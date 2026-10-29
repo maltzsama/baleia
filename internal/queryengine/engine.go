@@ -189,6 +189,29 @@ type Dialect = dialect.Dialect
 // an error before anything runs.
 type IcebergMaintainer interface {
 	MaintenanceStatements(table []string, retention string) ([]string, error)
+	// IcebergStatement renders one operation with its parameters (#500).
+	IcebergStatement(table []string, op IcebergOperation) (string, error)
+	// IcebergMetricsStatements render the counts of the table's data files
+	// smaller than targetFileSize and of its manifests.
+	IcebergMetricsStatements(table []string, targetFileSize int64) (smallFiles, manifests string, err error)
+}
+
+// IcebergOperation is one Iceberg maintenance procedure and its arguments.
+// Zero fields are left to the engine's defaults.
+type IcebergOperation struct {
+	// Name is optimize, optimize_manifests, expire_snapshots or
+	// remove_orphan_files.
+	Name string
+	// optimize
+	FileSizeThreshold  int64
+	PartitionFilter    string
+	SkipFilesNewerThan time.Duration
+	SortedBy           []string
+	// expire_snapshots and remove_orphan_files
+	Retention time.Duration
+	// expire_snapshots
+	RetainLast           int64
+	CleanExpiredMetadata *bool
 }
 
 // QueryResourcesReader reads what one query used, by its engine-side id

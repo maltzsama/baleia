@@ -267,6 +267,18 @@
 				get label() {
 					return m.statusbadge_scheduled();
 				}
+			},
+			gave_up: {
+				tone: 'warning',
+				get label() {
+					return m.statusbadge_gave_up();
+				}
+			},
+			dry_run: {
+				tone: 'neutral',
+				get label() {
+					return m.statusbadge_dry_run();
+				}
 			}
 		},
 		agent: {

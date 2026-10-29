@@ -1,0 +1,46 @@
+meta {
+  name: Maintenance - Stale revision
+  type: http
+  seq: 11
+}
+
+put {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/tables/default/t/maintenance
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  If-Match: 9
+}
+
+body:json {
+  {
+    "mode": "managed",
+    "writer_commit_interval_seconds": 60,
+    "optimize": { "enabled": false, "trigger": {}, "min_interval_seconds": 0, "timeout_seconds": 0, "on_conflict": "retry_with_backoff", "params": {} },
+    "optimize_manifests": { "enabled": false, "trigger": {}, "min_interval_seconds": 0, "timeout_seconds": 0, "on_conflict": "retry_with_backoff", "params": {} },
+    "remove_orphan_files": { "enabled": false, "trigger": {}, "min_interval_seconds": 0, "timeout_seconds": 0, "on_conflict": "retry_with_backoff", "params": {} },
+    "expire_snapshots": {
+      "enabled": true,
+      "trigger": { "snapshots": 100 },
+      "min_interval_seconds": 3600,
+      "timeout_seconds": 600,
+      "on_conflict": "retry_with_backoff",
+      "params": { "retention_seconds": {{maintenance_retention}}, "retain_last": 10 }
+    }
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.code: eq version_conflict
+}
+
+docs {
+  If-Match with a revision that moved on is a 409 version_conflict (#500).
+}

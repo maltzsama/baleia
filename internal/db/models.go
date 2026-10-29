@@ -264,20 +264,25 @@ type EngineCatalogObservation struct {
 }
 
 type MaintenanceRun struct {
-	ID           pgtype.UUID        `json:"id"`
-	CatalogID    pgtype.UUID        `json:"catalog_id"`
-	BindingID    pgtype.UUID        `json:"binding_id"`
-	Namespace    string             `json:"namespace"`
-	TableName    string             `json:"table_name"`
-	Operations   []string           `json:"operations"`
-	Retention    *string            `json:"retention"`
-	Status       string             `json:"status"`
-	ErrorCode    *string            `json:"error_code"`
-	ErrorMessage *string            `json:"error_message"`
-	StartedBy    pgtype.UUID        `json:"started_by"`
-	StartedAt    pgtype.Timestamptz `json:"started_at"`
-	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
-	WorkflowID   string             `json:"workflow_id"`
+	ID             pgtype.UUID        `json:"id"`
+	CatalogID      pgtype.UUID        `json:"catalog_id"`
+	BindingID      pgtype.UUID        `json:"binding_id"`
+	Namespace      string             `json:"namespace"`
+	TableName      string             `json:"table_name"`
+	Operations     []string           `json:"operations"`
+	Retention      *string            `json:"retention"`
+	Status         string             `json:"status"`
+	ErrorCode      *string            `json:"error_code"`
+	ErrorMessage   *string            `json:"error_message"`
+	StartedBy      pgtype.UUID        `json:"started_by"`
+	StartedAt      pgtype.Timestamptz `json:"started_at"`
+	FinishedAt     pgtype.Timestamptz `json:"finished_at"`
+	WorkflowID     string             `json:"workflow_id"`
+	Trigger        string             `json:"trigger"`
+	Reason         []byte             `json:"reason"`
+	Parameters     []byte             `json:"parameters"`
+	Attempts       int32              `json:"attempts"`
+	PolicyRevision *int64             `json:"policy_revision"`
 }
 
 type MetadataColumn struct {
@@ -582,8 +587,37 @@ type TableHealthSnapshot struct {
 	HealthScore            int32              `json:"health_score"`
 	NeedsCompaction        bool               `json:"needs_compaction"`
 	NeedsSnapshotExpiry    bool               `json:"needs_snapshot_expiry"`
-	NeedsOrphanCleanup     bool               `json:"needs_orphan_cleanup"`
 	CatalogID              pgtype.UUID        `json:"catalog_id"`
+	DeleteFileCount        *int64             `json:"delete_file_count"`
+	EqualityDeleteCount    *int64             `json:"equality_delete_count"`
+	PositionDeleteCount    *int64             `json:"position_delete_count"`
+	SmallFileCount         *int64             `json:"small_file_count"`
+	CommitsLastHour        *int32             `json:"commits_last_hour"`
+	CommitsLastDay         *int32             `json:"commits_last_day"`
+	AvgFileSizeBytes       *int64             `json:"avg_file_size_bytes"`
+	ManifestCount          *int32             `json:"manifest_count"`
+	FormatVersion          *int32             `json:"format_version"`
+	TableProperties        []byte             `json:"table_properties"`
+	DueOperations          []string           `json:"due_operations"`
+	PolicyRevision         *int64             `json:"policy_revision"`
+}
+
+type TableMaintenancePolicy struct {
+	ID                          pgtype.UUID        `json:"id"`
+	CatalogID                   pgtype.UUID        `json:"catalog_id"`
+	Namespace                   string             `json:"namespace"`
+	TableName                   string             `json:"table_name"`
+	Mode                        string             `json:"mode"`
+	WriterCommitIntervalSeconds int32              `json:"writer_commit_interval_seconds"`
+	Optimize                    []byte             `json:"optimize"`
+	OptimizeManifests           []byte             `json:"optimize_manifests"`
+	ExpireSnapshots             []byte             `json:"expire_snapshots"`
+	RemoveOrphanFiles           []byte             `json:"remove_orphan_files"`
+	Revision                    int64              `json:"revision"`
+	CreatedBy                   pgtype.UUID        `json:"created_by"`
+	UpdatedBy                   pgtype.UUID        `json:"updated_by"`
+	CreatedAt                   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Team struct {

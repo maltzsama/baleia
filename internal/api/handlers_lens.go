@@ -371,7 +371,6 @@ func healthToMap(s db.TableHealthSnapshot) map[string]any {
 		"health_score":          s.HealthScore,
 		"needs_compaction":      s.NeedsCompaction,
 		"needs_snapshot_expiry": s.NeedsSnapshotExpiry,
-		"needs_orphan_cleanup":  s.NeedsOrphanCleanup,
 	}
 }
 

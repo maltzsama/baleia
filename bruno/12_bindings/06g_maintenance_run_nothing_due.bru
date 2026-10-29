@@ -1,0 +1,30 @@
+meta {
+  name: Maintenance - Run next due (nothing due)
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/tables/default/t/maintenance/runs
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+
+body:json {
+  { "operation": "next_due" }
+}
+
+assert {
+  res.status: eq 409
+  res.body.code: eq conflict
+}
+
+docs {
+  With no health pass of the table, no trigger fires: next_due has nothing to
+  run (#500).
+}

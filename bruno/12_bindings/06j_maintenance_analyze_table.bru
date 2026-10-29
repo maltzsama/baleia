@@ -1,0 +1,25 @@
+meta {
+  name: Maintenance - Analyze a table now
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/tables/default/t/table-health/analyze
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+
+
+assert {
+  res.status: eq 202
+}
+
+docs {
+  Starts the table's health pass and the catalog's round (#500).
+}

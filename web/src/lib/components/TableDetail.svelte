@@ -18,6 +18,8 @@
 	import DocEditor from '$lib/semantic/DocEditor.svelte';
 	import DocumentColumns from '$lib/semantic/DocumentColumns.svelte';
 	import type { SemanticDoc } from '$lib/semantic/docs';
+	import TableMaintenance from '$lib/maintenance/TableMaintenance.svelte';
+	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 
 	let { table, focusColumn = '' }: { table: TableRef | null; focusColumn?: string } = $props();
 
@@ -338,6 +340,21 @@
 					</div>
 				{/if}
 			</div>
+
+			{#if detail.kind === 'table' && table.maintainable}
+				<TableMaintenance
+					catalogId={detail.catalog_id}
+					namespace={detail.namespace.join('.')}
+					table={detail.name}
+				/>
+				<div class="border-b border-border px-4 py-3">
+					<ActivityPanel
+						resourceType="table_maintenance"
+						resourceId={`${detail.catalog_id}/${detail.namespace.join('.')}/${detail.name}`}
+						title={m.maintenance_activity()}
+					/>
+				</div>
+			{/if}
 
 			{#if Object.keys(detail.properties).length > 0}
 				<div class="border-b border-border px-4 py-3">

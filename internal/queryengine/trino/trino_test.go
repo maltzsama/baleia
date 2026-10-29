@@ -292,3 +292,65 @@ func TestMaintenanceStatementsWithoutRetention(t *testing.T) {
 		t.Error("a bad retention was rendered")
 	}
 }
+
+func TestIcebergStatement(t *testing.T) {
+	t.Parallel()
+	e := testEngine(t, &fakeCoordinator{})
+	table := []string{"lake", "cdc", "orders"}
+	clean := false
+	tests := []struct {
+		name string
+		op   queryengine.IcebergOperation
+		want string
+	}{
+		{"optimize with defaults", queryengine.IcebergOperation{Name: "optimize"},
+			`ALTER TABLE "lake"."cdc"."orders" EXECUTE optimize`},
+		{"optimize cold files of a partition", queryengine.IcebergOperation{
+			Name: "optimize", FileSizeThreshold: 268435456, SortedBy: []string{"id"},
+			PartitionFilter: "day < DATE '2026-05-01'", SkipFilesNewerThan: time.Hour,
+		}, `ALTER TABLE "lake"."cdc"."orders" EXECUTE optimize(file_size_threshold => '268435456B', sorted_by => ARRAY['id'])` +
+			` WHERE (day < DATE '2026-05-01') AND "$file_modified_time" < current_timestamp - INTERVAL '3600' SECOND`},
+		{"manifests", queryengine.IcebergOperation{Name: "optimize_manifests"},
+			`ALTER TABLE "lake"."cdc"."orders" EXECUTE optimize_manifests`},
+		{"expiry in days with retain_last", queryengine.IcebergOperation{
+			Name: "expire_snapshots", Retention: 72 * time.Hour, RetainLast: 10, CleanExpiredMetadata: &clean,
+		}, `ALTER TABLE "lake"."cdc"."orders" EXECUTE expire_snapshots(retention_threshold => '3d', retain_last => 10, clean_expired_metadata => false)`},
+		{"orphans rounded up to a minute", queryengine.IcebergOperation{Name: "remove_orphan_files", Retention: 90 * time.Second},
+			`ALTER TABLE "lake"."cdc"."orders" EXECUTE remove_orphan_files(retention_threshold => '2m')`},
+		{"orphans in hours", queryengine.IcebergOperation{Name: "remove_orphan_files", Retention: 25 * time.Hour},
+			`ALTER TABLE "lake"."cdc"."orders" EXECUTE remove_orphan_files(retention_threshold => '25h')`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := e.IcebergStatement(table, tt.op)
+			if err != nil || got != tt.want {
+				t.Errorf("IcebergStatement() = %q, %v\nwant %q", got, err, tt.want)
+			}
+		})
+	}
+	for _, bad := range []queryengine.IcebergOperation{
+		{Name: "optimize", PartitionFilter: "day IN (SELECT 1)"},
+		{Name: "expire_snapshots"},
+		{Name: "vacuum"},
+	} {
+		if got, err := e.IcebergStatement(table, bad); err == nil {
+			t.Errorf("IcebergStatement(%+v) = %q, want an error", bad, got)
+		}
+	}
+}
+
+func TestIcebergMetricsStatements(t *testing.T) {
+	t.Parallel()
+	e := testEngine(t, &fakeCoordinator{})
+	small, manifests, err := e.IcebergMetricsStatements([]string{"lake", "cdc", "orders"}, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if small != `SELECT count(*) FROM "lake"."cdc"."orders$files" WHERE content = 0 AND file_size_in_bytes < 1024` {
+		t.Errorf("small files = %q", small)
+	}
+	if manifests != `SELECT count(*) FROM "lake"."cdc"."orders$manifests"` {
+		t.Errorf("manifests = %q", manifests)
+	}
+}

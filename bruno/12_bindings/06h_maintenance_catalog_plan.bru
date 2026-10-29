@@ -1,0 +1,27 @@
+meta {
+  name: Maintenance - Catalog plan
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/maintenance-plan
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+
+
+assert {
+  res.status: eq 200
+  res.body.length: eq 1
+  res.body[0].table_name: eq t
+}
+
+docs {
+  Every table of the catalog with parameters, with its current plan (#500).
+}

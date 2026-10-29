@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -561,5 +562,26 @@ func TestProject_SecretReference(t *testing.T) {
 	}
 	if pLit.Properties["connection-password"] != "s3cret" || len(pLit.SecretKeys) != 1 {
 		t.Errorf("literal secret not projected: %v %v", pLit.Properties, pLit.SecretKeys)
+	}
+}
+
+// TestBinder_IcebergMinRetention: the floor of #500 reaches Iceberg
+// catalogs only, survives WithStore and WithRegistryKeyring, and never
+// overrides an operator's extra property.
+func TestBinder_IcebergMinRetention(t *testing.T) {
+	t.Parallel()
+	b := New(nil, nil, nil).WithIcebergMinRetention(90 * time.Minute).WithStore(nil).WithRegistryKeyring(nil)
+	if b.minRetention != 90*time.Minute {
+		t.Fatalf("minRetention lost through the With* options: %s", b.minRetention)
+	}
+	p := projection{props: map[string]string{"iceberg.remove-orphan-files.min-retention": "2d"}}
+	minRetention(&p, b.minRetention)
+	if p.props["iceberg.expire-snapshots.min-retention"] != "90m" || p.props["iceberg.remove-orphan-files.min-retention"] != "2d" {
+		t.Fatalf("props = %v", p.props)
+	}
+	for d, want := range map[time.Duration]string{time.Hour: "1h", 48 * time.Hour: "2d", 90 * time.Second: "90s"} {
+		if got := retentionDuration(d); got != want {
+			t.Errorf("retentionDuration(%s) = %q, want %q", d, got, want)
+		}
 	}
 }

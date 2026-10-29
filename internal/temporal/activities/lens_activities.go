@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +12,8 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/monitoring"
+	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
@@ -149,6 +150,9 @@ type LensAnalyzeTableHealthParams struct {
 	CatalogID           string
 	CatalogConnectionID string
 	Catalog             string
+	// Namespace and Table limit the pass to one table ("analyze now", #500).
+	Namespace string
+	Table     string
 }
 
 type ListEnabledIcebergCatalogsParams struct{}
@@ -230,6 +234,8 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 		return fmt.Errorf("list catalogs: %w", err)
 	}
 
+	h := healthPass{a: a, catalogID: catalogID, connID: connID, now: time.Now()}
+	h.prepare(ctx)
 	for _, cat := range catalogs {
 		if params.Catalog != "" && cat.Name != params.Catalog {
 			continue
@@ -242,92 +248,155 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 
 		for _, ns := range namespaces {
 			nsName := strings.Join(ns, ".")
+			if params.Namespace != "" && nsName != params.Namespace {
+				continue
+			}
 			tables, err := allTables(ctx, reader, cat.Name, ns)
 			if err != nil {
 				continue
 			}
 
 			for _, tbl := range tables {
+				if params.Table != "" && tbl.Name != params.Table {
+					continue
+				}
 				meta, err := reader.LoadTable(ctx, tbl)
 				if err != nil {
 					continue
 				}
-
-				snapshotCount := int32(len(meta.Snapshots))
-				healthScore := int32(100)
-				needsCompaction := false
-				needsExpiry := false
-				var fileCount *int32
-				var totalSize *int64
-
-				if snapshotCount > 50 {
-					healthScore -= 30
-					needsExpiry = true
-				} else if snapshotCount > 20 {
-					healthScore -= 10
-				}
-
-				if len(meta.Snapshots) > 0 {
-					latest := meta.Snapshots[len(meta.Snapshots)-1]
-
-					if totalFilesStr, ok := latest.Summary["total-data-files"]; ok {
-						if n, err := strconv.Atoi(totalFilesStr); err == nil {
-							fc := int32(n)
-							fileCount = &fc
-							if fc > 100 {
-								healthScore -= 30
-								needsCompaction = true
-							} else if fc > 50 {
-								healthScore -= 10
-							}
-						}
-					}
-
-					if totalSizeStr, ok := latest.Summary["total-files-size"]; ok {
-						if n, err := strconv.ParseInt(totalSizeStr, 10, 64); err == nil {
-							totalSize = &n
-						}
-					}
-				}
-
-				var oldestAgeHours *int32
-				if len(meta.Snapshots) > 0 {
-					oldest := meta.Snapshots[0]
-					oldestTime := time.UnixMilli(oldest.TimestampMs)
-					ageHours := int32(time.Since(oldestTime).Hours())
-					oldestAgeHours = &ageHours
-					if ageHours > 168 {
-						healthScore -= 20
-					}
-				}
-
-				if healthScore < 0 {
-					healthScore = 0
-				}
-
-				_, err = a.queries.UpsertTableHealthSnapshot(ctx, db.UpsertTableHealthSnapshotParams{
-					CatalogID:              catalogID,
-					CatalogConnectionID:    connID,
-					Catalog:                cat.Name,
-					Namespace:              nsName,
-					TableName:              tbl.Name,
-					SnapshotCount:          snapshotCount,
-					FileCount:              fileCount,
-					TotalSizeBytes:         totalSize,
-					OldestSnapshotAgeHours: oldestAgeHours,
-					HealthScore:            healthScore,
-					NeedsCompaction:        needsCompaction,
-					NeedsSnapshotExpiry:    needsExpiry,
-					NeedsOrphanCleanup:     false,
-				})
-				if err != nil {
-					return fmt.Errorf("upsert table health: %w", err)
+				if err := h.record(ctx, cat.Name, nsName, tbl.Name, meta); err != nil {
+					return err
 				}
 			}
 		}
 	}
 
 	return nil
+}
+
+// healthPass scores the tables of one catalog: by the default thresholds,
+// or by each table's own maintenance parameters (#500).
+type healthPass struct {
+	a         *Activities
+	catalogID pgtype.UUID
+	connID    pgtype.UUID
+	now       time.Time
+	policies  map[string]db.TableMaintenancePolicy
+	engine    queryengine.Engine
+	binding   db.CatalogBinding
+}
+
+// prepare loads the catalog's parameters and the engine that measures what
+// the metadata does not say; without either, tables keep metadata metrics.
+func (h *healthPass) prepare(ctx context.Context) {
+	h.policies = map[string]db.TableMaintenancePolicy{}
+	rows, err := h.a.queries.ListTableMaintenancePolicies(ctx, h.catalogID)
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	for _, r := range rows {
+		h.policies[r.Namespace+"\x00"+r.TableName] = r
+	}
+	bindings, err := h.a.queries.ListBindingsByCatalog(ctx, h.catalogID)
+	if err != nil {
+		return
+	}
+	if b, ok := monitoring.MaintenanceBinding(ctx, bindings, h.a.capableEngine); ok {
+		if eng, err := h.a.engines.Get(ctx, b.EngineID); err == nil {
+			h.engine, h.binding = eng, b
+		}
+	}
+}
+
+func (h *healthPass) record(ctx context.Context, catalog, namespace, table string, meta *connections.TableMeta) error {
+	m := readSnapshotMetrics(meta, h.now)
+	snapshotCount := clampInt32(int64(len(meta.Snapshots)))
+	score, needsCompaction, needsExpiry := defaultScore(snapshotCount, m)
+
+	var small, manifests *int64
+	due := []string{}
+	var revision *int64
+	if row, ok := h.policies[namespace+"\x00"+table]; ok {
+		if p, err := monitoring.DecodePolicy(row); err == nil {
+			if h.engine != nil {
+				small, manifests = h.a.engineMetrics(ctx, h.engine, []string{h.binding.EngineCatalogName, namespace, table}, p)
+			}
+			due = h.dueOperations(ctx, row, p, snapshotCount, m, small, manifests)
+			rev := row.Revision
+			revision = &rev
+			score = policyScore(due)
+		}
+	}
+
+	props, err := json.Marshal(m.properties)
+	if err != nil || m.properties == nil {
+		props = []byte("{}")
+	}
+	var manifestCount *int32
+	if manifests != nil {
+		v := clampInt32(*manifests)
+		manifestCount = &v
+	}
+	_, err = h.a.queries.UpsertTableHealthSnapshot(ctx, db.UpsertTableHealthSnapshotParams{
+		CatalogID:              h.catalogID,
+		CatalogConnectionID:    h.connID,
+		Catalog:                catalog,
+		Namespace:              namespace,
+		TableName:              table,
+		SnapshotCount:          snapshotCount,
+		FileCount:              m.dataFiles,
+		TotalSizeBytes:         m.totalSize,
+		OldestSnapshotAgeHours: m.oldestAgeHours,
+		HealthScore:            score,
+		NeedsCompaction:        needsCompaction,
+		NeedsSnapshotExpiry:    needsExpiry,
+		DeleteFileCount:        m.deleteFiles,
+		EqualityDeleteCount:    m.equalityDel,
+		PositionDeleteCount:    m.positionDel,
+		SmallFileCount:         small,
+		CommitsLastHour:        m.commitsHour,
+		CommitsLastDay:         m.commitsDay,
+		AvgFileSizeBytes:       m.avgFileSize,
+		ManifestCount:          manifestCount,
+		FormatVersion:          m.formatVersion,
+		TableProperties:        props,
+		DueOperations:          due,
+		PolicyRevision:         revision,
+	})
+	if err != nil {
+		return fmt.Errorf("upsert table health: %w", err)
+	}
+	return nil
+}
+
+// dueOperations evaluates the table's parameters against this pass.
+func (h *healthPass) dueOperations(ctx context.Context, row db.TableMaintenancePolicy, p maintenance.Policy, snapshots int32, m snapshotMetrics, small, manifests *int64) []string {
+	count := int64(snapshots)
+	metrics := maintenance.Metrics{SmallFiles: small, DeleteFiles: m.deleteFiles, Manifests: manifests, Snapshots: &count}
+	if m.dataFiles != nil {
+		v := int64(*m.dataFiles)
+		metrics.DataFiles = &v
+	}
+	if m.oldestAgeHours != nil {
+		v := time.Duration(*m.oldestAgeHours) * time.Hour
+		metrics.OldestSnapshotAge = &v
+	}
+	key := monitoring.TableKey{CatalogID: h.catalogID, Namespace: row.Namespace, Table: row.TableName}
+	st, err := monitoring.New(h.a.queries).TableState(ctx, key, row.CreatedAt.Time)
+	if err != nil {
+		return []string{}
+	}
+	plan, err := maintenance.Evaluate(p, metrics, st, maintenance.Automatic, h.now)
+	if err != nil {
+		return []string{}
+	}
+	out := []string{}
+	for _, s := range plan.Steps {
+		if s.Due {
+			out = append(out, s.Operation)
+		}
+	}
+	return out
 }
 
 // maxNamespaceDepth bounds the walk of nested Iceberg namespaces.

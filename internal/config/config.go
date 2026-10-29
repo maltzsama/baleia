@@ -101,6 +101,13 @@ type Config struct {
 	// ExecutionTimeout caps a whole script (every statement of an
 	// execution, run in one activity, #27).
 	ExecutionTimeout time.Duration
+	// MaintenanceMaxConcurrentRuns bounds the automatic Iceberg maintenance
+	// runs in progress at once, across tables (#500).
+	MaintenanceMaxConcurrentRuns int
+	// IcebergMaintenanceMinRetention is projected into managed Iceberg
+	// catalogs as Trino's minimum retention for expire_snapshots and
+	// remove_orphan_files (#500); shorter retentions are refused at save.
+	IcebergMaintenanceMinRetention time.Duration
 	// MetadataSyncInterval is how often every catalog's metadata snapshot is
 	// refreshed (#17).
 	MetadataSyncInterval time.Duration
@@ -210,55 +217,57 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:                  getEnv("PORT", "8080"),
-		DatabaseURL:           getEnv("DATABASE_URL", "postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable"),
-		TemporalHost:          getEnv("TEMPORAL_HOST", "localhost:7233"),
-		PolarisURL:            getEnv("POLARIS_URL", "http://localhost:8181"),
-		PolarisClientID:       getEnv("POLARIS_CLIENT_ID", ""),
-		PolarisClientSecret:   getEnv("POLARIS_CLIENT_SECRET", ""),
-		WorkerHealthPort:      getEnv("WORKER_HEALTH_PORT", "8081"),
-		LogLevel:              getEnv("BALEIA_LOG_LEVEL", "info"),
-		PprofAddr:             getEnv("BALEIA_PPROF_ADDR", ""),
-		TrinoEventsToken:      getEnv("BALEIA_TRINO_EVENTS_TOKEN", ""),
-		OracleLOBMaxBytes:     getEnvInt("BALEIA_LOB_MAX_BYTES", 0),
-		SecretFileBaseDir:     getEnv("BALEIA_SECRET_FILE_BASE_DIR", ""),
-		TrinoURL:              getEnv("TRINO_URL", "http://localhost:8088"),
-		TrinoDBPassword:       getEnv("BALEIA_TRINO_DB_PASSWORD", ""),
-		TrinoAdminUser:        getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),
-		TrinoServiceUser:      getEnv("BALEIA_TRINO_SERVICE_USER", "baleia"),
-		TrinoUserIdentity:     getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
-		PluginVersion:         getEnv("BALEIA_PLUGIN_VERSION", "0.10.0"),
-		JWTSecret:             getEnv("JWT_SECRET", DefaultJWTSecret),
-		AccessTokenTTL:        getEnvDuration("BALEIA_ACCESS_TOKEN_TTL", DefaultAccessTokenTTL),
-		RefreshTokenTTL:       getEnvDuration("BALEIA_REFRESH_TOKEN_TTL", DefaultRefreshTokenTTL),
-		ResetTokenTTL:         getEnvDuration("BALEIA_RESET_TOKEN_TTL", DefaultResetTokenTTL),
-		BcryptCost:            getEnvInt("BALEIA_BCRYPT_COST", DefaultBcryptCost),
-		EncryptionKey:         getEnv("BALEIA_ENCRYPTION_KEY", ""),
-		EncryptionKeyPrevious: getEnv("BALEIA_ENCRYPTION_KEY_PREVIOUS", ""),
-		RegistryKey:           getEnv("BALEIA_REGISTRY_KEY", ""),
-		RegistryKeyPrevious:   getEnv("BALEIA_REGISTRY_KEY_PREVIOUS", ""),
-		PublicURL:             getEnv("PUBLIC_URL", "http://localhost:8080"),
-		SMTPHost:              getEnv("SMTP_HOST", ""),
-		SMTPPort:              getEnv("SMTP_PORT", ""),
-		SMTPUser:              getEnv("SMTP_USER", ""),
-		SMTPPassword:          getEnv("SMTP_PASSWORD", ""),
-		SMTPFrom:              getEnv("SMTP_FROM", ""),
-		DefaultLocale:         getEnv("BALEIA_DEFAULT_LOCALE", "en"),
-		S3Endpoint:            getEnv("S3_ENDPOINT", "localhost:9000"),
-		S3AccessKey:           getEnv("S3_ACCESS_KEY", "rustfsadmin"),
-		S3SecretKey:           getEnv("S3_SECRET_KEY", "rustfsadmin"),
-		S3Bucket:              getEnv("S3_BUCKET", "baleia"),
-		S3UseSSL:              getEnv("S3_USE_SSL", "false") == "true",
-		StatementTimeout:      getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
-		ExecutionTimeout:      getEnvDuration("BALEIA_EXECUTION_TIMEOUT", 2*time.Hour),
-		MetadataSyncInterval:  getEnvDuration("BALEIA_METADATA_SYNC_INTERVAL", 15*time.Minute),
-		ReconcileMaxActions:   getEnvInt("BALEIA_RECONCILE_MAX_ACTIONS", 20),
-		ReconcileInterval:     getEnvDuration("BALEIA_RECONCILE_INTERVAL", 0),
-		ResultMaxRows:         getEnvInt64("BALEIA_RESULT_MAX_ROWS", 1000000),
-		ResultMaxBytes:        getEnvInt64("BALEIA_RESULT_MAX_BYTES", 536870912),
-		SchedulesEnabled:      getEnv("BALEIA_SCHEDULES_ENABLED", "true") == "true",
-		RateLimitRPS:          getEnvInt("RATE_LIMIT_RPS", 60),
-		RateLimitBurst:        getEnvInt("RATE_LIMIT_BURST", 10),
+		Port:                           getEnv("PORT", "8080"),
+		DatabaseURL:                    getEnv("DATABASE_URL", "postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable"),
+		TemporalHost:                   getEnv("TEMPORAL_HOST", "localhost:7233"),
+		PolarisURL:                     getEnv("POLARIS_URL", "http://localhost:8181"),
+		PolarisClientID:                getEnv("POLARIS_CLIENT_ID", ""),
+		PolarisClientSecret:            getEnv("POLARIS_CLIENT_SECRET", ""),
+		WorkerHealthPort:               getEnv("WORKER_HEALTH_PORT", "8081"),
+		LogLevel:                       getEnv("BALEIA_LOG_LEVEL", "info"),
+		PprofAddr:                      getEnv("BALEIA_PPROF_ADDR", ""),
+		TrinoEventsToken:               getEnv("BALEIA_TRINO_EVENTS_TOKEN", ""),
+		OracleLOBMaxBytes:              getEnvInt("BALEIA_LOB_MAX_BYTES", 0),
+		SecretFileBaseDir:              getEnv("BALEIA_SECRET_FILE_BASE_DIR", ""),
+		TrinoURL:                       getEnv("TRINO_URL", "http://localhost:8088"),
+		TrinoDBPassword:                getEnv("BALEIA_TRINO_DB_PASSWORD", ""),
+		TrinoAdminUser:                 getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),
+		TrinoServiceUser:               getEnv("BALEIA_TRINO_SERVICE_USER", "baleia"),
+		TrinoUserIdentity:              getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
+		PluginVersion:                  getEnv("BALEIA_PLUGIN_VERSION", "0.10.0"),
+		JWTSecret:                      getEnv("JWT_SECRET", DefaultJWTSecret),
+		AccessTokenTTL:                 getEnvDuration("BALEIA_ACCESS_TOKEN_TTL", DefaultAccessTokenTTL),
+		RefreshTokenTTL:                getEnvDuration("BALEIA_REFRESH_TOKEN_TTL", DefaultRefreshTokenTTL),
+		ResetTokenTTL:                  getEnvDuration("BALEIA_RESET_TOKEN_TTL", DefaultResetTokenTTL),
+		BcryptCost:                     getEnvInt("BALEIA_BCRYPT_COST", DefaultBcryptCost),
+		EncryptionKey:                  getEnv("BALEIA_ENCRYPTION_KEY", ""),
+		EncryptionKeyPrevious:          getEnv("BALEIA_ENCRYPTION_KEY_PREVIOUS", ""),
+		RegistryKey:                    getEnv("BALEIA_REGISTRY_KEY", ""),
+		RegistryKeyPrevious:            getEnv("BALEIA_REGISTRY_KEY_PREVIOUS", ""),
+		PublicURL:                      getEnv("PUBLIC_URL", "http://localhost:8080"),
+		SMTPHost:                       getEnv("SMTP_HOST", ""),
+		SMTPPort:                       getEnv("SMTP_PORT", ""),
+		SMTPUser:                       getEnv("SMTP_USER", ""),
+		SMTPPassword:                   getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:                       getEnv("SMTP_FROM", ""),
+		DefaultLocale:                  getEnv("BALEIA_DEFAULT_LOCALE", "en"),
+		S3Endpoint:                     getEnv("S3_ENDPOINT", "localhost:9000"),
+		S3AccessKey:                    getEnv("S3_ACCESS_KEY", "rustfsadmin"),
+		S3SecretKey:                    getEnv("S3_SECRET_KEY", "rustfsadmin"),
+		S3Bucket:                       getEnv("S3_BUCKET", "baleia"),
+		S3UseSSL:                       getEnv("S3_USE_SSL", "false") == "true",
+		StatementTimeout:               getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
+		ExecutionTimeout:               getEnvDuration("BALEIA_EXECUTION_TIMEOUT", 2*time.Hour),
+		MetadataSyncInterval:           getEnvDuration("BALEIA_METADATA_SYNC_INTERVAL", 15*time.Minute),
+		MaintenanceMaxConcurrentRuns:   getEnvInt("BALEIA_MAINTENANCE_MAX_CONCURRENT_RUNS", 4),
+		IcebergMaintenanceMinRetention: getEnvDuration("BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION", time.Hour),
+		ReconcileMaxActions:            getEnvInt("BALEIA_RECONCILE_MAX_ACTIONS", 20),
+		ReconcileInterval:              getEnvDuration("BALEIA_RECONCILE_INTERVAL", 0),
+		ResultMaxRows:                  getEnvInt64("BALEIA_RESULT_MAX_ROWS", 1000000),
+		ResultMaxBytes:                 getEnvInt64("BALEIA_RESULT_MAX_BYTES", 536870912),
+		SchedulesEnabled:               getEnv("BALEIA_SCHEDULES_ENABLED", "true") == "true",
+		RateLimitRPS:                   getEnvInt("RATE_LIMIT_RPS", 60),
+		RateLimitBurst:                 getEnvInt("RATE_LIMIT_BURST", 10),
 
 		ConnectionsDenyCIDRs:        splitList(getEnv("BALEIA_CONNECTIONS_DENY_CIDRS", "")),
 		ConnectionsAllowCIDRs:       splitList(getEnv("BALEIA_CONNECTIONS_ALLOW_CIDRS", "")),
@@ -384,6 +393,12 @@ func (c *Config) Validate() error {
 	}
 	if c.ReconcileInterval != 0 && c.ReconcileInterval < 5*time.Minute {
 		return fmt.Errorf("BALEIA_RECONCILE_INTERVAL must be at least 5m (got %s)", c.ReconcileInterval)
+	}
+	if c.MaintenanceMaxConcurrentRuns < 0 {
+		return fmt.Errorf("BALEIA_MAINTENANCE_MAX_CONCURRENT_RUNS must be at least 1 (got %d)", c.MaintenanceMaxConcurrentRuns)
+	}
+	if c.IcebergMaintenanceMinRetention != 0 && c.IcebergMaintenanceMinRetention < time.Minute {
+		return fmt.Errorf("BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION must be at least 1m (got %s)", c.IcebergMaintenanceMinRetention)
 	}
 	if c.MetadataSyncInterval < 0 || (c.MetadataSyncInterval > 0 && c.MetadataSyncInterval < 5*time.Minute) {
 		return fmt.Errorf("BALEIA_METADATA_SYNC_INTERVAL must be at least 5m (got %s)", c.MetadataSyncInterval)
@@ -537,4 +552,20 @@ func (c *Config) MetadataSyncEvery() time.Duration {
 		return DefaultMetadataSyncInterval
 	}
 	return c.MetadataSyncInterval
+}
+
+// MaintenanceConcurrency is MaintenanceMaxConcurrentRuns, 4 when unset.
+func (c *Config) MaintenanceConcurrency() int {
+	if c == nil || c.MaintenanceMaxConcurrentRuns <= 0 {
+		return 4
+	}
+	return c.MaintenanceMaxConcurrentRuns
+}
+
+// MaintenanceMinRetention is IcebergMaintenanceMinRetention, 1h when unset.
+func (c *Config) MaintenanceMinRetention() time.Duration {
+	if c == nil || c.IcebergMaintenanceMinRetention <= 0 {
+		return time.Hour
+	}
+	return c.IcebergMaintenanceMinRetention
 }

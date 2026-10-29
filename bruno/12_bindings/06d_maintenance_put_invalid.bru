@@ -1,0 +1,47 @@
+meta {
+  name: Maintenance - Invalid parameters
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/tables/default/t/maintenance
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  If-Match: 1
+}
+
+body:json {
+  {
+    "mode": "managed",
+    "writer_commit_interval_seconds": 60,
+    "optimize": { "enabled": false, "trigger": {}, "min_interval_seconds": 0, "timeout_seconds": 0, "on_conflict": "retry_with_backoff", "params": {} },
+    "optimize_manifests": { "enabled": false, "trigger": {}, "min_interval_seconds": 0, "timeout_seconds": 0, "on_conflict": "retry_with_backoff", "params": {} },
+    "remove_orphan_files": { "enabled": false, "trigger": {}, "min_interval_seconds": 0, "timeout_seconds": 0, "on_conflict": "retry_with_backoff", "params": {} },
+    "expire_snapshots": {
+      "enabled": true,
+      "trigger": { "snapshots": 100 },
+      "min_interval_seconds": 10,
+      "timeout_seconds": 600,
+      "on_conflict": "retry_with_backoff",
+      "params": { "retention_seconds": {{maintenance_retention}}, "retain_last": 10 }
+    }
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.code: eq validation_error
+  res.body.fields[0].field: eq expire_snapshots.min_interval_seconds
+}
+
+docs {
+  A min_interval_seconds under 60 is a field error with its JSON path (#500).
+}

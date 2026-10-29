@@ -80,6 +80,21 @@ components:
       in: header
       name: X-Api-Key
   parameters:
+    MaintenanceCatalogId:
+      name: catalog_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    MaintenanceNamespace:
+      name: namespace
+      in: path
+      required: true
+      schema: { type: string }
+    MaintenanceTable:
+      name: table
+      in: path
+      required: true
+      schema: { type: string }
     PathId:
       name: id
       in: path
@@ -164,7 +179,7 @@ components:
     # web/messages/{en,pt-BR}.json (enforced by TestErrorCodesClosed).
     ErrorCode:
       type: string
-      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspacePersonal]
+      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspacePersonal]
       enum:
         - account_suspended
         - agent_token_not_allowed
@@ -209,6 +224,7 @@ components:
         - invalid_identifier
         - invalid_sql
         - invalid_time_range
+        - maintenance_external
         - name_conflict
         - name_in_use
         - not_direct
@@ -3052,7 +3068,7 @@ components:
 
     TableHealth:
       type: object
-      required: [catalog_id, catalog_name, namespace, table_name, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup]
+      required: [catalog_id, catalog_name, namespace, table_name, health_score, needs_compaction, needs_snapshot_expiry, due_operations]
       properties:
         catalog_id: { type: string, format: uuid }
         catalog_name: { type: string }
@@ -3066,11 +3082,197 @@ components:
         health_score: { type: integer }
         needs_compaction: { type: boolean }
         needs_snapshot_expiry: { type: boolean }
-        needs_orphan_cleanup: { type: boolean }
+        delete_file_count: { type: integer, nullable: true }
+        equality_delete_count: { type: integer, nullable: true }
+        position_delete_count: { type: integer, nullable: true }
+        small_file_count: { type: integer, nullable: true }
+        commits_last_hour: { type: integer, nullable: true }
+        commits_last_day: { type: integer, nullable: true }
+        avg_file_size_bytes: { type: integer, nullable: true }
+        manifest_count: { type: integer, nullable: true }
+        format_version: { type: integer, nullable: true }
+        captured_at: { type: string, format: date-time }
+        due_operations:
+          type: array
+          description: Operations the table's maintenance parameters find due at the last health pass.
+          items: { $ref: "#/components/schemas/MaintenanceOperation" }
+        maintenance_mode:
+          allOf: [{ $ref: "#/components/schemas/MaintenanceMode" }]
+          nullable: true
+          description: The table's maintenance mode; null when it has no parameters.
+        policy_revision: { type: integer, format: int64, nullable: true }
+
+    MaintenanceOperation:
+      type: string
+      enum: [optimize, optimize_manifests, expire_snapshots, remove_orphan_files]
+
+    MaintenanceMode:
+      type: string
+      enum: [managed, "off", maintained_elsewhere]
+
+    MaintenanceWindow:
+      type: object
+      required: [start_hour, end_hour, tz]
+      properties:
+        start_hour: { type: integer, minimum: 0, maximum: 23 }
+        end_hour: { type: integer, minimum: 0, maximum: 23 }
+        tz: { type: string, description: "IANA time zone, e.g. UTC or America/Sao_Paulo" }
+
+    MaintenanceTrigger:
+      type: object
+      description: Measured conditions that call for an operation; each operation reads only its own.
+      properties:
+        small_file_ratio: { type: number, format: double, nullable: true, description: "optimize: share of files below target_file_size_bytes" }
+        delete_files: { type: integer, format: int64, nullable: true, description: "optimize: delete files (format v2+)" }
+        manifests: { type: integer, format: int64, nullable: true, description: "optimize_manifests: manifest count" }
+        snapshots: { type: integer, format: int64, nullable: true, description: "expire_snapshots: snapshot count" }
+        oldest_age_seconds: { type: integer, format: int64, nullable: true, description: "expire_snapshots: age of the oldest snapshot" }
+
+    MaintenanceParams:
+      type: object
+      properties:
+        target_file_size_bytes: { type: integer, format: int64, nullable: true }
+        partition_filter: { type: string, nullable: true, description: "optimize: WHERE on partition columns" }
+        skip_files_newer_than_seconds: { type: integer, format: int64, nullable: true }
+        sorted_by: { type: array, items: { type: string }, nullable: true }
+        retention_seconds: { type: integer, format: int64, nullable: true }
+        retain_last: { type: integer, format: int64, nullable: true }
+        clean_expired_metadata: { type: boolean, nullable: true }
+        older_than_seconds: { type: integer, format: int64, nullable: true }
+
+    MaintenanceSettings:
+      type: object
+      required: [enabled, trigger, min_interval_seconds, timeout_seconds, on_conflict, params]
+      properties:
+        enabled: { type: boolean }
+        trigger: { $ref: "#/components/schemas/MaintenanceTrigger" }
+        min_interval_seconds: { type: integer, format: int64 }
+        max_interval_seconds: { type: integer, format: int64, nullable: true }
+        window:
+          allOf: [{ $ref: "#/components/schemas/MaintenanceWindow" }]
+          nullable: true
+        timeout_seconds: { type: integer, format: int64 }
+        on_conflict: { type: string, enum: [retry_with_backoff, give_up_and_report] }
+        params: { $ref: "#/components/schemas/MaintenanceParams" }
+
+    MaintenancePolicy:
+      type: object
+      description: A table's maintenance parameters (#500).
+      required: [mode, writer_commit_interval_seconds, optimize, optimize_manifests, expire_snapshots, remove_orphan_files]
+      properties:
+        mode: { $ref: "#/components/schemas/MaintenanceMode" }
+        writer_commit_interval_seconds: { type: integer, format: int64 }
+        optimize: { $ref: "#/components/schemas/MaintenanceSettings" }
+        optimize_manifests: { $ref: "#/components/schemas/MaintenanceSettings" }
+        expire_snapshots: { $ref: "#/components/schemas/MaintenanceSettings" }
+        remove_orphan_files: { $ref: "#/components/schemas/MaintenanceSettings" }
+
+    StoredMaintenancePolicy:
+      allOf:
+        - $ref: "#/components/schemas/MaintenancePolicy"
+        - type: object
+          required: [revision, created_at, updated_at]
+          properties:
+            revision: { type: integer, format: int64 }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+            updated_by: { type: string, format: uuid, nullable: true }
+
+    MaintenanceReason:
+      type: object
+      properties:
+        fired: { type: string, description: "trigger that fired, max_interval or manual" }
+        measured: { type: number, format: double }
+        threshold: { type: number, format: double }
+        elapsed_seconds: { type: integer, format: int64 }
+        max_interval_seconds: { type: integer, format: int64 }
+        min_interval_seconds: { type: integer, format: int64 }
+        last_success_at: { type: string, format: date-time }
+        blocked: { type: string, enum: [disabled, mode, not_fired, min_interval, window, running] }
+        requested_by: { type: string, format: uuid }
+
+    MaintenancePlanStep:
+      type: object
+      required: [operation, due, would_run, reason]
+      properties:
+        operation: { $ref: "#/components/schemas/MaintenanceOperation" }
+        due: { type: boolean }
+        would_run: { type: boolean }
+        reason: { $ref: "#/components/schemas/MaintenanceReason" }
+        waits_for:
+          allOf: [{ $ref: "#/components/schemas/MaintenanceOperation" }]
+          nullable: true
+
+    MaintenancePlan:
+      type: object
+      required: [evaluated_at, plan]
+      properties:
+        evaluated_at: { type: string, format: date-time }
+        policy_revision: { type: integer, format: int64, nullable: true }
+        plan:
+          type: array
+          items: { $ref: "#/components/schemas/MaintenancePlanStep" }
+
+    TableMaintenance:
+      type: object
+      description: A table's maintenance parameters, what its catalog allows, its recent runs and its current plan.
+      required: [catalog_id, namespace, table_name, retention_floor_seconds, runs, allowed_actions]
+      properties:
+        allowed_actions:
+          type: array
+          readOnly: true
+          description: update covers saving and removing the parameters, dry runs, runs and analysis.
+          items: { $ref: "#/components/schemas/TableMaintenanceAllowedAction" }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: string }
+        table_name: { type: string }
+        policy:
+          allOf: [{ $ref: "#/components/schemas/StoredMaintenancePolicy" }]
+          nullable: true
+        retention_floor_seconds:
+          type: integer
+          format: int64
+          description: Shortest retention the catalog's engine accepts for expiry and orphan cleanup.
+        format_version: { type: integer, nullable: true }
+        properties:
+          type: object
+          additionalProperties: { type: string }
+          description: Iceberg table properties read at the last health pass.
+        runs:
+          type: array
+          items: { $ref: "#/components/schemas/MaintenanceRun" }
+        plan:
+          allOf: [{ $ref: "#/components/schemas/MaintenancePlan" }]
+          nullable: true
+
+    TableMaintenanceAllowedAction:
+      type: string
+      enum: [view, update]
+      x-enum-varnames: [TableMaintenanceAllowedActionView, TableMaintenanceAllowedActionUpdate]
+
+    CatalogMaintenancePlanItem:
+      type: object
+      required: [namespace, table_name, mode, plan]
+      properties:
+        namespace: { type: string }
+        table_name: { type: string }
+        mode: { $ref: "#/components/schemas/MaintenanceMode" }
+        plan: { $ref: "#/components/schemas/MaintenancePlan" }
+        last_run:
+          allOf: [{ $ref: "#/components/schemas/MaintenanceRun" }]
+          nullable: true
+
+    ManualMaintenanceRequest:
+      type: object
+      required: [operation]
+      properties:
+        operation:
+          type: string
+          enum: [optimize, optimize_manifests, expire_snapshots, remove_orphan_files, next_due]
 
     MaintenanceRun:
       type: object
-      required: [id, catalog_id, namespace, table_name, operations, status, started_at, workflow_id]
+      required: [id, catalog_id, namespace, table_name, operations, status, started_at, workflow_id, trigger, reason, attempts]
       properties:
         id: { type: string, format: uuid }
         catalog_id: { type: string, format: uuid }
@@ -3086,6 +3288,14 @@ components:
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
         workflow_id: { type: string }
+        trigger: { type: string, enum: [manual, automatic, dry_run] }
+        reason: { $ref: "#/components/schemas/MaintenanceReason" }
+        parameters:
+          type: object
+          additionalProperties: true
+          description: The operation's settings when the run was created.
+        attempts: { type: integer }
+        policy_revision: { type: integer, format: int64, nullable: true }
 
     CreateMaintenanceRequest:
       type: object
@@ -7589,6 +7799,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /catalogs/{catalog_id}/maintenance-runs:
@@ -7602,6 +7813,21 @@ paths:
       operationId: listMaintenanceRuns
       summary: "Maintenance runs of a catalog, newest first"
       parameters:
+        - name: trigger
+          in: query
+          schema: { type: string, enum: [manual, automatic, dry_run] }
+        - name: operation
+          in: query
+          schema: { $ref: "#/components/schemas/MaintenanceOperation" }
+        - name: status
+          in: query
+          schema: { type: string, enum: [running, finished, failed, gave_up, dry_run] }
+        - name: ns
+          in: query
+          schema: { type: string }
+        - name: table
+          in: query
+          schema: { type: string }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
@@ -7620,6 +7846,165 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Retrievers ────────────────────────────────────────────────
+
+  /catalogs/{catalog_id}/maintenance-plan:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Monitoring]
+      operationId: getCatalogMaintenancePlan
+      summary: "The current maintenance plan of every table of the catalog with parameters"
+      responses:
+        "200":
+          description: "Plans, one per table"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogMaintenancePlanItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{catalog_id}/table-health/analyze:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Monitoring]
+      operationId: analyzeCatalogTableHealth
+      summary: "Analyze the health of every table of an Iceberg catalog now"
+      responses:
+        "202": { description: "Analysis started" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /catalogs/{catalog_id}/tables/{namespace}/{table}/table-health/analyze:
+    parameters:
+      - $ref: "#/components/parameters/MaintenanceCatalogId"
+      - $ref: "#/components/parameters/MaintenanceNamespace"
+      - $ref: "#/components/parameters/MaintenanceTable"
+    post:
+      tags: [Monitoring]
+      operationId: analyzeTableHealth
+      summary: "Analyze the health of one Iceberg table now"
+      responses:
+        "202": { description: "Analysis started" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance:
+    parameters:
+      - $ref: "#/components/parameters/MaintenanceCatalogId"
+      - $ref: "#/components/parameters/MaintenanceNamespace"
+      - $ref: "#/components/parameters/MaintenanceTable"
+    get:
+      tags: [Monitoring]
+      operationId: getTableMaintenance
+      summary: "A table's maintenance parameters, recent runs and current plan"
+      responses:
+        "200":
+          description: "The table's maintenance"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TableMaintenance" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Monitoring]
+      operationId: putTableMaintenance
+      summary: "Create or replace a table's maintenance parameters"
+      description: >-
+        Without If-Match the parameters are created and the call fails when they
+        already exist; with If-Match they are replaced only at that revision.
+      parameters:
+        - name: If-Match
+          in: header
+          required: false
+          schema: { type: string }
+          description: The revision being replaced.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MaintenancePolicy" }
+      responses:
+        "200":
+          description: "Stored parameters"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StoredMaintenancePolicy" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Monitoring]
+      operationId: deleteTableMaintenance
+      summary: "Remove a table's maintenance parameters: the table is no longer maintained"
+      responses:
+        "204": { description: "Removed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/dry-run:
+    parameters:
+      - $ref: "#/components/parameters/MaintenanceCatalogId"
+      - $ref: "#/components/parameters/MaintenanceNamespace"
+      - $ref: "#/components/parameters/MaintenanceTable"
+    post:
+      tags: [Monitoring]
+      operationId: dryRunTableMaintenance
+      summary: "What a round would run on the table now, without running it"
+      responses:
+        "200":
+          description: "The plan"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenancePlan" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/runs:
+    parameters:
+      - $ref: "#/components/parameters/MaintenanceCatalogId"
+      - $ref: "#/components/parameters/MaintenanceNamespace"
+      - $ref: "#/components/parameters/MaintenanceTable"
+    post:
+      tags: [Monitoring]
+      operationId: runTableMaintenance
+      summary: "Run one maintenance operation on the table now"
+      description: >-
+        next_due runs what a round would pick. A named operation runs now,
+        ignoring its interval and window but not its timeout and conflict policy.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ManualMaintenanceRequest" }
+      responses:
+        "202":
+          description: "Run started"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaintenanceRun" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /workspaces/{id}/retrievers:
     parameters:
       - $ref: "#/components/parameters/PathId"

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -372,9 +373,21 @@ func (h *OpsHandlers) ListTableHealth(ctx context.Context, request ListTableHeal
 	if err != nil {
 		return nil, err
 	}
+	policies, err := h.queries.ListTableMaintenancePolicies(ctx, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	modes := make(map[string]MaintenanceMode, len(policies))
+	for _, p := range policies {
+		modes[p.Namespace+"\x00"+p.TableName] = MaintenanceMode(p.Mode)
+	}
 	out := make([]TableHealth, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, tableHealth(catalog, row))
+		item := tableHealth(catalog, row)
+		if mode, ok := modes[row.Namespace+"\x00"+row.TableName]; ok {
+			item.MaintenanceMode = &mode
+		}
+		out = append(out, item)
 	}
 	return ListTableHealth200JSONResponse(out), nil
 }
@@ -389,8 +402,25 @@ func tableHealth(catalog db.Catalog, s db.TableHealthSnapshot) TableHealth {
 		HealthScore:         int(s.HealthScore),
 		NeedsCompaction:     s.NeedsCompaction,
 		NeedsSnapshotExpiry: s.NeedsSnapshotExpiry,
-		NeedsOrphanCleanup:  s.NeedsOrphanCleanup,
+		DueOperations:       make([]MaintenanceOperation, 0, len(s.DueOperations)),
+		PolicyRevision:      s.PolicyRevision,
 	}
+	for _, op := range s.DueOperations {
+		out.DueOperations = append(out.DueOperations, MaintenanceOperation(op))
+	}
+	if s.CapturedAt.Valid {
+		v := s.CapturedAt.Time
+		out.CapturedAt = &v
+	}
+	out.DeleteFileCount = intFrom64(s.DeleteFileCount)
+	out.EqualityDeleteCount = intFrom64(s.EqualityDeleteCount)
+	out.PositionDeleteCount = intFrom64(s.PositionDeleteCount)
+	out.SmallFileCount = intFrom64(s.SmallFileCount)
+	out.AvgFileSizeBytes = intFrom64(s.AvgFileSizeBytes)
+	out.CommitsLastHour = intFrom32(s.CommitsLastHour)
+	out.CommitsLastDay = intFrom32(s.CommitsLastDay)
+	out.ManifestCount = intFrom32(s.ManifestCount)
+	out.FormatVersion = intFrom32(s.FormatVersion)
 	if s.FileCount != nil {
 		v := int(*s.FileCount)
 		out.FileCount = &v
@@ -452,6 +482,10 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 	runID := uuid.New()
 	workflowID := "maintenance-" + runID.String()
 	run, err := h.monitor.Record(ctx, plan, workflowID)
+	if isUniqueViolation(err) {
+		return CreateMaintenanceRun409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
+			Code: ErrorCodeConflict, Message: "a maintenance run is already in progress on this table"}}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +516,20 @@ func (h *OpsHandlers) ListMaintenanceRuns(ctx context.Context, request ListMaint
 	} else if !ok {
 		return ListMaintenanceRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
-	rows, err := h.monitor.Runs(ctx, catalogID, request.Params.Limit, request.Params.Offset)
+	f := monitoring.RunFilter{Namespace: request.Params.Ns, Table: request.Params.Table, Limit: request.Params.Limit, Offset: request.Params.Offset}
+	if v := request.Params.Trigger; v != nil {
+		t := string(*v)
+		f.Trigger = &t
+	}
+	if v := request.Params.Operation; v != nil {
+		o := string(*v)
+		f.Operation = &o
+	}
+	if v := request.Params.Status; v != nil {
+		st := string(*v)
+		f.Status = &st
+	}
+	rows, err := h.monitor.Runs(ctx, catalogID, f)
 	if err != nil {
 		return nil, err
 	}
@@ -495,17 +542,27 @@ func (h *OpsHandlers) ListMaintenanceRuns(ctx context.Context, request ListMaint
 
 func maintenanceRun(r db.MaintenanceRun) MaintenanceRun {
 	out := MaintenanceRun{
-		Id:           openapi_types.UUID(r.ID.Bytes),
-		CatalogId:    openapi_types.UUID(r.CatalogID.Bytes),
-		Namespace:    r.Namespace,
-		TableName:    r.TableName,
-		Operations:   r.Operations,
-		Retention:    r.Retention,
-		Status:       r.Status,
-		ErrorCode:    r.ErrorCode,
-		ErrorMessage: r.ErrorMessage,
-		StartedAt:    pgTimestampToTime(r.StartedAt),
-		WorkflowId:   r.WorkflowID,
+		Id:             openapi_types.UUID(r.ID.Bytes),
+		CatalogId:      openapi_types.UUID(r.CatalogID.Bytes),
+		Namespace:      r.Namespace,
+		TableName:      r.TableName,
+		Operations:     r.Operations,
+		Retention:      r.Retention,
+		Status:         r.Status,
+		ErrorCode:      r.ErrorCode,
+		ErrorMessage:   r.ErrorMessage,
+		StartedAt:      pgTimestampToTime(r.StartedAt),
+		WorkflowId:     r.WorkflowID,
+		Trigger:        MaintenanceRunTrigger(r.Trigger),
+		Attempts:       int(r.Attempts),
+		PolicyRevision: r.PolicyRevision,
+	}
+	_ = json.Unmarshal(r.Reason, &out.Reason)
+	if len(r.Parameters) > 0 && string(r.Parameters) != "{}" {
+		var params map[string]interface{}
+		if json.Unmarshal(r.Parameters, &params) == nil {
+			out.Parameters = &params
+		}
 	}
 	if r.BindingID.Valid {
 		id := openapi_types.UUID(r.BindingID.Bytes)
@@ -523,3 +580,19 @@ func maintenanceRun(r db.MaintenanceRun) MaintenanceRun {
 }
 
 func intPtrValue(value int) *int { return &value }
+
+func intFrom64(v *int64) *int {
+	if v == nil {
+		return nil
+	}
+	n := int(*v)
+	return &n
+}
+
+func intFrom32(v *int32) *int {
+	if v == nil {
+		return nil
+	}
+	n := int(*v)
+	return &n
+}

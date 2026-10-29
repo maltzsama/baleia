@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -38,6 +39,10 @@ type Binder struct {
 	// trino_catalog_registry (Phase B of #31 / D4). Nil keeps Phase A: rows
 	// carry plaintext.
 	registry *crypto.Keyring
+	// minRetention is projected into Iceberg catalogs as Trino's minimum
+	// retention for expire_snapshots and remove_orphan_files (#500); zero
+	// leaves Trino's default.
+	minRetention time.Duration
 }
 
 var _ bindings.Binder = (*Binder)(nil)
@@ -50,13 +55,26 @@ func New(logger *slog.Logger, admin *trinoclient.Client, store RegistryStore) *B
 // WithRegistryKeyring enables Phase B encryption of registry values. A nil
 // keyring is a no-op.
 func (b *Binder) WithRegistryKeyring(kr *crypto.Keyring) *Binder {
-	return &Binder{admin: b.admin, store: b.store, registry: kr}
+	c := *b
+	c.registry = kr
+	return &c
+}
+
+// WithIcebergMinRetention projects d as the minimum retention of every
+// Iceberg catalog the binder writes (#500). Changing it changes the catalog
+// version, so each Iceberg catalog is re-created once.
+func (b *Binder) WithIcebergMinRetention(d time.Duration) *Binder {
+	c := *b
+	c.minRetention = d
+	return &c
 }
 
 // WithStore is the binder writing the registry through store, e.g. a
 // transaction that also writes the catalog row.
 func (b *Binder) WithStore(store RegistryStore) *Binder {
-	return &Binder{admin: b.admin, store: store, registry: b.registry}
+	c := *b
+	c.store = store
+	return &c
 }
 
 func (*Binder) EngineKind() string { return "trino" }
@@ -107,6 +125,9 @@ func (b *Binder) Project(spec bindings.BindingSpec, src connections.Config) (bin
 	}
 	if err := mergeExtra(&p, spec.ExtraProps); err != nil {
 		return bindings.Projection{}, err
+	}
+	if connector == "iceberg" && b.minRetention > 0 {
+		minRetention(&p, b.minRetention)
 	}
 	// The version hashes the values Baleia resolved, not the external
 	// references the properties carry: the plugin resolves them the same way and

@@ -18,6 +18,7 @@
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
 	import EngineBadge from '$lib/ui/patterns/EngineBadge.svelte';
+	import { hasTableHealth } from '$lib/ui/patterns/kindIcon';
 
 	let {
 		onSelectTable,
@@ -209,6 +210,7 @@
 			tableId: table.id,
 			catalogId: catalog.id,
 			catalogName: catalog.name,
+			maintainable: hasTableHealth(catalog),
 			namespace: path,
 			tableName: table.name,
 			bindings: catalog.bindings

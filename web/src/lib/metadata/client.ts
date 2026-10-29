@@ -22,6 +22,8 @@ export type TableRef = {
 	tableId: string;
 	catalogId: string;
 	catalogName: string;
+	/** Whether the catalog gets table maintenance: a source Iceberg catalog (#500). */
+	maintainable?: boolean;
 	namespace: string[];
 	tableName: string;
 	bindings: MetadataCatalogBinding[];

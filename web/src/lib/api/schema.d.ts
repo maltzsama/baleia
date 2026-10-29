@@ -3003,6 +3003,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/catalogs/{catalog_id}/maintenance-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        /** The current maintenance plan of every table of the catalog with parameters */
+        get: operations["getCatalogMaintenancePlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/table-health/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyze the health of every table of an Iceberg catalog now */
+        post: operations["analyzeCatalogTableHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/tables/{namespace}/{table}/table-health/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: components["parameters"]["MaintenanceCatalogId"];
+                namespace: components["parameters"]["MaintenanceNamespace"];
+                table: components["parameters"]["MaintenanceTable"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyze the health of one Iceberg table now */
+        post: operations["analyzeTableHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: components["parameters"]["MaintenanceCatalogId"];
+                namespace: components["parameters"]["MaintenanceNamespace"];
+                table: components["parameters"]["MaintenanceTable"];
+            };
+            cookie?: never;
+        };
+        /** A table's maintenance parameters, recent runs and current plan */
+        get: operations["getTableMaintenance"];
+        /**
+         * Create or replace a table's maintenance parameters
+         * @description Without If-Match the parameters are created and the call fails when they already exist; with If-Match they are replaced only at that revision.
+         */
+        put: operations["putTableMaintenance"];
+        post?: never;
+        /** Remove a table's maintenance parameters: the table is no longer maintained */
+        delete: operations["deleteTableMaintenance"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: components["parameters"]["MaintenanceCatalogId"];
+                namespace: components["parameters"]["MaintenanceNamespace"];
+                table: components["parameters"]["MaintenanceTable"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What a round would run on the table now, without running it */
+        post: operations["dryRunTableMaintenance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: components["parameters"]["MaintenanceCatalogId"];
+                namespace: components["parameters"]["MaintenanceNamespace"];
+                table: components["parameters"]["MaintenanceTable"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run one maintenance operation on the table now
+         * @description next_due runs what a round would pick. A named operation runs now, ignoring its interval and window but not its timeout and conflict policy.
+         */
+        post: operations["runTableMaintenance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/retrievers": {
         parameters: {
             query?: never;
@@ -3239,7 +3369,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_not_found" | "workspace_personal";
+        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_not_found" | "workspace_personal";
         /** @enum {string} */
         Locale: "en" | "pt-BR";
         /** @enum {string} */
@@ -5673,7 +5803,180 @@ export interface components {
             health_score: number;
             needs_compaction: boolean;
             needs_snapshot_expiry: boolean;
-            needs_orphan_cleanup: boolean;
+            delete_file_count?: number | null;
+            equality_delete_count?: number | null;
+            position_delete_count?: number | null;
+            small_file_count?: number | null;
+            commits_last_hour?: number | null;
+            commits_last_day?: number | null;
+            avg_file_size_bytes?: number | null;
+            manifest_count?: number | null;
+            format_version?: number | null;
+            /** Format: date-time */
+            captured_at?: string;
+            /** @description Operations the table's maintenance parameters find due at the last health pass. */
+            due_operations: components["schemas"]["MaintenanceOperation"][];
+            /** @description The table's maintenance mode; null when it has no parameters. */
+            maintenance_mode?: components["schemas"]["MaintenanceMode"] | null;
+            /** Format: int64 */
+            policy_revision?: number | null;
+        };
+        /** @enum {string} */
+        MaintenanceOperation: "optimize" | "optimize_manifests" | "expire_snapshots" | "remove_orphan_files";
+        /** @enum {string} */
+        MaintenanceMode: "managed" | "off" | "maintained_elsewhere";
+        MaintenanceWindow: {
+            start_hour: number;
+            end_hour: number;
+            /** @description IANA time zone, e.g. UTC or America/Sao_Paulo */
+            tz: string;
+        };
+        /** @description Measured conditions that call for an operation; each operation reads only its own. */
+        MaintenanceTrigger: {
+            /**
+             * Format: double
+             * @description optimize: share of files below target_file_size_bytes
+             */
+            small_file_ratio?: number | null;
+            /**
+             * Format: int64
+             * @description optimize: delete files (format v2+)
+             */
+            delete_files?: number | null;
+            /**
+             * Format: int64
+             * @description optimize_manifests: manifest count
+             */
+            manifests?: number | null;
+            /**
+             * Format: int64
+             * @description expire_snapshots: snapshot count
+             */
+            snapshots?: number | null;
+            /**
+             * Format: int64
+             * @description expire_snapshots: age of the oldest snapshot
+             */
+            oldest_age_seconds?: number | null;
+        };
+        MaintenanceParams: {
+            /** Format: int64 */
+            target_file_size_bytes?: number | null;
+            /** @description optimize: WHERE on partition columns */
+            partition_filter?: string | null;
+            /** Format: int64 */
+            skip_files_newer_than_seconds?: number | null;
+            sorted_by?: string[] | null;
+            /** Format: int64 */
+            retention_seconds?: number | null;
+            /** Format: int64 */
+            retain_last?: number | null;
+            clean_expired_metadata?: boolean | null;
+            /** Format: int64 */
+            older_than_seconds?: number | null;
+        };
+        MaintenanceSettings: {
+            enabled: boolean;
+            trigger: components["schemas"]["MaintenanceTrigger"];
+            /** Format: int64 */
+            min_interval_seconds: number;
+            /** Format: int64 */
+            max_interval_seconds?: number | null;
+            window?: components["schemas"]["MaintenanceWindow"] | null;
+            /** Format: int64 */
+            timeout_seconds: number;
+            /** @enum {string} */
+            on_conflict: "retry_with_backoff" | "give_up_and_report";
+            params: components["schemas"]["MaintenanceParams"];
+        };
+        /** @description A table's maintenance parameters (#500). */
+        MaintenancePolicy: {
+            mode: components["schemas"]["MaintenanceMode"];
+            /** Format: int64 */
+            writer_commit_interval_seconds: number;
+            optimize: components["schemas"]["MaintenanceSettings"];
+            optimize_manifests: components["schemas"]["MaintenanceSettings"];
+            expire_snapshots: components["schemas"]["MaintenanceSettings"];
+            remove_orphan_files: components["schemas"]["MaintenanceSettings"];
+        };
+        StoredMaintenancePolicy: components["schemas"]["MaintenancePolicy"] & {
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: uuid */
+            updated_by?: string | null;
+        };
+        MaintenanceReason: {
+            /** @description trigger that fired, max_interval or manual */
+            fired?: string;
+            /** Format: double */
+            measured?: number;
+            /** Format: double */
+            threshold?: number;
+            /** Format: int64 */
+            elapsed_seconds?: number;
+            /** Format: int64 */
+            max_interval_seconds?: number;
+            /** Format: int64 */
+            min_interval_seconds?: number;
+            /** Format: date-time */
+            last_success_at?: string;
+            /** @enum {string} */
+            blocked?: "disabled" | "mode" | "not_fired" | "min_interval" | "window" | "running";
+            /** Format: uuid */
+            requested_by?: string;
+        };
+        MaintenancePlanStep: {
+            operation: components["schemas"]["MaintenanceOperation"];
+            due: boolean;
+            would_run: boolean;
+            reason: components["schemas"]["MaintenanceReason"];
+            waits_for?: components["schemas"]["MaintenanceOperation"] | null;
+        };
+        MaintenancePlan: {
+            /** Format: date-time */
+            evaluated_at: string;
+            /** Format: int64 */
+            policy_revision?: number | null;
+            plan: components["schemas"]["MaintenancePlanStep"][];
+        };
+        /** @description A table's maintenance parameters, what its catalog allows, its recent runs and its current plan. */
+        TableMaintenance: {
+            /** @description update covers saving and removing the parameters, dry runs, runs and analysis. */
+            readonly allowed_actions: components["schemas"]["TableMaintenanceAllowedAction"][];
+            /** Format: uuid */
+            catalog_id: string;
+            namespace: string;
+            table_name: string;
+            policy?: components["schemas"]["StoredMaintenancePolicy"] | null;
+            /**
+             * Format: int64
+             * @description Shortest retention the catalog's engine accepts for expiry and orphan cleanup.
+             */
+            retention_floor_seconds: number;
+            format_version?: number | null;
+            /** @description Iceberg table properties read at the last health pass. */
+            properties?: {
+                [key: string]: string;
+            };
+            runs: components["schemas"]["MaintenanceRun"][];
+            plan?: components["schemas"]["MaintenancePlan"] | null;
+        };
+        /** @enum {string} */
+        TableMaintenanceAllowedAction: "view" | "update";
+        CatalogMaintenancePlanItem: {
+            namespace: string;
+            table_name: string;
+            mode: components["schemas"]["MaintenanceMode"];
+            plan: components["schemas"]["MaintenancePlan"];
+            last_run?: components["schemas"]["MaintenanceRun"] | null;
+        };
+        ManualMaintenanceRequest: {
+            /** @enum {string} */
+            operation: "optimize" | "optimize_manifests" | "expire_snapshots" | "remove_orphan_files" | "next_due";
         };
         MaintenanceRun: {
             /** Format: uuid */
@@ -5696,6 +5999,16 @@ export interface components {
             /** Format: date-time */
             finished_at?: string | null;
             workflow_id: string;
+            /** @enum {string} */
+            trigger: "manual" | "automatic" | "dry_run";
+            reason: components["schemas"]["MaintenanceReason"];
+            /** @description The operation's settings when the run was created. */
+            parameters?: {
+                [key: string]: unknown;
+            };
+            attempts: number;
+            /** Format: int64 */
+            policy_revision?: number | null;
         };
         CreateMaintenanceRequest: {
             namespace: string;
@@ -5965,6 +6278,9 @@ export interface components {
         };
     };
     parameters: {
+        MaintenanceCatalogId: string;
+        MaintenanceNamespace: string;
+        MaintenanceTable: string;
         PathId: string;
         PathAgentId: string;
         PathAgentTokenId: string;
@@ -11233,12 +11549,18 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };
     listMaintenanceRuns: {
         parameters: {
             query?: {
+                trigger?: "manual" | "automatic" | "dry_run";
+                operation?: components["schemas"]["MaintenanceOperation"];
+                status?: "running" | "finished" | "failed" | "gave_up" | "dry_run";
+                ns?: string;
+                table?: string;
                 limit?: number;
                 offset?: number;
             };
@@ -11261,6 +11583,228 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getCatalogMaintenancePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plans, one per table */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogMaintenancePlanItem"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    analyzeCatalogTableHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Analysis started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    analyzeTableHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: components["parameters"]["MaintenanceCatalogId"];
+                namespace: components["parameters"]["MaintenanceNamespace"];
+                table: components["parameters"]["MaintenanceTable"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Analysis started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getTableMaintenance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: components["parameters"]["MaintenanceCatalogId"];
+                namespace: components["parameters"]["MaintenanceNamespace"];
+                table: components["parameters"]["MaintenanceTable"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The table's maintenance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableMaintenance"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putTableMaintenance: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The revision being replaced. */
+                "If-Match"?: string;
+            };
+            path: {
+                catalog_id: components["parameters"]["MaintenanceCatalogId"];
+                namespace: components["parameters"]["MaintenanceNamespace"];
+                table: components["parameters"]["MaintenanceTable"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaintenancePolicy"];
+            };
+        };
+        responses: {
+            /** @description Stored parameters */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredMaintenancePolicy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteTableMaintenance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: components["parameters"]["MaintenanceCatalogId"];
+                namespace: components["parameters"]["MaintenanceNamespace"];
+                table: components["parameters"]["MaintenanceTable"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    dryRunTableMaintenance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: components["parameters"]["MaintenanceCatalogId"];
+                namespace: components["parameters"]["MaintenanceNamespace"];
+                table: components["parameters"]["MaintenanceTable"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenancePlan"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    runTableMaintenance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: components["parameters"]["MaintenanceCatalogId"];
+                namespace: components["parameters"]["MaintenanceNamespace"];
+                table: components["parameters"]["MaintenanceTable"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualMaintenanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Run started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceRun"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listRetrievers: {

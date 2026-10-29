@@ -72,6 +72,10 @@ const (
 	ResultsDownload Action = "results.download"
 
 	MaintenanceTrigger Action = "maintenance.trigger"
+	// Per-table maintenance parameters and runs (#500).
+	MaintenanceParametersSet     Action = "maintenance.parameters_set"
+	MaintenanceParametersRemoved Action = "maintenance.parameters_removed"
+	MaintenanceRunRequested      Action = "maintenance.run_requested"
 
 	RetrieverCreate  Action = "retriever.create"
 	RetrieverUpdate  Action = "retriever.update"
@@ -111,7 +115,7 @@ var allActions = []Action{
 	AssistantSettingsUpdate,
 	ExecutionCreate, ExecutionCancel,
 	ResultsDownload,
-	MaintenanceTrigger,
+	MaintenanceTrigger, MaintenanceParametersSet, MaintenanceParametersRemoved, MaintenanceRunRequested,
 	RetrieverCreate, RetrieverUpdate, RetrieverDelete, RetrieverRefresh,
 	MetadataSync,
 	SpaceCreate, SpaceUpdate, SpaceDelete, SpaceMemberSet, SpaceMemberRemove,

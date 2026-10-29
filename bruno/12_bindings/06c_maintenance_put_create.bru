@@ -1,0 +1,44 @@
+meta {
+  name: Maintenance - Create parameters
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/tables/default/t/maintenance
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+
+body:json {
+  {
+    "mode": "managed",
+    "writer_commit_interval_seconds": 60,
+    "optimize": { "enabled": false, "trigger": {}, "min_interval_seconds": 0, "timeout_seconds": 0, "on_conflict": "retry_with_backoff", "params": {} },
+    "optimize_manifests": { "enabled": false, "trigger": {}, "min_interval_seconds": 0, "timeout_seconds": 0, "on_conflict": "retry_with_backoff", "params": {} },
+    "remove_orphan_files": { "enabled": false, "trigger": {}, "min_interval_seconds": 0, "timeout_seconds": 0, "on_conflict": "retry_with_backoff", "params": {} },
+    "expire_snapshots": {
+      "enabled": true,
+      "trigger": { "snapshots": 100 },
+      "min_interval_seconds": 3600,
+      "timeout_seconds": 600,
+      "on_conflict": "retry_with_backoff",
+      "params": { "retention_seconds": {{maintenance_retention}}, "retain_last": 10 }
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.revision: eq 1
+  res.body.mode: eq managed
+}
+
+docs {
+  PUT without If-Match creates the table's parameters (#500).
+}

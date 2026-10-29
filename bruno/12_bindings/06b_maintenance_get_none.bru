@@ -1,0 +1,34 @@
+meta {
+  name: Maintenance - Get (no parameters)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{base_url}}/catalogs/{{lifecycle_catalog_id}}/tables/default/t/maintenance
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+
+
+script:post-response {
+  // The PUT cases use a retention the catalog accepts: at least its floor
+  // (Trino's 7 days until the projected floor is loaded).
+  bru.setVar("maintenance_retention", Math.max(res.getBody().retention_floor_seconds, 86400));
+}
+
+assert {
+  res.status: eq 200
+  res.body.policy: isNull
+  res.body.retention_floor_seconds: gt 0
+}
+
+docs {
+  GET /catalogs/{id}/tables/{ns}/{table}/maintenance (#500): a table without
+  parameters answers with no policy, the catalog's retention floor and its runs.
+}

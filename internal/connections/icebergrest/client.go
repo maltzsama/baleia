@@ -380,8 +380,10 @@ func (r *reader) LoadTableIfChanged(ctx context.Context, t connections.TableRef,
 
 func toTableMeta(t connections.TableRef, metadataLocation string, m tableMetadata) *connections.TableMeta {
 	meta := &connections.TableMeta{
-		Ref:    t,
-		Format: "iceberg",
+		Ref:             t,
+		Format:          "iceberg",
+		TableProperties: m.Properties,
+		FormatVersion:   m.FormatVersion,
 		Properties: map[string]string{
 			"location": m.Location, "table_uuid": m.TableUUID, "format_version": fmt.Sprint(m.FormatVersion),
 			// It changes on every commit: the metadata sync's change detector.

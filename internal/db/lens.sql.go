@@ -15,7 +15,7 @@ const createMaintenanceRun = `-- name: CreateMaintenanceRun :one
 INSERT INTO maintenance_runs (catalog_id, binding_id, namespace, table_name, operations, retention, status, started_by, workflow_id)
 VALUES ($1::uuid, $2::uuid, $3::text, $4::text,
         $5::text[], $6::text, 'running', $7::uuid, $8::text)
-RETURNING id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id
+RETURNING id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision
 `
 
 type CreateMaintenanceRunParams struct {
@@ -56,6 +56,11 @@ func (q *Queries) CreateMaintenanceRun(ctx context.Context, arg CreateMaintenanc
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.WorkflowID,
+		&i.Trigger,
+		&i.Reason,
+		&i.Parameters,
+		&i.Attempts,
+		&i.PolicyRevision,
 	)
 	return i, err
 }
@@ -105,7 +110,7 @@ func (q *Queries) GetLatestClusterSnapshotByEngine(ctx context.Context, engineID
 }
 
 const getMaintenanceRun = `-- name: GetMaintenanceRun :one
-SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id FROM maintenance_runs WHERE id = $1::uuid
+SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision FROM maintenance_runs WHERE id = $1::uuid
 `
 
 func (q *Queries) GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (MaintenanceRun, error) {
@@ -126,12 +131,17 @@ func (q *Queries) GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (Mainte
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.WorkflowID,
+		&i.Trigger,
+		&i.Reason,
+		&i.Parameters,
+		&i.Attempts,
+		&i.PolicyRevision,
 	)
 	return i, err
 }
 
 const getTableHealthSnapshot = `-- name: GetTableHealthSnapshot :one
-SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id FROM table_health_snapshots
+SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, catalog_id, delete_file_count, equality_delete_count, position_delete_count, small_file_count, commits_last_hour, commits_last_day, avg_file_size_bytes, manifest_count, format_version, table_properties, due_operations, policy_revision FROM table_health_snapshots
 WHERE catalog_connection_id = $1 AND catalog = $2 AND namespace = $3 AND table_name = $4
 `
 
@@ -165,8 +175,19 @@ func (q *Queries) GetTableHealthSnapshot(ctx context.Context, arg GetTableHealth
 		&i.HealthScore,
 		&i.NeedsCompaction,
 		&i.NeedsSnapshotExpiry,
-		&i.NeedsOrphanCleanup,
 		&i.CatalogID,
+		&i.DeleteFileCount,
+		&i.EqualityDeleteCount,
+		&i.PositionDeleteCount,
+		&i.SmallFileCount,
+		&i.CommitsLastHour,
+		&i.CommitsLastDay,
+		&i.AvgFileSizeBytes,
+		&i.ManifestCount,
+		&i.FormatVersion,
+		&i.TableProperties,
+		&i.DueOperations,
+		&i.PolicyRevision,
 	)
 	return i, err
 }
@@ -416,20 +437,39 @@ func (q *Queries) ListClusterSnapshotsByEngine(ctx context.Context, arg ListClus
 }
 
 const listMaintenanceRuns = `-- name: ListMaintenanceRuns :many
-SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id FROM maintenance_runs
+SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision FROM maintenance_runs
 WHERE catalog_id = $1::uuid
+  AND ($2::text IS NULL OR trigger = $2::text)
+  AND ($3::text IS NULL OR $3::text = ANY (operations))
+  AND ($4::text IS NULL OR status = $4::text)
+  AND ($5::text IS NULL OR namespace = $5::text)
+  AND ($6::text IS NULL OR table_name = $6::text)
 ORDER BY started_at DESC
-LIMIT $3::int OFFSET $2::int
+LIMIT $8::int OFFSET $7::int
 `
 
 type ListMaintenanceRunsParams struct {
 	CatalogID pgtype.UUID `json:"catalog_id"`
+	Trigger   *string     `json:"trigger"`
+	Operation *string     `json:"operation"`
+	Status    *string     `json:"status"`
+	Ns        *string     `json:"ns"`
+	Tbl       *string     `json:"tbl"`
 	Off       int32       `json:"off"`
 	Lim       int32       `json:"lim"`
 }
 
 func (q *Queries) ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRunsParams) ([]MaintenanceRun, error) {
-	rows, err := q.db.Query(ctx, listMaintenanceRuns, arg.CatalogID, arg.Off, arg.Lim)
+	rows, err := q.db.Query(ctx, listMaintenanceRuns,
+		arg.CatalogID,
+		arg.Trigger,
+		arg.Operation,
+		arg.Status,
+		arg.Ns,
+		arg.Tbl,
+		arg.Off,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -452,6 +492,11 @@ func (q *Queries) ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRu
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.WorkflowID,
+			&i.Trigger,
+			&i.Reason,
+			&i.Parameters,
+			&i.Attempts,
+			&i.PolicyRevision,
 		); err != nil {
 			return nil, err
 		}
@@ -464,13 +509,13 @@ func (q *Queries) ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRu
 }
 
 const listTableHealthByCatalog = `-- name: ListTableHealthByCatalog :many
-SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id FROM table_health_snapshots
+SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, catalog_id, delete_file_count, equality_delete_count, position_delete_count, small_file_count, commits_last_hour, commits_last_day, avg_file_size_bytes, manifest_count, format_version, table_properties, due_operations, policy_revision FROM table_health_snapshots
 WHERE catalog_id = $1::uuid
   AND ($2::text IS NULL OR namespace = $2::text)
   AND ($3::text IS NULL
        OR ($3::text = 'compaction' AND needs_compaction)
        OR ($3::text = 'snapshot_expiry' AND needs_snapshot_expiry)
-       OR ($3::text = 'orphan_cleanup' AND needs_orphan_cleanup))
+       OR $3::text = ANY (due_operations))
   AND ($4::int IS NULL OR health_score <= $4::int)
 ORDER BY health_score ASC, namespace, table_name
 LIMIT $6::int OFFSET $5::int
@@ -516,8 +561,19 @@ func (q *Queries) ListTableHealthByCatalog(ctx context.Context, arg ListTableHea
 			&i.HealthScore,
 			&i.NeedsCompaction,
 			&i.NeedsSnapshotExpiry,
-			&i.NeedsOrphanCleanup,
 			&i.CatalogID,
+			&i.DeleteFileCount,
+			&i.EqualityDeleteCount,
+			&i.PositionDeleteCount,
+			&i.SmallFileCount,
+			&i.CommitsLastHour,
+			&i.CommitsLastDay,
+			&i.AvgFileSizeBytes,
+			&i.ManifestCount,
+			&i.FormatVersion,
+			&i.TableProperties,
+			&i.DueOperations,
+			&i.PolicyRevision,
 		); err != nil {
 			return nil, err
 		}
@@ -530,7 +586,7 @@ func (q *Queries) ListTableHealthByCatalog(ctx context.Context, arg ListTableHea
 }
 
 const listTableHealthByConnection = `-- name: ListTableHealthByConnection :many
-SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id FROM table_health_snapshots
+SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, catalog_id, delete_file_count, equality_delete_count, position_delete_count, small_file_count, commits_last_hour, commits_last_day, avg_file_size_bytes, manifest_count, format_version, table_properties, due_operations, policy_revision FROM table_health_snapshots
 WHERE catalog_connection_id = $1
 ORDER BY health_score ASC
 LIMIT $2 OFFSET $3
@@ -566,8 +622,19 @@ func (q *Queries) ListTableHealthByConnection(ctx context.Context, arg ListTable
 			&i.HealthScore,
 			&i.NeedsCompaction,
 			&i.NeedsSnapshotExpiry,
-			&i.NeedsOrphanCleanup,
 			&i.CatalogID,
+			&i.DeleteFileCount,
+			&i.EqualityDeleteCount,
+			&i.PositionDeleteCount,
+			&i.SmallFileCount,
+			&i.CommitsLastHour,
+			&i.CommitsLastDay,
+			&i.AvgFileSizeBytes,
+			&i.ManifestCount,
+			&i.FormatVersion,
+			&i.TableProperties,
+			&i.DueOperations,
+			&i.PolicyRevision,
 		); err != nil {
 			return nil, err
 		}
@@ -580,7 +647,7 @@ func (q *Queries) ListTableHealthByConnection(ctx context.Context, arg ListTable
 }
 
 const listTableHealthSnapshots = `-- name: ListTableHealthSnapshots :many
-SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id FROM table_health_snapshots
+SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, catalog_id, delete_file_count, equality_delete_count, position_delete_count, small_file_count, commits_last_hour, commits_last_day, avg_file_size_bytes, manifest_count, format_version, table_properties, due_operations, policy_revision FROM table_health_snapshots
 ORDER BY health_score ASC
 LIMIT $1 OFFSET $2
 `
@@ -614,8 +681,19 @@ func (q *Queries) ListTableHealthSnapshots(ctx context.Context, arg ListTableHea
 			&i.HealthScore,
 			&i.NeedsCompaction,
 			&i.NeedsSnapshotExpiry,
-			&i.NeedsOrphanCleanup,
 			&i.CatalogID,
+			&i.DeleteFileCount,
+			&i.EqualityDeleteCount,
+			&i.PositionDeleteCount,
+			&i.SmallFileCount,
+			&i.CommitsLastHour,
+			&i.CommitsLastDay,
+			&i.AvgFileSizeBytes,
+			&i.ManifestCount,
+			&i.FormatVersion,
+			&i.TableProperties,
+			&i.DueOperations,
+			&i.PolicyRevision,
 		); err != nil {
 			return nil, err
 		}
@@ -802,7 +880,7 @@ UPDATE maintenance_runs
 SET status = $1::text, error_code = $2::text,
     error_message = $3::text, finished_at = now()
 WHERE id = $4::uuid
-RETURNING id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id
+RETURNING id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision
 `
 
 type UpdateMaintenanceRunParams struct {
@@ -835,13 +913,30 @@ func (q *Queries) UpdateMaintenanceRun(ctx context.Context, arg UpdateMaintenanc
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.WorkflowID,
+		&i.Trigger,
+		&i.Reason,
+		&i.Parameters,
+		&i.Attempts,
+		&i.PolicyRevision,
 	)
 	return i, err
 }
 
 const upsertTableHealthSnapshot = `-- name: UpsertTableHealthSnapshot :one
-INSERT INTO table_health_snapshots (catalog_id, catalog_connection_id, catalog, namespace, table_name, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+INSERT INTO table_health_snapshots (
+    catalog_id, catalog_connection_id, catalog, namespace, table_name, snapshot_count, file_count,
+    total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction,
+    needs_snapshot_expiry, delete_file_count, equality_delete_count, position_delete_count,
+    small_file_count, commits_last_hour, commits_last_day, avg_file_size_bytes, manifest_count,
+    format_version, table_properties, due_operations, policy_revision)
+VALUES (
+    $1, $2, $3, $4, $5, $6, $7,
+    $8, $9, $10, $11, $12,
+    $13, $14::bigint, $15::bigint,
+    $16::bigint, $17::bigint,
+    $18::int, $19::int, $20::bigint,
+    $21::int, $22::int, $23::jsonb,
+    $24::text[], $25::bigint)
 ON CONFLICT (catalog_id, namespace, table_name) DO UPDATE
 SET captured_at               = now(),
     catalog_connection_id     = EXCLUDED.catalog_connection_id,
@@ -854,8 +949,19 @@ SET captured_at               = now(),
     health_score              = EXCLUDED.health_score,
     needs_compaction          = EXCLUDED.needs_compaction,
     needs_snapshot_expiry     = EXCLUDED.needs_snapshot_expiry,
-    needs_orphan_cleanup      = EXCLUDED.needs_orphan_cleanup
-RETURNING id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, needs_orphan_cleanup, catalog_id
+    delete_file_count         = EXCLUDED.delete_file_count,
+    equality_delete_count     = EXCLUDED.equality_delete_count,
+    position_delete_count     = EXCLUDED.position_delete_count,
+    small_file_count          = EXCLUDED.small_file_count,
+    commits_last_hour         = EXCLUDED.commits_last_hour,
+    commits_last_day          = EXCLUDED.commits_last_day,
+    avg_file_size_bytes       = EXCLUDED.avg_file_size_bytes,
+    manifest_count            = EXCLUDED.manifest_count,
+    format_version            = EXCLUDED.format_version,
+    table_properties          = EXCLUDED.table_properties,
+    due_operations            = EXCLUDED.due_operations,
+    policy_revision           = EXCLUDED.policy_revision
+RETURNING id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, catalog_id, delete_file_count, equality_delete_count, position_delete_count, small_file_count, commits_last_hour, commits_last_day, avg_file_size_bytes, manifest_count, format_version, table_properties, due_operations, policy_revision
 `
 
 type UpsertTableHealthSnapshotParams struct {
@@ -872,7 +978,18 @@ type UpsertTableHealthSnapshotParams struct {
 	HealthScore            int32              `json:"health_score"`
 	NeedsCompaction        bool               `json:"needs_compaction"`
 	NeedsSnapshotExpiry    bool               `json:"needs_snapshot_expiry"`
-	NeedsOrphanCleanup     bool               `json:"needs_orphan_cleanup"`
+	DeleteFileCount        *int64             `json:"delete_file_count"`
+	EqualityDeleteCount    *int64             `json:"equality_delete_count"`
+	PositionDeleteCount    *int64             `json:"position_delete_count"`
+	SmallFileCount         *int64             `json:"small_file_count"`
+	CommitsLastHour        *int32             `json:"commits_last_hour"`
+	CommitsLastDay         *int32             `json:"commits_last_day"`
+	AvgFileSizeBytes       *int64             `json:"avg_file_size_bytes"`
+	ManifestCount          *int32             `json:"manifest_count"`
+	FormatVersion          *int32             `json:"format_version"`
+	TableProperties        []byte             `json:"table_properties"`
+	DueOperations          []string           `json:"due_operations"`
+	PolicyRevision         *int64             `json:"policy_revision"`
 }
 
 func (q *Queries) UpsertTableHealthSnapshot(ctx context.Context, arg UpsertTableHealthSnapshotParams) (TableHealthSnapshot, error) {
@@ -890,7 +1007,18 @@ func (q *Queries) UpsertTableHealthSnapshot(ctx context.Context, arg UpsertTable
 		arg.HealthScore,
 		arg.NeedsCompaction,
 		arg.NeedsSnapshotExpiry,
-		arg.NeedsOrphanCleanup,
+		arg.DeleteFileCount,
+		arg.EqualityDeleteCount,
+		arg.PositionDeleteCount,
+		arg.SmallFileCount,
+		arg.CommitsLastHour,
+		arg.CommitsLastDay,
+		arg.AvgFileSizeBytes,
+		arg.ManifestCount,
+		arg.FormatVersion,
+		arg.TableProperties,
+		arg.DueOperations,
+		arg.PolicyRevision,
 	)
 	var i TableHealthSnapshot
 	err := row.Scan(
@@ -908,8 +1036,19 @@ func (q *Queries) UpsertTableHealthSnapshot(ctx context.Context, arg UpsertTable
 		&i.HealthScore,
 		&i.NeedsCompaction,
 		&i.NeedsSnapshotExpiry,
-		&i.NeedsOrphanCleanup,
 		&i.CatalogID,
+		&i.DeleteFileCount,
+		&i.EqualityDeleteCount,
+		&i.PositionDeleteCount,
+		&i.SmallFileCount,
+		&i.CommitsLastHour,
+		&i.CommitsLastDay,
+		&i.AvgFileSizeBytes,
+		&i.ManifestCount,
+		&i.FormatVersion,
+		&i.TableProperties,
+		&i.DueOperations,
+		&i.PolicyRevision,
 	)
 	return i, err
 }
