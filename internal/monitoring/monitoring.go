@@ -43,6 +43,7 @@ type Catalogs interface {
 type Store interface {
 	Engines
 	Catalogs
+	Policies
 }
 
 // Operations are the maintenance operations, in the order they run.

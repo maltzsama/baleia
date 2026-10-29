@@ -15,6 +15,8 @@ import (
 func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
 
 type fakeStore struct {
+	// Policies is not used by these tests (see policies_test.go).
+	Policies
 	bindings  []db.CatalogBinding
 	queries   db.ListTrinoQuerySnapshotsByEngineParams
 	snapshot  error

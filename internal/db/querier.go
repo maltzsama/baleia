@@ -86,6 +86,9 @@ type Querier interface {
 	CreateMigrationItem(ctx context.Context, arg CreateMigrationItemParams) (MigrationItem, error)
 	CreateOIDCLoginAttempt(ctx context.Context, arg CreateOIDCLoginAttemptParams) error
 	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) error
+	// A run with its trigger, reason and frozen parameters. A dry run is
+	// recorded finished at once; any other run starts 'running'.
+	CreatePlannedMaintenanceRun(ctx context.Context, arg CreatePlannedMaintenanceRunParams) (MaintenanceRun, error)
 	// The target columns are the resolved execution target (#13); trino_catalog
 	// keeps the engine catalog for the Trino workflow until it reads the target.
 	CreateQueryExecution(ctx context.Context, arg CreateQueryExecutionParams) (QueryExecution, error)
@@ -101,6 +104,8 @@ type Querier interface {
 	// The effective role is computed by baleia_effective_space_role so listing and
 	// single-space checks share one rule (#16 matrix).
 	CreateSpace(ctx context.Context, arg CreateSpaceParams) (Space, error)
+	// No row comes back when the table already has parameters.
+	CreateTableMaintenancePolicy(ctx context.Context, arg CreateTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
@@ -132,6 +137,7 @@ type Querier interface {
 	DeleteSemanticModel(ctx context.Context, arg DeleteSemanticModelParams) (int64, error)
 	DeleteSpace(ctx context.Context, arg DeleteSpaceParams) (int64, error)
 	DeleteSpaceMember(ctx context.Context, arg DeleteSpaceMemberParams) (int64, error)
+	DeleteTableMaintenancePolicy(ctx context.Context, arg DeleteTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	DeleteWorkspace(ctx context.Context, id pgtype.UUID) (int64, error)
@@ -229,6 +235,7 @@ type Querier interface {
 	// Worker-only lookup: the refresh activity runs off a due list, so it does not
 	// have (and must not trust) a caller-supplied workspace id.
 	GetRetrieverForRefresh(ctx context.Context, id pgtype.UUID) (Retriever, error)
+	GetRunningMaintenanceRun(ctx context.Context, arg GetRunningMaintenanceRunParams) (MaintenanceRun, error)
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)
 	GetSavedQueryBySlug(ctx context.Context, arg GetSavedQueryBySlugParams) (SavedQuery, error)
 	GetSavedQueryForUpdate(ctx context.Context, arg GetSavedQueryForUpdateParams) (SavedQuery, error)
@@ -242,7 +249,10 @@ type Querier interface {
 	GetSpace(ctx context.Context, arg GetSpaceParams) (Space, error)
 	// What the last passes stored, so a source can skip loading unchanged tables.
 	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]GetTableFingerprintsRow, error)
+	GetTableHealthByTable(ctx context.Context, arg GetTableHealthByTableParams) (TableHealthSnapshot, error)
 	GetTableHealthSnapshot(ctx context.Context, arg GetTableHealthSnapshotParams) (TableHealthSnapshot, error)
+	// Per-table maintenance parameters and the runs they plan (#500).
+	GetTableMaintenancePolicy(ctx context.Context, arg GetTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
 	GetTeamByID(ctx context.Context, id pgtype.UUID) (Team, error)
 	GetTeamMemberRole(ctx context.Context, arg GetTeamMemberRoleParams) (string, error)
 	GetTrinoCatalogRegistryState(ctx context.Context, arg GetTrinoCatalogRegistryStateParams) (GetTrinoCatalogRegistryStateRow, error)
@@ -268,6 +278,8 @@ type Querier interface {
 	InsertReconcileRun(ctx context.Context, arg InsertReconcileRunParams) (InsertReconcileRunRow, error)
 	// A personal workspace is owned by its user; a shared one by the owners of its team.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
+	// The latest finished run of each operation on a table.
+	LastSuccessfulMaintenanceByOperation(ctx context.Context, arg LastSuccessfulMaintenanceByOperationParams) ([]LastSuccessfulMaintenanceByOperationRow, error)
 	LatestContentVersion(ctx context.Context, arg LatestContentVersionParams) (ContentVersion, error)
 	// Newest run per engine for the system status section (#291).
 	LatestReconcileRuns(ctx context.Context) ([]LatestReconcileRunsRow, error)
@@ -344,6 +356,7 @@ type Querier interface {
 	ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRunsParams) ([]MaintenanceRun, error)
 	// The managed bindings of an engine the reconciler checks (#37).
 	ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)
+	ListManagedMaintenancePolicies(ctx context.Context, catalogID pgtype.UUID) ([]TableMaintenancePolicy, error)
 	// The catalogs a workspace may use with their freshness and their enabled
 	// bindings (what the editor's target selector offers, #24).
 	ListMetadataCatalogs(ctx context.Context, workspaceID pgtype.UUID) ([]ListMetadataCatalogsRow, error)
@@ -403,6 +416,8 @@ type Querier interface {
 	ListTableHealthByCatalog(ctx context.Context, arg ListTableHealthByCatalogParams) ([]TableHealthSnapshot, error)
 	ListTableHealthByConnection(ctx context.Context, arg ListTableHealthByConnectionParams) ([]TableHealthSnapshot, error)
 	ListTableHealthSnapshots(ctx context.Context, arg ListTableHealthSnapshotsParams) ([]TableHealthSnapshot, error)
+	ListTableMaintenancePolicies(ctx context.Context, catalogID pgtype.UUID) ([]TableMaintenancePolicy, error)
+	ListTableMaintenanceRuns(ctx context.Context, arg ListTableMaintenanceRunsParams) ([]MaintenanceRun, error)
 	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error)
 	ListTeams(ctx context.Context) ([]Team, error)
 	ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]Team, error)
@@ -583,6 +598,8 @@ type Querier interface {
 	UpdateSemanticMetric(ctx context.Context, arg UpdateSemanticMetricParams) (SemanticMetric, error)
 	UpdateSemanticModel(ctx context.Context, arg UpdateSemanticModelParams) (SemanticModel, error)
 	UpdateSpace(ctx context.Context, arg UpdateSpaceParams) (Space, error)
+	// No row comes back when the revision moved on (optimistic concurrency).
+	UpdateTableMaintenancePolicy(ctx context.Context, arg UpdateTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) (TeamMember, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)

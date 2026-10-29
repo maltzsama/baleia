@@ -15,7 +15,7 @@ const createMaintenanceRun = `-- name: CreateMaintenanceRun :one
 INSERT INTO maintenance_runs (catalog_id, binding_id, namespace, table_name, operations, retention, status, started_by, workflow_id)
 VALUES ($1::uuid, $2::uuid, $3::text, $4::text,
         $5::text[], $6::text, 'running', $7::uuid, $8::text)
-RETURNING id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id
+RETURNING id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision
 `
 
 type CreateMaintenanceRunParams struct {
@@ -56,6 +56,11 @@ func (q *Queries) CreateMaintenanceRun(ctx context.Context, arg CreateMaintenanc
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.WorkflowID,
+		&i.Trigger,
+		&i.Reason,
+		&i.Parameters,
+		&i.Attempts,
+		&i.PolicyRevision,
 	)
 	return i, err
 }
@@ -105,7 +110,7 @@ func (q *Queries) GetLatestClusterSnapshotByEngine(ctx context.Context, engineID
 }
 
 const getMaintenanceRun = `-- name: GetMaintenanceRun :one
-SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id FROM maintenance_runs WHERE id = $1::uuid
+SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision FROM maintenance_runs WHERE id = $1::uuid
 `
 
 func (q *Queries) GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (MaintenanceRun, error) {
@@ -126,6 +131,11 @@ func (q *Queries) GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (Mainte
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.WorkflowID,
+		&i.Trigger,
+		&i.Reason,
+		&i.Parameters,
+		&i.Attempts,
+		&i.PolicyRevision,
 	)
 	return i, err
 }
@@ -416,7 +426,7 @@ func (q *Queries) ListClusterSnapshotsByEngine(ctx context.Context, arg ListClus
 }
 
 const listMaintenanceRuns = `-- name: ListMaintenanceRuns :many
-SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id FROM maintenance_runs
+SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision FROM maintenance_runs
 WHERE catalog_id = $1::uuid
 ORDER BY started_at DESC
 LIMIT $3::int OFFSET $2::int
@@ -452,6 +462,11 @@ func (q *Queries) ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRu
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.WorkflowID,
+			&i.Trigger,
+			&i.Reason,
+			&i.Parameters,
+			&i.Attempts,
+			&i.PolicyRevision,
 		); err != nil {
 			return nil, err
 		}
@@ -802,7 +817,7 @@ UPDATE maintenance_runs
 SET status = $1::text, error_code = $2::text,
     error_message = $3::text, finished_at = now()
 WHERE id = $4::uuid
-RETURNING id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id
+RETURNING id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision
 `
 
 type UpdateMaintenanceRunParams struct {
@@ -835,6 +850,11 @@ func (q *Queries) UpdateMaintenanceRun(ctx context.Context, arg UpdateMaintenanc
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.WorkflowID,
+		&i.Trigger,
+		&i.Reason,
+		&i.Parameters,
+		&i.Attempts,
+		&i.PolicyRevision,
 	)
 	return i, err
 }
