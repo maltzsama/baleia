@@ -80,15 +80,22 @@ func TestKillUntilFound(t *testing.T) {
 			t.Fatalf("calls = %d, err = %v, took %s", calls, err, time.Since(start))
 		}
 	})
-	t.Run("each attempt gets the time left", func(t *testing.T) {
+	t.Run("each attempt gets at least the floor", func(t *testing.T) {
 		t.Parallel()
 		var lefts []time.Duration
 		_ = killUntilFound(300*time.Millisecond, func(left time.Duration) (bool, error) {
 			lefts = append(lefts, left)
 			return false, nil
 		})
-		if len(lefts) < 2 || lefts[0] > 300*time.Millisecond || lefts[len(lefts)-1] >= lefts[0] {
-			t.Fatalf("time left per attempt = %v", lefts)
+		// The window is shorter than minAttempt: every attempt still gets
+		// the floor, so the last one is not cut short.
+		for _, left := range lefts {
+			if left < minAttempt {
+				t.Fatalf("time per attempt = %v, want at least %s each", lefts, minAttempt)
+			}
+		}
+		if len(lefts) < 2 {
+			t.Fatalf("attempts = %d, want retries", len(lefts))
 		}
 	})
 	t.Run("error stops at once", func(t *testing.T) {
