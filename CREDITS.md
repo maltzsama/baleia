@@ -24,7 +24,7 @@ License summary, as published by Flaticon:
 > [Terms of Use](https://www.flaticon.com/legal) before using the content.
 
 The favicon and web app icon set (`favicon.ico`, `favicon.svg`,
-`favicon-96x96.png`, `apple-touch-icon.png` and the 192/512 px manifest icons)
+`favicon-96x96.png`, `apple-touch-icon.png` and the 192/512 px manifest icons, with padded maskable variants for installed apps)
 was generated from the same artwork with
 [RealFaviconGenerator](https://realfavicongenerator.net).
 
