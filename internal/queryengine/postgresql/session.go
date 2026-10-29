@@ -89,12 +89,17 @@ func (s *session) Close() error {
 // Execute runs one statement and streams its results as Arrow.
 func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callbacks, sink queryengine.RecordSink) error {
 	start := time.Now()
+	tag := queryengine.NewStatementTag()
 	if cb.OnStart != nil {
 		cb.OnStart(queryengine.QueryHandle{
 			EngineID: s.engine.ID(),
-			Extra:    map[string]string{"backend_pid": strconv.Itoa(int(s.pid))},
+			Extra: map[string]string{
+				"backend_pid":               strconv.Itoa(int(s.pid)),
+				queryengine.StatementTagKey: tag,
+			},
 		})
 	}
+	sql = queryengine.TagStatement(sql, tag)
 	if s.readOnly {
 		return s.executeReadOnly(ctx, sql, sink, start)
 	}

@@ -7,6 +7,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -159,10 +160,37 @@ func (e *Engine) Cancel(ctx context.Context, h queryengine.QueryHandle) error {
 	if err != nil {
 		return err
 	}
-	if err := e.kill(ctx, id); err != nil {
-		return mapError(err)
+	tag := h.Extra[queryengine.StatementTagKey]
+	if tag == "" {
+		if err := e.kill(ctx, id); err != nil {
+			return mapError(err)
+		}
+		return nil
 	}
-	return nil
+	// KILL QUERY stops whatever the connection runs at that moment, and the
+	// handle is reported before the statement reaches it (#505): kill only
+	// while the connection runs the statement tagged in the handle, and
+	// retry until it does. An early cancel is not lost, and a pooled
+	// connection's next statement is not hit.
+	ctx = context.WithoutCancel(ctx)
+	return queryengine.CancelUntilFound(queryengine.CancelWindow, func(left time.Duration) (bool, error) {
+		actx, cancel := context.WithTimeout(ctx, left)
+		defer cancel()
+		var running uint64
+		err := e.db.QueryRowContext(actx,
+			"SELECT ID FROM information_schema.PROCESSLIST WHERE ID = ? AND INFO LIKE ?",
+			id, queryengine.TagPattern(tag)).Scan(&running)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		if err != nil {
+			return false, mapError(err)
+		}
+		if err := e.kill(actx, id); err != nil {
+			return false, mapError(err)
+		}
+		return true, nil
+	})
 }
 
 // kill runs KILL QUERY from a pool connection other than the session's own.

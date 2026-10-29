@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net"
+	"regexp"
 	"strconv"
 
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -25,7 +26,8 @@ func mapError(err error) error {
 	}
 	var oe *network.OracleError
 	if errors.As(err, &oe) {
-		return queryengine.NewError(oraCode(oe.ErrCode), Kind, strconv.Itoa(oe.ErrCode), oe.ErrMsg)
+		code := causeOf(oe.ErrCode, oe.ErrMsg)
+		return queryengine.NewError(oraCode(code), Kind, strconv.Itoa(code), oe.ErrMsg)
 	}
 	if errors.Is(err, sql.ErrConnDone) {
 		return queryengine.NewError(queryengine.CodeUnavailable, Kind, "", err.Error())
@@ -69,4 +71,22 @@ func isNotRunning(err error) bool {
 		return false
 	}
 	return oe.ErrCode == 30 || oe.ErrCode == 1013
+}
+
+// oraNumber finds the ORA codes in an Oracle message.
+var oraNumber = regexp.MustCompile(`ORA-(\d{5})`)
+
+// causeOf returns the error behind ORA-00604 ("error occurred at recursive
+// SQL level n"), which only wraps the next ORA code in the message: a cancel
+// that lands while Oracle parses the statement arrives as 604 around 1013.
+func causeOf(code int, msg string) int {
+	if code != 604 {
+		return code
+	}
+	for _, m := range oraNumber.FindAllStringSubmatch(msg, -1) {
+		if n, err := strconv.Atoi(m[1]); err == nil && n != 604 {
+			return n
+		}
+	}
+	return code
 }

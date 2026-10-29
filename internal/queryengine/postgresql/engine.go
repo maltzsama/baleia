@@ -130,18 +130,41 @@ func (e *Engine) Ping(ctx context.Context) error {
 }
 
 // Cancel cancels a running statement from any process with pg_cancel_backend,
-// using the handle's backend pid. A statement that is gone is not an error
-// (pg_cancel_backend returns false).
+// using the handle's backend pid. A statement that is gone is not an error.
+//
+// pg_cancel_backend stops whatever the backend runs at that moment, and the
+// handle is reported before the statement reaches it (#505). So it is sent
+// only while the backend runs the statement tagged in the handle, retried
+// until it does: a cancel never hits another statement on a pooled
+// connection, and one that arrives early is not lost. A handle without a
+// tag (an older worker) cancels at once.
 func (e *Engine) Cancel(ctx context.Context, h queryengine.QueryHandle) error {
 	pid, err := backendPID(h)
 	if err != nil {
 		return err
 	}
-	var cancelled bool
-	if err := e.pool.QueryRow(ctx, "SELECT pg_cancel_backend($1)", pid).Scan(&cancelled); err != nil {
-		return mapError(err)
+	tag := h.Extra[queryengine.StatementTagKey]
+	if tag == "" {
+		var cancelled bool
+		if err := e.pool.QueryRow(ctx, "SELECT pg_cancel_backend($1)", pid).Scan(&cancelled); err != nil {
+			return mapError(err)
+		}
+		return nil
 	}
-	return nil
+	ctx = context.WithoutCancel(ctx)
+	return queryengine.CancelUntilFound(queryengine.CancelWindow, func(left time.Duration) (bool, error) {
+		actx, cancel := context.WithTimeout(ctx, left)
+		defer cancel()
+		var signalled int
+		err := e.pool.QueryRow(actx, `SELECT count(*) FROM (
+			SELECT pg_cancel_backend(pid) FROM pg_stat_activity
+			WHERE pid = $1 AND state = 'active' AND query LIKE $2) c`,
+			pid, queryengine.TagPattern(tag)).Scan(&signalled)
+		if err != nil {
+			return false, mapError(err)
+		}
+		return signalled > 0, nil
+	})
 }
 
 func (e *Engine) OpenSession(ctx context.Context, spec queryengine.SessionSpec) (queryengine.Session, error) {

@@ -49,7 +49,7 @@ func (*Provider) ConfigSchema() []connections.Field {
 		{Key: "host", Label: "Host", Type: connections.FieldText, Required: true},
 		{Key: "port", Label: "Port", Type: connections.FieldInt, Default: "1521"},
 		{Key: "service_name", Label: "Service name", Type: connections.FieldText, Required: true, Help: "e.g. FREEPDB1"},
-		{Key: "cancel_with_alter_system", Label: "Cancel statements with ALTER SYSTEM", Type: connections.FieldBool, Default: "false", Help: "Requires the ALTER SYSTEM permission; lets a running statement be cancelled from another process"},
+		{Key: "cancel_with_alter_system", Label: "Cancel statements with ALTER SYSTEM", Type: connections.FieldBool, Default: "false", Help: "Requires the ALTER SYSTEM permission and SELECT on v$session and v$sql; lets a running statement be cancelled from another process"},
 		{Key: "username", Label: "Username", Type: connections.FieldText, Required: true},
 		{Key: "password", Label: "Password", Type: connections.FieldSecret},
 	}

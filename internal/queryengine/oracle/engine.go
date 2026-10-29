@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -140,6 +141,14 @@ func (e *Engine) Ping(ctx context.Context) error {
 // Cancel cancels a running statement with ALTER SYSTEM CANCEL SQL when the
 // connection asserts that permission (cancel_with_alter_system); otherwise
 // Oracle can only be cancelled in-process, through the statement's context.
+//
+// A CANCEL SQL on an idle session stays pending and stops the session's next
+// call. The handle is reported before the statement reaches the session
+// (#505), and a cancel can also arrive after it ended: the pending cancel
+// would then stop whatever the pooled connection runs next. So Cancel looks
+// the tagged statement up in v$session and v$sql and names its sql_id, which
+// stops that statement and no other, retrying until it is running. A handle
+// without a tag (an older worker) cancels the session's current SQL.
 func (e *Engine) Cancel(ctx context.Context, h queryengine.QueryHandle) error {
 	if !e.cancelWithAlterSystem {
 		return queryengine.ErrCancelUnsupported
@@ -148,7 +157,40 @@ func (e *Engine) Cancel(ctx context.Context, h queryengine.QueryHandle) error {
 	if err != nil {
 		return err
 	}
-	if _, err := e.db.ExecContext(ctx, fmt.Sprintf("ALTER SYSTEM CANCEL SQL '%d, %d'", sid, serial)); err != nil {
+	tag := h.Extra[queryengine.StatementTagKey]
+	if tag == "" {
+		return e.cancelSQL(ctx, fmt.Sprintf("%d, %d", sid, serial))
+	}
+	ctx = context.WithoutCancel(ctx)
+	return queryengine.CancelUntilFound(queryengine.CancelWindow, func(left time.Duration) (bool, error) {
+		actx, cancel := context.WithTimeout(ctx, left)
+		defer cancel()
+		var sqlID string
+		err := e.db.QueryRowContext(actx, `SELECT s.sql_id FROM v$session s
+			JOIN v$sql q ON q.sql_id = s.sql_id AND q.child_number = s.sql_child_number
+			WHERE s.sid = :1 AND s.serial# = :2 AND s.status = 'ACTIVE' AND q.sql_text LIKE :3`,
+			sid, serial, queryengine.TagPattern(tag)).Scan(&sqlID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		if err != nil {
+			return false, mapError(err)
+		}
+		if !sqlIDPattern.MatchString(sqlID) {
+			return false, queryengine.NewError(queryengine.CodeInternal, Kind, "", "unexpected sql_id")
+		}
+		return true, e.cancelSQL(actx, fmt.Sprintf("%d, %d, %s", sid, serial, sqlID))
+	})
+}
+
+// sqlIDPattern is Oracle's 13-character sql_id, checked before it is written
+// into ALTER SYSTEM CANCEL SQL (which takes no bind variables).
+var sqlIDPattern = regexp.MustCompile(`^[0-9a-z]{13}$`)
+
+// cancelSQL runs ALTER SYSTEM CANCEL SQL; a statement that is gone is not an
+// error.
+func (e *Engine) cancelSQL(ctx context.Context, target string) error {
+	if _, err := e.db.ExecContext(ctx, "ALTER SYSTEM CANCEL SQL '"+target+"'"); err != nil {
 		if isNotRunning(err) {
 			return nil
 		}
