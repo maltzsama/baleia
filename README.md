@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="web/static/baleia.svg" alt="Baleia logo" width="128" height="128">
+</p>
+
 # Baleia
 
 **A self-hosted SQL workspace for your data platform.** Write and run SQL against Trino and your databases, browse every catalog in one place, and share queries, metrics and models with your team.
@@ -60,6 +64,14 @@ Baleia is in beta and moving fast; expect changes between minor versions. Bugs a
 ## Contributing
 
 Baleia is mostly a one-person project for now, and help is welcome, especially on the web app (Svelte 5). Start with [docs/development.md](docs/development.md) and [AGENTS.md](AGENTS.md), then open an issue or a pull request. Code, comments and docs are written in English.
+
+## Credits
+
+The Baleia icon is the ["pet" icon](https://www.flaticon.com/free-icon/pet_7688189)
+by bsd from [Flaticon](https://www.flaticon.com)
+([Tv show icons created by bsd - Flaticon](https://www.flaticon.com/free-icons/tv-show)),
+used under its free license; the bundled fonts are under the SIL Open Font License.
+See [CREDITS.md](CREDITS.md) for the attributions and license summaries.
 
 ## License
 

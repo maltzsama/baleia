@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { API_ROOT, client } from '$lib/api/client';
 	import { bootstrap, login as loginSession, safeNext } from '$lib/auth/session';
 	import { describeError } from '$lib/errors/catalog';
 	import { Input, PasswordInput, Select } from '$lib/ui';
+	import Logo from '$lib/components/Logo.svelte';
 
 	type Provider = { id: string; name: string; type: 'oidc' | 'ldap' };
 
@@ -231,13 +233,7 @@
 		max-[680px]:hidden"
 	>
 		<div class="relative z-[1] flex flex-col items-center text-center gap-6">
-			<div
-				class="w-[72px] h-[72px] bg-primary/15 border border-primary/30 rounded-[20px] flex items-center justify-center"
-			>
-				<svg viewBox="0 0 24 24" class="w-9 h-9 stroke-primary"
-					><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
-				>
-			</div>
+			<Logo class="h-[96px] w-[96px]" />
 			<div class="text-[32px] font-bold tracking-[-1px] text-slate-100">{m.common_baleia()}</div>
 			<div class="text-[13px] text-slate-500 leading-[1.6] max-w-[260px]">
 				{m.login_a_powerful_sql_client_for_your_self_hosted()}
@@ -443,6 +439,13 @@
 				</div>
 			{/if}
 		</div>
+
+		<a
+			href={resolve('/credits')}
+			class="absolute bottom-4 text-[11px] text-text-muted no-underline transition-colors duration-150 hover:text-text-main"
+		>
+			{m.common_credits()}
+		</a>
 	</div>
 </div>
 

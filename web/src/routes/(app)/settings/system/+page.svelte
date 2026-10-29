@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
@@ -223,5 +224,17 @@
 				</div>
 			</section>
 		{/if}
+
+		<section class="mt-6 border-t border-border pt-4">
+			<h2 class="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+				{m.common_credits()}
+			</h2>
+			<p class="mt-1 text-[12px] text-text-muted">
+				{m.settings_system_icon_and_font_licenses()}
+				<a href={resolve('/credits')} class="text-primary hover:underline">
+					{m.common_view_credits()}
+				</a>
+			</p>
+		</section>
 	</div>
 </div>
