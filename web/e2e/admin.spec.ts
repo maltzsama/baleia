@@ -17,7 +17,7 @@ test('@issue-385 the admin sees connections, a catalog and the profile', async (
 
 	// The old settings URL redirects to the personal profile page.
 	await page.goto('/settings/profile');
-	await expect(page).toHaveURL(/\/profile$/);
+	await expect.poll(() => new URL(page.url()).pathname).toBe('/profile');
 	await expect(page.getByLabel('Email')).toBeEnabled();
 	await expect(page.getByRole('button', { name: /change password/i })).toBeVisible();
 	await expectNoA11yViolations(page);

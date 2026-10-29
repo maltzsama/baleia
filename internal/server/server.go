@@ -268,6 +268,14 @@ func (e engineCapabilities) ReadOnly(ctx context.Context, id pgtype.UUID) (query
 	return e.h.EngineReadOnly(ctx, id)
 }
 
+// movedRoutes are app routes that moved; their old URLs answer with a
+// permanent redirect so links and bookmarks keep working. The client router
+// redirects too, for navigation inside the app.
+var movedRoutes = map[string]string{
+	"/settings/profile":  "/profile",
+	"/settings/api-keys": "/profile/api-keys",
+}
+
 // staticHandler serves the SPA. The root is the app shell, never the directory
 // listing of the build, and a prerendered .html file redirects to its
 // extensionless route so the client router matches it.
@@ -291,6 +299,13 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 
 		if strings.HasPrefix(path, "/api/") {
 			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		// The target is a fixed route: nothing from the request reaches the
+		// Location header (the profile pages read no query).
+		if to, ok := movedRoutes[strings.TrimSuffix(path, "/")]; ok {
+			http.Redirect(w, r, to, http.StatusPermanentRedirect)
 			return
 		}
 
