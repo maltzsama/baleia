@@ -1,12 +1,11 @@
-<p align="center">
-  <img src="web/static/baleia.svg" alt="Baleia logo" width="128" height="128">
-</p>
+<h1 align="center">
+  <img src="web/static/baleia.svg" alt="" width="120"><br>
+  Baleia
+</h1>
 
-# Baleia
+<p align="center"><strong>A self-hosted SQL workspace for your data platform.</strong></p>
 
-**A self-hosted SQL workspace for your data platform.** Write and run SQL against Trino and your databases, browse every catalog in one place, and share queries, metrics and models with your team.
-
-![The Baleia SQL editor running a query on Trino](docs/img/workbench.png)
+Write and run SQL against Trino and your databases, browse every catalog in one place, and share queries, metrics and models with your team.
 
 ## What you can do
 
