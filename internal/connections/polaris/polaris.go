@@ -32,12 +32,12 @@ func (*Provider) Status() connections.Status {
 }
 
 func (*Provider) ConfigSchema() []connections.Field {
-	return []connections.Field{
+	return append([]connections.Field{
 		{Key: "url", Label: "Polaris URL", Type: connections.FieldURL, Required: true, Help: "Server root, e.g. http://polaris:8181 (without /api/catalog)"},
 		{Key: "realm", Label: "Realm", Type: connections.FieldText, Default: "POLARIS"},
 		{Key: "client_id", Label: "Client ID", Type: connections.FieldText, Required: true},
 		{Key: "client_secret", Label: "Client secret", Type: connections.FieldSecret, Required: true},
-	}
+	}, connections.S3StorageFields()...)
 }
 
 func (p *Provider) Validate(cfg connections.Config) (connections.Config, error) {

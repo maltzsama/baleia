@@ -60,11 +60,11 @@ func (*Provider) Status() connections.Status {
 }
 
 func (*Provider) ConfigSchema() []connections.Field {
-	return []connections.Field{
+	return append([]connections.Field{
 		{Key: "url", Label: "Unity URL", Type: connections.FieldURL, Required: true, Help: "Server root, e.g. http://unity:8080 or a Databricks workspace URL"},
 		{Key: "token", Label: "Bearer token", Type: connections.FieldSecret, Help: "OSS token or a Databricks personal access token"},
 		{Key: "iceberg_path", Label: "Iceberg REST path", Type: connections.FieldText, Default: defaultIcebergPath, Help: "Override for Databricks: /api/2.1/unity-catalog/iceberg-rest"},
-	}
+	}, connections.S3StorageFields()...)
 }
 
 func (p *Provider) Validate(cfg connections.Config) (connections.Config, error) {

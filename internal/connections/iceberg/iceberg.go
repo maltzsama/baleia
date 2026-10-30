@@ -30,7 +30,7 @@ func (*Provider) Status() connections.Status {
 }
 
 func (*Provider) ConfigSchema() []connections.Field {
-	return []connections.Field{
+	return append([]connections.Field{
 		{Key: "url", Label: "REST URI", Type: connections.FieldURL, Required: true, Help: "Base URI of the Iceberg REST API (the one /v1/config is under)"},
 		{Key: "warehouse", Label: "Warehouse", Type: connections.FieldText},
 		{Key: "token", Label: "Bearer token", Type: connections.FieldSecret},
@@ -38,7 +38,7 @@ func (*Provider) ConfigSchema() []connections.Field {
 		{Key: "client_secret", Label: "OAuth2 client secret", Type: connections.FieldSecret},
 		{Key: "oauth2_server_uri", Label: "OAuth2 token endpoint", Type: connections.FieldURL, Help: "Default: <REST URI>/v1/oauth/tokens"},
 		{Key: "scope", Label: "OAuth2 scope", Type: connections.FieldText},
-	}
+	}, connections.S3StorageFields()...)
 }
 
 func (p *Provider) Validate(cfg connections.Config) (connections.Config, error) {

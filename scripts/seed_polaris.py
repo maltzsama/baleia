@@ -3,7 +3,10 @@
 Seed local Polaris with a catalog, namespace, and table for Baleia dev.
 
 Creates a catalog with STS enabled so Polaris vends temporary S3
-credentials to clients (Trino, Baleia). Uses PyIceberg for catalog
+credentials to clients (Trino, Baleia). On a store without STS (Oracle
+Object Storage, Ceph RGW or MinIO without STS), STS_UNAVAILABLE=true creates
+it with stsUnavailable and the seed writes with S3_ACCESS_KEY/S3_SECRET_KEY,
+which is what a Baleia connection with storage.access_key does (#511). Uses PyIceberg for catalog
 operations (namespace + table) to exercise the full OAuth2 + STS flow
 with Polaris's REST API, and raw requests for the Management API
 (catalog create) which PyIceberg doesn't cover.
@@ -21,6 +24,12 @@ Usage:
 
 import os
 import sys
+
+# Newer AWS SDKs send aws-chunked uploads with integrity checksums by default,
+# which several S3-compatible stores reject (HTTP 501). Ask only when required;
+# AWS and RustFS accept either. Set before pyarrow loads its S3 client.
+os.environ.setdefault("AWS_REQUEST_CHECKSUM_CALCULATION", "WHEN_REQUIRED")
+os.environ.setdefault("AWS_RESPONSE_CHECKSUM_VALIDATION", "WHEN_REQUIRED")
 import requests
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
@@ -37,6 +46,10 @@ NAMESPACE = os.getenv("NAMESPACE", "analytics")
 TABLE = os.getenv("TABLE", "events")
 
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "http://rustfs:9000")
+S3_REGION = os.getenv("S3_REGION", "")
+STS_UNAVAILABLE = os.getenv("STS_UNAVAILABLE", "false") == "true"
+S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "")
+S3_SECRET_KEY = os.getenv("S3_SECRET_KEY", "")
 BUCKET = os.getenv("BUCKET", "baleia")
 BASE_LOCATION = f"s3://{BUCKET}/warehouse"
 
@@ -79,7 +92,8 @@ def drop_catalog(token: str):
 
 
 def create_catalog(token: str):
-    print(f"==> Creating catalog '{CATALOG}' with STS enabled")
+    sts = "unavailable" if STS_UNAVAILABLE else "enabled"
+    print(f"==> Creating catalog '{CATALOG}' with STS {sts}")
     payload = {
         "catalog": {
             "name": CATALOG,
@@ -96,6 +110,11 @@ def create_catalog(token: str):
             },
         }
     }
+    storage = payload["catalog"]["storageConfigInfo"]
+    if S3_REGION:
+        storage["region"] = S3_REGION
+    if STS_UNAVAILABLE:
+        storage["stsUnavailable"] = True
     r = requests.post(MANAGEMENT_URL, headers=realm_headers(token), json=payload)
     if r.status_code == 409:
         print("    (already exists)")
@@ -125,19 +144,32 @@ def grant_catalog_privileges(token: str):
             print(f"    HTTP {r.status_code}: {r.text[:200]}")
 
 
+def catalog_props() -> dict:
+    props = {
+        "type": "rest",
+        "uri": f"{POLARIS_URL}/api/catalog",
+        "warehouse": CATALOG,
+        "credential": f"{CLIENT_ID}:{CLIENT_SECRET}",
+        "scope": "PRINCIPAL_ROLE:ALL",
+        "header.Polaris-Realm": REALM,
+    }
+    if STS_UNAVAILABLE:
+        # Nothing to vend: do not ask for it, and write with our own keys.
+        props.update({
+            "header.X-Iceberg-Access-Delegation": "",
+            "s3.endpoint": S3_ENDPOINT,
+            "s3.access-key-id": S3_ACCESS_KEY,
+            "s3.secret-access-key": S3_SECRET_KEY,
+            "s3.force-virtual-addressing": False,
+        })
+        if S3_REGION:
+            props["s3.region"] = S3_REGION
+    return props
+
+
 def seed_table():
     print(f"==> Creating namespace '{NAMESPACE}' and table '{TABLE}' via PyIceberg")
-    catalog = load_catalog(
-        "polaris_rest",
-        **{
-            "type": "rest",
-            "uri": f"{POLARIS_URL}/api/catalog",
-            "warehouse": CATALOG,
-            "credential": f"{CLIENT_ID}:{CLIENT_SECRET}",
-            "scope": "PRINCIPAL_ROLE:ALL",
-            "header.Polaris-Realm": REALM,
-        },
-    )
+    catalog = load_catalog("polaris_rest", **catalog_props())
     catalog.create_namespace(NAMESPACE)
     schema = Schema(
         NestedField(field_id=1, name="id", field_type=LongType(), required=True),
