@@ -8,8 +8,6 @@ title: Introduction
 
 Baleia is a self-hosted SQL workspace for your data platform. Write and run SQL against Trino and your databases, browse every catalog in one place, and share queries, metrics and models with your team.
 
-![The Baleia SQL editor running a query on Trino](img/workbench.png)
-
 Baleia is a **control plane**. It manages connections, catalogs and engines, runs your SQL on those engines and shows the results. The engines do the work: external clients keep talking to them directly, and joins across sources are the job of a federated engine such as Trino ([why](adr/0001-control-plane-only.md)).
 
 ## What you can do

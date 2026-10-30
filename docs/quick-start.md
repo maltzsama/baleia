@@ -10,7 +10,7 @@ Run Baleia on your machine with Docker, connect the bundled Polaris catalog and 
 
 You need Docker with Compose and `make`.
 
-```bash
+```bash title="Start Baleia and its dependencies"
 git clone https://github.com/maltzsama/baleia.git
 cd baleia
 make up
@@ -59,7 +59,7 @@ The connection types and their fields are listed in [Connections](connections.md
 
 Open **SQL**, pick the catalog in the target selector and run:
 
-```sql
+```sql title="A first query"
 SELECT * FROM analytics.events LIMIT 10;
 ```
 
@@ -67,7 +67,7 @@ Run with **⌘/Ctrl + Enter**. The [workbench guide](guides/workbench.md) covers
 
 ## Stop
 
-```bash
+```bash title="Stop"
 make down      # stop, keeping the data
 make down-v    # stop and delete the volumes
 ```

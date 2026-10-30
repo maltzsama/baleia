@@ -1,29 +1,173 @@
-/* Baleia's palette: the web app's primary blue (web/src/app.css). */
+/* Baleia's site follows the house style of the project's other sites: serif
+   headings, square controls, terminal-like code blocks and a faint grain.
+   The palette is the logo's: the outline's purple, the star's yellow and
+   the pet's pink. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&display=swap');
+
 :root {
-  --ifm-color-primary: #2563eb;
-  --ifm-color-primary-dark: #1554e0;
-  --ifm-color-primary-darker: #1350d4;
-  --ifm-color-primary-darkest: #1042ae;
-  --ifm-color-primary-light: #3e75ed;
-  --ifm-color-primary-lighter: #4a7eee;
-  --ifm-color-primary-lightest: #7098f2;
-  --ifm-code-font-size: 92%;
-  --ifm-font-family-base: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.08);
+  --baleia-purple: #3a1061;
+  --baleia-yellow: #ffeb87;
+  --baleia-pink: #ff8f94;
+
+  --ifm-color-primary: #6b2fa3;
+  --ifm-color-primary-dark: #602a93;
+  --ifm-color-primary-darker: #5b288b;
+  --ifm-color-primary-darkest: #4b2172;
+  --ifm-color-primary-light: #7634b3;
+  --ifm-color-primary-lighter: #7b36bb;
+  --ifm-color-primary-lightest: #8b47ca;
+  --ifm-code-font-size: 95%;
+
+  --ifm-heading-margin-top: 2.5rem;
+  --ifm-global-radius: 0px;
+  --ifm-code-border-radius: 16px;
+  --ifm-global-shadow-lw: none;
+  --ifm-global-shadow-md: none;
+  --ifm-global-shadow-tl: none;
+
+  --docusaurus-highlighted-code-line-bg: rgba(107, 47, 163, 0.12);
+
+  /* Code block – light theme */
+  --code-block-bg: hsl(0, 0%, 98%);
+  --code-block-border: hsl(0, 0%, 88%);
+  --code-block-header-bg: hsl(0, 0%, 95%);
+  --code-block-header-text: hsl(0, 0%, 45%);
+  --code-block-dots-color: hsl(0, 0%, 80%);
+  --code-block-footer-bg: hsl(0, 0%, 96%);
+  --code-block-footer-text: hsl(276, 45%, 42%);
+  --code-block-footer-icon: hsl(356, 70%, 60%);
 }
 
 [data-theme='dark'] {
-  --ifm-color-primary: #60a5fa;
-  --ifm-color-primary-dark: #3e92f9;
-  --ifm-color-primary-darker: #2e89f8;
-  --ifm-color-primary-darkest: #076deb;
-  --ifm-color-primary-light: #82b8fb;
-  --ifm-color-primary-lighter: #92c1fc;
-  --ifm-color-primary-lightest: #c5defd;
-  --ifm-background-color: #0f172a;
-  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.1);
+  --ifm-color-primary: #c3a3f5;
+  --ifm-color-primary-dark: #ab7ef1;
+  --ifm-color-primary-darker: #9f6cef;
+  --ifm-color-primary-darkest: #7b35e9;
+  --ifm-color-primary-light: #dbc8f9;
+  --ifm-color-primary-lighter: #e7dafb;
+  --ifm-color-primary-lightest: #ffffff;
+
+  --ifm-background-color: #121212;
+  --ifm-background-surface-color: #1e1e1e;
+
+  --docusaurus-highlighted-code-line-bg: rgba(195, 163, 245, 0.16);
+
+  /* Code block – dark theme */
+  --code-block-bg: hsl(270, 25%, 4%);
+  --code-block-border: hsl(270, 14%, 15%);
+  --code-block-header-bg: hsl(270, 18%, 8%);
+  --code-block-header-text: hsl(276, 20%, 66%);
+  --code-block-dots-color: hsla(270, 12%, 22%, 0.8);
+  --code-block-footer-bg: hsla(270, 18%, 8%, 0.4);
+  --code-block-footer-text: hsla(276, 70%, 82%, 0.9);
+  --code-block-footer-icon: hsl(356, 80%, 72%);
 }
 
-.navbar__logo img {
-  height: 28px;
+.hero__title,
+.navbar__title,
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+}
+
+.navbar__title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.navbar {
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  box-shadow: none;
+}
+
+.hero {
+  padding: 6rem 2rem;
+}
+
+:is([data-theme='light'], [data-theme='dark']) .hero__title {
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  font-size: 3.75rem;
+  color: #fff;
+}
+
+@media (min-width: 640px) {
+  :is([data-theme='light'], [data-theme='dark']) .hero__title {
+    font-size: 6rem;
+  }
+}
+
+:is([data-theme='light'], [data-theme='dark']) .hero__subtitle {
+  max-width: 48rem;
+  margin-inline: auto;
+  margin-top: 1.5rem;
+  font-size: 1.5rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: #fff;
+}
+
+@media (min-width: 640px) {
+  :is([data-theme='light'], [data-theme='dark']) .hero__subtitle {
+    font-size: 1.75rem;
+  }
+}
+
+.button {
+  border-radius: 0px;
+  font-weight: bold;
+  border-width: 2px;
+}
+
+/* Code block container overrides */
+.codeBlockContainer {
+  background: var(--code-block-bg);
+  border: 1px solid var(--code-block-border);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  margin-bottom: var(--ifm-leading);
+}
+
+[data-theme='dark'] .codeBlockContainer {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.codeBlockContainer pre {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* A faint grain behind the docs content */
+.docMainContainer > div {
+  position: relative;
+}
+
+.docMainContainer > div::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 1px 1px, hsl(276 30% 40% / 0.05) 1px, transparent 0);
+  background-size: 32px 32px;
+  z-index: 0;
+}
+
+[data-theme='dark'] .docMainContainer > div::before {
+  background-image: radial-gradient(circle at 1px 1px, hsl(276 30% 92% / 0.04) 1px, transparent 0);
+}
+
+.docMainContainer > div > article,
+.docMainContainer > div > aside {
+  position: relative;
+  z-index: 1;
+}
+
+/* Tables read better with a little air */
+.markdown table {
+  font-size: 0.95rem;
 }
