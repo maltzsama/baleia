@@ -32,6 +32,12 @@ function HomepageHeader() {
           <Link className={clsx('button button--lg', styles.outlineButton)} to="/docs/quick-start">
             Get Started
           </Link>
+          <Link
+            className={clsx('button button--lg', styles.outlineButton)}
+            href="https://demo.baleia.galileostd.io"
+          >
+            Try the live demo
+          </Link>
           <iframe
             src="https://ghbtns.com/github-btn.html?user=maltzsama&repo=baleia&type=star&count=true&size=large"
             width="160"

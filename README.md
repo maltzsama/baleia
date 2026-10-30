@@ -45,7 +45,7 @@ Settings are listed in [docs/configuration.md](docs/configuration.md), and runni
 
 ## Documentation
 
-The documentation is published at **https://maltzsama.github.io/baleia/**, built from [`docs/`](docs/) with the site in [`website/`](website/).
+The documentation is published at **https://baleia.galileostd.io/**, built from [`docs/`](docs/) with the site in [`website/`](website/). A live demo runs at **https://demo.baleia.galileostd.io/**.
 
 | | |
 |---|---|

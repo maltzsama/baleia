@@ -4,6 +4,7 @@ import { themes as prismThemes } from 'prism-react-renderer';
 import githubLinks from './src/remark/github-links';
 
 const repo = 'https://github.com/maltzsama/baleia';
+const demo = 'https://demo.baleia.galileostd.io';
 
 // The site renders the repository's docs/ folder as is, under /docs, so the
 // same Markdown reads well on GitHub and here. Links that leave docs/ go to
@@ -17,8 +18,8 @@ const config: Config = {
     v4: true
   },
 
-  url: 'https://maltzsama.github.io',
-  baseUrl: '/baleia/',
+  url: 'https://baleia.galileostd.io',
+  baseUrl: '/',
   organizationName: 'maltzsama',
   projectName: 'baleia',
   trailingSlash: false,
@@ -79,6 +80,7 @@ const config: Config = {
       items: [
         { type: 'docSidebar', sidebarId: 'docs', position: 'left', label: 'Docs' },
         { to: '/docs/adr', label: 'Decisions', position: 'left' },
+        { href: demo, label: 'Live demo', position: 'right' },
         { href: `${repo}/releases`, label: 'Releases', position: 'right' },
         { href: repo, label: 'GitHub', position: 'right' }
       ]
@@ -91,6 +93,7 @@ const config: Config = {
           items: [
             { label: 'Quick start', to: '/docs/quick-start' },
             { label: 'Install on Kubernetes', to: '/docs/install' },
+            { label: 'Live demo', href: demo },
             { label: 'Concepts', to: '/docs/concepts' },
             { label: 'Configuration', to: '/docs/configuration' }
           ]
