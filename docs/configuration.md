@@ -20,10 +20,11 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `POLARIS_URL` | `http://localhost:8181` | Polaris REST API endpoint |
 | `POLARIS_CLIENT_ID` / `POLARIS_CLIENT_SECRET` | _(unset)_ | Credentials stored for a `polaris` connection created without any; both must be set |
 | `PUBLIC_URL` | `http://localhost:8080` | Externally reachable URL (used for presigned links) |
-| `S3_ENDPOINT` | `localhost:9000` | S3-compatible storage endpoint (RustFS) |
+| `S3_ENDPOINT` | `localhost:9000` | Endpoint of any S3-compatible store (AWS S3, RustFS, MinIO, Ceph RGW, Google Cloud Storage, Oracle Object Storage), as host[:port] |
 | `S3_ACCESS_KEY` | `rustfsadmin` | S3 access key |
 | `S3_SECRET_KEY` | `rustfsadmin` | S3 secret key |
 | `S3_BUCKET` | `baleia` | S3 bucket for query results |
+| `S3_REGION` | _(empty)_ | SigV4 signing region. Empty discovers it (AWS, RustFS, MinIO); set it for stores that require it, e.g. `sa-saopaulo-1` on Oracle Object Storage |
 | `S3_USE_SSL` | `false` | Enable TLS for S3 connections |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | — | Outbound email (password reset, invites) |
 | `BALEIA_DEFAULT_LOCALE` | `en` | Fallback language for transactional e-mails when the recipient has no `users.locale` (`en` or `pt-BR`) |

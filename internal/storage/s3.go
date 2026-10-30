@@ -23,32 +23,35 @@ import (
 // handled by minio-go's PutObject with size -1, so a result stream is never
 // buffered in memory.
 type S3Client struct {
-	endpoint  string
-	accessKey string
-	secretKey string
-	bucket    string
-	useSSL    bool
-	client    *minio.Client
-	metrics   *metrics.Storage // nil-safe
+	bucket  string
+	client  *minio.Client
+	metrics *metrics.Storage // nil-safe
 }
 
-// New creates the adapter. The endpoint is a host[:port] (no scheme). It
-// fails only on an unusable configuration.
-func New(endpoint, accessKey, secretKey, bucket string, useSSL bool) (*S3Client, error) {
-	ep := strings.TrimRight(endpoint, "/")
+// Options configures the adapter.
+type Options struct {
+	// Endpoint is a host[:port]; a scheme, if any, is dropped.
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Bucket    string
+	// Region is the SigV4 signing region. Empty lets minio-go discover it,
+	// which AWS, MinIO and RustFS answer; stores such as Oracle Object
+	// Storage reject that lookup and need it set (#510).
+	Region string
+	UseSSL bool
+}
+
+// New creates the adapter. It fails only on an unusable configuration.
+func New(o Options) (*S3Client, error) {
+	ep := strings.TrimRight(o.Endpoint, "/")
 	if i := strings.Index(ep, "://"); i >= 0 {
 		ep = ep[i+3:]
 	}
 
-	var opts *minio.Options
-	if accessKey != "" || secretKey != "" {
-		opts = &minio.Options{
-			Creds:     credentials.NewStaticV4(accessKey, secretKey, ""),
-			Secure:    useSSL,
-			Transport: obs.Transport(nil),
-		}
-	} else {
-		opts = &minio.Options{Secure: useSSL, Transport: obs.Transport(nil)}
+	opts := &minio.Options{Secure: o.UseSSL, Region: o.Region, Transport: obs.Transport(nil)}
+	if o.AccessKey != "" || o.SecretKey != "" {
+		opts.Creds = credentials.NewStaticV4(o.AccessKey, o.SecretKey, "")
 	}
 
 	mc, err := minio.New(ep, opts)
@@ -56,14 +59,7 @@ func New(endpoint, accessKey, secretKey, bucket string, useSSL bool) (*S3Client,
 		return nil, fmt.Errorf("storage: invalid s3 endpoint %q: %w", ep, err)
 	}
 
-	return &S3Client{
-		endpoint:  ep,
-		accessKey: accessKey,
-		secretKey: secretKey,
-		bucket:    bucket,
-		useSSL:    useSSL,
-		client:    mc,
-	}, nil
+	return &S3Client{bucket: o.Bucket, client: mc}, nil
 }
 
 // MakeBucket ensures the bucket exists (idempotent).

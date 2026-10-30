@@ -93,7 +93,9 @@ type Config struct {
 	S3AccessKey   string
 	S3SecretKey   string
 	S3Bucket      string
-	S3UseSSL      bool
+	// S3Region is the signing region; empty lets the client discover it (#510).
+	S3Region string
+	S3UseSSL bool
 	// StatementTimeout bounds a single statement execution. The script
 	// activity enforces it per statement and passes it to the engine (Trino:
 	// query_max_execution_time) so the engine enforces it too.
@@ -255,6 +257,7 @@ func Load() *Config {
 		S3AccessKey:                    getEnv("S3_ACCESS_KEY", "rustfsadmin"),
 		S3SecretKey:                    getEnv("S3_SECRET_KEY", "rustfsadmin"),
 		S3Bucket:                       getEnv("S3_BUCKET", "baleia"),
+		S3Region:                       getEnv("S3_REGION", ""),
 		S3UseSSL:                       getEnv("S3_USE_SSL", "false") == "true",
 		StatementTimeout:               getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
 		ExecutionTimeout:               getEnvDuration("BALEIA_EXECUTION_TIMEOUT", 2*time.Hour),
