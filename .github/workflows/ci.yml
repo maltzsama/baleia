@@ -134,6 +134,23 @@ jobs:
       - name: Build
         run: go build ./cmd/...
 
+  # The release publishes amd64 and arm64 (#516); build both here so an
+  # ARM-only break shows up on the PR, not at release time. Nothing is pushed.
+  image:
+    name: Image (amd64, arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   web:
     name: Web
     runs-on: ubuntu-latest
