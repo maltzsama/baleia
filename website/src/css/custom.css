@@ -124,8 +124,9 @@
   border-width: 2px;
 }
 
-/* Code block container overrides */
-.codeBlockContainer {
+/* Code block container overrides (theme-code-block is the stable class; the
+   module class is hashed) */
+.theme-code-block {
   background: var(--code-block-bg);
   border: 1px solid var(--code-block-border);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
@@ -133,21 +134,22 @@
   margin-bottom: var(--ifm-leading);
 }
 
-[data-theme='dark'] .codeBlockContainer {
+[data-theme='dark'] .theme-code-block {
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
 }
 
-.codeBlockContainer pre {
+.theme-code-block pre {
   font-size: 13px;
   line-height: 1.6;
 }
 
-/* A faint grain behind the docs content */
-.docMainContainer > div {
+/* A faint grain behind the docs content. docMainContainer is a hashed module
+   class, so the layout is reached through the stable docs-wrapper. */
+.docs-wrapper main > .container {
   position: relative;
 }
 
-.docMainContainer > div::before {
+.docs-wrapper main > .container::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -157,12 +159,11 @@
   z-index: 0;
 }
 
-[data-theme='dark'] .docMainContainer > div::before {
+[data-theme='dark'] .docs-wrapper main > .container::before {
   background-image: radial-gradient(circle at 1px 1px, hsl(276 30% 92% / 0.04) 1px, transparent 0);
 }
 
-.docMainContainer > div > article,
-.docMainContainer > div > aside {
+.docs-wrapper main > .container > .row {
   position: relative;
   z-index: 1;
 }

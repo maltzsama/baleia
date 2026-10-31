@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import clsx from 'clsx';
 import Link from '@docusaurus/Link';
 import useBaseUrl from '@docusaurus/useBaseUrl';
@@ -85,7 +85,7 @@ const features = [
   {
     title: 'Access You Can Audit',
     description:
-      'Workspaces, teams and roles, OIDC or LDAP sign-in, API keys, read-only agents over MCP, and an audit trail of every operation.',
+      'Workspaces, teams and roles, OIDC or LDAP sign-in, API keys, read-only agents over MCP, and a best-effort audit trail of operations.',
     to: '/docs/guides/administration'
   }
 ];
@@ -115,8 +115,19 @@ function HomepageFeatures() {
   );
 }
 
+// The introduction was the site root before it moved to /docs, so old
+// bookmarks to its sections (e.g. /#where-to-start) land here: send them on.
+const introAnchors = ['what-you-can-do', 'where-to-start'];
+
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
+  const docsUrl = useBaseUrl('/docs');
+  useEffect(() => {
+    const anchor = window.location.hash.slice(1);
+    if (introAnchors.includes(anchor)) {
+      window.location.replace(`${docsUrl}#${anchor}`);
+    }
+  }, [docsUrl]);
   return (
     <Layout title={siteConfig.title} description={siteConfig.tagline}>
       <HomepageHeader />
