@@ -26,7 +26,7 @@ func testDeps(t *testing.T) Deps {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s3, err := storage.New("localhost:9000", "", "", "results", false)
+	s3, err := storage.New(storage.Options{Endpoint: "localhost:9000", Bucket: "results"})
 	if err != nil {
 		t.Fatal(err)
 	}

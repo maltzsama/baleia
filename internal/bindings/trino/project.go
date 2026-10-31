@@ -106,7 +106,7 @@ func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, conn
 // version d0e1bd09…): changing it would force every Polaris catalog to
 // resync.
 func polarisProjection(spec bindings.BindingSpec, src connections.Config) projection {
-	return projection{
+	p := projection{
 		props: map[string]string{
 			"iceberg.catalog.type":                            "rest",
 			"iceberg.rest-catalog.uri":                        polaris.New(nil).RESTURI(src),
@@ -119,6 +119,19 @@ func polarisProjection(spec bindings.BindingSpec, src connections.Config) projec
 		},
 		secrets: []string{"iceberg.rest-catalog.oauth2.credential"},
 	}
+	restStorage(&p, src)
+	return p
+}
+
+// restStorage switches a REST catalog from vended credentials to the
+// connection's own S3 credentials when it has an access key: stores without
+// STS have nothing to vend (#511). Without one the projection is unchanged.
+func restStorage(p *projection, src connections.Config) {
+	if src.Value("storage.access_key") == "" {
+		return
+	}
+	p.props["iceberg.rest-catalog.vended-credentials-enabled"] = "false"
+	s3Storage(p, src)
 }
 
 // icebergREST is the shared shape of REST catalogs that are not Polaris.
@@ -146,6 +159,7 @@ func icebergREST(uri, warehouse string, src connections.Config) projection {
 	default:
 		p.props["iceberg.rest-catalog.security"] = "NONE"
 	}
+	restStorage(&p, src)
 	return p
 }
 
@@ -204,6 +218,7 @@ func lakekeeperProjection(spec bindings.BindingSpec, src connections.Config) (pr
 		}
 		p.secrets = append(p.secrets, "iceberg.rest-catalog.oauth2.credential")
 	}
+	restStorage(&p, src)
 	return p, nil
 }
 
@@ -227,6 +242,7 @@ func unityProjection(spec bindings.BindingSpec, src connections.Config) (project
 		p.props["iceberg.rest-catalog.security"] = "OAUTH2"
 		secretProp(&p, "iceberg.rest-catalog.oauth2.token", "token", src)
 	}
+	restStorage(&p, src)
 	return p, nil
 }
 

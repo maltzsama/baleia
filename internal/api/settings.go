@@ -11,11 +11,12 @@ import (
 // sees a zero lifetime. The zero Settings is what a handler built without
 // configuration sees: no agents, no SMTP, no schedules, packaged ceilings.
 type Settings struct {
-	Auth      AuthSettings
-	Mail      MailSettings
-	Agents    AgentSettings
-	Execution ExecutionSettings
-	Ops       OpsSettings
+	Auth        AuthSettings
+	Mail        MailSettings
+	Agents      AgentSettings
+	Execution   ExecutionSettings
+	Ops         OpsSettings
+	Connections ConnectionSettings
 }
 
 // AuthSettings are the token and password settings.
@@ -71,6 +72,13 @@ type OpsSettings struct {
 	ReconcileInterval   time.Duration
 }
 
+// ConnectionSettings say who may create and edit connections.
+type ConnectionSettings struct {
+	// AdminsOnly is BALEIA_CONNECTIONS_CREATE=admins (#512); false lets
+	// everyone, the default.
+	AdminsOnly bool
+}
+
 // SettingsFromConfig resolves the handler settings from the process config.
 func SettingsFromConfig(c *config.Config) Settings {
 	return Settings{
@@ -115,5 +123,6 @@ func SettingsFromConfig(c *config.Config) Settings {
 			ReconcileMaxActions: c.ReconcileMaxActions,
 			ReconcileInterval:   c.ReconcileInterval,
 		},
+		Connections: ConnectionSettings{AdminsOnly: c.ConnectionsCreate == "admins"},
 	}
 }

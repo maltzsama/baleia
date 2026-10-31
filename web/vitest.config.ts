@@ -1,6 +1,7 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { defineConfig } from 'vitest/config';
+import { releaseVersion } from './release-version';
 
 export default defineConfig({
 	plugins: [sveltekit(), svelteTesting()],
@@ -8,7 +9,8 @@ export default defineConfig({
 	// relative `/api/v1` against.
 	define: {
 		// Matches jsdom's default origin so MSW's relative handlers resolve.
-		'import.meta.env.VITE_API_BASE': JSON.stringify('http://localhost:3000')
+		'import.meta.env.VITE_API_BASE': JSON.stringify('http://localhost:3000'),
+		__APP_VERSION__: JSON.stringify(releaseVersion())
 	},
 	test: {
 		environment: 'jsdom',

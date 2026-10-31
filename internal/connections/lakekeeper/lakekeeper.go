@@ -44,14 +44,14 @@ func (*Provider) Status() connections.Status {
 }
 
 func (*Provider) ConfigSchema() []connections.Field {
-	return []connections.Field{
+	return append([]connections.Field{
 		{Key: "url", Label: "Lakekeeper URL", Type: connections.FieldURL, Required: true, Help: "Server root, e.g. http://lakekeeper:8181 (without /catalog)"},
 		{Key: "auth_mode", Label: "Authentication", Type: connections.FieldSelect, Options: []string{"none", "oauth2"}, Default: "none", Help: "none is for servers with authorization off"},
 		{Key: "client_id", Label: "OAuth2 client ID", Type: connections.FieldText, Help: "Required with auth_mode=oauth2"},
 		{Key: "client_secret", Label: "OAuth2 client secret", Type: connections.FieldSecret, Help: "Required with auth_mode=oauth2"},
 		{Key: "token_endpoint", Label: "OAuth2 token endpoint", Type: connections.FieldURL, Help: "The IdP token endpoint (not the Lakekeeper URL); required with auth_mode=oauth2"},
 		{Key: "scope", Label: "OAuth2 scope", Type: connections.FieldText},
-	}
+	}, connections.S3StorageFields()...)
 }
 
 func (p *Provider) Validate(cfg connections.Config) (connections.Config, error) {

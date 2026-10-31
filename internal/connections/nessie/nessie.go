@@ -28,11 +28,11 @@ func (*Provider) Status() connections.Status {
 }
 
 func (*Provider) ConfigSchema() []connections.Field {
-	return []connections.Field{
+	return append([]connections.Field{
 		{Key: "url", Label: "Nessie URL", Type: connections.FieldURL, Required: true, Help: "Server root, e.g. http://nessie:19120 (without /iceberg)"},
 		{Key: "warehouse", Label: "Warehouse", Type: connections.FieldText, Help: "Default: the server's default warehouse"},
 		{Key: "token", Label: "Bearer token", Type: connections.FieldSecret},
-	}
+	}, connections.S3StorageFields()...)
 }
 
 func (p *Provider) Validate(cfg connections.Config) (connections.Config, error) {

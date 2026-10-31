@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -455,5 +457,100 @@ func TestListConnectionProviders(t *testing.T) {
 	}
 	if !secret["password"] || secret["username"] {
 		t.Errorf("secret flags = %v", secret)
+	}
+}
+
+// ── who may manage connections (#512) ────────────────────────────────────────
+
+func adminsOnlyHandlers(t *testing.T, q db.Querier, kr *crypto.Keyring) *API {
+	t.Helper()
+	return testAPI(handlerFields{queries: q, tx: directTx{q: q}, keyring: kr, connections: testRegistry(t), settings: SettingsFromConfig(&config.Config{ConnectionsCreate: "admins"}), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
+}
+
+func roleContext(role string) context.Context {
+	return context.WithValue(testContext(), auth.ContextKeyRole, role)
+}
+
+// TestMayManageConnections: everyone by default; with
+// BALEIA_CONNECTIONS_CREATE=admins only admins, which is what both handlers and
+// the create_connection global action use.
+func TestMayManageConnections(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		create   string
+		role     string
+		expected bool
+	}{
+		{name: "member by default", role: "member", expected: true},
+		{name: "member with everyone", create: "everyone", role: "member", expected: true},
+		{name: "member with admins", create: "admins", role: "member", expected: false},
+		{name: "admin with admins", create: "admins", role: authz.RoleAdmin, expected: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			h := testAPI(handlerFields{settings: SettingsFromConfig(&config.Config{ConnectionsCreate: tt.create})})
+			if got := h.mayManageConnections(authz.Principal{Role: tt.role}); got != tt.expected {
+				t.Errorf("mayManageConnections = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCreateConnection_AdminsOnly: a member is refused before anything is
+// validated or stored; an admin still creates.
+func TestCreateConnection_AdminsOnly(t *testing.T) {
+	t.Parallel()
+	body := validCreateRequests()["polaris"]
+
+	q := &recordingConnQuerier{}
+	resp, err := adminsOnlyHandlers(t, q, testKeyring(t)).CreateCatalogConnection(roleContext("member"), CreateCatalogConnectionRequestObject{Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := visitCreate(t, resp); rec.Code != 403 || !strings.Contains(rec.Body.String(), `"forbidden"`) {
+		t.Fatalf("member: %d %s", rec.Code, rec.Body)
+	}
+	if len(q.created) != 0 {
+		t.Fatalf("member stored %d connections", len(q.created))
+	}
+
+	q = &recordingConnQuerier{}
+	resp, err = adminsOnlyHandlers(t, q, testKeyring(t)).CreateCatalogConnection(roleContext(authz.RoleAdmin), CreateCatalogConnectionRequestObject{Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := visitCreate(t, resp); rec.Code != 201 || len(q.created) != 1 {
+		t.Fatalf("admin: %d %s, stored %d", rec.Code, rec.Body, len(q.created))
+	}
+}
+
+// TestUpdateConnection_AdminsOnly: owning a connection is not enough to
+// re-point it when only admins manage connections.
+func TestUpdateConnection_AdminsOnly(t *testing.T) {
+	t.Parallel()
+	kr := testKeyring(t)
+	name := "renamed"
+	for _, c := range []struct {
+		role     string
+		expected int
+		updates  int
+	}{
+		{role: "member", expected: 403},
+		{role: authz.RoleAdmin, expected: 200, updates: 1},
+	} {
+		q := &updateConnQuerier{conn: storedPolaris(t, kr)}
+		resp, err := adminsOnlyHandlers(t, q, kr).UpdateCatalogConnection(roleContext(c.role), UpdateCatalogConnectionRequestObject{Id: [16]byte{0x01}, Body: &UpdateCatalogConnectionRequest{Name: &name}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := httptest.NewRecorder()
+		if err := resp.VisitUpdateCatalogConnectionResponse(rec); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != c.expected || len(q.updates) != c.updates {
+			t.Errorf("%s: %d %s, %d updates", c.role, rec.Code, rec.Body, len(q.updates))
+		}
 	}
 }

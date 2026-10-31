@@ -8,6 +8,8 @@ COPY web/package.json web/package-lock.json* ./
 RUN npm ci
 
 COPY web/ ./
+# The login page shows the release version from this manifest (#513).
+COPY .release-please-manifest.json /
 RUN npm run build
 
 FROM golang:1.26-alpine AS go

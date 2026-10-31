@@ -169,7 +169,15 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	}
 	c.Engines = queryengine.NewManager(c.Queries, c.Keyring, c.Connections, c.Dialer, kinds)
 
-	if c.Storage, err = storage.New(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL); err != nil {
+	c.Storage, err = storage.New(storage.Options{
+		Endpoint:  cfg.S3Endpoint,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+		Bucket:    cfg.S3Bucket,
+		Region:    cfg.S3Region,
+		UseSSL:    cfg.S3UseSSL,
+	})
+	if err != nil {
 		return nil, err
 	}
 	c.Storage.SetMetrics(c.Metrics.Storage())

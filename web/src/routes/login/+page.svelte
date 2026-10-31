@@ -241,7 +241,7 @@
 			<div
 				class="font-mono text-[11px] text-slate-700 bg-white/[.04] border border-slate-800 py-1 px-3 rounded-[20px]"
 			>
-				{m.login_v1_0_0_beta()}
+				{m.login_version({ version: __APP_VERSION__ })}
 			</div>
 		</div>
 	</div>

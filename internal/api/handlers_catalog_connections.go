@@ -71,16 +71,20 @@ func connectionAllows(conn CatalogConnection, action string) bool {
 }
 
 func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request CreateCatalogConnectionRequestObject) (CreateCatalogConnectionResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
-	uid, err := uuidFromString(userID)
+	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return CreateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
+	uid := p.UserID
 
 	// The connection id is generated here, not by the database default: the
 	// credentials are sealed with it as additional authenticated data.
 	connID := pgtype.UUID{Bytes: uuid.New(), Valid: true}
 	ev := audit.Event{Action: audit.ConnectionCreate, ResourceType: "connection", ResourceID: idString(connID)}
+	if !h.mayManageConnections(p) {
+		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
+		return CreateCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only admins may create connections"}}, nil
+	}
 	cfg, err := h.createConfig(connID, request.Body)
 	var ce *configError
 	if errors.As(err, &ce) {
@@ -160,6 +164,10 @@ func (h *CatalogHandlers) UpdateCatalogConnection(ctx context.Context, request U
 	connID := pgtype.UUID{Bytes: request.Id, Valid: true}
 	ev := audit.Event{Action: audit.ConnectionUpdate, ResourceType: "connection", ResourceID: idString(connID)}
 	ctx = audit.WithAction(ctx, ev.Action)
+	if !h.mayManageConnections(p) {
+		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
+		return UpdateCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only admins may edit connections"}}, nil
+	}
 	stored, err := h.authz().Connection(ctx, p, connID, authz.ActWrite)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {

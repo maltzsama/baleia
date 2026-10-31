@@ -30,6 +30,15 @@ describe('login page', () => {
 		expect(localStorage.getItem('refresh_token')).toBeNull();
 	});
 
+	it('shows the released version from the release-please manifest', async () => {
+		render(LoginPage);
+
+		// Injected at build time (#513); never a hard-coded tag.
+		expect(await screen.findByText(`v${__APP_VERSION__}`)).toBeTruthy();
+		expect(__APP_VERSION__).toMatch(/^\d+\.\d+\.\d+/);
+		expect(screen.queryByText('v1.0.0-beta')).toBeNull();
+	});
+
 	it('renders the password field with a show/hide toggle', async () => {
 		render(LoginPage);
 

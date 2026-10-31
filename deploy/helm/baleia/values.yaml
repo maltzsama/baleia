@@ -30,6 +30,7 @@ config:
   POLARIS_URL: ""         # default: http://baleia-polaris.<namespace>.svc:8181
   S3_ENDPOINT: ""
   S3_BUCKET: baleia-results
+  S3_REGION: ""           # signing region; required by e.g. Oracle Object Storage
   S3_USE_SSL: "false"
   SMTP_HOST: ""
   SMTP_PORT: ""
@@ -48,6 +49,7 @@ config:
   # cloud metadata addresses are always refused. Comma-separated CIDRs.
   BALEIA_CONNECTIONS_DENY_CIDRS: ""
   BALEIA_CONNECTIONS_ALLOW_CIDRS: ""   # if set, connections may only reach these
+  BALEIA_CONNECTIONS_CREATE: everyone   # or admins: only admins create and edit connections
 
 api:
   replicas: 1

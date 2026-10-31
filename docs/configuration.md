@@ -20,10 +20,11 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `POLARIS_URL` | `http://localhost:8181` | Polaris REST API endpoint |
 | `POLARIS_CLIENT_ID` / `POLARIS_CLIENT_SECRET` | _(unset)_ | Credentials stored for a `polaris` connection created without any; both must be set |
 | `PUBLIC_URL` | `http://localhost:8080` | Externally reachable URL (used for presigned links) |
-| `S3_ENDPOINT` | `localhost:9000` | S3-compatible storage endpoint (RustFS) |
+| `S3_ENDPOINT` | `localhost:9000` | Endpoint of any S3-compatible store (AWS S3, RustFS, MinIO, Ceph RGW, Google Cloud Storage, Oracle Object Storage), as host[:port] |
 | `S3_ACCESS_KEY` | `rustfsadmin` | S3 access key |
 | `S3_SECRET_KEY` | `rustfsadmin` | S3 secret key |
 | `S3_BUCKET` | `baleia` | S3 bucket for query results |
+| `S3_REGION` | _(empty)_ | SigV4 signing region. Empty discovers it (AWS, RustFS, MinIO); set it for stores that require it, e.g. `sa-saopaulo-1` on Oracle Object Storage |
 | `S3_USE_SSL` | `false` | Enable TLS for S3 connections |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | — | Outbound email (password reset, invites) |
 | `BALEIA_DEFAULT_LOCALE` | `en` | Fallback language for transactional e-mails when the recipient has no `users.locale` (`en` or `pt-BR`) |
@@ -42,6 +43,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_SCHEDULES_ENABLED` | `true` | Ensure recurring Temporal Schedules (Lens pollers, table health, retriever) at worker boot |
 | `BALEIA_CONNECTIONS_DENY_CIDRS` | _(unset)_ | Comma-separated CIDRs that connections may never reach, added to the built-in deny list (loopback, link-local incl. cloud metadata `169.254.169.254`, `0.0.0.0/8`) — see [ADR 0011](adr/0011-direct-connections-security.md) |
 | `BALEIA_CONNECTIONS_ALLOW_CIDRS` | _(unset)_ | If set, connections may only reach these comma-separated CIDRs (the deny list still wins) |
+| `BALEIA_CONNECTIONS_CREATE` | `everyone` | Who may create and edit connections: `everyone`, or `admins`. The CIDR lists bind admins too, so on a deployment with self-service or shared accounts use `admins` to keep other users from aiming connections at internal services |
 | `BALEIA_LOG_LEVEL` | `info` | Lowest level the API, the worker and `cmd/migrate` log: `debug`, `info`, `warn` or `error`. They log JSON lines to stdout; a line logged during a traced request or activity carries its `trace_id` and `span_id` (#379) |
 | `BALEIA_TRINO_EVENTS_TOKEN` | _(unset)_ | Bearer token Trino's HTTP event listener sends to `POST /internal/trino/query-events` (at least 32 characters). Set, the API records each completed query as it ends; unset, the endpoint does not exist. The chart wires both sides with `trino.queryEvents.enabled` (#406) |
 | `BALEIA_PPROF_ADDR` | _(unset)_ | Where the API and the worker serve the Go runtime profiles (`/debug/pprof/`), e.g. `127.0.0.1:6060`; unset serves none. The listener has no authentication: bind it to loopback or a port only reachable from the pod (`kubectl port-forward`), never to a public interface (#380) |

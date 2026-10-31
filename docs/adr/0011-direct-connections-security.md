@@ -37,6 +37,7 @@ access.
 ## Consequences
 
 - Local databases in development need an explicit allow (`BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true`).
+- The CIDR lists apply to every caller, admins included. Where users should not reach what admins wire up, such as self-service or shared accounts, `BALEIA_CONNECTIONS_CREATE=admins` limits creating and editing connections to admins (#512).
 - api and worker must see the same SQLite path (shared volume).
 - MySQL/MariaDB, Oracle, SQL Server and Flight SQL cannot enforce read-only; grants on them are
   explicit about it.

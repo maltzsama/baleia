@@ -104,6 +104,11 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `client_secret` | secret |  |  |  |
 | `oauth2_server_uri` | url |  |  | Default: <REST URI>/v1/oauth/tokens |
 | `scope` | text |  |  |  |
+| `storage.endpoint` | text |  |  | Only with an S3 access key, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
+| `storage.region` | text |  |  | Only with an S3 access key, e.g. us-east-1 |
+| `storage.path_style` | bool |  | `false` | Only with an S3 access key; required by most S3-compatible stores |
+| `storage.access_key` | text |  |  | Set it when the object store has no STS: the engine then uses these credentials instead of vended ones |
+| `storage.secret_key` | secret |  |  |  |
 
 ## `lakekeeper` — Lakekeeper
 
@@ -115,6 +120,11 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `client_secret` | secret |  |  | Required with auth_mode=oauth2 |
 | `token_endpoint` | url |  |  | The IdP token endpoint (not the Lakekeeper URL); required with auth_mode=oauth2 |
 | `scope` | text |  |  |  |
+| `storage.endpoint` | text |  |  | Only with an S3 access key, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
+| `storage.region` | text |  |  | Only with an S3 access key, e.g. us-east-1 |
+| `storage.path_style` | bool |  | `false` | Only with an S3 access key; required by most S3-compatible stores |
+| `storage.access_key` | text |  |  | Set it when the object store has no STS: the engine then uses these credentials instead of vended ones |
+| `storage.secret_key` | secret |  |  |  |
 
 ## `mariadb` — MariaDB
 
@@ -145,6 +155,11 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `url` | url | yes |  | Server root, e.g. http://nessie:19120 (without /iceberg) |
 | `warehouse` | text |  |  | Default: the server's default warehouse |
 | `token` | secret |  |  |  |
+| `storage.endpoint` | text |  |  | Only with an S3 access key, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
+| `storage.region` | text |  |  | Only with an S3 access key, e.g. us-east-1 |
+| `storage.path_style` | bool |  | `false` | Only with an S3 access key; required by most S3-compatible stores |
+| `storage.access_key` | text |  |  | Set it when the object store has no STS: the engine then uses these credentials instead of vended ones |
+| `storage.secret_key` | secret |  |  |  |
 
 ## `oracle` — Oracle Database
 
@@ -165,6 +180,11 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `realm` | text |  | `POLARIS` |  |
 | `client_id` | text | yes |  |  |
 | `client_secret` | secret | yes |  |  |
+| `storage.endpoint` | text |  |  | Only with an S3 access key, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
+| `storage.region` | text |  |  | Only with an S3 access key, e.g. us-east-1 |
+| `storage.path_style` | bool |  | `false` | Only with an S3 access key; required by most S3-compatible stores |
+| `storage.access_key` | text |  |  | Set it when the object store has no STS: the engine then uses these credentials instead of vended ones |
+| `storage.secret_key` | secret |  |  |  |
 
 ## `postgresql` — PostgreSQL
 
@@ -223,3 +243,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `url` | url | yes |  | Server root, e.g. http://unity:8080 or a Databricks workspace URL |
 | `token` | secret |  |  | OSS token or a Databricks personal access token |
 | `iceberg_path` | text |  | `/api/2.1/unity-catalog/iceberg` | Override for Databricks: /api/2.1/unity-catalog/iceberg-rest |
+| `storage.endpoint` | text |  |  | Only with an S3 access key, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
+| `storage.region` | text |  |  | Only with an S3 access key, e.g. us-east-1 |
+| `storage.path_style` | bool |  | `false` | Only with an S3 access key; required by most S3-compatible stores |
+| `storage.access_key` | text |  |  | Set it when the object store has no STS: the engine then uses these credentials instead of vended ones |
+| `storage.secret_key` | secret |  |  |  |

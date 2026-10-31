@@ -14,7 +14,7 @@ The chart does not install Baleia's dependencies. Before installing, have:
 |---|---|
 | PostgreSQL for Baleia's own data (CI and the dev stacks run 18) | `DATABASE_URL` (secret) |
 | [Temporal](https://temporal.io) (self-hosted or Temporal Cloud) | `config.TEMPORAL_HOST` |
-| S3-compatible object storage for query results | `config.S3_ENDPOINT`, `config.S3_BUCKET`, `config.S3_USE_SSL`; `S3_ACCESS_KEY` and `S3_SECRET_KEY` (secret) |
+| S3-compatible object storage for query results | `config.S3_ENDPOINT`, `config.S3_BUCKET`, `config.S3_REGION`, `config.S3_USE_SSL`; `S3_ACCESS_KEY` and `S3_SECRET_KEY` (secret) |
 | SMTP, for invitations and password resets (optional) | `config.SMTP_*`; `SMTP_PASSWORD` (secret) |
 | A way in: an Ingress or a load balancer in front of the `baleia-api` Service (ClusterIP, port 8080) | `config.PUBLIC_URL` |
 
