@@ -1,4 +1,6 @@
-FROM node:22-alpine AS web
+# web and go run on the build platform: the web build is static and Go
+# cross-compiles, so a multi-arch build emulates only the final stage (#516).
+FROM --platform=$BUILDPLATFORM node:22-alpine AS web
 WORKDIR /web
 
 RUN apk add --no-cache python3 make g++
@@ -12,13 +14,16 @@ COPY web/ ./
 COPY .release-please-manifest.json /
 RUN npm run build
 
-FROM golang:1.26-alpine AS go
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS go
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . ./
 ARG VERSION=dev
 ARG COMMIT=dev
+ARG TARGETOS
+ARG TARGETARCH
+ENV GOOS=$TARGETOS GOARCH=$TARGETARCH
 RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION} -X github.com/galileostudio/baleia/internal/version.Commit=${COMMIT}" -o /api ./cmd/api
 RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION} -X github.com/galileostudio/baleia/internal/version.Commit=${COMMIT}" -o /worker ./cmd/worker
 RUN CGO_ENABLED=0 go build -o /migrate ./cmd/migrate
