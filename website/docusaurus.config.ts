@@ -4,18 +4,26 @@ import { themes as prismThemes } from 'prism-react-renderer';
 import githubLinks from './src/remark/github-links';
 
 const repo = 'https://github.com/maltzsama/baleia';
+const demo = 'https://demo.baleia.galileostd.io';
 
-// The site renders the repository's docs/ folder as is, so the same Markdown
-// reads well on GitHub and here. Links that leave docs/ go to GitHub.
+// The site renders the repository's docs/ folder as is, under /docs, so the
+// same Markdown reads well on GitHub and here. Links that leave docs/ go to
+// GitHub. The landing page is src/pages/index.tsx.
 const config: Config = {
   title: 'Baleia',
   tagline: 'A self-hosted SQL workspace for your data platform',
   favicon: 'img/favicon.ico',
-  url: 'https://maltzsama.github.io',
-  baseUrl: '/baleia/',
+
+  future: {
+    v4: true
+  },
+
+  url: 'https://baleia.galileostd.io',
+  baseUrl: '/',
   organizationName: 'maltzsama',
   projectName: 'baleia',
   trailingSlash: false,
+
   onBrokenLinks: 'throw',
   onBrokenAnchors: 'throw',
   markdown: {
@@ -24,15 +32,17 @@ const config: Config = {
     mermaid: true,
     hooks: { onBrokenMarkdownLinks: 'throw' }
   },
+
   i18n: { defaultLocale: 'en', locales: ['en'] },
   themes: ['@docusaurus/theme-mermaid'],
+
   presets: [
     [
       'classic',
       {
         docs: {
           path: '../docs',
-          routeBasePath: '/',
+          routeBasePath: '/docs',
           sidebarPath: './sidebars.ts',
           exclude: ['adr/template.md'],
           editUrl: `${repo}/edit/main/`,
@@ -45,13 +55,32 @@ const config: Config = {
       } satisfies Preset.Options
     ]
   ],
+
+  // The docs were served at the site root until they moved under /docs: keep
+  // every old address working.
+  plugins: [
+    [
+      '@docusaurus/plugin-client-redirects',
+      {
+        createRedirects(existingPath: string) {
+          if (existingPath.startsWith('/docs/')) {
+            return [existingPath.slice('/docs'.length)];
+          }
+          return undefined;
+        }
+      }
+    ]
+  ],
+
   themeConfig: {
+    colorMode: { respectPrefersColorScheme: true },
     navbar: {
       title: 'Baleia',
-      logo: { alt: 'Baleia logo', src: 'img/baleia.svg' },
+      logo: { alt: 'Baleia', src: 'img/baleia.svg' },
       items: [
         { type: 'docSidebar', sidebarId: 'docs', position: 'left', label: 'Docs' },
-        { to: '/adr', label: 'Decisions', position: 'left' },
+        { to: '/docs/adr', label: 'Decisions', position: 'left' },
+        { href: demo, label: 'Live demo', position: 'right' },
         { href: `${repo}/releases`, label: 'Releases', position: 'right' },
         { href: repo, label: 'GitHub', position: 'right' }
       ]
@@ -62,13 +91,15 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            { label: 'Quick start', to: '/quick-start' },
-            { label: 'Install on Kubernetes', to: '/install' },
-            { label: 'Configuration', to: '/configuration' }
+            { label: 'Quick start', to: '/docs/quick-start' },
+            { label: 'Install on Kubernetes', to: '/docs/install' },
+            { label: 'Live demo', href: demo },
+            { label: 'Concepts', to: '/docs/concepts' },
+            { label: 'Configuration', to: '/docs/configuration' }
           ]
         },
         {
-          title: 'Project',
+          title: 'Community',
           items: [
             { label: 'GitHub', href: repo },
             { label: 'Issues', href: `${repo}/issues` },
@@ -76,14 +107,13 @@ const config: Config = {
           ]
         }
       ],
-      copyright: 'Baleia is released under the Apache License 2.0.'
+      copyright: `Copyright © ${new Date().getFullYear()} Baleia contributors. Apache License 2.0. Built with Docusaurus.`
     },
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
       additionalLanguages: ['bash', 'sql', 'yaml', 'json', 'go']
-    },
-    colorMode: { respectPrefersColorScheme: true }
+    }
   } satisfies Preset.ThemeConfig
 };
 

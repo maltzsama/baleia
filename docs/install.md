@@ -31,7 +31,7 @@ Put the credentials in a Secret and name it in `existingSecret`. These keys are 
 
 With the in-chart Trino, add `BALEIA_TRINO_DB_PASSWORD`, which the catalog-store plugin uses to read the catalog registry. See [Secrets](secrets.md) for key rotation and the optional keys.
 
-```bash
+```bash title="Create the secret"
 kubectl create namespace baleia
 kubectl -n baleia create secret generic baleia-secrets \
   --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
@@ -47,7 +47,7 @@ Keep `BALEIA_ENCRYPTION_KEY` safe: without it, stored connection credentials can
 
 A minimal `values.yaml`, here with the in-chart Trino:
 
-```yaml
+```yaml title="values.yaml"
 existingSecret: baleia-secrets
 
 config:
@@ -69,7 +69,7 @@ The in-chart Trino has no authentication. Read the catalog guard notes in [Archi
 
 ## Install
 
-```bash
+```bash title="Install the chart"
 helm install baleia oci://ghcr.io/maltzsama/charts/baleia \
   -n baleia -f values.yaml \
   --version 0.4.0 # x-release-please-version

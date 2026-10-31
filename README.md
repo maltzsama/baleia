@@ -1,12 +1,11 @@
-<p align="center">
-  <img src="web/static/baleia.svg" alt="Baleia logo" width="128" height="128">
-</p>
+<h1 align="center">
+  <img src="web/static/baleia.svg" alt="" width="120"><br>
+  Baleia
+</h1>
 
-# Baleia
+<p align="center"><strong>A self-hosted SQL workspace for your data platform.</strong></p>
 
-**A self-hosted SQL workspace for your data platform.** Write and run SQL against Trino and your databases, browse every catalog in one place, and share queries, metrics and models with your team.
-
-![The Baleia SQL editor running a query on Trino](docs/img/workbench.png)
+Write and run SQL against Trino and your databases, browse every catalog in one place, and share queries, metrics and models with your team.
 
 ## What you can do
 
@@ -46,7 +45,7 @@ Settings are listed in [docs/configuration.md](docs/configuration.md), and runni
 
 ## Documentation
 
-The documentation is published at **https://maltzsama.github.io/baleia/**, built from [`docs/`](docs/) with the site in [`website/`](website/).
+The documentation is published at **https://baleia.galileostd.io/**, built from [`docs/`](docs/) with the site in [`website/`](website/). A live demo runs at **https://demo.baleia.galileostd.io/**.
 
 | | |
 |---|---|
