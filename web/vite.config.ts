@@ -2,8 +2,10 @@ import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
+import { releaseVersion } from './release-version';
 
 export default defineConfig({
+	define: { __APP_VERSION__: JSON.stringify(releaseVersion()) },
 	plugins: [
 		tailwindcss(),
 		// Compiled, tree-shakable messages (#67). A missing m.* key is a

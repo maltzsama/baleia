@@ -510,7 +510,7 @@
 	"settings_users_users": "Users",
 	"settings_audit_uuid": "UUID",
 	"content_historydrawer_v": "v",
-	"login_v1_0_0_beta": "v1.0.0-beta",
+	"login_version": "v{version}",
 	"metrics_metricbuilder_validate": "Validate",
 	"metrics_metricbuilder_validation_binding": "Validation binding",
 	"keyvalueeditor_value": "value",
