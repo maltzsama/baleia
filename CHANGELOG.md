@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.5.0](https://github.com/maltzsama/baleia/compare/v0.4.0...v0.5.0) (2026-10-31)
+
+
+### Features
+
+* **connections:** let operators limit connection management to admins ([fa42f65](https://github.com/maltzsama/baleia/commit/fa42f65e90a0483515f917b4e62c19fb01129673)), closes [#512](https://github.com/maltzsama/baleia/issues/512)
+
+
+### Bug Fixes
+
+* **bindings:** let Iceberg REST catalogs read data with their own S3 credentials ([c4b9360](https://github.com/maltzsama/baleia/commit/c4b9360c201f226d57e27e329f36b77e52ae1ce3)), closes [#511](https://github.com/maltzsama/baleia/issues/511)
+* **storage:** sign result-store requests with a configurable S3 region ([b342a97](https://github.com/maltzsama/baleia/commit/b342a97e8c1bcd4d277d3a6cd340fdc9796b6c8b)), closes [#510](https://github.com/maltzsama/baleia/issues/510)
+* **web:** show the released version on the login page ([35fb0d4](https://github.com/maltzsama/baleia/commit/35fb0d40eebc39714693887692a10eb5487d186b)), closes [#513](https://github.com/maltzsama/baleia/issues/513)
+
+
+### Documentation
+
+* **readme:** center the logo with the title and drop the screenshot ([98c98c2](https://github.com/maltzsama/baleia/commit/98c98c24343fba82ebfd69ec7a3869fed4915697))
+* redesign the documentation site and fix the README header ([a542b48](https://github.com/maltzsama/baleia/commit/a542b487ddecdacb9d58a0d676c5dc28fd42191a))
+* **site:** fix hashed CSS selectors, old intro bookmarks and the audit claim ([12e7a5a](https://github.com/maltzsama/baleia/commit/12e7a5a243b144edfea0ebf5ffa417ccf2bd43c4))
+* **site:** redesign after the project's house style ([e4d2e7b](https://github.com/maltzsama/baleia/commit/e4d2e7bc97835d5563e65c63529a8ef841a6d120))
+* **site:** serve the docs at baleia.galileostd.io and link the live demo ([0cc7e88](https://github.com/maltzsama/baleia/commit/0cc7e887c827696d877e1709f0add7167b2819c8))
+
 ## [0.4.0](https://github.com/maltzsama/baleia/compare/v0.3.0...v0.4.0) (2026-10-29)
 
 
