@@ -133,6 +133,10 @@ type Config struct {
 	ConnectionsDenyCIDRs     []string
 	ConnectionsAllowCIDRs    []string
 	ConnectionsAllowLoopback bool
+	// ConnectionsCreate is who may create and edit connections: "everyone"
+	// (the default) or "admins" (#512). The dialer lists apply to admins too,
+	// so this is what keeps self-service users off internal addresses.
+	ConnectionsCreate string
 	// SQLiteRoot confines SQLite connections to files under it; empty
 	// disables the SQLite provider. SQLiteAllowWrite lets a connection that
 	// asks for it open its file read-write.
@@ -275,6 +279,7 @@ func Load() *Config {
 		ConnectionsDenyCIDRs:        splitList(getEnv("BALEIA_CONNECTIONS_DENY_CIDRS", "")),
 		ConnectionsAllowCIDRs:       splitList(getEnv("BALEIA_CONNECTIONS_ALLOW_CIDRS", "")),
 		ConnectionsAllowLoopback:    getEnv("BALEIA_CONNECTIONS_ALLOW_LOOPBACK", "false") == "true",
+		ConnectionsCreate:           getEnv("BALEIA_CONNECTIONS_CREATE", "everyone"),
 		SQLiteRoot:                  getEnv("BALEIA_SQLITE_ROOT", ""),
 		SQLiteAllowWrite:            getEnv("BALEIA_SQLITE_ALLOW_WRITE", "false") == "true",
 		AllowAmbientAWSCredentials:  getEnv("BALEIA_ALLOW_AMBIENT_AWS_CREDENTIALS", "false") == "true",
@@ -393,6 +398,11 @@ func (c *Config) Validate() error {
 	}
 	if err := c.ValidateRegistryKey(); err != nil {
 		return err
+	}
+	switch c.ConnectionsCreate {
+	case "", "everyone", "admins":
+	default:
+		return fmt.Errorf("BALEIA_CONNECTIONS_CREATE must be everyone or admins (got %q)", c.ConnectionsCreate)
 	}
 	if c.ReconcileInterval != 0 && c.ReconcileInterval < 5*time.Minute {
 		return fmt.Errorf("BALEIA_RECONCILE_INTERVAL must be at least 5m (got %s)", c.ReconcileInterval)

@@ -92,23 +92,23 @@ var operationAccess = map[string]access{
 	"CreateApiKey":            {kind: kindSelf, calls: selfID},
 	"DeleteApiKey":            {kind: kindSelf, calls: selfID},
 	"ListWorkspaces":          {kind: kindSelf, calls: selfID},
-	"ListCatalogConnections":  {kind: kindSelf, calls: selfPrincipal}, // the caller's connections; admin sees all
-	"CreateCatalogConnection": {kind: kindSelf, calls: selfID},        // any user; becomes the owner
-	"ListTeams":               {kind: kindSelf, calls: selfPrincipal}, // the caller's teams; admin sees all
-	"ListAttention":           {kind: kindSelf, calls: selfPrincipal}, // items scoped to what the caller can act on
-	"ListEngines":             {kind: kindSelf, calls: selfPrincipal}, // engines on the caller's connections or hosting a granted catalog; admin sees all
-	"ListAgents":              {kind: kindSelf, calls: selfPrincipal}, // the caller's agents; admin may list all with all=true
-	"CreateAgent":             {kind: kindSelf, calls: selfPrincipal}, // owner is the caller
-	"GetAgent":                {kind: kindSelf, calls: selfPrincipal}, // owner or admin
-	"UpdateAgent":             {kind: kindSelf, calls: selfPrincipal}, // owner; admin may only disable
-	"DeleteAgent":             {kind: kindSelf, calls: selfPrincipal}, // owner or admin
-	"ListAgentTokens":         {kind: kindSelf, calls: selfPrincipal}, // owner or admin; never the secret
-	"CreateAgentToken":        {kind: kindSelf, calls: selfPrincipal}, // owner only
-	"RevokeAgentToken":        {kind: kindSelf, calls: selfPrincipal}, // owner only
-	"GetAgentPolicy":          {kind: kindSelf, calls: selfPrincipal}, // owner or admin
-	"PutAgentPolicy":          {kind: kindSelf, calls: selfPrincipal}, // owner or admin
-	"GetAgentsMeta":           {kind: kindSelf, calls: selfPrincipal}, // any authenticated user; static metadata
-	"GetAgentEligibility":     {kind: kindSelf, calls: selfPrincipal}, // owner or admin
+	"ListCatalogConnections":  {kind: kindSelf, calls: selfPrincipal},                  // the caller's connections; admin sees all
+	"CreateCatalogConnection": checked("PrincipalFromContext", "mayManageConnections"), // any user (admins only with BALEIA_CONNECTIONS_CREATE=admins, #512); becomes the owner
+	"ListTeams":               {kind: kindSelf, calls: selfPrincipal},                  // the caller's teams; admin sees all
+	"ListAttention":           {kind: kindSelf, calls: selfPrincipal},                  // items scoped to what the caller can act on
+	"ListEngines":             {kind: kindSelf, calls: selfPrincipal},                  // engines on the caller's connections or hosting a granted catalog; admin sees all
+	"ListAgents":              {kind: kindSelf, calls: selfPrincipal},                  // the caller's agents; admin may list all with all=true
+	"CreateAgent":             {kind: kindSelf, calls: selfPrincipal},                  // owner is the caller
+	"GetAgent":                {kind: kindSelf, calls: selfPrincipal},                  // owner or admin
+	"UpdateAgent":             {kind: kindSelf, calls: selfPrincipal},                  // owner; admin may only disable
+	"DeleteAgent":             {kind: kindSelf, calls: selfPrincipal},                  // owner or admin
+	"ListAgentTokens":         {kind: kindSelf, calls: selfPrincipal},                  // owner or admin; never the secret
+	"CreateAgentToken":        {kind: kindSelf, calls: selfPrincipal},                  // owner only
+	"RevokeAgentToken":        {kind: kindSelf, calls: selfPrincipal},                  // owner only
+	"GetAgentPolicy":          {kind: kindSelf, calls: selfPrincipal},                  // owner or admin
+	"PutAgentPolicy":          {kind: kindSelf, calls: selfPrincipal},                  // owner or admin
+	"GetAgentsMeta":           {kind: kindSelf, calls: selfPrincipal},                  // any authenticated user; static metadata
+	"GetAgentEligibility":     {kind: kindSelf, calls: selfPrincipal},                  // owner or admin
 
 	// ── assistant (#62)
 	"GetAssistantStatus":          {kind: kindSelf, calls: selfPrincipal},
@@ -151,7 +151,7 @@ var operationAccess = map[string]access{
 
 	// ── connections and catalogs (internal/authz)
 	"GetCatalogConnection":    checked("Connection"),
-	"UpdateCatalogConnection": checked("Connection"),
+	"UpdateCatalogConnection": checked("Connection", "mayManageConnections"),
 	"DeleteCatalogConnection": checked("Connection"),
 	"TestCatalogConnection":   checked("Connection"),
 	// Any signed-in user tests settings they hold; bind: intents go through the engine check.

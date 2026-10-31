@@ -278,7 +278,11 @@ func (h *core) features(ctx context.Context) Features {
 
 // globalActions are the actions outside any resource (#104).
 func (h *core) globalActions(ctx context.Context, p authz.Principal) []GlobalAction {
-	acts := []GlobalAction{CreateConnection, CreateWorkspace}
+	acts := make([]GlobalAction, 0, 8)
+	if h.mayManageConnections(p) {
+		acts = append(acts, CreateConnection)
+	}
+	acts = append(acts, CreateWorkspace)
 	if p.IsAdmin() {
 		return append(acts, CreateSharedWorkspace, ManageUsers, ManageIdentity, ViewAllAudit, ViewSystem, ManageAssistant)
 	}
@@ -286,6 +290,13 @@ func (h *core) globalActions(ctx context.Context, p authz.Principal) []GlobalAct
 		acts = append(acts, CreateSharedWorkspace)
 	}
 	return acts
+}
+
+// mayManageConnections reports whether p may create or edit connections:
+// everyone by default, admins only with BALEIA_CONNECTIONS_CREATE=admins (#512).
+// create_connection in globalActions and the connection handlers both use it.
+func (h *core) mayManageConnections(p authz.Principal) bool {
+	return p.IsAdmin() || !h.settings.Connections.AdminsOnly
 }
 
 // ── OIDC ──────────────────────────────────────────────────────────────────────

@@ -49,6 +49,7 @@ config:
   # cloud metadata addresses are always refused. Comma-separated CIDRs.
   BALEIA_CONNECTIONS_DENY_CIDRS: ""
   BALEIA_CONNECTIONS_ALLOW_CIDRS: ""   # if set, connections may only reach these
+  BALEIA_CONNECTIONS_CREATE: everyone   # or admins: only admins create and edit connections
 
 api:
   replicas: 1
