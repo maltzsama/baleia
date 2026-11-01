@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -64,6 +65,18 @@ func (s *session) options(cb queryengine.Callbacks, onHeaders func(http.Header))
 	}
 	if s.spec.Tags.Source != "" {
 		o.ClientTags = append(o.ClientTags, s.spec.Tags.Source)
+	}
+	// The workload class reaches Trino two ways: a client tag a resource-group
+	// selector can match on, and the query_priority session property a
+	// `query_priority` scheduling policy reads. Both are per request.
+	if s.spec.Tags.Class != "" {
+		o.ClientTags = append(o.ClientTags, "baleia.class="+string(s.spec.Tags.Class))
+		if priority, ok := s.spec.Tags.Class.QueryPriority(); ok {
+			if o.SessionProperties == nil {
+				o.SessionProperties = map[string]string{}
+			}
+			o.SessionProperties["query_priority"] = strconv.Itoa(priority)
+		}
 	}
 	if s.spec.Tags.ExecutionID != "" {
 		info, _ := json.Marshal(map[string]string{"execution_id": s.spec.Tags.ExecutionID})

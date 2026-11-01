@@ -318,6 +318,51 @@ tests a minute (`429` beyond). A test catalog is dropped as soon as its check en
 crash expires after 2 min and is dropped by the `ephemeral-catalog-sweeper` schedule (every
 minute).
 
+## Workload tagging (Trino)
+
+Baleia tags every Trino session with the run's workload class (#399, ADR 0014):
+the client tag `baleia.class=<class>` and the `query_priority` session property.
+The classes are `interactive`, `heavy` and `background`. Trino treats
+**larger numbers as higher priority** (`trino-main` `SystemSessionProperties`),
+so Baleia sends `interactive=10`, `heavy=5`, `background=1`.
+
+This release only tags; Baleia's own admission queues arrive with the workload
+work behind `BALEIA_WORKLOAD_ENABLED`. Until then, a Trino resource-group
+policy keyed on the client tag gives the same split inside Trino:
+
+```properties
+resource-groups.configuration-manager=file
+resource-groups.config-file=etc/resource-groups.json
+```
+
+```json
+{
+  "rootGroups": [
+    {
+      "name": "baleia",
+      "softMemoryLimit": "80%",
+      "hardConcurrencyLimit": 50,
+      "maxQueued": 500,
+      "subGroups": [
+        { "name": "interactive", "hardConcurrencyLimit": 20, "maxQueued": 200 },
+        { "name": "heavy", "hardConcurrencyLimit": 3, "maxQueued": 20 },
+        { "name": "background", "hardConcurrencyLimit": 2, "maxQueued": 20 }
+      ]
+    }
+  ],
+  "selectors": [
+    { "clientTags": ["baleia.class=interactive"], "group": "baleia.interactive" },
+    { "clientTags": ["baleia.class=heavy"], "group": "baleia.heavy" },
+    { "clientTags": ["baleia.class=background"], "group": "baleia.background" },
+    { "group": "baleia.interactive" }
+  ]
+}
+```
+
+Selectors are evaluated in order and the first match wins; the last one is the
+catch-all for a session with no class. Set the root group's `schedulingPolicy`
+to `weighted` or `query_priority` to also honour the session property.
+
 ## Runbooks
 
 ### BaleiaAPIDown

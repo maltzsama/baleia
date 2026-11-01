@@ -45,6 +45,7 @@ type ExecuteScriptParams struct {
 	Statements  []StatementRef
 	Timeout     time.Duration // per statement; 0 = engine default
 	RequestID   string
+	Class       queryengine.WorkloadClass
 }
 
 // StatementOutcome is how one statement ended. It is control data only:
@@ -172,7 +173,7 @@ func (s *script) openSession() (queryengine.Session, error) {
 		Identity: s.p.Identity,
 		ReadOnly: s.p.Target.ReadOnly,
 		Timeout:  s.p.Timeout,
-		Tags:     queryengine.Tags{ExecutionID: s.p.ExecutionID, RequestID: s.p.RequestID, Source: source},
+		Tags:     queryengine.Tags{ExecutionID: s.p.ExecutionID, RequestID: s.p.RequestID, Source: source, Class: s.p.Class},
 	}
 	if s.p.Target.Schema != "" {
 		spec.Schema = []string{s.p.Target.Schema}

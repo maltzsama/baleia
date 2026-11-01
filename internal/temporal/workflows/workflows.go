@@ -34,6 +34,9 @@ type QueryExecutionInput struct {
 	// Dialect splits and gates the script; the caller resolves it from the
 	// target's engine kind.
 	Dialect string
+	// Class is the workload class (#399, ADR 0014): classification happens in
+	// the API and reaches the engine's session as a hint.
+	Class queryengine.WorkloadClass
 }
 
 // defaultExecutionTimeout caps a script when the input names no cap.
@@ -103,6 +106,7 @@ func runQueryExecution(ctx workflow.Context, in QueryExecutionInput, dialectName
 		Statements:  refs,
 		Timeout:     in.StatementTimeout,
 		RequestID:   in.RequestID,
+		Class:       in.Class,
 	}).Get(scriptCtx, &res)
 
 	// A cancelled workflow (UI cancel) cancels the script, which stops the

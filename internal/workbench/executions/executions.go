@@ -178,6 +178,9 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 			RerunExecutionID:  rerunOf,
 			RerunFromPosition: r.RerunFromPosition,
 			Dialect:           dialectName,
+			// A-1 tags every editor run as interactive; real classification
+			// replaces this in #536.
+			Class: queryengine.ClassInteractive,
 		})
 	if err != nil {
 		// Detached from the request, which may be the reason it failed.
