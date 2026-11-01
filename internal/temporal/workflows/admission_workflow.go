@@ -207,7 +207,13 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 // (Trino) engine; the API resolves the per-engine defaults from the workload
 // package and sends them with request or set-capacity.
 func DefaultAdmissionCapacities() []AdmissionCapacity {
-	defaults := workload.Defaults("federated")
+	return DefaultAdmissionCapacitiesFor("federated")
+}
+
+// DefaultAdmissionCapacitiesFor returns the defaults of one engine class
+// ("federated" or "direct"), in the fixed class order the API reports.
+func DefaultAdmissionCapacitiesFor(engineClass string) []AdmissionCapacity {
+	defaults := workload.Defaults(engineClass)
 	classes := []queryengine.WorkloadClass{
 		queryengine.ClassInteractive,
 		queryengine.ClassHeavy,

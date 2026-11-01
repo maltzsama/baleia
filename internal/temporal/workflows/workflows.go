@@ -4,10 +4,12 @@
 package workflows
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"github.com/google/uuid"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -37,6 +39,12 @@ type QueryExecutionInput struct {
 	// Class is the workload class (#399, ADR 0014): classification happens in
 	// the API and reaches the engine's session as a hint.
 	Class queryengine.WorkloadClass
+	// WorkloadEnabled asks the engine's admission workflow for a slot before
+	// running. Off, V4 behaves exactly like V3.
+	WorkloadEnabled bool
+	// FairnessKey shares a class's slots across workspaces (#399). The agent id
+	// for an agent run, the workspace otherwise.
+	FairnessKey string
 }
 
 // defaultExecutionTimeout caps a script when the input names no cap.
@@ -53,6 +61,108 @@ const defaultExecutionTimeout = 2 * time.Hour
 // add V4 and drain V3 (V2 went that way, #414).
 func QueryExecutionWorkflowV3(ctx workflow.Context, in QueryExecutionInput) error {
 	return runQueryExecution(ctx, in, in.Dialect)
+}
+
+// QueryExecutionWorkflowV4 adds the admission step (#399, ADR 0014): when
+// workload management is on it asks the target engine's admission workflow for
+// a slot, waits for admitted or failed, and releases the slot when the script
+// ends, fails or is cancelled. Every other command is V3's.
+func QueryExecutionWorkflowV4(ctx workflow.Context, in QueryExecutionInput) error {
+	if !in.WorkloadEnabled {
+		return runQueryExecution(ctx, in, in.Dialect)
+	}
+
+	if err := signalAdmission(ctx, in, AdmissionRequestSignal, AdmissionRequest{
+		ExecutionID: in.ExecutionID,
+		Class:       in.Class,
+		FairnessKey: in.FairnessKey,
+		Weight:      1,
+	}); err != nil {
+		return admissionFailed(ctx, in, AdmissionFailure{Code: AdmissionFailureQueueFull, Message: "the engine's admission queue is unreachable"})
+	}
+
+	admitted, failure := awaitAdmission(ctx, in)
+	if !admitted {
+		if ctx.Err() != nil {
+			// Cancelled while queued: drop the request, then record the cancel.
+			// The context is already cancelled, so signal on a disconnected one.
+			dctx, cancel := workflow.NewDisconnectedContext(ctx)
+			_ = signalAdmission(dctx, in, AdmissionCancelSignal, AdmissionCancel{ExecutionID: in.ExecutionID})
+			_ = signalAdmission(dctx, in, AdmissionReleaseSignal, AdmissionRelease{ExecutionID: in.ExecutionID})
+			cancel()
+			return markCancelled(ctx, in)
+		}
+		return admissionFailed(ctx, in, failure)
+	}
+
+	defer releaseAdmissionSlot(ctx, in)
+	return runQueryExecution(ctx, in, in.Dialect)
+}
+
+// defaultQueueTimeout is the execution workflow's own safety net: the
+// admission workflow enforces the per-class timeout and answers first, but a
+// lost answer must not leave a run waiting forever.
+const defaultQueueTimeout = 24 * time.Hour
+
+// awaitAdmission waits for admitted, admission-failed, cancellation or the
+// safety timeout.
+func awaitAdmission(ctx workflow.Context, in QueryExecutionInput) (bool, AdmissionFailure) {
+	admittedCh := workflow.GetSignalChannel(ctx, AdmittedSignal)
+	failedCh := workflow.GetSignalChannel(ctx, AdmissionFailedSignal)
+
+	var admitted bool
+	var failure AdmissionFailure
+	sel := workflow.NewSelector(ctx)
+	sel.AddReceive(admittedCh, func(c workflow.ReceiveChannel, _ bool) {
+		var lease AdmissionLease
+		c.Receive(ctx, &lease)
+		admitted = true
+	})
+	sel.AddReceive(failedCh, func(c workflow.ReceiveChannel, _ bool) {
+		c.Receive(ctx, &failure)
+	})
+	sel.AddReceive(ctx.Done(), func(c workflow.ReceiveChannel, _ bool) {
+		c.Receive(ctx, nil)
+	})
+	sel.AddFuture(workflow.NewTimer(ctx, defaultQueueTimeout), func(workflow.Future) {
+		failure = AdmissionFailure{ExecutionID: in.ExecutionID, Code: AdmissionFailureQueueTimeout, Message: "the run waited too long in the queue"}
+	})
+	sel.Select(ctx)
+	return admitted, failure
+}
+
+// admissionFailed records the execution as failed with the admission reason.
+func admissionFailed(ctx workflow.Context, in QueryExecutionInput, failure AdmissionFailure) error {
+	bookkeepingCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
+	})
+	_ = workflow.ExecuteActivity(bookkeepingCtx, activities.FailExecution, activities.FailExecutionParams{
+		ExecutionID:  in.ExecutionID,
+		ErrorMessage: failure.Message,
+	}).Get(bookkeepingCtx, nil)
+	return fmt.Errorf("admission: %s", failure.Code)
+}
+
+// signalAdmission signals the engine's admission workflow.
+func signalAdmission(ctx workflow.Context, in QueryExecutionInput, signal string, arg any) error {
+	engineID := uuid.UUID(in.Target.EngineID.Bytes).String()
+	return workflow.SignalExternalWorkflow(ctx, AdmissionWorkflowID(engineID), "", signal, arg).Get(ctx, nil)
+}
+
+// releaseAdmissionSlot frees the slot after the script, including on the
+// cancelled path, so a finished run never keeps a slot.
+func releaseAdmissionSlot(ctx workflow.Context, in QueryExecutionInput) {
+	release := func(rctx workflow.Context) {
+		_ = signalAdmission(rctx, in, AdmissionReleaseSignal, AdmissionRelease{ExecutionID: in.ExecutionID})
+	}
+	if ctx.Err() == nil {
+		release(ctx)
+		return
+	}
+	dctx, cancel := workflow.NewDisconnectedContext(ctx)
+	defer cancel()
+	release(dctx)
 }
 
 // runQueryExecution is the body of QueryExecutionWorkflowV3. Its commands must
