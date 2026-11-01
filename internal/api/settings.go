@@ -58,6 +58,8 @@ type ExecutionSettings struct {
 	TrinoUserIdentity string
 	StatementTimeout  time.Duration
 	ExecutionTimeout  time.Duration
+	// WorkloadEnabled records the workload class of new runs (#399).
+	WorkloadEnabled bool
 	// PolarisDefaultCredentials is nil unless both halves are configured.
 	PolarisDefaultCredentials map[string]string
 }
@@ -113,6 +115,7 @@ func SettingsFromConfig(c *config.Config) Settings {
 			TrinoUserIdentity:         c.TrinoUserIdentity,
 			StatementTimeout:          c.StatementTimeout,
 			ExecutionTimeout:          c.ExecutionTimeout,
+			WorkloadEnabled:           c.WorkloadEnabled,
 			PolarisDefaultCredentials: c.PolarisDefaultCredentials(),
 		},
 		Ops: OpsSettings{

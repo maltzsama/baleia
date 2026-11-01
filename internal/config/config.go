@@ -103,6 +103,9 @@ type Config struct {
 	// ExecutionTimeout caps a whole script (every statement of an
 	// execution, run in one activity, #27).
 	ExecutionTimeout time.Duration
+	// WorkloadEnabled turns on workload management (#399, ADR 0014). Off by
+	// default: a run starts immediately and is never `queued`.
+	WorkloadEnabled bool
 	// MaintenanceMaxConcurrentRuns bounds the automatic Iceberg maintenance
 	// runs in progress at once, across tables (#500).
 	MaintenanceMaxConcurrentRuns int
@@ -265,6 +268,7 @@ func Load() *Config {
 		S3UseSSL:                       getEnv("S3_USE_SSL", "false") == "true",
 		StatementTimeout:               getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
 		ExecutionTimeout:               getEnvDuration("BALEIA_EXECUTION_TIMEOUT", 2*time.Hour),
+		WorkloadEnabled:                getEnv("BALEIA_WORKLOAD_ENABLED", "false") == "true",
 		MetadataSyncInterval:           getEnvDuration("BALEIA_METADATA_SYNC_INTERVAL", 15*time.Minute),
 		MaintenanceMaxConcurrentRuns:   getEnvInt("BALEIA_MAINTENANCE_MAX_CONCURRENT_RUNS", 4),
 		IcebergMaintenanceMinRetention: getEnvDuration("BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION", time.Hour),

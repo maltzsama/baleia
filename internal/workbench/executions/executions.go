@@ -17,6 +17,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -70,6 +71,9 @@ type Dialects interface {
 type Config struct {
 	StatementTimeout time.Duration
 	ExecutionTimeout time.Duration
+	// WorkloadEnabled records the workload class on new runs (#399). Off by
+	// default; the admission workflow that reads it ships later.
+	WorkloadEnabled bool
 	// Logger receives the logs; nil discards them (#379).
 	Logger *slog.Logger
 }
@@ -113,6 +117,8 @@ type Run struct {
 	// RerunFromPosition instead of re-splitting SQL (#111).
 	RerunOf           pgtype.UUID
 	RerunFromPosition int32
+	// Origin is where the run came from; classification uses it (#399).
+	Origin workload.Origin
 }
 
 // Start records the execution as running and starts its workflow. When the
@@ -131,6 +137,16 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 	if r.RequestID != "" {
 		requestID = &r.RequestID
 	}
+	// A-1 tags every run interactive (#527); with workload management on, the
+	// classification decides the class and records why (#536).
+	class := queryengine.ClassInteractive
+	var queueClass, queueReason *string
+	if s.cfg.WorkloadEnabled {
+		decision := workload.Classify(r.Origin)
+		class = decision.Class
+		c, reason := string(decision.Class), decision.Reason
+		queueClass, queueReason = &c, &reason
+	}
 
 	execution, err := s.store.CreateQueryExecution(ctx, db.CreateQueryExecutionParams{
 		WorkspaceID:  r.WorkspaceID,
@@ -147,6 +163,8 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 		TargetSchema:    schema,
 		TargetSnapshot:  snapshot,
 		AgentID:         r.AgentID,
+		QueueClass:      queueClass,
+		QueueReason:     queueReason,
 	})
 	if err != nil {
 		return db.QueryExecution{}, err
@@ -178,9 +196,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 			RerunExecutionID:  rerunOf,
 			RerunFromPosition: r.RerunFromPosition,
 			Dialect:           dialectName,
-			// A-1 tags every editor run as interactive; real classification
-			// replaces this in #536.
-			Class: queryengine.ClassInteractive,
+			Class:             class,
 		})
 	if err != nil {
 		// Detached from the request, which may be the reason it failed.
