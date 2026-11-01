@@ -62,7 +62,7 @@ const cancelQueryExecution = `-- name: CancelQueryExecution :one
 UPDATE query_executions
 SET status = 'cancelled', finished_at = now()
 WHERE id = $1 AND workspace_id = $2 AND status = 'running'
-RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms
 `
 
 type CancelQueryExecutionParams struct {
@@ -97,6 +97,12 @@ func (q *Queries) CancelQueryExecution(ctx context.Context, arg CancelQueryExecu
 		&i.TargetSchema,
 		&i.TargetSnapshot,
 		&i.AgentID,
+		&i.QueueClass,
+		&i.QueueReason,
+		&i.FairnessKey,
+		&i.QueuedAt,
+		&i.AdmittedAt,
+		&i.QueueWaitMs,
 	)
 	return i, err
 }
@@ -106,7 +112,7 @@ INSERT INTO query_executions (
     workspace_id, user_id, saved_query_id, status, sql, trino_catalog, request_id,
     engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms
 `
 
 type CreateQueryExecutionParams struct {
@@ -165,6 +171,12 @@ func (q *Queries) CreateQueryExecution(ctx context.Context, arg CreateQueryExecu
 		&i.TargetSchema,
 		&i.TargetSnapshot,
 		&i.AgentID,
+		&i.QueueClass,
+		&i.QueueReason,
+		&i.FairnessKey,
+		&i.QueuedAt,
+		&i.AdmittedAt,
+		&i.QueueWaitMs,
 	)
 	return i, err
 }
@@ -358,7 +370,7 @@ func (q *Queries) FolderSlugExists(ctx context.Context, arg FolderSlugExistsPara
 }
 
 const getQueryExecutionByID = `-- name: GetQueryExecutionByID :one
-SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id FROM query_executions WHERE id = $1
+SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms FROM query_executions WHERE id = $1
 `
 
 func (q *Queries) GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QueryExecution, error) {
@@ -385,12 +397,18 @@ func (q *Queries) GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (Qu
 		&i.TargetSchema,
 		&i.TargetSnapshot,
 		&i.AgentID,
+		&i.QueueClass,
+		&i.QueueReason,
+		&i.FairnessKey,
+		&i.QueuedAt,
+		&i.AdmittedAt,
+		&i.QueueWaitMs,
 	)
 	return i, err
 }
 
 const getQueryExecutionByIDAndWorkspace = `-- name: GetQueryExecutionByIDAndWorkspace :one
-SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id FROM query_executions WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms FROM query_executions WHERE id = $1 AND workspace_id = $2
 `
 
 type GetQueryExecutionByIDAndWorkspaceParams struct {
@@ -425,6 +443,12 @@ func (q *Queries) GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg Get
 		&i.TargetSchema,
 		&i.TargetSnapshot,
 		&i.AgentID,
+		&i.QueueClass,
+		&i.QueueReason,
+		&i.FairnessKey,
+		&i.QueuedAt,
+		&i.AdmittedAt,
+		&i.QueueWaitMs,
 	)
 	return i, err
 }
@@ -681,7 +705,7 @@ func (q *Queries) ListExecutionHistory(ctx context.Context, arg ListExecutionHis
 }
 
 const listQueryExecutionsByWorkspace = `-- name: ListQueryExecutionsByWorkspace :many
-SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id FROM query_executions
+SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms FROM query_executions
 WHERE workspace_id = $1
 ORDER BY started_at DESC
 LIMIT $2 OFFSET $3
@@ -723,6 +747,12 @@ func (q *Queries) ListQueryExecutionsByWorkspace(ctx context.Context, arg ListQu
 			&i.TargetSchema,
 			&i.TargetSnapshot,
 			&i.AgentID,
+			&i.QueueClass,
+			&i.QueueReason,
+			&i.FairnessKey,
+			&i.QueuedAt,
+			&i.AdmittedAt,
+			&i.QueueWaitMs,
 		); err != nil {
 			return nil, err
 		}
@@ -1199,7 +1229,7 @@ const updateQueryExecution = `-- name: UpdateQueryExecution :one
 UPDATE query_executions
 SET status = $2, engine_query_id = $3, rows_returned = $4, duration_ms = $5, finished_at = $6
 WHERE id = $1 AND status = 'running'
-RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms
 `
 
 type UpdateQueryExecutionParams struct {
@@ -1245,6 +1275,12 @@ func (q *Queries) UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecu
 		&i.TargetSchema,
 		&i.TargetSnapshot,
 		&i.AgentID,
+		&i.QueueClass,
+		&i.QueueReason,
+		&i.FairnessKey,
+		&i.QueuedAt,
+		&i.AdmittedAt,
+		&i.QueueWaitMs,
 	)
 	return i, err
 }
