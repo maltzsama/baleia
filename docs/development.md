@@ -32,6 +32,13 @@ There are two ([ADR 0010](adr/0010-dev-environments.md)):
 
 To work on the code with fast reloads, run the processes on the host against either stack: `make dev` (API on :9000) and `make worker`, and `cd web && npm run dev` for the web app with hot reload.
 
+### Temporal version
+
+The Temporal server and UI images are pinned (`temporalio/auto-setup:1.29.7`,
+`temporalio/ui:2.57.0` in `docker-compose.yaml` and `deploy/dev/temporal.yaml`)
+so workflow behavior does not change under the SDK in `go.mod`. Bump the images
+and `go.temporal.io/sdk` together, in one change (#525).
+
 ## Commands
 
 | Command | What it does |
