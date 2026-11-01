@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/temporal"
 )
 
 // Runs persists executions; *db.Queries implements it.
@@ -171,6 +172,12 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 	}
 
 	executionID := uuid.UUID(execution.ID.Bytes).String()
+	// Workload management starts the engine's admission workflow once, before
+	// the execution workflow can signal it (#399). An already-running one is
+	// the expected answer.
+	if s.cfg.WorkloadEnabled && r.Target.EngineID.Valid {
+		s.ensureAdmissionWorkflow(ctx, r.Target)
+	}
 	// The script is split with the target engine's dialect; Trino when the
 	// kind has none.
 	dialectName := dialect.Trino
@@ -184,7 +191,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 		rerunOf = uuid.UUID(r.RerunOf.Bytes).String()
 	}
 	_, err = s.workflows.ExecuteWorkflow(ctx, client.StartWorkflowOptions{ID: WorkflowID(execution.ID), TaskQueue: TaskQueue},
-		workflows.QueryExecutionWorkflowV3, workflows.QueryExecutionInput{
+		workflows.QueryExecutionWorkflowV4, workflows.QueryExecutionInput{
 			ExecutionID:       executionID,
 			WorkspaceID:       uuid.UUID(r.WorkspaceID.Bytes).String(),
 			SQL:               r.SQL,
@@ -197,6 +204,8 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 			RerunFromPosition: r.RerunFromPosition,
 			Dialect:           dialectName,
 			Class:             class,
+			WorkloadEnabled:   s.cfg.WorkloadEnabled,
+			FairnessKey:       fairnessKey(r),
 		})
 	if err != nil {
 		// Detached from the request, which may be the reason it failed.
@@ -214,6 +223,32 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 // WorkflowID is the id of an execution's workflow.
 func WorkflowID(executionID pgtype.UUID) string {
 	return workflows.ExecutionWorkflowID(uuid.UUID(executionID.Bytes).String())
+}
+
+// fairnessKey shares a class's slots across workspaces: the agent for an agent
+// run, the workspace otherwise (#399).
+func fairnessKey(r Run) string {
+	if r.AgentID.Valid {
+		return uuid.UUID(r.AgentID.Bytes).String()
+	}
+	return uuid.UUID(r.WorkspaceID.Bytes).String()
+}
+
+// ensureAdmissionWorkflow starts the engine's entity workflow; already
+// running is the expected answer and ignored.
+func (s *Service) ensureAdmissionWorkflow(ctx context.Context, target queryengine.Target) {
+	engineID := uuid.UUID(target.EngineID.Bytes).String()
+	engineClass := "direct"
+	if target.EngineKind == "trino" {
+		engineClass = "federated"
+	}
+	_, err := s.workflows.ExecuteWorkflow(ctx,
+		client.StartWorkflowOptions{ID: workflows.AdmissionWorkflowID(engineID), TaskQueue: TaskQueue},
+		workflows.AdmissionWorkflow, engineID,
+		workflows.AdmissionState{Capacities: workflows.DefaultAdmissionCapacitiesFor(engineClass)})
+	if err != nil && !temporal.IsWorkflowExecutionAlreadyStartedError(err) {
+		s.logger.WarnContext(ctx, "could not start the admission workflow", "engine_id", engineID, "err", err)
+	}
 }
 
 // Get returns one execution of the workspace.

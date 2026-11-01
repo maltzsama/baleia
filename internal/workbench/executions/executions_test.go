@@ -101,7 +101,10 @@ func (w *fakeWorkflows) ExecuteWorkflow(_ context.Context, o client.StartWorkflo
 		return nil, w.startErr
 	}
 	w.ids = append(w.ids, o.ID)
-	w.started = append(w.started, args[0].(workflows.QueryExecutionInput))
+	// The admission workflow starts with an engine id, not an input.
+	if in, ok := args[0].(workflows.QueryExecutionInput); ok {
+		w.started = append(w.started, in)
+	}
 	return nil, nil
 }
 

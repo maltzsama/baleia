@@ -139,6 +139,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	activities.Register(w, act)
 
 	w.RegisterWorkflow(workflows.QueryExecutionWorkflowV3)
+	w.RegisterWorkflow(workflows.QueryExecutionWorkflowV4)
 	w.RegisterWorkflow(workflows.AdmissionWorkflow)
 	w.RegisterWorkflow(workflows.LensQueryPollWorkflow)
 	w.RegisterWorkflow(workflows.LensClusterPollWorkflow)
