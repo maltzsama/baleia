@@ -18,6 +18,7 @@
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
 	import EngineBadge from '$lib/ui/patterns/EngineBadge.svelte';
+	import KindIcon from '$lib/ui/patterns/KindIcon.svelte';
 
 	let {
 		onSelectTable,
@@ -518,20 +519,19 @@
 				? 'rotate-90'
 				: ''}"><path d="M9 18l6-6-6-6" /></svg
 		>
-		<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 stroke-text-muted"
-			><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path
-				d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"
-			/></svg
-		>
+		<KindIcon kind={catalog.provider_kind} family="catalog" size={14} />
 		<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium"
 			>{catalog.name}</span
 		>
 		<span class="flex shrink-0 items-center gap-1">
 			{#each catalog.bindings as binding (binding.binding_id)}
 				<span
-					class="rounded border border-border px-1 py-px text-[9px] uppercase text-text-muted"
-					title={`${binding.engine_name} (${binding.mode})`}>{binding.engine_name}</span
+					class="inline-flex items-center gap-1 rounded border border-border px-1 py-px text-[9px] uppercase text-text-muted"
+					title={`${binding.engine_name} (${binding.mode})`}
 				>
+					<KindIcon kind={binding.engine_kind} family="engine" size={11} />
+					{binding.engine_name}
+				</span>
 			{/each}
 		</span>
 	</button>

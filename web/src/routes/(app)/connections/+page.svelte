@@ -348,8 +348,8 @@
 				{@const ownEngines = enginesOf(connection.id)}
 				{@const catalogsHere = catalogs[connection.id] ?? []}
 				<article class="flex flex-col gap-3 rounded-lg border border-border bg-bg-panel p-4">
-					<div class="flex items-start gap-2">
-						<KindIcon kind={connection.type} family={provider?.family} size={18} />
+					<div class="flex items-center gap-2">
+						<KindIcon kind={connection.type} family={provider?.family} size={20} />
 						<div class="min-w-0 flex-1">
 							<button
 								type="button"
@@ -379,7 +379,7 @@
 							<span class="text-slate-600 dark:text-slate-300">{m.connections_engine()}</span>
 							{#each ownEngines as engine (engine.id)}
 								<span class="ml-1 inline-flex items-center gap-1 font-medium">
-									<KindIcon kind={engine.kind} family="engine" size={13} />
+									<KindIcon kind={engine.kind} family="engine" size={14} />
 									{engine.name}
 								</span>
 							{/each}
