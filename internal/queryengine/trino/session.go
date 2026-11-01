@@ -71,11 +71,17 @@ func (s *session) options(cb queryengine.Callbacks, onHeaders func(http.Header))
 	// `query_priority` scheduling policy reads. Both are per request.
 	if s.spec.Tags.Class != "" {
 		o.ClientTags = append(o.ClientTags, "baleia.class="+string(s.spec.Tags.Class))
-		if priority, ok := s.spec.Tags.Class.QueryPriority(); ok {
-			if o.SessionProperties == nil {
-				o.SessionProperties = map[string]string{}
+		// The Baleia catalog guard 0.10.0 denies every system session property
+		// except query_max_* in a read-only session, so query_priority there
+		// would fail the query with permission_denied before planning. The
+		// client tag still routes it to its class (#527).
+		if !s.spec.ReadOnly {
+			if priority, ok := s.spec.Tags.Class.QueryPriority(); ok {
+				if o.SessionProperties == nil {
+					o.SessionProperties = map[string]string{}
+				}
+				o.SessionProperties["query_priority"] = strconv.Itoa(priority)
 			}
-			o.SessionProperties["query_priority"] = strconv.Itoa(priority)
 		}
 	}
 	if s.spec.Tags.ExecutionID != "" {
