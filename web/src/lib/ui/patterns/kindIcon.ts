@@ -1,44 +1,75 @@
 // The single source of provider/engine kind literals (FD6). Every other file
 // resolves icons and colors through `appearanceFor()`.
+//
+// Brand marks are vendored under ./icons as monochrome silhouettes: the fill
+// is `currentColor` (see the normalisation note in each file), so each icon
+// takes the kind's text color and stays legible on both themes next to the
+// line icons. Kinds without a mark fall back to a distinct line glyph.
+import postgresqlMark from './icons/postgresql.svg';
+import mysqlMark from './icons/mysql.svg';
+import mariadbMark from './icons/mariadb.svg';
+import sqliteMark from './icons/sqlite.svg';
+import clickhouseMark from './icons/clickhouse.svg';
+import trinoMark from './icons/trino.svg';
+import hiveMark from './icons/hive.svg';
+import flightsqlMark from './icons/flightsql.svg';
+import dorisMark from './icons/doris.svg';
+import oracleMark from './icons/oracle.svg';
+import sqlserverMark from './icons/sqlserver.svg';
+import lakekeeperMark from './icons/lakekeeper.svg';
+import starrocksMark from './icons/starrocks.svg';
+import polarisMark from './icons/polaris.svg';
+
+export type KindGlyph =
+	'catalog' | 'metastore' | 'database' | 'engine' | 'file' | 'mountain' | 'nodes' | 'waves';
 
 export type KindAppearance = {
 	color: string;
-	family: 'catalog' | 'metastore' | 'database' | 'engine' | 'file';
+	glyph: KindGlyph;
+	/** A vendored brand mark (raw SVG, original brand colours). */
+	brand?: string;
+	/** A dark mark: give it a light backdrop in dark mode so it stays legible. */
+	contrast?: boolean;
 };
 
 const appearances: Record<string, KindAppearance> = {
-	polaris: { color: 'text-fuchsia-600', family: 'catalog' },
-	nessie: { color: 'text-emerald-600', family: 'catalog' },
-	iceberg: { color: 'text-sky-600', family: 'catalog' },
-	lakekeeper: { color: 'text-cyan-600', family: 'catalog' },
-	unity: { color: 'text-indigo-600', family: 'catalog' },
-	hive: { color: 'text-orange-600', family: 'metastore' },
-	glue: { color: 'text-amber-600', family: 'metastore' },
-	postgresql: { color: 'text-blue-600', family: 'database' },
-	mysql: { color: 'text-orange-500', family: 'database' },
-	mariadb: { color: 'text-teal-600', family: 'database' },
-	sqlserver: { color: 'text-red-600', family: 'database' },
-	oracle: { color: 'text-rose-600', family: 'database' },
-	sqlite: { color: 'text-slate-600', family: 'file' },
-	clickhouse: { color: 'text-yellow-600', family: 'database' },
-	flightsql: { color: 'text-violet-600', family: 'engine' },
-	trino: { color: 'text-pink-600', family: 'engine' },
-	doris: { color: 'text-cyan-700', family: 'engine' },
-	starrocks: { color: 'text-emerald-700', family: 'engine' }
+	polaris: { color: 'text-fuchsia-600', glyph: 'catalog', brand: polarisMark, contrast: true },
+	nessie: { color: 'text-emerald-600', glyph: 'waves' },
+	iceberg: { color: 'text-sky-600', glyph: 'mountain' },
+	lakekeeper: {
+		color: 'text-cyan-600',
+		glyph: 'catalog',
+		brand: lakekeeperMark,
+		contrast: true
+	},
+	unity: { color: 'text-indigo-600', glyph: 'nodes' },
+	hive: { color: 'text-orange-600', glyph: 'metastore', brand: hiveMark },
+	glue: { color: 'text-amber-600', glyph: 'metastore' },
+	postgresql: { color: 'text-blue-600', glyph: 'database', brand: postgresqlMark },
+	mysql: { color: 'text-orange-500', glyph: 'database', brand: mysqlMark },
+	mariadb: { color: 'text-teal-600', glyph: 'database', brand: mariadbMark, contrast: true },
+	sqlserver: { color: 'text-red-600', glyph: 'database', brand: sqlserverMark },
+	oracle: { color: 'text-rose-600', glyph: 'database', brand: oracleMark },
+	sqlite: { color: 'text-slate-600', glyph: 'file', brand: sqliteMark, contrast: true },
+	clickhouse: { color: 'text-yellow-600', glyph: 'database', brand: clickhouseMark },
+	flightsql: { color: 'text-violet-600', glyph: 'engine', brand: flightsqlMark, contrast: true },
+	trino: { color: 'text-pink-600', glyph: 'engine', brand: trinoMark },
+	doris: { color: 'text-cyan-700', glyph: 'engine', brand: dorisMark },
+	starrocks: { color: 'text-emerald-700', glyph: 'engine', brand: starrocksMark }
 };
 
 const familyFallback: Record<string, KindAppearance> = {
-	catalog: { color: 'text-text-muted', family: 'catalog' },
-	metastore: { color: 'text-text-muted', family: 'metastore' },
-	database: { color: 'text-text-muted', family: 'database' },
-	engine: { color: 'text-text-muted', family: 'engine' },
-	file: { color: 'text-text-muted', family: 'file' }
+	catalog: { color: 'text-text-muted', glyph: 'catalog' },
+	metastore: { color: 'text-text-muted', glyph: 'metastore' },
+	database: { color: 'text-text-muted', glyph: 'database' },
+	engine: { color: 'text-text-muted', glyph: 'engine' },
+	file: { color: 'text-text-muted', glyph: 'file' }
 };
 
 export function appearanceFor(kind: string, family?: string): KindAppearance {
 	return (
 		appearances[kind] ??
-		familyFallback[family ?? ''] ?? { color: 'text-text-muted', family: 'catalog' }
+		familyFallback[family ?? ''] ?? { color: 'text-text-muted', glyph: 'catalog' }
 	);
 }
 

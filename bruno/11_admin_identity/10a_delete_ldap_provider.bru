@@ -1,0 +1,25 @@
+meta {
+  name: Delete LDAP Provider
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{base_url}}/admin/identity-providers/{{ldap_idp_id}}?suspend_users=true
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  The LDAP provider created in 04 is deleted here as well: deleting only the OIDC
+  provider (10) left one more identical "Bruno LDAP" entry in the login provider
+  list on every collection run.
+}
