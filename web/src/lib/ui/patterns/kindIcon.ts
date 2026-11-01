@@ -26,26 +26,33 @@ export type KindGlyph =
 export type KindAppearance = {
 	color: string;
 	glyph: KindGlyph;
-	/** A vendored brand mark (raw SVG, monochrome `currentColor`). */
+	/** A vendored brand mark (raw SVG, original brand colours). */
 	brand?: string;
+	/** A dark mark: give it a light backdrop in dark mode so it stays legible. */
+	contrast?: boolean;
 };
 
 const appearances: Record<string, KindAppearance> = {
-	polaris: { color: 'text-fuchsia-600', glyph: 'catalog', brand: polarisMark },
+	polaris: { color: 'text-fuchsia-600', glyph: 'catalog', brand: polarisMark, contrast: true },
 	nessie: { color: 'text-emerald-600', glyph: 'waves' },
 	iceberg: { color: 'text-sky-600', glyph: 'mountain' },
-	lakekeeper: { color: 'text-cyan-600', glyph: 'catalog', brand: lakekeeperMark },
+	lakekeeper: {
+		color: 'text-cyan-600',
+		glyph: 'catalog',
+		brand: lakekeeperMark,
+		contrast: true
+	},
 	unity: { color: 'text-indigo-600', glyph: 'nodes' },
 	hive: { color: 'text-orange-600', glyph: 'metastore', brand: hiveMark },
 	glue: { color: 'text-amber-600', glyph: 'metastore' },
 	postgresql: { color: 'text-blue-600', glyph: 'database', brand: postgresqlMark },
 	mysql: { color: 'text-orange-500', glyph: 'database', brand: mysqlMark },
-	mariadb: { color: 'text-teal-600', glyph: 'database', brand: mariadbMark },
+	mariadb: { color: 'text-teal-600', glyph: 'database', brand: mariadbMark, contrast: true },
 	sqlserver: { color: 'text-red-600', glyph: 'database', brand: sqlserverMark },
 	oracle: { color: 'text-rose-600', glyph: 'database', brand: oracleMark },
-	sqlite: { color: 'text-slate-600', glyph: 'file', brand: sqliteMark },
+	sqlite: { color: 'text-slate-600', glyph: 'file', brand: sqliteMark, contrast: true },
 	clickhouse: { color: 'text-yellow-600', glyph: 'database', brand: clickhouseMark },
-	flightsql: { color: 'text-violet-600', glyph: 'engine', brand: flightsqlMark },
+	flightsql: { color: 'text-violet-600', glyph: 'engine', brand: flightsqlMark, contrast: true },
 	trino: { color: 'text-pink-600', glyph: 'engine', brand: trinoMark },
 	doris: { color: 'text-cyan-700', glyph: 'engine', brand: dorisMark },
 	starrocks: { color: 'text-emerald-700', glyph: 'engine', brand: starrocksMark }

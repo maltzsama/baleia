@@ -18,7 +18,9 @@
 
 {#if appearance.brand}
 	<span
-		class="brand inline-flex shrink-0 items-center justify-center {className}"
+		class="brand inline-flex shrink-0 items-center justify-center rounded-[3px] {appearance.contrast
+			? 'dark:bg-white/90 dark:p-px dark:ring-1 dark:ring-black/10'
+			: ''} {className}"
 		style:width={`${size}px`}
 		style:height={`${size}px`}
 		aria-hidden="true"
