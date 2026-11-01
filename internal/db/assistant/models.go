@@ -241,16 +241,17 @@ type DirectoryReconcileRun struct {
 }
 
 type Engine struct {
-	ID           pgtype.UUID        `json:"id"`
-	Name         string             `json:"name"`
-	Kind         string             `json:"kind"`
-	Class        string             `json:"class"`
-	ConnectionID pgtype.UUID        `json:"connection_id"`
-	IdentityMode string             `json:"identity_mode"`
-	Enabled      bool               `json:"enabled"`
-	CreatedBy    pgtype.UUID        `json:"created_by"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID              pgtype.UUID        `json:"id"`
+	Name            string             `json:"name"`
+	Kind            string             `json:"kind"`
+	Class           string             `json:"class"`
+	ConnectionID    pgtype.UUID        `json:"connection_id"`
+	IdentityMode    string             `json:"identity_mode"`
+	Enabled         bool               `json:"enabled"`
+	CreatedBy       pgtype.UUID        `json:"created_by"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	MaxRunningTotal *int32             `json:"max_running_total"`
 }
 
 type EngineCatalogObservation struct {
@@ -261,6 +262,16 @@ type EngineCatalogObservation struct {
 	Connector   *string            `json:"connector"`
 	FirstSeenAt pgtype.Timestamptz `json:"first_seen_at"`
 	ObservedAt  pgtype.Timestamptz `json:"observed_at"`
+}
+
+type EngineQueueCapacity struct {
+	EngineID       pgtype.UUID        `json:"engine_id"`
+	Class          string             `json:"class"`
+	MaxRunning     int32              `json:"max_running"`
+	MaxQueued      int32              `json:"max_queued"`
+	QueueTimeoutMs int64              `json:"queue_timeout_ms"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type MaintenanceRun struct {
@@ -400,6 +411,12 @@ type QueryExecution struct {
 	TargetSchema    *string            `json:"target_schema"`
 	TargetSnapshot  []byte             `json:"target_snapshot"`
 	AgentID         pgtype.UUID        `json:"agent_id"`
+	QueueClass      *string            `json:"queue_class"`
+	QueueReason     *string            `json:"queue_reason"`
+	FairnessKey     *string            `json:"fairness_key"`
+	QueuedAt        pgtype.Timestamptz `json:"queued_at"`
+	AdmittedAt      pgtype.Timestamptz `json:"admitted_at"`
+	QueueWaitMs     *int64             `json:"queue_wait_ms"`
 }
 
 type QueryFolder struct {
