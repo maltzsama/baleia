@@ -51,6 +51,8 @@
 	"error_property_not_overridable": "Esta propriedade não pode ser sobrescrita.",
 	"error_provider_in_use": "O provedor está em uso.",
 	"error_provider_unsupported": "Nenhum provedor suporta este tipo de conexão.",
+	"error_queue_full": "A fila desta classe de trabalho está cheia; tente mais tarde.",
+	"error_queue_timeout": "A execução esperou demais na fila e expirou.",
 	"error_rate_limited": "Muitas requisições; tente novamente em instantes.",
 	"error_refused": "A requisição foi recusada.",
 	"error_reserved_name": "Este nome é reservado.",

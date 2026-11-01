@@ -385,6 +385,13 @@ const (
 	EngineCapabilitiesReadOnlyNone     EngineCapabilitiesReadOnly = "none"
 )
 
+// Defines values for EngineQueueClass.
+const (
+	EngineQueueClassBackground  EngineQueueClass = "background"
+	EngineQueueClassHeavy       EngineQueueClass = "heavy"
+	EngineQueueClassInteractive EngineQueueClass = "interactive"
+)
+
 // Defines values for ErrorCode.
 const (
 	ErrorCodeAccountSuspended          ErrorCode = "account_suspended"
@@ -441,6 +448,8 @@ const (
 	ErrorCodePropertyNotOverridable    ErrorCode = "property_not_overridable"
 	ErrorCodeProviderInUse             ErrorCode = "provider_in_use"
 	ErrorCodeProviderUnsupported       ErrorCode = "provider_unsupported"
+	ErrorCodeQueueFull                 ErrorCode = "queue_full"
+	ErrorCodeQueueTimeout              ErrorCode = "queue_timeout"
 	ErrorCodeRateLimited               ErrorCode = "rate_limited"
 	ErrorCodeReadOnlyUnsupported       ErrorCode = "read_only_unsupported"
 	ErrorCodeRefused                   ErrorCode = "refused"
@@ -473,7 +482,20 @@ const (
 	ExecutionStatusCancelled ExecutionStatus = "cancelled"
 	ExecutionStatusFailed    ExecutionStatus = "failed"
 	ExecutionStatusFinished  ExecutionStatus = "finished"
+	ExecutionStatusQueued    ExecutionStatus = "queued"
 	ExecutionStatusRunning   ExecutionStatus = "running"
+)
+
+// Defines values for ExecutionQueueClass.
+const (
+	ExecutionQueueClassBackground  ExecutionQueueClass = "background"
+	ExecutionQueueClassHeavy       ExecutionQueueClass = "heavy"
+	ExecutionQueueClassInteractive ExecutionQueueClass = "interactive"
+)
+
+// Defines values for ExecutionRequestPriority.
+const (
+	ExecutionRequestPriorityBackground ExecutionRequestPriority = "background"
 )
 
 // Defines values for ExploreQueryFiltersOp.
@@ -508,6 +530,7 @@ const (
 	ManageAssistant       GlobalAction = "manage_assistant"
 	ManageIdentity        GlobalAction = "manage_identity"
 	ManageUsers           GlobalAction = "manage_users"
+	ManageWorkload        GlobalAction = "manage_workload"
 	ViewAllAudit          GlobalAction = "view_all_audit"
 	ViewSystem            GlobalAction = "view_system"
 )
@@ -951,6 +974,13 @@ const (
 	UpdateAssistantSettingsRequestProviderOpenaiCompatible UpdateAssistantSettingsRequestProvider = "openai_compatible"
 )
 
+// Defines values for UpdateEngineQueueClass.
+const (
+	UpdateEngineQueueClassBackground  UpdateEngineQueueClass = "background"
+	UpdateEngineQueueClassHeavy       UpdateEngineQueueClass = "heavy"
+	UpdateEngineQueueClassInteractive UpdateEngineQueueClass = "interactive"
+)
+
 // Defines values for UpdateLDAPConfigDefaultRole.
 const (
 	UpdateLDAPConfigDefaultRoleAdmin  UpdateLDAPConfigDefaultRole = "admin"
@@ -1098,6 +1128,7 @@ const (
 	ListExecutionsParamsStatusCancelled ListExecutionsParamsStatus = "cancelled"
 	ListExecutionsParamsStatusFailed    ListExecutionsParamsStatus = "failed"
 	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
+	ListExecutionsParamsStatusQueued    ListExecutionsParamsStatus = "queued"
 	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
 )
 
@@ -2307,6 +2338,29 @@ type EngineObservation struct {
 	Present    bool      `json:"present"`
 }
 
+// EngineQueue defines model for EngineQueue.
+type EngineQueue struct {
+	Class          EngineQueueClass `json:"class"`
+	MaxQueued      int              `json:"max_queued"`
+	MaxRunning     int              `json:"max_running"`
+	OldestWaitMs   *int             `json:"oldest_wait_ms"`
+	QueueTimeoutMs int              `json:"queue_timeout_ms"`
+	Queued         int              `json:"queued"`
+	Running        int              `json:"running"`
+}
+
+// EngineQueueClass defines model for EngineQueue.Class.
+type EngineQueueClass string
+
+// EngineQueues defines model for EngineQueues.
+type EngineQueues struct {
+	Classes  []EngineQueue      `json:"classes"`
+	EngineId openapi_types.UUID `json:"engine_id"`
+
+	// MaxRunningTotal Ceiling across every class; null means none
+	MaxRunningTotal *int `json:"max_running_total"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	Code   ErrorCode     `json:"code"`
@@ -2332,6 +2386,9 @@ type Execution struct {
 	FinishedAt    *time.Time         `json:"finished_at"`
 	Id            openapi_types.UUID `json:"id"`
 
+	// Queue The workload queue of a run (#399). Present while the execution is `queued`; `position` is only the caller's own position.
+	Queue *ExecutionQueue `json:"queue,omitempty"`
+
 	// ReadOnly The target ran in a read-only session
 	ReadOnly     *bool               `json:"read_only,omitempty"`
 	RowsReturned *int                `json:"rows_returned"`
@@ -2354,8 +2411,28 @@ type Execution struct {
 // ExecutionStatus defines model for Execution.Status.
 type ExecutionStatus string
 
+// ExecutionQueue The workload queue of a run (#399). Present while the execution is `queued`; `position` is only the caller's own position.
+type ExecutionQueue struct {
+	AdmittedAt *time.Time          `json:"admitted_at"`
+	Class      ExecutionQueueClass `json:"class"`
+
+	// Position The caller's position in the queue
+	Position int       `json:"position"`
+	QueuedAt time.Time `json:"queued_at"`
+
+	// Reason Which rule or step chose the class
+	Reason *string `json:"reason"`
+	WaitMs int     `json:"wait_ms"`
+}
+
+// ExecutionQueueClass defines model for ExecutionQueue.Class.
+type ExecutionQueueClass string
+
 // ExecutionRequest defines model for ExecutionRequest.
 type ExecutionRequest struct {
+	// Priority Ask for a lower workload class (#399). It can only lower the class a rule chose, never raise it; the default is one click, interactive.
+	Priority *ExecutionRequestPriority `json:"priority,omitempty"`
+
 	// Rerun Re-run the statements of an earlier execution from from_position; the server copies them, never re-splits SQL it did not send
 	Rerun *struct {
 		ExecutionId  openapi_types.UUID `json:"execution_id"`
@@ -2368,6 +2445,9 @@ type ExecutionRequest struct {
 	Target      *TargetRequest     `json:"target,omitempty"`
 	WorkspaceId openapi_types.UUID `json:"workspace_id"`
 }
+
+// ExecutionRequestPriority Ask for a lower workload class (#399). It can only lower the class a rule chose, never raise it; the default is one click, interactive.
+type ExecutionRequestPriority string
 
 // ExecutionTarget The target an execution ran on, as recorded when it started
 type ExecutionTarget struct {
@@ -4124,6 +4204,23 @@ type UpdateCatalogDetailRequest struct {
 	Name        *string `json:"name,omitempty"`
 }
 
+// UpdateEngineQueue defines model for UpdateEngineQueue.
+type UpdateEngineQueue struct {
+	Class          UpdateEngineQueueClass `json:"class"`
+	MaxQueued      int                    `json:"max_queued"`
+	MaxRunning     int                    `json:"max_running"`
+	QueueTimeoutMs int                    `json:"queue_timeout_ms"`
+}
+
+// UpdateEngineQueueClass defines model for UpdateEngineQueue.Class.
+type UpdateEngineQueueClass string
+
+// UpdateEngineQueuesRequest defines model for UpdateEngineQueuesRequest.
+type UpdateEngineQueuesRequest struct {
+	Classes         []UpdateEngineQueue `json:"classes"`
+	MaxRunningTotal *int                `json:"max_running_total"`
+}
+
 // UpdateEngineRequest defines model for UpdateEngineRequest.
 type UpdateEngineRequest struct {
 	Enabled *bool `json:"enabled,omitempty"`
@@ -4998,6 +5095,9 @@ type CreateEngineJSONRequestBody = CreateEngineRequest
 
 // UpdateEngineJSONRequestBody defines body for UpdateEngine for application/json ContentType.
 type UpdateEngineJSONRequestBody = UpdateEngineRequest
+
+// PutEngineQueuesJSONRequestBody defines body for PutEngineQueues for application/json ContentType.
+type PutEngineQueuesJSONRequestBody = UpdateEngineQueuesRequest
 
 // UpdateProfileJSONRequestBody defines body for UpdateProfile for application/json ContentType.
 type UpdateProfileJSONRequestBody = UpdateProfileRequest

@@ -7,6 +7,16 @@ package api
 
 import "context"
 
+// ── Workload queues (#535 contract; the real handlers land with #540) ────────
+
+func (h *CatalogHandlers) GetEngineQueues(ctx context.Context, request GetEngineQueuesRequestObject) (GetEngineQueuesResponseObject, error) {
+	return nil, errNotImplemented
+}
+
+func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngineQueuesRequestObject) (PutEngineQueuesResponseObject, error) {
+	return nil, errNotImplemented
+}
+
 // ── Migrant ───────────────────────────────────────────────────────────────────
 
 func (h *OpsHandlers) ListMigrations(ctx context.Context, request ListMigrationsRequestObject) (ListMigrationsResponseObject, error) {

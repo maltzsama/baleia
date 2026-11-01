@@ -1,0 +1,32 @@
+meta {
+  name: Put engine queues
+  type: http
+  seq: 14
+}
+
+put {
+  url: {{base_url}}/engines/{{trino_engine_id}}/queues
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "max_running_total": null,
+    "classes": [
+      { "class": "interactive", "max_running": 20, "max_queued": 200, "queue_timeout_ms": 300000 },
+      { "class": "heavy", "max_running": 3, "max_queued": 50, "queue_timeout_ms": 1800000 },
+      { "class": "background", "max_running": 2, "max_queued": 100, "queue_timeout_ms": 86400000 }
+    ]
+  }
+}
+
+docs {
+  Contract skeleton for #535; the handler lands with #540. Sets the capacities,
+  the queue timeouts and the optional engine ceiling; the change applies
+  without restarting the admission workflow. Admins and engine owners only.
+}

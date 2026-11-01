@@ -2591,6 +2591,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engines/{id}/queues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Live queue depth and capacity per class
+         * @description Admins and engine owners. Returns the configured capacity, the live depth and the oldest wait for every workload class of this engine.
+         */
+        get: operations["getEngineQueues"];
+        /**
+         * Set capacities, timeouts and the engine ceiling
+         * @description Admins and engine owners. Applies without restarting the admission workflow. Closing a class with queued runs is allowed but must be confirmed by the caller (FD4).
+         */
+        put: operations["putEngineQueues"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/folders": {
         parameters: {
             query?: never;
@@ -3369,7 +3395,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_not_found" | "workspace_personal";
+        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_not_found" | "workspace_personal";
         /** @enum {string} */
         Locale: "en" | "pt-BR";
         /** @enum {string} */
@@ -4004,7 +4030,7 @@ export interface components {
         /** @enum {string} */
         WorkspaceAllowedAction: "view" | "update" | "delete" | "manage_grants" | "set_defaults" | "run" | "create_space";
         /** @enum {string} */
-        GlobalAction: "create_connection" | "create_workspace" | "create_shared_workspace" | "manage_users" | "manage_identity" | "view_all_audit" | "view_system" | "manage_assistant";
+        GlobalAction: "create_connection" | "create_workspace" | "create_shared_workspace" | "manage_users" | "manage_identity" | "view_all_audit" | "view_system" | "manage_assistant" | "manage_workload";
         Features: {
             agents: boolean;
             assistant: boolean;
@@ -5579,6 +5605,11 @@ export interface components {
             saved_query_id?: string | null;
             sql: string;
             target?: components["schemas"]["TargetRequest"];
+            /**
+             * @description Ask for a lower workload class (#399). It can only lower the class a rule chose, never raise it; the default is one click, interactive.
+             * @enum {string}
+             */
+            priority?: "background";
             /** @description Re-run the statements of an earlier execution from from_position; the server copies them, never re-splits SQL it did not send */
             rerun?: {
                 /** Format: uuid */
@@ -5601,7 +5632,7 @@ export interface components {
             /** Format: uuid */
             saved_query_id?: string | null;
             /** @enum {string} */
-            status: "running" | "finished" | "failed" | "cancelled";
+            status: "queued" | "running" | "finished" | "failed" | "cancelled";
             sql: string;
             /** @description The statement's id on its engine (a Trino query id, …). Was trino_query_id */
             engine_query_id?: string | null;
@@ -5615,6 +5646,49 @@ export interface components {
             /** @description The target ran in a read-only session */
             read_only?: boolean;
             error_code?: string | null;
+            queue?: components["schemas"]["ExecutionQueue"];
+        };
+        /** @description The workload queue of a run (#399). Present while the execution is `queued`; `position` is only the caller's own position. */
+        ExecutionQueue: {
+            /** @enum {string} */
+            class: "interactive" | "heavy" | "background";
+            /** @description Which rule or step chose the class */
+            reason?: string | null;
+            /** @description The caller's position in the queue */
+            position: number;
+            /** Format: date-time */
+            queued_at: string;
+            /** Format: date-time */
+            admitted_at?: string | null;
+            wait_ms: number;
+        };
+        EngineQueues: {
+            /** Format: uuid */
+            engine_id: string;
+            /** @description Ceiling across every class; null means none */
+            max_running_total?: number | null;
+            classes: components["schemas"]["EngineQueue"][];
+        };
+        EngineQueue: {
+            /** @enum {string} */
+            class: "interactive" | "heavy" | "background";
+            max_running: number;
+            max_queued: number;
+            queue_timeout_ms: number;
+            running: number;
+            queued: number;
+            oldest_wait_ms?: number | null;
+        };
+        UpdateEngineQueuesRequest: {
+            max_running_total?: number | null;
+            classes: components["schemas"]["UpdateEngineQueue"][];
+        };
+        UpdateEngineQueue: {
+            /** @enum {string} */
+            class: "interactive" | "heavy" | "background";
+            max_running: number;
+            max_queued: number;
+            queue_timeout_ms: number;
         };
         QueryStatement: {
             /** Format: uuid */
@@ -10863,6 +10937,61 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
+    getEngineQueues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineQueues"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putEngineQueues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEngineQueuesRequest"];
+            };
+        };
+        responses: {
+            /** @description Queues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineQueues"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     listFolders: {
         parameters: {
             query?: {
@@ -11108,7 +11237,7 @@ export interface operations {
     listExecutions: {
         parameters: {
             query?: {
-                status?: "running" | "finished" | "failed" | "cancelled";
+                status?: "queued" | "running" | "finished" | "failed" | "cancelled";
                 /** @description A user id, or `me` for the caller */
                 user_id?: string;
                 /** @description Only executions started at or after this instant */

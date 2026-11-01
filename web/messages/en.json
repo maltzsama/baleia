@@ -51,6 +51,8 @@
 	"error_property_not_overridable": "This property cannot be overridden.",
 	"error_provider_in_use": "The provider is in use.",
 	"error_provider_unsupported": "No provider supports this connection type.",
+	"error_queue_full": "The queue for this workload class is full; try again later.",
+	"error_queue_timeout": "The run waited too long in the queue and timed out.",
 	"error_rate_limited": "Too many requests; try again shortly.",
 	"error_refused": "The request was refused.",
 	"error_reserved_name": "This name is reserved.",

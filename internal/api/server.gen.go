@@ -348,6 +348,12 @@ type ServerInterface interface {
 	// Catalogs the federated engine reported, with managed/adopted mode
 	// (GET /engines/{id}/observations)
 	ListEngineObservations(w http.ResponseWriter, r *http.Request, id PathId)
+	// Live queue depth and capacity per class
+	// (GET /engines/{id}/queues)
+	GetEngineQueues(w http.ResponseWriter, r *http.Request, id PathId)
+	// Set capacities, timeouts and the engine ceiling
+	// (PUT /engines/{id}/queues)
+	PutEngineQueues(w http.ResponseWriter, r *http.Request, id PathId)
 	// Repair the engine's managed catalog drift and report the rest — admins
 	// (POST /engines/{id}/reconcile)
 	ReconcileEngine(w http.ResponseWriter, r *http.Request, id PathId, params ReconcileEngineParams)
@@ -1359,6 +1365,18 @@ func (_ Unimplemented) KillMonitoringQuery(w http.ResponseWriter, r *http.Reques
 // Catalogs the federated engine reported, with managed/adopted mode
 // (GET /engines/{id}/observations)
 func (_ Unimplemented) ListEngineObservations(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Live queue depth and capacity per class
+// (GET /engines/{id}/queues)
+func (_ Unimplemented) GetEngineQueues(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set capacities, timeouts and the engine ceiling
+// (PUT /engines/{id}/queues)
+func (_ Unimplemented) PutEngineQueues(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5974,6 +5992,72 @@ func (siw *ServerInterfaceWrapper) ListEngineObservations(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListEngineObservations(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEngineQueues operation middleware
+func (siw *ServerInterfaceWrapper) GetEngineQueues(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEngineQueues(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutEngineQueues operation middleware
+func (siw *ServerInterfaceWrapper) PutEngineQueues(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutEngineQueues(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11478,6 +11562,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/engines/{id}/observations", wrapper.ListEngineObservations)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/queues", wrapper.GetEngineQueues)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/engines/{id}/queues", wrapper.PutEngineQueues)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/engines/{id}/reconcile", wrapper.ReconcileEngine)
 	})
 	r.Group(func(r chi.Router) {
@@ -16530,6 +16620,106 @@ type ListEngineObservations404JSONResponse struct{ NotFoundJSONResponse }
 func (response ListEngineObservations404JSONResponse) VisitListEngineObservationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineQueuesRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetEngineQueuesResponseObject interface {
+	VisitGetEngineQueuesResponse(w http.ResponseWriter) error
+}
+
+type GetEngineQueues200JSONResponse EngineQueues
+
+func (response GetEngineQueues200JSONResponse) VisitGetEngineQueuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineQueues401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetEngineQueues401JSONResponse) VisitGetEngineQueuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineQueues403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetEngineQueues403JSONResponse) VisitGetEngineQueuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineQueues404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetEngineQueues404JSONResponse) VisitGetEngineQueuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutEngineQueuesRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *PutEngineQueuesJSONRequestBody
+}
+
+type PutEngineQueuesResponseObject interface {
+	VisitPutEngineQueuesResponse(w http.ResponseWriter) error
+}
+
+type PutEngineQueues200JSONResponse EngineQueues
+
+func (response PutEngineQueues200JSONResponse) VisitPutEngineQueuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutEngineQueues401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PutEngineQueues401JSONResponse) VisitPutEngineQueuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutEngineQueues403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutEngineQueues403JSONResponse) VisitPutEngineQueuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutEngineQueues404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutEngineQueues404JSONResponse) VisitPutEngineQueuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutEngineQueues422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response PutEngineQueues422JSONResponse) VisitPutEngineQueuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -22044,6 +22234,12 @@ type StrictServerInterface interface {
 	// Catalogs the federated engine reported, with managed/adopted mode
 	// (GET /engines/{id}/observations)
 	ListEngineObservations(ctx context.Context, request ListEngineObservationsRequestObject) (ListEngineObservationsResponseObject, error)
+	// Live queue depth and capacity per class
+	// (GET /engines/{id}/queues)
+	GetEngineQueues(ctx context.Context, request GetEngineQueuesRequestObject) (GetEngineQueuesResponseObject, error)
+	// Set capacities, timeouts and the engine ceiling
+	// (PUT /engines/{id}/queues)
+	PutEngineQueues(ctx context.Context, request PutEngineQueuesRequestObject) (PutEngineQueuesResponseObject, error)
 	// Repair the engine's managed catalog drift and report the rest — admins
 	// (POST /engines/{id}/reconcile)
 	ReconcileEngine(ctx context.Context, request ReconcileEngineRequestObject) (ReconcileEngineResponseObject, error)
@@ -25482,6 +25678,65 @@ func (sh *strictHandler) ListEngineObservations(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListEngineObservationsResponseObject); ok {
 		if err := validResponse.VisitListEngineObservationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEngineQueues operation middleware
+func (sh *strictHandler) GetEngineQueues(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetEngineQueuesRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEngineQueues(ctx, request.(GetEngineQueuesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEngineQueues")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEngineQueuesResponseObject); ok {
+		if err := validResponse.VisitGetEngineQueuesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutEngineQueues operation middleware
+func (sh *strictHandler) PutEngineQueues(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request PutEngineQueuesRequestObject
+
+	request.Id = id
+
+	var body PutEngineQueuesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutEngineQueues(ctx, request.(PutEngineQueuesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutEngineQueues")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutEngineQueuesResponseObject); ok {
+		if err := validResponse.VisitPutEngineQueuesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
