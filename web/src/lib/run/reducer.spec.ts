@@ -31,6 +31,55 @@ describe('run reducer', () => {
 		expect(orderedStatements(state).map((s) => s.position)).toEqual([1, 2]);
 	});
 
+	it('carries the queue through snapshot, queue_position and admitted', () => {
+		const base = snapshot as Extract<ExecutionEvent, { type: 'snapshot' }>;
+		const queued = {
+			...base,
+			execution: {
+				...base.execution,
+				status: 'queued',
+				queue: {
+					class: 'interactive',
+					position: 2,
+					queued_at: '2026-01-01T00:00:00Z',
+					wait_ms: 0
+				}
+			}
+		} as ExecutionEvent;
+		let state = applyEvent(initialRunState('e1'), queued);
+		expect(state.status).toBe('queued');
+		expect(state.queue?.position).toBe(2);
+
+		state = applyEvent(state, {
+			type: 'queue_position',
+			execution_id: 'e1',
+			seq: 2,
+			ts: '2026-01-01T00:00:01Z',
+			queue: {
+				class: 'interactive',
+				position: 1,
+				queued_at: '2026-01-01T00:00:00Z',
+				wait_ms: 1000
+			}
+		} as ExecutionEvent);
+		expect(state.queue?.position).toBe(1);
+		expect(state.status).toBe('queued');
+
+		state = applyEvent(state, {
+			type: 'admitted',
+			execution_id: 'e1',
+			seq: 3,
+			ts: '2026-01-01T00:00:02Z',
+			queue: {
+				class: 'interactive',
+				position: 0,
+				queued_at: '2026-01-01T00:00:00Z',
+				wait_ms: 2000
+			}
+		} as ExecutionEvent);
+		expect(state.status).toBe('running');
+	});
+
 	it('applies statement_status once and ignores a duplicate seq', () => {
 		let state = applyEvent(initialRunState('e1'), snapshot);
 		const finished = {

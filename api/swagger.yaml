@@ -2990,6 +2990,7 @@ components:
         - $ref: "#/components/schemas/ExecutionStatusEvent"
         - $ref: "#/components/schemas/StatementStatusEvent"
         - $ref: "#/components/schemas/StatementProgressEvent"
+        - $ref: "#/components/schemas/ExecutionQueueEvent"
 
     ExecutionSnapshotEvent:
       type: object
@@ -3012,8 +3013,21 @@ components:
         execution_id: { type: string, format: uuid }
         seq: { type: integer }
         ts: { type: string, format: date-time }
-        status: { type: string, enum: [running, finished, failed, cancelled] }
+        status: { type: string, enum: [queued, running, finished, failed, cancelled] }
         error_code: { type: string, nullable: true }
+
+    ExecutionQueueEvent:
+      type: object
+      description: >
+        A queued run's position (`queue_position`, when it changes) or its
+        admission (`admitted`, when it gets a slot) (#399).
+      required: [type, execution_id, seq, ts, queue]
+      properties:
+        type: { type: string, enum: [queue_position, admitted] }
+        execution_id: { type: string, format: uuid }
+        seq: { type: integer }
+        ts: { type: string, format: date-time }
+        queue: { $ref: "#/components/schemas/ExecutionQueue" }
 
     StatementStatusEvent:
       type: object
