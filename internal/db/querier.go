@@ -159,6 +159,9 @@ type Querier interface {
 	EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error)
 	// Creates the monthly partitions of this month and the next months ahead.
 	EnsureAuditPartitions(ctx context.Context, monthsAhead int32) error
+	// A run that failed before any statement ran (the admission queue) records its
+	// error code here, where no statement can (#399).
+	FailQueryExecution(ctx context.Context, arg FailQueryExecutionParams) (QueryExecution, error)
 	// A run left running by a crashed worker ends failed when the next pass of
 	// the same catalog starts (that pass holds the catalog sync lock).
 	FailStaleMetadataSyncRuns(ctx context.Context, catalogID pgtype.UUID) error

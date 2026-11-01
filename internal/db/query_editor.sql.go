@@ -62,7 +62,7 @@ const cancelQueryExecution = `-- name: CancelQueryExecution :one
 UPDATE query_executions
 SET status = 'cancelled', finished_at = now()
 WHERE id = $1 AND workspace_id = $2 AND status = 'running'
-RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code
 `
 
 type CancelQueryExecutionParams struct {
@@ -103,6 +103,7 @@ func (q *Queries) CancelQueryExecution(ctx context.Context, arg CancelQueryExecu
 		&i.QueuedAt,
 		&i.AdmittedAt,
 		&i.QueueWaitMs,
+		&i.ErrorCode,
 	)
 	return i, err
 }
@@ -113,7 +114,7 @@ INSERT INTO query_executions (
     engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id,
     queue_class, queue_reason)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code
 `
 
 type CreateQueryExecutionParams struct {
@@ -182,6 +183,7 @@ func (q *Queries) CreateQueryExecution(ctx context.Context, arg CreateQueryExecu
 		&i.QueuedAt,
 		&i.AdmittedAt,
 		&i.QueueWaitMs,
+		&i.ErrorCode,
 	)
 	return i, err
 }
@@ -356,6 +358,55 @@ func (q *Queries) DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryPara
 	return result.RowsAffected(), nil
 }
 
+const failQueryExecution = `-- name: FailQueryExecution :one
+UPDATE query_executions
+SET status = 'failed', error_code = $2, finished_at = now()
+WHERE id = $1 AND status = 'running'
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code
+`
+
+type FailQueryExecutionParams struct {
+	ID        pgtype.UUID `json:"id"`
+	ErrorCode *string     `json:"error_code"`
+}
+
+// A run that failed before any statement ran (the admission queue) records its
+// error code here, where no statement can (#399).
+func (q *Queries) FailQueryExecution(ctx context.Context, arg FailQueryExecutionParams) (QueryExecution, error) {
+	row := q.db.QueryRow(ctx, failQueryExecution, arg.ID, arg.ErrorCode)
+	var i QueryExecution
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.SavedQueryID,
+		&i.Status,
+		&i.Sql,
+		&i.EngineQueryID,
+		&i.RowsReturned,
+		&i.DurationMs,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.TrinoCatalog,
+		&i.ResultKey,
+		&i.RequestID,
+		&i.EngineID,
+		&i.TargetBindingID,
+		&i.TargetCatalogID,
+		&i.TargetSchema,
+		&i.TargetSnapshot,
+		&i.AgentID,
+		&i.QueueClass,
+		&i.QueueReason,
+		&i.FairnessKey,
+		&i.QueuedAt,
+		&i.AdmittedAt,
+		&i.QueueWaitMs,
+		&i.ErrorCode,
+	)
+	return i, err
+}
+
 const folderSlugExists = `-- name: FolderSlugExists :one
 SELECT EXISTS (
     SELECT 1 FROM query_folders WHERE space_id = $1::uuid AND slug = $2::text
@@ -375,7 +426,7 @@ func (q *Queries) FolderSlugExists(ctx context.Context, arg FolderSlugExistsPara
 }
 
 const getQueryExecutionByID = `-- name: GetQueryExecutionByID :one
-SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms FROM query_executions WHERE id = $1
+SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code FROM query_executions WHERE id = $1
 `
 
 func (q *Queries) GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QueryExecution, error) {
@@ -408,12 +459,13 @@ func (q *Queries) GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (Qu
 		&i.QueuedAt,
 		&i.AdmittedAt,
 		&i.QueueWaitMs,
+		&i.ErrorCode,
 	)
 	return i, err
 }
 
 const getQueryExecutionByIDAndWorkspace = `-- name: GetQueryExecutionByIDAndWorkspace :one
-SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms FROM query_executions WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code FROM query_executions WHERE id = $1 AND workspace_id = $2
 `
 
 type GetQueryExecutionByIDAndWorkspaceParams struct {
@@ -454,6 +506,7 @@ func (q *Queries) GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg Get
 		&i.QueuedAt,
 		&i.AdmittedAt,
 		&i.QueueWaitMs,
+		&i.ErrorCode,
 	)
 	return i, err
 }
@@ -710,7 +763,7 @@ func (q *Queries) ListExecutionHistory(ctx context.Context, arg ListExecutionHis
 }
 
 const listQueryExecutionsByWorkspace = `-- name: ListQueryExecutionsByWorkspace :many
-SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms FROM query_executions
+SELECT id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code FROM query_executions
 WHERE workspace_id = $1
 ORDER BY started_at DESC
 LIMIT $2 OFFSET $3
@@ -758,6 +811,7 @@ func (q *Queries) ListQueryExecutionsByWorkspace(ctx context.Context, arg ListQu
 			&i.QueuedAt,
 			&i.AdmittedAt,
 			&i.QueueWaitMs,
+			&i.ErrorCode,
 		); err != nil {
 			return nil, err
 		}
@@ -1234,7 +1288,7 @@ const updateQueryExecution = `-- name: UpdateQueryExecution :one
 UPDATE query_executions
 SET status = $2, engine_query_id = $3, rows_returned = $4, duration_ms = $5, finished_at = $6
 WHERE id = $1 AND status = 'running'
-RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code
 `
 
 type UpdateQueryExecutionParams struct {
@@ -1286,6 +1340,7 @@ func (q *Queries) UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecu
 		&i.QueuedAt,
 		&i.AdmittedAt,
 		&i.QueueWaitMs,
+		&i.ErrorCode,
 	)
 	return i, err
 }

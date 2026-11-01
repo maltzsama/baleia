@@ -67,6 +67,13 @@
 			}
 		},
 		execution: {
+			queued: {
+				tone: 'info',
+				get label() {
+					return m.statusbadge_queued();
+				},
+				spinning: true
+			},
 			pending: {
 				tone: 'neutral',
 				get label() {

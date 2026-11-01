@@ -140,6 +140,7 @@ func admissionFailed(ctx workflow.Context, in QueryExecutionInput, failure Admis
 	_ = workflow.ExecuteActivity(bookkeepingCtx, activities.FailExecution, activities.FailExecutionParams{
 		ExecutionID:  in.ExecutionID,
 		ErrorMessage: failure.Message,
+		ErrorCode:    failure.Code,
 	}).Get(bookkeepingCtx, nil)
 	return fmt.Errorf("admission: %s", failure.Code)
 }

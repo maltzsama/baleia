@@ -348,6 +348,9 @@ func (a *Activities) completeExecution(ctx context.Context, params CompleteExecu
 type FailExecutionParams struct {
 	ExecutionID  string
 	ErrorMessage string
+	// ErrorCode, when set, is stored on the execution: a run that failed
+	// before any statement ran has no statement to carry it (#399).
+	ErrorCode string
 }
 
 func FailExecution(ctx context.Context, params FailExecutionParams) error {
@@ -360,10 +363,18 @@ func (a *Activities) failExecution(ctx context.Context, params FailExecutionPara
 		return err
 	}
 
-	_, err := a.queries.UpdateQueryExecution(ctx, db.UpdateQueryExecutionParams{
-		ID:     execID,
-		Status: "failed",
-	})
+	var err error
+	if params.ErrorCode != "" {
+		_, err = a.queries.FailQueryExecution(ctx, db.FailQueryExecutionParams{
+			ID:        execID,
+			ErrorCode: &params.ErrorCode,
+		})
+	} else {
+		_, err = a.queries.UpdateQueryExecution(ctx, db.UpdateQueryExecutionParams{
+			ID:     execID,
+			Status: "failed",
+		})
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		// The execution was cancelled (or already terminal); do not overwrite it.
 		return nil

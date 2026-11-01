@@ -2468,5 +2468,15 @@
 	"nav_page_api_keys": "Chaves de API",
 	"credits_attribution": "Tv show icons created by bsd - Flaticon",
 	"credits_attribution_title": "tv show icons",
-	"credits_icon_page": "O ícone \"pet\" no Flaticon"
+	"credits_icon_page": "O ícone \"pet\" no Flaticon",
+	"components_queryeditor_queued": "Na fila",
+	"errors_catalog_queue_timed_out": "A fila expirou",
+	"errors_catalog_the_run_waited_longer_than_the_class_queue_timeout": "A execução esperou mais do que o tempo limite desta classe de trabalho.",
+	"errors_catalog_raise_the_queue_timeout_or_run_it_later": "Aumente o tempo limite da fila ou execute mais tarde.",
+	"errors_catalog_queue_is_full": "A fila está cheia",
+	"errors_catalog_the_queue_for_this_class_is_full": "A fila desta classe de trabalho está cheia.",
+	"errors_catalog_try_again_later_or_raise_the_capacity": "Tente novamente mais tarde ou aumente a capacidade.",
+	"run_runpanel_queued": "Na fila · posição {position} · ~{wait} · {class}",
+	"statusbadge_queued": "Na fila",
+	"components_queryeditor_run_in_background": "Executar em segundo plano"
 }

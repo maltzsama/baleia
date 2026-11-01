@@ -177,4 +177,47 @@ describe('RunPanel with a single statement (#393)', () => {
 			screen.getByText("line 1:15: Catalog 'e2d_tpch' not found (trino CATALOG_NOT_FOUND)")
 		).toBeTruthy();
 	});
+
+	it('shows the queue position and class while queued, with Cancel', () => {
+		render(RunPanel, {
+			props: {
+				state: state({
+					status: 'queued',
+					statements: {},
+					queue: {
+						class: 'interactive',
+						position: 3,
+						queued_at: '2026-01-01T00:00:00Z',
+						wait_ms: 40_000
+					}
+				}),
+				executing: true,
+				canCancel: true,
+				oncancel: vi.fn(),
+				onrerun: vi.fn()
+			}
+		});
+
+		expect(screen.getByText(/Queued · position 3/)).toBeTruthy();
+		expect(screen.getByText(/interactive/)).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+	});
+
+	it('renders a queue timeout from the error catalog', () => {
+		render(RunPanel, {
+			props: {
+				state: state({
+					status: 'failed',
+					errorCode: 'queue_timeout',
+					statements: {}
+				}),
+				executing: false,
+				canCancel: true,
+				oncancel: vi.fn(),
+				onrerun: vi.fn()
+			}
+		});
+
+		expect(screen.getByText('The queue timed out')).toBeTruthy();
+	});
 });
