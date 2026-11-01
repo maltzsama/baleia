@@ -179,7 +179,7 @@ components:
     # web/messages/{en,pt-BR}.json (enforced by TestErrorCodesClosed).
     ErrorCode:
       type: string
-      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspacePersonal]
+      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspacePersonal]
       enum:
         - account_suspended
         - agent_token_not_allowed
@@ -235,6 +235,8 @@ components:
         - property_not_overridable
         - provider_in_use
         - provider_unsupported
+        - queue_full
+        - queue_timeout
         - rate_limited
         - read_only_unsupported
         - refused
@@ -1093,7 +1095,7 @@ components:
     GlobalAction:
       type: string
       enum: [create_connection, create_workspace, create_shared_workspace, manage_users,
-             manage_identity, view_all_audit, view_system, manage_assistant]
+             manage_identity, view_all_audit, view_system, manage_assistant, manage_workload]
     Features:
       type: object
       required: [agents, assistant, retrievers]
@@ -2840,6 +2842,12 @@ components:
         saved_query_id: { type: string, format: uuid, nullable: true }
         sql: { type: string }
         target: { $ref: "#/components/schemas/TargetRequest" }
+        priority:
+          type: string
+          enum: [background]
+          description: >
+            Ask for a lower workload class (#399). It can only lower the class
+            a rule chose, never raise it; the default is one click, interactive.
         rerun:
           type: object
           description: "Re-run the statements of an earlier execution from from_position; the server copies them, never re-splits SQL it did not send"
@@ -2857,7 +2865,7 @@ components:
         user_id: { type: string, format: uuid, nullable: true, description: "The caller who ran it" }
         user_name: { type: string, nullable: true, description: "The runner's name (history list)" }
         saved_query_id: { type: string, format: uuid, nullable: true }
-        status: { type: string, enum: [running, finished, failed, cancelled] }
+        status: { type: string, enum: [queued, running, finished, failed, cancelled] }
         sql: { type: string }
         engine_query_id: { type: string, nullable: true, description: "The statement's id on its engine (a Trino query id, …). Was trino_query_id" }
         rows_returned: { type: integer, nullable: true }
@@ -2867,6 +2875,61 @@ components:
         target: { $ref: "#/components/schemas/ExecutionTarget" }
         read_only: { type: boolean, description: "The target ran in a read-only session" }
         error_code: { type: string, nullable: true }
+        queue: { $ref: "#/components/schemas/ExecutionQueue" }
+
+    ExecutionQueue:
+      type: object
+      description: >
+        The workload queue of a run (#399). Present while the execution is
+        `queued`; `position` is only the caller's own position.
+      required: [class, position, queued_at, wait_ms]
+      properties:
+        class: { type: string, enum: [interactive, heavy, background] }
+        reason: { type: string, nullable: true, description: "Which rule or step chose the class" }
+        position: { type: integer, description: "The caller's position in the queue" }
+        queued_at: { type: string, format: date-time }
+        admitted_at: { type: string, format: date-time, nullable: true }
+        wait_ms: { type: integer }
+
+    EngineQueues:
+      type: object
+      required: [engine_id, classes]
+      properties:
+        engine_id: { type: string, format: uuid }
+        max_running_total: { type: integer, nullable: true, description: "Ceiling across every class; null means none" }
+        classes:
+          type: array
+          items: { $ref: "#/components/schemas/EngineQueue" }
+
+    EngineQueue:
+      type: object
+      required: [class, max_running, max_queued, queue_timeout_ms, running, queued]
+      properties:
+        class: { type: string, enum: [interactive, heavy, background] }
+        max_running: { type: integer }
+        max_queued: { type: integer }
+        queue_timeout_ms: { type: integer }
+        running: { type: integer }
+        queued: { type: integer }
+        oldest_wait_ms: { type: integer, nullable: true }
+
+    UpdateEngineQueuesRequest:
+      type: object
+      required: [classes]
+      properties:
+        max_running_total: { type: integer, nullable: true, minimum: 0 }
+        classes:
+          type: array
+          items: { $ref: "#/components/schemas/UpdateEngineQueue" }
+
+    UpdateEngineQueue:
+      type: object
+      required: [class, max_running, max_queued, queue_timeout_ms]
+      properties:
+        class: { type: string, enum: [interactive, heavy, background] }
+        max_running: { type: integer, minimum: 0 }
+        max_queued: { type: integer, minimum: 0 }
+        queue_timeout_ms: { type: integer, minimum: 1 }
 
     QueryStatement:
       type: object
@@ -7177,6 +7240,49 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
+  /engines/{id}/queues:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Engines]
+      operationId: getEngineQueues
+      summary: "Live queue depth and capacity per class"
+      description: >
+        Admins and engine owners. Returns the configured capacity, the live
+        depth and the oldest wait for every workload class of this engine.
+      responses:
+        "200":
+          description: "Queues"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EngineQueues" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Engines]
+      operationId: putEngineQueues
+      summary: "Set capacities, timeouts and the engine ceiling"
+      description: >
+        Admins and engine owners. Applies without restarting the admission
+        workflow. Closing a class with queued runs is allowed but must be
+        confirmed by the caller (FD4).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateEngineQueuesRequest" }
+      responses:
+        "200":
+          description: "Queues"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EngineQueues" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /workspaces/{id}/folders:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -7371,7 +7477,7 @@ paths:
       parameters:
         - name: status
           in: query
-          schema: { type: string, enum: [running, finished, failed, cancelled] }
+          schema: { type: string, enum: [queued, running, finished, failed, cancelled] }
         - name: user_id
           in: query
           description: "A user id, or `me` for the caller"

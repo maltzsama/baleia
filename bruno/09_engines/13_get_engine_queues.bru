@@ -1,0 +1,21 @@
+meta {
+  name: Get engine queues
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{base_url}}/engines/{{trino_engine_id}}/queues
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Contract skeleton for #535; the handler lands with #540. Returns the live
+  depth, the oldest wait and the configured capacity per workload class of the
+  engine. Admins and engine owners only.
+}
