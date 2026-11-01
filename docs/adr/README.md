@@ -23,6 +23,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0011](0011-direct-connections-security.md) | Security of direct connections to user-supplied hosts | Accepted |
 | [0012](0012-semantic-layer-roadmap.md) | Semantic layer roadmap (no dbt) | Accepted |
 | [0013](0013-content-model.md) | Saved content model | Accepted |
+| [0014](0014-workload-management.md) | Workload management: per-engine admission queues | Accepted |
 
 ## Owner decisions
 
