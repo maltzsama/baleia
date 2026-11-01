@@ -25,8 +25,13 @@ body:json {
   }
 }
 
+assert {
+  res.status: eq 200
+  res.body.classes: isArray
+}
+
 docs {
-  Contract skeleton for #535; the handler lands with #540. Sets the capacities,
-  the queue timeouts and the optional engine ceiling; the change applies
-  without restarting the admission workflow. Admins and engine owners only.
+  Sets the capacities, the queue timeouts and the optional engine ceiling
+  (#540); the change applies without restarting the admission workflow. Admins
+  and engine owners only.
 }

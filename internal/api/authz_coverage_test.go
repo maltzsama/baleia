@@ -282,10 +282,9 @@ var operationAccess = map[string]access{
 	"ListEngineObservations": checked("PrincipalFromContext", "Engine"),
 	"GetEngineImpact":        checked("PrincipalFromContext", "Engine"),
 	"DiscoverEngineCatalogs": checked("PrincipalFromContext", "Engine"),
-	// The queue contract ships first (#535); #540 implements both handlers.
-	"GetEngineQueues": {kind: kindStub},
-	"PutEngineQueues": {kind: kindStub},
-	"GetReconcileRun": checked("PrincipalFromContext", "RequireAdmin"),
+	"GetEngineQueues":        checked("PrincipalFromContext", "Engine"),
+	"PutEngineQueues":        checked("PrincipalFromContext", "Engine"),
+	"GetReconcileRun":        checked("PrincipalFromContext", "RequireAdmin"),
 	// Sources pages (#109).
 	"ListAllCatalogs":             checked("PrincipalFromContext", "topology.VisibleCatalogs"),
 	"GetCatalogDetail":            checked("PrincipalFromContext", "Catalog"),

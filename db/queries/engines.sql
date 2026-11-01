@@ -116,3 +116,27 @@ SELECT
     (SELECT count(*) FROM saved_queries s
       JOIN catalog_bindings b ON b.id = s.target_binding_id WHERE b.engine_id = $1)::bigint AS saved_queries_targeting,
     (SELECT count(*) FROM query_executions e WHERE e.engine_id = $1 AND e.status = 'running')::bigint AS running_executions;
+
+-- name: ListEngineQueueCapacities :many
+-- Per-class capacities configured for one engine (#399).
+SELECT * FROM engine_queue_capacity
+WHERE engine_id = $1
+ORDER BY class;
+
+-- name: DeleteEngineQueueCapacities :exec
+DELETE FROM engine_queue_capacity WHERE engine_id = $1;
+
+-- name: UpsertEngineQueueCapacity :exec
+INSERT INTO engine_queue_capacity (engine_id, class, max_running, max_queued, queue_timeout_ms)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (engine_id, class) DO UPDATE
+SET max_running = EXCLUDED.max_running,
+    max_queued = EXCLUDED.max_queued,
+    queue_timeout_ms = EXCLUDED.queue_timeout_ms,
+    updated_at = now();
+
+-- name: SetEngineMaxRunningTotal :one
+UPDATE engines
+SET max_running_total = $2, updated_at = now()
+WHERE id = $1
+RETURNING *;

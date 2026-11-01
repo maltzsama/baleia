@@ -123,6 +123,15 @@ func (q *Queries) DeleteEngine(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const deleteEngineQueueCapacities = `-- name: DeleteEngineQueueCapacities :exec
+DELETE FROM engine_queue_capacity WHERE engine_id = $1
+`
+
+func (q *Queries) DeleteEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteEngineQueueCapacities, engineID)
+	return err
+}
+
 const engineHostsCatalogGrantedToAgent = `-- name: EngineHostsCatalogGrantedToAgent :one
 SELECT EXISTS (
     SELECT 1 FROM catalog_bindings b
@@ -401,6 +410,41 @@ func (q *Queries) ListEngineObservations(ctx context.Context, engineID pgtype.UU
 	return items, nil
 }
 
+const listEngineQueueCapacities = `-- name: ListEngineQueueCapacities :many
+SELECT engine_id, class, max_running, max_queued, queue_timeout_ms, created_at, updated_at FROM engine_queue_capacity
+WHERE engine_id = $1
+ORDER BY class
+`
+
+// Per-class capacities configured for one engine (#399).
+func (q *Queries) ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]EngineQueueCapacity, error) {
+	rows, err := q.db.Query(ctx, listEngineQueueCapacities, engineID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EngineQueueCapacity
+	for rows.Next() {
+		var i EngineQueueCapacity
+		if err := rows.Scan(
+			&i.EngineID,
+			&i.Class,
+			&i.MaxRunning,
+			&i.MaxQueued,
+			&i.QueueTimeoutMs,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEngines = `-- name: ListEngines :many
 SELECT id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total FROM engines ORDER BY name
 `
@@ -485,6 +529,37 @@ func (q *Queries) ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UU
 	return items, nil
 }
 
+const setEngineMaxRunningTotal = `-- name: SetEngineMaxRunningTotal :one
+UPDATE engines
+SET max_running_total = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total
+`
+
+type SetEngineMaxRunningTotalParams struct {
+	ID              pgtype.UUID `json:"id"`
+	MaxRunningTotal *int32      `json:"max_running_total"`
+}
+
+func (q *Queries) SetEngineMaxRunningTotal(ctx context.Context, arg SetEngineMaxRunningTotalParams) (Engine, error) {
+	row := q.db.QueryRow(ctx, setEngineMaxRunningTotal, arg.ID, arg.MaxRunningTotal)
+	var i Engine
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Kind,
+		&i.Class,
+		&i.ConnectionID,
+		&i.IdentityMode,
+		&i.Enabled,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.MaxRunningTotal,
+	)
+	return i, err
+}
+
 const updateEngine = `-- name: UpdateEngine :one
 UPDATE engines
 SET enabled       = COALESCE($1, enabled),
@@ -517,4 +592,33 @@ func (q *Queries) UpdateEngine(ctx context.Context, arg UpdateEngineParams) (Eng
 		&i.MaxRunningTotal,
 	)
 	return i, err
+}
+
+const upsertEngineQueueCapacity = `-- name: UpsertEngineQueueCapacity :exec
+INSERT INTO engine_queue_capacity (engine_id, class, max_running, max_queued, queue_timeout_ms)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (engine_id, class) DO UPDATE
+SET max_running = EXCLUDED.max_running,
+    max_queued = EXCLUDED.max_queued,
+    queue_timeout_ms = EXCLUDED.queue_timeout_ms,
+    updated_at = now()
+`
+
+type UpsertEngineQueueCapacityParams struct {
+	EngineID       pgtype.UUID `json:"engine_id"`
+	Class          string      `json:"class"`
+	MaxRunning     int32       `json:"max_running"`
+	MaxQueued      int32       `json:"max_queued"`
+	QueueTimeoutMs int64       `json:"queue_timeout_ms"`
+}
+
+func (q *Queries) UpsertEngineQueueCapacity(ctx context.Context, arg UpsertEngineQueueCapacityParams) error {
+	_, err := q.db.Exec(ctx, upsertEngineQueueCapacity,
+		arg.EngineID,
+		arg.Class,
+		arg.MaxRunning,
+		arg.MaxQueued,
+		arg.QueueTimeoutMs,
+	)
+	return err
 }
