@@ -5,20 +5,20 @@
 // is `currentColor` (see the normalisation note in each file), so each icon
 // takes the kind's text color and stays legible on both themes next to the
 // line icons. Kinds without a mark fall back to a distinct line glyph.
-import postgresqlMark from './icons/postgresql.svg?raw';
-import mysqlMark from './icons/mysql.svg?raw';
-import mariadbMark from './icons/mariadb.svg?raw';
-import sqliteMark from './icons/sqlite.svg?raw';
-import clickhouseMark from './icons/clickhouse.svg?raw';
-import trinoMark from './icons/trino.svg?raw';
-import hiveMark from './icons/hive.svg?raw';
-import flightsqlMark from './icons/flightsql.svg?raw';
-import dorisMark from './icons/doris.svg?raw';
-import oracleMark from './icons/oracle.svg?raw';
-import sqlserverMark from './icons/sqlserver.svg?raw';
-import lakekeeperMark from './icons/lakekeeper.svg?raw';
-import starrocksMark from './icons/starrocks.svg?raw';
-import polarisMark from './icons/polaris.svg?raw';
+import postgresqlMark from './icons/postgresql.svg';
+import mysqlMark from './icons/mysql.svg';
+import mariadbMark from './icons/mariadb.svg';
+import sqliteMark from './icons/sqlite.svg';
+import clickhouseMark from './icons/clickhouse.svg';
+import trinoMark from './icons/trino.svg';
+import hiveMark from './icons/hive.svg';
+import flightsqlMark from './icons/flightsql.svg';
+import dorisMark from './icons/doris.svg';
+import oracleMark from './icons/oracle.svg';
+import sqlserverMark from './icons/sqlserver.svg';
+import lakekeeperMark from './icons/lakekeeper.svg';
+import starrocksMark from './icons/starrocks.svg';
+import polarisMark from './icons/polaris.svg';
 
 export type KindGlyph =
 	'catalog' | 'metastore' | 'database' | 'engine' | 'file' | 'mountain' | 'nodes' | 'waves';

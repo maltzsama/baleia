@@ -529,7 +529,7 @@
 					class="inline-flex items-center gap-1 rounded border border-border px-1 py-px text-[9px] uppercase text-text-muted"
 					title={`${binding.engine_name} (${binding.mode})`}
 				>
-					<KindIcon kind={binding.engine_kind} family="engine" size={11} />
+					<KindIcon kind={binding.engine_kind ?? ''} family="engine" size={11} />
 					{binding.engine_name}
 				</span>
 			{/each}

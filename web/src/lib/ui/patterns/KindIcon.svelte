@@ -18,15 +18,20 @@
 
 {#if appearance.brand}
 	<span
-		class="brand inline-flex shrink-0 items-center justify-center rounded-[3px] {appearance.contrast
+		class="inline-flex shrink-0 items-center justify-center rounded-[3px] {appearance.contrast
 			? 'dark:bg-white/90 dark:p-px dark:ring-1 dark:ring-black/10'
 			: ''} {className}"
 		style:width={`${size}px`}
 		style:height={`${size}px`}
 		aria-hidden="true"
 	>
-		<!-- eslint-disable-next-line svelte/no-at-html-tags -- vendored, static SVG asset -->
-		{@html appearance.brand}
+		<img
+			src={appearance.brand}
+			alt=""
+			class="h-full w-full object-contain"
+			draggable="false"
+			loading="lazy"
+		/>
 	</span>
 {:else}
 	<svg
@@ -68,15 +73,3 @@
 		{/if}
 	</svg>
 {/if}
-
-<style>
-	/* The app-wide `svg` rule pins 14px and a currentColor outline for inline
-	   line icons. A brand mark is a filled, multi-colour SVG: restore its
-	   original fills and sizing here. */
-	.brand :global(svg) {
-		display: block;
-		width: 100%;
-		height: 100%;
-		stroke: none;
-	}
-</style>
