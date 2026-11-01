@@ -213,7 +213,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 
 // WorkflowID is the id of an execution's workflow.
 func WorkflowID(executionID pgtype.UUID) string {
-	return "exec-" + uuid.UUID(executionID.Bytes).String()
+	return workflows.ExecutionWorkflowID(uuid.UUID(executionID.Bytes).String())
 }
 
 // Get returns one execution of the workspace.
