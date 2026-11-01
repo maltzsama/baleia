@@ -4,6 +4,7 @@ import type { components } from '$lib/api/schema';
 import type { ExecutionEvent } from '$lib/results/stream';
 
 type Execution = components['schemas']['Execution'];
+type ExecutionQueue = components['schemas']['ExecutionQueue'];
 type QueryStatement = components['schemas']['QueryStatement'];
 export type StatementStatus = QueryStatement['status'];
 
@@ -27,6 +28,7 @@ export type RunState = {
 	errorCode?: string | null;
 	readOnly: boolean;
 	target?: Execution['target'];
+	queue?: ExecutionQueue | null;
 	statements: Record<number, StatementState>;
 	lastSeq: number;
 };
@@ -62,6 +64,7 @@ export function initialRunState(executionId: string): RunState {
 		executionId,
 		status: 'running',
 		readOnly: false,
+		queue: null,
 		statements: {},
 		lastSeq: 0
 	};
@@ -82,6 +85,7 @@ export function applyEvent(state: RunState, event: ExecutionEvent): RunState {
 				errorCode: event.execution.error_code ?? null,
 				readOnly: event.execution.read_only ?? false,
 				target: event.execution.target,
+				queue: event.execution.queue ?? null,
 				statements,
 				lastSeq: event.seq
 			};
@@ -124,6 +128,14 @@ export function applyEvent(state: RunState, event: ExecutionEvent): RunState {
 				}
 			};
 		}
+		case 'queue_position':
+		case 'admitted':
+			return {
+				...state,
+				lastSeq: event.seq,
+				queue: event.queue,
+				status: event.type === 'admitted' ? 'running' : state.status
+			};
 		default:
 			return state;
 	}

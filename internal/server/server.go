@@ -111,7 +111,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		{Path: "/api/v1/auth/password-reset/confirm", Kind: metrics.AuthPasswordResetConfirm, Every: 15 * time.Minute, Burst: 10},
 	}, func(kind string) { authMetrics.Attempt(kind, metrics.OutcomeRateLimited) })
 
-	s.ws = ws.New(s.logger, core.Queries.AsWSQuerier(), cfg.JWTSecret, cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
+	s.ws = ws.New(s.logger, wsQuerier{q: core.Queries}, cfg.JWTSecret, core.Temporal, cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
 	s.ws.SetTickets(tickets)
 
 	s.strict = api.NewStrictHandlerWithOptions(h, []api.StrictMiddlewareFunc{

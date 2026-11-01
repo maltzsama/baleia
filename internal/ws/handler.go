@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.temporal.io/sdk/client"
 )
 
 const (
@@ -51,6 +53,13 @@ type QuerierQueryExecution struct {
 	ErrorCode      *string
 	StartedAt      pgtype.Timestamptz
 	TargetSnapshot []byte
+	// Workload queue (#399).
+	EngineID    pgtype.UUID
+	QueueClass  *string
+	QueueReason *string
+	QueuedAt    pgtype.Timestamptz
+	AdmittedAt  pgtype.Timestamptz
+	QueueWaitMs *int64
 }
 
 type QuerierQueryStatement struct {
@@ -74,6 +83,7 @@ type Handler struct {
 	queries     Querier
 	jwtSecret   string
 	tickets     *wsticket.Store
+	temporal    client.Client
 	s3Endpoint  string
 	s3AccessKey string
 	s3SecretKey string
@@ -84,12 +94,13 @@ type Handler struct {
 // SetTickets wires the shared single-use ticket store (#26).
 func (h *Handler) SetTickets(store *wsticket.Store) { h.tickets = store }
 
-func New(logger *slog.Logger, queries Querier, jwtSecret, s3Endpoint, s3AccessKey, s3SecretKey, s3Bucket string, s3UseSSL bool) *Handler {
+func New(logger *slog.Logger, queries Querier, jwtSecret string, temporal client.Client, s3Endpoint, s3AccessKey, s3SecretKey, s3Bucket string, s3UseSSL bool) *Handler {
 	return &Handler{
 		logger:      cmp.Or(logger, slog.New(slog.DiscardHandler)),
 		queries:     queries,
 		jwtSecret:   jwtSecret,
 		tickets:     nil,
+		temporal:    temporal,
 		s3Endpoint:  s3Endpoint,
 		s3AccessKey: s3AccessKey,
 		s3SecretKey: s3SecretKey,
@@ -111,6 +122,18 @@ type ExecutionSnapshot struct {
 	ErrorCode    *string         `json:"error_code,omitempty"`
 	ReadOnly     bool            `json:"read_only"`
 	Target       json.RawMessage `json:"target,omitempty"`
+	Queue        *QueueSnapshot  `json:"queue,omitempty"`
+}
+
+// QueueSnapshot is the workload queue of a run (#399): its class, its position
+// (only the caller's own) and how long it has waited.
+type QueueSnapshot struct {
+	Class      string  `json:"class"`
+	Reason     *string `json:"reason,omitempty"`
+	Position   int     `json:"position"`
+	QueuedAt   string  `json:"queued_at"`
+	AdmittedAt *string `json:"admitted_at,omitempty"`
+	WaitMs     int64   `json:"wait_ms"`
 }
 
 // StatementSnapshot is one row of the snapshot and of a statement_status event.
@@ -148,6 +171,7 @@ type WSEvent struct {
 	Truncated    *bool               `json:"truncated,omitempty"`
 	DurationMs   *int64              `json:"duration_ms,omitempty"`
 	RowsSoFar    *int64              `json:"rows_so_far,omitempty"`
+	Queue        *QueueSnapshot      `json:"queue,omitempty"`
 }
 
 func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
@@ -215,6 +239,7 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var lastStatus string
+	var lastQueuePos int
 	var seenStatements map[int32]string
 	var seq int64
 
@@ -247,14 +272,14 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-pollTicker.C:
-			if !h.poll(ctx, conn, executionID, wsID, &lastStatus, &seenStatements, &seq) {
+			if !h.poll(ctx, conn, executionID, wsID, &lastStatus, &lastQueuePos, &seenStatements, &seq) {
 				return
 			}
 		}
 	}
 }
 
-func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID string, workspaceID pgtype.UUID, lastStatus *string, seenStatements *map[int32]string, seq *int64) bool {
+func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID string, workspaceID pgtype.UUID, lastStatus *string, lastQueuePos *int, seenStatements *map[int32]string, seq *int64) bool {
 	var execID pgtype.UUID
 	execID.Scan(executionID)
 
@@ -271,7 +296,7 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 
 	// The first message of every connection replaces the client state.
 	if *lastStatus == "" {
-		snapshot := executionSnapshot(execution)
+		snapshot := h.snapshot(ctx, execution)
 		sendEvent(h.logger, conn, WSEvent{
 			Type:        "snapshot",
 			ExecutionID: executionID,
@@ -285,6 +310,9 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 			(*seenStatements)[stmt.Position] = stmt.Status
 		}
 		*lastStatus = execution.Status
+		if execution.Status == "queued" {
+			*lastQueuePos = h.queuePosition(ctx, execution)
+		}
 		return !terminal(execution.Status)
 	}
 
@@ -312,6 +340,33 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 		})
 	}
 
+	// A queued run's position changes as earlier runs leave the queue; the
+	// transition out of `queued` is its admission (#399).
+	if execution.Status == "queued" {
+		queue := h.queueSnapshot(ctx, execution)
+		if *lastQueuePos != queue.Position {
+			*lastQueuePos = queue.Position
+			sendEvent(h.logger, conn, WSEvent{
+				Type:        "queue_position",
+				ExecutionID: executionID,
+				Seq:         nextSeq(seq),
+				TS:          now(),
+				Queue:       &queue,
+			})
+		}
+	} else if *lastStatus == "queued" && execution.Status == "running" {
+		queue := h.queueSnapshot(ctx, execution)
+		queue.Position = 0
+		*lastQueuePos = 0
+		sendEvent(h.logger, conn, WSEvent{
+			Type:        "admitted",
+			ExecutionID: executionID,
+			Seq:         nextSeq(seq),
+			TS:          now(),
+			Queue:       &queue,
+		})
+	}
+
 	if execution.Status != *lastStatus {
 		*lastStatus = execution.Status
 		sendExecutionStatus(h.logger, conn, executionID, seq, execution.Status, execution.ErrorCode)
@@ -320,6 +375,73 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 		}
 	}
 	return true
+}
+
+// snapshot is the execution shape the first event carries, with its queue when
+// workload management classified it.
+func (h *Handler) snapshot(ctx context.Context, e QuerierQueryExecution) ExecutionSnapshot {
+	out := executionSnapshot(e)
+	if e.QueueClass != nil {
+		q := h.queueSnapshot(ctx, e)
+		out.Queue = &q
+	}
+	return out
+}
+
+// queueSnapshot renders the run's queue, including its position while it waits.
+func (h *Handler) queueSnapshot(ctx context.Context, e QuerierQueryExecution) QueueSnapshot {
+	out := QueueSnapshot{}
+	if e.QueueClass != nil {
+		out.Class = *e.QueueClass
+	}
+	out.Reason = e.QueueReason
+	if e.QueuedAt.Valid {
+		out.QueuedAt = e.QueuedAt.Time.UTC().Format(time.RFC3339)
+	}
+	if e.AdmittedAt.Valid {
+		admitted := e.AdmittedAt.Time.UTC().Format(time.RFC3339)
+		out.AdmittedAt = &admitted
+	}
+	switch {
+	case e.QueueWaitMs != nil:
+		out.WaitMs = *e.QueueWaitMs
+	case e.QueuedAt.Valid:
+		out.WaitMs = time.Since(e.QueuedAt.Time).Milliseconds()
+		if out.WaitMs < 0 {
+			out.WaitMs = 0
+		}
+	}
+	if e.Status == "queued" {
+		out.Position = h.queuePosition(ctx, e)
+	}
+	return out
+}
+
+// queuePosition asks the engine's admission workflow where the run sits. A
+// missing workflow (or a run no longer queued) is position 0.
+func (h *Handler) queuePosition(ctx context.Context, e QuerierQueryExecution) int {
+	if h.temporal == nil || !e.EngineID.Valid || e.QueueClass == nil {
+		return 0
+	}
+	value, err := h.temporal.QueryWorkflow(ctx, workflows.AdmissionWorkflowID(uuidString(e.EngineID)), "", workflows.AdmissionStateQuery)
+	if err != nil {
+		return 0
+	}
+	var state workflows.AdmissionState
+	if err := value.Get(&state); err != nil {
+		return 0
+	}
+	position := 0
+	for _, q := range state.Queued {
+		if string(q.Class) != *e.QueueClass {
+			continue
+		}
+		if q.ExecutionID == uuidString(e.ID) {
+			return position + 1
+		}
+		position++
+	}
+	return 0
 }
 
 func executionSnapshot(e QuerierQueryExecution) ExecutionSnapshot {

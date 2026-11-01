@@ -5730,7 +5730,7 @@ export interface components {
             finished_at?: string | null;
         };
         /** @description One server -> client WebSocket message. Every event has `type`, `execution_id`, a monotonic per-connection `seq` and `ts`. The first message of every connection (including a reconnect) is `snapshot`. */
-        ExecutionEvent: components["schemas"]["ExecutionSnapshotEvent"] | components["schemas"]["ExecutionStatusEvent"] | components["schemas"]["StatementStatusEvent"] | components["schemas"]["StatementProgressEvent"];
+        ExecutionEvent: components["schemas"]["ExecutionSnapshotEvent"] | components["schemas"]["ExecutionStatusEvent"] | components["schemas"]["StatementStatusEvent"] | components["schemas"]["StatementProgressEvent"] | components["schemas"]["ExecutionQueueEvent"];
         ExecutionSnapshotEvent: {
             /** @enum {string} */
             type: "snapshot";
@@ -5751,8 +5751,19 @@ export interface components {
             /** Format: date-time */
             ts: string;
             /** @enum {string} */
-            status: "running" | "finished" | "failed" | "cancelled";
+            status: "queued" | "running" | "finished" | "failed" | "cancelled";
             error_code?: string | null;
+        };
+        /** @description A queued run's position (`queue_position`, when it changes) or its admission (`admitted`, when it gets a slot) (#399). */
+        ExecutionQueueEvent: {
+            /** @enum {string} */
+            type: "queue_position" | "admitted";
+            /** Format: uuid */
+            execution_id: string;
+            seq: number;
+            /** Format: date-time */
+            ts: string;
+            queue: components["schemas"]["ExecutionQueue"];
         };
         StatementStatusEvent: {
             /** @enum {string} */
