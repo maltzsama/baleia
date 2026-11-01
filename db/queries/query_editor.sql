@@ -89,6 +89,14 @@ INSERT INTO query_executions (
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 RETURNING *;
 
+-- name: FailQueryExecution :one
+-- A run that failed before any statement ran (the admission queue) records its
+-- error code here, where no statement can (#399).
+UPDATE query_executions
+SET status = 'failed', error_code = $2, finished_at = now()
+WHERE id = $1 AND status = 'running'
+RETURNING *;
+
 -- name: UpdateQueryExecution :one
 -- Only a running execution transitions, so a late completion or failure can
 -- never overwrite a cancellation. Zero matched rows (pgx.ErrNoRows) means the

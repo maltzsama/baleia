@@ -62,6 +62,28 @@ export const errorCatalog: Record<string, ErrorEntry> = {
 			return m.errors_catalog_reload_the_latest_version_and_apply();
 		}
 	},
+	queue_timeout: {
+		get title() {
+			return m.errors_catalog_queue_timed_out();
+		},
+		get explanation() {
+			return m.errors_catalog_the_run_waited_longer_than_the_class_queue_timeout();
+		},
+		get remediation() {
+			return m.errors_catalog_raise_the_queue_timeout_or_run_it_later();
+		}
+	},
+	queue_full: {
+		get title() {
+			return m.errors_catalog_queue_is_full();
+		},
+		get explanation() {
+			return m.errors_catalog_the_queue_for_this_class_is_full();
+		},
+		get remediation() {
+			return m.errors_catalog_try_again_later_or_raise_the_capacity();
+		}
+	},
 	validation_error: {
 		get title() {
 			return m.errors_catalog_invalid_input();

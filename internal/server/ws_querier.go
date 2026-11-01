@@ -35,6 +35,7 @@ func (a wsQuerier) GetQueryExecutionByIDAndWorkspace(ctx context.Context, id pgt
 		Sql:            e.Sql,
 		RowsReturned:   e.RowsReturned,
 		DurationMs:     e.DurationMs,
+		ErrorCode:      e.ErrorCode,
 		StartedAt:      e.StartedAt,
 		TargetSnapshot: e.TargetSnapshot,
 		EngineID:       e.EngineID,

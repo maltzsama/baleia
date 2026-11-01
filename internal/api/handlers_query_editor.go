@@ -1194,6 +1194,31 @@ func dbExecutionToPublic(e db.QueryExecution) Execution {
 		finished := e.FinishedAt.Time
 		exec.FinishedAt = &finished
 	}
+	if e.ErrorCode != nil {
+		exec.ErrorCode = e.ErrorCode
+	}
+	if e.QueueClass != nil {
+		queue := ExecutionQueue{
+			Class:    ExecutionQueueClass(*e.QueueClass),
+			Reason:   e.QueueReason,
+			Position: 0,
+			QueuedAt: e.QueuedAt.Time,
+		}
+		if e.AdmittedAt.Valid {
+			admitted := e.AdmittedAt.Time
+			queue.AdmittedAt = &admitted
+		}
+		switch {
+		case e.QueueWaitMs != nil:
+			queue.WaitMs = int(*e.QueueWaitMs)
+		case e.QueuedAt.Valid:
+			queue.WaitMs = int(time.Since(e.QueuedAt.Time).Milliseconds())
+			if queue.WaitMs < 0 {
+				queue.WaitMs = 0
+			}
+		}
+		exec.Queue = &queue
+	}
 	exec.Target = executionTargetFrom(e.TargetSnapshot, e.EngineID, e.TargetBindingID, e.TargetCatalogID)
 	if exec.Target != nil {
 		exec.ReadOnly = exec.Target.ReadOnly

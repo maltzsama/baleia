@@ -724,7 +724,7 @@
 		return data;
 	}
 
-	async function submit(sqlText: string) {
+	async function submit(sqlText: string, priority?: 'background') {
 		const text = sqlText.trim();
 		if (!text) return;
 		// A run is not a completion choice: drop an open suggestion list.
@@ -749,7 +749,8 @@
 					target: {
 						binding_id: tab.bindingId,
 						...(tab.schema ? { schema: tab.schema } : {})
-					}
+					},
+					...(priority ? { priority } : {})
 				}
 			});
 			if (error || !data) {
@@ -771,17 +772,17 @@
 		}
 	}
 
-	async function runAll() {
+	async function runAll(priority?: 'background') {
 		if (!editorView) return;
-		await submit(editorView.state.doc.toString());
+		await submit(editorView.state.doc.toString(), priority);
 	}
 
-	async function runCurrent() {
+	async function runCurrent(priority?: 'background') {
 		if (!editorView) return;
 		const selection = editorView.state.selection.main;
 		const doc = editorView.state.doc;
 		if (!selection.empty) {
-			await submit(doc.sliceString(selection.from, selection.to));
+			await submit(doc.sliceString(selection.from, selection.to), priority);
 			return;
 		}
 		const full = doc.toString();
@@ -803,7 +804,7 @@
 			}
 		}
 		span ??= statementSpanAt(full, head);
-		if (span) await submit(full.slice(span.start, span.end));
+		if (span) await submit(full.slice(span.start, span.end), priority);
 	}
 
 	async function cancelExecution() {
@@ -832,6 +833,8 @@
 
 	function executionStatusText(status: string): string {
 		switch (status) {
+			case 'queued':
+				return m.components_queryeditor_queued();
 			case 'finished':
 				return m.components_queryeditor_complete();
 			case 'failed':
@@ -1042,6 +1045,14 @@
 			>
 			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
 			<span class="text-[10px] font-normal">{formatKeys('Mod-Enter')}</span>
+		</button>
+		<button
+			onclick={() => void runCurrent('background')}
+			disabled={executing}
+			title={m.components_queryeditor_run_in_background()}
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+		>
+			{m.components_queryeditor_run_in_background()}
 		</button>
 		{#if executing && canCancel}
 			<button

@@ -68,6 +68,15 @@
 		class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3.5 py-1.5 text-[11px]"
 	>
 		<StatusBadge kind="execution" status={state.status} />
+		{#if state.status === 'queued' && state.queue}
+			<span class="font-semibold">
+				{m.run_runpanel_queued({
+					position: state.queue.position,
+					wait: formatDuration(state.queue.wait_ms),
+					class: state.queue.class
+				})}
+			</span>
+		{/if}
 		{#if single}
 			{#if rowsLabel(single)}
 				<span class="font-semibold">{rowsLabel(single)}</span>
@@ -159,6 +168,10 @@
 					error_native: engineMessage(singleError.errorCode!, singleError.errorMessage)
 				}}
 			/>
+		</div>
+	{:else if state.errorCode === 'queue_timeout' || state.errorCode === 'queue_full'}
+		<div class="px-3.5 py-2">
+			<ErrorPanel open error={{ code: state.errorCode }} />
 		</div>
 	{:else if statements.length > 1}
 		<ol class="max-h-40 overflow-y-auto px-3.5 py-1 text-[11px]">

@@ -417,6 +417,7 @@ type QueryExecution struct {
 	QueuedAt        pgtype.Timestamptz `json:"queued_at"`
 	AdmittedAt      pgtype.Timestamptz `json:"admitted_at"`
 	QueueWaitMs     *int64             `json:"queue_wait_ms"`
+	ErrorCode       *string            `json:"error_code"`
 }
 
 type QueryFolder struct {
