@@ -120,6 +120,7 @@ type Querier interface {
 	DeleteCatalog(ctx context.Context, id pgtype.UUID) error
 	DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) error
 	DeleteEngine(ctx context.Context, id pgtype.UUID) error
+	DeleteEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) error
 	// Hard delete: the row holds real credentials. Permanent rows are never
 	// matched.
 	DeleteEphemeralRegistryRow(ctx context.Context, arg DeleteEphemeralRegistryRowParams) error
@@ -353,6 +354,8 @@ type Querier interface {
 	ListEnabledLDAPProviders(ctx context.Context) ([]AuthProvider, error)
 	// Catalogs the engine reported, with the managed/adopted mode (#38).
 	ListEngineObservations(ctx context.Context, engineID pgtype.UUID) ([]EngineCatalogObservation, error)
+	// Per-class capacities configured for one engine (#399).
+	ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]EngineQueueCapacity, error)
 	ListEngines(ctx context.Context) ([]Engine, error)
 	// The engines a non-admin may see: those on connections they own and those
 	// hosting a catalog granted to one of their workspaces.
@@ -530,6 +533,7 @@ type Querier interface {
 	SetAgentStatus(ctx context.Context, arg SetAgentStatusParams) (Agent, error)
 	SetAuditExportCursor(ctx context.Context, arg SetAuditExportCursorParams) error
 	SetCatalogEnabled(ctx context.Context, arg SetCatalogEnabledParams) error
+	SetEngineMaxRunningTotal(ctx context.Context, arg SetEngineMaxRunningTotalParams) (Engine, error)
 	SetExecutionResult(ctx context.Context, arg SetExecutionResultParams) error
 	// Stores the resolved target of an execution. target_snapshot is immutable
 	// context for history and carries no secret.
@@ -626,6 +630,7 @@ type Querier interface {
 	// binding of the same name is never touched.
 	UpsertAdoptedBinding(ctx context.Context, arg UpsertAdoptedBindingParams) error
 	UpsertEngineCatalogObservation(ctx context.Context, arg UpsertEngineCatalogObservationParams) error
+	UpsertEngineQueueCapacity(ctx context.Context, arg UpsertEngineQueueCapacityParams) error
 	// The managed binding of a catalog on an engine (one per pair), entering
 	// lifecycle_state with the projection version it wants (#38).
 	UpsertManagedBinding(ctx context.Context, arg UpsertManagedBindingParams) (CatalogBinding, error)

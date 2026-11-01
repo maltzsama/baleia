@@ -14,8 +14,13 @@ auth:bearer {
   token: {{token}}
 }
 
+assert {
+  res.status: eq 200
+  res.body.engine_id: isString
+  res.body.classes: isArray
+}
+
 docs {
-  Contract skeleton for #535; the handler lands with #540. Returns the live
-  depth, the oldest wait and the configured capacity per workload class of the
-  engine. Admins and engine owners only.
+  Returns the live depth, the oldest wait and the configured capacity per
+  workload class of the engine (#540). Admins and engine owners only.
 }

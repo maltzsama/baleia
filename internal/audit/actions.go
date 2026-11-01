@@ -95,6 +95,8 @@ const (
 	SavedQueryDelete Action = "saved_query.delete"
 	FolderCreate     Action = "folder.create"
 	FolderDelete     Action = "folder.delete"
+
+	WorkloadUpdate Action = "workload.update"
 )
 
 // allActions is the whole vocabulary.
@@ -120,6 +122,7 @@ var allActions = []Action{
 	MetadataSync,
 	SpaceCreate, SpaceUpdate, SpaceDelete, SpaceMemberSet, SpaceMemberRemove,
 	SavedQueryCreate, SavedQueryUpdate, SavedQueryDelete, FolderCreate, FolderDelete,
+	WorkloadUpdate,
 }
 
 // Actions returns the vocabulary.
