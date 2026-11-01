@@ -33,6 +33,14 @@ const (
 	admissionHistoryLimit = 2000
 )
 
+// Failure codes an execution receives when it will never be admitted. They
+// mirror the API's ErrorCode values without importing the generated package.
+const (
+	AdmissionFailureQueueFull    = "queue_full"
+	AdmissionFailureQueueTimeout = "queue_timeout"
+	AdmissionFailureCancelled    = "cancelled"
+)
+
 // AdmissionWorkflowID is the id of an engine's admission workflow. One entity
 // workflow per engine serializes its admission, so API replicas do not matter.
 func AdmissionWorkflowID(engineID string) string { return "admission-" + engineID }
@@ -166,7 +174,7 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 			var can AdmissionCancel
 			c.Receive(ctx, &can)
 			if state.cancel(can.ExecutionID) {
-				f := AdmissionFailure{ExecutionID: can.ExecutionID, Code: "cancelled", Message: "the run was cancelled while queued"}
+				f := AdmissionFailure{ExecutionID: can.ExecutionID, Code: AdmissionFailureCancelled, Message: "the run was cancelled while queued"}
 				if err := signalExecution(ctx, f.ExecutionID, AdmissionFailedSignal, f); err != nil {
 					logger.Warn("could not signal queue cancellation", "execution_id", f.ExecutionID, "err", err)
 				}
@@ -184,7 +192,7 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 			}
 			sel.AddFuture(workflow.NewTimer(ctx, delay), func(workflow.Future) {
 				for _, q := range state.expire(workflow.Now(ctx)) {
-					f := AdmissionFailure{ExecutionID: q.ExecutionID, Code: "queue_timeout", Message: "the run waited too long in the queue"}
+					f := AdmissionFailure{ExecutionID: q.ExecutionID, Code: AdmissionFailureQueueTimeout, Message: "the run waited too long in the queue"}
 					if err := signalExecution(ctx, q.ExecutionID, AdmissionFailedSignal, f); err != nil {
 						logger.Warn("could not signal queue timeout", "execution_id", q.ExecutionID, "err", err)
 					}
@@ -230,17 +238,17 @@ func (s *AdmissionState) request(now time.Time, req AdmissionRequest, fail func(
 	}
 	capacity, ok := s.capacity(req.Class)
 	if !ok {
-		fail(AdmissionFailure{ExecutionID: req.ExecutionID, Code: "queue_full", Message: "unknown workload class"})
+		fail(AdmissionFailure{ExecutionID: req.ExecutionID, Code: AdmissionFailureQueueFull, Message: "unknown workload class"})
 		return
 	}
 	if capacity.MaxRunning == 0 {
-		fail(AdmissionFailure{ExecutionID: req.ExecutionID, Code: "queue_full", Message: "the class is closed on this engine"})
+		fail(AdmissionFailure{ExecutionID: req.ExecutionID, Code: AdmissionFailureQueueFull, Message: "the class is closed on this engine"})
 		return
 	}
 	// max_queued bounds waiting runs; a run that can start right away does not
 	// wait and is not counted.
 	if s.queuedInClass(req.Class) >= capacity.MaxQueued && !s.canAdmit(req.Class) {
-		fail(AdmissionFailure{ExecutionID: req.ExecutionID, Code: "queue_full", Message: "the queue for this class is full"})
+		fail(AdmissionFailure{ExecutionID: req.ExecutionID, Code: AdmissionFailureQueueFull, Message: "the queue for this class is full"})
 		return
 	}
 	timeout := req.QueueTimeout
