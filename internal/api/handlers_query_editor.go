@@ -24,6 +24,7 @@ import (
 	"github.com/galileostudio/baleia/internal/workbench/executions"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/galileostudio/baleia/internal/workbench/savedqueries"
+	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -627,9 +628,11 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 	// read-only.
 	principal, _ := authz.PrincipalFromContext(ctx)
 	agentID := pgtype.UUID{}
+	origin := workload.OriginEditor
 	if principal.IsAgent() {
 		target.ReadOnly = true
 		agentID = principal.AgentID
+		origin = workload.OriginAgent
 	}
 	// A target runs where an adapter for its engine kind exists; direct
 	// engines get theirs in #81-#83.
@@ -685,6 +688,7 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 		RequestID:         middleware.GetReqID(ctx),
 		RerunOf:           rerunOf,
 		RerunFromPosition: rerunFromPosition,
+		Origin:            origin,
 	})
 	if err != nil {
 		return nil, err

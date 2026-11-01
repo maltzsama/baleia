@@ -110,8 +110,9 @@ func (q *Queries) CancelQueryExecution(ctx context.Context, arg CancelQueryExecu
 const createQueryExecution = `-- name: CreateQueryExecution :one
 INSERT INTO query_executions (
     workspace_id, user_id, saved_query_id, status, sql, trino_catalog, request_id,
-    engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id,
+    queue_class, queue_reason)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms
 `
 
@@ -129,6 +130,8 @@ type CreateQueryExecutionParams struct {
 	TargetSchema    *string     `json:"target_schema"`
 	TargetSnapshot  []byte      `json:"target_snapshot"`
 	AgentID         pgtype.UUID `json:"agent_id"`
+	QueueClass      *string     `json:"queue_class"`
+	QueueReason     *string     `json:"queue_reason"`
 }
 
 // The target columns are the resolved execution target (#13); trino_catalog
@@ -148,6 +151,8 @@ func (q *Queries) CreateQueryExecution(ctx context.Context, arg CreateQueryExecu
 		arg.TargetSchema,
 		arg.TargetSnapshot,
 		arg.AgentID,
+		arg.QueueClass,
+		arg.QueueReason,
 	)
 	var i QueryExecution
 	err := row.Scan(

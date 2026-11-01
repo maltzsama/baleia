@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -23,6 +24,8 @@ type fakeStore struct {
 	execs   map[[16]byte]db.QueryExecution
 	handles []db.ListRunningStatementHandlesRow
 	owner   bool
+	// lastCreate is the CreateQueryExecution the service sent.
+	lastCreate db.CreateQueryExecutionParams
 	// lastHistory is the query History sent.
 	lastHistory db.ListExecutionHistoryParams
 	history     []db.ListExecutionHistoryRow
@@ -31,6 +34,7 @@ type fakeStore struct {
 func newStore() *fakeStore { return &fakeStore{execs: map[[16]byte]db.QueryExecution{}} }
 
 func (f *fakeStore) CreateQueryExecution(_ context.Context, arg db.CreateQueryExecutionParams) (db.QueryExecution, error) {
+	f.lastCreate = arg
 	e := db.QueryExecution{ID: newID(), WorkspaceID: arg.WorkspaceID, UserID: arg.UserID, Status: arg.Status, Sql: arg.Sql, EngineID: arg.EngineID, TargetSchema: arg.TargetSchema, AgentID: arg.AgentID}
 	f.execs[e.ID.Bytes] = e
 	return e, nil
@@ -157,6 +161,49 @@ func TestStart(t *testing.T) {
 	}
 	if wf.started[1].Dialect != dialect.Trino {
 		t.Errorf("dialect = %q, want trino by default", wf.started[1].Dialect)
+	}
+}
+
+func TestStart_RecordsWorkloadClassWhenEnabled(t *testing.T) {
+	t.Parallel()
+	st, wf := newStore(), &fakeWorkflows{}
+	s := New(st, wf, fakeEngines{&fakeEngine{}}, dialect.NewRegistry(), Config{WorkloadEnabled: true})
+	if _, err := s.Start(context.Background(), Run{
+		WorkspaceID: newID(),
+		SQL:         "select 1",
+		Target:      queryengine.Target{EngineKind: "trino", EngineID: newID()},
+		Origin:      workload.OriginAgent,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if st.lastCreate.QueueClass == nil || *st.lastCreate.QueueClass != string(queryengine.ClassBackground) {
+		t.Errorf("queue_class = %v, want background", st.lastCreate.QueueClass)
+	}
+	if st.lastCreate.QueueReason == nil || *st.lastCreate.QueueReason != "origin:agent" {
+		t.Errorf("queue_reason = %v, want origin:agent", st.lastCreate.QueueReason)
+	}
+	if len(wf.started) != 1 || wf.started[0].Class != queryengine.ClassBackground {
+		t.Errorf("workflow class = %+v", wf.started)
+	}
+}
+
+func TestStart_NoWorkloadClassWhenDisabled(t *testing.T) {
+	t.Parallel()
+	st, wf := newStore(), &fakeWorkflows{}
+	s := New(st, wf, fakeEngines{&fakeEngine{}}, dialect.NewRegistry(), Config{})
+	if _, err := s.Start(context.Background(), Run{
+		WorkspaceID: newID(),
+		SQL:         "select 1",
+		Target:      queryengine.Target{EngineKind: "trino", EngineID: newID()},
+		Origin:      workload.OriginAgent,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if st.lastCreate.QueueClass != nil || st.lastCreate.QueueReason != nil {
+		t.Errorf("queue columns written with the flag off: %v %v", st.lastCreate.QueueClass, st.lastCreate.QueueReason)
+	}
+	if wf.started[0].Class != queryengine.ClassInteractive {
+		t.Errorf("workflow class = %q, want interactive", wf.started[0].Class)
 	}
 }
 
