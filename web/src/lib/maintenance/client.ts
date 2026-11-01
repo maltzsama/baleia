@@ -171,8 +171,8 @@ export function emptyPolicy(): MaintenancePolicy {
 	};
 }
 
-/** The data explorer's query for a table (namespace segments joined by "."). */
-export function dataTableQuery(catalogId: string, namespace: string, table: string): string {
+/** The maintenance page's query for a table (namespace segments joined by "."). */
+export function maintenanceTableQuery(catalogId: string, namespace: string, table: string): string {
 	const params = new URLSearchParams({ catalog: catalogId });
 	for (const segment of namespace.split('.')) params.append('ns', segment);
 	params.set('table', table);
