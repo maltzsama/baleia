@@ -321,10 +321,16 @@ minute).
 ## Workload tagging (Trino)
 
 Baleia tags every Trino session with the run's workload class (#399, ADR 0014):
-the client tag `baleia.class=<class>` and the `query_priority` session property.
-The classes are `interactive`, `heavy` and `background`. Trino treats
-**larger numbers as higher priority** (`trino-main` `SystemSessionProperties`),
-so Baleia sends `interactive=10`, `heavy=5`, `background=1`.
+the client tag `baleia.class=<class>` and, when the session may write, the
+`query_priority` session property. The classes are `interactive`, `heavy` and
+`background`. Trino treats **larger numbers as higher priority**
+(`trino-main` `SystemSessionProperties`), so Baleia sends `interactive=10`,
+`heavy=5`, `background=1`.
+
+The Baleia catalog guard denies every system session property except
+`query_max_*` in a read-only session, so a read-only run carries the client tag
+but not `query_priority`; a resource-group selector on `baleia.class` is the
+reliable path until the guard allows `query_priority`.
 
 This release only tags; Baleia's own admission queues arrive with the workload
 work behind `BALEIA_WORKLOAD_ENABLED`. Until then, a Trino resource-group
