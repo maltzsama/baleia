@@ -45,7 +45,8 @@ type SessionSpec struct {
 type Tags struct {
 	ExecutionID string
 	RequestID   string
-	Source      string // "editor" | "explorer" | "sync" | "agent" | …
+	Source      string        // "editor" | "explorer" | "sync" | "agent" | …
+	Class       WorkloadClass // "" = unknown; engines that support it map it to their own mechanism
 }
 
 // QueryHandle identifies a running statement well enough to cancel it from

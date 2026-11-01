@@ -354,3 +354,27 @@ func TestIcebergMetricsStatements(t *testing.T) {
 		t.Errorf("manifests = %q", manifests)
 	}
 }
+
+func TestSessionCarriesWorkloadClass(t *testing.T) {
+	t.Parallel()
+	f := &fakeCoordinator{respond: func(string) (http.Header, map[string]any) {
+		return http.Header{}, map[string]any{"id": "20260101_000000_00001_abcde"}
+	}}
+	e := testEngine(t, f)
+	s, err := e.OpenSession(context.Background(), queryengine.SessionSpec{
+		Tags: queryengine.Tags{Source: "editor", Class: queryengine.ClassHeavy},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Execute(context.Background(), "SELECT 1", queryengine.Callbacks{}, &collect{}); err != nil {
+		t.Fatal(err)
+	}
+	h := f.last()
+	if got := h.Get("X-Trino-Client-Tags"); got != "baleia,editor,baleia.class=heavy" {
+		t.Errorf("client tags = %q", got)
+	}
+	if got := h.Get("X-Trino-Session"); !strings.Contains(got, "query_priority=5") {
+		t.Errorf("session = %q, want query_priority=5", got)
+	}
+}
