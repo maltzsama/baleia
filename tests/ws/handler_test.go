@@ -63,7 +63,7 @@ func finishedStatements() []ws.QuerierQueryStatement {
 
 // newHandler returns a handler wired to a fresh ticket store.
 func newHandler(mock *mockQuerier) (*ws.Handler, *wsticket.Store) {
-	handler := ws.New(slog.New(slog.DiscardHandler), mock, "test-secret", "", "", "", "", false)
+	handler := ws.New(slog.New(slog.DiscardHandler), mock, "test-secret", nil, "", "", "", "", false)
 	tickets := wsticket.New()
 	handler.SetTickets(tickets)
 	return handler, tickets
