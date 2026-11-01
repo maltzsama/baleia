@@ -224,7 +224,7 @@ describe('monitoring page', () => {
 			expect(within(row).getByText('Expire snapshots')).toBeTruthy();
 			expect(within(row).getByText('Managed')).toBeTruthy();
 			expect(within(row).getByRole('link', { name: 'Configure' }).getAttribute('href')).toBe(
-				`/data?catalog=${CATALOG}&ns=sales&table=orders`
+				`/maintenance?catalog=${CATALOG}&ns=sales&table=orders`
 			);
 			expect(within(row).getByRole('button', { name: 'Run now' })).toBeTruthy();
 			expect(within(row).queryByRole('button', { name: 'Run maintenance…' })).toBeNull();

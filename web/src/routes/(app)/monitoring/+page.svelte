@@ -9,7 +9,7 @@
 	import { hasTableHealth } from '$lib/ui/patterns/kindIcon';
 	import {
 		analyzeCatalogTableHealth,
-		dataTableQuery,
+		maintenanceTableQuery,
 		runTableMaintenance
 	} from '$lib/maintenance/client';
 	import { operationLabel, triggerLabel } from '$lib/maintenance/labels';
@@ -742,7 +742,7 @@
 						</thead>
 						<tbody>
 							{#each health as row (row.catalog_id + row.namespace + row.table_name)}
-								{@const configureHref = `${resolve('/data')}?${dataTableQuery(row.catalog_id, row.namespace, row.table_name)}`}
+								{@const configureHref = `${resolve('/maintenance')}?${maintenanceTableQuery(row.catalog_id, row.namespace, row.table_name)}`}
 								<tr class="border-b border-border/60 last:border-b-0">
 									<td class="px-3 py-1.5 font-mono">{row.namespace}.{row.table_name}</td>
 									<td class="px-3 py-1.5">
@@ -797,7 +797,7 @@
 									</td>
 									<td class="px-3 py-1.5 text-right">
 										<div class="flex justify-end gap-1.5">
-											<!-- eslint-disable svelte/no-navigation-without-resolve -- configureHref is resolve('/data') plus the query -->
+											<!-- eslint-disable svelte/no-navigation-without-resolve -- configureHref is resolve('/maintenance') plus the query -->
 											<a
 												class="inline-flex h-7 items-center rounded-md border border-border px-2.5 text-[11px] font-semibold text-text-muted no-underline hover:text-text-main"
 												href={configureHref}>{m.maintenance_configure()}</a

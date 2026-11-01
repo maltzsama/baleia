@@ -18,8 +18,6 @@
 	import DocEditor from '$lib/semantic/DocEditor.svelte';
 	import DocumentColumns from '$lib/semantic/DocumentColumns.svelte';
 	import type { SemanticDoc } from '$lib/semantic/docs';
-	import TableMaintenance from '$lib/maintenance/TableMaintenance.svelte';
-	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 
 	let { table, focusColumn = '' }: { table: TableRef | null; focusColumn?: string } = $props();
 
@@ -341,35 +339,6 @@
 				{/if}
 			</div>
 
-			{#if detail.kind === 'table' && table.maintainable}
-				<TableMaintenance
-					catalogId={detail.catalog_id}
-					namespace={detail.namespace.join('.')}
-					table={detail.name}
-				/>
-				<div class="border-b border-border px-4 py-3">
-					<ActivityPanel
-						resourceType="table_maintenance"
-						resourceId={`${detail.catalog_id}/${detail.namespace.join('.')}/${detail.name}`}
-						title={m.maintenance_activity()}
-					/>
-				</div>
-			{/if}
-
-			{#if Object.keys(detail.properties).length > 0}
-				<div class="border-b border-border px-4 py-3">
-					<p class="mb-2 text-[10px] font-bold uppercase tracking-wide text-text-muted">
-						{m.components_tabledetail_properties()}
-					</p>
-					<dl class="grid grid-cols-[minmax(90px,auto)_1fr] gap-x-3 gap-y-1 text-[12px]">
-						{#each Object.entries(detail.properties) as [key, value] (key)}
-							<dt class="text-text-muted">{key}</dt>
-							<dd class="break-all font-mono">{value}</dd>
-						{/each}
-					</dl>
-				</div>
-			{/if}
-
 			<div class="px-3 py-2">
 				<div class="mb-2 flex items-center gap-2 px-1">
 					<p class="text-[10px] font-bold uppercase tracking-wide text-text-muted">
@@ -455,6 +424,20 @@
 					{/each}
 				{/if}
 			</div>
+
+			{#if Object.keys(detail.properties).length > 0}
+				<div class="border-t border-border px-4 py-3">
+					<p class="mb-2 text-[10px] font-bold uppercase tracking-wide text-text-muted">
+						{m.components_tabledetail_properties()}
+					</p>
+					<dl class="grid grid-cols-[minmax(90px,auto)_1fr] gap-x-3 gap-y-1 text-[12px]">
+						{#each Object.entries(detail.properties) as [key, value] (key)}
+							<dt class="text-text-muted">{key}</dt>
+							<dd class="break-all font-mono">{value}</dd>
+						{/each}
+					</dl>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>

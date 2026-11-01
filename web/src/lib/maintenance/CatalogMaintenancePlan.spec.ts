@@ -37,7 +37,7 @@ describe('CatalogMaintenancePlan', () => {
 		render(CatalogMaintenancePlan, { props: { catalogId: CATALOG } });
 
 		const link = await screen.findByRole('link', { name: 'sales.orders' });
-		expect(link.getAttribute('href')).toBe(`/data?catalog=${CATALOG}&ns=sales&table=orders`);
+		expect(link.getAttribute('href')).toBe(`/maintenance?catalog=${CATALOG}&ns=sales&table=orders`);
 		expect(screen.getByText('Expire snapshots')).toBeTruthy();
 		expect(screen.getByText('Gave up')).toBeTruthy();
 		expect(screen.getByText('Nothing due')).toBeTruthy();

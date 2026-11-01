@@ -11,7 +11,7 @@
 	import { toasts } from '$lib/ui/toast.svelte';
 	import {
 		analyzeCatalogTableHealth,
-		dataTableQuery,
+		maintenanceTableQuery,
 		getCatalogMaintenancePlan,
 		type CatalogMaintenancePlanItem
 	} from './client';
@@ -103,10 +103,10 @@
 				<tbody>
 					{#each items as item (`${item.namespace}.${item.table_name}`)}
 						{@const next = item.plan.plan.find((step) => step.would_run)}
-						{@const configureHref = `${resolve('/data')}?${dataTableQuery(catalogId, item.namespace, item.table_name)}`}
+						{@const configureHref = `${resolve('/maintenance')}?${maintenanceTableQuery(catalogId, item.namespace, item.table_name)}`}
 						<tr class="border-t border-border align-top">
 							<td class="px-3 py-1.5 font-mono">
-								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- configureHref is resolve('/data') plus the query -->
+								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- configureHref is resolve('/maintenance') plus the query -->
 								<a class="text-primary" href={configureHref}>{item.namespace}.{item.table_name}</a>
 							</td>
 							<td class="px-3 py-1.5"><Badge tone="neutral">{modeLabel(item.mode)}</Badge></td>
