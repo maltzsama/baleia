@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
         - name: temporal
-          image: temporalio/auto-setup:latest
+          image: temporalio/auto-setup:1.29.7
           env:
             - { name: DB, value: postgres12 }
             - { name: DB_PORT, value: "5432" }
@@ -69,7 +69,7 @@ spec:
     spec:
       containers:
         - name: ui
-          image: temporalio/ui:latest
+          image: temporalio/ui:2.57.0
           env:
             - { name: TEMPORAL_ADDRESS, value: "temporal.baleia-dev.svc:7233" }
             # The Service below is named "temporal-ui", so the kubelet injects

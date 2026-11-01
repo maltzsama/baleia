@@ -107,7 +107,8 @@ services:
   # ============================================
 
   temporal:
-    image: temporalio/auto-setup:latest
+    # Pinned with the Go SDK in go.mod (#525). Bump both together.
+    image: temporalio/auto-setup:1.29.7
     container_name: baleia_temporal
     ports:
       - "7233:7233"
@@ -133,7 +134,7 @@ services:
       retries: 10
 
   temporal-ui:
-    image: temporalio/ui:latest
+    image: temporalio/ui:2.57.0
     container_name: baleia_temporal_ui
     ports:
       - "8233:8080"
