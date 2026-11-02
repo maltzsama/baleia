@@ -241,17 +241,19 @@ type DirectoryReconcileRun struct {
 }
 
 type Engine struct {
-	ID              pgtype.UUID        `json:"id"`
-	Name            string             `json:"name"`
-	Kind            string             `json:"kind"`
-	Class           string             `json:"class"`
-	ConnectionID    pgtype.UUID        `json:"connection_id"`
-	IdentityMode    string             `json:"identity_mode"`
-	Enabled         bool               `json:"enabled"`
-	CreatedBy       pgtype.UUID        `json:"created_by"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	MaxRunningTotal *int32             `json:"max_running_total"`
+	ID                 pgtype.UUID        `json:"id"`
+	Name               string             `json:"name"`
+	Kind               string             `json:"kind"`
+	Class              string             `json:"class"`
+	ConnectionID       pgtype.UUID        `json:"connection_id"`
+	IdentityMode       string             `json:"identity_mode"`
+	Enabled            bool               `json:"enabled"`
+	CreatedBy          pgtype.UUID        `json:"created_by"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	MaxRunningTotal    *int32             `json:"max_running_total"`
+	CostRoutingEnabled bool               `json:"cost_routing_enabled"`
+	CostThresholdBytes *int64             `json:"cost_threshold_bytes"`
 }
 
 type EngineCatalogObservation struct {

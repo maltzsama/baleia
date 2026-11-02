@@ -3,6 +3,7 @@ package workload
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/galileostudio/baleia/internal/queryengine"
 )
@@ -24,12 +25,17 @@ const (
 	OriginMetadata Origin = "metadata"
 	// OriginMaintenance is Iceberg maintenance.
 	OriginMaintenance Origin = "maintenance"
+	// OriginExport is a user export of a result set as a run.
+	OriginExport Origin = "export"
+	// OriginDownload is a user download of a stored result as a run.
+	OriginDownload Origin = "download"
 )
 
 // Valid reports whether o is one of the known origins.
 func (o Origin) Valid() bool {
 	switch o {
-	case OriginEditor, OriginAgent, OriginExplore, OriginRetriever, OriginMetadata, OriginMaintenance:
+	case OriginEditor, OriginAgent, OriginExplore, OriginRetriever, OriginMetadata, OriginMaintenance,
+		OriginExport, OriginDownload:
 		return true
 	default:
 		return false
@@ -87,6 +93,12 @@ type RuleInput struct {
 	Origin       Origin
 	SavedQueryID string
 	Statements   int
+	// DDL marks a data-definition statement: it is never demoted to background
+	// by origin alone (#580).
+	DDL bool
+	// CostHeavy is set by the caller when the engine's cost estimate exceeds
+	// its threshold (#550).
+	CostHeavy bool
 }
 
 // Classify is the first classification step: background work gets the
@@ -96,6 +108,8 @@ func Classify(origin Origin) Decision {
 	switch origin {
 	case OriginAgent, OriginRetriever, OriginMetadata, OriginMaintenance:
 		return Decision{Class: queryengine.ClassBackground, Reason: "origin:" + string(origin), Weight: 1}
+	case OriginExport, OriginDownload:
+		return Decision{Class: queryengine.ClassHeavy, Reason: "origin:" + string(origin), Weight: 1}
 	case OriginExplore:
 		return Decision{Class: queryengine.ClassInteractive, Reason: "origin:explore", Weight: 1}
 	default:
@@ -111,6 +125,11 @@ func Classify(origin Origin) Decision {
 func Decide(origin Origin, in RuleInput, rules []Rule) Decision {
 	base := Classify(origin)
 	in.Origin = origin
+	// DDL must run promptly: it is never kept in background by origin alone.
+	// A rule may still set its class (#580).
+	if in.DDL && base.Class == queryengine.ClassBackground {
+		base = Decision{Class: queryengine.ClassInteractive, Reason: "statement:ddl", Weight: 1}
+	}
 	for _, r := range rules {
 		if !r.Enabled || !r.matches(in) {
 			continue
@@ -127,6 +146,10 @@ func Decide(origin Origin, in RuleInput, rules []Rule) Decision {
 			weight = 1
 		}
 		return Decision{Class: class, Reason: "rule:" + r.ID, Weight: weight, MaxClass: r.MaxClass}
+	}
+	// Cost routing comes after the rules and before the default (#550).
+	if in.CostHeavy {
+		return Decision{Class: queryengine.ClassHeavy, Reason: "cost:trino", Weight: 1}
 	}
 	return base
 }
@@ -235,4 +258,57 @@ func EncodeRuleMatch(m RuleMatch) ([]byte, error) {
 		return nil, fmt.Errorf("workload: unknown origin %q in rule match", m.Origin)
 	}
 	return json.Marshal(matchJSON(m))
+}
+
+// IsDDL reports whether sql is a data-definition statement. The caller passes
+// one statement, already split by the engine dialect (#580).
+func IsDDL(sql string) bool {
+	switch leadingKeyword(sql) {
+	case "CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME", "COMMENT", "GRANT", "REVOKE":
+		return true
+	default:
+		return false
+	}
+}
+
+// leadingKeyword is the first word of sql, upper-cased, ignoring leading line
+// and block comments.
+func leadingKeyword(sql string) string {
+	s := strings.TrimSpace(sql)
+	for {
+		switch {
+		case strings.HasPrefix(s, "--"):
+			if i := strings.IndexByte(s, '\n'); i >= 0 {
+				s = strings.TrimSpace(s[i+1:])
+				continue
+			}
+			return ""
+		case strings.HasPrefix(s, "/*"):
+			if i := strings.Index(s, "*/"); i >= 0 {
+				s = strings.TrimSpace(s[i+2:])
+				continue
+			}
+			return ""
+		}
+		break
+	}
+	if i := strings.IndexAny(s, " \t\r\n("); i >= 0 {
+		s = s[:i]
+	}
+	if i := strings.IndexByte(s, ';'); i >= 0 {
+		s = s[:i]
+	}
+	return strings.ToUpper(s)
+}
+
+// IsSelect reports whether sql is a statement a cost estimate can be had for:
+// a SELECT or a CTE that starts with WITH. Other statements never get an
+// EXPLAIN (#550).
+func IsSelect(sql string) bool {
+	switch leadingKeyword(sql) {
+	case "SELECT", "WITH", "VALUES", "TABLE":
+		return true
+	default:
+		return false
+	}
 }

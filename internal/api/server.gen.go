@@ -16459,6 +16459,17 @@ func (response UpdateEngine404JSONResponse) VisitUpdateEngineResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type UpdateEngine422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateEngine422JSONResponse) VisitUpdateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetEngineBindingSupportRequestObject struct {
 	Id PathId `json:"id"`
 }

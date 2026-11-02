@@ -76,7 +76,7 @@ func (q *Queries) CountEngineImpact(ctx context.Context, engineID pgtype.UUID) (
 const createEngine = `-- name: CreateEngine :one
 INSERT INTO engines (name, kind, class, connection_id, identity_mode, created_by)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total
+RETURNING id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total, cost_routing_enabled, cost_threshold_bytes
 `
 
 type CreateEngineParams struct {
@@ -110,6 +110,8 @@ func (q *Queries) CreateEngine(ctx context.Context, arg CreateEngineParams) (Eng
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.MaxRunningTotal,
+		&i.CostRoutingEnabled,
+		&i.CostThresholdBytes,
 	)
 	return i, err
 }
@@ -185,7 +187,7 @@ func (q *Queries) EngineHostsCatalogGrantedToUser(ctx context.Context, arg Engin
 }
 
 const getDefaultTrinoEngine = `-- name: GetDefaultTrinoEngine :one
-SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, c.id, c.name, c.type, c.url, c.credentials_enc, c.default_readonly, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only
+SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, c.id, c.name, c.type, c.url, c.credentials_enc, c.default_readonly, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only
 FROM engines e
 JOIN trino_clusters tc ON tc.engine_id = e.id
 JOIN catalog_connections c ON c.id = e.connection_id
@@ -213,6 +215,8 @@ func (q *Queries) GetDefaultTrinoEngine(ctx context.Context) (GetDefaultTrinoEng
 		&i.Engine.CreatedAt,
 		&i.Engine.UpdatedAt,
 		&i.Engine.MaxRunningTotal,
+		&i.Engine.CostRoutingEnabled,
+		&i.Engine.CostThresholdBytes,
 		&i.CatalogConnection.ID,
 		&i.CatalogConnection.Name,
 		&i.CatalogConnection.Type,
@@ -231,7 +235,7 @@ func (q *Queries) GetDefaultTrinoEngine(ctx context.Context) (GetDefaultTrinoEng
 }
 
 const getEngineByID = `-- name: GetEngineByID :one
-SELECT id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total FROM engines WHERE id = $1
+SELECT id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total, cost_routing_enabled, cost_threshold_bytes FROM engines WHERE id = $1
 `
 
 func (q *Queries) GetEngineByID(ctx context.Context, id pgtype.UUID) (Engine, error) {
@@ -249,12 +253,14 @@ func (q *Queries) GetEngineByID(ctx context.Context, id pgtype.UUID) (Engine, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.MaxRunningTotal,
+		&i.CostRoutingEnabled,
+		&i.CostThresholdBytes,
 	)
 	return i, err
 }
 
 const getEngineWithConnection = `-- name: GetEngineWithConnection :one
-SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, c.id, c.name, c.type, c.url, c.credentials_enc, c.default_readonly, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only
+SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, c.id, c.name, c.type, c.url, c.credentials_enc, c.default_readonly, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only
 FROM engines e
 JOIN catalog_connections c ON c.id = e.connection_id
 WHERE e.id = $1
@@ -281,6 +287,8 @@ func (q *Queries) GetEngineWithConnection(ctx context.Context, id pgtype.UUID) (
 		&i.Engine.CreatedAt,
 		&i.Engine.UpdatedAt,
 		&i.Engine.MaxRunningTotal,
+		&i.Engine.CostRoutingEnabled,
+		&i.Engine.CostThresholdBytes,
 		&i.CatalogConnection.ID,
 		&i.CatalogConnection.Name,
 		&i.CatalogConnection.Type,
@@ -313,7 +321,7 @@ func (q *Queries) LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClust
 }
 
 const listEnabledEnginesWithConnection = `-- name: ListEnabledEnginesWithConnection :many
-SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, c.id, c.name, c.type, c.url, c.credentials_enc, c.default_readonly, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only, tc.id AS cluster_id
+SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, c.id, c.name, c.type, c.url, c.credentials_enc, c.default_readonly, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only, tc.id AS cluster_id
 FROM engines e
 JOIN catalog_connections c ON c.id = e.connection_id
 LEFT JOIN trino_clusters tc ON tc.engine_id = e.id
@@ -350,6 +358,8 @@ func (q *Queries) ListEnabledEnginesWithConnection(ctx context.Context) ([]ListE
 			&i.Engine.CreatedAt,
 			&i.Engine.UpdatedAt,
 			&i.Engine.MaxRunningTotal,
+			&i.Engine.CostRoutingEnabled,
+			&i.Engine.CostThresholdBytes,
 			&i.CatalogConnection.ID,
 			&i.CatalogConnection.Name,
 			&i.CatalogConnection.Type,
@@ -447,7 +457,7 @@ func (q *Queries) ListEngineQueueCapacities(ctx context.Context, engineID pgtype
 }
 
 const listEngines = `-- name: ListEngines :many
-SELECT id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total FROM engines ORDER BY name
+SELECT id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total, cost_routing_enabled, cost_threshold_bytes FROM engines ORDER BY name
 `
 
 func (q *Queries) ListEngines(ctx context.Context) ([]Engine, error) {
@@ -471,6 +481,8 @@ func (q *Queries) ListEngines(ctx context.Context) ([]Engine, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.MaxRunningTotal,
+			&i.CostRoutingEnabled,
+			&i.CostThresholdBytes,
 		); err != nil {
 			return nil, err
 		}
@@ -483,7 +495,7 @@ func (q *Queries) ListEngines(ctx context.Context) ([]Engine, error) {
 }
 
 const listEnginesVisibleToUser = `-- name: ListEnginesVisibleToUser :many
-SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total FROM engines e
+SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes FROM engines e
 JOIN catalog_connections c ON c.id = e.connection_id
 WHERE c.created_by = $1
    OR EXISTS (
@@ -519,6 +531,8 @@ func (q *Queries) ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UU
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.MaxRunningTotal,
+			&i.CostRoutingEnabled,
+			&i.CostThresholdBytes,
 		); err != nil {
 			return nil, err
 		}
@@ -534,7 +548,7 @@ const setEngineMaxRunningTotal = `-- name: SetEngineMaxRunningTotal :one
 UPDATE engines
 SET max_running_total = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total
+RETURNING id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total, cost_routing_enabled, cost_threshold_bytes
 `
 
 type SetEngineMaxRunningTotalParams struct {
@@ -557,6 +571,8 @@ func (q *Queries) SetEngineMaxRunningTotal(ctx context.Context, arg SetEngineMax
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.MaxRunningTotal,
+		&i.CostRoutingEnabled,
+		&i.CostThresholdBytes,
 	)
 	return i, err
 }
@@ -565,19 +581,29 @@ const updateEngine = `-- name: UpdateEngine :one
 UPDATE engines
 SET enabled       = COALESCE($1, enabled),
     identity_mode = COALESCE($2, identity_mode),
+    cost_routing_enabled = COALESCE($3, cost_routing_enabled),
+    cost_threshold_bytes = COALESCE($4, cost_threshold_bytes),
     updated_at    = now()
-WHERE id = $3
-RETURNING id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total
+WHERE id = $5
+RETURNING id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total, cost_routing_enabled, cost_threshold_bytes
 `
 
 type UpdateEngineParams struct {
-	Enabled      *bool       `json:"enabled"`
-	IdentityMode *string     `json:"identity_mode"`
-	ID           pgtype.UUID `json:"id"`
+	Enabled            *bool       `json:"enabled"`
+	IdentityMode       *string     `json:"identity_mode"`
+	CostRoutingEnabled *bool       `json:"cost_routing_enabled"`
+	CostThresholdBytes *int64      `json:"cost_threshold_bytes"`
+	ID                 pgtype.UUID `json:"id"`
 }
 
 func (q *Queries) UpdateEngine(ctx context.Context, arg UpdateEngineParams) (Engine, error) {
-	row := q.db.QueryRow(ctx, updateEngine, arg.Enabled, arg.IdentityMode, arg.ID)
+	row := q.db.QueryRow(ctx, updateEngine,
+		arg.Enabled,
+		arg.IdentityMode,
+		arg.CostRoutingEnabled,
+		arg.CostThresholdBytes,
+		arg.ID,
+	)
 	var i Engine
 	err := row.Scan(
 		&i.ID,
@@ -591,6 +617,8 @@ func (q *Queries) UpdateEngine(ctx context.Context, arg UpdateEngineParams) (Eng
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.MaxRunningTotal,
+		&i.CostRoutingEnabled,
+		&i.CostThresholdBytes,
 	)
 	return i, err
 }

@@ -4552,6 +4552,13 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at?: string;
+            /** @description Run EXPLAIN (FORMAT JSON) before a Trino SELECT and route an expensive run to heavy (#550) */
+            cost_routing_enabled?: boolean;
+            /**
+             * Format: int64
+             * @description Estimated bytes above which a Trino SELECT is heavy; cost routing does nothing while this is null (#550)
+             */
+            cost_threshold_bytes?: number | null;
             /** @description Server version reported by the engine (cached 5 minutes); null when unknown or unreachable */
             version?: string | null;
             /** @description What the engine can do; null when the engine is disabled or no adapter for its kind is available yet */
@@ -4669,6 +4676,9 @@ export interface components {
         };
         UpdateEngineRequest: {
             enabled?: boolean;
+            cost_routing_enabled?: boolean;
+            /** Format: int64 */
+            cost_threshold_bytes?: number | null;
         };
         AuditEvent: {
             /** Format: int64 */
@@ -10159,6 +10169,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     getDialect: {

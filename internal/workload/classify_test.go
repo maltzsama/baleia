@@ -137,3 +137,58 @@ func TestClassRankAndClamp(t *testing.T) {
 		t.Fatalf("ClampToMax = %q, want background", got)
 	}
 }
+
+func TestClassifyExportAndDownloadAreHeavy(t *testing.T) {
+	t.Parallel()
+	for _, origin := range []Origin{OriginExport, OriginDownload} {
+		got := Classify(origin)
+		if got.Class != queryengine.ClassHeavy || got.Reason != "origin:"+string(origin) {
+			t.Fatalf("Classify(%q) = %+v, want heavy", origin, got)
+		}
+	}
+}
+
+func TestDecide_DDLIsNeverBackground(t *testing.T) {
+	t.Parallel()
+	got := Decide(OriginAgent, RuleInput{Origin: OriginAgent, DDL: true}, nil)
+	if got.Class != queryengine.ClassInteractive || got.Reason != "statement:ddl" {
+		t.Fatalf("DDL agent run = %+v, want interactive/statement:ddl", got)
+	}
+	// A rule still wins over the DDL default.
+	rules := []Rule{{ID: "r", Enabled: true, Class: queryengine.ClassBackground, Weight: 1}}
+	if got := Decide(OriginAgent, RuleInput{Origin: OriginAgent, DDL: true}, rules); got.Reason != "rule:r" {
+		t.Fatalf("DDL with a rule = %+v, want the rule", got)
+	}
+}
+
+func TestDecide_CostHeavy(t *testing.T) {
+	t.Parallel()
+	got := Decide(OriginEditor, RuleInput{Origin: OriginEditor, CostHeavy: true}, nil)
+	if got.Class != queryengine.ClassHeavy || got.Reason != "cost:trino" {
+		t.Fatalf("cost-heavy run = %+v, want heavy/cost:trino", got)
+	}
+	// A rule wins over cost routing.
+	rules := []Rule{{ID: "r", Enabled: true, Class: queryengine.ClassInteractive, Weight: 1}}
+	if got := Decide(OriginEditor, RuleInput{Origin: OriginEditor, CostHeavy: true}, rules); got.Reason != "rule:r" {
+		t.Fatalf("cost-heavy run with a rule = %+v, want the rule", got)
+	}
+}
+
+func TestIsDDLAndIsSelect(t *testing.T) {
+	t.Parallel()
+	for _, sql := range []string{"CREATE TABLE t (a int)", "alter table t add b int", "/* c */ DROP TABLE t", "-- c\nTRUNCATE t"} {
+		if !IsDDL(sql) {
+			t.Errorf("IsDDL(%q) = false", sql)
+		}
+	}
+	for _, sql := range []string{"CREATE TABLE t (a int)", "INSERT INTO t VALUES (1)"} {
+		if IsSelect(sql) {
+			t.Errorf("IsSelect(%q) = true", sql)
+		}
+	}
+	for _, sql := range []string{"SELECT 1", "with x as (select 1) select * from x"} {
+		if !IsSelect(sql) {
+			t.Errorf("IsSelect(%q) = false", sql)
+		}
+	}
+}

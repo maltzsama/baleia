@@ -37,6 +37,10 @@ func engineToPublic(e db.Engine) Engine {
 		Enabled:      e.Enabled,
 		CreatedAt:    pgTimestampToTime(e.CreatedAt),
 	}
+	// Cost routing is opt-in per engine (#550).
+	costRouting := e.CostRoutingEnabled
+	out.CostRoutingEnabled = &costRouting
+	out.CostThresholdBytes = e.CostThresholdBytes
 	out.UpdatedAt = pgTimestampToTimePtr(e.UpdatedAt)
 	return out
 }
@@ -182,6 +186,16 @@ func (h *CatalogHandlers) UpdateEngine(ctx context.Context, request UpdateEngine
 	eng, err := h.engineAdmin.SetEnabled(ctx, id, request.Body.Enabled)
 	if err != nil {
 		return nil, err
+	}
+	// Cost routing is opt-in per engine (#550). Omitted fields keep their
+	// value; a null threshold is only meaningful when cost routing is off.
+	if request.Body.CostRoutingEnabled != nil || request.Body.CostThresholdBytes != nil {
+		if request.Body.CostThresholdBytes != nil && *request.Body.CostThresholdBytes < 1 {
+			return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "cost_threshold_bytes must be at least 1")}, nil
+		}
+		if eng, err = h.engineAdmin.SetCostRouting(ctx, id, request.Body.CostRoutingEnabled, request.Body.CostThresholdBytes); err != nil {
+			return nil, err
+		}
 	}
 	return UpdateEngine200JSONResponse(h.withEngineActions(ctx, eng)), nil
 }
