@@ -240,6 +240,11 @@ type Querier interface {
 	GetManagedBindingOfCatalog(ctx context.Context, arg GetManagedBindingOfCatalogParams) (CatalogBinding, error)
 	// A live table by its natural key, for the v1 -> v2 metric migration (#121).
 	GetMetadataTableByName(ctx context.Context, arg GetMetadataTableByNameParams) (pgtype.UUID, error)
+	// Lineage (#558, B4): the tables a model, metric or saved query reads, and
+	// the content that reads a table. Name resolution is best-effort: a reference
+	// whose table no longer exists simply contributes no edge.
+	// A live table by its natural key, to resolve a content reference.
+	GetMetadataTableByRef(ctx context.Context, arg GetMetadataTableByRefParams) (GetMetadataTableByRefRow, error)
 	GetMigrationByID(ctx context.Context, id pgtype.UUID) (Migration, error)
 	GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
 	// Workspace-scoped lookup: an execution id from another workspace must not be
@@ -407,6 +412,17 @@ type Querier interface {
 	// left column always belongs to @left_table and the right to @right_table,
 	// whatever order the statements wrote them in.
 	ListJoinSuggestions(ctx context.Context, arg ListJoinSuggestionsParams) ([]ListJoinSuggestionsRow, error)
+	// Every metric, to detect a base table that no longer exists.
+	ListLineageBrokenMetrics(ctx context.Context) ([]ListLineageBrokenMetricsRow, error)
+	// Every model, to detect a base table or column that no longer exists.
+	ListLineageBrokenModels(ctx context.Context) ([]ListLineageBrokenModelsRow, error)
+	// The metrics the caller can read in one workspace (#40 space role).
+	ListLineageMetrics(ctx context.Context, arg ListLineageMetricsParams) ([]ListLineageMetricsRow, error)
+	// The models the caller can read in one workspace (#40 space role).
+	ListLineageModels(ctx context.Context, arg ListLineageModelsParams) ([]ListLineageModelsRow, error)
+	// The saved queries the caller can read in one workspace, with the catalog
+	// their target binding points at (NULL when they have no target).
+	ListLineageSavedQueries(ctx context.Context, arg ListLineageSavedQueriesParams) ([]ListLineageSavedQueriesRow, error)
 	ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRunsParams) ([]MaintenanceRun, error)
 	// The managed bindings of an engine the reconciler checks (#37).
 	ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)

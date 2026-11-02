@@ -95,6 +95,7 @@ const (
 	AuditExportLagging AttentionKind = "audit_export_lagging"
 	BindingError       AttentionKind = "binding_error"
 	EngineUnreachable  AttentionKind = "engine_unreachable"
+	LineageBroken      AttentionKind = "lineage_broken"
 	MetadataStale      AttentionKind = "metadata_stale"
 	MetadataSyncFailed AttentionKind = "metadata_sync_failed"
 	ReconcileDrift     AttentionKind = "reconcile_drift"
@@ -109,6 +110,8 @@ const (
 	AttentionResourceTypeBinding     AttentionResourceType = "binding"
 	AttentionResourceTypeCatalog     AttentionResourceType = "catalog"
 	AttentionResourceTypeEngine      AttentionResourceType = "engine"
+	AttentionResourceTypeMetric      AttentionResourceType = "metric"
+	AttentionResourceTypeModel       AttentionResourceType = "model"
 	AttentionResourceTypeRetriever   AttentionResourceType = "retriever"
 	AttentionResourceTypeSchedule    AttentionResourceType = "schedule"
 )
@@ -644,6 +647,14 @@ const (
 const (
 	LDAPConfigAdminDefaultRoleAdmin  LDAPConfigAdminDefaultRole = "admin"
 	LDAPConfigAdminDefaultRoleMember LDAPConfigAdminDefaultRole = "member"
+)
+
+// Defines values for LineageNodeKind.
+const (
+	LineageNodeKindMetric     LineageNodeKind = "metric"
+	LineageNodeKindModel      LineageNodeKind = "model"
+	LineageNodeKindSavedQuery LineageNodeKind = "saved_query"
+	LineageNodeKindTable      LineageNodeKind = "table"
 )
 
 // Defines values for Locale.
@@ -1222,6 +1233,12 @@ const (
 	ListExecutionsParamsClassBackground  ListExecutionsParamsClass = "background"
 	ListExecutionsParamsClassHeavy       ListExecutionsParamsClass = "heavy"
 	ListExecutionsParamsClassInteractive ListExecutionsParamsClass = "interactive"
+)
+
+// Defines values for ListLineageParamsDirection.
+const (
+	Down ListLineageParamsDirection = "down"
+	Up   ListLineageParamsDirection = "up"
 )
 
 // Defines values for SearchMetadataParamsKind.
@@ -2985,6 +3002,33 @@ type LDAPConfigAdmin struct {
 
 // LDAPConfigAdminDefaultRole defines model for LDAPConfigAdmin.DefaultRole.
 type LDAPConfigAdminDefaultRole string
+
+// LineageEdge A dependency edge: `from` depends on `to`.
+type LineageEdge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// LineageGraph defines model for LineageGraph.
+type LineageGraph struct {
+	Edges []LineageEdge `json:"edges"`
+	Nodes []LineageNode `json:"nodes"`
+}
+
+// LineageNode One node of a lineage graph. `id` is opaque; it is the node reference of the next `/lineage` call.
+type LineageNode struct {
+	// Detail The catalog and namespace of a table, or the slug of content.
+	Detail *string `json:"detail,omitempty"`
+
+	// Href SPA route that opens the node.
+	Href  *string         `json:"href,omitempty"`
+	Id    string          `json:"id"`
+	Kind  LineageNodeKind `json:"kind"`
+	Label string          `json:"label"`
+}
+
+// LineageNodeKind defines model for LineageNodeKind.
+type LineageNodeKind string
 
 // Locale defines model for Locale.
 type Locale string
@@ -5167,6 +5211,16 @@ type ListFoldersParams struct {
 	SpaceId  *openapi_types.UUID `form:"space_id,omitempty" json:"space_id,omitempty"`
 	ParentId *openapi_types.UUID `form:"parent_id,omitempty" json:"parent_id,omitempty"`
 }
+
+// ListLineageParams defines parameters for ListLineage.
+type ListLineageParams struct {
+	Node      string                      `form:"node" json:"node"`
+	Direction *ListLineageParamsDirection `form:"direction,omitempty" json:"direction,omitempty"`
+	Depth     *int                        `form:"depth,omitempty" json:"depth,omitempty"`
+}
+
+// ListLineageParamsDirection defines parameters for ListLineage.
+type ListLineageParamsDirection string
 
 // ListMetadataNamespacesParams defines parameters for ListMetadataNamespaces.
 type ListMetadataNamespacesParams struct {

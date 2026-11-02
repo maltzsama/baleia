@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sort"
 	"strconv"
@@ -9,7 +10,10 @@ import (
 
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/api/serviceerror"
 )
 
@@ -68,6 +72,7 @@ func (h *OpsHandlers) attentionItems(ctx context.Context, p authz.Principal) ([]
 	items = append(items, h.attentionMetadataStale(ctx, p)...)
 	items = append(items, h.attentionEngineUnreachable(ctx, p)...)
 	items = append(items, h.attentionRetrieverErrors(ctx, p)...)
+	items = append(items, h.attentionLineageBroken(ctx, p)...)
 
 	if p.IsAdmin() {
 		items = append(items, h.attentionReconcileDrift(ctx)...)
@@ -364,3 +369,150 @@ func (h *OpsHandlers) attentionAuditExport(ctx context.Context) []AttentionItem 
 // ptrString returns a pointer to s; the generated models use *string for
 // optional fields.
 func ptrString(s string) *string { return &s }
+
+// attentionLineageBroken reports a model or metric whose base table, or a
+// column a model references, no longer exists after a metadata sync (B4, #558).
+// It is computed on demand from the current state, like every other attention
+// item, and only shown to someone who can edit the workspace.
+func (h *OpsHandlers) attentionLineageBroken(ctx context.Context, p authz.Principal) []AttentionItem {
+	var items []AttentionItem
+
+	models, err := h.queries.ListLineageBrokenModels(ctx)
+	if err != nil {
+		return items
+	}
+	for _, m := range models {
+		if _, err := h.authz().Workspace(ctx, p, m.WorkspaceID, authz.ActWrite); err != nil {
+			continue
+		}
+		missing, broken := brokenModelReference(ctx, h.queries, m)
+		if !broken {
+			continue
+		}
+		params := map[string]string{"model": m.Slug, "missing": missing}
+		items = append(items, AttentionItem{
+			Kind:     LineageBroken,
+			Severity: AttentionSeverityWarning,
+			Resource: AttentionResource{
+				Type: AttentionResourceTypeModel,
+				Id:   idString(m.ID),
+				Name: m.Label,
+			},
+			Params: &params,
+			Since:  m.UpdatedAt.Time,
+			Href:   ptrString("/models/" + idString(m.ID)),
+		})
+	}
+
+	metrics, err := h.queries.ListLineageBrokenMetrics(ctx)
+	if err != nil {
+		return items
+	}
+	for _, mt := range metrics {
+		if _, err := h.authz().Workspace(ctx, p, mt.WorkspaceID, authz.ActWrite); err != nil {
+			continue
+		}
+		if tableExists(ctx, h.queries, mt.CatalogID, mt.Namespace, mt.TableName) {
+			continue
+		}
+		params := map[string]string{"metric": mt.Slug, "missing": mt.TableName}
+		items = append(items, AttentionItem{
+			Kind:     LineageBroken,
+			Severity: AttentionSeverityWarning,
+			Resource: AttentionResource{
+				Type: AttentionResourceTypeMetric,
+				Id:   idString(mt.ID),
+				Name: mt.Label,
+			},
+			Params: &params,
+			Since:  mt.UpdatedAt.Time,
+			Href:   ptrString("/metrics/" + idString(mt.ID)),
+		})
+	}
+	return items
+}
+
+// brokenModelReference reports whether a model's base table or one of its
+// referenced columns no longer exists. missing names what is gone.
+func brokenModelReference(ctx context.Context, q db.Querier, m db.ListLineageBrokenModelsRow) (missing string, broken bool) {
+	var def semantic.Model
+	if err := json.Unmarshal(m.Definition, &def); err != nil {
+		return "", false
+	}
+	if def.Source.Kind != semantic.SourceTable {
+		return "", false // a SQL source is best-effort and never flagged here
+	}
+	table, err := q.GetMetadataTableByRef(ctx, db.GetMetadataTableByRefParams{
+		CatalogID: m.CatalogID, Namespace: def.Source.Namespace, Name: def.Source.Table,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return def.Source.Table, true
+	}
+	if err != nil {
+		return "", false
+	}
+	cols, err := q.ListMetadataColumns(ctx, table.ID)
+	if err != nil {
+		return "", false
+	}
+	existing := make(map[string]bool, len(cols))
+	for _, c := range cols {
+		existing[c.Name] = true
+	}
+	for _, col := range modelReferencedColumns(def) {
+		if !existing[col] {
+			return col, true
+		}
+	}
+	return "", false
+}
+
+// tableExists reports whether a live table row matches the natural key.
+func tableExists(ctx context.Context, q db.Querier, catalogID pgtype.UUID, namespace []string, name string) bool {
+	_, err := q.GetMetadataTableByName(ctx, db.GetMetadataTableByNameParams{
+		CatalogID: catalogID, Namespace: namespace, Name: name,
+	})
+	return err == nil
+}
+
+// modelReferencedColumns are the columns a model names: its primary key and
+// the source column of each dimension (the dimension name when SQL is empty).
+func modelReferencedColumns(m semantic.Model) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(c string) {
+		if c == "" || seen[c] {
+			return
+		}
+		seen[c] = true
+		out = append(out, c)
+	}
+	for _, c := range m.PrimaryKey {
+		add(c)
+	}
+	for _, d := range m.Dimensions {
+		if d.SQL != "" {
+			if isSimpleColumn(d.SQL) {
+				add(d.SQL)
+			}
+		} else {
+			add(d.Name)
+		}
+	}
+	return out
+}
+
+// isSimpleColumn reports whether s is a plain unquoted identifier, so an
+// expression is never treated as a column that must exist.
+func isSimpleColumn(s string) bool {
+	for i, r := range s {
+		if r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			continue
+		}
+		if i > 0 && r >= '0' && r <= '9' {
+			continue
+		}
+		return false
+	}
+	return s != ""
+}

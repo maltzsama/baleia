@@ -498,6 +498,7 @@ components:
         - reconcile_drift
         - schedule_missing
         - audit_export_lagging
+        - lineage_broken
         - agent_token_expiring
 
     AttentionSeverity:
@@ -509,7 +510,7 @@ components:
       description: "The entity to act on. `id` is opaque to the client; `href` is the SPA route that fixes it."
       required: [type, id, name]
       properties:
-        type: { type: string, enum: [binding, catalog, engine, retriever, schedule, audit_export, agent_token] }
+        type: { type: string, enum: [binding, catalog, engine, retriever, schedule, audit_export, agent_token, model, metric] }
         id: { type: string }
         name: { type: string }
 
@@ -526,6 +527,39 @@ components:
           additionalProperties: { type: string }
         since: { type: string, format: date-time }
         href: { type: string, description: "SPA route that fixes the item." }
+    LineageNodeKind:
+      type: string
+      enum: [table, model, metric, saved_query]
+
+    LineageNode:
+      type: object
+      description: "One node of a lineage graph. `id` is opaque; it is the node reference of the next `/lineage` call."
+      required: [kind, id, label]
+      properties:
+        kind: { $ref: "#/components/schemas/LineageNodeKind" }
+        id: { type: string }
+        label: { type: string }
+        detail: { type: string, description: "The catalog and namespace of a table, or the slug of content." }
+        href: { type: string, description: "SPA route that opens the node." }
+
+    LineageEdge:
+      type: object
+      description: "A dependency edge: `from` depends on `to`."
+      required: [from, to]
+      properties:
+        from: { type: string }
+        to: { type: string }
+
+    LineageGraph:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/LineageNode" }
+        edges:
+          type: array
+          items: { $ref: "#/components/schemas/LineageEdge" }
     IdentityProviderType:
       type: string
       enum: [oidc, ldap]
@@ -5397,6 +5431,40 @@ paths:
                 items: { $ref: "#/components/schemas/PopularTable" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/lineage:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Metadata]
+      operationId: listLineage
+      summary: "What depends on what: the lineage graph around one node (B4)"
+      description: >
+        The dependents (direction=up) or dependencies (direction=down) of one
+        node, as a small graph of tables, models, metrics and saved queries.
+        A node is `table:<id>`, `model:<id>`, `metric:<id>` or
+        `saved_query:<id>`. Content nodes are only visible through a space the
+        caller can read; tables only through a granted catalog.
+      parameters:
+        - name: node
+          in: query
+          required: true
+          schema: { type: string }
+        - name: direction
+          in: query
+          schema: { type: string, enum: [up, down], default: down }
+        - name: depth
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 8, default: 1 }
+      responses:
+        "200":
+          description: "The graph around the node"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LineageGraph" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── Semantic layer (#33) ──────────────────────────────────────
   /workspaces/{id}/semantic/tags:

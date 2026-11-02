@@ -537,6 +537,9 @@ type ServerInterface interface {
 	// What a workspace delete would remove — owner or admin
 	// (GET /workspaces/{id}/impact)
 	GetWorkspaceImpact(w http.ResponseWriter, r *http.Request, id PathId)
+	// What depends on what: the lineage graph around one node (B4)
+	// (GET /workspaces/{id}/lineage)
+	ListLineage(w http.ResponseWriter, r *http.Request, id PathId, params ListLineageParams)
 	// Catalogs the workspace may browse, with freshness and bindings — workspace members
 	// (GET /workspaces/{id}/metadata/catalogs)
 	ListMetadataCatalogs(w http.ResponseWriter, r *http.Request, id PathId)
@@ -1773,6 +1776,12 @@ func (_ Unimplemented) UpdateFolder(w http.ResponseWriter, r *http.Request, id P
 // What a workspace delete would remove — owner or admin
 // (GET /workspaces/{id}/impact)
 func (_ Unimplemented) GetWorkspaceImpact(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What depends on what: the lineage graph around one node (B4)
+// (GET /workspaces/{id}/lineage)
+func (_ Unimplemented) ListLineage(w http.ResponseWriter, r *http.Request, id PathId, params ListLineageParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8418,6 +8427,73 @@ func (siw *ServerInterfaceWrapper) GetWorkspaceImpact(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListLineage operation middleware
+func (siw *ServerInterfaceWrapper) ListLineage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLineageParams
+
+	// ------------- Required query parameter "node" -------------
+
+	if paramValue := r.URL.Query().Get("node"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "node"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "node", r.URL.Query(), &params.Node)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "node", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "direction" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "direction", r.URL.Query(), &params.Direction)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "direction", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "depth" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "depth", r.URL.Query(), &params.Depth)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "depth", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLineage(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMetadataCatalogs operation middleware
 func (siw *ServerInterfaceWrapper) ListMetadataCatalogs(w http.ResponseWriter, r *http.Request) {
 
@@ -12295,6 +12371,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/impact", wrapper.GetWorkspaceImpact)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/lineage", wrapper.ListLineage)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/metadata/catalogs", wrapper.ListMetadataCatalogs)
@@ -19928,6 +20007,53 @@ func (response GetWorkspaceImpact404JSONResponse) VisitGetWorkspaceImpactRespons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListLineageRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ListLineageParams
+}
+
+type ListLineageResponseObject interface {
+	VisitListLineageResponse(w http.ResponseWriter) error
+}
+
+type ListLineage200JSONResponse LineageGraph
+
+func (response ListLineage200JSONResponse) VisitListLineageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListLineage401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListLineage401JSONResponse) VisitListLineageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListLineage404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListLineage404JSONResponse) VisitListLineageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListLineage422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ListLineage422JSONResponse) VisitListLineageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListMetadataCatalogsRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -23472,6 +23598,9 @@ type StrictServerInterface interface {
 	// What a workspace delete would remove — owner or admin
 	// (GET /workspaces/{id}/impact)
 	GetWorkspaceImpact(ctx context.Context, request GetWorkspaceImpactRequestObject) (GetWorkspaceImpactResponseObject, error)
+	// What depends on what: the lineage graph around one node (B4)
+	// (GET /workspaces/{id}/lineage)
+	ListLineage(ctx context.Context, request ListLineageRequestObject) (ListLineageResponseObject, error)
 	// Catalogs the workspace may browse, with freshness and bindings — workspace members
 	// (GET /workspaces/{id}/metadata/catalogs)
 	ListMetadataCatalogs(ctx context.Context, request ListMetadataCatalogsRequestObject) (ListMetadataCatalogsResponseObject, error)
@@ -28527,6 +28656,33 @@ func (sh *strictHandler) GetWorkspaceImpact(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetWorkspaceImpactResponseObject); ok {
 		if err := validResponse.VisitGetWorkspaceImpactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLineage operation middleware
+func (sh *strictHandler) ListLineage(w http.ResponseWriter, r *http.Request, id PathId, params ListLineageParams) {
+	var request ListLineageRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLineage(ctx, request.(ListLineageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLineage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLineageResponseObject); ok {
+		if err := validResponse.VisitListLineageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
