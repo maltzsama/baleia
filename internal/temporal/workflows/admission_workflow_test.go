@@ -327,3 +327,24 @@ func TestAdmissionState_WithinKeyIsFIFO(t *testing.T) {
 	require.Equal(t, "b", s.Running[0].ExecutionID)
 	require.Empty(t, *failures)
 }
+
+// TestAdmissionWorkflow_ThrottleAppliesLive: the adaptive gate admits only
+// interactive work while throttled, and lifts without a restart (#551, #579).
+func TestAdmissionWorkflow_ThrottleAppliesLive(t *testing.T) {
+	t.Parallel()
+	env, admitted, _ := newAdmissionEnv(t)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(AdmissionThrottleSignal, AdmissionThrottle{Throttled: true, Reason: "cluster:queued"})
+		env.SignalWorkflow(AdmissionRequestSignal, AdmissionRequest{ExecutionID: "h", Class: queryengine.ClassHeavy})
+		env.SignalWorkflow(AdmissionRequestSignal, AdmissionRequest{ExecutionID: "i", Class: queryengine.ClassInteractive})
+	}, time.Millisecond)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(AdmissionThrottleSignal, AdmissionThrottle{Throttled: false})
+	}, time.Second)
+	env.RegisterDelayedCallback(env.CancelWorkflow, 2*time.Second)
+	env.ExecuteWorkflow(AdmissionWorkflow, "e1", admissionState())
+
+	require.Len(t, *admitted, 2)
+	require.Equal(t, "i", (*admitted)[0].ExecutionID, "only interactive is admitted while throttled")
+	require.Equal(t, "h", (*admitted)[1].ExecutionID, "heavy starts once the gate lifts")
+}

@@ -85,6 +85,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 
 	act := activities.New(logger, pool, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
 	act.SetMetrics(reg)
+	act.SetTemporal(core.Temporal)
 	act.SetMetadataSyncer(metadata.NewSyncer(pool, metadata.NewSources(core.Queries, core.Keyring, core.Connections, core.Engines)))
 	// The dispatcher observes federated engines' catalogs (adopting the ones
 	// Baleia did not create) with the binder, as the catalog DDL identity.

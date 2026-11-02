@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/worker"
 )
@@ -66,7 +67,13 @@ type Activities struct {
 	sweepEphemeral ephemeralSweeper
 	// auditExport ships audit events to OpenSearch (#50); nil when disabled.
 	auditExport *auditexport.Exporter
+	// temporalClient signals the adaptive admission gate (#551, #579). Nil in
+	// tests that build activities without a worker client.
+	temporalClient client.Client
 }
+
+// SetTemporal wires the client the cluster poller signals admission with.
+func (a *Activities) SetTemporal(c client.Client) { a.temporalClient = c }
 
 // SetAuditExporter wires the audit export pass (#50).
 func (a *Activities) SetAuditExporter(e *auditexport.Exporter) { a.auditExport = e }

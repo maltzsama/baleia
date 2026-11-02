@@ -369,6 +369,24 @@ Selectors are evaluated in order and the first match wins; the last one is the
 catch-all for a session with no class. Set the root group's `schedulingPolicy`
 to `weighted` or `query_priority` to also honour the session property.
 
+## Adaptive admission (Trino)
+
+With `BALEIA_WORKLOAD_ENABLED=true`, the Lens cluster poller can throttle an
+engine's admission queue (#551, #579). While the latest `cluster_snapshots`
+row is above a threshold, only `interactive` runs are admitted and
+`heavy`/`background` wait for the gate to lift. The gate is a signal to the
+admission workflow, so it is reversible without a restart and clears on the
+next snapshot below the threshold.
+
+| Setting | Default | Trigger |
+|---|---|---|
+| `BALEIA_WORKLOAD_ADAPTIVE_QUEUED_THRESHOLD` | 20 | `queued_queries` above it |
+| `BALEIA_WORKLOAD_ADAPTIVE_BLOCKED_THRESHOLD` | 10 | `blocked_queries` above it |
+| `BALEIA_WORKLOAD_ADAPTIVE_MEMORY_HEADROOM_PCT` | 10 | free/total memory below it |
+
+`0` disables a trigger. The queued-query gate is the primary one; the blocked
+and memory gates catch saturation that the queue length does not show.
+
 ## Runbooks
 
 ### BaleiaAPIDown
