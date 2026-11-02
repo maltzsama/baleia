@@ -155,6 +155,10 @@ type Querier interface {
 	// The refresh replaces every row in one transaction with InsertTablePopularity.
 	DeleteTablePopularity(ctx context.Context) error
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
+	// Trino resource groups (#599, A-5.2): the write path Baleia uses to publish
+	// the generated document (#598) into the tables Trino's db manager reads, plus
+	// the revision log that makes a rollback possible.
+	DeleteTrinoResourceGroups(ctx context.Context, environment *string) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	DeleteWorkloadRule(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteWorkspace(ctx context.Context, id pgtype.UUID) (int64, error)
@@ -292,6 +296,7 @@ type Querier interface {
 	GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (TrinoCluster, error)
 	GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string) (TrinoQuerySnapshot, error)
 	GetTrinoQuerySnapshotByEngine(ctx context.Context, arg GetTrinoQuerySnapshotByEngineParams) (TrinoQuerySnapshot, error)
+	GetTrinoResourceGroupRevision(ctx context.Context, arg GetTrinoResourceGroupRevisionParams) ([]byte, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByExternalID(ctx context.Context, arg GetUserByExternalIDParams) (User, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
@@ -317,6 +322,9 @@ type Querier interface {
 	// Counts the reads of the last 30 days with a 7-day half-life decay. Only
 	// finished statements and references with a catalog (a target) count.
 	InsertTablePopularity(ctx context.Context) error
+	InsertTrinoResourceGroup(ctx context.Context, arg InsertTrinoResourceGroupParams) (int64, error)
+	InsertTrinoResourceGroupRevision(ctx context.Context, arg InsertTrinoResourceGroupRevisionParams) error
+	InsertTrinoSelector(ctx context.Context, arg InsertTrinoSelectorParams) error
 	// A personal workspace is owned by its user; a shared one by the owners of its team.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
 	// The latest finished run of each operation on a table.
@@ -556,6 +564,7 @@ type Querier interface {
 	MoveQueryFolderSubtree(ctx context.Context, arg MoveQueryFolderSubtreeParams) error
 	MoveSavedQueriesInFolderSubtree(ctx context.Context, arg MoveSavedQueriesInFolderSubtreeParams) error
 	NextContentVersion(ctx context.Context, arg NextContentVersionParams) (int32, error)
+	NextTrinoResourceGroupRevision(ctx context.Context, engineID pgtype.UUID) (int32, error)
 	// Catalogs Baleia managed and still sees in the engine, though no managed
 	// binding owns them any more (an old name that failed to drop): they stay
 	// managed, never adopted, for the reconciler (#37) to drop.
