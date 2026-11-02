@@ -288,6 +288,7 @@ var operationAccess = map[string]access{
 	"TestEngine":             checked("PrincipalFromContext", "Engine"),
 	"ListEngineObservations": checked("PrincipalFromContext", "Engine"),
 	"GetEngineImpact":        checked("PrincipalFromContext", "Engine"),
+	"GetEngineBIFile":        checked("PrincipalFromContext", "Engine"),
 	"DiscoverEngineCatalogs": checked("PrincipalFromContext", "Engine"),
 	"GetEngineQueues":        checked("PrincipalFromContext", "Engine"),
 	"PutEngineQueues":        checked("PrincipalFromContext", "Engine"),

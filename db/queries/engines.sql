@@ -46,6 +46,10 @@ SET enabled       = COALESCE(sqlc.narg('enabled'), enabled),
         WHEN sqlc.narg('clear_cost_threshold')::boolean THEN NULL
         ELSE COALESCE(sqlc.narg('cost_threshold_bytes'), cost_threshold_bytes)
     END,
+    external_url = CASE
+        WHEN sqlc.narg('clear_external_url')::boolean THEN NULL
+        ELSE COALESCE(sqlc.narg('external_url'), external_url)
+    END,
     updated_at    = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;

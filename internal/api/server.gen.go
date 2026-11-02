@@ -321,6 +321,9 @@ type ServerInterface interface {
 	// Enable or disable an engine (owner of its connection or an admin)
 	// (PATCH /engines/{id})
 	UpdateEngine(w http.ResponseWriter, r *http.Request, id PathId)
+	// Download a Tableau (.tds) or Power BI (.pbids) data source
+	// (GET /engines/{id}/bi/{tool})
+	GetEngineBIFile(w http.ResponseWriter, r *http.Request, id PathId, tool string, params GetEngineBIFileParams)
 	// Source kinds this engine can bind, with connectors, protected extra-property keys and reserved names
 	// (GET /engines/{id}/binding-support)
 	GetEngineBindingSupport(w http.ResponseWriter, r *http.Request, id PathId)
@@ -1326,6 +1329,12 @@ func (_ Unimplemented) GetEngine(w http.ResponseWriter, r *http.Request, id Path
 // Enable or disable an engine (owner of its connection or an admin)
 // (PATCH /engines/{id})
 func (_ Unimplemented) UpdateEngine(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Download a Tableau (.tds) or Power BI (.pbids) data source
+// (GET /engines/{id}/bi/{tool})
+func (_ Unimplemented) GetEngineBIFile(w http.ResponseWriter, r *http.Request, id PathId, tool string, params GetEngineBIFileParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5668,6 +5677,89 @@ func (siw *ServerInterfaceWrapper) UpdateEngine(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateEngine(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEngineBIFile operation middleware
+func (siw *ServerInterfaceWrapper) GetEngineBIFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "tool" -------------
+	var tool string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tool", chi.URLParam(r, "tool"), &tool, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tool", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetEngineBIFileParams
+
+	// ------------- Required query parameter "catalog" -------------
+
+	if paramValue := r.URL.Query().Get("catalog"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "catalog"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "catalog", r.URL.Query(), &params.Catalog)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "schema" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "schema", r.URL.Query(), &params.Schema)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "schema", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "table" -------------
+
+	if paramValue := r.URL.Query().Get("table"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "table"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "table", r.URL.Query(), &params.Table)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEngineBIFile(w, r, id, tool, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11720,6 +11812,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/engines/{id}", wrapper.UpdateEngine)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/bi/{tool}", wrapper.GetEngineBIFile)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engines/{id}/binding-support", wrapper.GetEngineBindingSupport)
 	})
 	r.Group(func(r chi.Router) {
@@ -16464,6 +16559,64 @@ type UpdateEngine422JSONResponse struct {
 }
 
 func (response UpdateEngine422JSONResponse) VisitUpdateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineBIFileRequestObject struct {
+	Id     PathId `json:"id"`
+	Tool   string `json:"tool"`
+	Params GetEngineBIFileParams
+}
+
+type GetEngineBIFileResponseObject interface {
+	VisitGetEngineBIFileResponse(w http.ResponseWriter) error
+}
+
+type GetEngineBIFile200TextResponse string
+
+func (response GetEngineBIFile200TextResponse) VisitGetEngineBIFileResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(200)
+
+	_, err := w.Write([]byte(response))
+	return err
+}
+
+type GetEngineBIFile401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetEngineBIFile401JSONResponse) VisitGetEngineBIFileResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineBIFile403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetEngineBIFile403JSONResponse) VisitGetEngineBIFileResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineBIFile404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetEngineBIFile404JSONResponse) VisitGetEngineBIFileResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEngineBIFile422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response GetEngineBIFile422JSONResponse) VisitGetEngineBIFileResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
 
@@ -22643,6 +22796,9 @@ type StrictServerInterface interface {
 	// Enable or disable an engine (owner of its connection or an admin)
 	// (PATCH /engines/{id})
 	UpdateEngine(ctx context.Context, request UpdateEngineRequestObject) (UpdateEngineResponseObject, error)
+	// Download a Tableau (.tds) or Power BI (.pbids) data source
+	// (GET /engines/{id}/bi/{tool})
+	GetEngineBIFile(ctx context.Context, request GetEngineBIFileRequestObject) (GetEngineBIFileResponseObject, error)
 	// Source kinds this engine can bind, with connectors, protected extra-property keys and reserved names
 	// (GET /engines/{id}/binding-support)
 	GetEngineBindingSupport(ctx context.Context, request GetEngineBindingSupportRequestObject) (GetEngineBindingSupportResponseObject, error)
@@ -25891,6 +26047,34 @@ func (sh *strictHandler) UpdateEngine(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateEngineResponseObject); ok {
 		if err := validResponse.VisitUpdateEngineResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEngineBIFile operation middleware
+func (sh *strictHandler) GetEngineBIFile(w http.ResponseWriter, r *http.Request, id PathId, tool string, params GetEngineBIFileParams) {
+	var request GetEngineBIFileRequestObject
+
+	request.Id = id
+	request.Tool = tool
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEngineBIFile(ctx, request.(GetEngineBIFileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEngineBIFile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEngineBIFileResponseObject); ok {
+		if err := validResponse.VisitGetEngineBIFileResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

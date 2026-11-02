@@ -84,3 +84,17 @@ export function hasTableHealth(catalog: {
 }): boolean {
 	return catalog.origin === 'source' && tableHealthKinds.includes(catalog.provider_kind ?? '');
 }
+
+/** canOpenInBI reports whether a table on this engine kind can be downloaded
+ * as a Tableau (.tds) or Power BI (.pbids) data source (#560). */
+export function canOpenInBI(kind: string): boolean {
+	switch (kind) {
+		case 'trino':
+		case 'postgresql':
+		case 'mysql':
+		case 'sqlserver':
+			return true;
+		default:
+			return false;
+	}
+}

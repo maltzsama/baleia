@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/authz"
@@ -41,6 +43,7 @@ func engineToPublic(e db.Engine) Engine {
 	costRouting := e.CostRoutingEnabled
 	out.CostRoutingEnabled = &costRouting
 	out.CostThresholdBytes = e.CostThresholdBytes
+	out.ExternalUrl = e.ExternalUrl
 	out.UpdatedAt = pgTimestampToTimePtr(e.UpdatedAt)
 	return out
 }
@@ -196,13 +199,31 @@ func (h *CatalogHandlers) UpdateEngine(ctx context.Context, request UpdateEngine
 			return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "cost_threshold_bytes and clear_cost_threshold are mutually exclusive")}, nil
 		}
 	}
-	// One UPDATE applies enabled and the cost settings together (#591).
+	// An empty external_url clears it; a non-empty one must be an http(s) URL
+	// (#533).
+	var externalURL *string
+	var clearExternalURL *bool
+	if body.ExternalUrl != nil {
+		trimmed := strings.TrimSpace(*body.ExternalUrl)
+		if trimmed == "" {
+			clearExternalURL = ptr(true)
+		} else {
+			parsed, err := url.Parse(trimmed)
+			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+				return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "external_url must be an http(s) URL")}, nil
+			}
+			externalURL = &trimmed
+		}
+	}
+	// One UPDATE applies enabled and the settings together (#591).
 	eng, err := h.engineAdmin.Update(ctx, db.UpdateEngineParams{
 		ID:                 id,
 		Enabled:            body.Enabled,
 		CostRoutingEnabled: body.CostRoutingEnabled,
 		CostThresholdBytes: body.CostThresholdBytes,
 		ClearCostThreshold: body.ClearCostThreshold,
+		ExternalUrl:        externalURL,
+		ClearExternalUrl:   clearExternalURL,
 	})
 	if err != nil {
 		return nil, err

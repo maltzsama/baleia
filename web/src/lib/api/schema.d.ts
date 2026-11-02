@@ -2617,6 +2617,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engines/{id}/bi/{tool}": {
+        parameters: {
+            query: {
+                catalog: string;
+                schema?: string;
+                table: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                tool: "tableau" | "powerbi";
+            };
+            cookie?: never;
+        };
+        /**
+         * Download a Tableau (.tds) or Power BI (.pbids) data source
+         * @description Points the BI tool at the engine, catalog, schema and table (#560). The file carries no credentials: the user signs in from the tool, which connects directly to the engine (ADR 0001). An engine without an external_url cannot produce the file.
+         */
+        get: operations["getEngineBIFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workload-rules": {
         parameters: {
             query?: never;
@@ -4559,6 +4586,11 @@ export interface components {
              * @description Estimated bytes above which a Trino SELECT is heavy; cost routing does nothing while this is null (#550)
              */
             cost_threshold_bytes?: number | null;
+            /**
+             * Format: uri
+             * @description Address BI clients reach, which may differ from the in-cluster URL (#533). Null when not set.
+             */
+            external_url?: string | null;
             /** @description Server version reported by the engine (cached 5 minutes); null when unknown or unreachable */
             version?: string | null;
             /** @description What the engine can do; null when the engine is disabled or no adapter for its kind is available yet */
@@ -4681,6 +4713,8 @@ export interface components {
             cost_threshold_bytes?: number | null;
             /** @description Set cost_threshold_bytes to null; cannot be combined with cost_threshold_bytes */
             clear_cost_threshold?: boolean;
+            /** @description Address BI clients reach; an empty string clears it (#533) */
+            external_url?: string | null;
         };
         AuditEvent: {
             /** Format: int64 */
@@ -11171,6 +11205,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EngineQueues"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getEngineBIFile: {
+        parameters: {
+            query: {
+                catalog: string;
+                schema?: string;
+                table: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                tool: "tableau" | "powerbi";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The data source file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
             401: components["responses"]["Unauthorized"];

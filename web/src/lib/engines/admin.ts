@@ -55,7 +55,10 @@ export async function createEngine(body: CreateEngineRequest): Promise<Engine> {
 	return fail(await client.POST('/engines', { body }), 'Could not register the engine');
 }
 
-export async function updateEngine(id: string, body: { enabled?: boolean }): Promise<Engine> {
+export async function updateEngine(
+	id: string,
+	body: components['schemas']['UpdateEngineRequest']
+): Promise<Engine> {
 	return fail(
 		await client.PATCH('/engines/{id}', { params: { path: { id } }, body }),
 		'Could not update the engine'

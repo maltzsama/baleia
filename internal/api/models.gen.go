@@ -2327,6 +2327,9 @@ type Engine struct {
 	Dialect *EngineDialect `json:"dialect"`
 	Enabled bool           `json:"enabled"`
 
+	// ExternalUrl Address BI clients reach, which may differ from the in-cluster URL (#533). Null when not set.
+	ExternalUrl *string `json:"external_url"`
+
 	// Health Result of the latest reachability probe; unknown before the first probe
 	Health       *EngineHealth      `json:"health"`
 	Id           openapi_types.UUID `json:"id"`
@@ -4336,6 +4339,9 @@ type UpdateEngineRequest struct {
 	CostRoutingEnabled *bool  `json:"cost_routing_enabled,omitempty"`
 	CostThresholdBytes *int64 `json:"cost_threshold_bytes"`
 	Enabled            *bool  `json:"enabled,omitempty"`
+
+	// ExternalUrl Address BI clients reach; an empty string clears it (#533)
+	ExternalUrl *string `json:"external_url"`
 }
 
 // UpdateFolderRequest defines model for UpdateFolderRequest.
@@ -4899,6 +4905,13 @@ type PutTableMaintenanceParams struct {
 // GetDialectParams defines parameters for GetDialect.
 type GetDialectParams struct {
 	IfNoneMatch *string `json:"If-None-Match,omitempty"`
+}
+
+// GetEngineBIFileParams defines parameters for GetEngineBIFile.
+type GetEngineBIFileParams struct {
+	Catalog string  `form:"catalog" json:"catalog"`
+	Schema  *string `form:"schema,omitempty" json:"schema,omitempty"`
+	Table   string  `form:"table" json:"table"`
 }
 
 // GetEngineClusterParams defines parameters for GetEngineCluster.
