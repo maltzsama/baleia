@@ -133,3 +133,30 @@ groups:
           summary: The audit export is more than 15 minutes behind
           description: 'The newest unexported audit event is {{ $value }} seconds old.'
           runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaauditexportlagging
+
+      - alert: BaleiaInteractiveQueueSlow
+        # Interactive work must not wait: a preview or editor run is expected to
+        # start near-instantly (#399).
+        expr: |
+          histogram_quantile(0.95, sum by (le, engine) (
+            rate(baleia_execution_queue_wait_seconds_bucket{class="interactive"}[10m])
+          )) > 30
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Interactive runs wait over 30s on {{ $labels.engine }}'
+          description: 'p95 interactive queue wait has been {{ $value | humanizeDuration }} for 10 minutes.'
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiainteractivequeueslow
+
+      - alert: BaleiaQueueTimeouts
+        # A run that times out waiting is a user-visible failure the operator
+        # can prevent by raising the class capacity or its queue timeout.
+        expr: sum(increase(baleia_execution_queue_timeouts_total[15m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Runs are timing out in the admission queue
+          description: '{{ $value }} runs timed out waiting in the queue over the last 15 minutes.'
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaqueuetimeouts

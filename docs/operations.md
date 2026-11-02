@@ -513,3 +513,24 @@ The newest unexported audit event is more than 15 minutes old for 15 minutes.
 3. A partial failure advances only to the last contiguous success. The failed item's index and
    reason are logged (never the document body).
 4. Confirm the cursor moved: `SELECT * FROM audit_export_cursor WHERE sink = 'opensearch';`.
+
+### BaleiaInteractiveQueueSlow
+
+The p95 interactive queue wait has been above 30 seconds for 10 minutes (#399).
+Interactive work — editor runs, table previews, Explore — is being starved by heavy or background
+work on that engine.
+
+1. Open Settings › Workload and check the engine's capacities and the live queue depth per class.
+2. Raise the `interactive` capacity (or lower `heavy`/`background`), or add a rule that routes the
+   heavy work away from the engine.
+3. On Trino, confirm the class reaches the engine: `baleia.class` client tags and the resource-group
+   policy in `docs/operations.md#workload-tagging-trino`.
+
+### BaleiaQueueTimeouts
+
+Runs timed out waiting in the queue over the last 15 minutes.
+
+1. `sum by (engine, class) (increase(baleia_execution_queue_timeouts_total[15m]))` names the engine and
+   class. Raise that class's `max_running`/`max_queued`, or its queue timeout, in Settings › Workload.
+2. If the engine is slow (not just busy), check its own health: `baleia_engine_*` and the Lens
+   cluster view. A slow engine makes every slot long-lived, so the queue backs up.
