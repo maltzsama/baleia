@@ -2543,5 +2543,11 @@
 	"workload_origin_explore": "Explore",
 	"workload_origin_retriever": "Retriever",
 	"workload_origin_metadata": "Metadados",
-	"workload_origin_maintenance": "Manutenção"
+	"workload_origin_maintenance": "Manutenção",
+	"engines_external_url": "URL externa",
+	"engines_external_url_description": "O endereço que clientes de BI usam para alcançar este motor; pode diferir da URL do cluster.",
+	"engines_external_url_saved": "URL externa salva",
+	"components_tabledetail_open_in_tableau": "Abrir no Tableau",
+	"components_tabledetail_open_in_powerbi": "Abrir no Power BI",
+	"components_tabledetail_set_the_engine_external_url": "Defina a URL externa do motor nas configurações primeiro."
 }

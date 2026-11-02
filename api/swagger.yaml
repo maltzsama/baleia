@@ -1648,6 +1648,11 @@ components:
           format: int64
           nullable: true
           description: "Estimated bytes above which a Trino SELECT is heavy; cost routing does nothing while this is null (#550)"
+        external_url:
+          type: string
+          format: uri
+          nullable: true
+          description: "Address BI clients reach, which may differ from the in-cluster URL (#533). Null when not set."
         version:
           type: string
           nullable: true
@@ -1815,6 +1820,10 @@ components:
         cost_routing_enabled: { type: boolean }
         cost_threshold_bytes: { type: integer, format: int64, nullable: true, minimum: 1 }
         clear_cost_threshold: { type: boolean, description: "Set cost_threshold_bytes to null; cannot be combined with cost_threshold_bytes" }
+        external_url:
+          type: string
+          nullable: true
+          description: "Address BI clients reach; an empty string clears it (#533)"
 
     AuditEvent:
       type: object
@@ -7383,6 +7392,44 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/EngineQueues" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /engines/{id}/bi/{tool}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: tool
+        in: path
+        required: true
+        schema: { type: string, enum: [tableau, powerbi] }
+      - name: catalog
+        in: query
+        required: true
+        schema: { type: string }
+      - name: schema
+        in: query
+        schema: { type: string }
+      - name: table
+        in: query
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Engines]
+      operationId: getEngineBIFile
+      summary: "Download a Tableau (.tds) or Power BI (.pbids) data source"
+      description: >
+        Points the BI tool at the engine, catalog, schema and table (#560). The
+        file carries no credentials: the user signs in from the tool, which
+        connects directly to the engine (ADR 0001). An engine without an
+        external_url cannot produce the file.
+      responses:
+        "200":
+          description: "The data source file"
+          content:
+            text/plain:
+              schema: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }

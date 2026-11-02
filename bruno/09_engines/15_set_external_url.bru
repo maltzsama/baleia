@@ -1,0 +1,30 @@
+meta {
+  name: Set engine external URL
+  type: http
+  seq: 15
+}
+
+patch {
+  url: {{base_url}}/engines/{{trino_engine_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "external_url": "http://trino:8080"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.external_url: eq http://trino:8080
+}
+
+docs {
+  Sets the address BI clients reach (#533). An empty string clears it.
+}

@@ -254,6 +254,7 @@ type Engine struct {
 	MaxRunningTotal    *int32             `json:"max_running_total"`
 	CostRoutingEnabled bool               `json:"cost_routing_enabled"`
 	CostThresholdBytes *int64             `json:"cost_threshold_bytes"`
+	ExternalUrl        *string            `json:"external_url"`
 }
 
 type EngineCatalogObservation struct {

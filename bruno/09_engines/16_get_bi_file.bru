@@ -1,0 +1,31 @@
+meta {
+  name: Open in Tableau
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{base_url}}/engines/{{trino_engine_id}}/bi/tableau?catalog=lake&schema=sales&table=orders
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the file is a Tableau data source", function() {
+    expect(res.getBody()).to.include("class='trino'");
+    expect(res.getBody()).to.include("trino:8080");
+  });
+}
+
+docs {
+  Downloads a .tds for the table (#560). No credentials: the user signs in
+  from Tableau, which connects directly to the engine.
+}
