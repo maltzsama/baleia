@@ -49,6 +49,8 @@ tags:
     description: "External Iceberg catalog connections"
   - name: Engines
     description: "Query engines (federated or direct) and the catalogs bound to them"
+  - name: Workload
+    description: "Per-engine admission queues and the ordered classification rules"
   - name: Catalog
     description: "Iceberg catalog, namespace, and table exploration via Trino"
   - name: QueryEditor
@@ -2932,6 +2934,81 @@ components:
         max_queued: { type: integer, minimum: 0 }
         queue_timeout_ms: { type: integer, minimum: 1 }
         runtime_timeout_ms: { type: integer, minimum: 1, nullable: true, description: "Omitted or null keeps the class default" }
+
+    WorkloadRuleMatch:
+      type: object
+      description: >
+        Closed match schema (#539). Every field present must match; an empty
+        object is a catch-all rule.
+      properties:
+        workspace_id: { type: string, format: uuid }
+        team_id: { type: string, format: uuid }
+        role: { type: string }
+        user_id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        engine_id: { type: string, format: uuid }
+        origin: { type: string, enum: [editor, agent, explore, retriever, metadata, maintenance] }
+        saved_query_id: { type: string, format: uuid }
+        min_statements: { type: integer, minimum: 1 }
+        max_statements: { type: integer, minimum: 1 }
+
+    WorkloadRule:
+      type: object
+      required: [id, position, enabled, match, class, weight, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        position: { type: integer }
+        enabled: { type: boolean }
+        match: { $ref: "#/components/schemas/WorkloadRuleMatch" }
+        class: { type: string, enum: [interactive, heavy, background] }
+        max_class: { type: string, enum: [interactive, heavy, background], nullable: true }
+        weight: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CreateWorkloadRuleRequest:
+      type: object
+      required: [class]
+      properties:
+        position: { type: integer, description: "Append when omitted" }
+        enabled: { type: boolean, default: true }
+        match: { $ref: "#/components/schemas/WorkloadRuleMatch" }
+        class: { type: string, enum: [interactive, heavy, background] }
+        max_class: { type: string, enum: [interactive, heavy, background], nullable: true }
+        weight: { type: integer, minimum: 1, default: 1 }
+
+    UpdateWorkloadRuleRequest:
+      type: object
+      properties:
+        position: { type: integer }
+        enabled: { type: boolean }
+        match: { $ref: "#/components/schemas/WorkloadRuleMatch" }
+        class: { type: string, enum: [interactive, heavy, background] }
+        max_class: { type: string, enum: [interactive, heavy, background], nullable: true }
+        weight: { type: integer, minimum: 1 }
+
+    WorkloadRuleTestRequest:
+      type: object
+      required: [origin]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        team_id: { type: string, format: uuid }
+        role: { type: string }
+        user_id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        engine_id: { type: string, format: uuid }
+        origin: { type: string, enum: [editor, agent, explore, retriever, metadata, maintenance] }
+        saved_query_id: { type: string, format: uuid }
+        statements: { type: integer, minimum: 1 }
+
+    WorkloadRuleTestResult:
+      type: object
+      required: [class, reason, weight]
+      properties:
+        class: { type: string, enum: [interactive, heavy, background] }
+        reason: { type: string, description: "The step that decided: origin:<x>, rule:<id> or default:editor" }
+        weight: { type: integer, minimum: 1 }
+        rule_id: { type: string, format: uuid, nullable: true, description: "The rule that matched, when a rule decided" }
 
     QueryStatement:
       type: object
@@ -7297,6 +7374,100 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workload-rules:
+    get:
+      tags: [Workload]
+      operationId: listWorkloadRules
+      summary: "List the ordered workload rules"
+      description: Admins only. The rules are evaluated in position order; the first match decides.
+      responses:
+        "200":
+          description: "Rules, in evaluation order"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkloadRule" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Workload]
+      operationId: createWorkloadRule
+      summary: "Create a workload rule"
+      description: Admins only. Appends the rule unless a position is given; the audit trail records the change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateWorkloadRuleRequest" }
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkloadRule" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workload-rules/{rule_id}:
+    parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Workload]
+      operationId: updateWorkloadRule
+      summary: "Update a workload rule"
+      description: Admins only. Omitted fields keep their value.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateWorkloadRuleRequest" }
+      responses:
+        "200":
+          description: "Updated"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkloadRule" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Workload]
+      operationId: deleteWorkloadRule
+      summary: "Delete a workload rule"
+      description: Admins only. The audit trail records the removal.
+      responses:
+        "204": { description: "Deleted" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workload-rules:test:
+    post:
+      tags: [Workload]
+      operationId: testWorkloadRule
+      summary: "Classify a hypothetical run and say why"
+      description: Admins only. Returns the class the run would get and the rule (or origin/default step) that decided it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkloadRuleTestRequest" }
+      responses:
+        "200":
+          description: "The class the run would get"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkloadRuleTestResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/folders:

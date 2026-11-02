@@ -689,6 +689,8 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 		RerunOf:           rerunOf,
 		RerunFromPosition: rerunFromPosition,
 		Origin:            origin,
+		Role:              principal.Role,
+		TeamID:            workspace.OwnerTeamID,
 	})
 	if err != nil {
 		return nil, err

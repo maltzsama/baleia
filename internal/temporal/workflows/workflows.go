@@ -48,6 +48,9 @@ type QueryExecutionInput struct {
 	// FairnessKey shares a class's slots across workspaces (#399). The agent id
 	// for an agent run, the workspace otherwise.
 	FairnessKey string
+	// Weight is the run's fairness weight within its class (#546). Rules may
+	// set it; zero means 1.
+	Weight int
 }
 
 // defaultExecutionTimeout caps a script when the input names no cap.
@@ -84,7 +87,7 @@ func QueryExecutionWorkflowV4(ctx workflow.Context, in QueryExecutionInput) erro
 		ExecutionID: in.ExecutionID,
 		Class:       in.Class,
 		FairnessKey: in.FairnessKey,
-		Weight:      1,
+		Weight:      max(in.Weight, 1),
 	}); err != nil {
 		return admissionFailed(ctx, in, AdmissionFailure{Code: AdmissionFailureQueueFull, Message: "the engine's admission queue is unreachable"})
 	}

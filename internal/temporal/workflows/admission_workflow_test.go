@@ -255,3 +255,75 @@ func TestAdmissionWorkflow_CapacityChangeAppliesLive(t *testing.T) {
 	require.Len(t, *admitted, 2)
 	require.Equal(t, "b", (*admitted)[1].ExecutionID, "raising the capacity admits the queued run")
 }
+
+// TestAdmissionState_WeightedFairness: within a class, two fairness keys share
+// the slots in proportion to their weight (1:2) instead of plain FIFO (#546).
+func TestAdmissionState_WeightedFairness(t *testing.T) {
+	t.Parallel()
+	s := admissionState()
+	s.Capacities = []AdmissionCapacity{
+		{Class: queryengine.ClassInteractive, MaxRunning: 3, MaxQueued: 10, QueueTimeout: time.Hour},
+	}
+	now := time.Unix(0, 0)
+	failures, fail := collectFailures()
+
+	for i, id := range []string{"a1", "a2", "a3"} {
+		s.request(now.Add(time.Duration(i)*time.Second), AdmissionRequest{ExecutionID: id, Class: queryengine.ClassInteractive, FairnessKey: "A", Weight: 1}, fail)
+	}
+	for i, id := range []string{"b1", "b2", "b3"} {
+		s.request(now.Add(time.Duration(10+i)*time.Second), AdmissionRequest{ExecutionID: id, Class: queryengine.ClassInteractive, FairnessKey: "B", Weight: 2}, fail)
+	}
+
+	leases := s.admitAll()
+	require.Len(t, leases, 3)
+	byKey := map[string]int{}
+	for _, lease := range leases {
+		byKey[lease.FairnessKey]++
+	}
+	require.Equal(t, 1, byKey["A"], "weight 1")
+	require.Equal(t, 2, byKey["B"], "weight 2")
+	require.Empty(t, *failures)
+}
+
+// TestAdmissionState_AgingUnderCeiling: when the engine ceiling is the binding
+// constraint, the run that waited longest is admitted first, so a background
+// run cannot starve behind newer interactive runs (#546).
+func TestAdmissionState_AgingUnderCeiling(t *testing.T) {
+	t.Parallel()
+	s := admissionState()
+	s.Capacities = []AdmissionCapacity{
+		{Class: queryengine.ClassInteractive, MaxRunning: 2, MaxQueued: 10, QueueTimeout: time.Hour},
+		{Class: queryengine.ClassBackground, MaxRunning: 1, MaxQueued: 10, QueueTimeout: time.Hour},
+	}
+	s.MaxRunningTotal = 2
+	now := time.Unix(0, 0)
+	failures, fail := collectFailures()
+
+	s.request(now, AdmissionRequest{ExecutionID: "bg", Class: queryengine.ClassBackground, FairnessKey: "ws"}, fail)
+	s.request(now.Add(time.Minute), AdmissionRequest{ExecutionID: "i1", Class: queryengine.ClassInteractive, FairnessKey: "ws"}, fail)
+	s.request(now.Add(2*time.Minute), AdmissionRequest{ExecutionID: "i2", Class: queryengine.ClassInteractive, FairnessKey: "ws"}, fail)
+
+	leases := s.admitAll()
+	require.Len(t, leases, 2)
+	require.Equal(t, "bg", leases[0].ExecutionID, "the oldest run goes first under the shared ceiling")
+	require.Equal(t, "i1", leases[1].ExecutionID)
+	require.Empty(t, *failures)
+}
+
+// TestAdmissionState_WithinKeyIsFIFO: aging keeps a key's runs in arrival order.
+func TestAdmissionState_WithinKeyIsFIFO(t *testing.T) {
+	t.Parallel()
+	s := admissionState()
+	now := time.Unix(0, 0)
+	failures, fail := collectFailures()
+
+	s.request(now, AdmissionRequest{ExecutionID: "a", Class: queryengine.ClassInteractive, FairnessKey: "ws"}, fail)
+	s.request(now.Add(time.Second), AdmissionRequest{ExecutionID: "b", Class: queryengine.ClassInteractive, FairnessKey: "ws"}, fail)
+	s.request(now.Add(2*time.Second), AdmissionRequest{ExecutionID: "c", Class: queryengine.ClassInteractive, FairnessKey: "ws"}, fail)
+
+	require.Len(t, s.admitAll(), 1)
+	s.release("a")
+	require.Len(t, s.admitAll(), 1)
+	require.Equal(t, "b", s.Running[0].ExecutionID)
+	require.Empty(t, *failures)
+}

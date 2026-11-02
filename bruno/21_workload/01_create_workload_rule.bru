@@ -1,0 +1,41 @@
+meta {
+  name: Create Workload Rule
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/workload-rules
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "match": { "origin": "retriever" },
+    "class": "interactive",
+    "max_class": "heavy",
+    "weight": 2
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.class: eq interactive
+  res.body.max_class: eq heavy
+  res.body.weight: eq 2
+  res.body.enabled: eq true
+}
+
+vars:post-response {
+  workload_rule_id: res.body.id
+}
+
+docs {
+  Admins only (#539). Appends the rule at the end of the ordered list unless a
+  position is given; the audit trail records the change.
+}

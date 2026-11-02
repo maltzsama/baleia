@@ -51,11 +51,12 @@ type Store interface {
 	Queues
 }
 
-// Queues reads the per-engine workload capacities (#399); *db.Queries
-// implements it.
+// Queues reads the per-engine workload capacities and the workload rules
+// (#399); *db.Queries implements it.
 type Queues interface {
 	ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]db.EngineQueueCapacity, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
+	ListWorkloadRules(ctx context.Context) ([]db.WorkloadRule, error)
 }
 
 // Workflows starts and cancels Temporal workflows; client.Client implements it.
@@ -128,6 +129,10 @@ type Run struct {
 	RerunFromPosition int32
 	// Origin is where the run came from; classification uses it (#399).
 	Origin workload.Origin
+	// Role is the caller's global role, matched by admin rules (#546).
+	Role string
+	// TeamID is the workspace owner team, matched by admin rules (#546).
+	TeamID pgtype.UUID
 }
 
 // Start records the execution as running and starts its workflow. When the
@@ -147,12 +152,16 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 		requestID = &r.RequestID
 	}
 	// A-1 tags every run interactive (#527); with workload management on, the
-	// classification decides the class and records why (#536).
+	// classification decides the class and records why (#536). Admin rules are
+	// evaluated in order and may set the class, a max class and a weight
+	// (#546).
 	class := queryengine.ClassInteractive
+	weight := 1
 	var queueClass, queueReason *string
 	if s.cfg.WorkloadEnabled {
-		decision := workload.Classify(r.Origin)
+		decision := workload.Decide(r.Origin, r.ruleInput(s.statementCount(r)), s.workloadRules(ctx))
 		class = decision.Class
+		weight = decision.Weight
 		c, reason := string(decision.Class), decision.Reason
 		queueClass, queueReason = &c, &reason
 	}
@@ -216,6 +225,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 			Class:             class,
 			WorkloadEnabled:   s.cfg.WorkloadEnabled,
 			FairnessKey:       fairnessKey(r),
+			Weight:            weight,
 			RuntimeTimeout:    runtimeTimeout,
 		})
 	if err != nil {
@@ -243,6 +253,77 @@ func fairnessKey(r Run) string {
 		return uuid.UUID(r.AgentID.Bytes).String()
 	}
 	return uuid.UUID(r.WorkspaceID.Bytes).String()
+}
+
+// ruleInput is the run as the rule matcher sees it (#546).
+func (r Run) ruleInput(statements int) workload.RuleInput {
+	return workload.RuleInput{
+		WorkspaceID:  uuidString(r.WorkspaceID),
+		TeamID:       uuidString(r.TeamID),
+		Role:         r.Role,
+		UserID:       uuidString(r.UserID),
+		AgentID:      uuidString(r.AgentID),
+		EngineID:     uuidString(r.Target.EngineID),
+		Origin:       r.Origin,
+		SavedQueryID: uuidString(r.SavedQueryID),
+		Statements:   statements,
+	}
+}
+
+// statementCount is how many statements the run carries, for the rules that
+// match on it (#546). An unsplittable script counts as zero.
+func (s *Service) statementCount(r Run) int {
+	if s.dialects == nil {
+		return 0
+	}
+	d, ok := s.dialects.ForEngineKind(r.Target.EngineKind)
+	if !ok {
+		return 0
+	}
+	parts, err := d.SplitStatements(r.SQL)
+	if err != nil {
+		return 0
+	}
+	return len(parts)
+}
+
+// workloadRules loads the ordered rules for classification (#546). A rule that
+// cannot be decoded is skipped, never allowed to break a run.
+func (s *Service) workloadRules(ctx context.Context) []workload.Rule {
+	rows, err := s.store.ListWorkloadRules(ctx)
+	if err != nil {
+		s.logger.WarnContext(ctx, "could not load workload rules; classifying without them", "err", err)
+		return nil
+	}
+	rules := make([]workload.Rule, 0, len(rows))
+	for _, row := range rows {
+		match, err := workload.ParseRuleMatch(row.Match)
+		if err != nil {
+			s.logger.WarnContext(ctx, "skipping an invalid workload rule", "rule_id", uuidString(row.ID), "err", err)
+			continue
+		}
+		rule := workload.Rule{
+			ID:       uuidString(row.ID),
+			Position: int(row.Position),
+			Enabled:  row.Enabled,
+			Match:    match,
+			Class:    queryengine.WorkloadClass(row.Class),
+			Weight:   int(row.Weight),
+		}
+		if row.MaxClass != nil {
+			rule.MaxClass = queryengine.WorkloadClass(*row.MaxClass)
+		}
+		rules = append(rules, rule)
+	}
+	return rules
+}
+
+// uuidString renders a UUID, or "" when it is not set.
+func uuidString(v pgtype.UUID) string {
+	if !v.Valid {
+		return ""
+	}
+	return uuid.UUID(v.Bytes).String()
 }
 
 // ensureAdmissionWorkflow starts the engine's entity workflow with the

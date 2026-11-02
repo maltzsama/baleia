@@ -2617,6 +2617,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workload-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the ordered workload rules
+         * @description Admins only. The rules are evaluated in position order; the first match decides.
+         */
+        get: operations["listWorkloadRules"];
+        put?: never;
+        /**
+         * Create a workload rule
+         * @description Admins only. Appends the rule unless a position is given; the audit trail records the change.
+         */
+        post: operations["createWorkloadRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workload-rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a workload rule
+         * @description Admins only. The audit trail records the removal.
+         */
+        delete: operations["deleteWorkloadRule"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a workload rule
+         * @description Admins only. Omitted fields keep their value.
+         */
+        patch: operations["updateWorkloadRule"];
+        trace?: never;
+    };
+    "/workload-rules:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Classify a hypothetical run and say why
+         * @description Admins only. Returns the class the run would get and the rule (or origin/default step) that decided it.
+         */
+        post: operations["testWorkloadRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/folders": {
         parameters: {
             query?: never;
@@ -5693,6 +5763,95 @@ export interface components {
             queue_timeout_ms: number;
             /** @description Omitted or null keeps the class default */
             runtime_timeout_ms?: number | null;
+        };
+        /** @description Closed match schema (#539). Every field present must match; an empty object is a catch-all rule. */
+        WorkloadRuleMatch: {
+            /** Format: uuid */
+            workspace_id?: string;
+            /** Format: uuid */
+            team_id?: string;
+            role?: string;
+            /** Format: uuid */
+            user_id?: string;
+            /** Format: uuid */
+            agent_id?: string;
+            /** Format: uuid */
+            engine_id?: string;
+            /** @enum {string} */
+            origin?: "editor" | "agent" | "explore" | "retriever" | "metadata" | "maintenance";
+            /** Format: uuid */
+            saved_query_id?: string;
+            min_statements?: number;
+            max_statements?: number;
+        };
+        WorkloadRule: {
+            /** Format: uuid */
+            id: string;
+            position: number;
+            enabled: boolean;
+            match: components["schemas"]["WorkloadRuleMatch"];
+            /** @enum {string} */
+            class: "interactive" | "heavy" | "background";
+            /** @enum {string|null} */
+            max_class?: "interactive" | "heavy" | "background" | null;
+            weight: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateWorkloadRuleRequest: {
+            /** @description Append when omitted */
+            position?: number;
+            /** @default true */
+            enabled: boolean;
+            match?: components["schemas"]["WorkloadRuleMatch"];
+            /** @enum {string} */
+            class: "interactive" | "heavy" | "background";
+            /** @enum {string|null} */
+            max_class?: "interactive" | "heavy" | "background" | null;
+            /** @default 1 */
+            weight: number;
+        };
+        UpdateWorkloadRuleRequest: {
+            position?: number;
+            enabled?: boolean;
+            match?: components["schemas"]["WorkloadRuleMatch"];
+            /** @enum {string} */
+            class?: "interactive" | "heavy" | "background";
+            /** @enum {string|null} */
+            max_class?: "interactive" | "heavy" | "background" | null;
+            weight?: number;
+        };
+        WorkloadRuleTestRequest: {
+            /** Format: uuid */
+            workspace_id?: string;
+            /** Format: uuid */
+            team_id?: string;
+            role?: string;
+            /** Format: uuid */
+            user_id?: string;
+            /** Format: uuid */
+            agent_id?: string;
+            /** Format: uuid */
+            engine_id?: string;
+            /** @enum {string} */
+            origin: "editor" | "agent" | "explore" | "retriever" | "metadata" | "maintenance";
+            /** Format: uuid */
+            saved_query_id?: string;
+            statements?: number;
+        };
+        WorkloadRuleTestResult: {
+            /** @enum {string} */
+            class: "interactive" | "heavy" | "background";
+            /** @description The step that decided: origin:<x>, rule:<id> or default:editor */
+            reason: string;
+            weight: number;
+            /**
+             * Format: uuid
+             * @description The rule that matched, when a rule decided
+             */
+            rule_id?: string | null;
         };
         QueryStatement: {
             /** Format: uuid */
@@ -11004,6 +11163,135 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listWorkloadRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rules, in evaluation order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadRule"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createWorkloadRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWorkloadRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadRule"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteWorkloadRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateWorkloadRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkloadRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadRule"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    testWorkloadRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkloadRuleTestRequest"];
+            };
+        };
+        responses: {
+            /** @description The class the run would get */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadRuleTestResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };

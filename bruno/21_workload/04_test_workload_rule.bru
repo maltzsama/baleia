@@ -1,0 +1,38 @@
+meta {
+  name: Test Workload Rule
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/workload-rules:test
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "origin": "retriever"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.class: eq background
+}
+
+tests {
+  test("the matched rule is named in the reason", function() {
+    expect(res.getBody().reason).to.match(/^rule:/);
+    expect(res.getBody().rule_id).to.be.a("string");
+  });
+}
+
+docs {
+  Admins only (#539). Returns the class, the reason (origin/rule/default) and
+  the rule that decided it.
+}

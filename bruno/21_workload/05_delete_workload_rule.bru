@@ -1,0 +1,24 @@
+meta {
+  name: Delete Workload Rule
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{base_url}}/workload-rules/{{workload_rule_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Admins only (#539). The audit trail records the removal. The next run of the
+  collection creates a fresh rule.
+}
