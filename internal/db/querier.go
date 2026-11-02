@@ -145,6 +145,9 @@ type Querier interface {
 	DeleteSemanticModel(ctx context.Context, arg DeleteSemanticModelParams) (int64, error)
 	DeleteSpace(ctx context.Context, arg DeleteSpaceParams) (int64, error)
 	DeleteSpaceMember(ctx context.Context, arg DeleteSpaceMemberParams) (int64, error)
+	DeleteStatementJoins(ctx context.Context, statementID pgtype.UUID) error
+	// Statement references and equi-joins (B0, #530, #538).
+	DeleteStatementReferences(ctx context.Context, statementID pgtype.UUID) error
 	DeleteTableMaintenancePolicy(ctx context.Context, arg DeleteTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
@@ -262,6 +265,10 @@ type Querier interface {
 	GetSemanticModelBySlug(ctx context.Context, arg GetSemanticModelBySlugParams) (SemanticModel, error)
 	GetSemanticModelForUpdate(ctx context.Context, arg GetSemanticModelForUpdateParams) (SemanticModel, error)
 	GetSpace(ctx context.Context, arg GetSpaceParams) (Space, error)
+	// The statement row and the workspace it belongs to, for the live persistence
+	// path. It reads the workspace from the execution so V3's activity input does
+	// not change (#538).
+	GetStatementReferenceTarget(ctx context.Context, arg GetStatementReferenceTargetParams) (GetStatementReferenceTargetRow, error)
 	// What the last passes stored, so a source can skip loading unchanged tables.
 	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]GetTableFingerprintsRow, error)
 	GetTableHealthByTable(ctx context.Context, arg GetTableHealthByTableParams) (TableHealthSnapshot, error)
@@ -292,6 +299,8 @@ type Querier interface {
 	InsertEphemeralRegistryRow(ctx context.Context, arg InsertEphemeralRegistryRowParams) error
 	InsertMetadataColumns(ctx context.Context, arg InsertMetadataColumnsParams) error
 	InsertReconcileRun(ctx context.Context, arg InsertReconcileRunParams) (InsertReconcileRunRow, error)
+	InsertStatementJoin(ctx context.Context, arg InsertStatementJoinParams) error
+	InsertStatementReference(ctx context.Context, arg InsertStatementReferenceParams) error
 	// A personal workspace is owned by its user; a shared one by the owners of its team.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
 	// The latest finished run of each operation on a table.
@@ -430,6 +439,9 @@ type Querier interface {
 	// Every space of the workspace where the caller has at least viewer, with the
 	// role. A space with no role is invisible (absent), never 403.
 	ListSpacesForPrincipal(ctx context.Context, arg ListSpacesForPrincipalParams) ([]ListSpacesForPrincipalRow, error)
+	// Keyset-paginated one-off backfill (#538). `cursor` is the last id of the
+	// previous page.
+	ListStatementsForReferenceBackfill(ctx context.Context, arg ListStatementsForReferenceBackfillParams) ([]ListStatementsForReferenceBackfillRow, error)
 	// The catalog enabled bindings on enabled engines, oldest first: the
 	// engine path introspects through the first one (a native catalog has only
 	// its native binding).

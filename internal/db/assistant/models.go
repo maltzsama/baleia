@@ -593,6 +593,25 @@ type SpaceMember struct {
 	GrantedAt     pgtype.Timestamptz `json:"granted_at"`
 }
 
+type StatementJoin struct {
+	StatementID pgtype.UUID `json:"statement_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	LeftAlias   string      `json:"left_alias"`
+	LeftColumn  string      `json:"left_column"`
+	RightAlias  string      `json:"right_alias"`
+	RightColumn string      `json:"right_column"`
+}
+
+type StatementReference struct {
+	StatementID pgtype.UUID `json:"statement_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	CatalogID   pgtype.UUID `json:"catalog_id"`
+	Namespace   string      `json:"namespace"`
+	TableName   string      `json:"table_name"`
+	Alias       string      `json:"alias"`
+	Kind        string      `json:"kind"`
+}
+
 type TableHealthSnapshot struct {
 	ID                     pgtype.UUID        `json:"id"`
 	CatalogConnectionID    pgtype.UUID        `json:"catalog_connection_id"`
