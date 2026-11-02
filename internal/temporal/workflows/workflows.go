@@ -51,6 +51,10 @@ type QueryExecutionInput struct {
 	// Weight is the run's fairness weight within its class (#546). Rules may
 	// set it; zero means 1.
 	Weight int
+	// AgentMaxConcurrent is the agent policy's per-agent concurrency limit,
+	// enforced by admission instead of refusing the run (#589). Zero when the
+	// run is not an agent's.
+	AgentMaxConcurrent int
 }
 
 // defaultExecutionTimeout caps a script when the input names no cap.
@@ -83,11 +87,25 @@ func QueryExecutionWorkflowV4(ctx workflow.Context, in QueryExecutionInput) erro
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
 	})
 
+	// A per-agent limit spans every engine (#589): the per-engine queues cannot
+	// see each other, so wait here for the active count to fall below the
+	// policy limit before asking an engine for a slot.
+	if in.AgentMaxConcurrent > 0 && in.Identity.AgentID != "" {
+		failure, ok := waitForAgentSlot(ctx, in, bookkeepingCtx)
+		if !ok {
+			if ctx.Err() != nil {
+				return markCancelled(ctx, in)
+			}
+			return admissionFailed(ctx, in, failure)
+		}
+	}
+
 	if err := signalAdmission(ctx, in, AdmissionRequestSignal, AdmissionRequest{
 		ExecutionID: in.ExecutionID,
 		Class:       in.Class,
 		FairnessKey: in.FairnessKey,
 		Weight:      max(in.Weight, 1),
+		MaxRunning:  in.AgentMaxConcurrent,
 	}); err != nil {
 		return admissionFailed(ctx, in, AdmissionFailure{Code: AdmissionFailureQueueFull, Message: "the engine's admission queue is unreachable"})
 	}
@@ -146,6 +164,53 @@ func awaitAdmission(ctx workflow.Context, in QueryExecutionInput) (bool, Admissi
 	})
 	sel.Select(ctx)
 	return admitted, failure
+}
+
+// agentSlotPollInterval is how often a run waiting for the agent's global limit
+// re-checks the active count (#589).
+const agentSlotPollInterval = 5 * time.Second
+
+// maxAgentSlotPolls bounds the wait: the workflow must not loop without a
+// history bound (see TestNoInfiniteLoops).
+const maxAgentSlotPolls = int(defaultQueueTimeout / agentSlotPollInterval)
+
+// waitForAgentSlot waits until the agent has fewer active runs than its limit,
+// or the queue timeout expires. A failed check lets the run proceed: the
+// engine queue still applies, and availability wins over a strict count.
+func waitForAgentSlot(ctx workflow.Context, in QueryExecutionInput, bookkeepingCtx workflow.Context) (AdmissionFailure, bool) {
+	actx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 10 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
+	})
+	deadline := workflow.Now(ctx).Add(defaultQueueTimeout)
+	queued := false
+	for polls := 0; polls < maxAgentSlotPolls; polls++ {
+		var available bool
+		if err := workflow.ExecuteActivity(actx, activities.AgentSlotAvailable, activities.AgentSlotParams{
+			AgentID: in.Identity.AgentID,
+			Limit:   in.AgentMaxConcurrent,
+		}).Get(actx, &available); err != nil {
+			return AdmissionFailure{}, true
+		}
+		if available {
+			return AdmissionFailure{}, true
+		}
+		if !queued {
+			queued = true
+			_ = workflow.ExecuteActivity(bookkeepingCtx, activities.MarkQueued, activities.MarkQueuedParams{ExecutionID: in.ExecutionID}).Get(bookkeepingCtx, nil)
+		}
+		if !workflow.Now(ctx).Before(deadline) {
+			break
+		}
+		if err := workflow.Sleep(ctx, agentSlotPollInterval); err != nil {
+			return AdmissionFailure{}, false
+		}
+	}
+	return AdmissionFailure{
+		ExecutionID: in.ExecutionID,
+		Code:        AdmissionFailureQueueTimeout,
+		Message:     "the agent's concurrency limit was not free in time",
+	}, false
 }
 
 // admissionFailed records the execution as failed with the admission reason.

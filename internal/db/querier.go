@@ -50,6 +50,8 @@ type Querier interface {
 	// updates a row (#51).
 	ConsumeRefreshToken(ctx context.Context, tokenHash string) (ConsumeRefreshTokenRow, error)
 	CountActiveAgentTokens(ctx context.Context, agentID pgtype.UUID) (int64, error)
+	// Runs that still hold an agent concurrency slot: running or queued (#589).
+	CountActiveExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error)
 	CountCatalogAccessImpact(ctx context.Context, arg CountCatalogAccessImpactParams) (CountCatalogAccessImpactRow, error)
 	CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (CountCatalogImpactRow, error)
 	CountConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (CountConnectionImpactRow, error)

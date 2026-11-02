@@ -232,13 +232,31 @@
 	function startQueues(id: string) {
 		queuesPoll?.stop();
 		queuesLoaded = false;
+		queuesError = '';
 		capacities = [];
-		queuesPoll = poll(() => getEngineQueues(id), {
-			until: () => false,
-			intervals: [5000],
-			maxDurationMs: 24 * 60 * 60 * 1000,
-			onValue: (queues) => applyQueues(queues, !queuesLoaded)
-		});
+		queuesPoll = poll(
+			async () => {
+				try {
+					return await getEngineQueues(id);
+				} catch (e) {
+					// poll() swallows errors; record the failure so the view can
+					// show it instead of a permanent skeleton (#589).
+					if (id === engineId) queuesError = e instanceof Error ? e.message : String(e);
+					throw e;
+				}
+			},
+			{
+				until: () => false,
+				intervals: [5000],
+				maxDurationMs: 24 * 60 * 60 * 1000,
+				onValue: (queues) => {
+					// Ignore a late response for an engine the admin switched
+					// away from (#589).
+					if (id !== engineId) return;
+					applyQueues(queues, !queuesLoaded);
+				}
+			}
+		);
 	}
 
 	$effect(() => {
@@ -263,26 +281,59 @@
 	onMount(load);
 	onDestroy(() => queuesPoll?.stop());
 
-	function buildSave(): UpdateEngineQueuesRequest {
-		return {
-			max_running_total: maxRunningTotal.trim() === '' ? null : Number(maxRunningTotal),
-			classes: capacities.map((row) => ({
+	function numberField(value: unknown): number | null {
+		const raw = String(value ?? '').trim();
+		if (raw === '') return null;
+		const n = Number(raw);
+		return Number.isFinite(n) ? n : NaN;
+	}
+
+	function buildSave(): { body: UpdateEngineQueuesRequest; closesWithQueued: boolean } | null {
+		saveError = '';
+		const total = numberField(maxRunningTotal);
+		if (total !== null && (Number.isNaN(total) || total < 0)) {
+			saveError = m.workload_could_not_save();
+			return null;
+		}
+		const classes: UpdateEngineQueuesRequest['classes'] = [];
+		let closesWithQueued = false;
+		for (const row of capacities) {
+			const maxRunning = numberField(row.max_running);
+			const maxQueued = numberField(row.max_queued);
+			const queueTimeout = numberField(row.queue_timeout_ms);
+			const runtime = numberField(row.runtime_timeout_ms);
+			if (
+				maxRunning === null ||
+				Number.isNaN(maxRunning) ||
+				maxRunning < 0 ||
+				maxQueued === null ||
+				Number.isNaN(maxQueued) ||
+				maxQueued < 0 ||
+				queueTimeout === null ||
+				Number.isNaN(queueTimeout) ||
+				queueTimeout < 1 ||
+				(runtime !== null && (Number.isNaN(runtime) || runtime < 1))
+			) {
+				saveError = m.workload_could_not_save();
+				return null;
+			}
+			if (row.queued > 0 && maxRunning === 0) closesWithQueued = true;
+			classes.push({
 				class: row.class as 'interactive' | 'heavy' | 'background',
-				max_running: Number(row.max_running),
-				max_queued: Number(row.max_queued),
-				queue_timeout_ms: Number(row.queue_timeout_ms),
-				runtime_timeout_ms:
-					row.runtime_timeout_ms.trim() === '' ? null : Number(row.runtime_timeout_ms)
-			}))
-		};
+				max_running: maxRunning,
+				max_queued: maxQueued,
+				queue_timeout_ms: queueTimeout,
+				runtime_timeout_ms: runtime
+			});
+		}
+		return { body: { max_running_total: total, classes }, closesWithQueued };
 	}
 
 	async function save() {
-		pendingSave = buildSave();
-		const closesWithQueued = capacities.some(
-			(row) => row.queued > 0 && Number(row.max_running) === 0
-		);
-		if (closesWithQueued) {
+		const plan = buildSave();
+		if (!plan) return;
+		pendingSave = plan.body;
+		if (plan.closesWithQueued) {
 			confirmClose = true;
 			return;
 		}
@@ -290,7 +341,11 @@
 	}
 
 	async function doSave() {
-		const body = pendingSave ?? buildSave();
+		const body = pendingSave ?? buildSave()?.body ?? null;
+		if (!body) {
+			confirmClose = false;
+			return;
+		}
 		saving = true;
 		saveError = '';
 		try {
@@ -427,6 +482,9 @@
 			await reloadRules();
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : String(e));
+			// A failed PATCH can leave duplicate positions; show the stored
+			// order instead of a local one the server does not have (#589).
+			await reloadRules();
 		} finally {
 			rulesBusy = false;
 		}

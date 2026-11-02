@@ -374,3 +374,20 @@ func TestCapacitiesForUsesEngineOverrides(t *testing.T) {
 		t.Errorf("interactive runtime = %s, want the 5m default", interactive.RuntimeTimeout)
 	}
 }
+
+func TestStart_AgentMaxConcurrentReachesWorkflow(t *testing.T) {
+	t.Parallel()
+	st, wf := newStore(), &fakeWorkflows{}
+	s := New(st, wf, fakeEngines{&fakeEngine{}}, dialect.NewRegistry(), Config{WorkloadEnabled: true})
+	if _, err := s.Start(context.Background(), Run{
+		WorkspaceID:        newID(),
+		SQL:                "select 1",
+		Target:             queryengine.Target{EngineKind: "trino", EngineID: newID()},
+		AgentMaxConcurrent: 2,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if wf.started[0].AgentMaxConcurrent != 2 {
+		t.Fatalf("workflow AgentMaxConcurrent = %d, want 2", wf.started[0].AgentMaxConcurrent)
+	}
+}

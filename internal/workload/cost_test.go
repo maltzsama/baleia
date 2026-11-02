@@ -12,6 +12,7 @@ func TestTrinoPlanCost(t *testing.T) {
 	}{
 		{"estimates", `{"outputStage":{"estimates":[{"outputSizeInBytes":123456}]}}`, 123456, true},
 		{"largest of the plan", `{"a":{"outputSizeInBytes":10},"b":[{"inputSizeInBytes":20}]}`, 20, true},
+		{"processed input size", `{"a":{"processedInputSizeInBytes":30}}`, 30, true},
 		{"no statistics", `{"outputStage":{}}`, 0, false},
 		{"invalid json", `not json`, 0, false},
 	}

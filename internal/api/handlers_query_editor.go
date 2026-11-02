@@ -453,6 +453,11 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 	}
 	if p.Class != nil {
 		class := string(*p.Class)
+		switch class {
+		case "interactive", "heavy", "background":
+		default:
+			return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "unknown workload class")}, nil
+		}
 		params.QueueClass = &class
 	}
 	if p.From != nil {
@@ -709,12 +714,13 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 		AgentID:      agentID,
 		// Correlates the row, the workflow and the activity logs with the
 		// request log line.
-		RequestID:         middleware.GetReqID(ctx),
-		RerunOf:           rerunOf,
-		RerunFromPosition: rerunFromPosition,
-		Origin:            origin,
-		Role:              principal.Role,
-		TeamID:            workspace.OwnerTeamID,
+		RequestID:          middleware.GetReqID(ctx),
+		RerunOf:            rerunOf,
+		RerunFromPosition:  rerunFromPosition,
+		Origin:             origin,
+		Role:               principal.Role,
+		TeamID:             workspace.OwnerTeamID,
+		AgentMaxConcurrent: agentMaxConcurrent(ctx),
 	})
 	if err != nil {
 		return nil, err

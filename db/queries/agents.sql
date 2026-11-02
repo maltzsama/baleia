@@ -97,3 +97,8 @@ SELECT started_at FROM query_executions
 WHERE agent_id = $1 AND started_at > $2
 ORDER BY started_at ASC
 LIMIT 1;
+
+-- name: CountActiveExecutionsByAgent :one
+-- Runs that still hold an agent concurrency slot: running or queued (#589).
+SELECT count(*) FROM query_executions
+WHERE agent_id = $1 AND status IN ('running', 'queued');

@@ -571,6 +571,9 @@ func (s *Server) runQuery(ctx context.Context, _ *mcpsdk.CallToolRequest, in run
 	}
 	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolRunQuery, WorkspaceID: pgUUID(ws), CatalogID: catalogPtr, EngineID: enginePtr, SQL: &in.SQL}, func(ctx context.Context, eff agentpolicy.Effective) (any, error) {
 		body := &api.ExecutionRequest{Sql: in.SQL, Target: target, WorkspaceId: ws}
+		// Admission enforces the per-agent limit (#589): the gate already
+		// evaluated the policy, so carry its effective value.
+		ctx = api.WithAgentMaxConcurrent(ctx, eff.MaxConcurrentQueries)
 		got, err := s.handlers.RunQuery(ctx, api.RunQueryRequestObject{Id: pathOf(ws), Body: body})
 		if err != nil {
 			return nil, err

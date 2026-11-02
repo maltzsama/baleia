@@ -133,6 +133,9 @@ type Run struct {
 	Role string
 	// TeamID is the workspace owner team, matched by admin rules (#546).
 	TeamID pgtype.UUID
+	// AgentMaxConcurrent is the agent policy's per-agent concurrency limit,
+	// enforced by admission instead of refusing the run (#589).
+	AgentMaxConcurrent int
 }
 
 // Start records the execution as running and starts its workflow. When the
@@ -224,22 +227,23 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 	}
 	_, err = s.workflows.ExecuteWorkflow(ctx, client.StartWorkflowOptions{ID: WorkflowID(execution.ID), TaskQueue: TaskQueue},
 		workflows.QueryExecutionWorkflowV4, workflows.QueryExecutionInput{
-			ExecutionID:       executionID,
-			WorkspaceID:       uuid.UUID(r.WorkspaceID.Bytes).String(),
-			SQL:               r.SQL,
-			Target:            r.Target,
-			Identity:          r.Identity,
-			StatementTimeout:  s.cfg.StatementTimeout,
-			RequestID:         r.RequestID,
-			ExecutionTimeout:  s.cfg.ExecutionTimeout,
-			RerunExecutionID:  rerunOf,
-			RerunFromPosition: r.RerunFromPosition,
-			Dialect:           dialectName,
-			Class:             class,
-			WorkloadEnabled:   s.cfg.WorkloadEnabled,
-			FairnessKey:       fairnessKey(r),
-			Weight:            weight,
-			RuntimeTimeout:    runtimeTimeout,
+			ExecutionID:        executionID,
+			WorkspaceID:        uuid.UUID(r.WorkspaceID.Bytes).String(),
+			SQL:                r.SQL,
+			Target:             r.Target,
+			Identity:           r.Identity,
+			StatementTimeout:   s.cfg.StatementTimeout,
+			RequestID:          r.RequestID,
+			ExecutionTimeout:   s.cfg.ExecutionTimeout,
+			RerunExecutionID:   rerunOf,
+			RerunFromPosition:  r.RerunFromPosition,
+			Dialect:            dialectName,
+			Class:              class,
+			WorkloadEnabled:    s.cfg.WorkloadEnabled,
+			FairnessKey:        fairnessKey(r),
+			Weight:             weight,
+			AgentMaxConcurrent: r.AgentMaxConcurrent,
+			RuntimeTimeout:     runtimeTimeout,
 		})
 	if err != nil {
 		// Detached from the request, which may be the reason it failed.
