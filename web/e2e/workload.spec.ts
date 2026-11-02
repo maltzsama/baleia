@@ -12,10 +12,18 @@ async function setScript(page: Page, text: string) {
 	await page.keyboard.press('Escape');
 }
 
-// A full lineitem scan: slow enough that the second run waits, bounded enough
-// to finish within the suite timeout.
-const SLOW =
-	'SELECT count(*) FROM e2e_tpch.sf1.lineitem l JOIN e2e_tpch.sf1.orders o ON l.l_orderkey = o.o_orderkey';
+// TPC-H Q1: a full lineitem scan with ten aggregates, heavy enough to hold the
+// slot for several seconds on the constrained cluster.
+const SLOW = `SELECT l_returnflag, l_linestatus,
+  sum(l_quantity) AS sum_qty, sum(l_extendedprice) AS sum_base_price,
+  sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+  sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+  avg(l_quantity) AS avg_qty, avg(l_extendedprice) AS avg_price,
+  avg(l_discount) AS avg_disc, count(*) AS count_order
+FROM e2e_tpch.sf1.lineitem
+WHERE l_shipdate <= DATE '1998-12-01' - INTERVAL '90' DAY
+GROUP BY l_returnflag, l_linestatus
+ORDER BY l_returnflag, l_linestatus`;
 
 test('@issue-545 a second run queues at position 1 and starts after the first', async ({
 	page,
@@ -25,11 +33,13 @@ test('@issue-545 a second run queues at position 1 and starts after the first', 
 
 	await setScript(page, SLOW);
 	await page.getByTestId('run-current').click();
+	// The first run is executing and holding the only interactive slot.
+	await expect(page.getByText(/Running/).first()).toBeVisible({ timeout: 15_000 });
 
 	await setScript(page, 'SELECT 42 AS answer');
 	await page.getByTestId('run-current').click();
 
-	// The second run waits for the single interactive slot.
+	// The second run waits for the slot.
 	await expect(page.getByText(/Queued · position 1/)).toBeVisible({ timeout: 15_000 });
 
 	// Once the first run releases the slot, the second starts and finishes.
@@ -43,6 +53,7 @@ test('@issue-545 cancel while queued', async ({ page, loginAs }) => {
 
 	await setScript(page, SLOW);
 	await page.getByTestId('run-current').click();
+	await expect(page.getByText(/Running/).first()).toBeVisible({ timeout: 15_000 });
 
 	await setScript(page, 'SELECT 7 AS lucky');
 	await page.getByTestId('run-current').click();
