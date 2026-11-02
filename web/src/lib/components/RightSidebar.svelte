@@ -24,6 +24,8 @@
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 	const savedQueryId = $derived(editor.activeTab.savedId);
+	// A save that edits the SQL bumps the version, so the graph refetches.
+	const savedQueryVersion = $derived(editor.activeTab.savedRef?.version ?? 0);
 
 	onMount(() => {
 		void assistantStore.loadStatus();
@@ -122,7 +124,9 @@
 			{:else}
 				{#if !selectedTable && savedQueryId && workspaceId}
 					<div class="border-b border-border p-3">
-						<LineageGraph {workspaceId} node={`saved_query:${savedQueryId}`} direction="down" />
+						{#key `${savedQueryId}:${savedQueryVersion}`}
+							<LineageGraph {workspaceId} node={`saved_query:${savedQueryId}`} direction="down" />
+						{/key}
 					</div>
 				{/if}
 				<TableDetail table={selectedTable ?? null} />

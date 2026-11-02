@@ -109,7 +109,9 @@
 		</div>
 
 		<div class="mb-6 rounded-[var(--radius)] border border-border bg-bg-panel p-4">
-			<LineageGraph {workspaceId} node={`model:${model.id}`} direction="down" />
+			{#key model.version}
+				<LineageGraph {workspaceId} node={`model:${model.id}`} direction="down" />
+			{/key}
 		</div>
 
 		{#if canEdit}
