@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.temporal.io/sdk/converter"
@@ -130,6 +131,9 @@ func newAdmissionEnv(t *testing.T) (*testsuite.TestWorkflowEnvironment, *[]Admis
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterWorkflow(AdmissionWorkflow)
+	env.OnActivity(activities.RecordQueueState, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(activities.RecordQueueAdmission, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(activities.RecordQueueTimeout, mock.Anything, mock.Anything).Return(nil)
 
 	admitted := &[]AdmissionLease{}
 	failed := &[]AdmissionFailure{}

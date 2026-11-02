@@ -134,6 +134,9 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(RefreshEngineCatalogs)
 	w.RegisterActivity(ListSyncableCatalogs)
 	w.RegisterActivity(CleanupExpiredTokens)
+	w.RegisterActivity(RecordQueueState)
+	w.RegisterActivity(RecordQueueAdmission)
+	w.RegisterActivity(RecordQueueTimeout)
 }
 
 type SplitSQLParams struct {
@@ -389,12 +392,19 @@ type workerMetrics struct {
 	schedules *metrics.Schedules
 	metadata  *metrics.Metadata
 	directory *metrics.Directory
+	workload  *metrics.Workload
 }
 
 // SetMetrics registers the worker's producers on reg. Result storage is
 // instrumented where it is built (internal/app).
 func (a *Activities) SetMetrics(reg *metrics.Registry) {
-	a.metrics = workerMetrics{engine: reg.Engine(), schedules: reg.Schedules(), metadata: reg.Metadata(), directory: reg.Directory()}
+	a.metrics = workerMetrics{
+		engine:    reg.Engine(),
+		schedules: reg.Schedules(),
+		metadata:  reg.Metadata(),
+		directory: reg.Directory(),
+		workload:  reg.Workload(),
+	}
 }
 
 // passDone records a successful pass of a schedule.

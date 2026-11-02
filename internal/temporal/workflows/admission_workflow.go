@@ -4,7 +4,9 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/galileostudio/baleia/internal/workload"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -136,6 +138,12 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 	cancelCh := workflow.GetSignalChannel(ctx, AdmissionCancelSignal)
 	capacityCh := workflow.GetSignalChannel(ctx, AdmissionCapacitySignal)
 
+	// Queue metrics are best-effort; a lost sample must not block admission.
+	actx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 10 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
+
 	if err := workflow.SetQueryHandler(ctx, AdmissionStateQuery, func() (AdmissionState, error) {
 		return state.copy(), nil
 	}); err != nil {
@@ -148,8 +156,21 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 				// The execution never learned it had a slot; do not leak it.
 				logger.Warn("could not signal admission", "execution_id", lease.ExecutionID, "err", err)
 				state.release(lease.ExecutionID)
+				continue
 			}
+			// The lease's AdmittedAt is the enqueued time; the wait is how long
+			// it stood in the queue before a slot freed.
+			wait := workflow.Now(ctx).Sub(lease.AdmittedAt)
+			if wait < 0 {
+				wait = 0
+			}
+			_ = workflow.ExecuteActivity(actx, activities.RecordQueueAdmission, activities.RecordQueueAdmissionParams{
+				EngineID: engineID,
+				Class:    string(lease.Class),
+				WaitMs:   wait.Milliseconds(),
+			}).Get(actx, nil)
 		}
+		recordGauges(actx, engineID, &state)
 
 		if workflow.GetInfo(ctx).GetCurrentHistoryLength() > admissionHistoryLimit {
 			return workflow.NewContinueAsNewError(ctx, AdmissionWorkflow, engineID, state.copy())
@@ -196,6 +217,10 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 					if err := signalExecution(ctx, q.ExecutionID, AdmissionFailedSignal, f); err != nil {
 						logger.Warn("could not signal queue timeout", "execution_id", q.ExecutionID, "err", err)
 					}
+					_ = workflow.ExecuteActivity(actx, activities.RecordQueueTimeout, activities.RecordQueueTimeoutParams{
+						EngineID: engineID,
+						Class:    string(q.Class),
+					}).Get(actx, nil)
 				}
 			})
 		}
@@ -234,6 +259,22 @@ func DefaultAdmissionCapacitiesFor(engineClass string) []AdmissionCapacity {
 
 func signalExecution(ctx workflow.Context, executionID, signal string, arg any) error {
 	return workflow.SignalExternalWorkflow(ctx, ExecutionWorkflowID(executionID), "", signal, arg).Get(ctx, nil)
+}
+
+// recordGauges reports the live depth and running count of every class.
+func recordGauges(ctx workflow.Context, engineID string, state *AdmissionState) {
+	for _, class := range []queryengine.WorkloadClass{
+		queryengine.ClassInteractive,
+		queryengine.ClassHeavy,
+		queryengine.ClassBackground,
+	} {
+		_ = workflow.ExecuteActivity(ctx, activities.RecordQueueState, activities.RecordQueueStateParams{
+			EngineID: engineID,
+			Class:    string(class),
+			Running:  state.runningInClass(class),
+			Queued:   state.queuedInClass(class),
+		}).Get(ctx, nil)
+	}
 }
 
 // request enqueues a run, immediately admits it when a slot is free, or

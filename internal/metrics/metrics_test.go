@@ -41,6 +41,10 @@ func registry(t *testing.T) *Registry {
 	r.Metadata().Synced(time.Second, nil)
 	r.Audit().WriteFailed()
 	r.WatchMetadataStaleness(slog.New(slog.DiscardHandler), func(context.Context) (float64, error) { return 42, nil })
+	workload := r.Workload()
+	workload.State("e1", "interactive", 1, 2)
+	workload.Admitted("e1", "interactive", time.Second)
+	workload.Timeout("e1", "interactive")
 	return r
 }
 
@@ -90,6 +94,24 @@ func TestMetadataMetrics(t *testing.T) {
 		"baleia_metadata_staleness_seconds_max 42",
 		`baleia_metadata_sync_duration_seconds_count{outcome="success"} 1`,
 		"baleia_audit_write_failures_total 1",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("scrape lacks %q", want)
+		}
+	}
+}
+
+// TestWorkloadMetrics: the queue gauges, counter and histogram are exported
+// under the names the alert rules use, with only engine and class labels.
+func TestWorkloadMetrics(t *testing.T) {
+	t.Parallel()
+	_, body := scrape(t, registry(t).Handler(""), "")
+	for _, want := range []string{
+		`baleia_execution_queue_depth{class="interactive",engine="e1"} 2`,
+		`baleia_execution_queue_running{class="interactive",engine="e1"} 1`,
+		`baleia_execution_admissions_total{class="interactive",engine="e1"} 1`,
+		`baleia_execution_queue_timeouts_total{class="interactive",engine="e1"} 1`,
+		`baleia_execution_queue_wait_seconds_count{class="interactive",engine="e1"} 1`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("scrape lacks %q", want)

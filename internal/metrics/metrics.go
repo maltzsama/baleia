@@ -31,7 +31,7 @@ const Namespace = "baleia"
 // AllowedLabels are the only label names a Baleia metric may carry
 // (TestLabelAllowList).
 var AllowedLabels = []string{
-	"route", "method", "status_class", "kind", "outcome", "resource", "reason", "engine", "code",
+	"route", "method", "status_class", "kind", "outcome", "resource", "reason", "engine", "code", "class",
 	"schedule", "action", "result", "state", "operation", "process", "version", "commit",
 }
 
