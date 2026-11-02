@@ -25,6 +25,31 @@ case for every new endpoint. CI (`.github/workflows/ci.yml`) runs the same:
 `Test` with Postgres and `-race`, `Lint` (golangci-lint, `.golangci.yml`, new
 issues only) and `Vulnerabilities` (govulncheck).
 
+## Pull requests
+
+Work is **sequential**: one PR at a time, from the latest `main`, until it is
+merged. Do not open parallel PRs or work on the next issue while one is in
+flight.
+
+1. **Write every PR, issue and comment in English.** This includes the PR
+   title, body, review replies and commit messages. Code comments and docs are
+   English too.
+2. Run the full DoD for what the PR touches (`DoD-standard`, `DoD-web`, or
+   both) **before** opening it. Open the PR with `Closes #<issue>` for every
+   issue it closes; grouping sibling issues into one PR is expected.
+3. **Trigger CodeRabbit on every PR**: comment `@coderabbitai review`.
+   - If it reviews, read **all** of its findings (the review body and every
+     inline comment) before merging, fix the valid ones, push, and re-check.
+   - After a finding is fixed, **resolve its review thread**
+     (`resolveReviewThread` in the GitHub GraphQL API); do not leave a fixed
+     finding open.
+   - If it is rate-limited or skips the review, merge based on the rest of CI.
+4. **Merge with a merge commit**, never squash or rebase:
+   `gh pr merge <n> --merge --delete-branch`. The repository history keeps the
+   PR's commits and a merge commit.
+5. After merging, switch to `main`, `git pull --ff-only`, and verify each
+   `Closes` issue is closed before starting the next PR.
+
 ## Frontend
 
 The SPA lives in `web/` (SvelteKit, Svelte 5 runes, Tailwind v4, adapter-static).
