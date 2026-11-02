@@ -1,0 +1,29 @@
+meta {
+  name: Metadata Search — tag filter
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/search?q={{metadata_table_name}}&tags=finance&limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the response is a list", function () {
+    expect(res.body).to.be.an("array");
+  });
+}
+
+docs {
+  `tags` keeps only tables whose table-level docs carry every given tag (#534). Empty is a valid answer when the table has no such tag.
+}

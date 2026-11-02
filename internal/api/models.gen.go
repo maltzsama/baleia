@@ -5041,7 +5041,16 @@ type SearchMetadataParams struct {
 	Q         string                    `form:"q" json:"q"`
 	Kind      *SearchMetadataParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
 	CatalogId *openapi_types.UUID       `form:"catalog_id,omitempty" json:"catalog_id,omitempty"`
-	Limit     *int                      `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Tags Tables whose table-level docs carry every one of these tags
+	Tags *[]string `form:"tags,omitempty" json:"tags,omitempty"`
+
+	// Certified Filter by the `certified` tag
+	Certified *bool `form:"certified,omitempty" json:"certified,omitempty"`
+
+	// Namespace The table's namespace, one value per level (namespace=a&namespace=b is a.b); a dot inside a level is part of its name
+	Namespace *[]string `form:"namespace,omitempty" json:"namespace,omitempty"`
+	Limit     *int      `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // SearchMetadataParamsKind defines parameters for SearchMetadata.

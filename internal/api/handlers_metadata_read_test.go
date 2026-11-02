@@ -322,3 +322,66 @@ func TestMetadataTable_DisplayForBinding(t *testing.T) {
 		t.Fatalf("unknown binding: %T", r)
 	}
 }
+
+// TestSearch_Filters: tags, the certified tag and namespace compose with the
+// free text and with each other (#534).
+func TestSearch_Filters(t *testing.T) {
+	t.Parallel()
+	f := newMetaFixture(t)
+	ctx := context.Background()
+	for name, doc := range map[string]struct {
+		tags      string
+		certified bool
+	}{
+		"orders":                 {tags: `{finance}`, certified: true},
+		"customer_order_history": {tags: `{sales}`},
+	} {
+		if _, err := f.pool.Exec(ctx, `
+			INSERT INTO semantic_docs (workspace_id, catalog_id, namespace, table_name, description, tags, certified, updated_by)
+			VALUES ($1, $2, '{sales}', $3, '', $4::text[], $5, (SELECT owner_user_id FROM workspaces WHERE id = $1))`,
+			pgUUID(f.ws), pgUUID(f.lake), name, doc.tags, doc.certified); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	search := func(params SearchMetadataParams) SearchMetadata200JSONResponse {
+		t.Helper()
+		params.Q = "order"
+		resp, err := f.h.SearchMetadata(f.as(f.owner), SearchMetadataRequestObject{Id: f.ws, Params: params})
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, ok := resp.(SearchMetadata200JSONResponse)
+		if !ok {
+			t.Fatalf("response = %T", resp)
+		}
+		return page
+	}
+
+	finance := []string{"finance"}
+	for _, hit := range search(SearchMetadataParams{Tags: &finance}) {
+		if hit.Table != "orders" {
+			t.Fatalf("tag:finance returned %s", hit.Table)
+		}
+	}
+	if got := len(search(SearchMetadataParams{Tags: &finance})); got == 0 {
+		t.Fatal("tag:finance returned nothing")
+	}
+
+	for _, hit := range search(SearchMetadataParams{Certified: ptr(true)}) {
+		if hit.Table != "orders" {
+			t.Fatalf("certified:yes returned %s", hit.Table)
+		}
+	}
+
+	sales := []string{"sales"}
+	for _, hit := range search(SearchMetadataParams{Namespace: &sales}) {
+		if hit.Table != "orders" && hit.Table != "customer_order_history" {
+			t.Fatalf("namespace:sales returned %s", hit.Table)
+		}
+	}
+	ops := []string{"ops"}
+	if got := search(SearchMetadataParams{Namespace: &ops}); len(got) != 0 {
+		t.Fatalf("namespace:ops returned %d hits", len(got))
+	}
+}

@@ -11,6 +11,7 @@
 	import Skeleton from '$lib/ui/Skeleton.svelte';
 	import { selection } from '$lib/stores/selection.svelte';
 	import { findTable, loadCatalogs, type TableRef } from '$lib/metadata/client';
+	import { parseSearchFilters } from '$lib/metadata/searchFilters';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 
 	let selectedTable = $state<TableRef | null>(null);
@@ -18,6 +19,7 @@
 	const TREE = { min: 240, max: 640, initial: 320 };
 	let treeWidth = $state(browser ? loadWidth('data-tree', TREE) : TREE.initial);
 	let search = $state('');
+	const parsedSearch = $derived(parseSearchFilters(search));
 	let tree = $state<DataSourceTree | null>(null);
 
 	// A deep link (?catalog=<id>&ns=&table=) restores the table it names in
@@ -112,6 +114,36 @@
 					class="w-full border-none bg-transparent text-xs text-text-main outline-none placeholder:text-text-muted"
 				/>
 			</div>
+			{#if parsedSearch.kind || parsedSearch.tags.length > 0 || parsedSearch.certified != null || parsedSearch.namespace?.length}
+				<div class="mt-1.5 flex flex-wrap gap-1">
+					{#if parsedSearch.kind}
+						<span
+							class="rounded-full border border-border bg-bg-toolbar px-2 py-0.5 text-[10px] text-text-muted"
+							>{m.data_search_filter_type({ value: parsedSearch.kind })}</span
+						>
+					{/if}
+					{#each parsedSearch.tags as tag (tag)}
+						<span
+							class="rounded-full border border-border bg-bg-toolbar px-2 py-0.5 text-[10px] text-text-muted"
+							>{m.data_search_filter_tag({ value: tag })}</span
+						>
+					{/each}
+					{#if parsedSearch.certified != null}
+						<span
+							class="rounded-full border border-border bg-bg-toolbar px-2 py-0.5 text-[10px] text-text-muted"
+							>{m.data_search_filter_certified({
+								value: parsedSearch.certified ? m.engines_detail_yes() : m.engines_detail_no()
+							})}</span
+						>
+					{/if}
+					{#if parsedSearch.namespace}
+						<span
+							class="rounded-full border border-border bg-bg-toolbar px-2 py-0.5 text-[10px] text-text-muted"
+							>{m.data_search_filter_namespace({ value: parsedSearch.namespace.join('.') })}</span
+						>
+					{/if}
+				</div>
+			{/if}
 		</div>
 		<DataSourceTree bind:this={tree} onSelectTable={select} bind:search />
 	</aside>

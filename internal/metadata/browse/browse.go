@@ -212,6 +212,12 @@ type SearchQuery struct {
 	Kind      string
 	Limit     *int
 	CatalogID pgtype.UUID
+	// Tags, Certified and Namespace filter tables through their workspace
+	// table-level docs (B6, #534). Namespace is one value per level, so a
+	// component that contains a dot is unambiguous.
+	Tags      []string
+	Certified *bool
+	Namespace []string
 }
 
 // Search finds tables and columns of the catalogs granted to ws.
@@ -234,7 +240,16 @@ func (s *Service) Search(ctx context.Context, ws pgtype.UUID, q SearchQuery) ([]
 		}
 		limit = *q.Limit
 	}
-	return s.store.SearchMetadata(ctx, db.SearchMetadataParams{WorkspaceID: ws, CatalogID: q.CatalogID, Q: q.Text, Kind: kind, Lim: int32(limit)})
+	return s.store.SearchMetadata(ctx, db.SearchMetadataParams{
+		WorkspaceID: ws,
+		CatalogID:   q.CatalogID,
+		Q:           q.Text,
+		Kind:        kind,
+		Tags:        q.Tags,
+		Certified:   q.Certified,
+		Namespace:   q.Namespace,
+		Lim:         int32(limit),
+	})
 }
 
 // SyncRuns lists a catalog's latest metadata passes. A limit outside

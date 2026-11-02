@@ -1,0 +1,29 @@
+meta {
+  name: Metadata Search — namespace filter
+  type: http
+  seq: 21
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/search?q={{metadata_table_name}}&namespace={{namespace_name}}&limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the response is a list", function () {
+    expect(res.body).to.be.an("array");
+  });
+}
+
+docs {
+  `namespace` is the table namespace, dot-separated (#534).
+}

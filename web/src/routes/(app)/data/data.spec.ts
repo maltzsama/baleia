@@ -23,6 +23,7 @@ const WAREHOUSE = '00000000-0000-0000-0000-0000000000a2';
 const LAKE_ORDERS = '00000000-0000-0000-0000-0000000000d1';
 const WAREHOUSE_ORDERS = '00000000-0000-0000-0000-0000000000d2';
 const tableIn: Record<string, string> = { [LAKE]: LAKE_ORDERS, [WAREHOUSE]: WAREHOUSE_ORDERS };
+let lastSearch: URLSearchParams | null = null;
 
 // Two granted catalogs that both hold sales.orders (#455).
 function useBackend(options: { searchFails?: boolean } = {}) {
@@ -53,6 +54,7 @@ function useBackend(options: { searchFails?: boolean } = {}) {
 			})
 		),
 		http.get('/workspaces/{id}/metadata/search', ({ request, response }) => {
+			lastSearch = new URL(request.url).searchParams;
 			if (options.searchFails) {
 				return response(404).json({ code: 'not_found', message: 'workspace not found' });
 			}
@@ -169,5 +171,18 @@ describe('data page deep link', () => {
 		const url = new URL(String(goto.mock.calls.at(-1)?.[0]), 'http://localhost');
 		expect(url.searchParams.get('catalog')).toBe(LAKE);
 		expect(url.searchParams.get('column')).toBeNull();
+	});
+	it('turns the filter grammar into request parameters and chips', async () => {
+		useBackend();
+		render(DataPage);
+
+		const input = await screen.findByLabelText('Search tables and columns');
+		await fireEvent.input(input, { target: { value: 'tag:finance type:table orders' } });
+
+		await waitFor(() => expect(lastSearch?.get('tags')).toBe('finance'));
+		expect(lastSearch?.get('kind')).toBe('table');
+		expect(lastSearch?.get('q')).toBe('orders');
+		expect(screen.getByText('tag: finance')).toBeTruthy();
+		expect(screen.getByText('type: table')).toBeTruthy();
 	});
 });
