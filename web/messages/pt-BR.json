@@ -2450,7 +2450,7 @@
 	"credits_terms_of_use": "Termos de Uso",
 	"credits_favicon_body": "O conjunto de favicons foi gerado com o RealFaviconGenerator.",
 	"credits_fonts_heading": "Fontes",
-	"credits_fonts_body": "IBM Plex Sans, DM Mono e Sometype Mono são incluídas via Fontsource sob a SIL Open Font License 1.1.",
+	"credits_fonts_body": "IBM Plex Sans, DM Mono, Sometype Mono e Monoton são incluídas via Fontsource sob a SIL Open Font License 1.1.",
 	"credits_software_heading": "Software",
 	"credits_software_body": "Módulos Go e pacotes npm mantêm as licenças declaradas em seus próprios repositórios. As versões fixadas e os créditos completos estão em",
 	"credits_credits_md": "CREDITS.md",
