@@ -7665,6 +7665,10 @@ paths:
         - name: status
           in: query
           schema: { type: string, enum: [queued, running, finished, failed, cancelled] }
+        - name: class
+          in: query
+          description: "Only executions classified in this workload class (#549)"
+          schema: { type: string, enum: [interactive, heavy, background] }
         - name: user_id
           in: query
           description: "A user id, or `me` for the caller"

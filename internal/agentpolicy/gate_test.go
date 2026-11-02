@@ -202,6 +202,26 @@ func TestConcurrencyAndHourlyQuota(t *testing.T) {
 	}
 }
 
+func TestConcurrencyWaitsWhenQueueing(t *testing.T) {
+	t.Parallel()
+	// With workload management on, hitting the per-agent concurrency lets the
+	// run wait in the background queue instead of refusing it (#548).
+	f := newFixture()
+	f.gate.SetQueueing(true)
+	f.store.running = 2 // default max_concurrent_queries
+	if dec := f.check(t, f.call(ToolRunQuery, str("SELECT 1"))); !dec.Allowed {
+		t.Fatalf("queueing concurrency = %+v, want allowed (wait)", dec)
+	}
+
+	// The hourly quota still refuses while queueing.
+	f.store.hourly = 120 // default max_queries_per_hour
+	f.store.oldest = pgtype.Timestamptz{Time: f.now.Add(-30 * time.Minute), Valid: true}
+	dec := f.check(t, f.call(ToolRunQuery, str("SELECT 1")))
+	if dec.Allowed || dec.Reason != ReasonQuota {
+		t.Fatalf("queueing hourly = %+v, want quota", dec)
+	}
+}
+
 func TestBurstLimiter(t *testing.T) {
 	t.Parallel()
 	f := newFixture()

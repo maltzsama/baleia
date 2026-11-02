@@ -5,6 +5,7 @@ import type { operations } from '$lib/api/schema';
 
 export type HistoryFilters = {
 	status: string;
+	queueClass: string;
 	q: string;
 	from: string;
 	to: string;
@@ -15,6 +16,7 @@ export type HistoryQuery = NonNullable<operations['listExecutions']['parameters'
 export function parseHistoryFilters(url: URL): HistoryFilters {
 	return {
 		status: url.searchParams.get('status') ?? '',
+		queueClass: url.searchParams.get('class') ?? '',
 		q: url.searchParams.get('q') ?? '',
 		from: url.searchParams.get('from') ?? '',
 		to: url.searchParams.get('to') ?? ''
@@ -26,6 +28,7 @@ export function historyQuery(filters: HistoryFilters, cursor?: string, limit = 5
 	return {
 		limit,
 		...(filters.status ? { status: filters.status as HistoryQuery['status'] } : {}),
+		...(filters.queueClass ? { class: filters.queueClass as HistoryQuery['class'] } : {}),
 		...(filters.q ? { q: filters.q } : {}),
 		...(filters.from ? { from: new Date(filters.from).toISOString() } : {}),
 		...(filters.to ? { to: new Date(filters.to).toISOString() } : {}),

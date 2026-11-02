@@ -161,12 +161,14 @@ SELECT qe.id, qe.workspace_id, qe.user_id, u.name AS user_name,
        qe.rows_returned, qe.duration_ms, qe.started_at, qe.finished_at,
        qe.trino_catalog, qe.result_key, qe.request_id, qe.engine_id,
        qe.target_binding_id, qe.target_catalog_id, qe.target_schema,
-       qe.target_snapshot
+       qe.target_snapshot,
+       qe.queue_class, qe.queue_reason, qe.queued_at, qe.admitted_at, qe.queue_wait_ms
 FROM query_executions qe
 JOIN users u ON u.id = qe.user_id
 WHERE qe.workspace_id = @workspace_id::uuid
   AND (sqlc.narg(user_id)::uuid IS NULL OR qe.user_id = sqlc.narg(user_id)::uuid)
   AND (sqlc.narg(status)::text IS NULL OR qe.status = sqlc.narg(status)::text)
+  AND (sqlc.narg(queue_class)::text IS NULL OR qe.queue_class = sqlc.narg(queue_class)::text)
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR qe.started_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR qe.started_at <= sqlc.narg(to_time)::timestamptz)
   AND (sqlc.narg(q)::text IS NULL OR qe.sql ILIKE '%' || sqlc.narg(q)::text || '%')

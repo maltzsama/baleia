@@ -4,10 +4,11 @@ import { historyQuery, parseHistoryFilters } from './filters';
 describe('history filters', () => {
 	it('parses the filters from the URL', () => {
 		const url = new URL(
-			'http://localhost/history?status=failed&q=orders&from=2026-10-01T10%3A00&to=2026-10-02T10%3A00'
+			'http://localhost/history?status=failed&class=heavy&q=orders&from=2026-10-01T10%3A00&to=2026-10-02T10%3A00'
 		);
 		expect(parseHistoryFilters(url)).toEqual({
 			status: 'failed',
+			queueClass: 'heavy',
 			q: 'orders',
 			from: '2026-10-01T10:00',
 			to: '2026-10-02T10:00'
@@ -17,6 +18,7 @@ describe('history filters', () => {
 	it('defaults every filter to empty', () => {
 		expect(parseHistoryFilters(new URL('http://localhost/history'))).toEqual({
 			status: '',
+			queueClass: '',
 			q: '',
 			from: '',
 			to: ''
@@ -25,10 +27,11 @@ describe('history filters', () => {
 
 	it('builds the API query from the filters and cursor', () => {
 		const query = historyQuery(
-			{ status: 'failed', q: 'orders', from: '2026-10-01T10:00', to: '' },
+			{ status: 'failed', queueClass: 'heavy', q: 'orders', from: '2026-10-01T10:00', to: '' },
 			'cursor-1'
 		);
 		expect(query.status).toBe('failed');
+		expect(query.class).toBe('heavy');
 		expect(query.q).toBe('orders');
 		expect(query.from).toBe(new Date('2026-10-01T10:00').toISOString());
 		expect(query.to).toBeUndefined();
@@ -37,7 +40,7 @@ describe('history filters', () => {
 	});
 
 	it('omits empty filters', () => {
-		const query = historyQuery({ status: '', q: '', from: '', to: '' });
+		const query = historyQuery({ status: '', queueClass: '', q: '', from: '', to: '' });
 		expect(query).toEqual({ limit: 50 });
 	});
 });

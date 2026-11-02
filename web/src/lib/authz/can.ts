@@ -12,7 +12,8 @@ export type GlobalAction =
 	| 'manage_identity'
 	| 'view_all_audit'
 	| 'view_system'
-	| 'manage_assistant';
+	| 'manage_assistant'
+	| 'manage_workload';
 
 /** can reports whether the resource carries the action. An absent list is false. */
 export function can(resource: Resource | null | undefined, action: string): boolean {

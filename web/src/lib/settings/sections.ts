@@ -41,6 +41,14 @@ export const settingsSections: SettingsSection[] = [
 		feature: 'assistant'
 	},
 	{
+		href: '/settings/workload',
+		get label() {
+			return m.settings_sections_workload();
+		},
+		group: 'platform',
+		action: 'manage_workload'
+	},
+	{
 		href: '/settings/identity',
 		get label() {
 			return m.settings_sections_identity_providers();
