@@ -44,10 +44,18 @@ type History interface {
 	GetQueryStatementByPosition(ctx context.Context, arg db.GetQueryStatementByPositionParams) (db.QueryStatement, error)
 }
 
-// Store is Runs and History.
+// Store is Runs, History and the workload queues.
 type Store interface {
 	Runs
 	History
+	Queues
+}
+
+// Queues reads the per-engine workload capacities (#399); *db.Queries
+// implements it.
+type Queues interface {
+	ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]db.EngineQueueCapacity, error)
+	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
 }
 
 // Workflows starts and cancels Temporal workflows; client.Client implements it.
@@ -234,21 +242,59 @@ func fairnessKey(r Run) string {
 	return uuid.UUID(r.WorkspaceID.Bytes).String()
 }
 
-// ensureAdmissionWorkflow starts the engine's entity workflow; already
-// running is the expected answer and ignored.
+// ensureAdmissionWorkflow starts the engine's entity workflow with the
+// engine's own capacities; already running is the expected answer and ignored.
 func (s *Service) ensureAdmissionWorkflow(ctx context.Context, target queryengine.Target) {
 	engineID := uuid.UUID(target.EngineID.Bytes).String()
 	engineClass := "direct"
 	if target.EngineKind == "trino" {
 		engineClass = "federated"
 	}
+	state := s.capacitiesFor(ctx, target.EngineID, engineClass)
 	_, err := s.workflows.ExecuteWorkflow(ctx,
 		client.StartWorkflowOptions{ID: workflows.AdmissionWorkflowID(engineID), TaskQueue: TaskQueue},
-		workflows.AdmissionWorkflow, engineID,
-		workflows.AdmissionState{Capacities: workflows.DefaultAdmissionCapacitiesFor(engineClass)})
+		workflows.AdmissionWorkflow, engineID, state)
 	if err != nil && !temporal.IsWorkflowExecutionAlreadyStartedError(err) {
 		s.logger.WarnContext(ctx, "could not start the admission workflow", "engine_id", engineID, "err", err)
 	}
+}
+
+// capacitiesFor is the admission workflow's initial state: the engine's own
+// capacities over the per-class defaults, plus its optional ceiling.
+func (s *Service) capacitiesFor(ctx context.Context, engineID pgtype.UUID, engineClass string) workflows.AdmissionState {
+	state := workflows.AdmissionState{Capacities: workflows.DefaultAdmissionCapacitiesFor(engineClass)}
+
+	configured := map[queryengine.WorkloadClass]*workload.Capacity{}
+	if rows, err := s.store.ListEngineQueueCapacities(ctx, engineID); err == nil {
+		for _, row := range rows {
+			configured[queryengine.WorkloadClass(row.Class)] = &workload.Capacity{
+				MaxRunning:   int(row.MaxRunning),
+				MaxQueued:    int(row.MaxQueued),
+				QueueTimeout: time.Duration(row.QueueTimeoutMs) * time.Millisecond,
+			}
+		}
+	}
+	classes := []queryengine.WorkloadClass{
+		queryengine.ClassInteractive,
+		queryengine.ClassHeavy,
+		queryengine.ClassBackground,
+	}
+	out := make([]workflows.AdmissionCapacity, 0, len(classes))
+	for _, class := range classes {
+		capacity := workload.Resolve(engineClass, class, configured[class])
+		out = append(out, workflows.AdmissionCapacity{
+			Class:        class,
+			MaxRunning:   capacity.MaxRunning,
+			MaxQueued:    capacity.MaxQueued,
+			QueueTimeout: capacity.QueueTimeout,
+		})
+	}
+	state.Capacities = out
+
+	if eng, err := s.store.GetEngineByID(ctx, engineID); err == nil && eng.MaxRunningTotal != nil {
+		state.MaxRunningTotal = int(*eng.MaxRunningTotal)
+	}
+	return state
 }
 
 // Get returns one execution of the workspace.
