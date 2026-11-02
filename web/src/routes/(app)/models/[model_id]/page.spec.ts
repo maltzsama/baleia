@@ -36,8 +36,10 @@ describe('model detail page', () => {
 			http.get('/workspaces/{id}/semantic/models/{model_id}', ({ response }) =>
 				response(200).json(makeSemanticModel({ id: MODEL, allowed_actions: ['view'] }))
 			),
-			http.get('/workspaces/{id}/lineage', ({ response }) =>
-				response(200).json(
+			http.get('/workspaces/{id}/lineage', ({ request, params, response }) => {
+				expect(params.id).toBe(WS);
+				expect(new URL(request.url).searchParams.get('node')).toBe(`model:${MODEL}`);
+				return response(200).json(
 					makeLineageGraph({
 						nodes: [
 							makeLineageNode({ kind: 'model', id: `model:${MODEL}`, label: 'Orders' }),
@@ -51,8 +53,8 @@ describe('model detail page', () => {
 						],
 						edges: [{ from: `model:${MODEL}`, to: 'table:t' }]
 					})
-				)
-			)
+				);
+			})
 		);
 	});
 

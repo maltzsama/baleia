@@ -5,6 +5,8 @@ import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { http, server } from '../../../test/server';
 import { setTestUrl } from '../../../test/nav.svelte';
 import {
+	makeLineageGraph,
+	makeLineageNode,
 	makeMetadataCatalog,
 	makeSearchResult,
 	makeTableDetail,
@@ -164,6 +166,43 @@ describe('data page deep link', () => {
 		const url = new URL(String(goto.mock.calls.at(-1)?.[0]), 'http://localhost');
 		expect(url.searchParams.get('catalog')).toBe(WAREHOUSE);
 		expect(url.searchParams.get('table')).toBe('orders');
+	});
+
+	it('shows the Used by lineage for the selected table (#559)', async () => {
+		useBackend();
+		server.use(
+			http.get('/workspaces/{id}/lineage', ({ response }) =>
+				response(200).json(
+					makeLineageGraph({
+						nodes: [
+							makeLineageNode({
+								kind: 'table',
+								id: `table:${WAREHOUSE_ORDERS}`,
+								label: 'orders',
+								detail: 'sales.orders',
+								href: undefined
+							}),
+							makeLineageNode({
+								kind: 'model',
+								id: 'model:m',
+								label: 'Orders model',
+								href: '/models/m'
+							})
+						],
+						edges: [{ from: 'model:m', to: `table:${WAREHOUSE_ORDERS}` }]
+					})
+				)
+			)
+		);
+		setTestUrl('/data');
+		render(DataPage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /warehouse/i }));
+		await fireEvent.click(await screen.findByRole('button', { name: /sales/i }));
+		await fireEvent.click(await screen.findByRole('button', { name: /orders/i }));
+
+		expect(await screen.findByText('Used by')).toBeTruthy();
+		expect(await screen.findByRole('link', { name: /Orders model/ })).toBeTruthy();
 	});
 	// #474: a link that names a column opens the table on that column.
 	it('expands and focuses the linked column', async () => {
