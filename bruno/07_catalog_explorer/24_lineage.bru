@@ -1,0 +1,30 @@
+meta {
+  name: Lineage
+  type: http
+  seq: 24
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/lineage?node=table:{{metadata_table_id}}&direction=up
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.nodes: isArray
+  res.body.edges: isArray
+}
+
+docs {
+  The lineage graph around one node (B4, #558): `table:<id>`, `model:<id>`,
+  `metric:<id>` or `saved_query:<id>`, with direction up (dependents) or down
+  (dependencies). Nodes are tables, models, metrics and saved queries; edges
+  always point "content depends on table". A node the workspace may not see is
+  a 404. Here `direction=up` lists the content that reads the browsed table,
+  usually none for a fresh catalog.
+}

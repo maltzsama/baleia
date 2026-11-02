@@ -8,6 +8,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -236,5 +237,66 @@ func TestAttention_ClearsWhenFixed(t *testing.T) {
 	f.cache.Clear()
 	if hasKind(f.list(t, f.owner), MetadataSyncFailed) {
 		t.Fatal("metadata_sync_failed survived a successful pass")
+	}
+}
+
+// TestAttention_LineageBroken: removing a column a model reads raises the
+// lineage_broken item for the workspace owner, and no one else (B4, #558).
+func TestAttention_LineageBroken(t *testing.T) {
+	t.Parallel()
+	f := newAttentionFixture(t)
+	ctx := context.Background()
+
+	var tableID pgtype.UUID
+	if err := f.pool.QueryRow(ctx, `
+		INSERT INTO metadata_tables (catalog_id, namespace, name, kind, fingerprint, last_seen_at, last_changed_at)
+		VALUES ($1, '{sales}', 'orders', 'table', 'f', now(), now()) RETURNING id`, f.catalogID).Scan(&tableID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pool.Exec(ctx, `
+		INSERT INTO metadata_columns (table_id, ordinal, name, native_type, type_system, nullable)
+		VALUES ($1, 1, 'id', 'long', 'iceberg', false), ($1, 2, 'note', 'string', 'iceberg', true)`, tableID); err != nil {
+		t.Fatal(err)
+	}
+
+	space, err := f.h.queries.GetDefaultSpace(ctx, f.wsID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := pgtype.UUID{Bytes: uuid.MustParse(f.ownerID), Valid: true}
+	def := []byte(`{"source":{"kind":"table","namespace":["sales"],"table":"orders"},
+		"primary_key":["id"],
+		"dimensions":[{"name":"id","type":"int64"},{"name":"note","sql":"note","type":"string"}]}`)
+	if _, err := f.h.queries.CreateSemanticModel(ctx, db.CreateSemanticModelParams{
+		WorkspaceID: f.wsID, SpaceID: space.ID, Slug: "broken_note", Label: "Broken",
+		CatalogID: f.catalogID, BindingID: f.bindingID, Definition: def, FormatVersion: 1,
+		OwnerUserID: owner, UpdatedBy: owner,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if hasKind(f.list(t, f.owner), LineageBroken) {
+		t.Fatal("lineage_broken raised before any column was removed")
+	}
+
+	if _, err := f.pool.Exec(ctx, `DELETE FROM metadata_columns WHERE table_id = $1 AND name = 'note'`, tableID); err != nil {
+		t.Fatal(err)
+	}
+	f.cache.Clear()
+	items := f.list(t, f.owner)
+	if !hasKind(items, LineageBroken) {
+		t.Fatalf("items = %+v, want lineage_broken", items)
+	}
+	for _, it := range items {
+		if it.Kind != LineageBroken {
+			continue
+		}
+		if it.Resource.Type != AttentionResourceTypeModel || it.Href == nil {
+			t.Errorf("lineage_broken item = %+v", it)
+		}
+	}
+
+	if hasKind(f.list(t, f.stranger), LineageBroken) {
+		t.Fatal("stranger sees another workspace's lineage_broken")
 	}
 }

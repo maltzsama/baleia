@@ -1245,6 +1245,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/lineage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What depends on what: the lineage graph around one node (B4)
+         * @description The dependents (direction=up) or dependencies (direction=down) of one node, as a small graph of tables, models, metrics and saved queries. A node is `table:<id>`, `model:<id>`, `metric:<id>` or `saved_query:<id>`. Content nodes are only visible through a space the caller can read; tables only through a granted catalog.
+         */
+        get: operations["listLineage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/semantic/tags": {
         parameters: {
             query?: never;
@@ -3733,13 +3755,13 @@ export interface components {
          * @description What needs attention. `agent_token_expiring` appears once the agent platform lands (#59).
          * @enum {string}
          */
-        AttentionKind: "binding_error" | "metadata_sync_failed" | "metadata_stale" | "engine_unreachable" | "retriever_error" | "reconcile_drift" | "schedule_missing" | "audit_export_lagging" | "agent_token_expiring";
+        AttentionKind: "binding_error" | "metadata_sync_failed" | "metadata_stale" | "engine_unreachable" | "retriever_error" | "reconcile_drift" | "schedule_missing" | "audit_export_lagging" | "lineage_broken" | "agent_token_expiring";
         /** @enum {string} */
         AttentionSeverity: "warning" | "error";
         /** @description The entity to act on. `id` is opaque to the client; `href` is the SPA route that fixes it. */
         AttentionResource: {
             /** @enum {string} */
-            type: "binding" | "catalog" | "engine" | "retriever" | "schedule" | "audit_export" | "agent_token";
+            type: "binding" | "catalog" | "engine" | "retriever" | "schedule" | "audit_export" | "agent_token" | "model" | "metric";
             id: string;
             name: string;
         };
@@ -3755,6 +3777,27 @@ export interface components {
             since: string;
             /** @description SPA route that fixes the item. */
             href?: string;
+        };
+        /** @enum {string} */
+        LineageNodeKind: "table" | "model" | "metric" | "saved_query";
+        /** @description One node of a lineage graph. `id` is opaque; it is the node reference of the next `/lineage` call. */
+        LineageNode: {
+            kind: components["schemas"]["LineageNodeKind"];
+            id: string;
+            label: string;
+            /** @description The catalog and namespace of a table, or the slug of content. */
+            detail?: string;
+            /** @description SPA route that opens the node. */
+            href?: string;
+        };
+        /** @description A dependency edge: `from` depends on `to`. */
+        LineageEdge: {
+            from: string;
+            to: string;
+        };
+        LineageGraph: {
+            nodes: components["schemas"]["LineageNode"][];
+            edges: components["schemas"]["LineageEdge"][];
         };
         /** @enum {string} */
         IdentityProviderType: "oidc" | "ldap";
@@ -8839,6 +8882,35 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listLineage: {
+        parameters: {
+            query: {
+                node: string;
+                direction?: "up" | "down";
+                depth?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The graph around the node */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LineageGraph"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listSemanticTags: {
