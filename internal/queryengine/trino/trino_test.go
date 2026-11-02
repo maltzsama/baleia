@@ -405,3 +405,21 @@ func TestSessionSkipsQueryPriorityWhenReadOnly(t *testing.T) {
 		t.Errorf("read-only session sent query_priority: %q", got)
 	}
 }
+
+func TestSessionCarriesRuntimeTimeout(t *testing.T) {
+	t.Parallel()
+	f := &fakeCoordinator{respond: func(string) (http.Header, map[string]any) {
+		return http.Header{}, map[string]any{"id": "20260101_000000_00001_abcde"}
+	}}
+	e := testEngine(t, f)
+	s, err := e.OpenSession(context.Background(), queryengine.SessionSpec{Timeout: 24 * time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Execute(context.Background(), "SELECT 1", queryengine.Callbacks{}, &collect{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.last().Get("X-Trino-Session"); !strings.Contains(got, "query_max_execution_time=86400s") {
+		t.Errorf("session = %q, want query_max_execution_time=86400s", got)
+	}
+}

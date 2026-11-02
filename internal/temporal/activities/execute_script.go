@@ -172,8 +172,11 @@ func (s *script) openSession() (queryengine.Session, error) {
 		Catalog:  s.p.Target.EngineCatalog,
 		Identity: s.p.Identity,
 		ReadOnly: s.p.Target.ReadOnly,
-		Timeout:  s.p.Timeout,
-		Tags:     queryengine.Tags{ExecutionID: s.p.ExecutionID, RequestID: s.p.RequestID, Source: source, Class: s.p.Class},
+		// Timeout is the class's runtime bound when workload management is on
+		// (#578), the global statement timeout otherwise; every builder maps it
+		// to its engine's own mechanism.
+		Timeout: s.p.Timeout,
+		Tags:    queryengine.Tags{ExecutionID: s.p.ExecutionID, RequestID: s.p.RequestID, Source: source, Class: s.p.Class},
 	}
 	if s.p.Target.Schema != "" {
 		spec.Schema = []string{s.p.Target.Schema}
