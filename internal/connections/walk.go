@@ -24,6 +24,25 @@ type ConditionalLoader interface {
 	LoadTableIfChanged(ctx context.Context, t TableRef, etag string) (meta *TableMeta, newETag string, err error)
 }
 
+// ForeignKeyRow is one foreign key as a provider reports it, with the child
+// table included: the sync attaches it to that table (B1, #554). Rows arrive
+// ordered by child namespace, table and column position.
+type ForeignKeyRow struct {
+	Namespace    Namespace
+	Table        string
+	Column       string
+	RefNamespace Namespace
+	RefTable     string
+	RefColumn    string
+}
+
+// ForeignKeyReader is implemented by database readers that can list the
+// foreign keys of a catalog in one query. It is optional: readers that cannot
+// report them simply do not implement it.
+type ForeignKeyReader interface {
+	ListForeignKeys(ctx context.Context, catalog string) ([]ForeignKeyRow, error)
+}
+
 // WalkTimeout bounds one catalog walk query: it reads a whole catalog, so it
 // gets longer than a single statement.
 const WalkTimeout = 5 * time.Minute

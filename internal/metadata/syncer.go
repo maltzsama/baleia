@@ -238,6 +238,20 @@ func (w *writer) store(t TableSnapshot) error {
 				return err
 			}
 		}
+		if err := qtx.DeleteMetadataForeignKeys(w.ctx, row.ID); err != nil {
+			return err
+		}
+		if len(t.ForeignKeys) > 0 {
+			keys, err := json.Marshal(t.ForeignKeys)
+			if err != nil {
+				return err
+			}
+			if err := qtx.InsertMetadataForeignKeys(w.ctx, db.InsertMetadataForeignKeysParams{
+				CatalogID: w.catalogID, TableID: row.ID, ForeignKeys: keys,
+			}); err != nil {
+				return err
+			}
+		}
 		w.stats.TablesChanged++
 	}
 	return tx.Commit(w.ctx)

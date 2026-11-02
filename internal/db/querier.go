@@ -134,6 +134,8 @@ type Querier interface {
 	DeleteExpiredPasswordResetTokens(ctx context.Context) error
 	DeleteExpiredRefreshTokens(ctx context.Context) error
 	DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID) error
+	// A changed table's outgoing foreign keys are replaced with the pass's result.
+	DeleteMetadataForeignKeys(ctx context.Context, tableID pgtype.UUID) error
 	// The native catalogs of an engine, deleted with it (their bindings cascade).
 	DeleteNativeCatalogsOfEngine(ctx context.Context, engineID pgtype.UUID) error
 	DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) (int64, error)
@@ -298,6 +300,9 @@ type Querier interface {
 	// resolves placeholders only from enabled rows) and expiring.
 	InsertEphemeralRegistryRow(ctx context.Context, arg InsertEphemeralRegistryRowParams) error
 	InsertMetadataColumns(ctx context.Context, arg InsertMetadataColumnsParams) error
+	// One table's outgoing foreign keys, as JSON so multi-level referenced
+	// namespaces stay arrays.
+	InsertMetadataForeignKeys(ctx context.Context, arg InsertMetadataForeignKeysParams) error
 	InsertReconcileRun(ctx context.Context, arg InsertReconcileRunParams) (InsertReconcileRunRow, error)
 	InsertStatementJoin(ctx context.Context, arg InsertStatementJoinParams) error
 	InsertStatementReference(ctx context.Context, arg InsertStatementReferenceParams) error
@@ -385,7 +390,17 @@ type Querier interface {
 	// user_id to the caller unless the caller owns the workspace or is an admin.
 	ListExecutionHistory(ctx context.Context, arg ListExecutionHistoryParams) ([]ListExecutionHistoryRow, error)
 	ListExpiredEphemeralRegistryRows(ctx context.Context) ([]ListExpiredEphemeralRegistryRowsRow, error)
+	// Foreign keys between the two tables, oriented so the left column belongs to
+	// @left_table and the right to @right_table. A key declared on the right
+	// table (referencing the left) is flipped.
+	ListForeignKeyJoinSuggestions(ctx context.Context, arg ListForeignKeyJoinSuggestionsParams) ([]ListForeignKeyJoinSuggestionsRow, error)
 	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
+	// Join suggestions from query history (B1, #554).
+	// Equi-join conditions a workspace used between two tables over the last 90
+	// days, ranked by a 30-day half-life decay. The pair is normalized so the
+	// left column always belongs to @left_table and the right to @right_table,
+	// whatever order the statements wrote them in.
+	ListJoinSuggestions(ctx context.Context, arg ListJoinSuggestionsParams) ([]ListJoinSuggestionsRow, error)
 	ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRunsParams) ([]MaintenanceRun, error)
 	// The managed bindings of an engine the reconciler checks (#37).
 	ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)

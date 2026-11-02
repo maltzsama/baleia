@@ -81,6 +81,18 @@ FROM (
            unnest(@comments::text[]) AS comment
 ) AS c;
 
+-- name: DeleteMetadataForeignKeys :exec
+-- A changed table's outgoing foreign keys are replaced with the pass's result.
+DELETE FROM metadata_foreign_keys WHERE table_id = $1;
+
+-- name: InsertMetadataForeignKeys :exec
+-- One table's outgoing foreign keys, as JSON so multi-level referenced
+-- namespaces stay arrays.
+INSERT INTO metadata_foreign_keys (catalog_id, table_id, column_name, ref_namespace, ref_table, ref_column)
+SELECT @catalog_id::uuid, @table_id::uuid, f.column_name, f.ref_namespace, f.ref_table, f.ref_column
+FROM jsonb_to_recordset(@foreign_keys::jsonb)
+     AS f(column_name text, ref_namespace text[], ref_table text, ref_column text);
+
 -- name: UpsertMetadataNamespace :exec
 INSERT INTO metadata_namespaces (catalog_id, namespace, last_seen_at)
 VALUES ($1, $2, now())

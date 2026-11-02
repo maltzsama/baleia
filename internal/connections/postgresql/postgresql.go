@@ -41,6 +41,7 @@ func (*Provider) EngineKind() string { return "postgresql" }
 func (*Provider) WalksCatalogs() bool { return true }
 
 var _ connections.CatalogWalker = (*reader)(nil)
+var _ connections.ForeignKeyReader = (*reader)(nil)
 
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
@@ -358,6 +359,54 @@ func (r *reader) WalkCatalog(ctx context.Context, catalog string, visit func(con
 		return err
 	}
 	return g.Flush()
+}
+
+// ListForeignKeys reads the foreign keys of every user table of a database
+// (B1, #554), in a read-only transaction with a longer statement timeout.
+func (r *reader) ListForeignKeys(ctx context.Context, catalog string) ([]connections.ForeignKeyRow, error) {
+	c, err := r.conn(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := c.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL statement_timeout = %d", connections.WalkTimeout.Milliseconds())); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT n.nspname, c.relname, a.attname, rn.nspname, rc.relname, ra.attname
+		FROM pg_catalog.pg_constraint con
+		JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		JOIN pg_catalog.pg_class rc ON rc.oid = con.confrelid
+		JOIN pg_catalog.pg_namespace rn ON rn.oid = rc.relnamespace
+		JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS k(attnum, refattnum, ord) ON true
+		JOIN pg_catalog.pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.attnum
+		JOIN pg_catalog.pg_attribute ra ON ra.attrelid = con.confrelid AND ra.attnum = k.refattnum
+		WHERE con.contype = 'f'
+		  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+		  AND rn.nspname NOT IN ('pg_catalog', 'information_schema')
+		  AND has_schema_privilege(n.oid, 'USAGE')
+		ORDER BY n.nspname, c.relname, k.ord`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]connections.ForeignKeyRow, 0)
+	for rows.Next() {
+		var schema, refSchema string
+		var fk connections.ForeignKeyRow
+		if err := rows.Scan(&schema, &fk.Table, &fk.Column, &refSchema, &fk.RefTable, &fk.RefColumn); err != nil {
+			return nil, err
+		}
+		fk.Namespace = connections.Namespace{schema}
+		fk.RefNamespace = connections.Namespace{refSchema}
+		out = append(out, fk)
+	}
+	return out, rows.Err()
 }
 
 func (r *reader) Close() error {

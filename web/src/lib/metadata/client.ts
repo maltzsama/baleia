@@ -16,6 +16,7 @@ export type MetadataTablePage = components['schemas']['MetadataTablePage'];
 export type MetadataTableDetail = components['schemas']['MetadataTableDetail'];
 export type MetadataColumn = components['schemas']['MetadataColumn'];
 export type MetadataSearchResult = components['schemas']['MetadataSearchResult'];
+export type JoinSuggestion = components['schemas']['JoinSuggestion'];
 
 /** A table the explorer selected, independent of the API's table detail. */
 export type TableRef = {
@@ -204,6 +205,27 @@ export function searchMetadata(
 		})
 		.then(({ data, error, response }) => {
 			if (error || !data) fail(error, response?.status, 'Search failed');
+			return data;
+		});
+}
+
+/** Join conditions used between two tables, best first (B1, #555). Not cached. */
+export function joinSuggestions(
+	workspaceId: string,
+	leftTableId: string,
+	rightTableId: string,
+	signal?: AbortSignal
+): Promise<JoinSuggestion[]> {
+	return client
+		.GET('/workspaces/{id}/metadata/join-suggestions', {
+			params: {
+				path: { id: workspaceId },
+				query: { left_table: leftTableId, right_table: rightTableId }
+			},
+			signal
+		})
+		.then(({ data, error, response }) => {
+			if (error || !data) fail(error, response?.status, 'Failed to load join suggestions');
 			return data;
 		});
 }

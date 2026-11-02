@@ -618,6 +618,12 @@ const (
 	InviteUserRequestRoleMember InviteUserRequestRole = "member"
 )
 
+// Defines values for JoinSuggestionSource.
+const (
+	ForeignKey JoinSuggestionSource = "foreign_key"
+	History    JoinSuggestionSource = "history"
+)
+
 // Defines values for LDAPConfigDefaultRole.
 const (
 	LDAPConfigDefaultRoleAdmin  LDAPConfigDefaultRole = "admin"
@@ -2817,6 +2823,27 @@ type InviteUserRequest struct {
 
 // InviteUserRequestRole defines model for InviteUserRequest.Role.
 type InviteUserRequestRole string
+
+// JoinSuggestion defines model for JoinSuggestion.
+type JoinSuggestion struct {
+	LastUsedAt *time.Time `json:"last_used_at"`
+
+	// LeftColumn A column of the left table
+	LeftColumn string `json:"left_column"`
+
+	// RightColumn A column of the right table
+	RightColumn string `json:"right_column"`
+
+	// Score Frequency with a 30-day half-life decay; 0 for a foreign key
+	Score  *float64             `json:"score,omitempty"`
+	Source JoinSuggestionSource `json:"source"`
+
+	// UseCount Finished statements that used it in the last 90 days; 0 for a foreign key never used
+	UseCount int `json:"use_count"`
+}
+
+// JoinSuggestionSource defines model for JoinSuggestion.Source.
+type JoinSuggestionSource string
 
 // LDAPConfig LDAP provider configuration written once. `bind_password` is never returned.
 type LDAPConfig struct {
@@ -5034,6 +5061,12 @@ type ListMetadataTablesParams struct {
 	// Cursor next_cursor of the previous page
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListJoinSuggestionsParams defines parameters for ListJoinSuggestions.
+type ListJoinSuggestionsParams struct {
+	LeftTable  openapi_types.UUID `form:"left_table" json:"left_table"`
+	RightTable openapi_types.UUID `form:"right_table" json:"right_table"`
 }
 
 // SearchMetadataParams defines parameters for SearchMetadata.

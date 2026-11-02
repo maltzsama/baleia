@@ -20,6 +20,16 @@ func (q *Queries) DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID
 	return err
 }
 
+const deleteMetadataForeignKeys = `-- name: DeleteMetadataForeignKeys :exec
+DELETE FROM metadata_foreign_keys WHERE table_id = $1
+`
+
+// A changed table's outgoing foreign keys are replaced with the pass's result.
+func (q *Queries) DeleteMetadataForeignKeys(ctx context.Context, tableID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteMetadataForeignKeys, tableID)
+	return err
+}
+
 const failStaleMetadataSyncRuns = `-- name: FailStaleMetadataSyncRuns :exec
 UPDATE metadata_sync_runs
 SET status = 'failed', finished_at = now(), error_code = 'interrupted',
@@ -338,6 +348,26 @@ func (q *Queries) InsertMetadataColumns(ctx context.Context, arg InsertMetadataC
 		arg.Nullables,
 		arg.Comments,
 	)
+	return err
+}
+
+const insertMetadataForeignKeys = `-- name: InsertMetadataForeignKeys :exec
+INSERT INTO metadata_foreign_keys (catalog_id, table_id, column_name, ref_namespace, ref_table, ref_column)
+SELECT $1::uuid, $2::uuid, f.column_name, f.ref_namespace, f.ref_table, f.ref_column
+FROM jsonb_to_recordset($3::jsonb)
+     AS f(column_name text, ref_namespace text[], ref_table text, ref_column text)
+`
+
+type InsertMetadataForeignKeysParams struct {
+	CatalogID   pgtype.UUID `json:"catalog_id"`
+	TableID     pgtype.UUID `json:"table_id"`
+	ForeignKeys []byte      `json:"foreign_keys"`
+}
+
+// One table's outgoing foreign keys, as JSON so multi-level referenced
+// namespaces stay arrays.
+func (q *Queries) InsertMetadataForeignKeys(ctx context.Context, arg InsertMetadataForeignKeysParams) error {
+	_, err := q.db.Exec(ctx, insertMetadataForeignKeys, arg.CatalogID, arg.TableID, arg.ForeignKeys)
 	return err
 }
 

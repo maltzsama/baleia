@@ -540,6 +540,9 @@ type ServerInterface interface {
 	// Tables of a namespace, by name, one page at a time
 	// (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables)
 	ListMetadataTables(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID, params ListMetadataTablesParams)
+	// Join conditions used between two tables, best first (editor autocomplete)
+	// (GET /workspaces/{id}/metadata/join-suggestions)
+	ListJoinSuggestions(w http.ResponseWriter, r *http.Request, id PathId, params ListJoinSuggestionsParams)
 	// Tables and columns whose names match, best first (autocomplete and search)
 	// (GET /workspaces/{id}/metadata/search)
 	SearchMetadata(w http.ResponseWriter, r *http.Request, id PathId, params SearchMetadataParams)
@@ -1767,6 +1770,12 @@ func (_ Unimplemented) ListMetadataNamespaces(w http.ResponseWriter, r *http.Req
 // Tables of a namespace, by name, one page at a time
 // (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables)
 func (_ Unimplemented) ListMetadataTables(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID, params ListMetadataTablesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Join conditions used between two tables, best first (editor autocomplete)
+// (GET /workspaces/{id}/metadata/join-suggestions)
+func (_ Unimplemented) ListJoinSuggestions(w http.ResponseWriter, r *http.Request, id PathId, params ListJoinSuggestionsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8438,6 +8447,72 @@ func (siw *ServerInterfaceWrapper) ListMetadataTables(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListJoinSuggestions operation middleware
+func (siw *ServerInterfaceWrapper) ListJoinSuggestions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListJoinSuggestionsParams
+
+	// ------------- Required query parameter "left_table" -------------
+
+	if paramValue := r.URL.Query().Get("left_table"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "left_table"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "left_table", r.URL.Query(), &params.LeftTable)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "left_table", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "right_table" -------------
+
+	if paramValue := r.URL.Query().Get("right_table"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "right_table"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "right_table", r.URL.Query(), &params.RightTable)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "right_table", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListJoinSuggestions(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SearchMetadata operation middleware
 func (siw *ServerInterfaceWrapper) SearchMetadata(w http.ResponseWriter, r *http.Request) {
 
@@ -12053,6 +12128,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/metadata/catalogs/{catalog_id}/tables", wrapper.ListMetadataTables)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/metadata/join-suggestions", wrapper.ListJoinSuggestions)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/metadata/search", wrapper.SearchMetadata)
@@ -19695,6 +19773,53 @@ func (response ListMetadataTables422JSONResponse) VisitListMetadataTablesRespons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListJoinSuggestionsRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ListJoinSuggestionsParams
+}
+
+type ListJoinSuggestionsResponseObject interface {
+	VisitListJoinSuggestionsResponse(w http.ResponseWriter) error
+}
+
+type ListJoinSuggestions200JSONResponse []JoinSuggestion
+
+func (response ListJoinSuggestions200JSONResponse) VisitListJoinSuggestionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListJoinSuggestions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListJoinSuggestions401JSONResponse) VisitListJoinSuggestionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListJoinSuggestions404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListJoinSuggestions404JSONResponse) VisitListJoinSuggestionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListJoinSuggestions422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ListJoinSuggestions422JSONResponse) VisitListJoinSuggestionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type SearchMetadataRequestObject struct {
 	Id     PathId `json:"id"`
 	Params SearchMetadataParams
@@ -23039,6 +23164,9 @@ type StrictServerInterface interface {
 	// Tables of a namespace, by name, one page at a time
 	// (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables)
 	ListMetadataTables(ctx context.Context, request ListMetadataTablesRequestObject) (ListMetadataTablesResponseObject, error)
+	// Join conditions used between two tables, best first (editor autocomplete)
+	// (GET /workspaces/{id}/metadata/join-suggestions)
+	ListJoinSuggestions(ctx context.Context, request ListJoinSuggestionsRequestObject) (ListJoinSuggestionsResponseObject, error)
 	// Tables and columns whose names match, best first (autocomplete and search)
 	// (GET /workspaces/{id}/metadata/search)
 	SearchMetadata(ctx context.Context, request SearchMetadataRequestObject) (SearchMetadataResponseObject, error)
@@ -28107,6 +28235,33 @@ func (sh *strictHandler) ListMetadataTables(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMetadataTablesResponseObject); ok {
 		if err := validResponse.VisitListMetadataTablesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListJoinSuggestions operation middleware
+func (sh *strictHandler) ListJoinSuggestions(w http.ResponseWriter, r *http.Request, id PathId, params ListJoinSuggestionsParams) {
+	var request ListJoinSuggestionsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListJoinSuggestions(ctx, request.(ListJoinSuggestionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListJoinSuggestions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListJoinSuggestionsResponseObject); ok {
+		if err := validResponse.VisitListJoinSuggestionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

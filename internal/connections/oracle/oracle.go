@@ -39,6 +39,7 @@ func (*Provider) EngineKind() string { return "oracle" }
 func (*Provider) WalksCatalogs() bool { return true }
 
 var _ connections.CatalogWalker = (*reader)(nil)
+var _ connections.ForeignKeyReader = (*reader)(nil)
 
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
@@ -324,6 +325,44 @@ func (r *reader) WalkCatalog(ctx context.Context, catalog string, visit func(con
 		return err
 	}
 	return g.Flush()
+}
+
+// ListForeignKeys reads the foreign keys of the user schemas (B1, #554).
+func (r *reader) ListForeignKeys(ctx context.Context, catalog string) ([]connections.ForeignKeyRow, error) {
+	if err := r.checkCatalog(catalog); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, connections.WalkTimeout)
+	defer cancel()
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT c.owner, c.table_name, cc.column_name,
+		       r.owner, r.table_name, rcc.column_name
+		FROM all_constraints c
+		JOIN all_constraints r ON r.owner = c.r_owner AND r.constraint_name = c.r_constraint_name
+		JOIN all_cons_columns cc ON cc.owner = c.owner AND cc.constraint_name = c.constraint_name
+		JOIN all_cons_columns rcc ON rcc.owner = r.owner AND rcc.constraint_name = r.constraint_name
+		                        AND rcc.position = cc.position
+		JOIN all_users u ON u.username = c.owner AND u.oracle_maintained = 'N'
+		WHERE c.constraint_type = 'R'
+		ORDER BY c.owner, c.table_name, cc.position`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := make([]connections.ForeignKeyRow, 0)
+	for rows.Next() {
+		var schema, refSchema string
+		var refTable, refColumn sql.NullString
+		var fk connections.ForeignKeyRow
+		if err := rows.Scan(&schema, &fk.Table, &fk.Column, &refSchema, &refTable, &refColumn); err != nil {
+			return nil, err
+		}
+		fk.Namespace = connections.Namespace{schema}
+		fk.RefNamespace = connections.Namespace{refSchema}
+		fk.RefTable, fk.RefColumn = refTable.String, refColumn.String
+		out = append(out, fk)
+	}
+	return out, rows.Err()
 }
 
 func (r *reader) Close() error { return r.db.Close() }

@@ -11,11 +11,15 @@ import type {
 import type { EditorView } from '@codemirror/view';
 import { keywordCompletionSource, type SQLDialect } from '@codemirror/lang-sql';
 import { m } from '$lib/paraglide/messages';
+import { plural } from '$lib/i18n/plural';
+import { formatRelativeTime } from '$lib/util/time';
 import {
+	joinSuggestions,
 	loadNamespaces,
 	loadTable,
 	loadTables,
 	searchMetadata,
+	type JoinSuggestion,
 	type MetadataColumn,
 	type MetadataTableSummary
 } from '$lib/metadata/client';
@@ -40,7 +44,15 @@ export type CompletionScope = {
 };
 
 // Group order in the list, best first.
-const RANK = { column: 0, table: 1, namespace: 2, otherTable: 3, function: 4, keyword: 5 } as const;
+const RANK = {
+	join: 0,
+	column: 1,
+	table: 2,
+	namespace: 3,
+	otherTable: 4,
+	function: 5,
+	keyword: 6
+} as const;
 type Group = keyof typeof RANK;
 type Option = Completion & { group: Group };
 
@@ -401,6 +413,64 @@ async function columnOptions(scope: CompletionScope, ctx: SqlContext): Promise<O
 	return [...byName.values()].map(({ column, tables }) => columnOption(scope, column, tables));
 }
 
+/** The join conditions the workspace used between the JOINed table and the
+ * ones already in the statement (#555), inserted with the statement's current
+ * aliases. */
+async function joinOptions(
+	scope: CompletionScope,
+	ctx: SqlContext,
+	signal: AbortSignal
+): Promise<Option[]> {
+	const joinOn = ctx.joinOn;
+	if (!joinOn) return [];
+	const joined = await resolveTable(scope, joinOn.joined).catch(() => null);
+	if (!joined) return [];
+	const out: Option[] = [];
+	for (const other of joinOn.others) {
+		const left = await resolveTable(scope, other).catch(() => null);
+		if (!left) continue;
+		const suggestions = await joinSuggestions(
+			scope.workspaceId,
+			left.summary.id,
+			joined.summary.id,
+			signal
+		).catch(() => []);
+		for (const suggestion of suggestions) {
+			const text =
+				`${identifier(other.alias, scope.cmDialect)}.${identifier(suggestion.left_column, scope.cmDialect)}` +
+				` = ${identifier(joinOn.joined.alias, scope.cmDialect)}.${identifier(suggestion.right_column, scope.cmDialect)}`;
+			out.push({
+				label: text,
+				apply: text,
+				type: suggestion.source === 'foreign_key' ? 'text' : 'property',
+				detail: joinDetail(suggestion),
+				info: joinInfo(suggestion),
+				group: 'join'
+			});
+		}
+	}
+	return out;
+}
+
+function joinDetail(suggestion: JoinSuggestion): string {
+	if (suggestion.source === 'foreign_key') return m.workbench_completion_join_foreign_key();
+	return plural(
+		suggestion.use_count,
+		m.workbench_completion_join_used_one,
+		m.workbench_completion_join_used_other
+	);
+}
+
+function joinInfo(suggestion: JoinSuggestion): () => Node {
+	return info(m.workbench_completion_join_condition(), joinDetail(suggestion), [
+		suggestion.last_used_at
+			? m.workbench_completion_join_last_used({
+					time: formatRelativeTime(suggestion.last_used_at)
+				})
+			: ''
+	]);
+}
+
 /** Prefix match, then group rank; exact matches first inside a group. */
 function rank(options: Option[], prefix: string): Completion[] {
 	const p = lower(prefix);
@@ -440,7 +510,7 @@ export function sqlCompletionSource(scope: () => CompletionScope | null): Comple
 		const ctx = sqlContextAt(context.state.doc.toString(), context.pos);
 		if (!ctx) return null;
 		const typing = ctx.prefix.length > 0 || ctx.qualifier.length > 0;
-		if (!typing && !context.explicit) return null;
+		if (!typing && !context.explicit && !ctx.joinOn) return null;
 
 		const controller = new AbortController();
 		context.addEventListener('abort', () => controller.abort(), { onDocChange: true });
@@ -464,6 +534,7 @@ export function sqlCompletionSource(scope: () => CompletionScope | null): Comple
 						break;
 					}
 					options = [
+						...(await joinOptions(current, ctx, controller.signal)),
 						...(columns ?? []),
 						...functionOptions(current),
 						...(await keywordOptions(current, context, false))

@@ -230,6 +230,7 @@ var operationAccess = map[string]access{
 	"ListMetadataTables":     checked("metadataWorkspace", "browse.Tables"),
 	"GetMetadataTable":       checked("metadataWorkspace", "browse.Table"),
 	"SearchMetadata":         checked("metadataWorkspace", "browse.Search"),
+	"ListJoinSuggestions":    checked("metadataWorkspace", "grantedTable"),
 	// Semantic layer v1 (#33): workspace members; docs only on catalogs the
 	// workspace may use (semanticCatalog wraps grantedCatalog). Docs are not
 	// content items, so #40 does not add a space check here.
