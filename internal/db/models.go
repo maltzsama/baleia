@@ -474,6 +474,28 @@ type RefreshToken struct {
 	FamilyID  pgtype.UUID        `json:"family_id"`
 }
 
+type ResourceGroup struct {
+	ResourceGroupID           int64   `json:"resource_group_id"`
+	Name                      string  `json:"name"`
+	SoftMemoryLimit           string  `json:"soft_memory_limit"`
+	MaxQueued                 int32   `json:"max_queued"`
+	SoftConcurrencyLimit      *int32  `json:"soft_concurrency_limit"`
+	HardConcurrencyLimit      int32   `json:"hard_concurrency_limit"`
+	SchedulingPolicy          *string `json:"scheduling_policy"`
+	SchedulingWeight          *int32  `json:"scheduling_weight"`
+	JmxExport                 *bool   `json:"jmx_export"`
+	SoftCpuLimit              *string `json:"soft_cpu_limit"`
+	HardCpuLimit              *string `json:"hard_cpu_limit"`
+	HardPhysicalDataScanLimit *string `json:"hard_physical_data_scan_limit"`
+	Parent                    *int64  `json:"parent"`
+	Environment               *string `json:"environment"`
+}
+
+type ResourceGroupsGlobalProperty struct {
+	Name  string  `json:"name"`
+	Value *string `json:"value"`
+}
+
 type Retriever struct {
 	ID            pgtype.UUID        `json:"id"`
 	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
@@ -522,6 +544,19 @@ type SavedQuery struct {
 	TargetBindingID pgtype.UUID        `json:"target_binding_id"`
 	TargetSchema    *string            `json:"target_schema"`
 	Slug            string             `json:"slug"`
+}
+
+type Selector struct {
+	ID                     int64   `json:"id"`
+	ResourceGroupID        int64   `json:"resource_group_id"`
+	Priority               int64   `json:"priority"`
+	UserRegex              *string `json:"user_regex"`
+	OriginalUserRegex      *string `json:"original_user_regex"`
+	AuthenticatedUserRegex *string `json:"authenticated_user_regex"`
+	UserGroupRegex         *string `json:"user_group_regex"`
+	SourceRegex            *string `json:"source_regex"`
+	QueryType              *string `json:"query_type"`
+	ClientTags             *string `json:"client_tags"`
 }
 
 type SemanticDoc struct {
@@ -744,6 +779,14 @@ type TrinoQuerySnapshot struct {
 	FirstSeenAt        pgtype.Timestamptz `json:"first_seen_at"`
 	LastSeenAt         pgtype.Timestamptz `json:"last_seen_at"`
 	EngineID           pgtype.UUID        `json:"engine_id"`
+}
+
+type TrinoResourceGroupRevision struct {
+	ID        pgtype.UUID        `json:"id"`
+	EngineID  pgtype.UUID        `json:"engine_id"`
+	Revision  int32              `json:"revision"`
+	Config    []byte             `json:"config"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {
