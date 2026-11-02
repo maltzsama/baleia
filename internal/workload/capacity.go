@@ -42,10 +42,17 @@ func Defaults(engineClass string) map[queryengine.WorkloadClass]Capacity {
 }
 
 // Resolve returns the configured capacity when one exists, otherwise the
-// engine class's default for that workload class.
+// engine class's default for that workload class. A configured row may leave
+// the runtime bound unset (NULL); it then falls back to the default. The
+// schema forbids 0, so 0 is unambiguously "unset".
 func Resolve(engineClass string, class queryengine.WorkloadClass, configured *Capacity) Capacity {
-	if configured != nil {
-		return *configured
+	defaults := Defaults(engineClass)[class]
+	if configured == nil {
+		return defaults
 	}
-	return Defaults(engineClass)[class]
+	out := *configured
+	if out.RuntimeTimeout == 0 {
+		out.RuntimeTimeout = defaults.RuntimeTimeout
+	}
+	return out
 }

@@ -20,6 +20,16 @@ assert {
   res.body.classes: isArray
 }
 
+tests {
+  test("every class carries a runtime timeout", function() {
+    const classes = res.getBody().classes;
+    expect(classes, "classes").to.be.an("array").that.is.not.empty;
+    for (const c of classes) {
+      expect(c.runtime_timeout_ms, c.class + " runtime_timeout_ms").to.be.a("number").above(0);
+    }
+  });
+}
+
 docs {
   Returns the live depth, the oldest wait and the configured capacity per
   workload class of the engine (#540). Admins and engine owners only.

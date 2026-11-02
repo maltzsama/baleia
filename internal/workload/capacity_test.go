@@ -42,8 +42,15 @@ func TestResolveFallsBackOnlyWhenMissing(t *testing.T) {
 		t.Errorf("missing row = %+v, want the default %+v", got, direct[queryengine.ClassInteractive])
 	}
 
-	configured := Capacity{MaxRunning: 1, MaxQueued: 2, QueueTimeout: time.Minute}
+	configured := Capacity{MaxRunning: 1, MaxQueued: 2, QueueTimeout: time.Minute, RuntimeTimeout: time.Hour}
 	if got := Resolve("direct", queryengine.ClassInteractive, &configured); got != configured {
 		t.Errorf("configured row = %+v, want %+v", got, configured)
+	}
+
+	// A configured row that leaves the runtime bound unset falls back to the
+	// class default, like a missing row.
+	unset := Capacity{MaxRunning: 1, MaxQueued: 2, QueueTimeout: time.Minute}
+	if got := Resolve("direct", queryengine.ClassInteractive, &unset); got.RuntimeTimeout != direct[queryengine.ClassInteractive].RuntimeTimeout {
+		t.Errorf("unset runtime = %s, want the default %s", got.RuntimeTimeout, direct[queryengine.ClassInteractive].RuntimeTimeout)
 	}
 }

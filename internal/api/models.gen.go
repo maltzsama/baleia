@@ -2347,6 +2347,9 @@ type EngineQueue struct {
 	QueueTimeoutMs int              `json:"queue_timeout_ms"`
 	Queued         int              `json:"queued"`
 	Running        int              `json:"running"`
+
+	// RuntimeTimeoutMs Stored per-class runtime bound; enforcement lands in #578
+	RuntimeTimeoutMs int `json:"runtime_timeout_ms"`
 }
 
 // EngineQueueClass defines model for EngineQueue.Class.
@@ -4210,6 +4213,9 @@ type UpdateEngineQueue struct {
 	MaxQueued      int                    `json:"max_queued"`
 	MaxRunning     int                    `json:"max_running"`
 	QueueTimeoutMs int                    `json:"queue_timeout_ms"`
+
+	// RuntimeTimeoutMs Omitted or null keeps the class default
+	RuntimeTimeoutMs *int `json:"runtime_timeout_ms"`
 }
 
 // UpdateEngineQueueClass defines model for UpdateEngineQueue.Class.
