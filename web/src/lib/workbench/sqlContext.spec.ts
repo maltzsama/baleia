@@ -126,6 +126,31 @@ describe('sqlContextAt', () => {
 	});
 });
 
+describe('joinOn (#555)', () => {
+	it('marks the JOIN whose ON the cursor follows', () => {
+		const ctx = at('SELECT * FROM orders o JOIN customers c ON |');
+		expect(ctx?.joinOn).toEqual({
+			joined: { path: ['customers'], alias: 'c' },
+			others: [{ path: ['orders'], alias: 'o' }]
+		});
+	});
+
+	it('marks only the most recent JOIN', () => {
+		const ctx = at('SELECT * FROM a x JOIN b y ON x.id = y.id JOIN c z ON |');
+		expect(ctx?.joinOn?.joined).toEqual({ path: ['c'], alias: 'z' });
+		expect(ctx?.joinOn?.others).toEqual([
+			{ path: ['a'], alias: 'x' },
+			{ path: ['b'], alias: 'y' }
+		]);
+	});
+
+	it('does not mark a WHERE, a typed column, or a populated condition', () => {
+		expect(at('SELECT * FROM a x WHERE |')?.joinOn).toBeUndefined();
+		expect(at('SELECT * FROM a x JOIN b y ON x.|')?.joinOn).toBeUndefined();
+		expect(at('SELECT * FROM a x JOIN b y ON x.id = |')?.joinOn).toBeUndefined();
+	});
+});
+
 describe('statementSpanAt (#395)', () => {
 	const text = (doc: string, pos: number) => {
 		const span = statementSpanAt(doc, pos);

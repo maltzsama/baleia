@@ -273,3 +273,20 @@ func TestTruncateKeepsUTF8(t *testing.T) {
 		t.Fatalf("truncate = %q", got)
 	}
 }
+
+// TestColumnsFingerprintIncludesForeignKeys: adding or dropping a key marks the
+// table changed, so the sync rewrites its keys (B1, #554).
+func TestColumnsFingerprintIncludesForeignKeys(t *testing.T) {
+	t.Parallel()
+	base := connections.TableMeta{
+		Ref:     connections.TableRef{Name: "orders", Type: "TABLE"},
+		Columns: []connections.Column{{Name: "customer_id", NativeType: "bigint", Position: 1}},
+	}
+	withKey := base
+	withKey.ForeignKeys = []connections.ForeignKey{{
+		Column: "customer_id", RefNamespace: connections.Namespace{"sales"}, RefTable: "customers", RefColumn: "id",
+	}}
+	if columnsFingerprint(base) == columnsFingerprint(withKey) {
+		t.Fatal("a foreign key must change the fingerprint")
+	}
+}

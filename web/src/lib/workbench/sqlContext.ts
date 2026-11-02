@@ -8,6 +8,14 @@ export type Expect = 'statement' | 'table' | 'column' | 'keyword';
 /** A table named in the statement; `path` is empty for a derived table. */
 export type StatementTable = { path: string[]; alias: string };
 
+/** The tables around a `JOIN <table> ON` at the cursor (#555). */
+export type JoinOnContext = {
+	/** The table the JOIN just introduced. */
+	joined: StatementTable;
+	/** The tables already in the statement (earlier joins included). */
+	others: StatementTable[];
+};
+
 export type SqlContext = {
 	expect: Expect;
 	/** Identifiers before the dot(s) at the cursor: `n.na` -> ['n']. */
@@ -16,6 +24,8 @@ export type SqlContext = {
 	prefix: string;
 	from: number;
 	tables: StatementTable[];
+	/** Set when the cursor is right after the ON of a JOIN (#555). */
+	joinOn?: JoinOnContext;
 };
 
 type Token = {
@@ -274,7 +284,21 @@ export function sqlContextAt(doc: string, pos: number): SqlContext | null {
 
 	const head = before.slice(0, last + 1);
 	const tables = statementTables(statement);
-	return { expect: expectAt(head, qualifier), qualifier, prefix, from, tables };
+	const expect = expectAt(head, qualifier);
+	// Right after `JOIN <table> ON` with nothing typed: offer the join
+	// conditions the workspace used (#555). Once a word is typed, the column
+	// completion takes over.
+	const joinOn =
+		expect === 'column' && prefix === '' && qualifier.length === 0
+			? joinOnAt(head, tables)
+			: undefined;
+	return { expect, qualifier, prefix, from, tables, joinOn };
+}
+
+/** The JOIN being completed when `head` ends with its ON, else undefined. */
+function joinOnAt(head: Token[], tables: StatementTable[]): JoinOnContext | undefined {
+	if (tables.length < 2 || upper(head[head.length - 1]) !== 'ON') return undefined;
+	return { joined: tables[tables.length - 1], others: tables.slice(0, -1) };
 }
 
 function expectAt(head: Token[], qualifier: string[]): Expect {

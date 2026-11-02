@@ -47,6 +47,7 @@ func (*Provider) EngineKind() string { return "sqlserver" }
 func (*Provider) WalksCatalogs() bool { return true }
 
 var _ connections.CatalogWalker = (*reader)(nil)
+var _ connections.ForeignKeyReader = (*reader)(nil)
 
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
@@ -366,6 +367,39 @@ func (r *reader) WalkCatalog(ctx context.Context, catalog string, visit func(con
 		return err
 	}
 	return g.Flush()
+}
+
+// ListForeignKeys reads the foreign keys of every user table (B1, #554).
+func (r *reader) ListForeignKeys(ctx context.Context, catalog string) ([]connections.ForeignKeyRow, error) {
+	ctx, cancel := context.WithTimeout(ctx, connections.WalkTimeout)
+	defer cancel()
+	rows, err := r.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT s.name, t.name, c.name, rs.name, rt.name, rc.name
+		FROM %[1]s.sys.foreign_key_columns fkc
+		JOIN %[1]s.sys.tables t ON t.object_id = fkc.parent_object_id
+		JOIN %[1]s.sys.schemas s ON s.schema_id = t.schema_id
+		JOIN %[1]s.sys.columns c ON c.object_id = fkc.parent_object_id AND c.column_id = fkc.parent_column_id
+		JOIN %[1]s.sys.tables rt ON rt.object_id = fkc.referenced_object_id
+		JOIN %[1]s.sys.schemas rs ON rs.schema_id = rt.schema_id
+		JOIN %[1]s.sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id
+		WHERE s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest') AND s.name NOT LIKE 'db[_]%%'
+		ORDER BY s.name, t.name, fkc.constraint_column_id`, quoteIdent(catalog)))
+	if err != nil {
+		return nil, notFoundOr(err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make([]connections.ForeignKeyRow, 0)
+	for rows.Next() {
+		var schema, refSchema string
+		var fk connections.ForeignKeyRow
+		if err := rows.Scan(&schema, &fk.Table, &fk.Column, &refSchema, &fk.RefTable, &fk.RefColumn); err != nil {
+			return nil, err
+		}
+		fk.Namespace = connections.Namespace{schema}
+		fk.RefNamespace = connections.Namespace{refSchema}
+		out = append(out, fk)
+	}
+	return out, rows.Err()
 }
 
 func (r *reader) Close() error { return r.db.Close() }

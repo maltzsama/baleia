@@ -265,7 +265,25 @@ func (s *walkerSource) Walk(ctx context.Context, known func([]string, string) (K
 			return err
 		}
 	}
+	// Foreign keys are read once per catalog and attached to the table they
+	// belong to (B1, #554). Readers that cannot report them are skipped.
+	fks := map[string][]connections.ForeignKey{}
+	if fkr, ok := s.r.(connections.ForeignKeyReader); ok {
+		rows, err := fkr.ListForeignKeys(ctx, catalog)
+		if err != nil {
+			return err
+		}
+		for _, fk := range rows {
+			k := tableKey([]string(fk.Namespace), fk.Table)
+			fks[k] = append(fks[k], connections.ForeignKey{
+				Column: fk.Column, RefNamespace: fk.RefNamespace, RefTable: fk.RefTable, RefColumn: fk.RefColumn,
+			})
+		}
+	}
 	return s.w.WalkCatalog(ctx, catalog, func(m connections.TableMeta) error {
+		if fk := fks[tableKey([]string(m.Ref.Namespace), m.Ref.Name)]; fk != nil {
+			m.ForeignKeys = fk
+		}
 		return v.Table(diffed(snapshotOf(m), columnsFingerprint(m), known))
 	})
 }
@@ -417,6 +435,14 @@ func snapshotOf(m connections.TableMeta) TableSnapshot {
 		}
 		t.Columns = append(t.Columns, ColumnSnapshot{Ordinal: ord, Name: c.Name, NativeType: c.NativeType, Nullable: c.Nullable, Comment: c.Comment})
 	}
+	for _, fk := range m.ForeignKeys {
+		t.ForeignKeys = append(t.ForeignKeys, ForeignKeySnapshot{
+			Column:       fk.Column,
+			RefNamespace: slices.Clone(fk.RefNamespace),
+			RefTable:     fk.RefTable,
+			RefColumn:    fk.RefColumn,
+		})
+	}
 	return t
 }
 
@@ -431,12 +457,17 @@ func kindOf(refType string) string {
 }
 
 // columnsFingerprint is the md5 of what a database or engine reports about a
-// table: its kind, comment and ordered columns.
+// table: its kind, comment, ordered columns and foreign keys. FKs are part of
+// it so adding or dropping one marks the table changed and rewrites them
+// (B1, #554).
 func columnsFingerprint(m connections.TableMeta) string {
 	h := md5.New()
 	fmt.Fprintf(h, "%s\x1f%s\x1e", m.Ref.Type, m.Comment)
 	for _, c := range m.Columns {
 		fmt.Fprintf(h, "%d\x1f%s\x1f%s\x1f%t\x1f%s\x1e", c.Position, c.Name, c.NativeType, c.Nullable, c.Comment)
+	}
+	for _, fk := range m.ForeignKeys {
+		_, _ = fmt.Fprintf(h, "%s\x1f%s\x1f%s\x1f%s\x1e", fk.Column, strings.Join(fk.RefNamespace, "."), fk.RefTable, fk.RefColumn)
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

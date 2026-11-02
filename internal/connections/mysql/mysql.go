@@ -81,6 +81,7 @@ func (p *Provider) EngineKind() string { return string(p.Kind()) }
 func (*Provider) WalksCatalogs() bool { return true }
 
 var _ connections.CatalogWalker = (*reader)(nil)
+var _ connections.ForeignKeyReader = (*reader)(nil)
 
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
@@ -348,6 +349,43 @@ func (r *reader) WalkCatalog(ctx context.Context, catalog string, visit func(con
 		return err
 	}
 	return g.Flush()
+}
+
+// ListForeignKeys reads the foreign keys of every user schema (B1, #554).
+func (r *reader) ListForeignKeys(ctx context.Context, catalog string) ([]connections.ForeignKeyRow, error) {
+	if err := checkCatalog(catalog); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, connections.WalkTimeout)
+	defer cancel()
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT k.TABLE_SCHEMA, k.TABLE_NAME, k.COLUMN_NAME,
+		       k.REFERENCED_TABLE_SCHEMA, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME
+		FROM information_schema.KEY_COLUMN_USAGE k
+		WHERE k.REFERENCED_TABLE_NAME IS NOT NULL
+		  AND k.TABLE_SCHEMA NOT IN (?, ?, ?, ?)
+		ORDER BY k.TABLE_SCHEMA, k.TABLE_NAME, k.ORDINAL_POSITION`,
+		systemSchemas[0], systemSchemas[1], systemSchemas[2], systemSchemas[3])
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := make([]connections.ForeignKeyRow, 0)
+	for rows.Next() {
+		var schema string
+		var refSchema, refTable, refColumn sql.NullString
+		var fk connections.ForeignKeyRow
+		if err := rows.Scan(&schema, &fk.Table, &fk.Column, &refSchema, &refTable, &refColumn); err != nil {
+			return nil, err
+		}
+		fk.Namespace = connections.Namespace{schema}
+		if refSchema.Valid {
+			fk.RefNamespace = connections.Namespace{refSchema.String}
+		}
+		fk.RefTable, fk.RefColumn = refTable.String, refColumn.String
+		out = append(out, fk)
+	}
+	return out, rows.Err()
 }
 
 func (r *reader) Close() error { return r.db.Close() }

@@ -73,6 +73,7 @@ const scope = (overrides: Partial<CompletionScope> = {}): CompletionScope => ({
 });
 
 let searches: { q: string; catalogId: string | null }[] = [];
+let joinCalls: { left: string | null; right: string | null }[] = [];
 
 beforeEach(() => {
 	clearMetadataCache();
@@ -109,6 +110,29 @@ beforeEach(() => {
 					namespace: ['tiny'],
 					table: 'nationality_like'
 				})
+			]);
+		}),
+		http.get('/workspaces/{id}/metadata/join-suggestions', ({ request, response }) => {
+			const url = new URL(request.url);
+			joinCalls.push({
+				left: url.searchParams.get('left_table'),
+				right: url.searchParams.get('right_table')
+			});
+			return response(200).json([
+				{
+					left_column: 'regionkey',
+					right_column: 'regionkey',
+					use_count: 3,
+					last_used_at: '2026-01-01T00:00:00Z',
+					score: 2.5,
+					source: 'history'
+				},
+				{
+					left_column: 'nationkey',
+					right_column: 'regionkey',
+					use_count: 0,
+					source: 'foreign_key'
+				}
 			]);
 		})
 	);
@@ -204,6 +228,25 @@ describe('sqlCompletionSource', () => {
 		]);
 		expect(got.indexOf('ABS · function')).toBeGreaterThan(2);
 		expect(got.indexOf('ABS · function')).toBeLessThan(got.indexOf('AND'));
+	});
+
+	it('offers the join conditions after JOIN ... ON and inserts them with the aliases', async () => {
+		joinCalls = [];
+		const result = await complete('SELECT * FROM nation n JOIN region r ON |');
+		const got = labels(result?.options);
+		expect(got[0]).toBe('n.regionkey = r.regionkey · Used 3 times');
+		expect(got).toContain('n.nationkey = r.regionkey · Foreign key');
+		// Choosing it inserts the whole condition with the statement's aliases.
+		expect((result?.options[0] as { apply?: unknown }).apply).toBe('n.regionkey = r.regionkey');
+		// The pair is asked as (existing table, joined table).
+		expect(joinCalls).toEqual([{ left: IDS.tinyNation, right: IDS.tinyRegion }]);
+	});
+
+	it('does not offer join conditions once a column is being typed', async () => {
+		joinCalls = [];
+		const result = await complete('SELECT * FROM nation n JOIN region r ON n.|');
+		expect(labels(result?.options)).not.toContain('n.regionkey = r.regionkey · Used 3 times');
+		expect(joinCalls).toEqual([]);
 	});
 
 	it('matches by prefix, never by similarity', async () => {

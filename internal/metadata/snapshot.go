@@ -35,10 +35,11 @@ type TableSnapshot struct {
 	// Unchanged means the source knows the table did not change since the
 	// stored fingerprint (Known) and loaded nothing: Columns, Properties and
 	// Comment are empty and the stored ones stay.
-	Unchanged  bool
-	Columns    []ColumnSnapshot
-	Properties map[string]string
-	Comment    string
+	Unchanged   bool
+	Columns     []ColumnSnapshot
+	ForeignKeys []ForeignKeySnapshot
+	Properties  map[string]string
+	Comment     string
 }
 
 // ColumnSnapshot is one column, in the source's own type system.
@@ -48,6 +49,15 @@ type ColumnSnapshot struct {
 	NativeType string
 	Nullable   bool
 	Comment    string
+}
+
+// ForeignKeySnapshot is one column referencing one column of another table
+// (B1, #554). The referenced table may live in another namespace.
+type ForeignKeySnapshot struct {
+	Column       string   `json:"column_name"`
+	RefNamespace []string `json:"ref_namespace"`
+	RefTable     string   `json:"ref_table"`
+	RefColumn    string   `json:"ref_column"`
 }
 
 // Known is what earlier passes stored about a table that is still present.

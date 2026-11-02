@@ -1201,6 +1201,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/metadata/join-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Join conditions used between two tables, best first (editor autocomplete)
+         * @description Conditions the workspace used in the last 90 days, ranked by frequency with a 30-day half-life decay, plus the foreign keys between the two tables. Both tables must belong to catalogs granted to the workspace.
+         */
+        get: operations["listJoinSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/semantic/tags": {
         parameters: {
             query?: never;
@@ -4925,6 +4947,23 @@ export interface components {
             /** Format: date-time */
             metadata_synced_at?: string | null;
         };
+        JoinSuggestion: {
+            /** @description A column of the left table */
+            left_column: string;
+            /** @description A column of the right table */
+            right_column: string;
+            /** @description Finished statements that used it in the last 90 days; 0 for a foreign key never used */
+            use_count: number;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            /**
+             * Format: double
+             * @description Frequency with a 30-day half-life decay; 0 for a foreign key
+             */
+            score?: number;
+            /** @enum {string} */
+            source: "history" | "foreign_key";
+        };
         SemanticDoc: {
             /** Format: uuid */
             id: string;
@@ -8583,6 +8622,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetadataSearchResult"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listJoinSuggestions: {
+        parameters: {
+            query: {
+                left_table: string;
+                right_table: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suggestions, best first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinSuggestion"][];
                 };
             };
             401: components["responses"]["Unauthorized"];

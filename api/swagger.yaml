@@ -2049,6 +2049,17 @@ components:
         score: { type: number, format: double }
         metadata_synced_at: { type: string, format: date-time, nullable: true }
 
+    JoinSuggestion:
+      type: object
+      required: [left_column, right_column, use_count, source]
+      properties:
+        left_column: { type: string, description: "A column of the left table" }
+        right_column: { type: string, description: "A column of the right table" }
+        use_count: { type: integer, description: "Finished statements that used it in the last 90 days; 0 for a foreign key never used" }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        score: { type: number, format: double, description: "Frequency with a 30-day half-life decay; 0 for a foreign key" }
+        source: { type: string, enum: [history, foreign_key] }
+
     # ── Semantic layer (#33) ───────────────────────────────────
     SemanticDoc:
       type: object
@@ -5234,6 +5245,38 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/MetadataSearchResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/metadata/join-suggestions:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Metadata]
+      operationId: listJoinSuggestions
+      summary: "Join conditions used between two tables, best first (editor autocomplete)"
+      description: >
+        Conditions the workspace used in the last 90 days, ranked by frequency
+        with a 30-day half-life decay, plus the foreign keys between the two
+        tables. Both tables must belong to catalogs granted to the workspace.
+      parameters:
+        - name: left_table
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: right_table
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: "Suggestions, best first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JoinSuggestion" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }

@@ -1,0 +1,28 @@
+meta {
+  name: Join Suggestions
+  type: http
+  seq: 22
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/join-suggestions?left_table={{metadata_table_id}}&right_table={{metadata_table_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+docs {
+  Join conditions used between two tables in the last 90 days, ranked by
+  frequency with a 30-day half-life decay, plus the foreign keys between them
+  (#554). The editor calls it after `JOIN <table> ON` to complete the
+  condition. A table of a catalog the workspace may not use is a 404. Here
+  both sides are the same browsed table, so the list is usually empty.
+}

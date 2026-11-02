@@ -37,11 +37,22 @@ type Snapshot struct {
 	Summary     map[string]string
 }
 
+// ForeignKey is one column of a table referencing one column of another.
+// Names are as the source reports them; the referenced table may live in
+// another namespace.
+type ForeignKey struct {
+	Column       string
+	RefNamespace Namespace
+	RefTable     string
+	RefColumn    string
+}
+
 // TableMeta is a table's metadata.
 type TableMeta struct {
-	Ref     TableRef
-	Columns []Column
-	Comment string
+	Ref         TableRef
+	Columns     []Column
+	ForeignKeys []ForeignKey
+	Comment     string
 	// Format is informational: "iceberg", "heap", "innodb", …
 	Format string
 	// Properties carries format-specific details (location, table engine, …).

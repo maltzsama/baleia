@@ -49,6 +49,7 @@ type fakeTable struct {
 	name    string
 	version string
 	cols    []string
+	fks     []ForeignKeySnapshot
 }
 
 func (s *fakeSource) TypeSystem() string { return "iceberg" }
@@ -81,6 +82,7 @@ func (s *fakeSource) Walk(ctx context.Context, known func([]string, string) (Kno
 		for i, c := range ft.cols {
 			t.Columns = append(t.Columns, ColumnSnapshot{Ordinal: i + 1, Name: c, NativeType: "long", Nullable: true})
 		}
+		t.ForeignKeys = ft.fks
 		if err := v.Table(t); err != nil {
 			return err
 		}
@@ -175,6 +177,35 @@ func TestSync_OnlyChangedTablesReload(t *testing.T) {
 	}
 	if n := count(t, pool, `SELECT count(*) FROM metadata_columns`); n != 13 {
 		t.Fatalf("columns = %d", n)
+	}
+}
+
+// TestSync_ForeignKeys: a table's foreign keys are stored with it and replaced
+// when the table changes and drops them (B1, #554).
+func TestSync_ForeignKeys(t *testing.T) {
+	t.Parallel()
+	pool := testPool(t)
+	cat := testCatalog(t, pool)
+	fk := ForeignKeySnapshot{Column: "customer_id", RefNamespace: []string{"sales"}, RefTable: "customers", RefColumn: "id"}
+	src := &fakeSource{tables: []fakeTable{
+		{ns: []string{"sales"}, name: "orders", version: "v1", cols: []string{"id", "customer_id"}, fks: []ForeignKeySnapshot{fk}},
+		{ns: []string{"sales"}, name: "customers", version: "v1", cols: []string{"id"}},
+	}}
+	s := NewSyncer(pool, fakeOpener{src})
+	ctx := context.Background()
+	if _, err := s.Sync(ctx, cat, nil); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM metadata_foreign_keys WHERE column_name = 'customer_id' AND ref_table = 'customers' AND ref_namespace = '{sales}'`); n != 1 {
+		t.Fatalf("foreign keys = %d", n)
+	}
+
+	src.tables[0].version, src.tables[0].fks = "v2", nil
+	if _, err := s.Sync(ctx, cat, nil); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM metadata_foreign_keys`); n != 0 {
+		t.Fatalf("foreign keys after the drop = %d", n)
 	}
 }
 

@@ -310,6 +310,16 @@ type MetadataColumn struct {
 	Comment    *string     `json:"comment"`
 }
 
+type MetadataForeignKey struct {
+	CatalogID    pgtype.UUID        `json:"catalog_id"`
+	TableID      pgtype.UUID        `json:"table_id"`
+	ColumnName   string             `json:"column_name"`
+	RefNamespace []string           `json:"ref_namespace"`
+	RefTable     string             `json:"ref_table"`
+	RefColumn    string             `json:"ref_column"`
+	LastSeenAt   pgtype.Timestamptz `json:"last_seen_at"`
+}
+
 type MetadataNamespace struct {
 	CatalogID  pgtype.UUID        `json:"catalog_id"`
 	Namespace  []string           `json:"namespace"`
