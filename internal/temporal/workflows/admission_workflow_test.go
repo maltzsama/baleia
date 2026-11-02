@@ -377,3 +377,24 @@ func TestAdmissionState_PerKeyCap(t *testing.T) {
 	require.Equal(t, "a2", leases[0].ExecutionID, "the capped run starts when its key frees a slot")
 	require.Empty(t, *failures)
 }
+
+// TestAdmissionState_CappedRequestRespectsQueueBound: with a full queue, a
+// capped arrival is refused instead of queued, even when the class has a free
+// slot (#589).
+func TestAdmissionState_CappedRequestRespectsQueueBound(t *testing.T) {
+	t.Parallel()
+	s := admissionState()
+	s.Capacities = []AdmissionCapacity{
+		{Class: queryengine.ClassInteractive, MaxRunning: 2, MaxQueued: 0, QueueTimeout: time.Hour},
+	}
+	now := time.Unix(0, 0)
+	failures, fail := collectFailures()
+
+	s.request(now, AdmissionRequest{ExecutionID: "a1", Class: queryengine.ClassInteractive, FairnessKey: "A", MaxRunning: 1}, fail)
+	require.Len(t, s.admitAll(), 1)
+	// The class has room, but the key is capped and the queue is closed.
+	s.request(now.Add(time.Second), AdmissionRequest{ExecutionID: "a2", Class: queryengine.ClassInteractive, FairnessKey: "A", MaxRunning: 1}, fail)
+	require.Empty(t, s.Queued)
+	require.Len(t, *failures, 1)
+	require.Equal(t, "queue_full", (*failures)[0].Code)
+}

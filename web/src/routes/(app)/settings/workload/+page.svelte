@@ -291,7 +291,7 @@
 	function buildSave(): { body: UpdateEngineQueuesRequest; closesWithQueued: boolean } | null {
 		saveError = '';
 		const total = numberField(maxRunningTotal);
-		if (total !== null && Number.isNaN(total)) {
+		if (total !== null && (Number.isNaN(total) || total < 0)) {
 			saveError = m.workload_could_not_save();
 			return null;
 		}

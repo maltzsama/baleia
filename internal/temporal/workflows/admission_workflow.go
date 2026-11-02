@@ -318,8 +318,9 @@ func (s *AdmissionState) request(now time.Time, req AdmissionRequest, fail func(
 		return
 	}
 	// max_queued bounds waiting runs; a run that can start right away does not
-	// wait and is not counted.
-	if s.queuedInClass(req.Class) >= capacity.MaxQueued && !s.canAdmit(req.Class) {
+	// wait and is not counted. A per-key cap counts as "cannot start" here, so
+	// a capped arrival is refused once the queue is full (#589).
+	if s.queuedInClass(req.Class) >= capacity.MaxQueued && !s.canAdmitRequest(req) {
 		fail(AdmissionFailure{ExecutionID: req.ExecutionID, Code: AdmissionFailureQueueFull, Message: "the queue for this class is full"})
 		return
 	}
@@ -477,6 +478,25 @@ func (s *AdmissionState) canAdmit(class queryengine.WorkloadClass) bool {
 	}
 	capacity, ok := s.capacity(class)
 	return ok && capacity.MaxRunning > 0 && s.runningInClass(class) < capacity.MaxRunning
+}
+
+// canAdmitRequest is canAdmit plus the request's per-key cap (#589).
+func (s *AdmissionState) canAdmitRequest(req AdmissionRequest) bool {
+	if !s.canAdmit(req.Class) {
+		return false
+	}
+	return req.MaxRunning <= 0 || s.runningForKey(req.Class, req.FairnessKey) < req.MaxRunning
+}
+
+// runningForKey counts the leases of one fairness key in a class.
+func (s *AdmissionState) runningForKey(class queryengine.WorkloadClass, key string) int {
+	n := 0
+	for _, lease := range s.Running {
+		if lease.Class == class && lease.FairnessKey == key {
+			n++
+		}
+	}
+	return n
 }
 
 func (s *AdmissionState) runningInClass(class queryengine.WorkloadClass) int {

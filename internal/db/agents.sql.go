@@ -66,6 +66,19 @@ func (q *Queries) CountActiveAgentTokens(ctx context.Context, agentID pgtype.UUI
 	return count, err
 }
 
+const countActiveExecutionsByAgent = `-- name: CountActiveExecutionsByAgent :one
+SELECT count(*) FROM query_executions
+WHERE agent_id = $1 AND status IN ('running', 'queued')
+`
+
+// Runs that still hold an agent concurrency slot: running or queued (#589).
+func (q *Queries) CountActiveExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveExecutionsByAgent, agentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countExecutionsByAgentSince = `-- name: CountExecutionsByAgentSince :one
 SELECT count(*) FROM query_executions
 WHERE agent_id = $1 AND started_at > $2
