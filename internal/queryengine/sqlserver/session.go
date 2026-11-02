@@ -21,6 +21,9 @@ type session struct {
 	conn   *sql.Conn
 	spec   queryengine.SessionSpec
 	spid   int
+	// db is the per-session pool created for the class-tagged application
+	// name (#552); closed with the session.
+	db *sql.DB
 }
 
 func (s *session) setup(ctx context.Context) error {
@@ -57,7 +60,13 @@ func (s *session) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, _ = s.conn.ExecContext(ctx, "IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION")
-	return s.conn.Close()
+	err := s.conn.Close()
+	if s.db != nil {
+		if dbErr := s.db.Close(); err == nil {
+			err = dbErr
+		}
+	}
+	return err
 }
 
 // Execute runs one batch and streams every result set it returns as Arrow.

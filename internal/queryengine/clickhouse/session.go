@@ -62,6 +62,22 @@ func (s *session) request(sql, queryID string) request {
 		readOnly:   s.readOnly,
 		timeout:    s.spec.Timeout,
 		logComment: logComment(s.spec.Tags),
+		class:      s.spec.Tags.Class,
+	}
+}
+
+// clickHousePriority maps Baleia's class to ClickHouse's `priority` setting,
+// where a lower number runs first (#552).
+func clickHousePriority(c queryengine.WorkloadClass) string {
+	switch c {
+	case queryengine.ClassInteractive:
+		return "1"
+	case queryengine.ClassHeavy:
+		return "5"
+	case queryengine.ClassBackground:
+		return "10"
+	default:
+		return ""
 	}
 }
 

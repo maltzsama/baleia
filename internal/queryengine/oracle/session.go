@@ -40,10 +40,10 @@ func (s *session) setup(ctx context.Context) error {
 			return err
 		}
 	}
-	if s.spec.Tags.Source != "" || s.spec.Tags.ExecutionID != "" {
+	if s.spec.Tags.Source != "" || s.spec.Tags.ExecutionID != "" || s.spec.Tags.Class != "" {
 		d := s.engine.Dialect()
 		block := fmt.Sprintf("BEGIN DBMS_APPLICATION_INFO.SET_MODULE(%s, %s); DBMS_APPLICATION_INFO.SET_CLIENT_INFO(%s); END;",
-			d.QuoteString("baleia"), d.QuoteString(s.spec.Tags.Source), d.QuoteString(s.spec.Tags.ExecutionID))
+			d.QuoteString(oracleModule(s.spec.Tags)), d.QuoteString(s.spec.Tags.Source), d.QuoteString(s.spec.Tags.ExecutionID))
 		if err := s.exec(ctx, block); err != nil {
 			return err
 		}
@@ -233,4 +233,13 @@ func sessionIDs(h queryengine.QueryHandle) (int, int, error) {
 		return 0, 0, queryengine.NewError(queryengine.CodeInternal, Kind, "", "handle has no serial")
 	}
 	return sid, serial, nil
+}
+
+// oracleModule is the module Oracle Resource Manager sees: baleia-<class>
+// (#552). Without a class it stays the plain marker.
+func oracleModule(t queryengine.Tags) string {
+	if t.Class == "" {
+		return "baleia"
+	}
+	return "baleia-" + string(t.Class)
 }

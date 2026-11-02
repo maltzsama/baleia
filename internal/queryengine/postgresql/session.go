@@ -184,16 +184,18 @@ func (s *session) stream(rows pgx.Rows, sink queryengine.RecordSink, start time.
 }
 
 // applicationName maps the session tags to application_name, truncated to the
-// 63-byte identifier limit.
+// 63-byte identifier limit. The class is included for visibility (#552).
 func applicationName(t queryengine.Tags) string {
-	if t.ExecutionID == "" {
-		return "baleia"
+	name := "baleia"
+	if t.Source != "" {
+		name += ":" + t.Source
 	}
-	src := t.Source
-	if src == "" {
-		src = "query"
+	if t.Class != "" {
+		name += ":class=" + string(t.Class)
 	}
-	name := "baleia:" + src + ":" + t.ExecutionID
+	if t.ExecutionID != "" {
+		name += ":" + t.ExecutionID
+	}
 	if len(name) > 63 {
 		name = name[:63]
 	}

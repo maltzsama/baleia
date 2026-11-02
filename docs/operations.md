@@ -369,6 +369,19 @@ Selectors are evaluated in order and the first match wins; the last one is the
 catch-all for a session with no class. Set the root group's `schedulingPolicy`
 to `weighted` or `query_priority` to also honour the session property.
 
+### Direct engines
+
+Where a direct engine has a native workload mechanism, Baleia sends the class
+there too (#552):
+
+| Engine | What Baleia sends | Where to see it |
+|---|---|---|
+| PostgreSQL | `application_name = baleia:<source>:class=<class>:<execution_id>` (truncated to 63 bytes) | `pg_stat_activity.application_name` |
+| ClickHouse | the `priority` setting: `interactive=1`, `heavy=5`, `background=10` | `system.query_log` / `system.processes` |
+| SQL Server | `Application Name=baleia-<class>` on the session's connection | Resource Governor classifier on `PROGRAM_NAME()` |
+| Oracle | `DBMS_APPLICATION_INFO.SET_MODULE('baleia-<class>', <source>)` | `v$session.module` / Resource Manager consumer groups |
+| MySQL/MariaDB, SQLite, Flight SQL | nothing native; Baleia's own queue is the control | — |
+
 ## Adaptive admission (Trino)
 
 With `BALEIA_WORKLOAD_ENABLED=true`, the Lens cluster poller can throttle an

@@ -68,6 +68,7 @@ type request struct {
 	readOnly   bool
 	timeout    time.Duration
 	logComment string
+	class      queryengine.WorkloadClass
 	params     map[string]string
 	format     string // default: ArrowStream
 }
@@ -103,6 +104,12 @@ func (c *client) do(ctx context.Context, r request) (*http.Response, error) {
 	}
 	if r.logComment != "" {
 		q.Set("log_comment", r.logComment)
+	}
+	if r.class != "" {
+		// ClickHouse prioritises lower numbers (#552).
+		if priority := clickHousePriority(r.class); priority != "" {
+			q.Set("priority", priority)
+		}
 	}
 	for k, v := range r.params {
 		q.Set("param_"+k, v)
