@@ -573,6 +573,7 @@
 					engineCatalog: selectedTarget.engine_catalog_name,
 					namespaceDepth: selectedEngine?.capabilities?.namespace_depth ?? 0,
 					schema: activeTab.schema || workspaceStore.current?.default_schema || '',
+					dialect: dialect?.name ?? '',
 					keywords: dialect?.keywords ?? [],
 					functions: dialect?.functions ?? [],
 					cmDialect: codemirrorDialect(selectedEngine?.dialect?.codemirror_base),

@@ -1,0 +1,2212 @@
+[
+  {
+    "name": "abs",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "acos",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "all_match",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "any_match",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "any_value",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "approx_distinct",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "approx_most_frequent",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "approx_percentile",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "approx_set",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "arbitrary",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_distinct",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_except",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_first",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_histogram",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_intersect",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_join",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_last",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_max",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_min",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_position",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_remove",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_sort",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "array_union",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "arrays_overlap",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "asin",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "at_timezone",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "atan",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "atan2",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "avg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bar",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "beta_cdf",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bing_tile",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bing_tile_at",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bing_tile_coordinates",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bing_tile_polygon",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bing_tile_quadkey",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bing_tile_zoom_level",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bing_tiles_around",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bit_count",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bitwise_and",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bitwise_and_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bitwise_left_shift",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bitwise_not",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bitwise_or",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bitwise_or_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bitwise_right_shift",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bitwise_right_shift_arithmetic",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bitwise_xor",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bitwise_xor_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bool_and",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bool_or",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "cardinality",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "cbrt",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ceil",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ceiling",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "char2hexint",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "checksum",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "chr",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "classify",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "codepoint",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "color",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "combinations",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "concat",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "concat_ws",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "contains",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "contains_sequence",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "convex_hull_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "corr",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "cos",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "cosh",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "cosine_distance",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "cosine_similarity",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "count",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "count_if",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "covar_pop",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "covar_samp",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "crc32",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "cume_dist",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "current_date",
+    "kind": "function",
+    "call": false
+  },
+  {
+    "name": "current_groups",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "current_timezone",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "date",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "date_add",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "date_diff",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "date_format",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "date_parse",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "date_trunc",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "day",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "day_of_month",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "day_of_week",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "day_of_year",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "degrees",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "dense_rank",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "dot_product",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "dow",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "doy",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "e",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "element_at",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "empty_approx_set",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ends_with",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "euclidean_distance",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "evaluate_classifier_predictions",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "every",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "exclude_columns",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "exp",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "features",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "filter",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "first_value",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "flatten",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "floor",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "format_datetime",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "format_number",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_base",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_base32",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_base64",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_base64url",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_big_endian_32",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_big_endian_64",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_encoded_polyline",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_geojson_geometry",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_hex",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_ieee754_32",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_ieee754_64",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_iso8601_date",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_iso8601_timestamp",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_iso8601_timestamp_nanos",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_unixtime",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_unixtime_nanos",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "from_utf8",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geometric_mean",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geometry_collect_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geometry_from_hadoop_shape",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geometry_invalid_reason",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geometry_nearest_points",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geometry_to_bing_tiles",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geometry_union",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geometry_union_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "great_circle_distance",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "greatest",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "hamming_distance",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "hash_counts",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "histogram",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "hmac_md5",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "hmac_sha1",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "hmac_sha256",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "hmac_sha512",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "hour",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "human_readable_seconds",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "index",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "infinity",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "intersection_cardinality",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "inverse_beta_cdf",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "inverse_normal_cdf",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "is_finite",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "is_infinite",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "is_json_scalar",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "is_nan",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jaccard_index",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_array_contains",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_array_get",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_array_length",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_extract",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_extract_scalar",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_format",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_parse",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_scalar",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_size",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "kurtosis",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "lag",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "last_day_of_month",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "last_value",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "lead",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "learn_classifier",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "learn_libsvm_classifier",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "learn_libsvm_regressor",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "learn_regressor",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "least",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "length",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "levenshtein_distance",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "line_interpolate_point",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "line_interpolate_points",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "line_locate_point",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "listagg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ln",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "log",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "log10",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "log2",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "lower",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "lpad",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ltrim",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "luhn_check",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "make_set_digest",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "map",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "map_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "map_concat",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "map_entries",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "map_filter",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "map_from_entries",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "map_keys",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "map_union",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "map_values",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "map_zip_with",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "max",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "max_by",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "md5",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "merge",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "merge_set_digest",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "millisecond",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "min",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "min_by",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "minute",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "mod",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "month",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "multimap_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "multimap_from_entries",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "murmur3",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "nan",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ngrams",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "none_match",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "normal_cdf",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "normalize",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "now",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "nth_value",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ntile",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "numeric_histogram",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "objectid",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "objectid_timestamp",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "parse_data_size",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "parse_datetime",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "parse_duration",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "parse_presto_data_size",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "percent_rank",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "pi",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "pow",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "power",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "qdigest_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "quantile_at_value",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "quarter",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "radians",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "rand",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "random",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "rank",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "reduce",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "reduce_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "regexp_count",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "regexp_extract",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "regexp_extract_all",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "regexp_like",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "regexp_position",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "regexp_replace",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "regexp_split",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "regr_intercept",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "regr_slope",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "regress",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "render",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "repeat",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "replace",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "reverse",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "rgb",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "round",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "row_number",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "rpad",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "rtrim",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "second",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sequence",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sha1",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sha256",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sha512",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "shuffle",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sign",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "simplify_geometry",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sin",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sinh",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "skewness",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "slice",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "soundex",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "spatial_partitioning",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "spatial_partitions",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "split",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "split_part",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "split_to_map",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "split_to_multimap",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "spooky_hash_v2_32",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "spooky_hash_v2_64",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sqrt",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Area",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_AsBinary",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_AsEWKB",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_AsEWKT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_AsText",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Boundary",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Buffer",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Centroid",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Collect",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Contains",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_ConvexHull",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_CoordDim",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Crosses",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Difference",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Dimension",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Disjoint",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Distance",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_EndPoint",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Envelope",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_EnvelopeAsPts",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Equals",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_ExteriorRing",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Force2D",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Force3D",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Geometries",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_GeometryFromText",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_GeometryN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_GeometryType",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_GeomFromBinary",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_GeomFromEWKT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_GeomFromKML",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_InteriorRingN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_InteriorRings",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Intersection",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Intersects",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_IsClosed",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_IsEmpty",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_IsRing",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_IsSimple",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_IsValid",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Length",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_LineFromText",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_LineMerge",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_LineString",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_MakeLine",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_MakePolygon",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_MinimumBoundingCircle",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Multi",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_MultiPoint",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Normalize",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_NumGeometries",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_NumInteriorRing",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_NumPoints",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_OrientedEnvelope",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Overlaps",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Point",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_PointN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_PointOnSurface",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Points",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Polygon",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Polygonize",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_ReducePrecision",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Relate",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_SetSRID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_SRID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_StartPoint",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_SymDifference",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Touches",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Transform",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_TransformXY",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Union",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_VoronoiPolygons",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Within",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_X",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_XMax",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_XMin",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Y",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_YMax",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_YMin",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ST_Z",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "starts_with",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "stddev",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "stddev_pop",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "stddev_samp",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "strpos",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "substr",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "substring",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sum",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "t_cdf",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "t_pdf",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "tan",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "tanh",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "tdigest_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "timestamp_objectid",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "timezone",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "timezone_hour",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "timezone_minute",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "title_case",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_base",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_base32",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_base64",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_base64url",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_big_endian_32",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_big_endian_64",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_char",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_date",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_encoded_polyline",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_geojson_geometry",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_geometry",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_hex",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_ieee754_32",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_ieee754_64",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_iso8601",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_milliseconds",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_spherical_geography",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_timestamp",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_unixtime",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "to_utf8",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "transform",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "transform_keys",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "transform_values",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "translate",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "trim",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "trim_array",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "truncate",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "typeof",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "upper",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "url_decode",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "url_encode",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "url_extract_fragment",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "url_extract_host",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "url_extract_parameter",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "url_extract_path",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "url_extract_port",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "url_extract_protocol",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "url_extract_query",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "uuid",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "value_at_quantile",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "values_at_quantiles",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "var_pop",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "var_samp",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "variance",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "variant_is_null",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "week",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "week_of_year",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "width_bucket",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "wilson_interval_lower",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "wilson_interval_upper",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "with_timezone",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "word_stem",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "xxhash64",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "year",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "year_of_week",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "yow",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "zip",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "zip_with",
+    "kind": "function",
+    "call": true
+  }
+]

@@ -1,0 +1,822 @@
+[
+  {
+    "name": "abs",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "acos",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "acosh",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "asin",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "asinh",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "atan",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "atan2",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "atanh",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "avg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "bm25",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ceil",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ceiling",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "changes",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "char",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "coalesce",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "concat",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "concat_ws",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "cos",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "cosh",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "count",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "cume_dist",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "current_date",
+    "kind": "function",
+    "call": false
+  },
+  {
+    "name": "current_time",
+    "kind": "function",
+    "call": false
+  },
+  {
+    "name": "current_timestamp",
+    "kind": "function",
+    "call": false
+  },
+  {
+    "name": "date",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "datetime",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "degrees",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "dense_rank",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "exp",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "first_value",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "floor",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "format",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "fts5",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "fts5_get_locale",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "fts5_insttoken",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "fts5_locale",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "fts5_source_id",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_area",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_bbox",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_blob",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_ccw",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_contains_point",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_debug",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_group_bbox",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_json",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_overlap",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_regular",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_svg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_within",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "geopoly_xform",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "glob",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "group_concat",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "hex",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "highlight",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "if",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ifnull",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "iif",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "instr",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_array",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_array_insert",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_array_length",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_error_position",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_extract",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_group_array",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_group_object",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_insert",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_object",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_patch",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_pretty",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_quote",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_remove",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_replace",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_set",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_type",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "json_valid",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_array",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_array_insert",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_extract",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_group_array",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_group_object",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_insert",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_object",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_patch",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_remove",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_replace",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "jsonb_set",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "julianday",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "lag",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "last_insert_rowid",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "last_value",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "lead",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "length",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "like",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "likelihood",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "likely",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ln",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "load_extension",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "log",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "log10",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "log2",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "lower",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ltrim",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "match",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "max",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "min",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "mod",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "nth_value",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ntile",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "nullif",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "octet_length",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "percent_rank",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "pi",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "pow",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "power",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "printf",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "quote",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "radians",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "random",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "randomblob",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "rank",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "replace",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "round",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "row_number",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "rtreecheck",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "rtreedepth",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "rtreenode",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "rtrim",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sign",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sin",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sinh",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "snippet",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "soundex",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sqlite_compileoption_get",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sqlite_compileoption_used",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sqlite_log",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sqlite_offset",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sqlite_source_id",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sqlite_version",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sqrt",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "strftime",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "string_agg",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "substr",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "substring",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "subtype",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "sum",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "tan",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "tanh",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "time",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "timediff",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "total",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "total_changes",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "trim",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "trunc",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "typeof",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "unhex",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "unicode",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "unistr",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "unistr_quote",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "unixepoch",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "unlikely",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "upper",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "zeroblob",
+    "kind": "function",
+    "call": true
+  }
+]

@@ -1,13 +1,15 @@
 package dialect
 
 import (
+	"embed"
+	"encoding/json"
 	"sort"
 	"strings"
 )
 
 // FunctionReference is one function the editor knows about (B2, #531).
 // Signature and Description are optional: the committed word lists carry the
-// names, and a generated reference enriches them where the engine exposes it.
+// names, and the generated reference enriches them where the engine exposes it.
 type FunctionReference struct {
 	Name        string `json:"name"`
 	Signature   string `json:"signature,omitempty"`
@@ -28,9 +30,23 @@ var noCall = map[string]bool{
 	"user": true,
 }
 
+//go:embed lists/*.functions.json
+var functionFiles embed.FS
+
+// Callable reports whether a function name takes parentheses; the special
+// forms (current_date) do not.
+func Callable(name string) bool { return !noCall[strings.ToLower(name)] }
+
 // FunctionReferences returns the dialect's functions, sorted by name and
-// deduplicated. Unknown dialects return nil.
+// deduplicated. The generated JSON is used when present; the embedded word
+// list is the fallback. Unknown dialects return nil.
 func FunctionReferences(name string) []FunctionReference {
+	if raw, err := functionFiles.ReadFile("lists/" + name + ".functions.json"); err == nil {
+		var out []FunctionReference
+		if json.Unmarshal(raw, &out) == nil {
+			return out
+		}
+	}
 	words, ok := lists[name]
 	if !ok {
 		return nil
