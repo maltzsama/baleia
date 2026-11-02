@@ -58,10 +58,55 @@ func (q *Queries) AbandonRunningStatements(ctx context.Context, arg AbandonRunni
 	return items, nil
 }
 
+const admitQueryExecution = `-- name: AdmitQueryExecution :one
+UPDATE query_executions
+SET status = 'running',
+    admitted_at = now(),
+    queue_wait_ms = (EXTRACT(EPOCH FROM (now() - queued_at)) * 1000)::bigint
+WHERE id = $1 AND status = 'queued'
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code
+`
+
+// A run leaves the queue and starts: back to running, with the wait recorded.
+func (q *Queries) AdmitQueryExecution(ctx context.Context, id pgtype.UUID) (QueryExecution, error) {
+	row := q.db.QueryRow(ctx, admitQueryExecution, id)
+	var i QueryExecution
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.SavedQueryID,
+		&i.Status,
+		&i.Sql,
+		&i.EngineQueryID,
+		&i.RowsReturned,
+		&i.DurationMs,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.TrinoCatalog,
+		&i.ResultKey,
+		&i.RequestID,
+		&i.EngineID,
+		&i.TargetBindingID,
+		&i.TargetCatalogID,
+		&i.TargetSchema,
+		&i.TargetSnapshot,
+		&i.AgentID,
+		&i.QueueClass,
+		&i.QueueReason,
+		&i.FairnessKey,
+		&i.QueuedAt,
+		&i.AdmittedAt,
+		&i.QueueWaitMs,
+		&i.ErrorCode,
+	)
+	return i, err
+}
+
 const cancelQueryExecution = `-- name: CancelQueryExecution :one
 UPDATE query_executions
 SET status = 'cancelled', finished_at = now()
-WHERE id = $1 AND workspace_id = $2 AND status = 'running'
+WHERE id = $1 AND workspace_id = $2 AND status IN ('running', 'queued')
 RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code
 `
 
@@ -70,9 +115,10 @@ type CancelQueryExecutionParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
-// Conditional cancel: only a running execution transitions to cancelled, so a
-// concurrent completion or failure activity cannot be overwritten. Zero matched
-// rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
+// Conditional cancel: a running or queued execution transitions to cancelled,
+// so a concurrent completion or failure activity cannot be overwritten. Zero
+// matched rows (pgx.ErrNoRows) means the execution is gone, foreign, or
+// already terminal.
 func (q *Queries) CancelQueryExecution(ctx context.Context, arg CancelQueryExecutionParams) (QueryExecution, error) {
 	row := q.db.QueryRow(ctx, cancelQueryExecution, arg.ID, arg.WorkspaceID)
 	var i QueryExecution
@@ -361,7 +407,7 @@ func (q *Queries) DeleteSavedQuery(ctx context.Context, arg DeleteSavedQueryPara
 const failQueryExecution = `-- name: FailQueryExecution :one
 UPDATE query_executions
 SET status = 'failed', error_code = $2, finished_at = now()
-WHERE id = $1 AND status = 'running'
+WHERE id = $1 AND status IN ('running', 'queued')
 RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code
 `
 
@@ -1136,6 +1182,49 @@ type MoveSavedQueriesInFolderSubtreeParams struct {
 func (q *Queries) MoveSavedQueriesInFolderSubtree(ctx context.Context, arg MoveSavedQueriesInFolderSubtreeParams) error {
 	_, err := q.db.Exec(ctx, moveSavedQueriesInFolderSubtree, arg.SpaceID, arg.ID, arg.WorkspaceID)
 	return err
+}
+
+const queueQueryExecution = `-- name: QueueQueryExecution :one
+UPDATE query_executions
+SET status = 'queued', queued_at = now()
+WHERE id = $1 AND status = 'running'
+RETURNING id, workspace_id, user_id, saved_query_id, status, sql, engine_query_id, rows_returned, duration_ms, started_at, finished_at, trino_catalog, result_key, request_id, engine_id, target_binding_id, target_catalog_id, target_schema, target_snapshot, agent_id, queue_class, queue_reason, fairness_key, queued_at, admitted_at, queue_wait_ms, error_code
+`
+
+// A run enters its engine's admission queue (#399).
+func (q *Queries) QueueQueryExecution(ctx context.Context, id pgtype.UUID) (QueryExecution, error) {
+	row := q.db.QueryRow(ctx, queueQueryExecution, id)
+	var i QueryExecution
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.SavedQueryID,
+		&i.Status,
+		&i.Sql,
+		&i.EngineQueryID,
+		&i.RowsReturned,
+		&i.DurationMs,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.TrinoCatalog,
+		&i.ResultKey,
+		&i.RequestID,
+		&i.EngineID,
+		&i.TargetBindingID,
+		&i.TargetCatalogID,
+		&i.TargetSchema,
+		&i.TargetSnapshot,
+		&i.AgentID,
+		&i.QueueClass,
+		&i.QueueReason,
+		&i.FairnessKey,
+		&i.QueuedAt,
+		&i.AdmittedAt,
+		&i.QueueWaitMs,
+		&i.ErrorCode,
+	)
+	return i, err
 }
 
 const savedQuerySlugExists = `-- name: SavedQuerySlugExists :one

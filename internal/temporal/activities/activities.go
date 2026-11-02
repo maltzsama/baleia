@@ -137,6 +137,8 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(RecordQueueState)
 	w.RegisterActivity(RecordQueueAdmission)
 	w.RegisterActivity(RecordQueueTimeout)
+	w.RegisterActivity(MarkQueued)
+	w.RegisterActivity(MarkAdmitted)
 }
 
 type SplitSQLParams struct {

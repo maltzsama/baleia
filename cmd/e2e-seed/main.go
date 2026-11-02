@@ -102,6 +102,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("e2e-seed: target: %v", err)
 	}
+	if err := ensureQueueCapacity(ctx, q); err != nil {
+		log.Fatalf("e2e-seed: queue capacity: %v", err)
+	}
 	if trinoURL := os.Getenv("E2E_TRINO_URL"); trinoURL != "" {
 		if err := ensureTrinoCatalog(ctx, q, trinoURL); err != nil {
 			log.Fatalf("e2e-seed: trino catalog: %v", err)
@@ -380,4 +383,21 @@ func randomSuffix() string {
 		return "seed"
 	}
 	return hex.EncodeToString(buf)
+}
+
+// ensureQueueCapacity pins the default Trino engine's interactive queue to one
+// slot so the workload smoke (#545) can make a second run wait. The other
+// classes keep their defaults.
+func ensureQueueCapacity(ctx context.Context, q *db.Queries) error {
+	row, err := q.GetDefaultTrinoEngine(ctx)
+	if err != nil {
+		return err
+	}
+	return q.UpsertEngineQueueCapacity(ctx, db.UpsertEngineQueueCapacityParams{
+		EngineID:       row.Engine.ID,
+		Class:          "interactive",
+		MaxRunning:     1,
+		MaxQueued:      10,
+		QueueTimeoutMs: 300000,
+	})
 }

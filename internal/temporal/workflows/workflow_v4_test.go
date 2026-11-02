@@ -21,6 +21,13 @@ func v4Input() QueryExecutionInput {
 	return in
 }
 
+// mockQueueActivities answers the status transitions V4 makes on the
+// admission path.
+func mockQueueActivities(env *testsuite.TestWorkflowEnvironment) {
+	env.OnActivity(activities.MarkQueued, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(activities.MarkAdmitted, mock.Anything, mock.Anything).Return(nil)
+}
+
 // signalRecorder counts the signals the workflow sends to the admission
 // workflow.
 type signalRecorder struct {
@@ -49,6 +56,7 @@ func TestV4_AdmittedRunsTheScriptAndReleases(t *testing.T) {
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
 	bookkeeping(env, 1)
+	mockQueueActivities(env)
 	env.OnActivity(activities.ExecuteScript, mock.Anything, mock.Anything).Return(finished(1), nil)
 	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).Return(nil)
 	rec := &signalRecorder{}
@@ -69,6 +77,7 @@ func TestV4_AdmissionFailureFailsTheExecution(t *testing.T) {
 	env := ts.NewTestWorkflowEnvironment()
 	rec := &signalRecorder{}
 	env.OnSignalExternalWorkflow(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(rec.on)
+	mockQueueActivities(env)
 	var failed activities.FailExecutionParams
 	env.OnActivity(activities.FailExecution, mock.Anything, mock.Anything).Return(func(_ context.Context, p activities.FailExecutionParams) error {
 		failed = p
@@ -105,6 +114,7 @@ func TestV4_CancelWhileQueuedReleasesAndRecordsTheCancel(t *testing.T) {
 	env := ts.NewTestWorkflowEnvironment()
 	rec := &signalRecorder{}
 	env.OnSignalExternalWorkflow(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(rec.on)
+	mockQueueActivities(env)
 	env.OnActivity(activities.AbandonStatements, mock.Anything, mock.Anything).Return(nil)
 	var completed activities.CompleteExecutionParams
 	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).Return(func(_ context.Context, p activities.CompleteExecutionParams) error {
