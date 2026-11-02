@@ -15,7 +15,12 @@
 
 	$effect(() => {
 		const dialect = name;
-		if (!dialect) return;
+		if (!dialect) {
+			functions = [];
+			loading = false;
+			error = '';
+			return;
+		}
 		let cancelled = false;
 		loading = true;
 		error = '';

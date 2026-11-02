@@ -2,6 +2,7 @@
 // engine name: the dialect, formatter language and CodeMirror base all come
 // from the API.
 import { apiErrorMessage, client } from '$lib/api/client';
+import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import {
 	Cassandra,
@@ -70,7 +71,7 @@ export function loadFunctions(name: string): Promise<DialectFunction[]> {
 	return client
 		.GET('/dialects/{name}/functions', { params: { path: { name } } })
 		.then(({ data, error, response }) => {
-			if (error || !data) fail(error, response?.status, 'Failed to load the functions');
+			if (error || !data) fail(error, response?.status, m.functions_panel_failed());
 			return data;
 		});
 }

@@ -593,7 +593,6 @@
 			selection: { anchor: from + fn.name.length + (fn.call ? 1 : 0) },
 			userEvent: 'input.complete'
 		});
-		editorView.focus();
 		functionsOpen = false;
 	}
 
@@ -1274,7 +1273,12 @@
 		</Drawer>
 	{/if}
 
-	<Drawer size="md" bind:open={functionsOpen} title={m.functions_panel_title()}>
+	<Drawer
+		size="md"
+		bind:open={functionsOpen}
+		title={m.functions_panel_title()}
+		onclose={() => editorView?.focus()}
+	>
 		<FunctionsPanel name={dialect?.name ?? ''} oninsert={insertFunction} />
 	</Drawer>
 
