@@ -411,7 +411,7 @@ func (q *Queries) ListEngineObservations(ctx context.Context, engineID pgtype.UU
 }
 
 const listEngineQueueCapacities = `-- name: ListEngineQueueCapacities :many
-SELECT engine_id, class, max_running, max_queued, queue_timeout_ms, created_at, updated_at FROM engine_queue_capacity
+SELECT engine_id, class, max_running, max_queued, queue_timeout_ms, created_at, updated_at, runtime_timeout_ms FROM engine_queue_capacity
 WHERE engine_id = $1
 ORDER BY class
 `
@@ -434,6 +434,7 @@ func (q *Queries) ListEngineQueueCapacities(ctx context.Context, engineID pgtype
 			&i.QueueTimeoutMs,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RuntimeTimeoutMs,
 		); err != nil {
 			return nil, err
 		}

@@ -22,6 +22,14 @@ func TestDefaultsAreConservativeAndOrdered(t *testing.T) {
 		if !(interactive.QueueTimeout <= heavy.QueueTimeout && heavy.QueueTimeout <= background.QueueTimeout) {
 			t.Errorf("%s: queue timeouts must not shrink for heavier work", engineClass)
 		}
+		if !(interactive.RuntimeTimeout <= heavy.RuntimeTimeout && heavy.RuntimeTimeout <= background.RuntimeTimeout) {
+			t.Errorf("%s: runtime timeouts must not shrink for heavier work", engineClass)
+		}
+		// The point of #576: a run that may wait 24h must be allowed to run
+		// longer than the global 30m statement timeout.
+		if background.RuntimeTimeout <= 30*time.Minute {
+			t.Errorf("%s: background runtime %s must exceed the 30m global cap", engineClass, background.RuntimeTimeout)
+		}
 	}
 }
 
