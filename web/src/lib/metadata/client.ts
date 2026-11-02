@@ -180,8 +180,8 @@ export function searchMetadata(
 		tags?: string[];
 		/** Filter by the `certified` tag. */
 		certified?: boolean;
-		/** The table's namespace, dot-separated. */
-		namespace?: string;
+		/** The table's namespace, one value per level. */
+		namespace?: string[];
 		limit?: number;
 		signal?: AbortSignal;
 	} = {}
@@ -196,7 +196,7 @@ export function searchMetadata(
 					...(options.catalogId ? { catalog_id: options.catalogId } : {}),
 					...(options.tags?.length ? { tags: options.tags } : {}),
 					...(options.certified != null ? { certified: options.certified } : {}),
-					...(options.namespace ? { namespace: options.namespace } : {}),
+					...(options.namespace?.length ? { namespace: options.namespace } : {}),
 					...(options.limit ? { limit: options.limit } : {})
 				}
 			},

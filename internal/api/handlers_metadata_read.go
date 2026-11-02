@@ -255,7 +255,9 @@ func (h *CatalogHandlers) SearchMetadata(ctx context.Context, request SearchMeta
 		q.Tags = *p.Tags
 	}
 	q.Certified = p.Certified
-	q.Namespace = p.Namespace
+	if p.Namespace != nil {
+		q.Namespace = *p.Namespace
+	}
 	rows, err := h.browse.Search(ctx, ws, q)
 	var invalid *browse.InvalidError
 	if errors.As(err, &invalid) {

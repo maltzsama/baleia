@@ -213,10 +213,11 @@ type SearchQuery struct {
 	Limit     *int
 	CatalogID pgtype.UUID
 	// Tags, Certified and Namespace filter tables through their workspace
-	// table-level docs (B6, #534). `certified` is the `certified` tag.
+	// table-level docs (B6, #534). Namespace is one value per level, so a
+	// component that contains a dot is unambiguous.
 	Tags      []string
 	Certified *bool
-	Namespace *string
+	Namespace []string
 }
 
 // Search finds tables and columns of the catalogs granted to ws.

@@ -331,7 +331,7 @@ LEFT JOIN semantic_docs sd
  AND sd.table_name = t.name
  AND sd.column_name IS NULL
 WHERE (sqlc.narg(tags)::text[] IS NULL OR sd.tags @> sqlc.narg(tags)::text[])
-  AND (sqlc.narg(certified)::boolean IS NULL OR COALESCE('certified' = ANY(sd.tags), false) = sqlc.narg(certified)::boolean)
-  AND (sqlc.narg(namespace)::text IS NULL OR t.namespace = string_to_array(sqlc.narg(namespace)::text, '.'))
+  AND (sqlc.narg(certified)::boolean IS NULL OR COALESCE(sd.certified, false) = sqlc.narg(certified)::boolean)
+  AND (sqlc.narg(namespace)::text[] IS NULL OR t.namespace = sqlc.narg(namespace)::text[])
 ORDER BY h.score DESC, h.len, h.table_name, h.column_name
 LIMIT @lim;

@@ -5219,8 +5219,10 @@ paths:
           schema: { type: boolean }
         - name: namespace
           in: query
-          description: "The table's namespace, dot-separated (sales or sales.sub)"
-          schema: { type: string }
+          description: "The table's namespace, one value per level (namespace=a&namespace=b is a.b); a dot inside a level is part of its name"
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }

@@ -329,14 +329,17 @@ func TestSearch_Filters(t *testing.T) {
 	t.Parallel()
 	f := newMetaFixture(t)
 	ctx := context.Background()
-	for name, tags := range map[string]string{
-		"orders":                 `{finance,certified}`,
-		"customer_order_history": `{sales}`,
+	for name, doc := range map[string]struct {
+		tags      string
+		certified bool
+	}{
+		"orders":                 {tags: `{finance}`, certified: true},
+		"customer_order_history": {tags: `{sales}`},
 	} {
 		if _, err := f.pool.Exec(ctx, `
-			INSERT INTO semantic_docs (workspace_id, catalog_id, namespace, table_name, description, tags, updated_by)
-			VALUES ($1, $2, '{sales}', $3, '', $4::text[], (SELECT owner_user_id FROM workspaces WHERE id = $1))`,
-			pgUUID(f.ws), pgUUID(f.lake), name, tags); err != nil {
+			INSERT INTO semantic_docs (workspace_id, catalog_id, namespace, table_name, description, tags, certified, updated_by)
+			VALUES ($1, $2, '{sales}', $3, '', $4::text[], $5, (SELECT owner_user_id FROM workspaces WHERE id = $1))`,
+			pgUUID(f.ws), pgUUID(f.lake), name, doc.tags, doc.certified); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -371,13 +374,13 @@ func TestSearch_Filters(t *testing.T) {
 		}
 	}
 
-	sales := "sales"
+	sales := []string{"sales"}
 	for _, hit := range search(SearchMetadataParams{Namespace: &sales}) {
 		if hit.Table != "orders" && hit.Table != "customer_order_history" {
 			t.Fatalf("namespace:sales returned %s", hit.Table)
 		}
 	}
-	ops := "ops"
+	ops := []string{"ops"}
 	if got := search(SearchMetadataParams{Namespace: &ops}); len(got) != 0 {
 		t.Fatalf("namespace:ops returned %d hits", len(got))
 	}

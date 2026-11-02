@@ -114,7 +114,7 @@
 					class="w-full border-none bg-transparent text-xs text-text-main outline-none placeholder:text-text-muted"
 				/>
 			</div>
-			{#if parsedSearch.kind || parsedSearch.tags.length > 0 || parsedSearch.certified != null || parsedSearch.namespace}
+			{#if parsedSearch.kind || parsedSearch.tags.length > 0 || parsedSearch.certified != null || parsedSearch.namespace?.length}
 				<div class="mt-1.5 flex flex-wrap gap-1">
 					{#if parsedSearch.kind}
 						<span
@@ -139,7 +139,7 @@
 					{#if parsedSearch.namespace}
 						<span
 							class="rounded-full border border-border bg-bg-toolbar px-2 py-0.5 text-[10px] text-text-muted"
-							>{m.data_search_filter_namespace({ value: parsedSearch.namespace })}</span
+							>{m.data_search_filter_namespace({ value: parsedSearch.namespace.join('.') })}</span
 						>
 					{/if}
 				</div>

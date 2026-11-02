@@ -806,8 +806,8 @@ LEFT JOIN semantic_docs sd
  AND sd.table_name = t.name
  AND sd.column_name IS NULL
 WHERE ($2::text[] IS NULL OR sd.tags @> $2::text[])
-  AND ($3::boolean IS NULL OR COALESCE('certified' = ANY(sd.tags), false) = $3::boolean)
-  AND ($4::text IS NULL OR t.namespace = string_to_array($4::text, '.'))
+  AND ($3::boolean IS NULL OR COALESCE(sd.certified, false) = $3::boolean)
+  AND ($4::text[] IS NULL OR t.namespace = $4::text[])
 ORDER BY h.score DESC, h.len, h.table_name, h.column_name
 LIMIT $5
 `
@@ -816,7 +816,7 @@ type SearchMetadataParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 	Tags        []string    `json:"tags"`
 	Certified   *bool       `json:"certified"`
-	Namespace   *string     `json:"namespace"`
+	Namespace   []string    `json:"namespace"`
 	Lim         int32       `json:"lim"`
 	CatalogID   pgtype.UUID `json:"catalog_id"`
 	Q           string      `json:"q"`

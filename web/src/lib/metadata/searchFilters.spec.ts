@@ -14,7 +14,7 @@ describe('search filters grammar', () => {
 		expect(parseSearchFilters('tag:"finance ops" namespace:sales orders')).toMatchObject({
 			text: 'orders',
 			tags: ['finance ops'],
-			namespace: 'sales'
+			namespace: ['sales']
 		});
 	});
 
@@ -26,5 +26,15 @@ describe('search filters grammar', () => {
 		const filters = parseSearchFilters('-tag:draft certified:yes orders');
 		expect(filters.excludeTags).toEqual(['draft']);
 		expect(filters.certified).toBe(true);
+	});
+
+	it('keeps an unknown certified value as free text', () => {
+		expect(parseSearchFilters('certified:maybe orders').certified).toBeUndefined();
+		expect(parseSearchFilters('certified:maybe orders').text).toBe('certified:maybe orders');
+	});
+
+	it('splits an unquoted namespace and keeps a quoted one whole', () => {
+		expect(parseSearchFilters('namespace:sales.sub orders').namespace).toEqual(['sales', 'sub']);
+		expect(parseSearchFilters('namespace:"sales.sub" orders').namespace).toEqual(['sales.sub']);
 	});
 });

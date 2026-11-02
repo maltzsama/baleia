@@ -8564,8 +8564,8 @@ export interface operations {
                 tags?: string[];
                 /** @description Filter by the `certified` tag */
                 certified?: boolean;
-                /** @description The table's namespace, dot-separated (sales or sales.sub) */
-                namespace?: string;
+                /** @description The table's namespace, one value per level (namespace=a&namespace=b is a.b); a dot inside a level is part of its name */
+                namespace?: string[];
                 limit?: number;
             };
             header?: never;

@@ -5048,9 +5048,9 @@ type SearchMetadataParams struct {
 	// Certified Filter by the `certified` tag
 	Certified *bool `form:"certified,omitempty" json:"certified,omitempty"`
 
-	// Namespace The table's namespace, dot-separated (sales or sales.sub)
-	Namespace *string `form:"namespace,omitempty" json:"namespace,omitempty"`
-	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	// Namespace The table's namespace, one value per level (namespace=a&namespace=b is a.b); a dot inside a level is part of its name
+	Namespace *[]string `form:"namespace,omitempty" json:"namespace,omitempty"`
+	Limit     *int      `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // SearchMetadataParamsKind defines parameters for SearchMetadata.
