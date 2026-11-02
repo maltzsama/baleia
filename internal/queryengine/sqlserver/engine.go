@@ -46,6 +46,8 @@ func newEngine(dl queryengine.Dialect) queryengine.Factory {
 			database:       valueOr(cfg.Value("database"), "master"),
 			cancelWithKill: cfg.Value("cancel_with_kill") == "true",
 			db:             db,
+			cfg:            cfg,
+			dialer:         d,
 		}, nil
 	}
 }
@@ -53,11 +55,17 @@ func newEngine(dl queryengine.Dialect) queryengine.Factory {
 // connector builds a URL-form DSN (values escaped by net/url) and hooks the
 // dialer into the connector.
 func connector(cfg connections.Config, d *connections.Dialer) (*mssql.Connector, error) {
+	return connectorWithApp(cfg, d, "baleia")
+}
+
+// connectorWithApp is connector with the application name the Resource
+// Governor classifier sees (#552).
+func connectorWithApp(cfg connections.Config, d *connections.Dialer, app string) (*mssql.Connector, error) {
 	q := url.Values{}
 	q.Set("database", valueOr(cfg.Value("database"), "master"))
 	q.Set("encrypt", valueOr(cfg.Value("encrypt"), "true"))
 	q.Set("TrustServerCertificate", valueOr(cfg.Value("trust_server_certificate"), "false"))
-	q.Set("app name", "baleia")
+	q.Set("app name", app)
 	q.Set("dial timeout", fmt.Sprint(int(connectTimeout.Seconds())))
 	u := &url.URL{
 		Scheme:   "sqlserver",
@@ -80,6 +88,10 @@ type Engine struct {
 	database       string
 	cancelWithKill bool
 	db             *sql.DB
+	// cfg and dialer build a per-session connector so the application name
+	// carries the workload class (#552).
+	cfg    connections.Config
+	dialer *connections.Dialer
 }
 
 func (e *Engine) ID() string                   { return e.id }
@@ -151,13 +163,24 @@ func (e *Engine) Cancel(ctx context.Context, h queryengine.QueryHandle) error {
 }
 
 func (e *Engine) OpenSession(ctx context.Context, spec queryengine.SessionSpec) (queryengine.Session, error) {
-	conn, err := e.db.Conn(ctx)
+	// A session owns its own connection so the application name can carry the
+	// run's class (#552). SQL Server reads it from the connection string, not a
+	// session setting.
+	c, err := connectorWithApp(e.cfg, e.dialer, sqlServerAppName(spec.Tags.Class))
 	if err != nil {
+		return nil, err
+	}
+	db := sql.OpenDB(c)
+	db.SetMaxOpenConns(1)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		_ = db.Close()
 		return nil, mapError(err)
 	}
-	s := &session{engine: e, conn: conn, spec: spec}
+	s := &session{engine: e, conn: conn, db: db, spec: spec}
 	if err := s.setup(ctx); err != nil {
 		_ = conn.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return s, nil
@@ -174,3 +197,12 @@ func valueOr(v, def string) string {
 
 // quoteIdent brackets a name, doubling closing brackets.
 func quoteIdent(s string) string { return "[" + strings.ReplaceAll(s, "]", "]]") + "]" }
+
+// sqlServerAppName is the application name the Resource Governor classifier
+// sees: baleia-<class> (#552).
+func sqlServerAppName(c queryengine.WorkloadClass) string {
+	if c == "" {
+		return "baleia"
+	}
+	return "baleia-" + string(c)
+}

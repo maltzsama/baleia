@@ -4679,6 +4679,8 @@ export interface components {
             cost_routing_enabled?: boolean;
             /** Format: int64 */
             cost_threshold_bytes?: number | null;
+            /** @description Set cost_threshold_bytes to null; cannot be combined with cost_threshold_bytes */
+            clear_cost_threshold?: boolean;
         };
         AuditEvent: {
             /** Format: int64 */

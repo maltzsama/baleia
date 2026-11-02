@@ -161,11 +161,18 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 	if s.cfg.WorkloadEnabled {
 		statements := s.splitStatements(r)
 		in := r.ruleInput(len(statements))
-		if len(statements) > 0 {
-			in.DDL = workload.IsDDL(statements[0])
-			in.CostHeavy = s.costHeavy(ctx, r, statements[0])
+		// Any DDL in the script keeps it out of background (#580).
+		in.DDL = workload.AnyDDL(statements)
+		rules := s.workloadRules(ctx)
+		var decision workload.Decision
+		if matched, ok := workload.MatchRule(in, rules); ok {
+			// A rule already decided the class; do not pay for an estimate
+			// that cannot change it (#591).
+			decision = matched
+		} else {
+			in.CostHeavy = s.costHeavy(ctx, r, statements)
+			decision = workload.Decide(r.Origin, in, nil)
 		}
-		decision := workload.Decide(r.Origin, in, s.workloadRules(ctx))
 		class = decision.Class
 		weight = decision.Weight
 		c, reason := string(decision.Class), decision.Reason
@@ -284,8 +291,14 @@ const costRoutingTimeout = 3 * time.Second
 // estimate is above the engine's threshold (#550). It is best effort: an
 // engine without cost routing, a non-SELECT, a failed EXPLAIN or a plan with
 // no statistics falls through to the next classification step.
-func (s *Service) costHeavy(ctx context.Context, r Run, sql string) bool {
-	if s.engines == nil || !r.Target.EngineID.Valid || r.Target.EngineKind != "trino" || !workload.IsSelect(sql) {
+// costHeavy asks Trino for an EXPLAIN (FORMAT JSON) of every SELECT in the
+// script and reports whether any estimate is above the engine's threshold
+// (#550). It is best effort: an engine without cost routing, a non-SELECT
+// statement, a failed EXPLAIN or a plan with no statistics falls through to
+// the next classification step. Rules are evaluated before this call, so a
+// matching rule never pays for the estimate (#591).
+func (s *Service) costHeavy(ctx context.Context, r Run, statements []string) bool {
+	if s.engines == nil || !r.Target.EngineID.Valid || r.Target.EngineKind != "trino" {
 		return false
 	}
 	row, err := s.store.GetEngineByID(ctx, r.Target.EngineID)
@@ -309,17 +322,27 @@ func (s *Service) costHeavy(ctx context.Context, r Run, sql string) bool {
 	if r.Target.Schema != "" {
 		spec.Schema = []string{r.Target.Schema}
 	}
-	table, err := queryengine.Collect(cctx, engine, spec, "EXPLAIN (FORMAT JSON) "+sql, 1)
-	if err != nil {
-		s.logger.DebugContext(ctx, "cost routing: EXPLAIN failed; classifying without it", "engine_id", uuidString(r.Target.EngineID), "err", err)
-		return false
+	for _, sql := range statements {
+		if !workload.IsSelect(sql) {
+			continue
+		}
+		table, err := queryengine.Collect(cctx, engine, spec, "EXPLAIN (FORMAT JSON) "+sql, 1)
+		if err != nil {
+			s.logger.DebugContext(ctx, "cost routing: EXPLAIN failed; classifying without it", "engine_id", uuidString(r.Target.EngineID), "err", err)
+			continue
+		}
+		costly := false
+		if table.NumRows() > 0 && table.NumCols() > 0 {
+			if bytes, ok := workload.TrinoPlanCost([]byte(table.Column(0).Data().Chunk(0).ValueStr(0))); ok && bytes > *row.CostThresholdBytes {
+				costly = true
+			}
+		}
+		table.Release()
+		if costly {
+			return true
+		}
 	}
-	defer table.Release()
-	if table.NumRows() == 0 || table.NumCols() == 0 {
-		return false
-	}
-	bytes, ok := workload.TrinoPlanCost([]byte(table.Column(0).Data().Chunk(0).ValueStr(0)))
-	return ok && bytes > *row.CostThresholdBytes
+	return false
 }
 
 // splitStatements is the run's statements, split with the target's dialect

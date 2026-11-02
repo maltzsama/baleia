@@ -183,19 +183,29 @@ func (h *CatalogHandlers) UpdateEngine(ctx context.Context, request UpdateEngine
 	case err != nil:
 		return nil, err
 	}
-	eng, err := h.engineAdmin.SetEnabled(ctx, id, request.Body.Enabled)
-	if err != nil {
-		return nil, err
+	body := request.Body
+	if body == nil {
+		return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "a body is required")}, nil
 	}
-	// Cost routing is opt-in per engine (#550). Omitted fields keep their
-	// value; a null threshold is only meaningful when cost routing is off.
-	if request.Body.CostRoutingEnabled != nil || request.Body.CostThresholdBytes != nil {
-		if request.Body.CostThresholdBytes != nil && *request.Body.CostThresholdBytes < 1 {
+	// Validate before the write: a refused request must change nothing (#591).
+	if body.CostThresholdBytes != nil {
+		if *body.CostThresholdBytes < 1 {
 			return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "cost_threshold_bytes must be at least 1")}, nil
 		}
-		if eng, err = h.engineAdmin.SetCostRouting(ctx, id, request.Body.CostRoutingEnabled, request.Body.CostThresholdBytes); err != nil {
-			return nil, err
+		if body.ClearCostThreshold != nil && *body.ClearCostThreshold {
+			return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "cost_threshold_bytes and clear_cost_threshold are mutually exclusive")}, nil
 		}
+	}
+	// One UPDATE applies enabled and the cost settings together (#591).
+	eng, err := h.engineAdmin.Update(ctx, db.UpdateEngineParams{
+		ID:                 id,
+		Enabled:            body.Enabled,
+		CostRoutingEnabled: body.CostRoutingEnabled,
+		CostThresholdBytes: body.CostThresholdBytes,
+		ClearCostThreshold: body.ClearCostThreshold,
+	})
+	if err != nil {
+		return nil, err
 	}
 	return UpdateEngine200JSONResponse(h.withEngineActions(ctx, eng)), nil
 }

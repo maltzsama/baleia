@@ -1814,6 +1814,7 @@ components:
         enabled: { type: boolean }
         cost_routing_enabled: { type: boolean }
         cost_threshold_bytes: { type: integer, format: int64, nullable: true, minimum: 1 }
+        clear_cost_threshold: { type: boolean, description: "Set cost_threshold_bytes to null; cannot be combined with cost_threshold_bytes" }
 
     AuditEvent:
       type: object

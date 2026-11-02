@@ -4331,6 +4331,8 @@ type UpdateEngineQueuesRequest struct {
 
 // UpdateEngineRequest defines model for UpdateEngineRequest.
 type UpdateEngineRequest struct {
+	// ClearCostThreshold Set cost_threshold_bytes to null; cannot be combined with cost_threshold_bytes
+	ClearCostThreshold *bool  `json:"clear_cost_threshold,omitempty"`
 	CostRoutingEnabled *bool  `json:"cost_routing_enabled,omitempty"`
 	CostThresholdBytes *int64 `json:"cost_threshold_bytes"`
 	Enabled            *bool  `json:"enabled,omitempty"`

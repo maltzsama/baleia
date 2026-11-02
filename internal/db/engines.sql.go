@@ -582,9 +582,12 @@ UPDATE engines
 SET enabled       = COALESCE($1, enabled),
     identity_mode = COALESCE($2, identity_mode),
     cost_routing_enabled = COALESCE($3, cost_routing_enabled),
-    cost_threshold_bytes = COALESCE($4, cost_threshold_bytes),
+    cost_threshold_bytes = CASE
+        WHEN $4::boolean THEN NULL
+        ELSE COALESCE($5, cost_threshold_bytes)
+    END,
     updated_at    = now()
-WHERE id = $5
+WHERE id = $6
 RETURNING id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total, cost_routing_enabled, cost_threshold_bytes
 `
 
@@ -592,6 +595,7 @@ type UpdateEngineParams struct {
 	Enabled            *bool       `json:"enabled"`
 	IdentityMode       *string     `json:"identity_mode"`
 	CostRoutingEnabled *bool       `json:"cost_routing_enabled"`
+	ClearCostThreshold *bool       `json:"clear_cost_threshold"`
 	CostThresholdBytes *int64      `json:"cost_threshold_bytes"`
 	ID                 pgtype.UUID `json:"id"`
 }
@@ -601,6 +605,7 @@ func (q *Queries) UpdateEngine(ctx context.Context, arg UpdateEngineParams) (Eng
 		arg.Enabled,
 		arg.IdentityMode,
 		arg.CostRoutingEnabled,
+		arg.ClearCostThreshold,
 		arg.CostThresholdBytes,
 		arg.ID,
 	)

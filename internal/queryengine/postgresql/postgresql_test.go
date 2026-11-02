@@ -147,6 +147,9 @@ func TestApplicationName(t *testing.T) {
 	if got := applicationName(queryengine.Tags{Source: "editor", ExecutionID: "e1"}); got != "baleia:editor:e1" {
 		t.Errorf("tags: %q", got)
 	}
+	if got := applicationName(queryengine.Tags{Source: "editor", Class: queryengine.ClassHeavy, ExecutionID: "e1"}); got != "baleia:editor:class=heavy:e1" {
+		t.Errorf("class tags: %q", got)
+	}
 	long := applicationName(queryengine.Tags{Source: "editor", ExecutionID: string(make([]byte, 200))})
 	if len(long) > 63 {
 		t.Errorf("application name not truncated: %d bytes", len(long))
