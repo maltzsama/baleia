@@ -596,21 +596,23 @@ func (q *Queries) UpdateEngine(ctx context.Context, arg UpdateEngineParams) (Eng
 }
 
 const upsertEngineQueueCapacity = `-- name: UpsertEngineQueueCapacity :exec
-INSERT INTO engine_queue_capacity (engine_id, class, max_running, max_queued, queue_timeout_ms)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO engine_queue_capacity (engine_id, class, max_running, max_queued, queue_timeout_ms, runtime_timeout_ms)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (engine_id, class) DO UPDATE
 SET max_running = EXCLUDED.max_running,
     max_queued = EXCLUDED.max_queued,
     queue_timeout_ms = EXCLUDED.queue_timeout_ms,
+    runtime_timeout_ms = EXCLUDED.runtime_timeout_ms,
     updated_at = now()
 `
 
 type UpsertEngineQueueCapacityParams struct {
-	EngineID       pgtype.UUID `json:"engine_id"`
-	Class          string      `json:"class"`
-	MaxRunning     int32       `json:"max_running"`
-	MaxQueued      int32       `json:"max_queued"`
-	QueueTimeoutMs int64       `json:"queue_timeout_ms"`
+	EngineID         pgtype.UUID `json:"engine_id"`
+	Class            string      `json:"class"`
+	MaxRunning       int32       `json:"max_running"`
+	MaxQueued        int32       `json:"max_queued"`
+	QueueTimeoutMs   int64       `json:"queue_timeout_ms"`
+	RuntimeTimeoutMs *int64      `json:"runtime_timeout_ms"`
 }
 
 func (q *Queries) UpsertEngineQueueCapacity(ctx context.Context, arg UpsertEngineQueueCapacityParams) error {
@@ -620,6 +622,7 @@ func (q *Queries) UpsertEngineQueueCapacity(ctx context.Context, arg UpsertEngin
 		arg.MaxRunning,
 		arg.MaxQueued,
 		arg.QueueTimeoutMs,
+		arg.RuntimeTimeoutMs,
 	)
 	return err
 }

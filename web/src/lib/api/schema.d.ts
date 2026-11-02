@@ -5675,6 +5675,8 @@ export interface components {
             max_running: number;
             max_queued: number;
             queue_timeout_ms: number;
+            /** @description How long an admitted run may execute */
+            runtime_timeout_ms: number;
             running: number;
             queued: number;
             oldest_wait_ms?: number | null;
@@ -5689,6 +5691,8 @@ export interface components {
             max_running: number;
             max_queued: number;
             queue_timeout_ms: number;
+            /** @description Omitted or null keeps the class default */
+            runtime_timeout_ms?: number | null;
         };
         QueryStatement: {
             /** Format: uuid */

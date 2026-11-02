@@ -127,12 +127,13 @@ ORDER BY class;
 DELETE FROM engine_queue_capacity WHERE engine_id = $1;
 
 -- name: UpsertEngineQueueCapacity :exec
-INSERT INTO engine_queue_capacity (engine_id, class, max_running, max_queued, queue_timeout_ms)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO engine_queue_capacity (engine_id, class, max_running, max_queued, queue_timeout_ms, runtime_timeout_ms)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (engine_id, class) DO UPDATE
 SET max_running = EXCLUDED.max_running,
     max_queued = EXCLUDED.max_queued,
     queue_timeout_ms = EXCLUDED.queue_timeout_ms,
+    runtime_timeout_ms = EXCLUDED.runtime_timeout_ms,
     updated_at = now();
 
 -- name: SetEngineMaxRunningTotal :one

@@ -2903,12 +2903,13 @@ components:
 
     EngineQueue:
       type: object
-      required: [class, max_running, max_queued, queue_timeout_ms, running, queued]
+      required: [class, max_running, max_queued, queue_timeout_ms, runtime_timeout_ms, running, queued]
       properties:
         class: { type: string, enum: [interactive, heavy, background] }
         max_running: { type: integer }
         max_queued: { type: integer }
         queue_timeout_ms: { type: integer }
+        runtime_timeout_ms: { type: integer, description: "How long an admitted run may execute" }
         running: { type: integer }
         queued: { type: integer }
         oldest_wait_ms: { type: integer, nullable: true }
@@ -2930,6 +2931,7 @@ components:
         max_running: { type: integer, minimum: 0 }
         max_queued: { type: integer, minimum: 0 }
         queue_timeout_ms: { type: integer, minimum: 1 }
+        runtime_timeout_ms: { type: integer, minimum: 1, nullable: true, description: "Omitted or null keeps the class default" }
 
     QueryStatement:
       type: object

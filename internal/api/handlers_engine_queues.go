@@ -124,11 +124,15 @@ func (h *CatalogHandlers) engineQueues(ctx context.Context, eng db.Engine) (Engi
 	}
 	configured := make(map[queryengine.WorkloadClass]*workload.Capacity, len(rows))
 	for _, row := range rows {
-		configured[queryengine.WorkloadClass(row.Class)] = &workload.Capacity{
+		capacity := &workload.Capacity{
 			MaxRunning:   int(row.MaxRunning),
 			MaxQueued:    int(row.MaxQueued),
 			QueueTimeout: time.Duration(row.QueueTimeoutMs) * time.Millisecond,
 		}
+		if row.RuntimeTimeoutMs != nil {
+			capacity.RuntimeTimeout = time.Duration(*row.RuntimeTimeoutMs) * time.Millisecond
+		}
+		configured[queryengine.WorkloadClass(row.Class)] = capacity
 	}
 	state, _ := h.admissionState(ctx, eng)
 
@@ -141,13 +145,14 @@ func (h *CatalogHandlers) engineQueues(ctx context.Context, eng db.Engine) (Engi
 		capacity := workload.Resolve(eng.Class, class, configured[class])
 		running, queued, oldest := liveCounts(state, class)
 		out.Classes = append(out.Classes, EngineQueue{
-			Class:          EngineQueueClass(class),
-			MaxRunning:     capacity.MaxRunning,
-			MaxQueued:      capacity.MaxQueued,
-			QueueTimeoutMs: int(capacity.QueueTimeout / time.Millisecond),
-			Running:        running,
-			Queued:         queued,
-			OldestWaitMs:   oldest,
+			Class:            EngineQueueClass(class),
+			MaxRunning:       capacity.MaxRunning,
+			MaxQueued:        capacity.MaxQueued,
+			QueueTimeoutMs:   int(capacity.QueueTimeout / time.Millisecond),
+			RuntimeTimeoutMs: int(capacity.RuntimeTimeout / time.Millisecond),
+			Running:          running,
+			Queued:           queued,
+			OldestWaitMs:     oldest,
 		})
 	}
 	return out, nil
@@ -212,12 +217,16 @@ func queueCapacityUpdate(id pgtype.UUID, body *PutEngineQueuesJSONRequestBody) (
 		if c.MaxRunning < 0 || c.MaxRunning > math.MaxInt32 || c.MaxQueued < 0 || c.MaxQueued > math.MaxInt32 || c.QueueTimeoutMs < 1 {
 			return nil, workflows.AdmissionCapacities{}, fmt.Errorf("class %q has an invalid capacity", class)
 		}
+		if c.RuntimeTimeoutMs != nil && *c.RuntimeTimeoutMs < 1 {
+			return nil, workflows.AdmissionCapacities{}, fmt.Errorf("class %q has an invalid runtime timeout", class)
+		}
 		rows = append(rows, db.UpsertEngineQueueCapacityParams{
-			EngineID:       id,
-			Class:          string(class),
-			MaxRunning:     int32(c.MaxRunning), //nolint:gosec // bounded above
-			MaxQueued:      int32(c.MaxQueued),  //nolint:gosec // bounded above
-			QueueTimeoutMs: int64(c.QueueTimeoutMs),
+			EngineID:         id,
+			Class:            string(class),
+			MaxRunning:       int32(c.MaxRunning), //nolint:gosec // bounded above
+			MaxQueued:        int32(c.MaxQueued),  //nolint:gosec // bounded above
+			QueueTimeoutMs:   int64(c.QueueTimeoutMs),
+			RuntimeTimeoutMs: int64Ptr(c.RuntimeTimeoutMs),
 		})
 		caps = append(caps, workflows.AdmissionCapacity{
 			Class:        class,
@@ -272,5 +281,13 @@ func intToInt32(v *int) *int32 {
 		return nil
 	}
 	n := int32(*v) //nolint:gosec // bounded above
+	return &n
+}
+
+func int64Ptr(v *int) *int64 {
+	if v == nil {
+		return nil
+	}
+	n := int64(*v)
 	return &n
 }
