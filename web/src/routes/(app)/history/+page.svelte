@@ -25,9 +25,12 @@
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
 	import ResultsPanel from '$lib/components/ResultsPanel.svelte';
+	import { formatBytes } from '$lib/util/size';
+	import { hasQueryProfile } from '$lib/ui/patterns/kindIcon';
 
 	type Execution = components['schemas']['Execution'];
 	type QueryStatement = components['schemas']['QueryStatement'];
+	type ExecutionDetails = components['schemas']['ExecutionDetails'];
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 
@@ -111,8 +114,17 @@
 	let statements = $state<QueryStatement[]>([]);
 	let statementsLoading = $state(false);
 	let statementsError = $state('');
+	let details = $state<ExecutionDetails | null>(null);
 	let resultsOpen = $state(false);
 	let resultsPosition = $state<number | undefined>(undefined);
+
+	function profileFor(position: number) {
+		return details?.statements.find((s) => s.position === position)?.profile ?? null;
+	}
+
+	function inputKey(input: { catalog?: string; schema?: string; table?: string }): string {
+		return `${input.catalog ?? ''}.${input.schema ?? ''}.${input.table ?? ''}`;
+	}
 
 	async function openDetails(execution: Execution) {
 		selected = execution;
@@ -120,6 +132,17 @@
 		statements = [];
 		statementsError = '';
 		statementsLoading = true;
+		details = null;
+		// The profile is best effort: a direct engine, or a Trino query the
+		// coordinator already forgot, leaves it null and the list still loads.
+		void client
+			.GET('/workspaces/{id}/executions/{execution_id}/details', {
+				params: { path: { id: workspaceId, execution_id: execution.id } }
+			})
+			.then(({ data }) => {
+				if (data) details = data;
+			})
+			.catch(() => {});
 		try {
 			const { data, error: readError } = await client.GET(
 				'/workspaces/{id}/executions/{execution_id}/statements',
@@ -480,6 +503,61 @@
 				</div>
 			{/if}
 
+			{#if details}
+				{#if details.timeline.queue_wait_ms != null || details.timeline.engine_queued_ms != null || details.timeline.planning_ms != null || details.timeline.execution_ms != null}
+					<div class="rounded-md border border-border bg-bg-toolbar px-3 py-2">
+						<h3 class="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-muted">
+							{m.execution_details_timeline()}
+						</h3>
+						<div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-muted">
+							{#if details.timeline.queue_wait_ms != null}
+								<span
+									>{m.execution_details_queue_wait()}:
+									<span class="font-mono text-text-main"
+										><Duration ms={details.timeline.queue_wait_ms} /></span
+									></span
+								>
+							{/if}
+							{#if details.timeline.engine_queued_ms != null}
+								<span
+									>{m.execution_details_engine_queued()}:
+									<span class="font-mono text-text-main"
+										><Duration ms={details.timeline.engine_queued_ms} /></span
+									></span
+								>
+							{/if}
+							{#if details.timeline.planning_ms != null}
+								<span
+									>{m.execution_details_planning()}:
+									<span class="font-mono text-text-main"
+										><Duration ms={details.timeline.planning_ms} /></span
+									></span
+								>
+							{/if}
+							{#if details.timeline.execution_ms != null}
+								<span
+									>{m.execution_details_execution()}:
+									<span class="font-mono text-text-main"
+										><Duration ms={details.timeline.execution_ms} /></span
+									></span
+								>
+							{/if}
+							{#if details.timeline.total_ms != null}
+								<span
+									>{m.execution_details_total()}:
+									<span class="font-mono text-text-main"
+										><Duration ms={details.timeline.total_ms} /></span
+									></span
+								>
+							{/if}
+						</div>
+					</div>
+				{/if}
+				{#if !hasQueryProfile(details.engine_kind)}
+					<Badge tone="neutral">{m.execution_details_direct_engine()}</Badge>
+				{/if}
+			{/if}
+
 			<CodeBlock code={selected.sql} language="sql" maxHeight="240px" />
 
 			<div class="flex flex-wrap gap-2">
@@ -516,6 +594,7 @@
 				{:else}
 					<div class="flex flex-col gap-2">
 						{#each statements as statement (statement.id)}
+							{@const profile = profileFor(statement.position)}
 							<div class="rounded-md border border-border px-3 py-2">
 								<div class="flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
 									<span class="font-semibold text-text-main">#{statement.position}</span>
@@ -547,6 +626,66 @@
 								</div>
 								{#if statement.error_message}
 									<p class="mt-1 text-[11px] text-red-600">{statement.error_message}</p>
+								{/if}
+								{#if profile}
+									<dl class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-text-muted">
+										{#if profile.cpu_ms != null}
+											<div>
+												{m.execution_details_cpu()}:
+												<span class="font-mono text-text-main"
+													><Duration ms={profile.cpu_ms} /></span
+												>
+											</div>
+										{/if}
+										{#if profile.peak_memory_bytes != null}
+											<div>
+												{m.execution_details_peak_memory()}:
+												<span class="font-mono text-text-main"
+													>{formatBytes(profile.peak_memory_bytes)}</span
+												>
+											</div>
+										{/if}
+										{#if profile.spilled_bytes != null}
+											<div>
+												{m.execution_details_spilled()}:
+												<span class="font-mono text-text-main"
+													>{formatBytes(profile.spilled_bytes)}</span
+												>
+											</div>
+										{/if}
+										{#if profile.input_bytes != null}
+											<div>
+												{m.execution_details_input()}:
+												<span class="font-mono text-text-main">
+													{formatBytes(profile.input_bytes)}
+													{profile.input_rows != null
+														? ` · ${profile.input_rows.toLocaleString()}`
+														: ''}
+												</span>
+											</div>
+										{/if}
+										{#if profile.output_bytes != null}
+											<div>
+												{m.execution_details_output()}:
+												<span class="font-mono text-text-main">
+													{formatBytes(profile.output_bytes)}
+													{profile.output_rows != null
+														? ` · ${profile.output_rows.toLocaleString()}`
+														: ''}
+												</span>
+											</div>
+										{/if}
+									</dl>
+									{#if profile.inputs?.length}
+										<ul class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-text-muted">
+											{#each profile.inputs as input (inputKey(input))}
+												<li class="font-mono">
+													{[input.catalog, input.schema, input.table].filter(Boolean).join('.')}
+													{input.input_bytes != null ? ` · ${formatBytes(input.input_bytes)}` : ''}
+												</li>
+											{/each}
+										</ul>
+									{/if}
 								{/if}
 								<p
 									class="mt-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] text-text-muted"

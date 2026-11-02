@@ -2865,6 +2865,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/executions/{execution_id}/details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Per-statement rows, bytes and duration, with the engine profile
+         * @description A finished Trino run carries the timeline (engine queued, planning, execution), CPU, peak memory, spilled bytes and per-input-table reads Lens recorded for each statement. A direct engine reports duration and rows only and has no profile.
+         */
+        get: operations["getExecutionDetails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/executions/{execution_id}/cancel": {
         parameters: {
             query?: never;
@@ -5816,6 +5839,61 @@ export interface components {
             /** Format: date-time */
             admitted_at?: string | null;
             wait_ms: number;
+        };
+        ExecutionDetails: {
+            /** Format: uuid */
+            execution_id: string;
+            /** @description The engine of the target; a Trino run has a profile */
+            engine_kind?: string | null;
+            duration_ms?: number | null;
+            timeline: components["schemas"]["ExecutionTimeline"];
+            statements: components["schemas"]["ExecutionStatement"][];
+        };
+        /** @description The run's phases, in milliseconds; a phase is null when the engine did not report it. */
+        ExecutionTimeline: {
+            /** @description Time in Baleia's queue (A2) */
+            queue_wait_ms?: number | null;
+            /** @description Time queued inside the engine */
+            engine_queued_ms?: number | null;
+            planning_ms?: number | null;
+            execution_ms?: number | null;
+            /** @description The execution's recorded duration */
+            total_ms?: number | null;
+        };
+        ExecutionStatement: {
+            /** Format: uuid */
+            id: string;
+            position: number;
+            sql: string;
+            /** @enum {string} */
+            status: "pending" | "running" | "finished" | "failed" | "cancelled" | "skipped";
+            engine_query_id?: string | null;
+            rows_returned?: number | null;
+            result_bytes?: number | null;
+            duration_ms?: number | null;
+            profile?: components["schemas"]["ExecutionProfile"];
+        };
+        /** @description What the engine reported about one statement; null for a direct engine. */
+        ExecutionProfile: {
+            queued_ms?: number | null;
+            analysis_ms?: number | null;
+            planning_ms?: number | null;
+            execution_ms?: number | null;
+            cpu_ms?: number | null;
+            peak_memory_bytes?: number | null;
+            spilled_bytes?: number | null;
+            input_bytes?: number | null;
+            input_rows?: number | null;
+            output_bytes?: number | null;
+            output_rows?: number | null;
+            inputs?: components["schemas"]["ExecutionInput"][];
+        };
+        ExecutionInput: {
+            catalog?: string;
+            schema?: string;
+            table?: string;
+            input_bytes?: number | null;
+            input_rows?: number | null;
         };
         EngineQueues: {
             /** Format: uuid */
@@ -11781,6 +11859,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Execution"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getExecutionDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Execution details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionDetails"];
                 };
             };
             401: components["responses"]["Unauthorized"];

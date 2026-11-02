@@ -31,13 +31,18 @@ type QueryInfo struct {
 		PhysicalInputDataSize string `json:"physicalInputDataSize"`
 		// The rest comes only with /v1/query/{id} (GetQuery, #407).
 		QueuedTime                string `json:"queuedTime"`
+		AnalysisTime              string `json:"analysisTime"`
 		PlanningTime              string `json:"planningTime"`
+		ExecutionTime             string `json:"executionTime"`
 		PeakUserMemoryReservation string `json:"peakUserMemoryReservation"`
+		SpilledDataSize           string `json:"spilledDataSize"`
 		ProcessedInputPositions   *int64 `json:"processedInputPositions"`
 		ProcessedInputDataSize    string `json:"processedInputDataSize"`
 		OutputPositions           *int64 `json:"outputPositions"`
 		OutputDataSize            string `json:"outputDataSize"`
 		FullyBlocked              bool   `json:"fullyBlocked"`
+		// Inputs is the per-input-table breakdown of /v1/query/{id} (#532).
+		Inputs []QueryInput `json:"inputs"`
 	} `json:"queryStats"`
 	ErrorType *string `json:"errorType"`
 	ErrorCode *struct {
@@ -89,7 +94,7 @@ func (q QueryInfo) PhysicalInputBytes() *int64 {
 // a field is nil when Trino left it out.
 func (q QueryInfo) Resources() Resources {
 	s := q.QueryStats
-	return Resources{
+	r := Resources{
 		PeakMemoryBytes: dataSize(s.PeakUserMemoryReservation),
 		ProcessedRows:   s.ProcessedInputPositions,
 		ProcessedBytes:  dataSize(s.ProcessedInputDataSize),
@@ -97,7 +102,20 @@ func (q QueryInfo) Resources() Resources {
 		OutputBytes:     dataSize(s.OutputDataSize),
 		QueuedMs:        durationMs64(s.QueuedTime),
 		PlanningMs:      durationMs64(s.PlanningTime),
+		ExecutionMs:     durationMs64(s.ExecutionTime),
+		SpilledBytes:    dataSize(s.SpilledDataSize),
 	}
+	for _, in := range s.Inputs {
+		raw := in.PhysicalInputBytes
+		if raw == "" {
+			raw = in.PhysicalInputDataSize
+		}
+		r.Inputs = append(r.Inputs, Input{
+			Catalog: in.CatalogName, Schema: in.Schema, Table: in.Table,
+			Bytes: dataSize(raw), Rows: in.PhysicalInputPositions,
+		})
+	}
+	return r
 }
 
 // Resources is a query's resource usage; nil fields are unknown.
@@ -109,6 +127,28 @@ type Resources struct {
 	OutputBytes     *int64
 	QueuedMs        *int64
 	PlanningMs      *int64
+	ExecutionMs     *int64
+	SpilledBytes    *int64
+	Inputs          []Input
+}
+
+// QueryInput is one input table of a query, as /v1/query/{id} reports it.
+type QueryInput struct {
+	CatalogName            string `json:"catalogName"`
+	Schema                 string `json:"schema"`
+	Table                  string `json:"table"`
+	PhysicalInputBytes     string `json:"physicalInputBytes"`
+	PhysicalInputDataSize  string `json:"physicalInputDataSize"`
+	PhysicalInputPositions *int64 `json:"physicalInputPositions"`
+}
+
+// Input is one input table with its physical reads, parsed.
+type Input struct {
+	Catalog string
+	Schema  string
+	Table   string
+	Bytes   *int64
+	Rows    *int64
 }
 
 func dataSize(s string) *int64 {

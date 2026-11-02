@@ -200,6 +200,7 @@ var operationAccess = map[string]access{
 	"ListExecutions":            {kind: kindChecked, calls: wsMember},
 	"RunQuery":                  checked("requireWorkspaceAccess", "requireSpace"),
 	"GetExecution":              {kind: kindChecked, calls: wsMember},
+	"GetExecutionDetails":       {kind: kindChecked, calls: wsMember},
 	"CancelExecution":           {kind: kindChecked, calls: wsMember},
 	"GetResults":                {kind: kindChecked, calls: wsMember},
 	"ListStatements":            {kind: kindChecked, calls: wsMember},

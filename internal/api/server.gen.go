@@ -507,6 +507,9 @@ type ServerInterface interface {
 	// Cancel an ongoing execution
 	// (POST /workspaces/{id}/executions/{execution_id}/cancel)
 	CancelExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID)
+	// Per-statement rows, bytes and duration, with the engine profile
+	// (GET /workspaces/{id}/executions/{execution_id}/details)
+	GetExecutionDetails(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID)
 	// Execution results as Arrow IPC stream
 	// (GET /workspaces/{id}/executions/{execution_id}/results)
 	GetResults(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID)
@@ -1704,6 +1707,12 @@ func (_ Unimplemented) GetExecution(w http.ResponseWriter, r *http.Request, id P
 // Cancel an ongoing execution
 // (POST /workspaces/{id}/executions/{execution_id}/cancel)
 func (_ Unimplemented) CancelExecution(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Per-statement rows, bytes and duration, with the engine profile
+// (GET /workspaces/{id}/executions/{execution_id}/details)
+func (_ Unimplemented) GetExecutionDetails(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7920,6 +7929,48 @@ func (siw *ServerInterfaceWrapper) CancelExecution(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetExecutionDetails operation middleware
+func (siw *ServerInterfaceWrapper) GetExecutionDetails(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "execution_id" -------------
+	var executionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "execution_id", chi.URLParam(r, "execution_id"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "execution_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetExecutionDetails(w, r, id, executionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetResults operation middleware
 func (siw *ServerInterfaceWrapper) GetResults(w http.ResponseWriter, r *http.Request) {
 
@@ -12095,6 +12146,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/workspaces/{id}/executions/{execution_id}/cancel", wrapper.CancelExecution)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/executions/{execution_id}/details", wrapper.GetExecutionDetails)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/executions/{execution_id}/results", wrapper.GetResults)
@@ -19242,6 +19296,42 @@ func (response CancelExecution404JSONResponse) VisitCancelExecutionResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetExecutionDetailsRequestObject struct {
+	Id          PathId             `json:"id"`
+	ExecutionId openapi_types.UUID `json:"execution_id"`
+}
+
+type GetExecutionDetailsResponseObject interface {
+	VisitGetExecutionDetailsResponse(w http.ResponseWriter) error
+}
+
+type GetExecutionDetails200JSONResponse ExecutionDetails
+
+func (response GetExecutionDetails200JSONResponse) VisitGetExecutionDetailsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetExecutionDetails401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetExecutionDetails401JSONResponse) VisitGetExecutionDetailsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetExecutionDetails404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetExecutionDetails404JSONResponse) VisitGetExecutionDetailsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetResultsRequestObject struct {
 	Id          PathId             `json:"id"`
 	ExecutionId openapi_types.UUID `json:"execution_id"`
@@ -23131,6 +23221,9 @@ type StrictServerInterface interface {
 	// Cancel an ongoing execution
 	// (POST /workspaces/{id}/executions/{execution_id}/cancel)
 	CancelExecution(ctx context.Context, request CancelExecutionRequestObject) (CancelExecutionResponseObject, error)
+	// Per-statement rows, bytes and duration, with the engine profile
+	// (GET /workspaces/{id}/executions/{execution_id}/details)
+	GetExecutionDetails(ctx context.Context, request GetExecutionDetailsRequestObject) (GetExecutionDetailsResponseObject, error)
 	// Execution results as Arrow IPC stream
 	// (GET /workspaces/{id}/executions/{execution_id}/results)
 	GetResults(ctx context.Context, request GetResultsRequestObject) (GetResultsResponseObject, error)
@@ -27923,6 +28016,33 @@ func (sh *strictHandler) CancelExecution(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CancelExecutionResponseObject); ok {
 		if err := validResponse.VisitCancelExecutionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetExecutionDetails operation middleware
+func (sh *strictHandler) GetExecutionDetails(w http.ResponseWriter, r *http.Request, id PathId, executionId openapi_types.UUID) {
+	var request GetExecutionDetailsRequestObject
+
+	request.Id = id
+	request.ExecutionId = executionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetExecutionDetails(ctx, request.(GetExecutionDetailsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetExecutionDetails")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetExecutionDetailsResponseObject); ok {
+		if err := validResponse.VisitGetExecutionDetailsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

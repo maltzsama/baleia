@@ -14,7 +14,8 @@
 		canCancel,
 		oncancel,
 		onrerun,
-		onpick
+		onpick,
+		ondetails
 	}: {
 		state: RunState;
 		executing: boolean;
@@ -22,6 +23,7 @@
 		oncancel: () => void;
 		onrerun: (position: number) => void;
 		onpick?: (position: number) => void;
+		ondetails?: () => void;
 	} = $props();
 
 	const statements = $derived(orderedStatements(state));
@@ -102,6 +104,9 @@
 		{/if}
 		{#if state.readOnly}
 			<Badge tone="warning">{m.common_read_only()}</Badge>
+		{/if}
+		{#if ondetails}
+			<Button size="sm" onclick={ondetails}>{m.history_execution_details()}</Button>
 		{/if}
 		{#if executing && canCancel}
 			<Button size="sm" onclick={oncancel}>{m.common_cancel()}</Button>
