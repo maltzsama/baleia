@@ -356,7 +356,7 @@ func TestV3_InputHasNoSecrets(t *testing.T) {
 		}
 		return out
 	}
-	require.Equal(t, []string{"ExecutionID", "WorkspaceID", "SQL", "Target", "Identity", "StatementTimeout", "RequestID", "ExecutionTimeout", "RerunExecutionID", "RerunFromPosition", "Dialect", "Class", "WorkloadEnabled", "FairnessKey"}, fields(QueryExecutionInput{}))
+	require.Equal(t, []string{"ExecutionID", "WorkspaceID", "SQL", "Target", "Identity", "StatementTimeout", "RequestID", "ExecutionTimeout", "RuntimeTimeout", "RerunExecutionID", "RerunFromPosition", "Dialect", "Class", "WorkloadEnabled", "FairnessKey"}, fields(QueryExecutionInput{}))
 	require.Equal(t, []string{"EngineID", "EngineKind", "EngineName", "BindingID", "CatalogID", "CatalogName", "EngineCatalog", "Schema", "ReadOnly"}, fields(queryengine.Target{}))
 	require.Equal(t, []string{"UserID", "AgentID"}, fields(queryengine.Identity{}))
 }
@@ -373,5 +373,27 @@ func TestV3_Replay(t *testing.T) {
 			r.RegisterWorkflow(QueryExecutionWorkflowV3)
 			require.NoError(t, r.ReplayWorkflowHistoryFromJSONFile(nil, "testdata/v3_"+name+".json"))
 		})
+	}
+}
+
+func TestV3_RuntimeTimeoutReplacesTheGlobalCaps(t *testing.T) {
+	t.Parallel()
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestWorkflowEnvironment()
+	bookkeeping(env, 1)
+	var script activities.ExecuteScriptParams
+	env.OnActivity(activities.ExecuteScript, mock.Anything, mock.MatchedBy(func(p activities.ExecuteScriptParams) bool {
+		script = p
+		return true
+	})).Return(finished(1), nil)
+	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).Return(nil)
+
+	in := v3Input()
+	in.RuntimeTimeout = 24 * time.Hour
+	env.ExecuteWorkflow(QueryExecutionWorkflowV3, in)
+
+	require.NoError(t, env.GetWorkflowError())
+	if script.Timeout != 24*time.Hour {
+		t.Errorf("script timeout = %s, want the class runtime 24h", script.Timeout)
 	}
 }

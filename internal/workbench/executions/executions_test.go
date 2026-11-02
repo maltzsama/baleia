@@ -325,14 +325,13 @@ func TestCapacitiesForUsesEngineOverrides(t *testing.T) {
 	}
 	s := New(st, &fakeWorkflows{}, fakeEngines{&fakeEngine{}}, dialect.NewRegistry(), Config{})
 
-	state := s.capacitiesFor(context.Background(), newID(), "federated")
-	var interactive workflows.AdmissionCapacity
-	for _, c := range state.Capacities {
-		if c.Class == queryengine.ClassInteractive {
-			interactive = c
-		}
-	}
+	_, resolved := s.capacitiesFor(context.Background(), newID(), "federated")
+	interactive := resolved[queryengine.ClassInteractive]
 	if interactive.MaxRunning != 1 || interactive.MaxQueued != 10 || interactive.QueueTimeout != 300*time.Second {
 		t.Errorf("interactive capacity = %+v, want the engine override", interactive)
+	}
+	// A row that leaves the runtime bound unset falls back to the class default.
+	if interactive.RuntimeTimeout != 5*time.Minute {
+		t.Errorf("interactive runtime = %s, want the 5m default", interactive.RuntimeTimeout)
 	}
 }

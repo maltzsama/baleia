@@ -29,6 +29,9 @@ type QueryExecutionInput struct {
 	// ExecutionTimeout caps the whole script (BALEIA_EXECUTION_TIMEOUT);
 	// 0 = defaultExecutionTimeout.
 	ExecutionTimeout time.Duration
+	// RuntimeTimeout is the class's bound on the whole execution (#578). Zero
+	// keeps the global StatementTimeout/ExecutionTimeout.
+	RuntimeTimeout time.Duration
 	// RerunExecutionID copies the statements of an earlier execution from
 	// RerunFromPosition instead of splitting SQL again (#111).
 	RerunExecutionID  string
@@ -211,11 +214,20 @@ func runQueryExecution(ctx workflow.Context, in QueryExecutionInput, dialectName
 		refs[i] = activities.StatementRef{Position: int32(i + 1), SQL: sql}
 	}
 
+	// The class's runtime bound replaces the global statement and execution
+	// caps when workload management is on (#578).
+	statementTimeout := in.StatementTimeout
+	executionCap := in.ExecutionTimeout
+	if in.RuntimeTimeout > 0 {
+		statementTimeout = in.RuntimeTimeout
+		executionCap = in.RuntimeTimeout
+	}
+
 	// The script is never retried automatically: a session cannot be resumed
 	// and a retried INSERT or CREATE TABLE AS would write twice. On cancel the
 	// workflow waits for the script to stop its statement on the engine.
 	scriptCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: scriptTimeout(len(refs), in.StatementTimeout, in.ExecutionTimeout),
+		StartToCloseTimeout: scriptTimeout(len(refs), statementTimeout, executionCap),
 		HeartbeatTimeout:    30 * time.Second,
 		WaitForCancellation: true,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
@@ -226,7 +238,7 @@ func runQueryExecution(ctx workflow.Context, in QueryExecutionInput, dialectName
 		Target:      in.Target,
 		Identity:    in.Identity,
 		Statements:  refs,
-		Timeout:     in.StatementTimeout,
+		Timeout:     statementTimeout,
 		RequestID:   in.RequestID,
 		Class:       in.Class,
 	}).Get(scriptCtx, &res)
