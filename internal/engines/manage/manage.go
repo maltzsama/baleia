@@ -176,6 +176,15 @@ func (s *Service) SetEnabled(ctx context.Context, id pgtype.UUID, enabled *bool)
 	return s.store.UpdateEngine(ctx, db.UpdateEngineParams{ID: id, Enabled: enabled})
 }
 
+// SetCostRouting opts an engine into cost-based classification (#550).
+func (s *Service) SetCostRouting(ctx context.Context, id pgtype.UUID, enabled *bool, threshold *int64) (db.Engine, error) {
+	return s.store.UpdateEngine(ctx, db.UpdateEngineParams{
+		ID:                 id,
+		CostRoutingEnabled: enabled,
+		CostThresholdBytes: threshold,
+	})
+}
+
 // Delete removes an engine and its native catalogs. Managed bindings,
 // running executions or any other reference make it an InUseError.
 func (s *Service) Delete(ctx context.Context, id pgtype.UUID) error {

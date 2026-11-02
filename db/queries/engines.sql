@@ -41,6 +41,8 @@ UPDATE trino_clusters SET engine_id = $2, updated_at = now() WHERE id = $1;
 UPDATE engines
 SET enabled       = COALESCE(sqlc.narg('enabled'), enabled),
     identity_mode = COALESCE(sqlc.narg('identity_mode'), identity_mode),
+    cost_routing_enabled = COALESCE(sqlc.narg('cost_routing_enabled'), cost_routing_enabled),
+    cost_threshold_bytes = COALESCE(sqlc.narg('cost_threshold_bytes'), cost_threshold_bytes),
     updated_at    = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;

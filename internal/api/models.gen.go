@@ -2312,7 +2312,13 @@ type Engine struct {
 	Class        EngineClass          `json:"class"`
 	Connection   *EngineConnectionRef `json:"connection"`
 	ConnectionId openapi_types.UUID   `json:"connection_id"`
-	CreatedAt    time.Time            `json:"created_at"`
+
+	// CostRoutingEnabled Run EXPLAIN (FORMAT JSON) before a Trino SELECT and route an expensive run to heavy (#550)
+	CostRoutingEnabled *bool `json:"cost_routing_enabled,omitempty"`
+
+	// CostThresholdBytes Estimated bytes above which a Trino SELECT is heavy; cost routing does nothing while this is null (#550)
+	CostThresholdBytes *int64    `json:"cost_threshold_bytes"`
+	CreatedAt          time.Time `json:"created_at"`
 
 	// CredentialsReadOnly Copied from the connection: its credentials only allow reads
 	CredentialsReadOnly *bool `json:"credentials_read_only,omitempty"`
@@ -4325,7 +4331,9 @@ type UpdateEngineQueuesRequest struct {
 
 // UpdateEngineRequest defines model for UpdateEngineRequest.
 type UpdateEngineRequest struct {
-	Enabled *bool `json:"enabled,omitempty"`
+	CostRoutingEnabled *bool  `json:"cost_routing_enabled,omitempty"`
+	CostThresholdBytes *int64 `json:"cost_threshold_bytes"`
+	Enabled            *bool  `json:"enabled,omitempty"`
 }
 
 // UpdateFolderRequest defines model for UpdateFolderRequest.

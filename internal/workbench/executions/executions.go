@@ -159,7 +159,13 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 	weight := 1
 	var queueClass, queueReason *string
 	if s.cfg.WorkloadEnabled {
-		decision := workload.Decide(r.Origin, r.ruleInput(s.statementCount(r)), s.workloadRules(ctx))
+		statements := s.splitStatements(r)
+		in := r.ruleInput(len(statements))
+		if len(statements) > 0 {
+			in.DDL = workload.IsDDL(statements[0])
+			in.CostHeavy = s.costHeavy(ctx, r, statements[0])
+		}
+		decision := workload.Decide(r.Origin, in, s.workloadRules(ctx))
 		class = decision.Class
 		weight = decision.Weight
 		c, reason := string(decision.Class), decision.Reason
@@ -270,21 +276,71 @@ func (r Run) ruleInput(statements int) workload.RuleInput {
 	}
 }
 
-// statementCount is how many statements the run carries, for the rules that
-// match on it (#546). An unsplittable script counts as zero.
-func (s *Service) statementCount(r Run) int {
+// costRoutingTimeout bounds the EXPLAIN; an estimate is a hint, never worth
+// delaying a run (#550).
+const costRoutingTimeout = 3 * time.Second
+
+// costHeavy asks Trino for an EXPLAIN (FORMAT JSON) and reports whether the
+// estimate is above the engine's threshold (#550). It is best effort: an
+// engine without cost routing, a non-SELECT, a failed EXPLAIN or a plan with
+// no statistics falls through to the next classification step.
+func (s *Service) costHeavy(ctx context.Context, r Run, sql string) bool {
+	if s.engines == nil || !r.Target.EngineID.Valid || r.Target.EngineKind != "trino" || !workload.IsSelect(sql) {
+		return false
+	}
+	row, err := s.store.GetEngineByID(ctx, r.Target.EngineID)
+	if err != nil || !row.CostRoutingEnabled || row.CostThresholdBytes == nil {
+		return false
+	}
+	engine, err := s.engines.Get(ctx, r.Target.EngineID)
+	if err != nil {
+		s.logger.WarnContext(ctx, "cost routing: engine lookup failed; classifying without it", "engine_id", uuidString(r.Target.EngineID), "err", err)
+		return false
+	}
+	cctx, cancel := context.WithTimeout(ctx, costRoutingTimeout)
+	defer cancel()
+	spec := queryengine.SessionSpec{
+		Catalog:  r.Target.EngineCatalog,
+		Identity: r.Identity,
+		ReadOnly: true,
+		Timeout:  costRoutingTimeout,
+		Tags:     queryengine.Tags{RequestID: r.RequestID, Source: "classification", Class: queryengine.ClassInteractive},
+	}
+	if r.Target.Schema != "" {
+		spec.Schema = []string{r.Target.Schema}
+	}
+	table, err := queryengine.Collect(cctx, engine, spec, "EXPLAIN (FORMAT JSON) "+sql, 1)
+	if err != nil {
+		s.logger.DebugContext(ctx, "cost routing: EXPLAIN failed; classifying without it", "engine_id", uuidString(r.Target.EngineID), "err", err)
+		return false
+	}
+	defer table.Release()
+	if table.NumRows() == 0 || table.NumCols() == 0 {
+		return false
+	}
+	bytes, ok := workload.TrinoPlanCost([]byte(table.Column(0).Data().Chunk(0).ValueStr(0)))
+	return ok && bytes > *row.CostThresholdBytes
+}
+
+// splitStatements is the run's statements, split with the target's dialect
+// (Trino when the kind has none). It feeds statement-count rules and the DDL
+// and cost steps (#546, #550, #580). An unsplittable script yields nil.
+func (s *Service) splitStatements(r Run) []string {
 	if s.dialects == nil {
-		return 0
+		return nil
 	}
 	d, ok := s.dialects.ForEngineKind(r.Target.EngineKind)
 	if !ok {
-		return 0
+		d, ok = s.dialects.ForEngineKind("trino")
+		if !ok {
+			return nil
+		}
 	}
 	parts, err := d.SplitStatements(r.SQL)
 	if err != nil {
-		return 0
+		return nil
 	}
-	return len(parts)
+	return parts
 }
 
 // workloadRules loads the ordered rules for classification (#546). A rule that

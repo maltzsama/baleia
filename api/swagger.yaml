@@ -1640,6 +1640,14 @@ components:
         enabled: { type: boolean }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        cost_routing_enabled:
+          type: boolean
+          description: "Run EXPLAIN (FORMAT JSON) before a Trino SELECT and route an expensive run to heavy (#550)"
+        cost_threshold_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: "Estimated bytes above which a Trino SELECT is heavy; cost routing does nothing while this is null (#550)"
         version:
           type: string
           nullable: true
@@ -1804,6 +1812,8 @@ components:
       type: object
       properties:
         enabled: { type: boolean }
+        cost_routing_enabled: { type: boolean }
+        cost_threshold_bytes: { type: integer, format: int64, nullable: true, minimum: 1 }
 
     AuditEvent:
       type: object
@@ -6549,6 +6559,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [Engines]
       operationId: deleteEngine
