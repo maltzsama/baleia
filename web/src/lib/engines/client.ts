@@ -2,6 +2,7 @@
 // engine name: the dialect, formatter language and CodeMirror base all come
 // from the API.
 import { apiErrorMessage, client } from '$lib/api/client';
+import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import {
 	Cassandra,
@@ -20,6 +21,7 @@ export type Engine = components['schemas']['Engine'];
 export type EngineDialect = components['schemas']['EngineDialect'];
 export type EngineCapabilities = components['schemas']['EngineCapabilities'];
 export type Dialect = components['schemas']['Dialect'];
+export type DialectFunction = components['schemas']['DialectFunction'];
 export type WorkspaceTarget = components['schemas']['WorkspaceTarget'];
 
 export class EngineRequestError extends Error {
@@ -64,6 +66,16 @@ export function loadEngines(): Promise<Engine[]> {
 }
 
 /** A dialect with its keyword and function lists, cached per name. */
+/** The dialect's function reference, with signatures where committed (B2, #531). */
+export function loadFunctions(name: string): Promise<DialectFunction[]> {
+	return client
+		.GET('/dialects/{name}/functions', { params: { path: { name } } })
+		.then(({ data, error, response }) => {
+			if (error || !data) fail(error, response?.status, m.functions_panel_failed());
+			return data;
+		});
+}
+
 export function loadDialect(name: string): Promise<Dialect> {
 	const hit = dialectCache.get(name);
 	if (hit) return hit;

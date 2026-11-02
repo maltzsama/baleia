@@ -49,6 +49,43 @@ func TestGetDialect(t *testing.T) {
 	}
 }
 
+func TestListDialectFunctions(t *testing.T) {
+	t.Parallel()
+	h := testAPI(handlerFields{dialects: dialect.NewRegistry()})
+	resp, err := h.ListDialectFunctions(testContext(), ListDialectFunctionsRequestObject{Name: "trino"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok, isOK := resp.(ListDialectFunctions200JSONResponse)
+	if !isOK || len(ok.Body) == 0 || ok.Headers.ETag == "" || ok.Headers.CacheControl == "" {
+		t.Fatalf("response = %#v", resp)
+	}
+	found := false
+	for _, f := range ok.Body {
+		if f.Name == "date_trunc" {
+			found = true
+			if !f.Call {
+				t.Fatalf("date_trunc = %+v", f)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("trino's reference lacks date_trunc")
+	}
+	for _, inm := range []string{ok.Headers.ETag, "W/" + ok.Headers.ETag, "*"} {
+		r, _ := h.ListDialectFunctions(testContext(), ListDialectFunctionsRequestObject{Name: "trino", Params: ListDialectFunctionsParams{IfNoneMatch: &inm}})
+		if nm, is304 := r.(ListDialectFunctions304Response); !is304 || nm.Headers.ETag != ok.Headers.ETag {
+			t.Errorf("If-None-Match %s: %T", inm, r)
+		}
+	}
+	if r, _ := h.ListDialectFunctions(testContext(), ListDialectFunctionsRequestObject{Name: "cobol"}); func() bool {
+		_, ok := r.(ListDialectFunctions404JSONResponse)
+		return !ok
+	}() {
+		t.Error("unknown dialect must be 404")
+	}
+}
+
 func TestSplitStatements_UTF16Offsets(t *testing.T) {
 	t.Parallel()
 	h := testAPI(handlerFields{dialects: dialect.NewRegistry()})

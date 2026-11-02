@@ -1779,6 +1779,16 @@ components:
             keywords: { type: array, items: { type: string } }
             functions: { type: array, items: { type: string } }
 
+    DialectFunction:
+      type: object
+      required: [name, kind, call]
+      properties:
+        name: { type: string }
+        signature: { type: string, description: "The call shape, when the engine exposes it" }
+        kind: { type: string, description: "function, aggregate or operator" }
+        description: { type: string }
+        call: { type: boolean, description: "False for a keyword-like special form written without parentheses (current_date)" }
+
     SplitStatementsRequest:
       type: object
       required: [sql]
@@ -6775,6 +6785,42 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Dialect" }
+        "304":
+          description: "Not modified (If-None-Match matched the ETag)"
+          headers:
+            ETag: { schema: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /dialects/{name}/functions:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Engines]
+      operationId: listDialectFunctions
+      summary: "The dialect's function reference (B2)"
+      description: >
+        The functions the editor knows, with the signature and description
+        where the committed reference has them. Cached with an ETag.
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: "Functions"
+          headers:
+            ETag: { schema: { type: string } }
+            Cache-Control: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DialectFunction" }
         "304":
           description: "Not modified (If-None-Match matched the ETag)"
           headers:

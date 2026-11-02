@@ -443,4 +443,26 @@ describe('QueryEditor', () => {
 		expect(seen.tickets).toBe(0);
 		expect(screen.queryByTestId('results-area')).toBeNull();
 	});
+
+	it('finds date_trunc and inserts it with the cursor inside the parentheses (#556)', async () => {
+		mockWorkbench();
+		server.use(
+			http.get('/dialects/{name}/functions', ({ response }) =>
+				response(200).json([
+					{ name: 'date_trunc', kind: 'function', call: true },
+					{ name: 'count', kind: 'function', call: true }
+				])
+			)
+		);
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Functions' }));
+		const search = await screen.findByRole('searchbox', { name: 'Search functions' });
+		await fireEvent.input(search, { target: { value: 'truncate' } });
+		await fireEvent.click(await screen.findByRole('button', { name: /date_trunc/ }));
+
+		const content = document.querySelector('.cm-content') as HTMLElement;
+		await waitFor(() => expect(content.textContent).toContain('date_trunc()'));
+	});
 });

@@ -172,7 +172,7 @@ func dialectNotFound() NotFoundJSONResponse {
 }
 
 // dialectETag is a strong validator of the dialect's whole document.
-func dialectETag(body Dialect) string {
+func dialectETag(body any) string {
 	raw, _ := json.Marshal(body)
 	sum := sha256.Sum256(raw)
 	return `"` + hex.EncodeToString(sum[:12]) + `"`
@@ -208,6 +208,40 @@ func (h *CatalogHandlers) GetDialect(ctx context.Context, request GetDialectRequ
 	return GetDialect200JSONResponse{
 		Body:    body,
 		Headers: GetDialect200ResponseHeaders{ETag: etag, CacheControl: "private, max-age=3600"},
+	}, nil
+}
+
+// ListDialectFunctions — GET /dialects/{name}/functions
+// The dialect's function reference with the signature/description where the
+// committed data has them (B2, #531), cached with an ETag.
+func (h *CatalogHandlers) ListDialectFunctions(ctx context.Context, request ListDialectFunctionsRequestObject) (ListDialectFunctionsResponseObject, error) {
+	if _, err := authz.PrincipalFromContext(ctx); err != nil {
+		return ListDialectFunctions401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
+	}
+	if _, ok := h.dialects.Get(request.Name); !ok {
+		return ListDialectFunctions404JSONResponse{NotFoundJSONResponse: dialectNotFound()}, nil
+	}
+	refs := dialect.FunctionReferences(request.Name)
+	body := make([]DialectFunction, 0, len(refs))
+	for _, r := range refs {
+		f := DialectFunction{Name: r.Name, Kind: r.Kind, Call: r.Call}
+		if r.Signature != "" {
+			sig := r.Signature
+			f.Signature = &sig
+		}
+		if r.Description != "" {
+			desc := r.Description
+			f.Description = &desc
+		}
+		body = append(body, f)
+	}
+	etag := dialectETag(body)
+	if request.Params.IfNoneMatch != nil && etagMatches(*request.Params.IfNoneMatch, etag) {
+		return ListDialectFunctions304Response{Headers: ListDialectFunctions304ResponseHeaders{ETag: etag}}, nil
+	}
+	return ListDialectFunctions200JSONResponse{
+		Body:    body,
+		Headers: ListDialectFunctions200ResponseHeaders{ETag: etag, CacheControl: "private, max-age=3600"},
 	}, nil
 }
 

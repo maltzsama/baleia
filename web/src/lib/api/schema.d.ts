@@ -2101,6 +2101,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dialects/{name}/functions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * The dialect's function reference (B2)
+         * @description The functions the editor knows, with the signature and description where the committed reference has them. Cached with an ETag.
+         */
+        get: operations["listDialectFunctions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dialects/{name}/split": {
         parameters: {
             query?: never;
@@ -4749,6 +4771,16 @@ export interface components {
         Dialect: components["schemas"]["EngineDialect"] & {
             keywords: string[];
             functions: string[];
+        };
+        DialectFunction: {
+            name: string;
+            /** @description The call shape, when the engine exposes it */
+            signature?: string;
+            /** @description function, aggregate or operator */
+            kind: string;
+            description?: string;
+            /** @description False for a keyword-like special form written without parentheses (current_date) */
+            call: boolean;
         };
         SplitStatementsRequest: {
             sql: string;
@@ -10455,6 +10487,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Dialect"];
+                };
+            };
+            /** @description Not modified (If-None-Match matched the ETag) */
+            304: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listDialectFunctions: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Functions */
+            200: {
+                headers: {
+                    ETag?: string;
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DialectFunction"][];
                 };
             };
             /** @description Not modified (If-None-Match matched the ETag) */
