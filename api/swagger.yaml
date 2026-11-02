@@ -2047,6 +2047,7 @@ components:
         column: { type: string, nullable: true }
         native_type: { type: string, nullable: true }
         score: { type: number, format: double }
+        popularity: { type: number, format: double, description: "The table's popularity score in this workspace (B7, #562)" }
         metadata_synced_at: { type: string, format: date-time, nullable: true }
 
     JoinSuggestion:
@@ -2059,6 +2060,20 @@ components:
         last_used_at: { type: string, format: date-time, nullable: true }
         score: { type: number, format: double, description: "Frequency with a 30-day half-life decay; 0 for a foreign key" }
         source: { type: string, enum: [history, foreign_key] }
+
+    PopularTable:
+      type: object
+      required: [table_id, catalog_id, namespace, name, kind, uses, score, last_used_at]
+      properties:
+        table_id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        namespace: { type: array, items: { type: string } }
+        name: { type: string }
+        kind: { type: string, description: "table, view or materialized_view" }
+        uses: { type: integer, description: "Finished statements that read the table in the last 30 days" }
+        score: { type: number, format: double, description: "Uses with a 7-day half-life decay" }
+        last_used_at: { type: string, format: date-time }
+        metadata_synced_at: { type: string, format: date-time, nullable: true }
 
     # ── Semantic layer (#33) ───────────────────────────────────
     SemanticDoc:
@@ -5346,6 +5361,32 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/metadata/popular-tables:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Metadata]
+      operationId: listPopularTables
+      summary: "Tables the workspace read most in the last 30 days (B7)"
+      description: >
+        The scheduled popularity pass counts finished statements' reads with a
+        7-day half-life decay. Only live tables of catalogs granted to the
+        workspace are returned, best first.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+      responses:
+        "200":
+          description: "Popular tables, best first"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PopularTable" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Semantic layer (#33) ──────────────────────────────────────
   /workspaces/{id}/semantic/tags:

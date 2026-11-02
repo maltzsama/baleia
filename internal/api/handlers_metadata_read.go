@@ -268,16 +268,50 @@ func (h *CatalogHandlers) SearchMetadata(ctx context.Context, request SearchMeta
 	}
 	out := make(SearchMetadata200JSONResponse, 0, len(rows))
 	for _, r := range rows {
+		popularity := r.Popularity
 		res := MetadataSearchResult{
 			Kind: MetadataSearchResultKind(r.Kind), TableId: openapi_types.UUID(r.TableID.Bytes),
 			CatalogId: openapi_types.UUID(r.CatalogID.Bytes), Namespace: r.Namespace, Table: r.TableName,
-			Score: r.Score, MetadataSyncedAt: timePtr(r.MetadataSyncedAt),
+			Score: r.Score, Popularity: &popularity, MetadataSyncedAt: timePtr(r.MetadataSyncedAt),
 		}
 		if r.Kind == "column" {
 			col, typ := r.ColumnName, r.NativeType
 			res.Column, res.NativeType = &col, &typ
 		}
 		out = append(out, res)
+	}
+	return out, nil
+}
+
+// ListPopularTables — GET /workspaces/{id}/metadata/popular-tables
+// The tables the workspace read most in the last 30 days, from the scheduled
+// popularity pass (B7, #562), live and grant-scoped.
+func (h *CatalogHandlers) ListPopularTables(ctx context.Context, request ListPopularTablesRequestObject) (ListPopularTablesResponseObject, error) {
+	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	if nf {
+		return ListPopularTables404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
+	}
+	limit := 10
+	if request.Params.Limit != nil {
+		limit = *request.Params.Limit
+	}
+	rows, err := h.queries.ListPopularTables(ctx, db.ListPopularTablesParams{
+		WorkspaceID: ws, Lim: int32(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make(ListPopularTables200JSONResponse, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, PopularTable{
+			TableId: openapi_types.UUID(r.TableID.Bytes), CatalogId: openapi_types.UUID(r.CatalogID.Bytes),
+			Namespace: r.Namespace, Name: r.Name, Kind: r.Kind,
+			Uses: int(r.Uses), Score: r.Score, LastUsedAt: r.LastUsedAt.Time,
+			MetadataSyncedAt: timePtr(r.MetadataSyncedAt),
+		})
 	}
 	return out, nil
 }

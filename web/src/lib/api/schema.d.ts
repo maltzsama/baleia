@@ -1223,6 +1223,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/metadata/popular-tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Tables the workspace read most in the last 30 days (B7)
+         * @description The scheduled popularity pass counts finished statements' reads with a 7-day half-life decay. Only live tables of catalogs granted to the workspace are returned, best first.
+         */
+        get: operations["listPopularTables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/semantic/tags": {
         parameters: {
             query?: never;
@@ -4967,6 +4989,11 @@ export interface components {
             native_type?: string | null;
             /** Format: double */
             score: number;
+            /**
+             * Format: double
+             * @description The table's popularity score in this workspace (B7, #562)
+             */
+            popularity?: number;
             /** Format: date-time */
             metadata_synced_at?: string | null;
         };
@@ -4986,6 +5013,27 @@ export interface components {
             score?: number;
             /** @enum {string} */
             source: "history" | "foreign_key";
+        };
+        PopularTable: {
+            /** Format: uuid */
+            table_id: string;
+            /** Format: uuid */
+            catalog_id: string;
+            namespace: string[];
+            name: string;
+            /** @description table, view or materialized_view */
+            kind: string;
+            /** @description Finished statements that read the table in the last 30 days */
+            uses: number;
+            /**
+             * Format: double
+             * @description Uses with a 7-day half-life decay
+             */
+            score: number;
+            /** Format: date-time */
+            last_used_at: string;
+            /** Format: date-time */
+            metadata_synced_at?: string | null;
         };
         SemanticDoc: {
             /** Format: uuid */
@@ -8733,6 +8781,32 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listPopularTables: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Popular tables, best first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PopularTable"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     listSemanticTags: {

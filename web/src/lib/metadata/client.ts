@@ -17,6 +17,7 @@ export type MetadataTableDetail = components['schemas']['MetadataTableDetail'];
 export type MetadataColumn = components['schemas']['MetadataColumn'];
 export type MetadataSearchResult = components['schemas']['MetadataSearchResult'];
 export type JoinSuggestion = components['schemas']['JoinSuggestion'];
+export type PopularTable = components['schemas']['PopularTable'];
 
 /** A table the explorer selected, independent of the API's table detail. */
 export type TableRef = {
@@ -51,6 +52,7 @@ const catalogsCache: Cache<MetadataCatalog[]> = new Map();
 const namespacesCache: Cache<MetadataNamespaceList> = new Map();
 const tablesCache: Cache<MetadataTablePage> = new Map();
 const tableCache: Cache<MetadataTableDetail> = new Map();
+const popularCache: Cache<PopularTable[]> = new Map();
 
 /** Upper bound per cache; the oldest (least-recently-set) entry is evicted. */
 const CACHE_MAX = 1000;
@@ -61,6 +63,7 @@ export function clearMetadataCache(): void {
 	namespacesCache.clear();
 	tablesCache.clear();
 	tableCache.clear();
+	popularCache.clear();
 }
 
 function cached<T>(cache: Cache<T>, key: string, load: () => Promise<T>): Promise<T> {
@@ -228,6 +231,17 @@ export function joinSuggestions(
 			if (error || !data) fail(error, response?.status, 'Failed to load join suggestions');
 			return data;
 		});
+}
+
+/** The tables the workspace read most in the last 30 days, best first (B7, #562). */
+export function popularTables(workspaceId: string, limit = 10): Promise<PopularTable[]> {
+	return cached(popularCache, `${workspaceId}:${limit}`, async () => {
+		const { data, error, response } = await client.GET('/workspaces/{id}/metadata/popular-tables', {
+			params: { path: { id: workspaceId }, query: { limit } }
+		});
+		if (error || !data) fail(error, response?.status, 'Failed to load popular tables');
+		return data;
+	});
 }
 
 // A deep link names a table by catalog, namespace and name. Search ranks an

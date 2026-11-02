@@ -151,6 +151,9 @@ type Querier interface {
 	// Statement references and equi-joins (B0, #530, #538).
 	DeleteStatementReferences(ctx context.Context, statementID pgtype.UUID) error
 	DeleteTableMaintenancePolicy(ctx context.Context, arg DeleteTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
+	// Popular tables from query history (B7, #562).
+	// The refresh replaces every row in one transaction with InsertTablePopularity.
+	DeleteTablePopularity(ctx context.Context) error
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	DeleteWorkloadRule(ctx context.Context, id pgtype.UUID) (int64, error)
@@ -306,6 +309,9 @@ type Querier interface {
 	InsertReconcileRun(ctx context.Context, arg InsertReconcileRunParams) (InsertReconcileRunRow, error)
 	InsertStatementJoin(ctx context.Context, arg InsertStatementJoinParams) error
 	InsertStatementReference(ctx context.Context, arg InsertStatementReferenceParams) error
+	// Counts the reads of the last 30 days with a 7-day half-life decay. Only
+	// finished statements and references with a catalog (a target) count.
+	InsertTablePopularity(ctx context.Context) error
 	// A personal workspace is owned by its user; a shared one by the owners of its team.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
 	// The latest finished run of each operation on a table.
@@ -415,6 +421,8 @@ type Querier interface {
 	ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	ListMigrations(ctx context.Context) ([]Migration, error)
 	ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
+	// The workspace's most used tables, live and granted only, best first.
+	ListPopularTables(ctx context.Context, arg ListPopularTablesParams) ([]ListPopularTablesRow, error)
 	ListQueryExecutionsByWorkspace(ctx context.Context, arg ListQueryExecutionsByWorkspaceParams) ([]QueryExecution, error)
 	ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]QueryStatement, error)
 	// Only returns statements of an execution that belongs to the given workspace.
@@ -568,6 +576,7 @@ type Querier interface {
 	// Tables and columns of the catalogs the workspace may use whose names are
 	// trigram-similar to q (or contain a word similar to it), best first.
 	// Table-level docs carry the tags and the `certified` tag (B6, #534).
+	// A popular table ranks before an equally similar one (B7, #562).
 	SearchMetadata(ctx context.Context, arg SearchMetadataParams) ([]SearchMetadataRow, error)
 	// Trigram search over docs of catalogs the workspace may use. A tag narrows
 	// the result to docs carrying it.

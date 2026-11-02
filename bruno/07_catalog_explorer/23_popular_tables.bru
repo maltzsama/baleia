@@ -1,0 +1,27 @@
+meta {
+  name: Popular Tables
+  type: http
+  seq: 23
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/popular-tables?limit=10
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+docs {
+  The tables this workspace read most in the last 30 days, from the scheduled
+  popularity pass (#562): a 7-day half-life decay over finished statements.
+  Only live tables of catalogs granted to the workspace are returned, best
+  first; `uses` is the raw count and `score` the decayed one.
+}

@@ -70,7 +70,8 @@ function useBackend(options: { searchFails?: boolean } = {}) {
 			opened.push(params.table_id);
 			const catalog = params.table_id === LAKE_ORDERS ? LAKE : WAREHOUSE;
 			return response(200).json(makeTableDetail({ id: params.table_id, catalog_id: catalog }));
-		})
+		}),
+		http.get('/workspaces/{id}/metadata/popular-tables', ({ response }) => response(200).json([]))
 	);
 	return opened;
 }
@@ -95,6 +96,33 @@ describe('data page deep link', () => {
 		// The tree reveals the linked row under its catalog.
 		const row = await screen.findByRole('button', { name: /orders/, current: true });
 		expect(row).toBeTruthy();
+	});
+
+	it('shows the popular tables when nothing is selected and opens one (#562)', async () => {
+		const opened = useBackend();
+		server.use(
+			http.get('/workspaces/{id}/metadata/popular-tables', ({ response }) =>
+				response(200).json([
+					{
+						table_id: LAKE_ORDERS,
+						catalog_id: LAKE,
+						namespace: ['sales'],
+						name: 'orders',
+						kind: 'table',
+						uses: 4,
+						score: 3.2,
+						last_used_at: '2026-10-01T00:00:00Z',
+						metadata_synced_at: null
+					}
+				])
+			)
+		);
+		setTestUrl('/data');
+		render(DataPage);
+
+		expect(await screen.findByText('Popular in this workspace')).toBeTruthy();
+		await fireEvent.click(await screen.findByRole('button', { name: /orders/ }));
+		await waitFor(() => expect(opened).toContain(LAKE_ORDERS));
 	});
 
 	it('still opens a link that carries the catalog name', async () => {

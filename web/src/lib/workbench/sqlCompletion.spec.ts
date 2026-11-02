@@ -134,7 +134,8 @@ beforeEach(() => {
 					source: 'foreign_key'
 				}
 			]);
-		})
+		}),
+		http.get('/workspaces/{id}/metadata/popular-tables', ({ response }) => response(200).json([]))
 	);
 });
 
@@ -240,6 +241,28 @@ describe('sqlCompletionSource', () => {
 		expect((result?.options[0] as { apply?: unknown }).apply).toBe('n.regionkey = r.regionkey');
 		// The pair is asked as (existing table, joined table).
 		expect(joinCalls).toEqual([{ left: IDS.tinyNation, right: IDS.tinyRegion }]);
+	});
+
+	it('ranks a popular table first within its group (#562)', async () => {
+		server.use(
+			http.get('/workspaces/{id}/metadata/popular-tables', ({ response }) =>
+				response(200).json([
+					{
+						table_id: IDS.tinyPart,
+						catalog_id: CATALOG,
+						namespace: ['tiny'],
+						name: 'part',
+						kind: 'table',
+						uses: 3,
+						score: 9,
+						last_used_at: '2026-01-01T00:00:00Z',
+						metadata_synced_at: null
+					}
+				])
+			)
+		);
+		const result = await complete('SELECT * FROM |', { explicit: true });
+		expect(labels(result?.options)[0]).toMatch(/^part/);
 	});
 
 	it('does not offer join conditions once a column is being typed', async () => {

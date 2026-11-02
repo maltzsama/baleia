@@ -141,6 +141,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(RefreshEngineCatalogs)
 	w.RegisterActivity(ListSyncableCatalogs)
 	w.RegisterActivity(CleanupExpiredTokens)
+	w.RegisterActivity(RefreshTablePopularity)
 	w.RegisterActivity(RecordQueueState)
 	w.RegisterActivity(RecordQueueAdmission)
 	w.RegisterActivity(RecordQueueTimeout)

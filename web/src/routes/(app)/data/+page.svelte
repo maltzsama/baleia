@@ -6,6 +6,7 @@
 	import { loadWidth } from '$lib/ui/panelWidth';
 	import DataSourceTree from '$lib/components/DataSourceTree.svelte';
 	import TableDetail from '$lib/components/TableDetail.svelte';
+	import PopularTables from '$lib/metadata/PopularTables.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -179,10 +180,12 @@
 				onretry={restoreLink}
 			/>
 		{:else}
-			<EmptyState
-				title={m.data_select_a_table()}
-				description={m.data_browse_the_metadata_driven_catalogs_on()}
-			/>
+			<div class="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
+				<PopularTables
+					onselect={(catalogId, namespace, tableId, name) =>
+						void tree?.revealTable(catalogId, namespace, { id: tableId, name })}
+				/>
+			</div>
 		{/if}
 	</section>
 </div>

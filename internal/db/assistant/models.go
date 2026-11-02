@@ -671,6 +671,17 @@ type TableMaintenancePolicy struct {
 	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type TablePopularity struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	CatalogID   pgtype.UUID        `json:"catalog_id"`
+	Namespace   string             `json:"namespace"`
+	TableName   string             `json:"table_name"`
+	Uses        int64              `json:"uses"`
+	Score       float64            `json:"score"`
+	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
+	ComputedAt  pgtype.Timestamptz `json:"computed_at"`
+}
+
 type Team struct {
 	ID          pgtype.UUID        `json:"id"`
 	Name        string             `json:"name"`
