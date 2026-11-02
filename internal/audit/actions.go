@@ -97,6 +97,10 @@ const (
 	FolderDelete     Action = "folder.delete"
 
 	WorkloadUpdate Action = "workload.update"
+
+	WorkloadRuleCreate Action = "workload.rule_create"
+	WorkloadRuleUpdate Action = "workload.rule_update"
+	WorkloadRuleDelete Action = "workload.rule_delete"
 )
 
 // allActions is the whole vocabulary.
@@ -123,6 +127,7 @@ var allActions = []Action{
 	SpaceCreate, SpaceUpdate, SpaceDelete, SpaceMemberSet, SpaceMemberRemove,
 	SavedQueryCreate, SavedQueryUpdate, SavedQueryDelete, FolderCreate, FolderDelete,
 	WorkloadUpdate,
+	WorkloadRuleCreate, WorkloadRuleUpdate, WorkloadRuleDelete,
 }
 
 // Actions returns the vocabulary.

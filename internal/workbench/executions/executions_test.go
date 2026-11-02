@@ -27,6 +27,8 @@ type fakeStore struct {
 	owner   bool
 	// capacities is what ListEngineQueueCapacities returns.
 	capacities []db.EngineQueueCapacity
+	// rules is what ListWorkloadRules returns.
+	rules []db.WorkloadRule
 	// lastCreate is the CreateQueryExecution the service sent.
 	lastCreate db.CreateQueryExecutionParams
 	// lastHistory is the query History sent.
@@ -93,6 +95,10 @@ func (f *fakeStore) GetQueryStatementByPosition(context.Context, db.GetQueryStat
 
 func (f *fakeStore) ListEngineQueueCapacities(context.Context, pgtype.UUID) ([]db.EngineQueueCapacity, error) {
 	return f.capacities, nil
+}
+
+func (f *fakeStore) ListWorkloadRules(context.Context) ([]db.WorkloadRule, error) {
+	return f.rules, nil
 }
 
 func (f *fakeStore) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
@@ -218,6 +224,39 @@ func TestStart_NoWorkloadClassWhenDisabled(t *testing.T) {
 	}
 	if wf.started[0].Class != queryengine.ClassInteractive {
 		t.Errorf("workflow class = %q, want interactive", wf.started[0].Class)
+	}
+}
+
+func TestStart_RuleSetsClassAndWeight(t *testing.T) {
+	t.Parallel()
+	st, wf := newStore(), &fakeWorkflows{}
+	ruleID := newID()
+	st.rules = []db.WorkloadRule{{
+		ID:       ruleID,
+		Position: 1,
+		Enabled:  true,
+		Match:    []byte(`{"origin":"editor"}`),
+		Class:    string(queryengine.ClassHeavy),
+		Weight:   3,
+	}}
+	s := New(st, wf, fakeEngines{&fakeEngine{}}, dialect.NewRegistry(), Config{WorkloadEnabled: true})
+	if _, err := s.Start(context.Background(), Run{
+		WorkspaceID: newID(),
+		SQL:         "select 1",
+		Target:      queryengine.Target{EngineKind: "trino", EngineID: newID()},
+		Origin:      workload.OriginEditor,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if st.lastCreate.QueueClass == nil || *st.lastCreate.QueueClass != string(queryengine.ClassHeavy) {
+		t.Errorf("queue_class = %v, want heavy", st.lastCreate.QueueClass)
+	}
+	wantReason := "rule:" + uuid.UUID(ruleID.Bytes).String()
+	if st.lastCreate.QueueReason == nil || *st.lastCreate.QueueReason != wantReason {
+		t.Errorf("queue_reason = %v, want %q", st.lastCreate.QueueReason, wantReason)
+	}
+	if wf.started[0].Class != queryengine.ClassHeavy || wf.started[0].Weight != 3 {
+		t.Errorf("workflow class/weight = %q/%d, want heavy/3", wf.started[0].Class, wf.started[0].Weight)
 	}
 }
 

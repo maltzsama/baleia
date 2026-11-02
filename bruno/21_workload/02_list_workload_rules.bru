@@ -1,0 +1,31 @@
+meta {
+  name: List Workload Rules
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/workload-rules
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+tests {
+  test("the created rule is listed", function() {
+    const rules = res.getBody();
+    expect(rules.some(r => r.id === bru.getVar("workload_rule_id"))).to.be.true;
+  });
+}
+
+docs {
+  Rules in evaluation order (#539). Admins only.
+}

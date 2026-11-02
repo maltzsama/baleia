@@ -124,8 +124,10 @@ type AdmissionState struct {
 // queues, the running leases and the engine ceiling, and signals the waiting
 // execution workflow when it may run or when it gives up.
 //
-// Ordering is FIFO per class and oldest-first across classes. Weighted
-// fairness and aging are #546; the fields they need are already carried here.
+// Ordering shares a class's slots across fairness keys in proportion to their
+// weight, and ages a waiting run so the engine ceiling cannot starve a
+// background run (#546). Within one key the order is FIFO; across the classes
+// that can admit at once, the run that waited longest goes first.
 func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState) error {
 	logger := workflow.GetLogger(ctx)
 	state := in.copy()
@@ -317,8 +319,7 @@ func (s *AdmissionState) request(now time.Time, req AdmissionRequest, fail func(
 	})
 }
 
-// admitAll admits until no class has room, oldest queued run first across the
-// classes that still have a free slot.
+// admitAll admits until no class has room.
 func (s *AdmissionState) admitAll() []AdmissionLease {
 	var leases []AdmissionLease
 	for lease, ok := s.admitOne(); ok; lease, ok = s.admitOne() {
@@ -327,18 +328,26 @@ func (s *AdmissionState) admitAll() []AdmissionLease {
 	return leases
 }
 
+// admitOne admits one run. Each class that still has a slot offers its best
+// waiting run; the one that waited longest wins, so the engine ceiling cannot
+// starve a class (#546).
 func (s *AdmissionState) admitOne() (AdmissionLease, bool) {
 	if s.MaxRunningTotal > 0 && len(s.Running) >= s.MaxRunningTotal {
 		return AdmissionLease{}, false
 	}
 	best := -1
-	for i, q := range s.Queued {
-		capacity, ok := s.capacity(q.Class)
-		if !ok || capacity.MaxRunning <= 0 || s.runningInClass(q.Class) >= capacity.MaxRunning {
+	seen := map[queryengine.WorkloadClass]bool{}
+	for _, q := range s.Queued {
+		if seen[q.Class] {
 			continue
 		}
-		if best == -1 || q.EnqueuedAt.Before(s.Queued[best].EnqueuedAt) {
-			best = i
+		seen[q.Class] = true
+		idx := s.bestInClass(q.Class)
+		if idx < 0 {
+			continue
+		}
+		if best == -1 || s.Queued[idx].EnqueuedAt.Before(s.Queued[best].EnqueuedAt) {
+			best = idx
 		}
 	}
 	if best == -1 {
@@ -349,6 +358,50 @@ func (s *AdmissionState) admitOne() (AdmissionLease, bool) {
 	lease := AdmissionLease{ExecutionID: q.ExecutionID, Class: q.Class, FairnessKey: q.FairnessKey, AdmittedAt: q.EnqueuedAt}
 	s.Running = append(s.Running, lease)
 	return lease, true
+}
+
+// bestInClass returns the index of the waiting run a class should admit next,
+// or -1 when the class has no free slot. Within a class, the run whose
+// fairness key is furthest below its weighted share goes first; ties (and
+// runs of the same key) keep FIFO order, which is how a long wait raises a
+// run's effective priority (#546).
+func (s *AdmissionState) bestInClass(class queryengine.WorkloadClass) int {
+	capacity, ok := s.capacity(class)
+	if !ok || capacity.MaxRunning <= 0 || s.runningInClass(class) >= capacity.MaxRunning {
+		return -1
+	}
+	runningByKey := map[string]int{}
+	for _, lease := range s.Running {
+		if lease.Class == class {
+			runningByKey[lease.FairnessKey]++
+		}
+	}
+	best := -1
+	bestRunning, bestWeight := 0, 1
+	for i, q := range s.Queued {
+		if q.Class != class {
+			continue
+		}
+		weight := q.Weight
+		if weight < 1 {
+			weight = 1
+		}
+		running := runningByKey[q.FairnessKey]
+		if best == -1 {
+			best, bestRunning, bestWeight = i, running, weight
+			continue
+		}
+		// Compare running/weight without floats: a/b < c/d iff a*d < c*b.
+		left := running * bestWeight
+		right := bestRunning * weight
+		switch {
+		case left < right:
+			best, bestRunning, bestWeight = i, running, weight
+		case left == right && q.EnqueuedAt.Before(s.Queued[best].EnqueuedAt):
+			best, bestRunning, bestWeight = i, running, weight
+		}
+	}
+	return best
 }
 
 func (s *AdmissionState) release(executionID string) {

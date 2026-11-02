@@ -149,6 +149,13 @@ var operationAccess = map[string]access{
 	"PreviewIdentityMapping":        {kind: kindAdmin, calls: adminRole},
 	"GetSystemStatus":               {kind: kindAdmin, calls: []string{"RequireAdmin"}},
 
+	// ── workload management (#399, #539)
+	"ListWorkloadRules":  {kind: kindAdmin, calls: adminRole},
+	"CreateWorkloadRule": {kind: kindAdmin, calls: adminRole},
+	"UpdateWorkloadRule": {kind: kindAdmin, calls: adminRole},
+	"DeleteWorkloadRule": {kind: kindAdmin, calls: adminRole},
+	"TestWorkloadRule":   {kind: kindAdmin, calls: adminRole},
+
 	// ── connections and catalogs (internal/authz)
 	"GetCatalogConnection":    checked("Connection"),
 	"UpdateCatalogConnection": checked("Connection", "mayManageConnections"),

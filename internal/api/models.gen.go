@@ -251,9 +251,9 @@ const (
 
 // Defines values for ConnectionProviderRoles.
 const (
-	DirectEngine    ConnectionProviderRoles = "direct_engine"
-	FederatedEngine ConnectionProviderRoles = "federated_engine"
-	Metadata        ConnectionProviderRoles = "metadata"
+	ConnectionProviderRolesDirectEngine    ConnectionProviderRoles = "direct_engine"
+	ConnectionProviderRolesFederatedEngine ConnectionProviderRoles = "federated_engine"
+	ConnectionProviderRolesMetadata        ConnectionProviderRoles = "metadata"
 )
 
 // Defines values for ConnectionProviderStatusState.
@@ -313,6 +313,20 @@ const (
 const (
 	CreateSpaceRequestVisibilityRestricted CreateSpaceRequestVisibility = "restricted"
 	CreateSpaceRequestVisibilityWorkspace  CreateSpaceRequestVisibility = "workspace"
+)
+
+// Defines values for CreateWorkloadRuleRequestClass.
+const (
+	CreateWorkloadRuleRequestClassBackground  CreateWorkloadRuleRequestClass = "background"
+	CreateWorkloadRuleRequestClassHeavy       CreateWorkloadRuleRequestClass = "heavy"
+	CreateWorkloadRuleRequestClassInteractive CreateWorkloadRuleRequestClass = "interactive"
+)
+
+// Defines values for CreateWorkloadRuleRequestMaxClass.
+const (
+	CreateWorkloadRuleRequestMaxClassBackground  CreateWorkloadRuleRequestMaxClass = "background"
+	CreateWorkloadRuleRequestMaxClassHeavy       CreateWorkloadRuleRequestMaxClass = "heavy"
+	CreateWorkloadRuleRequestMaxClassInteractive CreateWorkloadRuleRequestMaxClass = "interactive"
 )
 
 // Defines values for CreateWorkspaceRequestType.
@@ -1029,6 +1043,20 @@ const (
 	UpdateUserRoleRequestRoleMember UpdateUserRoleRequestRole = "member"
 )
 
+// Defines values for UpdateWorkloadRuleRequestClass.
+const (
+	UpdateWorkloadRuleRequestClassBackground  UpdateWorkloadRuleRequestClass = "background"
+	UpdateWorkloadRuleRequestClassHeavy       UpdateWorkloadRuleRequestClass = "heavy"
+	UpdateWorkloadRuleRequestClassInteractive UpdateWorkloadRuleRequestClass = "interactive"
+)
+
+// Defines values for UpdateWorkloadRuleRequestMaxClass.
+const (
+	UpdateWorkloadRuleRequestMaxClassBackground  UpdateWorkloadRuleRequestMaxClass = "background"
+	UpdateWorkloadRuleRequestMaxClassHeavy       UpdateWorkloadRuleRequestMaxClass = "heavy"
+	UpdateWorkloadRuleRequestMaxClassInteractive UpdateWorkloadRuleRequestMaxClass = "interactive"
+)
+
 // Defines values for UserPublicAuthProvider.
 const (
 	Ldap  UserPublicAuthProvider = "ldap"
@@ -1046,6 +1074,47 @@ const (
 const (
 	Active    UserPublicStatus = "active"
 	Suspended UserPublicStatus = "suspended"
+)
+
+// Defines values for WorkloadRuleClass.
+const (
+	WorkloadRuleClassBackground  WorkloadRuleClass = "background"
+	WorkloadRuleClassHeavy       WorkloadRuleClass = "heavy"
+	WorkloadRuleClassInteractive WorkloadRuleClass = "interactive"
+)
+
+// Defines values for WorkloadRuleMaxClass.
+const (
+	WorkloadRuleMaxClassBackground  WorkloadRuleMaxClass = "background"
+	WorkloadRuleMaxClassHeavy       WorkloadRuleMaxClass = "heavy"
+	WorkloadRuleMaxClassInteractive WorkloadRuleMaxClass = "interactive"
+)
+
+// Defines values for WorkloadRuleMatchOrigin.
+const (
+	WorkloadRuleMatchOriginAgent       WorkloadRuleMatchOrigin = "agent"
+	WorkloadRuleMatchOriginEditor      WorkloadRuleMatchOrigin = "editor"
+	WorkloadRuleMatchOriginExplore     WorkloadRuleMatchOrigin = "explore"
+	WorkloadRuleMatchOriginMaintenance WorkloadRuleMatchOrigin = "maintenance"
+	WorkloadRuleMatchOriginMetadata    WorkloadRuleMatchOrigin = "metadata"
+	WorkloadRuleMatchOriginRetriever   WorkloadRuleMatchOrigin = "retriever"
+)
+
+// Defines values for WorkloadRuleTestRequestOrigin.
+const (
+	WorkloadRuleTestRequestOriginAgent       WorkloadRuleTestRequestOrigin = "agent"
+	WorkloadRuleTestRequestOriginEditor      WorkloadRuleTestRequestOrigin = "editor"
+	WorkloadRuleTestRequestOriginExplore     WorkloadRuleTestRequestOrigin = "explore"
+	WorkloadRuleTestRequestOriginMaintenance WorkloadRuleTestRequestOrigin = "maintenance"
+	WorkloadRuleTestRequestOriginMetadata    WorkloadRuleTestRequestOrigin = "metadata"
+	WorkloadRuleTestRequestOriginRetriever   WorkloadRuleTestRequestOrigin = "retriever"
+)
+
+// Defines values for WorkloadRuleTestResultClass.
+const (
+	Background  WorkloadRuleTestResultClass = "background"
+	Heavy       WorkloadRuleTestResultClass = "heavy"
+	Interactive WorkloadRuleTestResultClass = "interactive"
 )
 
 // Defines values for WorkspaceType.
@@ -2131,6 +2200,26 @@ type CreateTeamRequest struct {
 	Description *string `json:"description,omitempty"`
 	Name        string  `json:"name"`
 }
+
+// CreateWorkloadRuleRequest defines model for CreateWorkloadRuleRequest.
+type CreateWorkloadRuleRequest struct {
+	Class   CreateWorkloadRuleRequestClass `json:"class"`
+	Enabled *bool                          `json:"enabled,omitempty"`
+
+	// Match Closed match schema (#539). Every field present must match; an empty object is a catch-all rule.
+	Match    *WorkloadRuleMatch                 `json:"match,omitempty"`
+	MaxClass *CreateWorkloadRuleRequestMaxClass `json:"max_class"`
+
+	// Position Append when omitted
+	Position *int `json:"position,omitempty"`
+	Weight   *int `json:"weight,omitempty"`
+}
+
+// CreateWorkloadRuleRequestClass defines model for CreateWorkloadRuleRequest.Class.
+type CreateWorkloadRuleRequestClass string
+
+// CreateWorkloadRuleRequestMaxClass defines model for CreateWorkloadRuleRequest.MaxClass.
+type CreateWorkloadRuleRequestMaxClass string
 
 // CreateWorkspaceRequest defines model for CreateWorkspaceRequest.
 type CreateWorkspaceRequest struct {
@@ -4373,6 +4462,24 @@ type UpdateUserRoleRequest struct {
 // UpdateUserRoleRequestRole defines model for UpdateUserRoleRequest.Role.
 type UpdateUserRoleRequestRole string
 
+// UpdateWorkloadRuleRequest defines model for UpdateWorkloadRuleRequest.
+type UpdateWorkloadRuleRequest struct {
+	Class   *UpdateWorkloadRuleRequestClass `json:"class,omitempty"`
+	Enabled *bool                           `json:"enabled,omitempty"`
+
+	// Match Closed match schema (#539). Every field present must match; an empty object is a catch-all rule.
+	Match    *WorkloadRuleMatch                 `json:"match,omitempty"`
+	MaxClass *UpdateWorkloadRuleRequestMaxClass `json:"max_class"`
+	Position *int                               `json:"position,omitempty"`
+	Weight   *int                               `json:"weight,omitempty"`
+}
+
+// UpdateWorkloadRuleRequestClass defines model for UpdateWorkloadRuleRequest.Class.
+type UpdateWorkloadRuleRequestClass string
+
+// UpdateWorkloadRuleRequestMaxClass defines model for UpdateWorkloadRuleRequest.MaxClass.
+type UpdateWorkloadRuleRequestMaxClass string
+
 // UpdateWorkspaceRequest defines model for UpdateWorkspaceRequest.
 type UpdateWorkspaceRequest struct {
 	// DefaultTarget Sets the workspace default target ({"binding_id": null} clears it). The binding must be a target of the workspace (GET /workspaces/{id}/targets). Omitted, the default is unchanged.
@@ -4428,6 +4535,75 @@ type ValidationError struct {
 	Fields  *[]FieldError `json:"fields,omitempty"`
 	Message string        `json:"message"`
 }
+
+// WorkloadRule defines model for WorkloadRule.
+type WorkloadRule struct {
+	Class     WorkloadRuleClass  `json:"class"`
+	CreatedAt time.Time          `json:"created_at"`
+	Enabled   bool               `json:"enabled"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Match Closed match schema (#539). Every field present must match; an empty object is a catch-all rule.
+	Match     WorkloadRuleMatch     `json:"match"`
+	MaxClass  *WorkloadRuleMaxClass `json:"max_class"`
+	Position  int                   `json:"position"`
+	UpdatedAt time.Time             `json:"updated_at"`
+	Weight    int                   `json:"weight"`
+}
+
+// WorkloadRuleClass defines model for WorkloadRule.Class.
+type WorkloadRuleClass string
+
+// WorkloadRuleMaxClass defines model for WorkloadRule.MaxClass.
+type WorkloadRuleMaxClass string
+
+// WorkloadRuleMatch Closed match schema (#539). Every field present must match; an empty object is a catch-all rule.
+type WorkloadRuleMatch struct {
+	AgentId       *openapi_types.UUID      `json:"agent_id,omitempty"`
+	EngineId      *openapi_types.UUID      `json:"engine_id,omitempty"`
+	MaxStatements *int                     `json:"max_statements,omitempty"`
+	MinStatements *int                     `json:"min_statements,omitempty"`
+	Origin        *WorkloadRuleMatchOrigin `json:"origin,omitempty"`
+	Role          *string                  `json:"role,omitempty"`
+	SavedQueryId  *openapi_types.UUID      `json:"saved_query_id,omitempty"`
+	TeamId        *openapi_types.UUID      `json:"team_id,omitempty"`
+	UserId        *openapi_types.UUID      `json:"user_id,omitempty"`
+	WorkspaceId   *openapi_types.UUID      `json:"workspace_id,omitempty"`
+}
+
+// WorkloadRuleMatchOrigin defines model for WorkloadRuleMatch.Origin.
+type WorkloadRuleMatchOrigin string
+
+// WorkloadRuleTestRequest defines model for WorkloadRuleTestRequest.
+type WorkloadRuleTestRequest struct {
+	AgentId      *openapi_types.UUID           `json:"agent_id,omitempty"`
+	EngineId     *openapi_types.UUID           `json:"engine_id,omitempty"`
+	Origin       WorkloadRuleTestRequestOrigin `json:"origin"`
+	Role         *string                       `json:"role,omitempty"`
+	SavedQueryId *openapi_types.UUID           `json:"saved_query_id,omitempty"`
+	Statements   *int                          `json:"statements,omitempty"`
+	TeamId       *openapi_types.UUID           `json:"team_id,omitempty"`
+	UserId       *openapi_types.UUID           `json:"user_id,omitempty"`
+	WorkspaceId  *openapi_types.UUID           `json:"workspace_id,omitempty"`
+}
+
+// WorkloadRuleTestRequestOrigin defines model for WorkloadRuleTestRequest.Origin.
+type WorkloadRuleTestRequestOrigin string
+
+// WorkloadRuleTestResult defines model for WorkloadRuleTestResult.
+type WorkloadRuleTestResult struct {
+	Class WorkloadRuleTestResultClass `json:"class"`
+
+	// Reason The step that decided: origin:<x>, rule:<id> or default:editor
+	Reason string `json:"reason"`
+
+	// RuleId The rule that matched, when a rule decided
+	RuleId *openapi_types.UUID `json:"rule_id"`
+	Weight int                 `json:"weight"`
+}
+
+// WorkloadRuleTestResultClass defines model for WorkloadRuleTestResult.Class.
+type WorkloadRuleTestResultClass string
 
 // Workspace defines model for Workspace.
 type Workspace struct {
@@ -5134,6 +5310,15 @@ type UpdateUserRoleJSONRequestBody = UpdateUserRoleRequest
 
 // SuspendUserJSONRequestBody defines body for SuspendUser for application/json ContentType.
 type SuspendUserJSONRequestBody = SuspendUserRequest
+
+// CreateWorkloadRuleJSONRequestBody defines body for CreateWorkloadRule for application/json ContentType.
+type CreateWorkloadRuleJSONRequestBody = CreateWorkloadRuleRequest
+
+// UpdateWorkloadRuleJSONRequestBody defines body for UpdateWorkloadRule for application/json ContentType.
+type UpdateWorkloadRuleJSONRequestBody = UpdateWorkloadRuleRequest
+
+// TestWorkloadRuleJSONRequestBody defines body for TestWorkloadRule for application/json ContentType.
+type TestWorkloadRuleJSONRequestBody = WorkloadRuleTestRequest
 
 // CreateWorkspaceJSONRequestBody defines body for CreateWorkspace for application/json ContentType.
 type CreateWorkspaceJSONRequestBody = CreateWorkspaceRequest

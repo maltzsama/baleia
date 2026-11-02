@@ -1,0 +1,33 @@
+meta {
+  name: Update Workload Rule
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{base_url}}/workload-rules/{{workload_rule_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "class": "background",
+    "weight": 3
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.class: eq background
+  res.body.weight: eq 3
+}
+
+docs {
+  Admins only (#539). Omitted fields keep their value; the other fields of the
+  rule created in step 1 are unchanged.
+}

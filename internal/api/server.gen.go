@@ -447,6 +447,21 @@ type ServerInterface interface {
 	// Suspend a user — admin only
 	// (POST /users/{id}/suspend)
 	SuspendUser(w http.ResponseWriter, r *http.Request, id PathId)
+	// List the ordered workload rules
+	// (GET /workload-rules)
+	ListWorkloadRules(w http.ResponseWriter, r *http.Request)
+	// Create a workload rule
+	// (POST /workload-rules)
+	CreateWorkloadRule(w http.ResponseWriter, r *http.Request)
+	// Delete a workload rule
+	// (DELETE /workload-rules/{rule_id})
+	DeleteWorkloadRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID)
+	// Update a workload rule
+	// (PATCH /workload-rules/{rule_id})
+	UpdateWorkloadRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID)
+	// Classify a hypothetical run and say why
+	// (POST /workload-rules:test)
+	TestWorkloadRule(w http.ResponseWriter, r *http.Request)
 	// List workspaces accessible to current user
 	// (GET /workspaces)
 	ListWorkspaces(w http.ResponseWriter, r *http.Request)
@@ -1563,6 +1578,36 @@ func (_ Unimplemented) ReinstateUser(w http.ResponseWriter, r *http.Request, id 
 // Suspend a user — admin only
 // (POST /users/{id}/suspend)
 func (_ Unimplemented) SuspendUser(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List the ordered workload rules
+// (GET /workload-rules)
+func (_ Unimplemented) ListWorkloadRules(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a workload rule
+// (POST /workload-rules)
+func (_ Unimplemented) CreateWorkloadRule(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a workload rule
+// (DELETE /workload-rules/{rule_id})
+func (_ Unimplemented) DeleteWorkloadRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update a workload rule
+// (PATCH /workload-rules/{rule_id})
+func (_ Unimplemented) UpdateWorkloadRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Classify a hypothetical run and say why
+// (POST /workload-rules:test)
+func (_ Unimplemented) TestWorkloadRule(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7041,6 +7086,138 @@ func (siw *ServerInterfaceWrapper) SuspendUser(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorkloadRules operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkloadRules(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkloadRules(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateWorkloadRule operation middleware
+func (siw *ServerInterfaceWrapper) CreateWorkloadRule(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWorkloadRule(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteWorkloadRule operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWorkloadRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "rule_id" -------------
+	var ruleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "rule_id", chi.URLParam(r, "rule_id"), &ruleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rule_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWorkloadRule(w, r, ruleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWorkloadRule operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWorkloadRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "rule_id" -------------
+	var ruleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "rule_id", chi.URLParam(r, "rule_id"), &ruleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rule_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWorkloadRule(w, r, ruleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestWorkloadRule operation middleware
+func (siw *ServerInterfaceWrapper) TestWorkloadRule(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestWorkloadRule(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkspaces operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
 
@@ -11659,6 +11836,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/users/{id}/suspend", wrapper.SuspendUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workload-rules", wrapper.ListWorkloadRules)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workload-rules", wrapper.CreateWorkloadRule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workload-rules/{rule_id}", wrapper.DeleteWorkloadRule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/workload-rules/{rule_id}", wrapper.UpdateWorkloadRule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workload-rules:test", wrapper.TestWorkloadRule)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces", wrapper.ListWorkspaces)
@@ -17970,6 +18162,231 @@ func (response SuspendUser404JSONResponse) VisitSuspendUserResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListWorkloadRulesRequestObject struct {
+}
+
+type ListWorkloadRulesResponseObject interface {
+	VisitListWorkloadRulesResponse(w http.ResponseWriter) error
+}
+
+type ListWorkloadRules200JSONResponse []WorkloadRule
+
+func (response ListWorkloadRules200JSONResponse) VisitListWorkloadRulesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListWorkloadRules401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListWorkloadRules401JSONResponse) VisitListWorkloadRulesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListWorkloadRules403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListWorkloadRules403JSONResponse) VisitListWorkloadRulesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateWorkloadRuleRequestObject struct {
+	Body *CreateWorkloadRuleJSONRequestBody
+}
+
+type CreateWorkloadRuleResponseObject interface {
+	VisitCreateWorkloadRuleResponse(w http.ResponseWriter) error
+}
+
+type CreateWorkloadRule201JSONResponse WorkloadRule
+
+func (response CreateWorkloadRule201JSONResponse) VisitCreateWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateWorkloadRule401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateWorkloadRule401JSONResponse) VisitCreateWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateWorkloadRule403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateWorkloadRule403JSONResponse) VisitCreateWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateWorkloadRule422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateWorkloadRule422JSONResponse) VisitCreateWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteWorkloadRuleRequestObject struct {
+	RuleId openapi_types.UUID `json:"rule_id"`
+}
+
+type DeleteWorkloadRuleResponseObject interface {
+	VisitDeleteWorkloadRuleResponse(w http.ResponseWriter) error
+}
+
+type DeleteWorkloadRule204Response struct {
+}
+
+func (response DeleteWorkloadRule204Response) VisitDeleteWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteWorkloadRule401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteWorkloadRule401JSONResponse) VisitDeleteWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteWorkloadRule403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteWorkloadRule403JSONResponse) VisitDeleteWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteWorkloadRule404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteWorkloadRule404JSONResponse) VisitDeleteWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateWorkloadRuleRequestObject struct {
+	RuleId openapi_types.UUID `json:"rule_id"`
+	Body   *UpdateWorkloadRuleJSONRequestBody
+}
+
+type UpdateWorkloadRuleResponseObject interface {
+	VisitUpdateWorkloadRuleResponse(w http.ResponseWriter) error
+}
+
+type UpdateWorkloadRule200JSONResponse WorkloadRule
+
+func (response UpdateWorkloadRule200JSONResponse) VisitUpdateWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateWorkloadRule401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateWorkloadRule401JSONResponse) VisitUpdateWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateWorkloadRule403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateWorkloadRule403JSONResponse) VisitUpdateWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateWorkloadRule404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateWorkloadRule404JSONResponse) VisitUpdateWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateWorkloadRule422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateWorkloadRule422JSONResponse) VisitUpdateWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestWorkloadRuleRequestObject struct {
+	Body *TestWorkloadRuleJSONRequestBody
+}
+
+type TestWorkloadRuleResponseObject interface {
+	VisitTestWorkloadRuleResponse(w http.ResponseWriter) error
+}
+
+type TestWorkloadRule200JSONResponse WorkloadRuleTestResult
+
+func (response TestWorkloadRule200JSONResponse) VisitTestWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestWorkloadRule401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response TestWorkloadRule401JSONResponse) VisitTestWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestWorkloadRule403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response TestWorkloadRule403JSONResponse) VisitTestWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestWorkloadRule422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response TestWorkloadRule422JSONResponse) VisitTestWorkloadRuleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListWorkspacesRequestObject struct {
 }
 
@@ -22333,6 +22750,21 @@ type StrictServerInterface interface {
 	// Suspend a user — admin only
 	// (POST /users/{id}/suspend)
 	SuspendUser(ctx context.Context, request SuspendUserRequestObject) (SuspendUserResponseObject, error)
+	// List the ordered workload rules
+	// (GET /workload-rules)
+	ListWorkloadRules(ctx context.Context, request ListWorkloadRulesRequestObject) (ListWorkloadRulesResponseObject, error)
+	// Create a workload rule
+	// (POST /workload-rules)
+	CreateWorkloadRule(ctx context.Context, request CreateWorkloadRuleRequestObject) (CreateWorkloadRuleResponseObject, error)
+	// Delete a workload rule
+	// (DELETE /workload-rules/{rule_id})
+	DeleteWorkloadRule(ctx context.Context, request DeleteWorkloadRuleRequestObject) (DeleteWorkloadRuleResponseObject, error)
+	// Update a workload rule
+	// (PATCH /workload-rules/{rule_id})
+	UpdateWorkloadRule(ctx context.Context, request UpdateWorkloadRuleRequestObject) (UpdateWorkloadRuleResponseObject, error)
+	// Classify a hypothetical run and say why
+	// (POST /workload-rules:test)
+	TestWorkloadRule(ctx context.Context, request TestWorkloadRuleRequestObject) (TestWorkloadRuleResponseObject, error)
 	// List workspaces accessible to current user
 	// (GET /workspaces)
 	ListWorkspaces(ctx context.Context, request ListWorkspacesRequestObject) (ListWorkspacesResponseObject, error)
@@ -26597,6 +27029,151 @@ func (sh *strictHandler) SuspendUser(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SuspendUserResponseObject); ok {
 		if err := validResponse.VisitSuspendUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWorkloadRules operation middleware
+func (sh *strictHandler) ListWorkloadRules(w http.ResponseWriter, r *http.Request) {
+	var request ListWorkloadRulesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWorkloadRules(ctx, request.(ListWorkloadRulesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWorkloadRules")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWorkloadRulesResponseObject); ok {
+		if err := validResponse.VisitListWorkloadRulesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateWorkloadRule operation middleware
+func (sh *strictHandler) CreateWorkloadRule(w http.ResponseWriter, r *http.Request) {
+	var request CreateWorkloadRuleRequestObject
+
+	var body CreateWorkloadRuleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateWorkloadRule(ctx, request.(CreateWorkloadRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateWorkloadRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateWorkloadRuleResponseObject); ok {
+		if err := validResponse.VisitCreateWorkloadRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteWorkloadRule operation middleware
+func (sh *strictHandler) DeleteWorkloadRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID) {
+	var request DeleteWorkloadRuleRequestObject
+
+	request.RuleId = ruleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteWorkloadRule(ctx, request.(DeleteWorkloadRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteWorkloadRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteWorkloadRuleResponseObject); ok {
+		if err := validResponse.VisitDeleteWorkloadRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateWorkloadRule operation middleware
+func (sh *strictHandler) UpdateWorkloadRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID) {
+	var request UpdateWorkloadRuleRequestObject
+
+	request.RuleId = ruleId
+
+	var body UpdateWorkloadRuleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateWorkloadRule(ctx, request.(UpdateWorkloadRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateWorkloadRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateWorkloadRuleResponseObject); ok {
+		if err := validResponse.VisitUpdateWorkloadRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestWorkloadRule operation middleware
+func (sh *strictHandler) TestWorkloadRule(w http.ResponseWriter, r *http.Request) {
+	var request TestWorkloadRuleRequestObject
+
+	var body TestWorkloadRuleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestWorkloadRule(ctx, request.(TestWorkloadRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestWorkloadRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestWorkloadRuleResponseObject); ok {
+		if err := validResponse.VisitTestWorkloadRuleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

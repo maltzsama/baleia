@@ -112,6 +112,7 @@ type Querier interface {
 	CreateTableMaintenancePolicy(ctx context.Context, arg CreateTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateWorkloadRule(ctx context.Context, arg CreateWorkloadRuleParams) (WorkloadRule, error)
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
 	DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
@@ -145,6 +146,7 @@ type Querier interface {
 	DeleteTableMaintenancePolicy(ctx context.Context, arg DeleteTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
+	DeleteWorkloadRule(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteWorkspace(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error)
 	DisableManagedBindingsOfCatalog(ctx context.Context, catalogID pgtype.UUID) error
@@ -274,6 +276,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByExternalID(ctx context.Context, arg GetUserByExternalIDParams) (User, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
+	GetWorkloadRule(ctx context.Context, id pgtype.UUID) (WorkloadRule, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
 	HasUsers(ctx context.Context) (bool, error)
@@ -464,6 +467,8 @@ type Querier interface {
 	// Model visibility is space role (#40) AND a catalog grant (#16); space_id
 	// narrows it.
 	ListVisibleSemanticModels(ctx context.Context, arg ListVisibleSemanticModelsParams) ([]SemanticModel, error)
+	// Ordered, admin-managed workload rules (#399, ADR 0014, #539).
+	ListWorkloadRules(ctx context.Context) ([]WorkloadRule, error)
 	// catalog_name is the Trino name of a source catalog (what the UI showed
 	// before bindings) and the logical name of a native one.
 	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error)
@@ -490,6 +495,7 @@ type Querier interface {
 	// since it was created). One number, no catalog label (#87). Same
 	// predicate as ListSyncableCatalogs: a catalog no pass syncs is not stale.
 	MaxMetadataStalenessSeconds(ctx context.Context) (float64, error)
+	MaxWorkloadRulePosition(ctx context.Context) (int32, error)
 	// Counts for the system status section (#291): syncable catalogs, those whose
 	// last finished pass is older than the threshold, and those whose last run
 	// failed. Same predicate as ListSyncableCatalogs.
@@ -632,6 +638,7 @@ type Querier interface {
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserPersonalWorkspace(ctx context.Context, arg UpdateUserPersonalWorkspaceParams) error
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
+	UpdateWorkloadRule(ctx context.Context, arg UpdateWorkloadRuleParams) (WorkloadRule, error)
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
 	// A catalog found in an engine that no managed binding created (#38, #13).
 	// An adopted binding the engine reports again is enabled again; a managed
