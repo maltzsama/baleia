@@ -18,6 +18,7 @@ import {
 	loadNamespaces,
 	loadTable,
 	loadTables,
+	popularTables,
 	searchMetadata,
 	type JoinSuggestion,
 	type MetadataColumn,
@@ -54,7 +55,7 @@ const RANK = {
 	keyword: 6
 } as const;
 type Group = keyof typeof RANK;
-type Option = Completion & { group: Group };
+type Option = Completion & { group: Group; popularity?: number };
 
 const STATEMENT_KEYWORDS = new Set([
 	'SELECT',
@@ -134,6 +135,17 @@ async function tablesIn(scope: CompletionScope, namespace: string[]) {
 
 const schemaPath = (scope: CompletionScope) =>
 	scope.namespaceDepth > 0 && scope.schema ? scope.schema.split('.') : [];
+
+/** Table id -> popularity score in the workspace, best effort (#562). */
+async function popularScores(workspaceId: string): Promise<Map<string, number>> {
+	const out = new Map<string, number>();
+	try {
+		for (const row of await popularTables(workspaceId, 50)) out.set(row.table_id, row.score);
+	} catch {
+		// Ranking only: the metadata list still works without it.
+	}
+	return out;
+}
 
 /** Drops a leading engine catalog name from a qualified path. */
 function withoutCatalog(scope: CompletionScope, path: string[]): string[] | null {
@@ -224,7 +236,8 @@ function tableOption(
 	scope: CompletionScope,
 	table: MetadataTableSummary,
 	namespace: string[],
-	qualify: boolean
+	qualify: boolean,
+	popularity: Map<string, number>
 ): Option {
 	const schema = namespace.join('.');
 	const name = identifier(table.name, scope.cmDialect);
@@ -239,7 +252,8 @@ function tableOption(
 			schema ? m.workbench_completion_in_schema({ schema }) : '',
 			table.comment ?? ''
 		]),
-		group: qualify ? 'otherTable' : 'table'
+		group: qualify ? 'otherTable' : 'table',
+		popularity: popularity.get(table.id) ?? 0
 	};
 }
 
@@ -320,6 +334,7 @@ async function tableOptions(
 	signal: AbortSignal
 ): Promise<Option[]> {
 	const qualifier = withoutCatalog(scope, ctx.qualifier);
+	const popularity = await popularScores(scope.workspaceId);
 	// `catalog.` lists that catalog's top-level namespaces.
 	if (
 		ctx.qualifier.length === 1 &&
@@ -336,14 +351,14 @@ async function tableOptions(
 			return list.items.map((item) => namespaceOption(scope, item.path));
 		}
 		const tables = await tablesIn(scope, qualifier);
-		return tables.map((table) => tableOption(scope, table, qualifier, false));
+		return tables.map((table) => tableOption(scope, table, qualifier, false, popularity));
 	}
 
 	const out: Option[] = [];
 	const home = schemaPath(scope);
 	if (home.length === scope.namespaceDepth) {
 		for (const table of await tablesIn(scope, home))
-			out.push(tableOption(scope, table, home, false));
+			out.push(tableOption(scope, table, home, false, popularity));
 	}
 	if (scope.namespaceDepth > 0) {
 		const list = await loadNamespaces(scope.workspaceId, scope.catalogId, []);
@@ -372,7 +387,8 @@ async function tableOptions(
 					scope,
 					{ id: hit.table_id, name: hit.table, kind: 'table' },
 					hit.namespace,
-					true
+					true,
+					popularity
 				)
 			);
 		}
@@ -482,6 +498,7 @@ function rank(options: Option[], prefix: string): Completion[] {
 			(a, b) =>
 				RANK[a.option.group] - RANK[b.option.group] ||
 				Number(lower(b.option.label) === p) - Number(lower(a.option.label) === p) ||
+				(b.option.popularity ?? 0) - (a.option.popularity ?? 0) ||
 				a.index - b.index
 		)
 		.filter(({ option }) => {

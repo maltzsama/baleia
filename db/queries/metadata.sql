@@ -332,6 +332,7 @@ WITH visible AS (
       AND @kind::text IN ('column', 'all')
 )
 SELECT h.kind, h.table_id, h.catalog_id, h.namespace, h.table_name, h.column_name, h.native_type, h.score,
+       COALESCE(p.score, 0)::float8 AS popularity,
        (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = h.catalog_id AND r.status = 'finished')::timestamptz AS metadata_synced_at
 FROM hits h
 JOIN metadata_tables t ON t.id = h.table_id
@@ -342,8 +343,14 @@ LEFT JOIN semantic_docs sd
  AND sd.namespace = t.namespace
  AND sd.table_name = t.name
  AND sd.column_name IS NULL
+-- A popular table ranks before an equally similar one (B7, #562).
+LEFT JOIN table_popularity p
+  ON p.workspace_id = @workspace_id::uuid
+ AND p.catalog_id = t.catalog_id
+ AND p.namespace = COALESCE(t.namespace[cardinality(t.namespace)], '')
+ AND p.table_name = t.name
 WHERE (sqlc.narg(tags)::text[] IS NULL OR sd.tags @> sqlc.narg(tags)::text[])
   AND (sqlc.narg(certified)::boolean IS NULL OR COALESCE(sd.certified, false) = sqlc.narg(certified)::boolean)
   AND (sqlc.narg(namespace)::text[] IS NULL OR t.namespace = sqlc.narg(namespace)::text[])
-ORDER BY h.score DESC, h.len, h.table_name, h.column_name
+ORDER BY h.score DESC, popularity DESC, h.len, h.table_name, h.column_name
 LIMIT @lim;

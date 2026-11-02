@@ -826,6 +826,7 @@ WITH visible AS (
       AND $8::text IN ('column', 'all')
 )
 SELECT h.kind, h.table_id, h.catalog_id, h.namespace, h.table_name, h.column_name, h.native_type, h.score,
+       COALESCE(p.score, 0)::float8 AS popularity,
        (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = h.catalog_id AND r.status = 'finished')::timestamptz AS metadata_synced_at
 FROM hits h
 JOIN metadata_tables t ON t.id = h.table_id
@@ -835,10 +836,15 @@ LEFT JOIN semantic_docs sd
  AND sd.namespace = t.namespace
  AND sd.table_name = t.name
  AND sd.column_name IS NULL
+LEFT JOIN table_popularity p
+  ON p.workspace_id = $1::uuid
+ AND p.catalog_id = t.catalog_id
+ AND p.namespace = COALESCE(t.namespace[cardinality(t.namespace)], '')
+ AND p.table_name = t.name
 WHERE ($2::text[] IS NULL OR sd.tags @> $2::text[])
   AND ($3::boolean IS NULL OR COALESCE(sd.certified, false) = $3::boolean)
   AND ($4::text[] IS NULL OR t.namespace = $4::text[])
-ORDER BY h.score DESC, h.len, h.table_name, h.column_name
+ORDER BY h.score DESC, popularity DESC, h.len, h.table_name, h.column_name
 LIMIT $5
 `
 
@@ -862,12 +868,14 @@ type SearchMetadataRow struct {
 	ColumnName       string             `json:"column_name"`
 	NativeType       string             `json:"native_type"`
 	Score            float64            `json:"score"`
+	Popularity       float64            `json:"popularity"`
 	MetadataSyncedAt pgtype.Timestamptz `json:"metadata_synced_at"`
 }
 
 // Tables and columns of the catalogs the workspace may use whose names are
 // trigram-similar to q (or contain a word similar to it), best first.
 // Table-level docs carry the tags and the `certified` tag (B6, #534).
+// A popular table ranks before an equally similar one (B7, #562).
 func (q *Queries) SearchMetadata(ctx context.Context, arg SearchMetadataParams) ([]SearchMetadataRow, error) {
 	rows, err := q.db.Query(ctx, searchMetadata,
 		arg.WorkspaceID,
@@ -895,6 +903,7 @@ func (q *Queries) SearchMetadata(ctx context.Context, arg SearchMetadataParams) 
 			&i.ColumnName,
 			&i.NativeType,
 			&i.Score,
+			&i.Popularity,
 			&i.MetadataSyncedAt,
 		); err != nil {
 			return nil, err

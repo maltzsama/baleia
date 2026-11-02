@@ -3251,9 +3251,12 @@ type MetadataSearchResult struct {
 	MetadataSyncedAt *time.Time               `json:"metadata_synced_at"`
 	Namespace        []string                 `json:"namespace"`
 	NativeType       *string                  `json:"native_type"`
-	Score            float64                  `json:"score"`
-	Table            string                   `json:"table"`
-	TableId          openapi_types.UUID       `json:"table_id"`
+
+	// Popularity The table's popularity score in this workspace (B7, #562)
+	Popularity *float64           `json:"popularity,omitempty"`
+	Score      float64            `json:"score"`
+	Table      string             `json:"table"`
+	TableId    openapi_types.UUID `json:"table_id"`
 }
 
 // MetadataSearchResultKind defines model for MetadataSearchResult.Kind.
@@ -3586,6 +3589,25 @@ type PasswordResetConfirmBody struct {
 // PasswordResetRequestBody defines model for PasswordResetRequestBody.
 type PasswordResetRequestBody struct {
 	Email openapi_types.Email `json:"email"`
+}
+
+// PopularTable defines model for PopularTable.
+type PopularTable struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+
+	// Kind table, view or materialized_view
+	Kind             string     `json:"kind"`
+	LastUsedAt       time.Time  `json:"last_used_at"`
+	MetadataSyncedAt *time.Time `json:"metadata_synced_at"`
+	Name             string     `json:"name"`
+	Namespace        []string   `json:"namespace"`
+
+	// Score Uses with a 7-day half-life decay
+	Score   float64            `json:"score"`
+	TableId openapi_types.UUID `json:"table_id"`
+
+	// Uses Finished statements that read the table in the last 30 days
+	Uses int `json:"uses"`
 }
 
 // QueryFolder defines model for QueryFolder.
@@ -5147,6 +5169,11 @@ type ListMetadataTablesParams struct {
 type ListJoinSuggestionsParams struct {
 	LeftTable  openapi_types.UUID `form:"left_table" json:"left_table"`
 	RightTable openapi_types.UUID `form:"right_table" json:"right_table"`
+}
+
+// ListPopularTablesParams defines parameters for ListPopularTables.
+type ListPopularTablesParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // SearchMetadataParams defines parameters for SearchMetadata.

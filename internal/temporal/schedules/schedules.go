@@ -100,6 +100,8 @@ const (
 	// DirectoryReconcile suspends/ reinstates users from the LDAP directory
 	// (#257).
 	DirectoryReconcile = "directory-reconcile"
+	// TablePopularity recomputes the popular tables of every workspace (#562).
+	TablePopularity = "table-popularity"
 )
 
 // Remove deletes a schedule an earlier configuration created; a schedule

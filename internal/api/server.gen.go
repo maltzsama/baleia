@@ -546,6 +546,9 @@ type ServerInterface interface {
 	// Join conditions used between two tables, best first (editor autocomplete)
 	// (GET /workspaces/{id}/metadata/join-suggestions)
 	ListJoinSuggestions(w http.ResponseWriter, r *http.Request, id PathId, params ListJoinSuggestionsParams)
+	// Tables the workspace read most in the last 30 days (B7)
+	// (GET /workspaces/{id}/metadata/popular-tables)
+	ListPopularTables(w http.ResponseWriter, r *http.Request, id PathId, params ListPopularTablesParams)
 	// Tables and columns whose names match, best first (autocomplete and search)
 	// (GET /workspaces/{id}/metadata/search)
 	SearchMetadata(w http.ResponseWriter, r *http.Request, id PathId, params SearchMetadataParams)
@@ -1785,6 +1788,12 @@ func (_ Unimplemented) ListMetadataTables(w http.ResponseWriter, r *http.Request
 // Join conditions used between two tables, best first (editor autocomplete)
 // (GET /workspaces/{id}/metadata/join-suggestions)
 func (_ Unimplemented) ListJoinSuggestions(w http.ResponseWriter, r *http.Request, id PathId, params ListJoinSuggestionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Tables the workspace read most in the last 30 days (B7)
+// (GET /workspaces/{id}/metadata/popular-tables)
+func (_ Unimplemented) ListPopularTables(w http.ResponseWriter, r *http.Request, id PathId, params ListPopularTablesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8564,6 +8573,50 @@ func (siw *ServerInterfaceWrapper) ListJoinSuggestions(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListPopularTables operation middleware
+func (siw *ServerInterfaceWrapper) ListPopularTables(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPopularTablesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPopularTables(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SearchMetadata operation middleware
 func (siw *ServerInterfaceWrapper) SearchMetadata(w http.ResponseWriter, r *http.Request) {
 
@@ -12185,6 +12238,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/metadata/join-suggestions", wrapper.ListJoinSuggestions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/metadata/popular-tables", wrapper.ListPopularTables)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/metadata/search", wrapper.SearchMetadata)
@@ -19910,6 +19966,42 @@ func (response ListJoinSuggestions422JSONResponse) VisitListJoinSuggestionsRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListPopularTablesRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ListPopularTablesParams
+}
+
+type ListPopularTablesResponseObject interface {
+	VisitListPopularTablesResponse(w http.ResponseWriter) error
+}
+
+type ListPopularTables200JSONResponse []PopularTable
+
+func (response ListPopularTables200JSONResponse) VisitListPopularTablesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListPopularTables401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListPopularTables401JSONResponse) VisitListPopularTablesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListPopularTables404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListPopularTables404JSONResponse) VisitListPopularTablesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type SearchMetadataRequestObject struct {
 	Id     PathId `json:"id"`
 	Params SearchMetadataParams
@@ -23260,6 +23352,9 @@ type StrictServerInterface interface {
 	// Join conditions used between two tables, best first (editor autocomplete)
 	// (GET /workspaces/{id}/metadata/join-suggestions)
 	ListJoinSuggestions(ctx context.Context, request ListJoinSuggestionsRequestObject) (ListJoinSuggestionsResponseObject, error)
+	// Tables the workspace read most in the last 30 days (B7)
+	// (GET /workspaces/{id}/metadata/popular-tables)
+	ListPopularTables(ctx context.Context, request ListPopularTablesRequestObject) (ListPopularTablesResponseObject, error)
 	// Tables and columns whose names match, best first (autocomplete and search)
 	// (GET /workspaces/{id}/metadata/search)
 	SearchMetadata(ctx context.Context, request SearchMetadataRequestObject) (SearchMetadataResponseObject, error)
@@ -28382,6 +28477,33 @@ func (sh *strictHandler) ListJoinSuggestions(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListJoinSuggestionsResponseObject); ok {
 		if err := validResponse.VisitListJoinSuggestionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPopularTables operation middleware
+func (sh *strictHandler) ListPopularTables(w http.ResponseWriter, r *http.Request, id PathId, params ListPopularTablesParams) {
+	var request ListPopularTablesRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPopularTables(ctx, request.(ListPopularTablesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPopularTables")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPopularTablesResponseObject); ok {
+		if err := validResponse.VisitListPopularTablesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

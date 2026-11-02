@@ -160,6 +160,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	w.RegisterWorkflow(workflows.DirectoryReconcileWorkflow)
 	w.RegisterWorkflow(workflows.EphemeralCatalogSweepWorkflow)
 	w.RegisterWorkflow(workflows.TokenCleanupWorkflow)
+	w.RegisterWorkflow(workflows.RefreshTablePopularityWorkflow)
 
 	if cfg.SchedulesEnabled {
 		if err := ensureSchedules(ctx, core.Temporal, cfg); err != nil {
