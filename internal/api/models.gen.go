@@ -2348,7 +2348,7 @@ type EngineQueue struct {
 	Queued         int              `json:"queued"`
 	Running        int              `json:"running"`
 
-	// RuntimeTimeoutMs How long an admitted run may execute
+	// RuntimeTimeoutMs Stored per-class runtime bound; enforcement lands in #578
 	RuntimeTimeoutMs int `json:"runtime_timeout_ms"`
 }
 

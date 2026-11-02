@@ -19,6 +19,10 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
+// maxRuntimeTimeoutMs is the largest millisecond value time.Duration can hold
+// without overflowing when multiplied by time.Millisecond.
+const maxRuntimeTimeoutMs = int64(math.MaxInt64) / int64(time.Millisecond)
+
 // workloadClasses is the order the queue API reports and accepts.
 var workloadClasses = []queryengine.WorkloadClass{
 	queryengine.ClassInteractive,
@@ -99,7 +103,7 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 		Outcome:      audit.Allowed,
 		Changes: map[string]audit.Change{
 			"max_running_total": {To: request.Body.MaxRunningTotal},
-			"classes":           {To: caps.Classes},
+			"classes":           {To: request.Body.Classes},
 		},
 	})
 	h.signalAdmission(ctx, idString(id), caps)
@@ -217,7 +221,7 @@ func queueCapacityUpdate(id pgtype.UUID, body *PutEngineQueuesJSONRequestBody) (
 		if c.MaxRunning < 0 || c.MaxRunning > math.MaxInt32 || c.MaxQueued < 0 || c.MaxQueued > math.MaxInt32 || c.QueueTimeoutMs < 1 {
 			return nil, workflows.AdmissionCapacities{}, fmt.Errorf("class %q has an invalid capacity", class)
 		}
-		if c.RuntimeTimeoutMs != nil && *c.RuntimeTimeoutMs < 1 {
+		if c.RuntimeTimeoutMs != nil && (*c.RuntimeTimeoutMs < 1 || int64(*c.RuntimeTimeoutMs) > maxRuntimeTimeoutMs) {
 			return nil, workflows.AdmissionCapacities{}, fmt.Errorf("class %q has an invalid runtime timeout", class)
 		}
 		rows = append(rows, db.UpsertEngineQueueCapacityParams{

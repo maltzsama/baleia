@@ -5675,7 +5675,7 @@ export interface components {
             max_running: number;
             max_queued: number;
             queue_timeout_ms: number;
-            /** @description How long an admitted run may execute */
+            /** @description Stored per-class runtime bound; enforcement lands in #578 */
             runtime_timeout_ms: number;
             running: number;
             queued: number;

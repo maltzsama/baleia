@@ -2909,7 +2909,7 @@ components:
         max_running: { type: integer }
         max_queued: { type: integer }
         queue_timeout_ms: { type: integer }
-        runtime_timeout_ms: { type: integer, description: "How long an admitted run may execute" }
+        runtime_timeout_ms: { type: integer, description: "Stored per-class runtime bound; enforcement lands in #578" }
         running: { type: integer }
         queued: { type: integer }
         oldest_wait_ms: { type: integer, nullable: true }
