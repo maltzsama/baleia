@@ -97,7 +97,7 @@
 				<li>
 					{#if item.href}
 						<a
-							href={resolve(item.href)}
+							href={resolve(item.href as '/')}
 							class="flex items-center gap-2 rounded px-1.5 py-1 hover:bg-blue-50 hover:text-primary dark:hover:bg-[#152236]"
 						>
 							<span
