@@ -1,9 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { http, server } from '../../../test/server';
 import { makeMe, makeWorkspace } from '../../../test/factories';
 import { renderPage } from '../../../test/render';
+import { setTestUrl } from '../../../test/nav.svelte';
+
+vi.mock('$app/state', async () => ({ page: (await import('../../../test/nav.svelte')).testPage }));
+
 import HistoryPage from './+page.svelte';
 
 const WS = '00000000-0000-0000-0000-000000000001';
@@ -39,6 +43,7 @@ function makeExecution(overrides: Record<string, unknown> = {}) {
 describe('history page', () => {
 	beforeEach(() => {
 		workspaceStore.select(makeWorkspace({ id: WS }));
+		setTestUrl('/history');
 		window.history.replaceState(null, '', '/history');
 	});
 
@@ -55,6 +60,37 @@ describe('history page', () => {
 		expect(screen.getByText('SELECT * FROM orders')).toBeTruthy();
 		expect(screen.getByText('42')).toBeTruthy();
 		expect(screen.getByText('lake.sales')).toBeTruthy();
+	});
+
+	it('filters by workload class and renders the queue columns', async () => {
+		let seenClass = '';
+		server.use(
+			http.get('/workspaces/{id}/executions', ({ request, response }) => {
+				seenClass = new URL(request.url).searchParams.get('class') ?? '';
+				return response(200).json({
+					data: [
+						makeExecution({
+							queue: {
+								class: 'heavy',
+								reason: 'rule:abc',
+								position: 0,
+								queued_at: '2026-10-01T11:59:58Z',
+								admitted_at: null,
+								wait_ms: 2000
+							}
+						})
+					],
+					next_cursor: null
+				});
+			})
+		);
+
+		setTestUrl('/history?class=heavy');
+		renderPage(HistoryPage, { me: makeMe(), url: '/history?class=heavy' });
+		await screen.findByText('Ada Lovelace');
+		await waitFor(() => expect(seenClass).toBe('heavy'));
+		expect(screen.getAllByText('Heavy').length).toBeGreaterThan(0);
+		expect(screen.getByRole('columnheader', { name: 'Queue wait' })).toBeTruthy();
 	});
 
 	it('opens the drawer with the statements', async () => {

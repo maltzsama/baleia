@@ -451,6 +451,10 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 		status := string(*p.Status)
 		params.Status = &status
 	}
+	if p.Class != nil {
+		class := string(*p.Class)
+		params.QueueClass = &class
+	}
 	if p.From != nil {
 		params.FromTime = pgtype.Timestamptz{Time: *p.From, Valid: true}
 	}
@@ -552,6 +556,26 @@ func historyRowToPublic(row db.ListExecutionHistoryRow) Execution {
 	if row.FinishedAt.Valid {
 		finished := row.FinishedAt.Time
 		exec.FinishedAt = &finished
+	}
+	if row.QueueClass != nil {
+		queue := ExecutionQueue{
+			Class:  ExecutionQueueClass(*row.QueueClass),
+			Reason: row.QueueReason,
+		}
+		if row.QueueWaitMs != nil {
+			queue.WaitMs = int(*row.QueueWaitMs)
+		}
+		switch {
+		case row.QueuedAt.Valid:
+			queue.QueuedAt = row.QueuedAt.Time
+		case row.StartedAt.Valid:
+			queue.QueuedAt = row.StartedAt.Time
+		}
+		if row.AdmittedAt.Valid {
+			admitted := row.AdmittedAt.Time
+			queue.AdmittedAt = &admitted
+		}
+		exec.Queue = &queue
 	}
 	return exec
 }

@@ -281,3 +281,36 @@ func TestHistory_SearchUsesIndex(t *testing.T) {
 		t.Fatalf("the trigram index is not used:\n%s", plan.String())
 	}
 }
+
+func classPtr(value ListExecutionsParamsClass) *ListExecutionsParamsClass { return &value }
+
+// TestHistory_FiltersByWorkloadClass: the class filter narrows the list and the
+// row carries the queue wait (#549).
+func TestHistory_FiltersByWorkloadClass(t *testing.T) {
+	t.Parallel()
+	f := newHistoryFixture(t)
+	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	f.addExecution(t, f.member, "finished", "SELECT 1", base)
+	heavy := f.addExecution(t, f.member, "finished", "SELECT 2", base.Add(time.Minute))
+	if _, err := f.pool.Exec(context.Background(), `
+		UPDATE query_executions
+		   SET queue_class = 'heavy', queue_reason = 'rule:x',
+		       queued_at = $2, admitted_at = $2, queue_wait_ms = 1500
+		 WHERE id = $1`, pgUUID(heavy), base.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	page := f.list(t, f.owner.String(), "member", ListExecutionsParams{
+		Class: classPtr(ListExecutionsParamsClassHeavy),
+	})
+	if got := executionIDs(page); len(got) != 1 || got[0] != heavy.String() {
+		t.Fatalf("class filter = %v, want just the heavy run", got)
+	}
+	queue := page.Data[0].Queue
+	if queue == nil || queue.Class != ExecutionQueueClassHeavy || queue.WaitMs != 1500 {
+		t.Fatalf("queue = %+v, want heavy with a 1500 ms wait", queue)
+	}
+	if queue.Reason == nil || *queue.Reason != "rule:x" {
+		t.Fatalf("queue reason = %v, want rule:x", queue.Reason)
+	}
+}

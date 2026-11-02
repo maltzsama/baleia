@@ -7619,6 +7619,14 @@ func (siw *ServerInterfaceWrapper) ListExecutions(w http.ResponseWriter, r *http
 		return
 	}
 
+	// ------------- Optional query parameter "class" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "class", r.URL.Query(), &params.Class)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "class", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "user_id" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "user_id", r.URL.Query(), &params.UserId)

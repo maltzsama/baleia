@@ -90,6 +90,10 @@ type Gate struct {
 	limiter  *BurstLimiter
 	observer Observer
 	now      func() time.Time
+	// queueing turns MaxConcurrentQueries from a refusal into a wait: the run
+	// enters the background admission queue instead (#548). Off, the gate
+	// keeps the hard refusal.
+	queueing bool
 }
 
 // NewGate builds a gate. ceilings zero values fall back to DefaultCeilings.
@@ -115,6 +119,11 @@ func (g *Gate) SetLimiter(l *BurstLimiter) { g.limiter = l }
 
 // SetObserver records gate decisions (metrics, #87).
 func (g *Gate) SetObserver(o Observer) { g.observer = o }
+
+// SetQueueing says whether a run over MaxConcurrentQueries waits in the
+// background admission queue instead of being refused (#548). It is on when
+// workload management is on.
+func (g *Gate) SetQueueing(v bool) { g.queueing = v }
 
 // Check decides whether p may run c. The order is the one from #60: identity,
 // tool, workspace, catalog, burst, then the run_query rules.
@@ -249,7 +258,10 @@ func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff
 	if err != nil {
 		return Decision{}, err
 	}
-	if running >= int64(eff.MaxConcurrentQueries) {
+	// With workload management on, exceeding the per-agent concurrency is a
+	// wait, not a refusal (#548): the run enters the background queue and the
+	// agent id is its fairness key. The hourly quota still refuses.
+	if running >= int64(eff.MaxConcurrentQueries) && !g.queueing {
 		return refuse(ReasonQuota, "concurrent query quota reached"), nil
 	}
 

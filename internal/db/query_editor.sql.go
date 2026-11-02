@@ -698,27 +698,30 @@ SELECT qe.id, qe.workspace_id, qe.user_id, u.name AS user_name,
        qe.rows_returned, qe.duration_ms, qe.started_at, qe.finished_at,
        qe.trino_catalog, qe.result_key, qe.request_id, qe.engine_id,
        qe.target_binding_id, qe.target_catalog_id, qe.target_schema,
-       qe.target_snapshot
+       qe.target_snapshot,
+       qe.queue_class, qe.queue_reason, qe.queued_at, qe.admitted_at, qe.queue_wait_ms
 FROM query_executions qe
 JOIN users u ON u.id = qe.user_id
 WHERE qe.workspace_id = $1::uuid
   AND ($2::uuid IS NULL OR qe.user_id = $2::uuid)
   AND ($3::text IS NULL OR qe.status = $3::text)
-  AND ($4::timestamptz IS NULL OR qe.started_at >= $4::timestamptz)
-  AND ($5::timestamptz IS NULL OR qe.started_at <= $5::timestamptz)
-  AND ($6::text IS NULL OR qe.sql ILIKE '%' || $6::text || '%')
-  AND ($7::uuid IS NULL OR qe.target_catalog_id = $7::uuid)
-  AND ($8::uuid IS NULL OR qe.engine_id = $8::uuid)
-  AND ($9::timestamptz IS NULL
-       OR (qe.started_at, qe.id) < ($9::timestamptz, $10::uuid))
+  AND ($4::text IS NULL OR qe.queue_class = $4::text)
+  AND ($5::timestamptz IS NULL OR qe.started_at >= $5::timestamptz)
+  AND ($6::timestamptz IS NULL OR qe.started_at <= $6::timestamptz)
+  AND ($7::text IS NULL OR qe.sql ILIKE '%' || $7::text || '%')
+  AND ($8::uuid IS NULL OR qe.target_catalog_id = $8::uuid)
+  AND ($9::uuid IS NULL OR qe.engine_id = $9::uuid)
+  AND ($10::timestamptz IS NULL
+       OR (qe.started_at, qe.id) < ($10::timestamptz, $11::uuid))
 ORDER BY qe.started_at DESC, qe.id DESC
-LIMIT $11
+LIMIT $12
 `
 
 type ListExecutionHistoryParams struct {
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 	UserID      pgtype.UUID        `json:"user_id"`
 	Status      *string            `json:"status"`
+	QueueClass  *string            `json:"queue_class"`
 	FromTime    pgtype.Timestamptz `json:"from_time"`
 	ToTime      pgtype.Timestamptz `json:"to_time"`
 	Q           *string            `json:"q"`
@@ -750,6 +753,11 @@ type ListExecutionHistoryRow struct {
 	TargetCatalogID pgtype.UUID        `json:"target_catalog_id"`
 	TargetSchema    *string            `json:"target_schema"`
 	TargetSnapshot  []byte             `json:"target_snapshot"`
+	QueueClass      *string            `json:"queue_class"`
+	QueueReason     *string            `json:"queue_reason"`
+	QueuedAt        pgtype.Timestamptz `json:"queued_at"`
+	AdmittedAt      pgtype.Timestamptz `json:"admitted_at"`
+	QueueWaitMs     *int64             `json:"queue_wait_ms"`
 }
 
 // Newest first, keyset-paginated on (started_at, id): the cursor is the last
@@ -760,6 +768,7 @@ func (q *Queries) ListExecutionHistory(ctx context.Context, arg ListExecutionHis
 		arg.WorkspaceID,
 		arg.UserID,
 		arg.Status,
+		arg.QueueClass,
 		arg.FromTime,
 		arg.ToTime,
 		arg.Q,
@@ -797,6 +806,11 @@ func (q *Queries) ListExecutionHistory(ctx context.Context, arg ListExecutionHis
 			&i.TargetCatalogID,
 			&i.TargetSchema,
 			&i.TargetSnapshot,
+			&i.QueueClass,
+			&i.QueueReason,
+			&i.QueuedAt,
+			&i.AdmittedAt,
+			&i.QueueWaitMs,
 		); err != nil {
 			return nil, err
 		}

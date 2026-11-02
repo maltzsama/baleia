@@ -34,6 +34,7 @@
 	// Filters live in the URL so a reload or a shared link restores the view.
 	const filters = $derived(parseHistoryFilters(page.url));
 	const status = $derived(filters.status);
+	const queueClass = $derived(filters.queueClass);
 	const q = $derived(filters.q);
 	const from = $derived(filters.from);
 	const to = $derived(filters.to);
@@ -62,7 +63,7 @@
 	let error = $state('');
 	let requestSeq = 0;
 
-	const filterKey = $derived(`${workspaceId}|${status}|${q}|${from}|${to}`);
+	const filterKey = $derived(`${workspaceId}|${status}|${queueClass}|${q}|${from}|${to}`);
 
 	$effect(() => {
 		const key = filterKey;
@@ -77,7 +78,7 @@
 	});
 
 	async function fetchPage(cursor: string | undefined, seq: number) {
-		const query = historyQuery({ status, q, from, to }, cursor);
+		const query = historyQuery({ status, queueClass, q, from, to }, cursor);
 		try {
 			const { data, error: readError } = await client.GET('/workspaces/{id}/executions', {
 				params: { path: { id: workspaceId }, query }
@@ -137,6 +138,19 @@
 
 	function firstLine(sql: string): string {
 		return sql.trim().split('\n')[0]?.slice(0, 60) || m.history_untitled();
+	}
+
+	function classLabel(value?: string | null): string {
+		switch (value) {
+			case 'interactive':
+				return m.workload_class_interactive();
+			case 'heavy':
+				return m.workload_class_heavy();
+			case 'background':
+				return m.workload_class_background();
+			default:
+				return m.workload_no_class();
+		}
 	}
 
 	function openInEditor(run: boolean) {
@@ -229,6 +243,20 @@
 				</select>
 			</label>
 			<label class="flex flex-col gap-1 text-[11px] font-medium text-text-muted">
+				<span>{m.history_class()}</span>
+				<select
+					aria-label={m.history_class()}
+					value={queueClass}
+					onchange={(e) => setParam('class', (e.currentTarget as HTMLSelectElement).value)}
+					class="rounded border border-border bg-bg-panel px-2 py-1 text-xs text-text-main"
+				>
+					<option value="">{m.history_all()}</option>
+					<option value="interactive">{m.workload_class_interactive()}</option>
+					<option value="heavy">{m.workload_class_heavy()}</option>
+					<option value="background">{m.workload_class_background()}</option>
+				</select>
+			</label>
+			<label class="flex flex-col gap-1 text-[11px] font-medium text-text-muted">
 				<span>{m.common_from()}</span>
 				<input
 					type="datetime-local"
@@ -293,8 +321,10 @@
 								class="border-b border-border bg-bg-toolbar text-[10px] uppercase tracking-wide text-text-muted"
 							>
 								<th class="px-3 py-2 font-semibold">{m.history_status()}</th>
+								<th class="px-3 py-2 font-semibold">{m.history_class()}</th>
 								<th class="px-3 py-2 font-semibold">{m.history_started_2()}</th>
 								<th class="px-3 py-2 font-semibold">{m.history_duration()}</th>
+								<th class="px-3 py-2 font-semibold">{m.history_queue_wait()}</th>
 								<th class="px-3 py-2 text-right font-semibold">{m.history_rows()}</th>
 								<th class="px-3 py-2 font-semibold">{m.history_user()}</th>
 								<th class="px-3 py-2 font-semibold">{m.history_engine()}</th>
@@ -320,6 +350,13 @@
 									<td class="px-3 py-2">
 										<StatusBadge kind="execution" status={execution.status} />
 									</td>
+									<td class="px-3 py-2">
+										{#if execution.queue}
+											<span class="text-text-muted">{classLabel(execution.queue.class)}</span>
+										{:else}
+											<span class="text-text-muted">—</span>
+										{/if}
+									</td>
 									<td class="whitespace-nowrap px-3 py-2 text-text-muted">
 										{#if execution.started_at}
 											<RelativeTime at={execution.started_at} />
@@ -332,6 +369,13 @@
 											<Duration ms={execution.duration_ms} />
 										{:else}
 											<span class="text-text-muted">—</span>
+										{/if}
+									</td>
+									<td class="whitespace-nowrap px-3 py-2 text-text-muted">
+										{#if execution.queue && execution.queue.wait_ms > 0}
+											<Duration ms={execution.queue.wait_ms} />
+										{:else}
+											—
 										{/if}
 									</td>
 									<td class="px-3 py-2 text-right font-mono text-text-muted">

@@ -11541,6 +11541,8 @@ export interface operations {
         parameters: {
             query?: {
                 status?: "queued" | "running" | "finished" | "failed" | "cancelled";
+                /** @description Only executions classified in this workload class (#549) */
+                class?: "interactive" | "heavy" | "background";
                 /** @description A user id, or `me` for the caller */
                 user_id?: string;
                 /** @description Only executions started at or after this instant */

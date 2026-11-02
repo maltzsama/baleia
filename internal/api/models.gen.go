@@ -1112,9 +1112,9 @@ const (
 
 // Defines values for WorkloadRuleTestResultClass.
 const (
-	Background  WorkloadRuleTestResultClass = "background"
-	Heavy       WorkloadRuleTestResultClass = "heavy"
-	Interactive WorkloadRuleTestResultClass = "interactive"
+	WorkloadRuleTestResultClassBackground  WorkloadRuleTestResultClass = "background"
+	WorkloadRuleTestResultClassHeavy       WorkloadRuleTestResultClass = "heavy"
+	WorkloadRuleTestResultClassInteractive WorkloadRuleTestResultClass = "interactive"
 )
 
 // Defines values for WorkspaceType.
@@ -1199,6 +1199,13 @@ const (
 	ListExecutionsParamsStatusFinished  ListExecutionsParamsStatus = "finished"
 	ListExecutionsParamsStatusQueued    ListExecutionsParamsStatus = "queued"
 	ListExecutionsParamsStatusRunning   ListExecutionsParamsStatus = "running"
+)
+
+// Defines values for ListExecutionsParamsClass.
+const (
+	ListExecutionsParamsClassBackground  ListExecutionsParamsClass = "background"
+	ListExecutionsParamsClassHeavy       ListExecutionsParamsClass = "heavy"
+	ListExecutionsParamsClassInteractive ListExecutionsParamsClass = "interactive"
 )
 
 // Defines values for SearchMetadataParamsKind.
@@ -4941,6 +4948,9 @@ type SearchContentParams struct {
 type ListExecutionsParams struct {
 	Status *ListExecutionsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
 
+	// Class Only executions classified in this workload class (#549)
+	Class *ListExecutionsParamsClass `form:"class,omitempty" json:"class,omitempty"`
+
 	// UserId A user id, or `me` for the caller
 	UserId *string `form:"user_id,omitempty" json:"user_id,omitempty"`
 
@@ -4962,6 +4972,9 @@ type ListExecutionsParams struct {
 
 // ListExecutionsParamsStatus defines parameters for ListExecutions.
 type ListExecutionsParamsStatus string
+
+// ListExecutionsParamsClass defines parameters for ListExecutions.
+type ListExecutionsParamsClass string
 
 // GetStatementResultsParams defines parameters for GetStatementResults.
 type GetStatementResultsParams struct {
