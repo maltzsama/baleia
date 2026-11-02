@@ -2,8 +2,11 @@
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import TableDetail from './TableDetail.svelte';
+	import LineageGraph from './LineageGraph.svelte';
 	import AssistantPanel from '$lib/assistant/Panel.svelte';
 	import { assistantStore } from '$lib/assistant/store.svelte';
+	import { editor } from '$lib/stores/editor.svelte';
+	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import type { TableRef } from '$lib/metadata/client';
 
 	let {
@@ -18,6 +21,9 @@
 	} = $props();
 
 	let tab = $state<'inspector' | 'assistant'>('inspector');
+
+	const workspaceId = $derived(workspaceStore.current?.id ?? '');
+	const savedQueryId = $derived(editor.activeTab.savedId);
 
 	onMount(() => {
 		void assistantStore.loadStatus();
@@ -114,6 +120,11 @@
 			{#if tab === 'assistant' && assistantStore.enabled}
 				<AssistantPanel />
 			{:else}
+				{#if !selectedTable && savedQueryId && workspaceId}
+					<div class="border-b border-border p-3">
+						<LineageGraph {workspaceId} node={`saved_query:${savedQueryId}`} direction="down" />
+					</div>
+				{/if}
 				<TableDetail table={selectedTable ?? null} />
 			{/if}
 		</div>
