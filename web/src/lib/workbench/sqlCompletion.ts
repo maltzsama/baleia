@@ -13,6 +13,7 @@ import { keywordCompletionSource, type SQLDialect } from '@codemirror/lang-sql';
 import { m } from '$lib/paraglide/messages';
 import { plural } from '$lib/i18n/plural';
 import { formatRelativeTime } from '$lib/util/time';
+import { loadFunctions, type DialectFunction } from '$lib/engines/client';
 import {
 	joinSuggestions,
 	loadNamespaces,
@@ -38,6 +39,7 @@ export type CompletionScope = {
 	/** The tab's schema, dot-separated; empty when the engine default applies. */
 	schema: string;
 	/** The engine dialect's lists; an empty keyword list uses `cmDialect`'s. */
+	dialect: string;
 	keywords: string[];
 	functions: string[];
 	cmDialect: SQLDialect;
@@ -268,27 +270,58 @@ function namespaceOption(scope: CompletionScope, path: string[]): Option {
 	};
 }
 
-function functionOptions(scope: CompletionScope): Option[] {
-	const seen = new Set<string>();
-	const out: Option[] = [];
-	for (const fn of [...scope.functions].sort((a, b) => lower(a).localeCompare(lower(b)))) {
-		if (seen.has(lower(fn))) continue;
-		seen.add(lower(fn));
-		const label = scope.upperCase ? fn.toUpperCase() : fn;
-		out.push({
-			label,
-			type: 'function',
-			detail: m.workbench_completion_function(),
-			apply: applyCall(label),
-			group: 'function'
-		});
+function functionOptions(scope: CompletionScope): Promise<Option[]> {
+	return functionReference(scope.dialect).then((refs) => {
+		const seen = new Set<string>();
+		const out: Option[] = [];
+		for (const fn of [...scope.functions].sort((a, b) => lower(a).localeCompare(lower(b)))) {
+			if (seen.has(lower(fn))) continue;
+			seen.add(lower(fn));
+			const label = scope.upperCase ? fn.toUpperCase() : fn;
+			const ref = refs.get(lower(fn));
+			out.push({
+				label,
+				type: 'function',
+				detail: functionKind(ref?.kind),
+				apply: applyCall(label, ref?.call ?? true),
+				info: ref ? info(label, ref.signature ?? ref.kind, [ref.description ?? '']) : undefined,
+				group: 'function'
+			});
+		}
+		return out;
+	});
+}
+
+/** Function name -> generated reference, best effort (B2, #531). */
+async function functionReference(name: string): Promise<Map<string, DialectFunction>> {
+	if (!name) return new Map();
+	try {
+		const rows = await loadFunctions(name);
+		return new Map(rows.map((row) => [lower(row.name), row]));
+	} catch {
+		// Without the reference the completion still offers the names.
+		return new Map();
 	}
-	return out;
+}
+
+/** The API kind as user-facing text; API values stay for comparisons. */
+function functionKind(kind: string | undefined): string {
+	if (kind === 'aggregate') return m.workbench_completion_kind_aggregate();
+	if (kind === 'window') return m.workbench_completion_kind_window();
+	return m.workbench_completion_function();
 }
 
 /** Inserts `name()` with the cursor between the parentheses. */
-function applyCall(name: string) {
+function applyCall(name: string, call = true) {
 	return (view: EditorView, _completion: Completion, from: number, to: number) => {
+		if (!call) {
+			view.dispatch({
+				changes: { from, to, insert: name },
+				selection: { anchor: from + name.length },
+				userEvent: 'input.complete'
+			});
+			return;
+		}
 		const hasParen = view.state.sliceDoc(to, to + 1) === '(';
 		const insert = hasParen ? name : `${name}()`;
 		view.dispatch({
@@ -553,7 +586,7 @@ export function sqlCompletionSource(scope: () => CompletionScope | null): Comple
 					options = [
 						...(await joinOptions(current, ctx, controller.signal)),
 						...(columns ?? []),
-						...functionOptions(current),
+						...(await functionOptions(current)),
 						...(await keywordOptions(current, context, false))
 					];
 					break;

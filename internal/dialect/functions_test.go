@@ -23,6 +23,24 @@ func TestFunctionReferences(t *testing.T) {
 	if !found {
 		t.Fatal("trino's reference lacks date_trunc")
 	}
+	// PostgreSQL's generated reference carries the signatures and descriptions
+	// pg_proc exposes (#531).
+	pg := FunctionReferences(PostgreSQL)
+	if len(pg) == 0 {
+		t.Fatal("no PostgreSQL functions")
+	}
+	found = false
+	for _, r := range pg {
+		if r.Name == "date_trunc" {
+			found = true
+			if r.Signature == "" || r.Description == "" {
+				t.Fatalf("date_trunc has no signature/description: %+v", r)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("postgresql's reference lacks date_trunc")
+	}
 	if FunctionReferences("cobol") != nil {
 		t.Fatal("an unknown dialect has no functions")
 	}

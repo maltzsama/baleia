@@ -1042,6 +1042,8 @@
 	"workbench_completion_in_schema": "Em {schema}",
 	"workbench_completion_schema": "schema",
 	"workbench_completion_function": "função",
+	"workbench_completion_kind_aggregate": "agregação",
+	"workbench_completion_kind_window": "janela",
 	"workbench_completion_join_condition": "Condição de join",
 	"workbench_completion_join_history": "Do histórico de queries",
 	"workbench_completion_join_foreign_key": "Chave estrangeira",

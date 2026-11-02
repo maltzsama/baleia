@@ -1,13 +1,15 @@
 package dialect
 
 import (
+	"embed"
+	"encoding/json"
 	"sort"
 	"strings"
 )
 
 // FunctionReference is one function the editor knows about (B2, #531).
 // Signature and Description are optional: the committed word lists carry the
-// names, and a generated reference enriches them where the engine exposes it.
+// names, and the generated reference enriches them where the engine exposes it.
 type FunctionReference struct {
 	Name        string `json:"name"`
 	Signature   string `json:"signature,omitempty"`
@@ -28,9 +30,34 @@ var noCall = map[string]bool{
 	"user": true,
 }
 
+//go:embed lists/*.functions.json
+var functionFiles embed.FS
+
+// Callable reports whether a function in the dialect takes parentheses; the
+// special forms (current_date) do not. MySQL/MariaDB expose USER(),
+// SESSION_USER() and SYSTEM_USER() as callable functions.
+func Callable(dialectName, name string) bool {
+	key := strings.ToLower(name)
+	if !noCall[key] {
+		return true
+	}
+	if (dialectName == MySQL || dialectName == MariaDB) &&
+		(key == "user" || key == "session_user" || key == "system_user") {
+		return true
+	}
+	return false
+}
+
 // FunctionReferences returns the dialect's functions, sorted by name and
-// deduplicated. Unknown dialects return nil.
+// deduplicated. The generated JSON is used when present; the embedded word
+// list is the fallback. Unknown dialects return nil.
 func FunctionReferences(name string) []FunctionReference {
+	if raw, err := functionFiles.ReadFile("lists/" + name + ".functions.json"); err == nil {
+		var out []FunctionReference
+		if json.Unmarshal(raw, &out) == nil {
+			return out
+		}
+	}
 	words, ok := lists[name]
 	if !ok {
 		return nil
@@ -43,7 +70,7 @@ func FunctionReferences(name string) []FunctionReference {
 			continue
 		}
 		seen[key] = true
-		out = append(out, FunctionReference{Name: word, Kind: "function", Call: !noCall[key]})
+		out = append(out, FunctionReference{Name: word, Kind: "function", Call: Callable(name, word)})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)

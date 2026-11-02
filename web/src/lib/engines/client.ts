@@ -36,10 +36,12 @@ export class EngineRequestError extends Error {
 
 const enginesCache = new Map<string, Promise<Engine[]>>();
 const dialectCache = new Map<string, Promise<Dialect>>();
+const functionsCache = new Map<string, Promise<DialectFunction[]>>();
 
 export function clearEnginesCache(): void {
 	enginesCache.clear();
 	dialectCache.clear();
+	functionsCache.clear();
 }
 
 function fail(error: unknown, status: number | undefined, fallback: string): never {
@@ -68,12 +70,20 @@ export function loadEngines(): Promise<Engine[]> {
 /** A dialect with its keyword and function lists, cached per name. */
 /** The dialect's function reference, with signatures where committed (B2, #531). */
 export function loadFunctions(name: string): Promise<DialectFunction[]> {
-	return client
+	const hit = functionsCache.get(name);
+	if (hit) return hit;
+	const pending = client
 		.GET('/dialects/{name}/functions', { params: { path: { name } } })
 		.then(({ data, error, response }) => {
 			if (error || !data) fail(error, response?.status, m.functions_panel_failed());
 			return data;
+		})
+		.catch((error) => {
+			functionsCache.delete(name);
+			throw error;
 		});
+	functionsCache.set(name, pending);
+	return pending;
 }
 
 export function loadDialect(name: string): Promise<Dialect> {

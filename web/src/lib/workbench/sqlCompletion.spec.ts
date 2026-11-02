@@ -65,6 +65,7 @@ const scope = (overrides: Partial<CompletionScope> = {}): CompletionScope => ({
 	engineCatalog: 'tpch',
 	namespaceDepth: 1,
 	schema: 'tiny',
+	dialect: 'trino',
 	keywords: [],
 	functions: ['count', 'count_if', 'ST_Area', 'abs'],
 	cmDialect: StandardSQL,
@@ -135,7 +136,19 @@ beforeEach(() => {
 				}
 			]);
 		}),
-		http.get('/workspaces/{id}/metadata/popular-tables', ({ response }) => response(200).json([]))
+		http.get('/workspaces/{id}/metadata/popular-tables', ({ response }) => response(200).json([])),
+		http.get('/dialects/{name}/functions', ({ response }) =>
+			response(200).json([
+				{
+					name: 'count',
+					kind: 'function',
+					call: true,
+					signature: 'count(x) → bigint',
+					description: 'Counts rows.'
+				},
+				{ name: 'count_if', kind: 'function', call: true }
+			])
+		)
 	);
 });
 
@@ -270,6 +283,15 @@ describe('sqlCompletionSource', () => {
 		const result = await complete('SELECT * FROM nation n JOIN region r ON n.|');
 		expect(labels(result?.options)).not.toContain('n.regionkey = r.regionkey · Used 3 times');
 		expect(joinCalls).toEqual([]);
+	});
+
+	it('shows the function signature and description in the completion info (#556)', async () => {
+		const result = await complete('SELECT cou| FROM nation');
+		const count = (result?.options ?? []).find((option) => option.label === 'COUNT');
+		expect(count).toBeTruthy();
+		const node = (count?.info as (() => Node) | undefined)?.();
+		expect(node?.textContent).toContain('count(x) → bigint');
+		expect(node?.textContent).toContain('Counts rows.');
 	});
 
 	it('matches by prefix, never by similarity', async () => {

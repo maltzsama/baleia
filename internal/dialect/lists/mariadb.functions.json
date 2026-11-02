@@ -1,0 +1,1342 @@
+[
+  {
+    "name": "ABS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ACOS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ADD_MONTHS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ADDDATE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ADDTIME",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "AES_DECRYPT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "AES_ENCRYPT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ASIN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ATAN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ATAN2",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "BENCHMARK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "BIN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "BINLOG_GTID_POS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "BIT_AND",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "BIT_COUNT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "BIT_LENGTH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "BIT_OR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "BIT_XOR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CAST",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CEIL",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CEILING",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CHAR_LENGTH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CHARACTER_LENGTH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CHR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COALESCE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COERCIBILITY",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COLLATION",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COLUMN_CHECK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COLUMN_EXISTS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COLUMN_JSON",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COLUMN_LIST",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COMPRESS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CONCAT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CONCAT_OPERATOR_ORACLE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CONCAT_WS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CONNECTION_ID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CONV",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CONVERT_TZ",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "COUNT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CRC32",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CRC32C",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CUME_DIST",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CURDATE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "CURTIME",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DATABASE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DATE_ADD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DATE_FORMAT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DATE_SUB",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DATEDIFF",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DAYNAME",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DAYOFMONTH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DAYOFWEEK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DAYOFYEAR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DECODE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DECODE_HISTOGRAM",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DECODE_ORACLE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DEGREES",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DENSE_RANK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DES_DECRYPT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "DES_ENCRYPT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ELT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ENCODE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ENCRYPT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "EXP",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "EXPORT_SET",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "EXTRACT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "EXTRACTVALUE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "FIELD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "FIND_IN_SET",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "FIRST_VALUE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "FLOOR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "FORMAT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "FORMAT_PICO_TIME",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "FOUND_ROWS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "FROM_BASE64",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "FROM_DAYS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "FROM_UNIXTIME",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "GET_LOCK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "GREATEST",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "GROUP_CONCAT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "HEX",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "IFNULL",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "INET6_ATON",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "INET6_NTOA",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "INET_ATON",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "INET_NTOA",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "INSTR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "IS_FREE_LOCK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "IS_IPV4",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "IS_IPV4_COMPAT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "IS_IPV4_MAPPED",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "IS_IPV6",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "IS_USED_LOCK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ISNULL",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_ARRAY",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_ARRAY_APPEND",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_ARRAY_INSERT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_ARRAY_INTERSECT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_ARRAYAGG",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_COMPACT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_CONTAINS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_CONTAINS_PATH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_DEPTH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_DETAILED",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_EQUALS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_EXISTS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_EXTRACT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_INSERT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_KEY_VALUE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_KEYS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_LENGTH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_LOOSE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_MERGE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_MERGE_PATCH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_MERGE_PRESERVE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_NORMALIZE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_OBJECT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_OBJECT_FILTER_KEYS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_OBJECT_TO_ARRAY",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_OBJECTAGG",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_OVERLAPS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_PRETTY",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_QUERY",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_QUOTE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_REMOVE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_REPLACE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_SCHEMA_VALID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_SEARCH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_SET",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_TYPE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_UNQUOTE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_VALID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "JSON_VALUE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "KDF",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LAG",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LAST_DAY",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LAST_INSERT_ID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LCASE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LEAD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LEAST",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LENGTH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LENGTHB",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LOAD_FILE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LOCATE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LOG",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LOG10",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LOG2",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LOWER",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LPAD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LPAD_ORACLE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LTRIM",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "LTRIM_ORACLE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MAKE_SET",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MAKEDATE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MAKETIME",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MASTER_GTID_WAIT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MASTER_POS_WAIT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MAX",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MD5",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MEDIAN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MICROSECOND",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MIN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MOD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "MONTHNAME",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "NAME_CONST",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "NATURAL_SORT_KEY",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "NOW",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "NTH_VALUE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "NTILE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "NULLIF",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "NVL",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "NVL2",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "OCT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "OCTET_LENGTH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "OLD_PASSWORD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ORD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "PASSWORD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "PERCENT_RANK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "PERCENTILE_CONT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "PERCENTILE_DISC",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "PERIOD_ADD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "PERIOD_DIFF",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "PI",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "POSITION",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "POW",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "POWER",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "QUARTER",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "QUOTE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "RADIANS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "RAND",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "RANDOM_BYTES",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "RANK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "REGEXP_INSTR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "REGEXP_REPLACE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "REGEXP_SUBSTR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "RELEASE_ALL_LOCKS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "RELEASE_LOCK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "REPLACE_ORACLE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "REVERSE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ROUND",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "ROW_COUNT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "RPAD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "RPAD_ORACLE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "RTRIM",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "RTRIM_ORACLE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SCHEMA",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SCHEMAS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SEC_TO_TIME",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SESSION_USER",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SFORMAT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SHA",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SHA1",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SHA2",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SIGN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SIN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SLEEP",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SOUNDEX",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SPACE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SQRT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "STD",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "STDDEV",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "STDDEV_POP",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "STDDEV_SAMP",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "STR_TO_DATE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "STRCMP",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SUBDATE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SUBSTR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SUBSTR_ORACLE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SUBSTRING",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SUBSTRING_INDEX",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SUBTIME",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SUM",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SYS_GUID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "SYSTEM_USER",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "TAN",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "TIME_FORMAT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "TIME_TO_SEC",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "TIMEDIFF",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "TO_BASE64",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "TO_CHAR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "TO_DAYS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "TO_SECONDS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "TRIM",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "TRIM_ORACLE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "UCASE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "UNCOMPRESS",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "UNCOMPRESSED_LENGTH",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "UNHEX",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "UNIX_TIMESTAMP",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "UPDATEXML",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "UPPER",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "UUID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "UUID_SHORT",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "VAR_POP",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "VAR_SAMP",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "VARIANCE",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "VERSION",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "WEEK",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "WEEKDAY",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "WEEKOFYEAR",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "WSREP_LAST_SEEN_GTID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "WSREP_LAST_WRITTEN_GTID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "WSREP_SYNC_WAIT_UPTO_GTID",
+    "kind": "function",
+    "call": true
+  },
+  {
+    "name": "YEARWEEK",
+    "kind": "function",
+    "call": true
+  }
+]

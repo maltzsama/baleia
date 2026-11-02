@@ -72,6 +72,27 @@ func TestListDialectFunctions(t *testing.T) {
 	if !found {
 		t.Fatal("trino's reference lacks date_trunc")
 	}
+	// A dialect with a generated reference returns its signature (#531).
+	pg, err := h.ListDialectFunctions(testContext(), ListDialectFunctionsRequestObject{Name: "postgresql"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pgOK, isPG := pg.(ListDialectFunctions200JSONResponse)
+	if !isPG {
+		t.Fatalf("postgresql response = %T", pg)
+	}
+	found = false
+	for _, f := range pgOK.Body {
+		if f.Name == "date_trunc" {
+			found = true
+			if f.Signature == nil || *f.Signature == "" || f.Description == nil || *f.Description == "" {
+				t.Fatalf("postgresql date_trunc = %+v", f)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("postgresql's reference lacks date_trunc")
+	}
 	for _, inm := range []string{ok.Headers.ETag, "W/" + ok.Headers.ETag, "*"} {
 		r, _ := h.ListDialectFunctions(testContext(), ListDialectFunctionsRequestObject{Name: "trino", Params: ListDialectFunctionsParams{IfNoneMatch: &inm}})
 		if nm, is304 := r.(ListDialectFunctions304Response); !is304 || nm.Headers.ETag != ok.Headers.ETag {
