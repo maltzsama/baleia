@@ -20,6 +20,8 @@ const (
 	AdmissionCancelSignal = "cancel-slot"
 	// AdmissionCapacitySignal replaces the capacities: AdmissionCapacities.
 	AdmissionCapacitySignal = "set-capacity"
+	// AdmissionThrottleSignal sets the adaptive gate (#551, #579).
+	AdmissionThrottleSignal = workload.AdmissionThrottleSignal
 
 	// AdmittedSignal is sent to the execution workflow when it may run.
 	AdmittedSignal = "admitted"
@@ -45,7 +47,7 @@ const (
 
 // AdmissionWorkflowID is the id of an engine's admission workflow. One entity
 // workflow per engine serializes its admission, so API replicas do not matter.
-func AdmissionWorkflowID(engineID string) string { return "admission-" + engineID }
+func AdmissionWorkflowID(engineID string) string { return workload.AdmissionWorkflowID(engineID) }
 
 // ExecutionWorkflowID is the id of an execution's workflow. The admission
 // workflow signals it by this id.
@@ -111,6 +113,9 @@ type AdmissionFailure struct {
 	Message     string
 }
 
+// AdmissionThrottle is the adaptive gate's mode (#551, #579).
+type AdmissionThrottle = workload.AdmissionThrottle
+
 // AdmissionState is both the workflow's input (first start and
 // continue-as-new) and the query's answer.
 type AdmissionState struct {
@@ -118,6 +123,10 @@ type AdmissionState struct {
 	Capacities      []AdmissionCapacity
 	Running         []AdmissionLease
 	Queued          []AdmissionQueued
+	// Throttled is the adaptive gate: only interactive work is admitted while
+	// the cluster is under pressure (#551, #579).
+	Throttled      bool
+	ThrottleReason string
 }
 
 // AdmissionWorkflow is the per-engine entity workflow. It keeps the per-class
@@ -139,6 +148,7 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 	releaseCh := workflow.GetSignalChannel(ctx, AdmissionReleaseSignal)
 	cancelCh := workflow.GetSignalChannel(ctx, AdmissionCancelSignal)
 	capacityCh := workflow.GetSignalChannel(ctx, AdmissionCapacitySignal)
+	throttleCh := workflow.GetSignalChannel(ctx, AdmissionThrottleSignal)
 
 	// Queue metrics are best-effort; a lost sample must not block admission.
 	actx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
@@ -207,6 +217,12 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 			var caps AdmissionCapacities
 			c.Receive(ctx, &caps)
 			state.setCapacities(caps)
+		})
+		sel.AddReceive(throttleCh, func(c workflow.ReceiveChannel, _ bool) {
+			var throttle AdmissionThrottle
+			c.Receive(ctx, &throttle)
+			state.Throttled = throttle.Throttled
+			state.ThrottleReason = throttle.Reason
 		})
 		if deadline, ok := state.nextDeadline(); ok {
 			delay := deadline.Sub(workflow.Now(ctx))
@@ -342,6 +358,11 @@ func (s *AdmissionState) admitOne() (AdmissionLease, bool) {
 			continue
 		}
 		seen[q.Class] = true
+		// Under pressure only interactive work is admitted; heavy and
+		// background wait for the gate to lift (#551, #579).
+		if s.Throttled && q.Class != queryengine.ClassInteractive {
+			continue
+		}
 		idx := s.bestInClass(q.Class)
 		if idx < 0 {
 			continue

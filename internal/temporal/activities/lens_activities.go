@@ -17,6 +17,8 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
+	"github.com/galileostudio/baleia/internal/workload"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 )
@@ -128,13 +130,13 @@ func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
 		return err
 	}
 
-	var totalMem *int64
-	var freeMem *int64
+	totalMem, freeMem := stats.TotalMemoryBytes, stats.FreeMemoryBytes
 
 	rawPayload, _ := json.Marshal(stats)
 
+	engineID := engineUUID(eng.ID())
 	_, err = a.queries.InsertClusterSnapshot(ctx, db.InsertClusterSnapshotParams{
-		EngineID:         engineUUID(eng.ID()),
+		EngineID:         engineID,
 		ActiveWorkers:    int32(stats.ActiveWorkers),
 		RunningQueries:   int32(stats.RunningQueries),
 		QueuedQueries:    int32(stats.QueuedQueries),
@@ -143,7 +145,40 @@ func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
 		FreeMemoryBytes:  freeMem,
 		RawPayload:       rawPayload,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	a.applyAdaptiveGate(ctx, engineID, stats)
+	return nil
+}
+
+// applyAdaptiveGate signals the engine's admission workflow when the latest
+// snapshot crosses a threshold (#551, #579). It is best effort: a missing
+// workflow (no run has needed admission yet) or a failed signal must not fail
+// the Lens poll.
+func (a *Activities) applyAdaptiveGate(ctx context.Context, engineID pgtype.UUID, stats *monitor.ClusterStats) {
+	if a.temporalClient == nil {
+		return
+	}
+	thresholds := workload.AdaptiveThresholds{
+		QueuedQueries:  a.cfg.WorkloadAdaptiveQueuedThreshold,
+		BlockedQueries: a.cfg.WorkloadAdaptiveBlockedThreshold,
+		MemoryHeadroom: float64(a.cfg.WorkloadAdaptiveMemoryHeadroomPct) / 100,
+	}
+	throttled, reason := thresholds.Throttled(workload.ClusterPressure{
+		QueuedQueries:    stats.QueuedQueries,
+		BlockedQueries:   stats.BlockedQueries,
+		TotalMemoryBytes: stats.TotalMemoryBytes,
+		FreeMemoryBytes:  stats.FreeMemoryBytes,
+	})
+	engine := uuid.UUID(engineID.Bytes).String()
+	if err := a.temporalClient.SignalWorkflow(ctx,
+		workload.AdmissionWorkflowID(engine), "",
+		workload.AdmissionThrottleSignal,
+		workload.AdmissionThrottle{Throttled: throttled, Reason: reason},
+	); err != nil {
+		activity.GetLogger(ctx).Debug("could not signal the adaptive gate", "engine_id", engine, "err", err)
+	}
 }
 
 type LensAnalyzeTableHealthParams struct {
