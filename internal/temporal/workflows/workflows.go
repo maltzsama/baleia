@@ -72,6 +72,11 @@ func QueryExecutionWorkflowV4(ctx workflow.Context, in QueryExecutionInput) erro
 		return runQueryExecution(ctx, in, in.Dialect)
 	}
 
+	bookkeepingCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
+	})
+
 	if err := signalAdmission(ctx, in, AdmissionRequestSignal, AdmissionRequest{
 		ExecutionID: in.ExecutionID,
 		Class:       in.Class,
@@ -80,6 +85,9 @@ func QueryExecutionWorkflowV4(ctx workflow.Context, in QueryExecutionInput) erro
 	}); err != nil {
 		return admissionFailed(ctx, in, AdmissionFailure{Code: AdmissionFailureQueueFull, Message: "the engine's admission queue is unreachable"})
 	}
+
+	// The run is queued now; the WebSocket snapshot reads the status.
+	_ = workflow.ExecuteActivity(bookkeepingCtx, activities.MarkQueued, activities.MarkQueuedParams{ExecutionID: in.ExecutionID}).Get(bookkeepingCtx, nil)
 
 	admitted, failure := awaitAdmission(ctx, in)
 	if !admitted {
@@ -94,6 +102,9 @@ func QueryExecutionWorkflowV4(ctx workflow.Context, in QueryExecutionInput) erro
 		}
 		return admissionFailed(ctx, in, failure)
 	}
+
+	// Admitted: running again, with the queue wait recorded.
+	_ = workflow.ExecuteActivity(bookkeepingCtx, activities.MarkAdmitted, activities.MarkAdmittedParams{ExecutionID: in.ExecutionID}).Get(bookkeepingCtx, nil)
 
 	defer releaseAdmissionSlot(ctx, in)
 	return runQueryExecution(ctx, in, in.Dialect)

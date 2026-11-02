@@ -17,6 +17,8 @@ type Querier interface {
 	AbandonRunningStatements(ctx context.Context, arg AbandonRunningStatementsParams) ([]AbandonRunningStatementsRow, error)
 	AddAgentWorkspace(ctx context.Context, arg AddAgentWorkspaceParams) error
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
+	// A run leaves the queue and starts: back to running, with the wait recorded.
+	AdmitQueryExecution(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
 	// Fired by the dispatcher when a refresh run is started: schedule the next run
 	// from the cron expression immediately, so a long refresh never triggers a
 	// burst of runs afterwards.
@@ -25,9 +27,10 @@ type Querier interface {
 	// Age of the export cursor for the system status section (#291). Zero when no
 	// cursor exists (nothing exported yet).
 	AuditExportLagSeconds(ctx context.Context) (float64, error)
-	// Conditional cancel: only a running execution transitions to cancelled, so a
-	// concurrent completion or failure activity cannot be overwritten. Zero matched
-	// rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
+	// Conditional cancel: a running or queued execution transitions to cancelled,
+	// so a concurrent completion or failure activity cannot be overwritten. Zero
+	// matched rows (pgx.ErrNoRows) means the execution is gone, foreign, or
+	// already terminal.
 	CancelQueryExecution(ctx context.Context, arg CancelQueryExecutionParams) (QueryExecution, error)
 	CatalogConnectionNameExists(ctx context.Context, name string) (bool, error)
 	// True when the catalog is granted to a workspace the agent is bound to and the
@@ -507,6 +510,8 @@ type Querier interface {
 	// Tombstones older than 7 days go: the explorer shows "removed" for a while,
 	// history does not grow forever.
 	PurgeMetadataTableTombstones(ctx context.Context, catalogID pgtype.UUID) error
+	// A run enters its engine's admission queue (#399).
+	QueueQueryExecution(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
 	// Reconciliation only lifts its own suspensions (#257): an admin suspension
 	// survives a directory pass.
 	ReinstateDirectoryUser(ctx context.Context, id pgtype.UUID) error

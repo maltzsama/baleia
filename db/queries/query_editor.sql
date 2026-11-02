@@ -94,7 +94,23 @@ RETURNING *;
 -- error code here, where no statement can (#399).
 UPDATE query_executions
 SET status = 'failed', error_code = $2, finished_at = now()
+WHERE id = $1 AND status IN ('running', 'queued')
+RETURNING *;
+
+-- name: QueueQueryExecution :one
+-- A run enters its engine's admission queue (#399).
+UPDATE query_executions
+SET status = 'queued', queued_at = now()
 WHERE id = $1 AND status = 'running'
+RETURNING *;
+
+-- name: AdmitQueryExecution :one
+-- A run leaves the queue and starts: back to running, with the wait recorded.
+UPDATE query_executions
+SET status = 'running',
+    admitted_at = now(),
+    queue_wait_ms = (EXTRACT(EPOCH FROM (now() - queued_at)) * 1000)::bigint
+WHERE id = $1 AND status = 'queued'
 RETURNING *;
 
 -- name: UpdateQueryExecution :one
@@ -107,12 +123,13 @@ WHERE id = $1 AND status = 'running'
 RETURNING *;
 
 -- name: CancelQueryExecution :one
--- Conditional cancel: only a running execution transitions to cancelled, so a
--- concurrent completion or failure activity cannot be overwritten. Zero matched
--- rows (pgx.ErrNoRows) means the execution is gone, foreign, or already terminal.
+-- Conditional cancel: a running or queued execution transitions to cancelled,
+-- so a concurrent completion or failure activity cannot be overwritten. Zero
+-- matched rows (pgx.ErrNoRows) means the execution is gone, foreign, or
+-- already terminal.
 UPDATE query_executions
 SET status = 'cancelled', finished_at = now()
-WHERE id = $1 AND workspace_id = $2 AND status = 'running'
+WHERE id = $1 AND workspace_id = $2 AND status IN ('running', 'queued')
 RETURNING *;
 
 -- name: SetExecutionResult :exec

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
@@ -24,6 +25,8 @@ type fakeStore struct {
 	execs   map[[16]byte]db.QueryExecution
 	handles []db.ListRunningStatementHandlesRow
 	owner   bool
+	// capacities is what ListEngineQueueCapacities returns.
+	capacities []db.EngineQueueCapacity
 	// lastCreate is the CreateQueryExecution the service sent.
 	lastCreate db.CreateQueryExecutionParams
 	// lastHistory is the query History sent.
@@ -86,6 +89,14 @@ func (f *fakeStore) ListQueryStatementsByWorkspace(context.Context, db.ListQuery
 
 func (f *fakeStore) GetQueryStatementByPosition(context.Context, db.GetQueryStatementByPositionParams) (db.QueryStatement, error) {
 	return db.QueryStatement{}, pgx.ErrNoRows
+}
+
+func (f *fakeStore) ListEngineQueueCapacities(context.Context, pgtype.UUID) ([]db.EngineQueueCapacity, error) {
+	return f.capacities, nil
+}
+
+func (f *fakeStore) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+	return db.Engine{ID: id, Class: "federated"}, nil
 }
 
 type fakeWorkflows struct {
@@ -303,5 +314,25 @@ func TestStart_WithoutDialects(t *testing.T) {
 	}
 	if wf.started[0].Dialect != dialect.Trino {
 		t.Errorf("dialect = %q, want trino", wf.started[0].Dialect)
+	}
+}
+
+func TestCapacitiesForUsesEngineOverrides(t *testing.T) {
+	t.Parallel()
+	st := newStore()
+	st.capacities = []db.EngineQueueCapacity{
+		{Class: "interactive", MaxRunning: 1, MaxQueued: 10, QueueTimeoutMs: 300000},
+	}
+	s := New(st, &fakeWorkflows{}, fakeEngines{&fakeEngine{}}, dialect.NewRegistry(), Config{})
+
+	state := s.capacitiesFor(context.Background(), newID(), "federated")
+	var interactive workflows.AdmissionCapacity
+	for _, c := range state.Capacities {
+		if c.Class == queryengine.ClassInteractive {
+			interactive = c
+		}
+	}
+	if interactive.MaxRunning != 1 || interactive.MaxQueued != 10 || interactive.QueueTimeout != 300*time.Second {
+		t.Errorf("interactive capacity = %+v, want the engine override", interactive)
 	}
 }
