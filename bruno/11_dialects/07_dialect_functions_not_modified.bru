@@ -1,0 +1,27 @@
+meta {
+  name: Dialect Functions Not Modified
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{base_url}}/dialects/trino/functions
+  body: none
+  auth: bearer
+}
+
+headers {
+  If-None-Match: {{dialect_functions_etag}}
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 304
+}
+
+docs {
+  `If-None-Match` with the ETag from 06 gets 304 and no body.
+}

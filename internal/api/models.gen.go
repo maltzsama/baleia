@@ -2282,6 +2282,18 @@ type Dialect struct {
 	Name              string   `json:"name"`
 }
 
+// DialectFunction defines model for DialectFunction.
+type DialectFunction struct {
+	Description *string `json:"description,omitempty"`
+
+	// Kind function, aggregate or operator
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+
+	// Signature The call shape, when the engine exposes it
+	Signature *string `json:"signature,omitempty"`
+}
+
 // DirectoryReconcileAction defines model for DirectoryReconcileAction.
 type DirectoryReconcileAction struct {
 	Action *DirectoryReconcileActionAction `json:"action,omitempty"`
@@ -5033,6 +5045,11 @@ type PutTableMaintenanceParams struct {
 
 // GetDialectParams defines parameters for GetDialect.
 type GetDialectParams struct {
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
+}
+
+// ListDialectFunctionsParams defines parameters for ListDialectFunctions.
+type ListDialectFunctionsParams struct {
 	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 

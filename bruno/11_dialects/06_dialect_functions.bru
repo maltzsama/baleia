@@ -1,0 +1,39 @@
+meta {
+  name: Dialect Functions
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/dialects/trino/functions
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+script:post-response {
+  bru.setVar("dialect_functions_etag", res.getHeader("etag"));
+}
+
+tests {
+  test("has a strong ETag and the reference", function() {
+    expect(res.getHeader("etag")).to.be.a("string");
+    expect(res.body.length).to.be.greaterThan(0);
+    expect(res.body[0].name).to.be.a("string");
+    expect(res.body[0].kind).to.be.a("string");
+  });
+}
+
+docs {
+  The dialect's function reference (B2, #531), cached with an ETag. The names
+  come from the committed word list; signatures and descriptions are added
+  where the generated reference has them.
+}

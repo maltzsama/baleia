@@ -33,6 +33,7 @@
 		loadDialect,
 		loadEngines,
 		type Dialect,
+		type DialectFunction,
 		type Engine,
 		type WorkspaceTarget
 	} from '$lib/engines/client';
@@ -40,6 +41,7 @@
 	import { sqlCompletionSource, type CompletionScope } from '$lib/workbench/sqlCompletion';
 	import { statementSpanAt } from '$lib/workbench/sqlContext';
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
+	import FunctionsPanel from '$lib/workbench/FunctionsPanel.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Drawer from '$lib/ui/Drawer.svelte';
@@ -104,6 +106,7 @@
 
 	let saveOpen = $state(false);
 	let detailsOpen = $state(false);
+	let functionsOpen = $state(false);
 	let saveMode = $state<'save' | 'copy'>('save');
 	let savePrefill = $state('');
 	let conflict = $state<Conflict | null>(null);
@@ -578,6 +581,20 @@
 			: null
 	);
 	const complete = sqlCompletionSource(() => completionScope);
+
+	// Insert a function from the reference panel with the cursor inside the
+	// parentheses (#556).
+	function insertFunction(fn: DialectFunction) {
+		if (!editorView) return;
+		const { from, to } = editorView.state.selection.main;
+		editorView.dispatch({
+			changes: { from, to, insert: `${fn.name}()` },
+			selection: { anchor: from + fn.name.length + 1 },
+			userEvent: 'input.complete'
+		});
+		editorView.focus();
+		functionsOpen = false;
+	}
 
 	// The live document lives in CodeMirror; `tab.sql` is a debounced mirror so a
 	// burst of keystrokes does not serialize the whole doc, rebuild the draft
@@ -1089,6 +1106,11 @@
 			>{m.components_queryeditor_format()}</button
 		>
 		<button
+			onclick={() => (functionsOpen = true)}
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
+			>{m.functions_panel_title()}</button
+		>
+		<button
 			onclick={() => openSave(activeTab.readOnly ? 'copy' : 'save')}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{activeTab.readOnly
@@ -1250,6 +1272,10 @@
 			<ExecutionDetails {workspaceId} executionId={activeTab.executionId} />
 		</Drawer>
 	{/if}
+
+	<Drawer size="md" bind:open={functionsOpen} title={m.functions_panel_title()}>
+		<FunctionsPanel name={dialect?.name ?? ''} oninsert={insertFunction} />
+	</Drawer>
 
 	<SaveQueryDialog
 		bind:open={

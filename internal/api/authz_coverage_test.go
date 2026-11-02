@@ -78,6 +78,7 @@ var operationAccess = map[string]access{
 	// ── any valid token
 	"ListConnectionProviders": {kind: kindAuthenticated, why: "static provider metadata (kinds and config schemas), no tenant data"},
 	"GetDialect":              {kind: kindAuthenticated, why: "static dialect metadata (keyword and function lists), no tenant data"},
+	"ListDialectFunctions":    {kind: kindAuthenticated, why: "static function reference metadata, no tenant data"},
 	"SplitStatements":         {kind: kindAuthenticated, why: "splits the caller's own text with static rules; reads no data"},
 	"PreviewCron":             {kind: kindAuthenticated, why: "parses the caller's own cron expression with static rules; reads no data"},
 	"ExplainSQL":              {kind: kindAuthenticated, why: "rewrites the caller's own text with static dialect rules; reads no data"},
