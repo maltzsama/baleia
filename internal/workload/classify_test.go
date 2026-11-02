@@ -181,7 +181,7 @@ func TestIsDDLAndIsSelect(t *testing.T) {
 			t.Errorf("IsDDL(%q) = false", sql)
 		}
 	}
-	for _, sql := range []string{"CREATE TABLE t (a int)", "INSERT INTO t VALUES (1)"} {
+	for _, sql := range []string{"CREATE TABLE t (a int)", "INSERT INTO t VALUES (1)", "VALUES (1)", "TABLE t"} {
 		if IsSelect(sql) {
 			t.Errorf("IsSelect(%q) = true", sql)
 		}
@@ -190,5 +190,15 @@ func TestIsDDLAndIsSelect(t *testing.T) {
 		if !IsSelect(sql) {
 			t.Errorf("IsSelect(%q) = false", sql)
 		}
+	}
+}
+
+func TestAnyDDL(t *testing.T) {
+	t.Parallel()
+	if AnyDDL([]string{"SELECT 1", "INSERT INTO t VALUES (1)"}) {
+		t.Fatal("AnyDDL = true without a DDL")
+	}
+	if !AnyDDL([]string{"SELECT 1", "CREATE TABLE t (a int)"}) {
+		t.Fatal("AnyDDL missed the second statement")
 	}
 }

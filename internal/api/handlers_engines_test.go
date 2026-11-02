@@ -78,6 +78,7 @@ type engineQuerier struct {
 	created    []db.CreateEngineParams
 	natives    []db.UpsertNativeCatalogParams
 	bindings   []db.UpsertNativeBindingParams
+	updated    []db.UpdateEngineParams
 	deletedNat int
 	deletedEng int
 }
@@ -108,6 +109,23 @@ func (q *engineQuerier) UpsertNativeBinding(_ context.Context, p db.UpsertNative
 }
 func (q *engineQuerier) CountEngineBlockers(context.Context, pgtype.UUID) (db.CountEngineBlockersRow, error) {
 	return q.blockers, nil
+}
+func (q *engineQuerier) UpdateEngine(_ context.Context, p db.UpdateEngineParams) (db.Engine, error) {
+	q.updated = append(q.updated, p)
+	e := q.engine
+	e.ID = p.ID
+	if p.Enabled != nil {
+		e.Enabled = *p.Enabled
+	}
+	if p.CostRoutingEnabled != nil {
+		e.CostRoutingEnabled = *p.CostRoutingEnabled
+	}
+	if p.ClearCostThreshold != nil && *p.ClearCostThreshold {
+		e.CostThresholdBytes = nil
+	} else if p.CostThresholdBytes != nil {
+		e.CostThresholdBytes = p.CostThresholdBytes
+	}
+	return e, nil
 }
 func (q *engineQuerier) DeleteNativeCatalogsOfEngine(context.Context, pgtype.UUID) error {
 	q.deletedNat++
@@ -367,4 +385,56 @@ func (q *engineQuerier) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db
 
 func (q *deleteConnQuerier) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
 	return nil, nil
+}
+
+func updateEngine(t *testing.T, h *API, body *UpdateEngineRequest) *httptest.ResponseRecorder {
+	t.Helper()
+	resp, err := h.UpdateEngine(testContext(), UpdateEngineRequestObject{Id: [16]byte{0xE1}, Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	if err := resp.VisitUpdateEngineResponse(rec); err != nil {
+		t.Fatal(err)
+	}
+	return rec
+}
+
+// TestUpdateEngine_CostRouting: the PATCH applies enabled and the cost settings
+// in one write, can clear the threshold, and refuses an invalid threshold
+// before writing (#591).
+func TestUpdateEngine_CostRouting(t *testing.T) {
+	t.Parallel()
+	q := engineFixture(t, testUserID)
+	h := engineHandlers(t, q)
+
+	if rec := updateEngine(t, h, &UpdateEngineRequest{
+		CostRoutingEnabled: ptr(true),
+		CostThresholdBytes: ptr(int64(1000)),
+	}); rec.Code != 200 {
+		t.Fatalf("update = %d %s", rec.Code, rec.Body)
+	}
+	if len(q.updated) != 1 || q.updated[0].CostThresholdBytes == nil || *q.updated[0].CostThresholdBytes != 1000 {
+		t.Fatalf("update params = %+v", q.updated)
+	}
+
+	q.updated = nil
+	if rec := updateEngine(t, h, &UpdateEngineRequest{ClearCostThreshold: ptr(true)}); rec.Code != 200 {
+		t.Fatalf("clear = %d %s", rec.Code, rec.Body)
+	}
+	if len(q.updated) != 1 || q.updated[0].ClearCostThreshold == nil || !*q.updated[0].ClearCostThreshold {
+		t.Fatalf("clear params = %+v", q.updated)
+	}
+
+	// A refused request writes nothing, not even `enabled` (#591).
+	q.updated = nil
+	if rec := updateEngine(t, h, &UpdateEngineRequest{Enabled: ptr(true), CostThresholdBytes: ptr(int64(0))}); rec.Code != 422 {
+		t.Fatalf("invalid threshold = %d %s", rec.Code, rec.Body)
+	}
+	if len(q.updated) != 0 {
+		t.Fatal("a refused request wrote to the engine")
+	}
+	if rec := updateEngine(t, h, &UpdateEngineRequest{CostThresholdBytes: ptr(int64(1)), ClearCostThreshold: ptr(true)}); rec.Code != 422 {
+		t.Fatalf("ambiguous = %d %s", rec.Code, rec.Body)
+	}
 }

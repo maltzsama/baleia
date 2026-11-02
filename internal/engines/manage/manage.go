@@ -185,6 +185,12 @@ func (s *Service) SetCostRouting(ctx context.Context, id pgtype.UUID, enabled *b
 	})
 }
 
+// Update applies every engine field in one statement, so a refused or failed
+// request cannot leave a partial change (#591).
+func (s *Service) Update(ctx context.Context, p db.UpdateEngineParams) (db.Engine, error) {
+	return s.store.UpdateEngine(ctx, p)
+}
+
 // Delete removes an engine and its native catalogs. Managed bindings,
 // running executions or any other reference make it an InUseError.
 func (s *Service) Delete(ctx context.Context, id pgtype.UUID) error {

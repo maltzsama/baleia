@@ -130,13 +130,27 @@ func Decide(origin Origin, in RuleInput, rules []Rule) Decision {
 	if in.DDL && base.Class == queryengine.ClassBackground {
 		base = Decision{Class: queryengine.ClassInteractive, Reason: "statement:ddl", Weight: 1}
 	}
+	if decision, ok := MatchRule(in, rules); ok {
+		return decision
+	}
+	// Cost routing comes after the rules and before the default (#550).
+	if in.CostHeavy {
+		return Decision{Class: queryengine.ClassHeavy, Reason: "cost:trino", Weight: 1}
+	}
+	return base
+}
+
+// MatchRule returns the first enabled rule that matches, and whether one did
+// (#546). Callers use it to know whether a rule decides the class before they
+// pay for a cost estimate (#550).
+func MatchRule(in RuleInput, rules []Rule) (Decision, bool) {
 	for _, r := range rules {
 		if !r.Enabled || !r.matches(in) {
 			continue
 		}
 		class := r.Class
 		if !class.Valid() {
-			class = base.Class
+			continue
 		}
 		if r.MaxClass != "" {
 			class = ClampToMax(class, r.MaxClass)
@@ -145,13 +159,9 @@ func Decide(origin Origin, in RuleInput, rules []Rule) Decision {
 		if weight < 1 {
 			weight = 1
 		}
-		return Decision{Class: class, Reason: "rule:" + r.ID, Weight: weight, MaxClass: r.MaxClass}
+		return Decision{Class: class, Reason: "rule:" + r.ID, Weight: weight, MaxClass: r.MaxClass}, true
 	}
-	// Cost routing comes after the rules and before the default (#550).
-	if in.CostHeavy {
-		return Decision{Class: queryengine.ClassHeavy, Reason: "cost:trino", Weight: 1}
-	}
-	return base
+	return Decision{}, false
 }
 
 // matches reports whether in satisfies every field the rule constrains.
@@ -302,13 +312,23 @@ func leadingKeyword(sql string) string {
 }
 
 // IsSelect reports whether sql is a statement a cost estimate can be had for:
-// a SELECT or a CTE that starts with WITH. Other statements never get an
-// EXPLAIN (#550).
+// a SELECT or a CTE that starts with WITH. Other statements (including VALUES
+// and TABLE) never get an EXPLAIN (#550).
 func IsSelect(sql string) bool {
 	switch leadingKeyword(sql) {
-	case "SELECT", "WITH", "VALUES", "TABLE":
+	case "SELECT", "WITH":
 		return true
 	default:
 		return false
 	}
+}
+
+// AnyDDL reports whether any statement of a script is a DDL (#580).
+func AnyDDL(statements []string) bool {
+	for _, sql := range statements {
+		if IsDDL(sql) {
+			return true
+		}
+	}
+	return false
 }
