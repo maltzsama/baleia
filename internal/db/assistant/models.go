@@ -722,6 +722,19 @@ type User struct {
 	Locale              *string            `json:"locale"`
 }
 
+type WorkloadRule struct {
+	ID        pgtype.UUID        `json:"id"`
+	Position  int32              `json:"position"`
+	Enabled   bool               `json:"enabled"`
+	Match     []byte             `json:"match"`
+	Class     string             `json:"class"`
+	MaxClass  *string            `json:"max_class"`
+	Weight    int32              `json:"weight"`
+	CreatedBy pgtype.UUID        `json:"created_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Workspace struct {
 	ID                 pgtype.UUID        `json:"id"`
 	Name               string             `json:"name"`
