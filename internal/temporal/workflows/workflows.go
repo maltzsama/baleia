@@ -107,8 +107,10 @@ func QueryExecutionWorkflowV4(ctx workflow.Context, in QueryExecutionInput) erro
 
 	// Managed resource groups hand admission over to Trino (#600): Baleia does
 	// not queue the run itself, so it goes straight to the engine, where
-	// Trino's resource group holds it. The agent limit above still applies.
+	// Trino's resource group holds it. The agent limit above still applies. If
+	// that wait marked the run queued, restore it to running first.
 	if in.TrinoResourceGroups {
+		_ = workflow.ExecuteActivity(bookkeepingCtx, activities.MarkAdmitted, activities.MarkAdmittedParams{ExecutionID: in.ExecutionID}).Get(bookkeepingCtx, nil)
 		return runQueryExecution(ctx, in, in.Dialect)
 	}
 
