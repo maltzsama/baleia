@@ -71,6 +71,34 @@ state and capacities (#528, #535), classification (#536), the admission workflow
 (#537, #541), the queue API and UI (#540, #543), metrics (#544) and the E2E (#545);
 rules, fairness and settings follow in #529, #539, #546, #547.
 
+## Managed Trino resource groups (A-5, #553)
+
+Baleia can generate Trino's `resource-groups.json` from the same capacities and
+rules it uses for its own admission, through Trino's `db` configuration
+manager. The goal is that Trino's queue becomes the one that holds Baleia's
+Trino runs, so the same run is never queued twice.
+
+**Double queueing is avoided by an explicit handover, per engine:**
+
+- While managed resource groups are off (today), Baleia's admission workflow is
+  the queue for every engine, and Trino only sees the class tag.
+- When an admin turns managed resource groups on for an engine, Baleia stops
+  granting slots from its own per-class queue for that engine: the admission
+  workflow forwards the run to Trino and lets Trino's resource group hold it.
+  Baleia keeps only fairness across workspaces and the per-agent limit, which
+  Trino cannot express.
+- The switch is per engine and reversible without a restart. Turning it off
+  makes Baleia's queue the authority again. A run never waits in both queues
+  at once.
+
+The generated groups mirror the API's capacities (`hardConcurrencyLimit`,
+`maxQueued`, `softMemoryLimit`) and the rules' classes; selectors match
+`baleia.class`. The configuration manager reloads without restarting Trino.
+
+The breakdown is tracked as #598 (generate and validate the document), #599
+(configure and reload), #600 (hand over admission) and #601 (flag, docs, E2E
+and rollback).
+
 ## Alternatives considered
 
 - **A Postgres queue** (`execution_queue`, `FOR UPDATE SKIP LOCKED`, leases with
