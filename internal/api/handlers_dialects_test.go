@@ -62,8 +62,11 @@ func TestListDialectFunctions(t *testing.T) {
 	}
 	found := false
 	for _, f := range ok.Body {
-		if f.Name == "date_trunc" && f.Kind == "function" {
+		if f.Name == "date_trunc" {
 			found = true
+			if !f.Call {
+				t.Fatalf("date_trunc = %+v", f)
+			}
 		}
 	}
 	if !found {

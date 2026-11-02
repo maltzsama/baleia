@@ -2284,6 +2284,8 @@ type Dialect struct {
 
 // DialectFunction defines model for DialectFunction.
 type DialectFunction struct {
+	// Call False for a keyword-like special form written without parentheses (current_date)
+	Call        bool    `json:"call"`
 	Description *string `json:"description,omitempty"`
 
 	// Kind function, aggregate or operator

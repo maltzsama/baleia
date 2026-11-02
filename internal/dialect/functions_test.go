@@ -12,9 +12,12 @@ func TestFunctionReferences(t *testing.T) {
 	for _, r := range refs {
 		if r.Name == "date_trunc" {
 			found = true
-			if r.Kind != "function" {
-				t.Fatalf("kind = %q", r.Kind)
+			if r.Kind != "function" || !r.Call {
+				t.Fatalf("date_trunc = %+v", r)
 			}
+		}
+		if r.Name == "current_date" && r.Call {
+			t.Fatal("current_date is a special form without parentheses")
 		}
 	}
 	if !found {

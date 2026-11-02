@@ -449,8 +449,8 @@ describe('QueryEditor', () => {
 		server.use(
 			http.get('/dialects/{name}/functions', ({ response }) =>
 				response(200).json([
-					{ name: 'date_trunc', kind: 'function' },
-					{ name: 'count', kind: 'function' }
+					{ name: 'date_trunc', kind: 'function', call: true },
+					{ name: 'count', kind: 'function', call: true }
 				])
 			)
 		);

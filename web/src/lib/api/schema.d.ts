@@ -4779,6 +4779,8 @@ export interface components {
             /** @description function, aggregate or operator */
             kind: string;
             description?: string;
+            /** @description False for a keyword-like special form written without parentheses (current_date) */
+            call: boolean;
         };
         SplitStatementsRequest: {
             sql: string;

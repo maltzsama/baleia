@@ -1781,12 +1781,13 @@ components:
 
     DialectFunction:
       type: object
-      required: [name, kind]
+      required: [name, kind, call]
       properties:
         name: { type: string }
         signature: { type: string, description: "The call shape, when the engine exposes it" }
         kind: { type: string, description: "function, aggregate or operator" }
         description: { type: string }
+        call: { type: boolean, description: "False for a keyword-like special form written without parentheses (current_date)" }
 
     SplitStatementsRequest:
       type: object

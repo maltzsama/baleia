@@ -585,11 +585,12 @@
 	// Insert a function from the reference panel with the cursor inside the
 	// parentheses (#556).
 	function insertFunction(fn: DialectFunction) {
-		if (!editorView) return;
+		if (!editorView || activeTab.readOnly) return;
 		const { from, to } = editorView.state.selection.main;
+		const insert = fn.call ? `${fn.name}()` : fn.name;
 		editorView.dispatch({
-			changes: { from, to, insert: `${fn.name}()` },
-			selection: { anchor: from + fn.name.length + 1 },
+			changes: { from, to, insert },
+			selection: { anchor: from + fn.name.length + (fn.call ? 1 : 0) },
 			userEvent: 'input.complete'
 		});
 		editorView.focus();

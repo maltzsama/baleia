@@ -224,7 +224,7 @@ func (h *CatalogHandlers) ListDialectFunctions(ctx context.Context, request List
 	refs := dialect.FunctionReferences(request.Name)
 	body := make([]DialectFunction, 0, len(refs))
 	for _, r := range refs {
-		f := DialectFunction{Name: r.Name, Kind: r.Kind}
+		f := DialectFunction{Name: r.Name, Kind: r.Kind, Call: r.Call}
 		if r.Signature != "" {
 			sig := r.Signature
 			f.Signature = &sig
