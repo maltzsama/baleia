@@ -314,3 +314,20 @@ func TestHistory_FiltersByWorkloadClass(t *testing.T) {
 		t.Fatalf("queue reason = %v, want rule:x", queue.Reason)
 	}
 }
+
+// TestHistory_RejectsUnknownClass: the class filter only accepts the closed
+// enum; a bogus value is a validation error, not an empty page (#589).
+func TestHistory_RejectsUnknownClass(t *testing.T) {
+	t.Parallel()
+	f := newHistoryFixture(t)
+	resp, err := f.h.ListExecutions(ctxAs(f.owner.String(), "member"), ListExecutionsRequestObject{
+		Id:     f.ws,
+		Params: ListExecutionsParams{Class: classPtr(ListExecutionsParamsClass("bogus"))},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(ListExecutions422JSONResponse); !ok {
+		t.Fatalf("response = %T, want 422", resp)
+	}
+}

@@ -51,6 +51,10 @@ type QueryExecutionInput struct {
 	// Weight is the run's fairness weight within its class (#546). Rules may
 	// set it; zero means 1.
 	Weight int
+	// AgentMaxConcurrent is the agent policy's per-agent concurrency limit,
+	// enforced by admission instead of refusing the run (#589). Zero when the
+	// run is not an agent's.
+	AgentMaxConcurrent int
 }
 
 // defaultExecutionTimeout caps a script when the input names no cap.
@@ -88,6 +92,7 @@ func QueryExecutionWorkflowV4(ctx workflow.Context, in QueryExecutionInput) erro
 		Class:       in.Class,
 		FairnessKey: in.FairnessKey,
 		Weight:      max(in.Weight, 1),
+		MaxRunning:  in.AgentMaxConcurrent,
 	}); err != nil {
 		return admissionFailed(ctx, in, AdmissionFailure{Code: AdmissionFailureQueueFull, Message: "the engine's admission queue is unreachable"})
 	}

@@ -61,6 +61,10 @@ type AdmissionRequest struct {
 	FairnessKey  string
 	Weight       int
 	QueueTimeout time.Duration
+	// MaxRunning caps how many runs of this fairness key may run in the class
+	// at once (#589). Zero means only the class capacity applies. Agent runs
+	// set it to the policy's MaxConcurrentQueries.
+	MaxRunning int
 }
 
 // AdmissionRelease frees the slot of a finished, failed or cancelled run.
@@ -102,8 +106,10 @@ type AdmissionQueued struct {
 	Class       queryengine.WorkloadClass
 	FairnessKey string
 	Weight      int
-	EnqueuedAt  time.Time
-	Deadline    time.Time
+	// MaxRunning is the per-key cap the request carried (#589).
+	MaxRunning int
+	EnqueuedAt time.Time
+	Deadline   time.Time
 }
 
 // AdmissionFailure tells a waiting execution why it will not run.
@@ -330,6 +336,7 @@ func (s *AdmissionState) request(now time.Time, req AdmissionRequest, fail func(
 		Class:       req.Class,
 		FairnessKey: req.FairnessKey,
 		Weight:      req.Weight,
+		MaxRunning:  req.MaxRunning,
 		EnqueuedAt:  now,
 		Deadline:    deadline,
 	})
@@ -401,6 +408,11 @@ func (s *AdmissionState) bestInClass(class queryengine.WorkloadClass) int {
 	bestRunning, bestWeight := 0, 1
 	for i, q := range s.Queued {
 		if q.Class != class {
+			continue
+		}
+		// A per-key cap (an agent's MaxConcurrentQueries, #589) keeps that
+		// key's runs waiting even when the class has a free slot.
+		if q.MaxRunning > 0 && runningByKey[q.FairnessKey] >= q.MaxRunning {
 			continue
 		}
 		weight := q.Weight

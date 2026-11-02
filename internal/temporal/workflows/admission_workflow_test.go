@@ -348,3 +348,32 @@ func TestAdmissionWorkflow_ThrottleAppliesLive(t *testing.T) {
 	require.Equal(t, "i", (*admitted)[0].ExecutionID, "only interactive is admitted while throttled")
 	require.Equal(t, "h", (*admitted)[1].ExecutionID, "heavy starts once the gate lifts")
 }
+
+// TestAdmissionState_PerKeyCap: an agent's MaxConcurrentQueries caps its own
+// runs inside the class; another key can use the free slot, and the capped
+// run starts when its key frees one (#589).
+func TestAdmissionState_PerKeyCap(t *testing.T) {
+	t.Parallel()
+	s := admissionState()
+	s.Capacities = []AdmissionCapacity{
+		{Class: queryengine.ClassInteractive, MaxRunning: 3, MaxQueued: 10, QueueTimeout: time.Hour},
+	}
+	now := time.Unix(0, 0)
+	failures, fail := collectFailures()
+
+	s.request(now, AdmissionRequest{ExecutionID: "a1", Class: queryengine.ClassInteractive, FairnessKey: "A", MaxRunning: 1}, fail)
+	require.Len(t, s.admitAll(), 1)
+	s.request(now.Add(time.Second), AdmissionRequest{ExecutionID: "a2", Class: queryengine.ClassInteractive, FairnessKey: "A", MaxRunning: 1}, fail)
+	s.request(now.Add(2*time.Second), AdmissionRequest{ExecutionID: "b1", Class: queryengine.ClassInteractive, FairnessKey: "B"}, fail)
+
+	leases := s.admitAll()
+	require.Len(t, leases, 1)
+	require.Equal(t, "b1", leases[0].ExecutionID, "the capped key must not take the next slot")
+	require.Len(t, s.Queued, 1, "the capped run waits")
+
+	s.release("a1")
+	leases = s.admitAll()
+	require.Len(t, leases, 1)
+	require.Equal(t, "a2", leases[0].ExecutionID, "the capped run starts when its key frees a slot")
+	require.Empty(t, *failures)
+}

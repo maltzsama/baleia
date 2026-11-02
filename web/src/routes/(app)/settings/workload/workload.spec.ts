@@ -158,3 +158,18 @@ describe('settings workload page', () => {
 		expect(saved).toBe(0);
 	});
 });
+
+it('shows an error when the queues cannot be loaded', async () => {
+	server.use(
+		http.get('/engines', ({ response }) => response(200).json([makeEngine({ id: ENGINE })])),
+		http.get('/workload-rules', ({ response }) => response(200).json([])),
+		http.get('/engines/{id}/queues', ({ response }) =>
+			response(403).json({ code: 'forbidden', message: 'not allowed' })
+		)
+	);
+	const me = makeMe();
+	me.global_actions = [...(me.global_actions ?? []), 'manage_workload'];
+	renderPage(WorkloadPage, { me, url: '/settings/workload' });
+
+	expect(await screen.findByText('Could not load the workload settings')).toBeTruthy();
+});
