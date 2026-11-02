@@ -73,6 +73,12 @@ export function appearanceFor(kind: string, family?: string): KindAppearance {
 	);
 }
 
+// hasQueryProfile: the engine exposes a per-query profile (Trino). Kept here
+// so no other file spells the kind (#557, FD6).
+export function hasQueryProfile(kind: string | null | undefined): boolean {
+	return kind === 'trino';
+}
+
 // Connection kinds whose catalogs get Iceberg table health and maintenance
 // (#500): the same list the health pass reads (ListEnabledIcebergCatalogs).
 const tableHealthKinds = ['polaris', 'iceberg', 'nessie'];

@@ -66,8 +66,13 @@ func TestIngest_CompletedEvents(t *testing.T) {
 	if ok.OutputRows == nil || *ok.OutputRows != 1 || ok.ErrorMessage != nil {
 		t.Errorf("finished output = %v rows, error %v", ok.OutputRows, ok.ErrorMessage)
 	}
-	if strings.Contains(string(ok.RawTrinoPayload), "plan") || strings.Contains(string(ok.RawTrinoPayload), "SELECT") {
-		t.Errorf("stored payload carries the event: %s", ok.RawTrinoPayload)
+	payload := string(ok.RawTrinoPayload)
+	if strings.Contains(payload, `"plan"`) || strings.Contains(payload, "operatorSummaries") || strings.Contains(payload, "SELECT") {
+		t.Errorf("stored payload carries the event: %s", payload)
+	}
+	// The metadata-sync profile carries the timeline, never the plan (#532).
+	if !strings.Contains(payload, `"queuedMs"`) || !strings.Contains(payload, `"planningMs"`) {
+		t.Errorf("payload lacks the timeline: %s", payload)
 	}
 
 	failed := r.rows[1]

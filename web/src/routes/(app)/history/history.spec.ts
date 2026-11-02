@@ -40,11 +40,60 @@ function makeExecution(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function makeDetails(overrides: Record<string, unknown> = {}) {
+	return {
+		execution_id: EXEC,
+		engine_kind: 'trino',
+		duration_ms: 120,
+		timeline: {
+			queue_wait_ms: 5,
+			engine_queued_ms: 10,
+			planning_ms: 20,
+			execution_ms: 85,
+			total_ms: 120
+		},
+		statements: [
+			{
+				id: '00000000-0000-0000-0000-0000000000f1',
+				position: 1,
+				sql: 'SELECT 1',
+				status: 'finished' as const,
+				engine_query_id: 'q1',
+				rows_returned: 1,
+				result_bytes: 10,
+				duration_ms: 12,
+				profile: {
+					queued_ms: 10,
+					planning_ms: 20,
+					execution_ms: 85,
+					cpu_ms: 7,
+					peak_memory_bytes: 4096,
+					spilled_bytes: 0,
+					input_bytes: 100,
+					input_rows: 5,
+					output_bytes: 10,
+					output_rows: 1,
+					inputs: [
+						{ catalog: 'lake', schema: 'sales', table: 'orders', input_bytes: 100, input_rows: 5 }
+					]
+				}
+			}
+		],
+		...overrides
+	};
+}
+
 describe('history page', () => {
 	beforeEach(() => {
 		workspaceStore.select(makeWorkspace({ id: WS }));
 		setTestUrl('/history');
 		window.history.replaceState(null, '', '/history');
+		// Every drawer open asks for the profile; a test can override it.
+		server.use(
+			http.get('/workspaces/{id}/executions/{execution_id}/details', ({ response }) =>
+				response(200).json(makeDetails())
+			)
+		);
 	});
 
 	it('renders the executions with user, engine and SQL', async () => {
@@ -121,6 +170,68 @@ describe('history page', () => {
 		expect(await screen.findByText('#1')).toBeTruthy();
 		expect(screen.getByRole('button', { name: 'Re-run' })).toBeTruthy();
 		expect(screen.getByRole('button', { name: 'Results' })).toBeTruthy();
+		// The Trino profile: timeline and per-statement facts (#557).
+		expect(await screen.findByText('Timeline')).toBeTruthy();
+		expect(screen.getByText(/Engine queued/)).toBeTruthy();
+		expect(screen.getByText(/CPU/)).toBeTruthy();
+		expect(screen.getByText(/lake\.sales\.orders/)).toBeTruthy();
+	});
+
+	it('states that a direct engine has no profile', async () => {
+		server.use(
+			http.get('/workspaces/{id}/executions', ({ response }) =>
+				response(200).json({ data: [makeExecution()], next_cursor: null })
+			),
+			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>
+				response(200).json([
+					{
+						id: '00000000-0000-0000-0000-0000000000f1',
+						execution_id: EXEC,
+						position: 1,
+						sql: 'SELECT 1',
+						status: 'finished',
+						duration_ms: 12,
+						rows_returned: 1,
+						result_count: 0
+					}
+				])
+			),
+			http.get('/workspaces/{id}/executions/{execution_id}/details', ({ response }) =>
+				response(200).json(
+					makeDetails({
+						engine_kind: 'postgresql',
+						timeline: {
+							queue_wait_ms: null,
+							engine_queued_ms: null,
+							planning_ms: null,
+							execution_ms: null,
+							total_ms: 120
+						},
+						statements: [
+							{
+								id: '00000000-0000-0000-0000-0000000000f1',
+								position: 1,
+								sql: 'SELECT 1',
+								status: 'finished' as const,
+								rows_returned: 1,
+								result_bytes: 10,
+								duration_ms: 12,
+								profile: null
+							}
+						]
+					})
+				)
+			)
+		);
+
+		render(HistoryPage);
+		await fireEvent.click(await screen.findByText('SELECT * FROM orders'));
+
+		expect(
+			await screen.findByText(
+				'This engine reports duration and rows only; it exposes no query profile.'
+			)
+		).toBeTruthy();
 	});
 
 	// #405: a running execution is cancelled from the list, after a

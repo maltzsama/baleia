@@ -875,6 +875,24 @@ func (q *Queries) ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTri
 	return items, nil
 }
 
+const setTrinoQueryProfile = `-- name: SetTrinoQueryProfile :exec
+UPDATE trino_query_snapshots
+SET raw_trino_payload = $2
+WHERE trino_query_id = $1
+`
+
+type SetTrinoQueryProfileParams struct {
+	TrinoQueryID    string `json:"trino_query_id"`
+	RawTrinoPayload []byte `json:"raw_trino_payload"`
+}
+
+// The detail payload Lens fetched from /v1/query/{id} (#532): the list entry
+// has no timeline, so the detail replaces the stored payload.
+func (q *Queries) SetTrinoQueryProfile(ctx context.Context, arg SetTrinoQueryProfileParams) error {
+	_, err := q.db.Exec(ctx, setTrinoQueryProfile, arg.TrinoQueryID, arg.RawTrinoPayload)
+	return err
+}
+
 const updateMaintenanceRun = `-- name: UpdateMaintenanceRun :one
 UPDATE maintenance_runs
 SET status = $1::text, error_code = $2::text,

@@ -589,6 +589,9 @@ type Querier interface {
 	// Persists the engine's handle of a running statement as soon as it is known,
 	// so the API can cancel it from another process.
 	SetStatementQueryHandle(ctx context.Context, arg SetStatementQueryHandleParams) error
+	// The detail payload Lens fetched from /v1/query/{id} (#532): the list entry
+	// has no timeline, so the detail replaces the stored payload.
+	SetTrinoQueryProfile(ctx context.Context, arg SetTrinoQueryProfileParams) error
 	SetWorkspaceDefaultTarget(ctx context.Context, arg SetWorkspaceDefaultTargetParams) error
 	// Whether two users are both members of one workspace, by the membership
 	// rule of CheckWorkspaceAccess (#432).

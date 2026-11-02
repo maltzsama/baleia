@@ -74,6 +74,33 @@ func TestQueryInfoDecodesTrino482(t *testing.T) {
 	}
 }
 
+// TestQueryInfoResourcesDetail: the /v1/query/{id} detail carries the timeline,
+// spilled bytes and the per-input-table reads (#532).
+func TestQueryInfoResourcesDetail(t *testing.T) {
+	t.Parallel()
+	const detail = `{"queryId":"q1","state":"FINISHED","queryStats":{
+		"queuedTime":"10.00ms","analysisTime":"3.00ms","planningTime":"20.00ms","executionTime":"65.00ms",
+		"peakUserMemoryReservation":"4.00kB","spilledDataSize":"1.00kB",
+		"processedInputPositions":100,"processedInputDataSize":"5.00kB",
+		"outputPositions":10,"outputDataSize":"200B",
+		"inputs":[{"catalogName":"lake","schema":"sales","table":"orders",
+		           "physicalInputBytes":"4.00kB","physicalInputPositions":90}]}}`
+	var q QueryInfo
+	if err := json.Unmarshal([]byte(detail), &q); err != nil {
+		t.Fatal(err)
+	}
+	r := q.Resources()
+	if r.QueuedMs == nil || *r.QueuedMs != 10 || r.PlanningMs == nil || *r.PlanningMs != 20 || r.ExecutionMs == nil || *r.ExecutionMs != 65 {
+		t.Fatalf("timeline = %+v", r)
+	}
+	if r.SpilledBytes == nil || *r.SpilledBytes != 1024 || r.PeakMemoryBytes == nil || *r.PeakMemoryBytes != 4096 {
+		t.Fatalf("memory/spill = %+v", r)
+	}
+	if len(r.Inputs) != 1 || r.Inputs[0].Table != "orders" || r.Inputs[0].Bytes == nil || *r.Inputs[0].Bytes != 4096 || r.Inputs[0].Rows == nil || *r.Inputs[0].Rows != 90 {
+		t.Fatalf("inputs = %+v", r.Inputs)
+	}
+}
+
 func TestParseUnits(t *testing.T) {
 	t.Parallel()
 	for in, want := range map[string]time.Duration{

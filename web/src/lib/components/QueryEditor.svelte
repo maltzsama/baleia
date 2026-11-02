@@ -42,6 +42,8 @@
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
+	import Drawer from '$lib/ui/Drawer.svelte';
+	import ExecutionDetails from '$lib/run/ExecutionDetails.svelte';
 	import ResultsPanel from './ResultsPanel.svelte';
 	import RunPanel from '$lib/run/RunPanel.svelte';
 	import { applyEvent, initialRunState, type RunState } from '$lib/run/reducer';
@@ -101,6 +103,7 @@
 	let namespacesError = $state('');
 
 	let saveOpen = $state(false);
+	let detailsOpen = $state(false);
 	let saveMode = $state<'save' | 'copy'>('save');
 	let savePrefill = $state('');
 	let conflict = $state<Conflict | null>(null);
@@ -1228,6 +1231,7 @@
 				oncancel={cancelExecution}
 				onrerun={rerun}
 				onpick={() => editorView?.focus()}
+				ondetails={() => (detailsOpen = true)}
 			/>
 			<!-- A run that ended without any result set (a failed statement, a DDL
 			     or DML) has nothing to show below the run panel (#387). A SELECT
@@ -1239,6 +1243,12 @@
 				</div>
 			{/if}
 		</div>
+	{/if}
+
+	{#if activeTab.executionId}
+		<Drawer size="lg" bind:open={detailsOpen} title={m.history_execution_details()}>
+			<ExecutionDetails {workspaceId} executionId={activeTab.executionId} />
+		</Drawer>
 	{/if}
 
 	<SaveQueryDialog

@@ -76,11 +76,26 @@ type event struct {
 		Schema  *string `json:"schema"`
 	} `json:"context"`
 	Statistics *struct {
-		CPUTime            float64 `json:"cpuTime"`
-		WallTime           float64 `json:"wallTime"`
-		PhysicalInputBytes int64   `json:"physicalInputBytes"`
-		OutputRows         int64   `json:"outputRows"`
+		CPUTime             float64 `json:"cpuTime"`
+		WallTime            float64 `json:"wallTime"`
+		QueuedTime          float64 `json:"queuedTime"`
+		AnalysisTime        float64 `json:"analysisTime"`
+		PlanningTime        float64 `json:"planningTime"`
+		ExecutionTime       float64 `json:"executionTime"`
+		PhysicalInputBytes  int64   `json:"physicalInputBytes"`
+		PhysicalInputRows   int64   `json:"physicalInputRows"`
+		OutputBytes         int64   `json:"outputBytes"`
+		OutputRows          int64   `json:"outputRows"`
+		PeakUserMemoryBytes int64   `json:"peakUserMemoryBytes"`
+		SpilledDataSize     int64   `json:"spilledDataSize"`
 	} `json:"statistics"`
+	IO struct {
+		Inputs []struct {
+			CatalogName string `json:"catalogName"`
+			Schema      string `json:"schema"`
+			Table       string `json:"table"`
+		} `json:"inputs"`
+	} `json:"ioMetadata"`
 	CreateTime  time.Time `json:"createTime"`
 	FailureInfo *struct {
 		FailureMessage string `json:"failureMessage"`
@@ -145,11 +160,60 @@ func snapshot(e event) db.UpsertTrinoQuerySnapshotParams {
 		OutputRows:         &output,
 		ErrorMessage:       errMsg,
 	}
-	p.RawTrinoPayload, _ = json.Marshal(struct {
-		Source string `json:"source"`
-		State  string `json:"state"`
-	}{Source: "query_completed_event", State: e.Metadata.QueryState})
+	p.RawTrinoPayload, _ = json.Marshal(profilePayload{
+		Source: "query_completed_event", State: e.Metadata.QueryState,
+		QueuedMs: ms64(st.QueuedTime), AnalysisMs: ms64(st.AnalysisTime),
+		PlanningMs: ms64(st.PlanningTime), ExecutionMs: ms64(st.ExecutionTime),
+		CPUMs: ms64(st.CPUTime), PeakMemoryBytes: st.PeakUserMemoryBytes,
+		SpilledBytes: st.SpilledDataSize, InputBytes: st.PhysicalInputBytes,
+		InputRows: st.PhysicalInputRows, OutputBytes: st.OutputBytes, OutputRows: st.OutputRows,
+		Inputs: inputNames(e.IO.Inputs),
+	})
 	return p
+}
+
+// profilePayload is the snapshot's own execution profile (#532). It is never
+// the raw event: that carries plans and literals.
+type profilePayload struct {
+	Source          string      `json:"source"`
+	State           string      `json:"state"`
+	QueuedMs        int64       `json:"queuedMs"`
+	AnalysisMs      int64       `json:"analysisMs"`
+	PlanningMs      int64       `json:"planningMs"`
+	ExecutionMs     int64       `json:"executionMs"`
+	CPUMs           int64       `json:"cpuMs"`
+	PeakMemoryBytes int64       `json:"peakMemoryBytes"`
+	SpilledBytes    int64       `json:"spilledBytes"`
+	InputBytes      int64       `json:"inputBytes"`
+	InputRows       int64       `json:"inputRows"`
+	OutputBytes     int64       `json:"outputBytes"`
+	OutputRows      int64       `json:"outputRows"`
+	Inputs          []inputName `json:"inputs,omitempty"`
+}
+
+// inputName is one input table the event names; per-table sizes come from
+// /v1/query/{id} when Lens has them.
+type inputName struct {
+	Catalog string `json:"catalog"`
+	Schema  string `json:"schema"`
+	Table   string `json:"table"`
+}
+
+func inputNames(in []struct {
+	CatalogName string `json:"catalogName"`
+	Schema      string `json:"schema"`
+	Table       string `json:"table"`
+}) []inputName {
+	out := make([]inputName, 0, len(in))
+	for _, i := range in {
+		out = append(out, inputName{Catalog: i.CatalogName, Schema: i.Schema, Table: i.Table})
+	}
+	return out
+}
+
+// ms64 converts Trino's seconds to whole milliseconds.
+func ms64(seconds float64) int64 {
+	return int64(math.Round(seconds * 1000))
 }
 
 // millis converts Trino's seconds to whole milliseconds; nil past int32.

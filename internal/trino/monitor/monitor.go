@@ -29,6 +29,12 @@ func New(c *trino.Client) *Monitor { return &Monitor{c: c} }
 // ListQueries returns the coordinator's query list.
 func (m *Monitor) ListQueries(ctx context.Context) ([]QueryInfo, error) { return m.c.ListQueries(ctx) }
 
+// GetQuery returns one query's detail: the timeline, spilled bytes and the
+// per-input-table reads the list omits (#407, #532).
+func (m *Monitor) GetQuery(ctx context.Context, queryID string) (*QueryInfo, error) {
+	return m.c.GetQuery(ctx, queryID)
+}
+
 // ClusterStats returns the coordinator's cluster summary.
 func (m *Monitor) ClusterStats(ctx context.Context) (*ClusterStats, error) {
 	return m.c.GetClusterStats(ctx)

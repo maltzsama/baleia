@@ -38,6 +38,13 @@ RETURNING *;
 -- name: GetTrinoQuerySnapshot :one
 SELECT * FROM trino_query_snapshots WHERE trino_query_id = $1;
 
+-- name: SetTrinoQueryProfile :exec
+-- The detail payload Lens fetched from /v1/query/{id} (#532): the list entry
+-- has no timeline, so the detail replaces the stored payload.
+UPDATE trino_query_snapshots
+SET raw_trino_payload = $2
+WHERE trino_query_id = $1;
+
 -- name: ListTrinoQuerySnapshots :many
 SELECT * FROM trino_query_snapshots
 ORDER BY created_at DESC

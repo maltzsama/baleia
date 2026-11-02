@@ -2924,6 +2924,72 @@ components:
         admitted_at: { type: string, format: date-time, nullable: true }
         wait_ms: { type: integer }
 
+    ExecutionDetails:
+      type: object
+      required: [execution_id, statements, timeline]
+      properties:
+        execution_id: { type: string, format: uuid }
+        engine_kind: { type: string, nullable: true, description: "The engine of the target; a Trino run has a profile" }
+        duration_ms: { type: integer, nullable: true }
+        timeline: { $ref: "#/components/schemas/ExecutionTimeline" }
+        statements:
+          type: array
+          items: { $ref: "#/components/schemas/ExecutionStatement" }
+
+    ExecutionTimeline:
+      type: object
+      description: "The run's phases, in milliseconds; a phase is null when the engine did not report it."
+      properties:
+        queue_wait_ms: { type: integer, nullable: true, description: "Time in Baleia's queue (A2)" }
+        engine_queued_ms: { type: integer, nullable: true, description: "Time queued inside the engine" }
+        planning_ms: { type: integer, nullable: true }
+        execution_ms: { type: integer, nullable: true }
+        total_ms: { type: integer, nullable: true, description: "The execution's recorded duration" }
+
+    ExecutionStatement:
+      type: object
+      required: [id, position, sql, status]
+      properties:
+        id: { type: string, format: uuid }
+        position: { type: integer }
+        sql: { type: string }
+        status:
+          type: string
+          enum: [pending, running, finished, failed, cancelled, skipped]
+        engine_query_id: { type: string, nullable: true }
+        rows_returned: { type: integer, nullable: true }
+        result_bytes: { type: integer, nullable: true }
+        duration_ms: { type: integer, nullable: true }
+        profile: { $ref: "#/components/schemas/ExecutionProfile" }
+
+    ExecutionProfile:
+      type: object
+      description: "What the engine reported about one statement; null for a direct engine."
+      properties:
+        queued_ms: { type: integer, nullable: true }
+        analysis_ms: { type: integer, nullable: true }
+        planning_ms: { type: integer, nullable: true }
+        execution_ms: { type: integer, nullable: true }
+        cpu_ms: { type: integer, nullable: true }
+        peak_memory_bytes: { type: integer, nullable: true }
+        spilled_bytes: { type: integer, nullable: true }
+        input_bytes: { type: integer, nullable: true }
+        input_rows: { type: integer, nullable: true }
+        output_bytes: { type: integer, nullable: true }
+        output_rows: { type: integer, nullable: true }
+        inputs:
+          type: array
+          items: { $ref: "#/components/schemas/ExecutionInput" }
+
+    ExecutionInput:
+      type: object
+      properties:
+        catalog: { type: string }
+        schema: { type: string }
+        table: { type: string }
+        input_bytes: { type: integer, nullable: true }
+        input_rows: { type: integer, nullable: true }
+
     EngineQueues:
       type: object
       required: [engine_id, classes]
@@ -7878,6 +7944,31 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Execution" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/executions/{execution_id}/details:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: execution_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Executions]
+      operationId: getExecutionDetails
+      summary: "Per-statement rows, bytes and duration, with the engine profile"
+      description: >
+        A finished Trino run carries the timeline (engine queued, planning,
+        execution), CPU, peak memory, spilled bytes and per-input-table reads
+        Lens recorded for each statement. A direct engine reports duration and
+        rows only and has no profile.
+      responses:
+        "200":
+          description: "Execution details"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExecutionDetails" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 

@@ -27,7 +27,16 @@ import (
 // *trino/monitor.Monitor implements it.
 type lensMonitor interface {
 	ListQueries(ctx context.Context) ([]monitor.QueryInfo, error)
+	GetQuery(ctx context.Context, queryID string) (*monitor.QueryInfo, error)
 	ClusterStats(ctx context.Context) (*monitor.ClusterStats, error)
+}
+
+// queryProfileWindow bounds the detail fetch: only a recently finished query
+// needs it; an older one already has its profile stored (#532).
+const queryProfileWindow = 15 * time.Minute
+
+func isTerminalState(state string) bool {
+	return state == "FINISHED" || state == "FAILED" || state == "CANCELED"
 }
 
 type LensPollTrinoQueriesParams struct{}
@@ -53,11 +62,25 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 		return err
 	}
 
-	for _, q := range queries {
+	for _, listed := range queries {
 		// Catalog DDL and the cluster poller's own statement are not user
 		// activity (monitor.Observable, I4/CR-017).
-		if !monitor.Observable(q.Query) {
+		if !monitor.Observable(listed.Query) {
 			continue
+		}
+		q := listed
+		createdAt, ok := q.CreatedAt()
+		if !ok {
+			createdAt = time.Now()
+		}
+		// The list entry has no timeline; fetch the detail for a query that just
+		// finished so its profile is stored (#532). Older ones already have it.
+		var detail []byte
+		if isTerminalState(q.State) && time.Since(createdAt) < queryProfileWindow {
+			if d, derr := a.monitor.GetQuery(ctx, q.QueryID); derr == nil {
+				q = *d
+				detail, _ = json.Marshal(q)
+			}
 		}
 
 		var elapsedMs *int32
@@ -78,11 +101,6 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 		}
 
 		rawPayload, _ := json.Marshal(q)
-
-		createdAt, ok := q.CreatedAt()
-		if !ok {
-			createdAt = time.Now()
-		}
 
 		state := monitor.SnapshotState(q.State)
 		origin := "trino_direct"
@@ -106,6 +124,13 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 		})
 		if err != nil {
 			logger.Error("failed to upsert query snapshot", "query_id", q.QueryID, "err", err)
+		}
+		if detail != nil {
+			if err := a.queries.SetTrinoQueryProfile(ctx, db.SetTrinoQueryProfileParams{
+				TrinoQueryID: q.QueryID, RawTrinoPayload: detail,
+			}); err != nil {
+				logger.Error("failed to store query profile", "query_id", q.QueryID, "err", err)
+			}
 		}
 	}
 

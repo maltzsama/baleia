@@ -512,6 +512,16 @@ const (
 	ExecutionRequestPriorityBackground ExecutionRequestPriority = "background"
 )
 
+// Defines values for ExecutionStatementStatus.
+const (
+	ExecutionStatementStatusCancelled ExecutionStatementStatus = "cancelled"
+	ExecutionStatementStatusFailed    ExecutionStatementStatus = "failed"
+	ExecutionStatementStatusFinished  ExecutionStatementStatus = "finished"
+	ExecutionStatementStatusPending   ExecutionStatementStatus = "pending"
+	ExecutionStatementStatusRunning   ExecutionStatementStatus = "running"
+	ExecutionStatementStatusSkipped   ExecutionStatementStatus = "skipped"
+)
+
 // Defines values for ExploreQueryFiltersOp.
 const (
 	Empty            ExploreQueryFiltersOp = "!="
@@ -1241,8 +1251,8 @@ const (
 
 // Defines values for ImportSpaceBundleParamsMode.
 const (
-	ImportSpaceBundleParamsModeApply  ImportSpaceBundleParamsMode = "apply"
-	ImportSpaceBundleParamsModeDryRun ImportSpaceBundleParamsMode = "dry_run"
+	Apply  ImportSpaceBundleParamsMode = "apply"
+	DryRun ImportSpaceBundleParamsMode = "dry_run"
 )
 
 // Defines values for ListTrashParamsEntityType.
@@ -2525,6 +2535,44 @@ type Execution struct {
 // ExecutionStatus defines model for Execution.Status.
 type ExecutionStatus string
 
+// ExecutionDetails defines model for ExecutionDetails.
+type ExecutionDetails struct {
+	DurationMs *int `json:"duration_ms"`
+
+	// EngineKind The engine of the target; a Trino run has a profile
+	EngineKind  *string              `json:"engine_kind"`
+	ExecutionId openapi_types.UUID   `json:"execution_id"`
+	Statements  []ExecutionStatement `json:"statements"`
+
+	// Timeline The run's phases, in milliseconds; a phase is null when the engine did not report it.
+	Timeline ExecutionTimeline `json:"timeline"`
+}
+
+// ExecutionInput defines model for ExecutionInput.
+type ExecutionInput struct {
+	Catalog    *string `json:"catalog,omitempty"`
+	InputBytes *int    `json:"input_bytes"`
+	InputRows  *int    `json:"input_rows"`
+	Schema     *string `json:"schema,omitempty"`
+	Table      *string `json:"table,omitempty"`
+}
+
+// ExecutionProfile What the engine reported about one statement; null for a direct engine.
+type ExecutionProfile struct {
+	AnalysisMs      *int              `json:"analysis_ms"`
+	CpuMs           *int              `json:"cpu_ms"`
+	ExecutionMs     *int              `json:"execution_ms"`
+	InputBytes      *int              `json:"input_bytes"`
+	InputRows       *int              `json:"input_rows"`
+	Inputs          *[]ExecutionInput `json:"inputs,omitempty"`
+	OutputBytes     *int              `json:"output_bytes"`
+	OutputRows      *int              `json:"output_rows"`
+	PeakMemoryBytes *int              `json:"peak_memory_bytes"`
+	PlanningMs      *int              `json:"planning_ms"`
+	QueuedMs        *int              `json:"queued_ms"`
+	SpilledBytes    *int              `json:"spilled_bytes"`
+}
+
 // ExecutionQueue The workload queue of a run (#399). Present while the execution is `queued`; `position` is only the caller's own position.
 type ExecutionQueue struct {
 	AdmittedAt *time.Time          `json:"admitted_at"`
@@ -2563,6 +2611,24 @@ type ExecutionRequest struct {
 // ExecutionRequestPriority Ask for a lower workload class (#399). It can only lower the class a rule chose, never raise it; the default is one click, interactive.
 type ExecutionRequestPriority string
 
+// ExecutionStatement defines model for ExecutionStatement.
+type ExecutionStatement struct {
+	DurationMs    *int               `json:"duration_ms"`
+	EngineQueryId *string            `json:"engine_query_id"`
+	Id            openapi_types.UUID `json:"id"`
+	Position      int                `json:"position"`
+
+	// Profile What the engine reported about one statement; null for a direct engine.
+	Profile      *ExecutionProfile        `json:"profile,omitempty"`
+	ResultBytes  *int                     `json:"result_bytes"`
+	RowsReturned *int                     `json:"rows_returned"`
+	Sql          string                   `json:"sql"`
+	Status       ExecutionStatementStatus `json:"status"`
+}
+
+// ExecutionStatementStatus defines model for ExecutionStatement.Status.
+type ExecutionStatementStatus string
+
 // ExecutionTarget The target an execution ran on, as recorded when it started
 type ExecutionTarget struct {
 	BindingId     *openapi_types.UUID `json:"binding_id"`
@@ -2574,6 +2640,20 @@ type ExecutionTarget struct {
 	EngineName    *string             `json:"engine_name,omitempty"`
 	ReadOnly      *bool               `json:"read_only,omitempty"`
 	Schema        *string             `json:"schema"`
+}
+
+// ExecutionTimeline The run's phases, in milliseconds; a phase is null when the engine did not report it.
+type ExecutionTimeline struct {
+	// EngineQueuedMs Time queued inside the engine
+	EngineQueuedMs *int `json:"engine_queued_ms"`
+	ExecutionMs    *int `json:"execution_ms"`
+	PlanningMs     *int `json:"planning_ms"`
+
+	// QueueWaitMs Time in Baleia's queue (A2)
+	QueueWaitMs *int `json:"queue_wait_ms"`
+
+	// TotalMs The execution's recorded duration
+	TotalMs *int `json:"total_ms"`
 }
 
 // ExplainRequest defines model for ExplainRequest.

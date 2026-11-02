@@ -1,0 +1,27 @@
+meta {
+  name: Execution Details
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/executions/{{execution_id}}/details
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.statements: isArray
+}
+
+docs {
+  Per-statement rows, bytes and duration, plus the Trino profile Lens recorded
+  (#532): engine queued, planning and execution times, CPU, peak memory,
+  spilled bytes and per-input-table reads. A direct engine reports duration and
+  rows only and has no `profile`.
+}
