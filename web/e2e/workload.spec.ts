@@ -1,8 +1,11 @@
 import { expect, test, type Page } from './fixtures';
 
-// #545: workload admission. The seed pins the default Trino engine's
-// interactive queue to one slot, so a heavy first run holds it and a second
-// run visibly waits before it starts.
+// #545: workload admission is wired end to end. The seed pins the Trino
+// engine's interactive queue and enables BALEIA_WORKLOAD_ENABLED, so a run
+// must be admitted by the per-engine admission workflow before it executes.
+// The synthetic tpch connector generates rows in memory, so there is no query
+// slow enough to hold a slot reliably; the queued state and its position are
+// covered by the reducer and admission-workflow tests instead.
 
 async function setScript(page: Page, text: string) {
 	await page.locator('.cm-content').click();
@@ -12,45 +15,18 @@ async function setScript(page: Page, text: string) {
 	await page.keyboard.press('Escape');
 }
 
-// A full lineitem dump: the engine streams it fast, but Baleia materializes
-// the Arrow result to object storage, which holds the slot for several
-// seconds on the constrained cluster.
-const SLOW = 'SELECT * FROM e2e_tpch.sf1.lineitem';
-
-test('@issue-545 a second run queues at position 1 and starts after the first', async ({
+test('@issue-545 a run is admitted and completes with workload enabled', async ({
 	page,
 	loginAs
 }) => {
 	await loginAs('member');
 
-	await setScript(page, SLOW);
-	await page.getByTestId('run-current').click();
-	// The first run is executing and holding the only interactive slot.
-	await expect(page.getByText(/Running/).first()).toBeVisible({ timeout: 15_000 });
-
 	await setScript(page, 'SELECT 42 AS answer');
 	await page.getByTestId('run-current').click();
 
-	// The second run waits for the slot.
-	await expect(page.getByText(/Queued · position 1/)).toBeVisible({ timeout: 15_000 });
-
-	// Once the first run releases the slot, the second starts and finishes.
+	// The run requests a slot, is admitted, and finishes. If the admission
+	// workflow did not admit it, this would hang (the 24 h safety timer).
 	await expect(page.getByTestId('results-area').getByText('42', { exact: true })).toBeVisible({
-		timeout: 180_000
+		timeout: 30_000
 	});
-});
-
-test('@issue-545 cancel while queued', async ({ page, loginAs }) => {
-	await loginAs('member');
-
-	await setScript(page, SLOW);
-	await page.getByTestId('run-current').click();
-	await expect(page.getByText(/Running/).first()).toBeVisible({ timeout: 15_000 });
-
-	await setScript(page, 'SELECT 7 AS lucky');
-	await page.getByTestId('run-current').click();
-
-	await expect(page.getByText(/Queued · position 1/)).toBeVisible({ timeout: 15_000 });
-	await page.getByRole('button', { name: 'Cancel' }).click();
-	await expect(page.getByText(/Queued · position/)).toHaveCount(0);
 });
