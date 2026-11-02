@@ -209,9 +209,13 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 	// the execution workflow can signal it (#399), and resolves the class's
 	// runtime bound for this run (#578).
 	var runtimeTimeout time.Duration
+	trinoResourceGroups := false
 	if s.cfg.WorkloadEnabled && r.Target.EngineID.Valid {
 		resolved := s.ensureAdmissionWorkflow(ctx, r.Target)
 		runtimeTimeout = resolved[class].RuntimeTimeout
+		if eng, err := s.store.GetEngineByID(ctx, r.Target.EngineID); err == nil {
+			trinoResourceGroups = eng.TrinoResourceGroupsEnabled
+		}
 	}
 	// The script is split with the target engine's dialect; Trino when the
 	// kind has none.
@@ -240,6 +244,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 			Dialect:            dialectName,
 			Class:              class,
 			WorkloadEnabled:    s.cfg.WorkloadEnabled,
+			TrinoResourceGroups: trinoResourceGroups,
 			FairnessKey:        fairnessKey(r),
 			Weight:             weight,
 			AgentMaxConcurrent: r.AgentMaxConcurrent,
