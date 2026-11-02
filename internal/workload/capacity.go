@@ -11,10 +11,16 @@ import (
 )
 
 // Capacity is how one (engine, class) queue is allowed to run and wait.
+//
+// QueueTimeout bounds the *wait* before a run enters the engine; RuntimeTimeout
+// bounds how long it may *execute* once admitted. The second is what stops a
+// background run that waited 24h from being killed by the global statement
+// timeout after 30 minutes.
 type Capacity struct {
-	MaxRunning   int
-	MaxQueued    int
-	QueueTimeout time.Duration
+	MaxRunning     int
+	MaxQueued      int
+	QueueTimeout   time.Duration
+	RuntimeTimeout time.Duration
 }
 
 // Defaults returns the conservative capacity of every class for an engine
@@ -23,15 +29,15 @@ type Capacity struct {
 func Defaults(engineClass string) map[queryengine.WorkloadClass]Capacity {
 	if engineClass == "direct" {
 		return map[queryengine.WorkloadClass]Capacity{
-			queryengine.ClassInteractive: {MaxRunning: 4, MaxQueued: 20, QueueTimeout: 5 * time.Minute},
-			queryengine.ClassHeavy:       {MaxRunning: 1, MaxQueued: 10, QueueTimeout: 30 * time.Minute},
-			queryengine.ClassBackground:  {MaxRunning: 1, MaxQueued: 20, QueueTimeout: 24 * time.Hour},
+			queryengine.ClassInteractive: {MaxRunning: 4, MaxQueued: 20, QueueTimeout: 5 * time.Minute, RuntimeTimeout: 5 * time.Minute},
+			queryengine.ClassHeavy:       {MaxRunning: 1, MaxQueued: 10, QueueTimeout: 30 * time.Minute, RuntimeTimeout: 30 * time.Minute},
+			queryengine.ClassBackground:  {MaxRunning: 1, MaxQueued: 20, QueueTimeout: 24 * time.Hour, RuntimeTimeout: 24 * time.Hour},
 		}
 	}
 	return map[queryengine.WorkloadClass]Capacity{
-		queryengine.ClassInteractive: {MaxRunning: 20, MaxQueued: 200, QueueTimeout: 5 * time.Minute},
-		queryengine.ClassHeavy:       {MaxRunning: 3, MaxQueued: 50, QueueTimeout: 30 * time.Minute},
-		queryengine.ClassBackground:  {MaxRunning: 2, MaxQueued: 100, QueueTimeout: 24 * time.Hour},
+		queryengine.ClassInteractive: {MaxRunning: 20, MaxQueued: 200, QueueTimeout: 5 * time.Minute, RuntimeTimeout: 5 * time.Minute},
+		queryengine.ClassHeavy:       {MaxRunning: 3, MaxQueued: 50, QueueTimeout: 30 * time.Minute, RuntimeTimeout: 30 * time.Minute},
+		queryengine.ClassBackground:  {MaxRunning: 2, MaxQueued: 100, QueueTimeout: 24 * time.Hour, RuntimeTimeout: 24 * time.Hour},
 	}
 }
 

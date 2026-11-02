@@ -265,13 +265,14 @@ type EngineCatalogObservation struct {
 }
 
 type EngineQueueCapacity struct {
-	EngineID       pgtype.UUID        `json:"engine_id"`
-	Class          string             `json:"class"`
-	MaxRunning     int32              `json:"max_running"`
-	MaxQueued      int32              `json:"max_queued"`
-	QueueTimeoutMs int64              `json:"queue_timeout_ms"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	EngineID         pgtype.UUID        `json:"engine_id"`
+	Class            string             `json:"class"`
+	MaxRunning       int32              `json:"max_running"`
+	MaxQueued        int32              `json:"max_queued"`
+	QueueTimeoutMs   int64              `json:"queue_timeout_ms"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	RuntimeTimeoutMs *int64             `json:"runtime_timeout_ms"`
 }
 
 type MaintenanceRun struct {
