@@ -552,6 +552,7 @@ type Querier interface {
 	SavedQuerySlugExists(ctx context.Context, arg SavedQuerySlugExistsParams) (bool, error)
 	// Tables and columns of the catalogs the workspace may use whose names are
 	// trigram-similar to q (or contain a word similar to it), best first.
+	// Table-level docs carry the tags and the `certified` tag (B6, #534).
 	SearchMetadata(ctx context.Context, arg SearchMetadataParams) ([]SearchMetadataRow, error)
 	// Trigram search over docs of catalogs the workspace may use. A tag narrows
 	// the result to docs carrying it.

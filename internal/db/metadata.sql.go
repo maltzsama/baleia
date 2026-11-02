@@ -769,42 +769,55 @@ WITH visible AS (
     -- owner's own catalogs in a personal workspace, and the granted ones.
     SELECT c.id FROM catalogs c
     JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = $2::uuid
+    JOIN workspaces w ON w.id = $1::uuid
     WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
     UNION
     SELECT g.catalog_id FROM workspace_catalog_grants g
     JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = $2::uuid AND c.enabled
+    WHERE g.workspace_id = $1::uuid AND c.enabled
 ), granted AS (
     SELECT id FROM visible
-    WHERE $3::uuid IS NULL OR id = $3::uuid
+    WHERE $6::uuid IS NULL OR id = $6::uuid
 ), hits AS (
     SELECT 'table'::text AS kind, t.id AS table_id, t.catalog_id, t.namespace, t.name AS table_name,
            ''::text AS column_name, ''::text AS native_type,
-           similarity(t.name, $4::text)::float8 AS score, length(t.name) AS len
+           similarity(t.name, $7::text)::float8 AS score, length(t.name) AS len
     FROM metadata_tables t
     WHERE t.catalog_id IN (SELECT id FROM granted) AND t.removed_at IS NULL
-      AND (t.name % $4::text OR $4::text <% t.name)
-      AND $5::text IN ('table', 'all')
+      AND (t.name % $7::text OR $7::text <% t.name)
+      AND $8::text IN ('table', 'all')
     UNION ALL
     SELECT 'column', t.id, t.catalog_id, t.namespace, t.name, c.name, c.native_type,
-           similarity(c.name, $4::text)::float8, length(c.name)
+           similarity(c.name, $7::text)::float8, length(c.name)
     FROM metadata_columns c
     JOIN metadata_tables t ON t.id = c.table_id
     WHERE t.catalog_id IN (SELECT id FROM granted) AND t.removed_at IS NULL
-      AND (c.name % $4::text OR $4::text <% c.name)
-      AND $5::text IN ('column', 'all')
+      AND (c.name % $7::text OR $7::text <% c.name)
+      AND $8::text IN ('column', 'all')
 )
 SELECT h.kind, h.table_id, h.catalog_id, h.namespace, h.table_name, h.column_name, h.native_type, h.score,
        (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = h.catalog_id AND r.status = 'finished')::timestamptz AS metadata_synced_at
 FROM hits h
+JOIN metadata_tables t ON t.id = h.table_id
+LEFT JOIN semantic_docs sd
+  ON sd.workspace_id = $1::uuid
+ AND sd.catalog_id = t.catalog_id
+ AND sd.namespace = t.namespace
+ AND sd.table_name = t.name
+ AND sd.column_name IS NULL
+WHERE ($2::text[] IS NULL OR sd.tags @> $2::text[])
+  AND ($3::boolean IS NULL OR COALESCE('certified' = ANY(sd.tags), false) = $3::boolean)
+  AND ($4::text IS NULL OR t.namespace = string_to_array($4::text, '.'))
 ORDER BY h.score DESC, h.len, h.table_name, h.column_name
-LIMIT $1
+LIMIT $5
 `
 
 type SearchMetadataParams struct {
-	Lim         int32       `json:"lim"`
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Tags        []string    `json:"tags"`
+	Certified   *bool       `json:"certified"`
+	Namespace   *string     `json:"namespace"`
+	Lim         int32       `json:"lim"`
 	CatalogID   pgtype.UUID `json:"catalog_id"`
 	Q           string      `json:"q"`
 	Kind        string      `json:"kind"`
@@ -824,10 +837,14 @@ type SearchMetadataRow struct {
 
 // Tables and columns of the catalogs the workspace may use whose names are
 // trigram-similar to q (or contain a word similar to it), best first.
+// Table-level docs carry the tags and the `certified` tag (B6, #534).
 func (q *Queries) SearchMetadata(ctx context.Context, arg SearchMetadataParams) ([]SearchMetadataRow, error) {
 	rows, err := q.db.Query(ctx, searchMetadata,
-		arg.Lim,
 		arg.WorkspaceID,
+		arg.Tags,
+		arg.Certified,
+		arg.Namespace,
+		arg.Lim,
 		arg.CatalogID,
 		arg.Q,
 		arg.Kind,

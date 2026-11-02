@@ -14,6 +14,7 @@
 		type MetadataTableSummary,
 		type TableRef
 	} from '$lib/metadata/client';
+	import { parseSearchFilters } from '$lib/metadata/searchFilters';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -223,10 +224,11 @@
 	let activeResult = $state(0);
 	let retryTick = $state(0);
 	let searchSeq = 0;
-	const searchActive = $derived(search.trim().length >= 2);
+	const parsedSearch = $derived(parseSearchFilters(search));
+	const searchActive = $derived(parsedSearch.text.trim().length >= 2);
 
 	$effect(() => {
-		const q = search.trim();
+		const q = parsedSearch.text.trim();
 		const wid = workspaceId;
 		// Retry is driven by a tick so re-submitting the same query re-runs it.
 		void retryTick;
@@ -246,7 +248,10 @@
 			const seq = ++searchSeq;
 			try {
 				const results = await searchMetadata(wid, q, {
-					kind: 'all',
+					kind: parsedSearch.kind ?? 'all',
+					tags: parsedSearch.tags,
+					certified: parsedSearch.certified,
+					namespace: parsedSearch.namespace,
 					limit: 50,
 					signal: controller.signal
 				});

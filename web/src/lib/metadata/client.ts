@@ -176,6 +176,12 @@ export function searchMetadata(
 		kind?: 'table' | 'column' | 'all';
 		/** Only this catalog; every catalog the workspace may use otherwise. */
 		catalogId?: string;
+		/** Tables whose docs carry every tag. */
+		tags?: string[];
+		/** Filter by the `certified` tag. */
+		certified?: boolean;
+		/** The table's namespace, dot-separated. */
+		namespace?: string;
 		limit?: number;
 		signal?: AbortSignal;
 	} = {}
@@ -188,6 +194,9 @@ export function searchMetadata(
 					q,
 					...(options.kind ? { kind: options.kind } : {}),
 					...(options.catalogId ? { catalog_id: options.catalogId } : {}),
+					...(options.tags?.length ? { tags: options.tags } : {}),
+					...(options.certified != null ? { certified: options.certified } : {}),
+					...(options.namespace ? { namespace: options.namespace } : {}),
 					...(options.limit ? { limit: options.limit } : {})
 				}
 			},

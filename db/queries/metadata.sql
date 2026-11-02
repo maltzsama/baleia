@@ -322,5 +322,16 @@ WITH visible AS (
 SELECT h.kind, h.table_id, h.catalog_id, h.namespace, h.table_name, h.column_name, h.native_type, h.score,
        (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = h.catalog_id AND r.status = 'finished')::timestamptz AS metadata_synced_at
 FROM hits h
+JOIN metadata_tables t ON t.id = h.table_id
+-- Table-level docs carry the tags and the `certified` tag (B6, #534).
+LEFT JOIN semantic_docs sd
+  ON sd.workspace_id = @workspace_id::uuid
+ AND sd.catalog_id = t.catalog_id
+ AND sd.namespace = t.namespace
+ AND sd.table_name = t.name
+ AND sd.column_name IS NULL
+WHERE (sqlc.narg(tags)::text[] IS NULL OR sd.tags @> sqlc.narg(tags)::text[])
+  AND (sqlc.narg(certified)::boolean IS NULL OR COALESCE('certified' = ANY(sd.tags), false) = sqlc.narg(certified)::boolean)
+  AND (sqlc.narg(namespace)::text IS NULL OR t.namespace = string_to_array(sqlc.narg(namespace)::text, '.'))
 ORDER BY h.score DESC, h.len, h.table_name, h.column_name
 LIMIT @lim;
