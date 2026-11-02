@@ -530,7 +530,7 @@ work on that engine.
 
 Runs timed out waiting in the queue over the last 15 minutes.
 
-1. `baleia_execution_queue_timeouts_total{engine,class}` names the engine and class. Raise that
-   class's `max_running`/`max_queued`, or its queue timeout, in Settings › Workload.
+1. `sum by (engine, class) (increase(baleia_execution_queue_timeouts_total[15m]))` names the engine and
+   class. Raise that class's `max_running`/`max_queued`, or its queue timeout, in Settings › Workload.
 2. If the engine is slow (not just busy), check its own health: `baleia_engine_*` and the Lens
    cluster view. A slow engine makes every slot long-lived, so the queue backs up.

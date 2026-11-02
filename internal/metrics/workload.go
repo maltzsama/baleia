@@ -9,6 +9,12 @@ import (
 // Workload records the per-engine admission queues (#399, ADR 0014). The
 // labels are the engine id and the workload class — never a user, a workspace
 // or SQL.
+//
+// The counters and the histogram are cumulative and aggregate correctly across
+// worker replicas. The depth and running gauges are process-local: with more
+// than one worker replica, each replica's scrape reports the last value an
+// activity on that replica wrote, so a per-engine gauge can read stale or
+// split across scrapes until the next admission event lands on that replica.
 type Workload struct {
 	depth      *prometheus.GaugeVec
 	running    *prometheus.GaugeVec

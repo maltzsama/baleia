@@ -168,7 +168,7 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 				EngineID: engineID,
 				Class:    string(lease.Class),
 				WaitMs:   wait.Milliseconds(),
-			}).Get(actx, nil)
+			})
 		}
 		recordGauges(actx, engineID, &state)
 
@@ -220,7 +220,7 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 					_ = workflow.ExecuteActivity(actx, activities.RecordQueueTimeout, activities.RecordQueueTimeoutParams{
 						EngineID: engineID,
 						Class:    string(q.Class),
-					}).Get(actx, nil)
+					})
 				}
 			})
 		}
@@ -261,7 +261,8 @@ func signalExecution(ctx workflow.Context, executionID, signal string, arg any) 
 	return workflow.SignalExternalWorkflow(ctx, ExecutionWorkflowID(executionID), "", signal, arg).Get(ctx, nil)
 }
 
-// recordGauges reports the live depth and running count of every class.
+// recordGauges reports the live depth and running count of every class. The
+// activities are fired without waiting: a lost sample must not delay admission.
 func recordGauges(ctx workflow.Context, engineID string, state *AdmissionState) {
 	for _, class := range []queryengine.WorkloadClass{
 		queryengine.ClassInteractive,
@@ -273,7 +274,7 @@ func recordGauges(ctx workflow.Context, engineID string, state *AdmissionState) 
 			Class:    string(class),
 			Running:  state.runningInClass(class),
 			Queued:   state.queuedInClass(class),
-		}).Get(ctx, nil)
+		})
 	}
 }
 
