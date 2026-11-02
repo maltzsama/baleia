@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/sqlref"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
@@ -407,7 +408,41 @@ func (s *script) run(sess queryengine.Session, st StatementRef) (stop bool, err 
 		outcome = metrics.StatementTruncated
 	}
 	observe(outcome, nil, sink.rows, o.ResultBytes)
+	s.persistReferences(st)
 	return false, s.finish(o)
+}
+
+// persistReferences stores the tables and equi-joins of a finished statement
+// (#538). Best effort: extraction or a write failure never fails the run.
+func (s *script) persistReferences(st StatementRef) {
+	if s.a.pool == nil {
+		return
+	}
+	row, err := s.a.queries.GetStatementReferenceTarget(s.bk, db.GetStatementReferenceTargetParams{
+		ExecutionID: s.execID,
+		Position:    st.Position,
+	})
+	if err != nil {
+		activity.GetLogger(s.ctx).Warn("could not load the statement for references",
+			"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
+		return
+	}
+	tx, err := s.a.pool.Begin(s.bk)
+	if err != nil {
+		activity.GetLogger(s.ctx).Warn("could not start reference transaction",
+			"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
+		return
+	}
+	defer func() { _ = tx.Rollback(s.bk) }()
+	if err := sqlref.Persist(s.bk, db.New(tx), row.StatementID, row.WorkspaceID, s.p.Target.CatalogID, s.p.Target.Schema, st.SQL); err != nil {
+		activity.GetLogger(s.ctx).Warn("could not persist statement references",
+			"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
+		return
+	}
+	if err := tx.Commit(s.bk); err != nil {
+		activity.GetLogger(s.ctx).Warn("could not commit statement references",
+			"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
+	}
 }
 
 // persistHandle stores the statement's engine handle so the API, or the
