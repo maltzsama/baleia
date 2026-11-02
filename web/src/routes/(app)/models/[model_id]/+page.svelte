@@ -8,6 +8,7 @@
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
 	import HistoryDrawer from '$lib/content/HistoryDrawer.svelte';
 	import ModelEditor from '$lib/semantic/ModelEditor.svelte';
+	import LineageGraph from '$lib/components/LineageGraph.svelte';
 	import {
 		deleteModel,
 		encodeShare,
@@ -105,6 +106,10 @@
 					<Button variant="danger" onclick={() => (deleteOpen = true)}>{m.common_delete()}</Button>
 				{/if}
 			</div>
+		</div>
+
+		<div class="mb-6 rounded-[var(--radius)] border border-border bg-bg-panel p-4">
+			<LineageGraph {workspaceId} node={`model:${model.id}`} direction="down" />
 		</div>
 
 		{#if canEdit}

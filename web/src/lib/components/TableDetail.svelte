@@ -19,6 +19,7 @@
 	import CopyButton from '$lib/ui/patterns/CopyButton.svelte';
 	import DocEditor from '$lib/semantic/DocEditor.svelte';
 	import DocumentColumns from '$lib/semantic/DocumentColumns.svelte';
+	import LineageGraph from './LineageGraph.svelte';
 	import type { SemanticDoc } from '$lib/semantic/docs';
 
 	let { table, focusColumn = '' }: { table: TableRef | null; focusColumn?: string } = $props();
@@ -486,6 +487,12 @@
 							<dd class="break-all font-mono">{value}</dd>
 						{/each}
 					</dl>
+				</div>
+			{/if}
+
+			{#if table}
+				<div class="border-t border-border px-4 py-3">
+					<LineageGraph {workspaceId} node={`table:${table.tableId}`} direction="up" />
 				</div>
 			{/if}
 		</div>

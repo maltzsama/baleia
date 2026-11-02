@@ -474,3 +474,25 @@ export function makeTableMaintenance(overrides: Partial<TableMaintenance> = {}):
 		...overrides
 	};
 }
+
+type LineageGraph = components['schemas']['LineageGraph'];
+type LineageNode = components['schemas']['LineageNode'];
+
+export function makeLineageGraph(overrides: Partial<LineageGraph> = {}): LineageGraph {
+	return {
+		nodes: [makeLineageNode({ kind: 'table', id: 'table:t', label: 'orders' })],
+		edges: [],
+		...overrides
+	};
+}
+
+export function makeLineageNode(overrides: Partial<LineageNode> = {}): LineageNode {
+	return {
+		kind: 'model',
+		id: 'model:00000000-0000-0000-0000-0000000000d1',
+		label: 'Orders',
+		detail: 'orders',
+		href: '/models/00000000-0000-0000-0000-0000000000d1',
+		...overrides
+	};
+}
