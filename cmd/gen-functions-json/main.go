@@ -30,7 +30,11 @@ func main() {
 		if !ok {
 			continue
 		}
-		refs := readWordFunctions(filepath.Join(dir, entry.Name()))
+		if name == dialect.PostgreSQL && pg == nil {
+			fmt.Printf("skipping %s: PostgreSQL enrichment unavailable, keeping the committed signatures\n", name)
+			continue
+		}
+		refs := readWordFunctions(name, filepath.Join(dir, entry.Name()))
 		if name == dialect.PostgreSQL && pg != nil {
 			for i := range refs {
 				if fn, ok := pg[strings.ToLower(refs[i].Name)]; ok {
@@ -60,7 +64,7 @@ type pgFunction struct{ signature, description, kind string }
 
 // readWordFunctions reads one committed word list into the reference shape,
 // independent of the embedded JSON (which this command is writing).
-func readWordFunctions(path string) []dialect.FunctionReference {
+func readWordFunctions(name, path string) []dialect.FunctionReference {
 	raw, err := os.ReadFile(path) //nolint:gosec // path is under the fixed lists directory
 	if err != nil {
 		panic(err)
@@ -77,7 +81,7 @@ func readWordFunctions(path string) []dialect.FunctionReference {
 			continue
 		}
 		seen[key] = true
-		out = append(out, dialect.FunctionReference{Name: line, Kind: "function", Call: dialect.Callable(line)})
+		out = append(out, dialect.FunctionReference{Name: line, Kind: "function", Call: dialect.Callable(name, line)})
 	}
 	return out
 }

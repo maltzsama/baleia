@@ -1272,7 +1272,7 @@
   {
     "name": "SESSION_USER",
     "kind": "function",
-    "call": false
+    "call": true
   },
   {
     "name": "SHA1",
@@ -1772,7 +1772,7 @@
   {
     "name": "SYSTEM_USER",
     "kind": "function",
-    "call": false
+    "call": true
   },
   {
     "name": "TAN",
@@ -1862,7 +1862,7 @@
   {
     "name": "USER",
     "kind": "function",
-    "call": false
+    "call": true
   },
   {
     "name": "UTC_DATE",

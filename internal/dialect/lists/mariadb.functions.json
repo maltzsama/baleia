@@ -1062,7 +1062,7 @@
   {
     "name": "SESSION_USER",
     "kind": "function",
-    "call": false
+    "call": true
   },
   {
     "name": "SFORMAT",
@@ -1187,7 +1187,7 @@
   {
     "name": "SYSTEM_USER",
     "kind": "function",
-    "call": false
+    "call": true
   },
   {
     "name": "TAN",

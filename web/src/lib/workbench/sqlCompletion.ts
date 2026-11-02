@@ -282,7 +282,7 @@ function functionOptions(scope: CompletionScope): Promise<Option[]> {
 			out.push({
 				label,
 				type: 'function',
-				detail: ref?.kind ?? m.workbench_completion_function(),
+				detail: functionKind(ref?.kind),
 				apply: applyCall(label, ref?.call ?? true),
 				info: ref ? info(label, ref.signature ?? ref.kind, [ref.description ?? '']) : undefined,
 				group: 'function'
@@ -302,6 +302,13 @@ async function functionReference(name: string): Promise<Map<string, DialectFunct
 		// Without the reference the completion still offers the names.
 		return new Map();
 	}
+}
+
+/** The API kind as user-facing text; API values stay for comparisons. */
+function functionKind(kind: string | undefined): string {
+	if (kind === 'aggregate') return m.workbench_completion_kind_aggregate();
+	if (kind === 'window') return m.workbench_completion_kind_window();
+	return m.workbench_completion_function();
 }
 
 /** Inserts `name()` with the cursor between the parentheses. */
