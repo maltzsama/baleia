@@ -154,3 +154,49 @@ func TestV4_AgentLimitWaitsBeforeAdmission(t *testing.T) {
 	require.NoError(t, env.GetWorkflowError())
 	require.Equal(t, 1, rec.count(AdmissionRequestSignal), "the engine queue is only asked once the agent has a slot")
 }
+
+// TestV4_TrinoResourceGroupsSkipsBaleiaQueue: when managed resource groups are
+// on for the engine, Baleia does not queue the run itself (no request-slot);
+// Trino's resource group holds it. The script still runs (#600).
+func TestV4_TrinoResourceGroupsSkipsBaleiaQueue(t *testing.T) {
+	t.Parallel()
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestWorkflowEnvironment()
+	bookkeeping(env, 1)
+	env.OnActivity(activities.ExecuteScript, mock.Anything, mock.Anything).Return(finished(1), nil)
+	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).Return(nil)
+	rec := &signalRecorder{}
+	env.OnSignalExternalWorkflow(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(rec.on)
+
+	in := v4Input()
+	in.TrinoResourceGroups = true
+	env.ExecuteWorkflow(QueryExecutionWorkflowV4, in)
+
+	require.NoError(t, env.GetWorkflowError())
+	require.Equal(t, 0, rec.count(AdmissionRequestSignal), "the run must not wait in Baleia's queue")
+	require.Equal(t, 0, rec.count(AdmissionReleaseSignal), "no Baleia slot was taken")
+}
+
+// TestV4_TrinoResourceGroupsStillEnforcesAgentLimit: the handover does not drop
+// the per-agent limit; it still waits before the run reaches the engine (#600).
+func TestV4_TrinoResourceGroupsStillEnforcesAgentLimit(t *testing.T) {
+	t.Parallel()
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestWorkflowEnvironment()
+	bookkeeping(env, 1)
+	env.OnActivity(activities.ExecuteScript, mock.Anything, mock.Anything).Return(finished(1), nil)
+	env.OnActivity(activities.CompleteExecution, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(activities.AgentSlotAvailable, mock.Anything, mock.Anything).Return(false, nil).Once()
+	env.OnActivity(activities.AgentSlotAvailable, mock.Anything, mock.Anything).Return(true, nil)
+	rec := &signalRecorder{}
+	env.OnSignalExternalWorkflow(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(rec.on)
+
+	in := v4Input()
+	in.TrinoResourceGroups = true
+	in.Identity.AgentID = "00000000-0000-0000-0000-0000000000a1"
+	in.AgentMaxConcurrent = 1
+	env.ExecuteWorkflow(QueryExecutionWorkflowV4, in)
+
+	require.NoError(t, env.GetWorkflowError())
+	require.Equal(t, 0, rec.count(AdmissionRequestSignal), "Trino queues the run, not Baleia")
+}

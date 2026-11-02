@@ -45,6 +45,11 @@ type QueryExecutionInput struct {
 	// WorkloadEnabled asks the engine's admission workflow for a slot before
 	// running. Off, V4 behaves exactly like V3.
 	WorkloadEnabled bool
+	// TrinoResourceGroups hands admission over to Trino's resource groups
+	// (#600): when WorkloadEnabled and this are both set, Baleia does not hold
+	// the run in its own queue; Trino's resource group queues it instead. The
+	// per-agent limit and the fairness tag still apply.
+	TrinoResourceGroups bool
 	// FairnessKey shares a class's slots across workspaces (#399). The agent id
 	// for an agent run, the workspace otherwise.
 	FairnessKey string
@@ -98,6 +103,15 @@ func QueryExecutionWorkflowV4(ctx workflow.Context, in QueryExecutionInput) erro
 			}
 			return admissionFailed(ctx, in, failure)
 		}
+	}
+
+	// Managed resource groups hand admission over to Trino (#600): Baleia does
+	// not queue the run itself, so it goes straight to the engine, where
+	// Trino's resource group holds it. The agent limit above still applies. If
+	// that wait marked the run queued, restore it to running first.
+	if in.TrinoResourceGroups {
+		_ = workflow.ExecuteActivity(bookkeepingCtx, activities.MarkAdmitted, activities.MarkAdmittedParams{ExecutionID: in.ExecutionID}).Get(bookkeepingCtx, nil)
+		return runQueryExecution(ctx, in, in.Dialect)
 	}
 
 	if err := signalAdmission(ctx, in, AdmissionRequestSignal, AdmissionRequest{

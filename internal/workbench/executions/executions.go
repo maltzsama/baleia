@@ -209,9 +209,17 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 	// the execution workflow can signal it (#399), and resolves the class's
 	// runtime bound for this run (#578).
 	var runtimeTimeout time.Duration
+	trinoResourceGroups := false
 	if s.cfg.WorkloadEnabled && r.Target.EngineID.Valid {
 		resolved := s.ensureAdmissionWorkflow(ctx, r.Target)
 		runtimeTimeout = resolved[class].RuntimeTimeout
+		if eng, err := s.store.GetEngineByID(ctx, r.Target.EngineID); err == nil {
+			trinoResourceGroups = eng.TrinoResourceGroupsEnabled
+		} else {
+			// Fail-safe: without the engine row the flag is unknowable, so the
+			// run keeps Baleia's queue. The error is surfaced here, not silently.
+			s.logger.WarnContext(ctx, "could not read the engine's resource-group switch; using Baleia's queue", "engine_id", uuidString(r.Target.EngineID), "err", err)
+		}
 	}
 	// The script is split with the target engine's dialect; Trino when the
 	// kind has none.
@@ -227,23 +235,24 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 	}
 	_, err = s.workflows.ExecuteWorkflow(ctx, client.StartWorkflowOptions{ID: WorkflowID(execution.ID), TaskQueue: TaskQueue},
 		workflows.QueryExecutionWorkflowV4, workflows.QueryExecutionInput{
-			ExecutionID:        executionID,
-			WorkspaceID:        uuid.UUID(r.WorkspaceID.Bytes).String(),
-			SQL:                r.SQL,
-			Target:             r.Target,
-			Identity:           r.Identity,
-			StatementTimeout:   s.cfg.StatementTimeout,
-			RequestID:          r.RequestID,
-			ExecutionTimeout:   s.cfg.ExecutionTimeout,
-			RerunExecutionID:   rerunOf,
-			RerunFromPosition:  r.RerunFromPosition,
-			Dialect:            dialectName,
-			Class:              class,
-			WorkloadEnabled:    s.cfg.WorkloadEnabled,
-			FairnessKey:        fairnessKey(r),
-			Weight:             weight,
-			AgentMaxConcurrent: r.AgentMaxConcurrent,
-			RuntimeTimeout:     runtimeTimeout,
+			ExecutionID:         executionID,
+			WorkspaceID:         uuid.UUID(r.WorkspaceID.Bytes).String(),
+			SQL:                 r.SQL,
+			Target:              r.Target,
+			Identity:            r.Identity,
+			StatementTimeout:    s.cfg.StatementTimeout,
+			RequestID:           r.RequestID,
+			ExecutionTimeout:    s.cfg.ExecutionTimeout,
+			RerunExecutionID:    rerunOf,
+			RerunFromPosition:   r.RerunFromPosition,
+			Dialect:             dialectName,
+			Class:               class,
+			WorkloadEnabled:     s.cfg.WorkloadEnabled,
+			TrinoResourceGroups: trinoResourceGroups,
+			FairnessKey:         fairnessKey(r),
+			Weight:              weight,
+			AgentMaxConcurrent:  r.AgentMaxConcurrent,
+			RuntimeTimeout:      runtimeTimeout,
 		})
 	if err != nil {
 		// Detached from the request, which may be the reason it failed.
