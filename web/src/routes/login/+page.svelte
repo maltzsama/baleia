@@ -234,7 +234,9 @@
 	>
 		<div class="relative z-[1] flex flex-col items-center text-center gap-6">
 			<Logo class="h-[96px] w-[96px]" />
-			<div class="text-[32px] font-bold tracking-[-1px] text-slate-100">{m.common_baleia()}</div>
+			<!-- Wordmark: Monoton has one weight (400), so no font-bold or
+			     Plex-calibrated tracking here. -->
+			<div class="font-display text-[32px] text-slate-100">{m.common_baleia()}</div>
 			<div class="text-[13px] text-slate-500 leading-[1.6] max-w-[260px]">
 				{m.login_a_powerful_sql_client_for_your_self_hosted()}
 			</div>

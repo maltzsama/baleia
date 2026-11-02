@@ -15,6 +15,9 @@
 	// Results-grid data cell code font (DM Mono); 400-italic renders NULL cells.
 	import '@fontsource/dm-mono/400.css';
 	import '@fontsource/dm-mono/400-italic.css';
+	// Display font for the Baleia wordmark (Monoton, --font-display): single
+	// weight, so only 400 exists.
+	import '@fontsource/monoton/400.css';
 	import { onMount } from 'svelte';
 	import { configureSession } from '$lib/auth/session';
 	import { initLocale } from '$lib/i18n/locale.svelte';

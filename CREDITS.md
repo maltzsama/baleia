@@ -39,7 +39,7 @@ attribution.
 
 ## Fonts
 
-The web app bundles IBM Plex Sans, DM Mono and Sometype Mono through
+The web app bundles IBM Plex Sans, DM Mono, Sometype Mono and Monoton through
 [Fontsource](https://fontsource.org). These fonts are licensed under the
 [SIL Open Font License 1.1](https://openfontlicense.org).
 

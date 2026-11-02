@@ -53,6 +53,9 @@
 	--font-mono: 'Sometype Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 	/* Code font for the results grid data cells (self-hosted, monospace). */
 	--font-data: 'DM Mono', var(--font-mono);
+	/* Display font for the Baleia wordmark (Monoton, self-hosted, OFL; single
+	   weight 400 — never pair it with font-bold, that would fake the weight). */
+	--font-display: 'Monoton', 'IBM Plex Sans', sans-serif;
 }
 
 .dark {
