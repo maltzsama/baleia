@@ -150,3 +150,9 @@ UPDATE engines
 SET max_running_total = $2, updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: SetEngineTrinoResourceGroups :one
+UPDATE engines
+SET trino_resource_groups_enabled = $2, updated_at = now()
+WHERE id = $1
+RETURNING *;

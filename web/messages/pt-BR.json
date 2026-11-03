@@ -2548,6 +2548,7 @@
 	"workload_saved": "Capacidades salvas",
 	"workload_close_class_confirm": "Esta classe tem execuções na fila. Fechá-la (máx. em execução 0) deixa essas execuções esperando até o tempo limite. Continuar?",
 	"workload_max_running_total": "Teto do motor",
+	"workload_trino_resource_groups": "Grupos de recursos do Trino controlam a fila",
 	"workload_rules": "Regras",
 	"workload_rules_description": "Avaliadas em ordem; a primeira correspondência decide a classe.",
 	"workload_add_rule": "Adicionar regra",

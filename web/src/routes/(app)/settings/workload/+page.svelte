@@ -116,6 +116,7 @@
 
 	let capacities = $state<CapacityRow[]>([]);
 	let maxRunningTotal = $state('');
+	let trinoResourceGroupsEnabled = $state(false);
 	let queuesLoaded = $state(false);
 	let queuesError = $state('');
 	let queuesPoll: PollController<EngineQueues> | undefined;
@@ -201,6 +202,7 @@
 		queuesError = '';
 		if (reset) {
 			maxRunningTotal = queues.max_running_total == null ? '' : String(queues.max_running_total);
+			trinoResourceGroupsEnabled = queues.trino_resource_groups_enabled ?? false;
 			capacities = queues.classes.map((row) => ({
 				class: row.class,
 				max_running: String(row.max_running),
@@ -326,7 +328,14 @@
 				runtime_timeout_ms: runtime
 			});
 		}
-		return { body: { max_running_total: total, classes }, closesWithQueued };
+		return {
+			body: {
+				max_running_total: total,
+				trino_resource_groups_enabled: trinoResourceGroupsEnabled,
+				classes
+			},
+			closesWithQueued
+		};
 	}
 
 	async function save() {
@@ -602,6 +611,15 @@
 							bind:value={maxRunningTotal}
 							class="rounded border border-border bg-bg-panel px-2 py-1 text-xs text-text-main"
 						/>
+					</label>
+					<label class="flex items-center gap-2 text-[12px] font-medium text-text-main">
+						<input
+							type="checkbox"
+							aria-label={m.workload_trino_resource_groups()}
+							bind:checked={trinoResourceGroupsEnabled}
+							class="h-3.5 w-3.5 rounded border-border"
+						/>
+						<span>{m.workload_trino_resource_groups()}</span>
 					</label>
 				</div>
 				{#if queuesError}

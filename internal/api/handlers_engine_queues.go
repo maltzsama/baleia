@@ -91,6 +91,15 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 			ID:              id,
 			MaxRunningTotal: intToInt32(request.Body.MaxRunningTotal),
 		})
+		if err != nil {
+			return err
+		}
+		if request.Body.TrinoResourceGroupsEnabled != nil {
+			_, err = q.SetEngineTrinoResourceGroups(ctx, db.SetEngineTrinoResourceGroupsParams{
+				ID:                         id,
+				TrinoResourceGroupsEnabled: *request.Body.TrinoResourceGroupsEnabled,
+			})
+		}
 		return err
 	}); err != nil {
 		return nil, err
@@ -102,8 +111,9 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 		ResourceID:   idString(id),
 		Outcome:      audit.Allowed,
 		Changes: map[string]audit.Change{
-			"max_running_total": {To: request.Body.MaxRunningTotal},
-			"classes":           {To: request.Body.Classes},
+			"max_running_total":             {To: request.Body.MaxRunningTotal},
+			"trino_resource_groups_enabled": {To: request.Body.TrinoResourceGroupsEnabled},
+			"classes":                       {To: request.Body.Classes},
 		},
 	})
 	h.signalAdmission(ctx, idString(id), caps)
@@ -141,9 +151,10 @@ func (h *CatalogHandlers) engineQueues(ctx context.Context, eng db.Engine) (Engi
 	state, _ := h.admissionState(ctx, eng)
 
 	out := EngineQueues{
-		EngineId:        openapi_types.UUID(eng.ID.Bytes),
-		MaxRunningTotal: int32ToIntPtr(eng.MaxRunningTotal),
-		Classes:         make([]EngineQueue, 0, len(workloadClasses)),
+		EngineId:                   openapi_types.UUID(eng.ID.Bytes),
+		MaxRunningTotal:            int32ToIntPtr(eng.MaxRunningTotal),
+		TrinoResourceGroupsEnabled: ptr(eng.TrinoResourceGroupsEnabled),
+		Classes:                    make([]EngineQueue, 0, len(workloadClasses)),
 	}
 	for _, class := range workloadClasses {
 		capacity := workload.Resolve(eng.Class, class, configured[class])

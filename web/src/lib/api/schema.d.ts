@@ -6023,6 +6023,8 @@ export interface components {
             engine_id: string;
             /** @description Ceiling across every class; null means none */
             max_running_total?: number | null;
+            /** @description When on, Trino's resource groups hold the queue instead of Baleia's (#600) */
+            trino_resource_groups_enabled?: boolean;
             classes: components["schemas"]["EngineQueue"][];
         };
         EngineQueue: {
@@ -6039,6 +6041,8 @@ export interface components {
         };
         UpdateEngineQueuesRequest: {
             max_running_total?: number | null;
+            /** @description Hand admission over to Trino's resource groups (#600) */
+            trino_resource_groups_enabled?: boolean;
             classes: components["schemas"]["UpdateEngineQueue"][];
         };
         UpdateEngineQueue: {

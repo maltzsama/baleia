@@ -2514,6 +2514,9 @@ type EngineQueues struct {
 
 	// MaxRunningTotal Ceiling across every class; null means none
 	MaxRunningTotal *int `json:"max_running_total"`
+
+	// TrinoResourceGroupsEnabled When on, Trino's resource groups hold the queue instead of Baleia's (#600)
+	TrinoResourceGroupsEnabled *bool `json:"trino_resource_groups_enabled,omitempty"`
 }
 
 // Error defines model for Error.
@@ -4517,6 +4520,9 @@ type UpdateEngineQueueClass string
 type UpdateEngineQueuesRequest struct {
 	Classes         []UpdateEngineQueue `json:"classes"`
 	MaxRunningTotal *int                `json:"max_running_total"`
+
+	// TrinoResourceGroupsEnabled Hand admission over to Trino's resource groups (#600)
+	TrinoResourceGroupsEnabled *bool `json:"trino_resource_groups_enabled,omitempty"`
 }
 
 // UpdateEngineRequest defines model for UpdateEngineRequest.

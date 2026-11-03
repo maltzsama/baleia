@@ -593,6 +593,41 @@ func (q *Queries) SetEngineMaxRunningTotal(ctx context.Context, arg SetEngineMax
 	return i, err
 }
 
+const setEngineTrinoResourceGroups = `-- name: SetEngineTrinoResourceGroups :one
+UPDATE engines
+SET trino_resource_groups_enabled = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, name, kind, class, connection_id, identity_mode, enabled, created_by, created_at, updated_at, max_running_total, cost_routing_enabled, cost_threshold_bytes, external_url, trino_resource_groups_enabled
+`
+
+type SetEngineTrinoResourceGroupsParams struct {
+	ID                         pgtype.UUID `json:"id"`
+	TrinoResourceGroupsEnabled bool        `json:"trino_resource_groups_enabled"`
+}
+
+func (q *Queries) SetEngineTrinoResourceGroups(ctx context.Context, arg SetEngineTrinoResourceGroupsParams) (Engine, error) {
+	row := q.db.QueryRow(ctx, setEngineTrinoResourceGroups, arg.ID, arg.TrinoResourceGroupsEnabled)
+	var i Engine
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Kind,
+		&i.Class,
+		&i.ConnectionID,
+		&i.IdentityMode,
+		&i.Enabled,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.MaxRunningTotal,
+		&i.CostRoutingEnabled,
+		&i.CostThresholdBytes,
+		&i.ExternalUrl,
+		&i.TrinoResourceGroupsEnabled,
+	)
+	return i, err
+}
+
 const updateEngine = `-- name: UpdateEngine :one
 UPDATE engines
 SET enabled       = COALESCE($1, enabled),

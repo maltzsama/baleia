@@ -3055,6 +3055,7 @@ components:
       properties:
         engine_id: { type: string, format: uuid }
         max_running_total: { type: integer, nullable: true, description: "Ceiling across every class; null means none" }
+        trino_resource_groups_enabled: { type: boolean, description: "When on, Trino's resource groups hold the queue instead of Baleia's (#600)" }
         classes:
           type: array
           items: { $ref: "#/components/schemas/EngineQueue" }
@@ -3077,6 +3078,7 @@ components:
       required: [classes]
       properties:
         max_running_total: { type: integer, nullable: true, minimum: 0 }
+        trino_resource_groups_enabled: { type: boolean, description: "Hand admission over to Trino's resource groups (#600)" }
         classes:
           type: array
           items: { $ref: "#/components/schemas/UpdateEngineQueue" }

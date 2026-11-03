@@ -2548,6 +2548,7 @@
 	"workload_saved": "Capacities saved",
 	"workload_close_class_confirm": "This class has queued runs. Closing it (max running 0) leaves them waiting until the queue timeout. Continue?",
 	"workload_max_running_total": "Engine ceiling",
+	"workload_trino_resource_groups": "Trino resource groups own the queue",
 	"workload_rules": "Rules",
 	"workload_rules_description": "Evaluated in order; the first match decides the class.",
 	"workload_add_rule": "Add rule",
