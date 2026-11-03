@@ -181,7 +181,7 @@ components:
     # web/messages/{en,pt-BR}.json (enforced by TestErrorCodesClosed).
     ErrorCode:
       type: string
-      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspacePersonal]
+      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspacePersonal]
       enum:
         - account_suspended
         - agent_token_not_allowed
@@ -202,6 +202,7 @@ components:
         - connection_in_use
         - credentials_unreadable
         - custom_sql_forbidden
+        - custom_sql_requires_read_only
         - destination_not_eligible
         - drop_failed
         - encryption_failed
@@ -239,6 +240,7 @@ components:
         - queue_full
         - queue_timeout
         - rate_limited
+        - read_only_unsupported
         - refused
         - reserved_name
         - resource_exhausted
@@ -1333,6 +1335,7 @@ components:
         catalog_name: { type: string }
         engine_catalog: { type: string }
         schema: { type: string, nullable: true }
+        read_only: { type: boolean }
 
     WsTicketRequest:
       type: object
@@ -1531,7 +1534,7 @@ components:
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
       type: object
-      required: [id, name, type, url, config, has_credentials, created_at, allowed_actions]
+      required: [id, name, type, url, config, has_credentials, credentials_read_only, created_at, allowed_actions]
       properties:
         allowed_actions:
           type: array
@@ -1548,6 +1551,7 @@ components:
         host: { type: string }
         port: { type: string }
         has_credentials: { type: boolean, description: "Whether stored credentials exist; the secret itself is never returned" }
+        credentials_read_only: { type: boolean, description: "The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -1568,6 +1572,8 @@ components:
           type: object
           additionalProperties: { type: string }
           description: "Non-secret fields of the provider's config schema"
+        credentials_read_only:
+          { type: boolean, default: false, description: "The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)" }
         credentials:
           type: object
           description: "Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config"
@@ -1643,6 +1649,8 @@ components:
           type: object
           additionalProperties: { type: string }
         credentials: { type: object }
+        credentials_read_only:
+          { type: boolean, description: "The administrator asserts these credentials cannot modify data (#11/#13/#59)" }
 
     Engine:
       type: object
@@ -1696,6 +1704,9 @@ components:
         catalog_count:
           type: integer
           description: "Distinct logical catalogs bound to this engine"
+        credentials_read_only:
+          type: boolean
+          description: "Copied from the connection: its credentials only allow reads"
 
     EngineHealth:
       type: object
@@ -1755,7 +1766,7 @@ components:
         What an engine can do. Capabilities never authorize anything: what a
         user may run is decided by policy (catalog DDL is never allowed in the
         editor, whatever supports_catalog_ddl says).
-      required: [dialect, identity_modes, supports_cancel, transactions, multiple_result_sets,
+      required: [dialect, identity_modes, read_only, supports_cancel, transactions, multiple_result_sets,
         multiple_catalogs, namespace_depth, session_schema, supports_explain, supports_time_travel,
         supports_catalog_ddl, monitoring, iceberg_maintenance, arrow_native, max_identifier_length, identifier_case]
       properties:
@@ -1763,6 +1774,7 @@ components:
         identity_modes:
           type: array
           items: { type: string, enum: [impersonation, connection, per_user] }
+        read_only: { type: string, enum: [enforced, none], description: "enforced: the engine guarantees read-only sessions; none: only a read-only database role can" }
         supports_cancel: { type: boolean }
         cancel_scope: { type: string, enum: [any_process, in_process], nullable: true }
         transactions: { type: boolean }
@@ -2945,6 +2957,7 @@ components:
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
         target: { $ref: "#/components/schemas/ExecutionTarget" }
+        read_only: { type: boolean, description: "The target ran in a read-only session" }
         error_code: { type: string, nullable: true }
         queue: { $ref: "#/components/schemas/ExecutionQueue" }
 
@@ -3186,7 +3199,8 @@ components:
           description: >
             Typed reason of a failed or cancelled statement: an engine code
             (syntax, not_found, permission_denied, timeout, cancelled,
-            resource_exhausted, engine_unavailable, conflict, internal), `editor_rejected`, or `interrupted` when the
+            resource_exhausted, engine_unavailable, read_only_unsupported,
+            conflict, internal), `editor_rejected`, or `interrupted` when the
             worker stopped mid-statement (its outcome on the engine is unknown).
         error_native: { type: string, nullable: true, description: "The engine's own error identifier (SQLSTATE, Trino errorName, gRPC status)" }
         update_count: { type: integer, nullable: true, description: "Affected rows for DML/DDL when the engine reports it" }

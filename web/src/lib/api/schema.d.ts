@@ -3603,7 +3603,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_not_found" | "workspace_personal";
+        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_not_found" | "workspace_personal";
         /** @enum {string} */
         Locale: "en" | "pt-BR";
         /** @enum {string} */
@@ -4433,6 +4433,7 @@ export interface components {
             catalog_name?: string;
             engine_catalog?: string;
             schema?: string | null;
+            read_only?: boolean;
         };
         WsTicketRequest: {
             /**
@@ -4604,6 +4605,8 @@ export interface components {
             port?: string;
             /** @description Whether stored credentials exist; the secret itself is never returned */
             has_credentials: boolean;
+            /** @description The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59) */
+            credentials_read_only: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -4620,6 +4623,11 @@ export interface components {
             config?: {
                 [key: string]: string;
             };
+            /**
+             * @description The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+             * @default false
+             */
+            credentials_read_only: boolean;
             /** @description Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config */
             credentials?: Record<string, never>;
             nessie_credentials?: components["schemas"]["NessieCredentials"];
@@ -4671,6 +4679,8 @@ export interface components {
                 [key: string]: string;
             };
             credentials?: Record<string, never>;
+            /** @description The administrator asserts these credentials cannot modify data (#11/#13/#59) */
+            credentials_read_only?: boolean;
         };
         Engine: {
             readonly allowed_actions: components["schemas"]["EngineAllowedAction"][];
@@ -4713,6 +4723,8 @@ export interface components {
             connection?: components["schemas"]["EngineConnectionRef"] | null;
             /** @description Distinct logical catalogs bound to this engine */
             catalog_count?: number;
+            /** @description Copied from the connection: its credentials only allow reads */
+            credentials_read_only?: boolean;
         };
         EngineHealth: {
             /** @description ok, unreachable or unknown */
@@ -4755,6 +4767,11 @@ export interface components {
         EngineCapabilities: {
             dialect: string;
             identity_modes: ("impersonation" | "connection" | "per_user")[];
+            /**
+             * @description enforced: the engine guarantees read-only sessions; none: only a read-only database role can
+             * @enum {string}
+             */
+            read_only: "enforced" | "none";
             supports_cancel: boolean;
             /** @enum {string|null} */
             cancel_scope?: "any_process" | "in_process" | null;
@@ -5910,6 +5927,8 @@ export interface components {
             /** Format: date-time */
             finished_at?: string | null;
             target?: components["schemas"]["ExecutionTarget"];
+            /** @description The target ran in a read-only session */
+            read_only?: boolean;
             error_code?: string | null;
             queue?: components["schemas"]["ExecutionQueue"];
         };
@@ -6133,7 +6152,7 @@ export interface components {
             truncated?: boolean | null;
             duration_ms?: number | null;
             error_message?: string | null;
-            /** @description Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, conflict, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown). */
+            /** @description Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, read_only_unsupported, conflict, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown). */
             error_code?: string | null;
             /** @description The engine's own error identifier (SQLSTATE, Trino errorName, gRPC status) */
             error_native?: string | null;

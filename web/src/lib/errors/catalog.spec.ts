@@ -38,6 +38,7 @@ describe('error catalog', () => {
 			'syntax',
 			'not_found',
 			'permission_denied',
+			'read_only_unsupported',
 			'timeout',
 			'cancelled',
 			'resource_exhausted',

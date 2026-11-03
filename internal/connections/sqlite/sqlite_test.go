@@ -113,17 +113,27 @@ func TestMetadataReader_sqlite(t *testing.T) {
 	}
 }
 
-// TestProviderOpensReadOnly: the provider only reads metadata and pings, so
-// its handle never writes; queries write through the query engine (#651).
-func TestProviderOpensReadOnly(t *testing.T) {
+// TestReadOnlyUnlessBothAllow: writes need the connection and the server.
+func TestReadOnlyUnlessBothAllow(t *testing.T) {
 	t.Parallel()
 	root, _ := fixture(t)
-	db, err := New(Options{Root: root}).open(connections.Config{Values: map[string]string{"path": "app.db"}})
-	if err != nil {
-		t.Fatal(err)
+	ctx := context.Background()
+	write := func(p *Provider, rw string) error {
+		db, err := p.open(connections.Config{Values: map[string]string{"path": "app.db", "read_write": rw}})
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		_, err = db.ExecContext(ctx, `INSERT INTO orders (id) VALUES (1)`)
+		return err
 	}
-	defer func() { _ = db.Close() }()
-	if _, err := db.ExecContext(context.Background(), `INSERT INTO orders (id) VALUES (1)`); err == nil {
-		t.Error("the metadata handle wrote to the file")
+	if err := write(New(Options{Root: root}), "true"); err == nil {
+		t.Error("wrote without BALEIA_SQLITE_ALLOW_WRITE")
+	}
+	if err := write(New(Options{Root: root, AllowWrite: true}), "false"); err == nil {
+		t.Error("wrote without read_write on the connection")
+	}
+	if err := write(New(Options{Root: root, AllowWrite: true}), "true"); err != nil {
+		t.Errorf("both allow writes: %v", err)
 	}
 }

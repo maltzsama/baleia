@@ -18,6 +18,7 @@
 		createEngine,
 		listCatalogConnections,
 		listEngines,
+		readOnlyGuarantee,
 		type CatalogConnection,
 		type Engine
 	} from '$lib/engines/admin';
@@ -238,11 +239,13 @@
 							<th class="px-3 py-2">{m.engines_health()}</th>
 							<th class="px-3 py-2">{m.engines_connection()}</th>
 							<th class="px-3 py-2 text-right">{m.engines_catalogs()}</th>
+							<th class="px-3 py-2">{m.engines_read_only()}</th>
 							<th class="px-3 py-2">{m.engines_state()}</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each filtered as engine (engine.id)}
+							{@const chip = readOnlyGuarantee(engine)}
 							<tr class="border-b border-border/60 last:border-b-0 hover:bg-bg-toolbar">
 								<td class="px-3 py-2">
 									<button
@@ -273,6 +276,9 @@
 									{/if}
 								</td>
 								<td class="px-3 py-2 text-right">{engine.catalog_count ?? 0}</td>
+								<td class="px-3 py-2">
+									<span title={chip.detail}><Badge tone={chip.tone}>{chip.label}</Badge></span>
+								</td>
 								<td class="px-3 py-2">
 									<Badge tone={engine.enabled ? 'success' : 'neutral'}>
 										{engine.enabled ? m.engines_enabled() : m.engines_disabled()}

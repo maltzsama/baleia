@@ -26,7 +26,7 @@ func TestEngineSpans(t *testing.T) {
 	otel.SetTracerProvider(tp)
 	t.Cleanup(func() { otel.SetTracerProvider(prev) })
 
-	e := queryengine.Guard(fake.New(fake.Options{ReadOnly: queryengine.ReadOnlyEnforced}))
+	e := queryengine.Guard(fake.New(fake.Options{ReadOnly: queryengine.ReadOnlyEnforced}), false)
 	if _, err := queryengine.CollectStrings(context.Background(), e, queryengine.SessionSpec{}, "SELECT MULTI", 100); err != nil {
 		t.Fatal(err)
 	}

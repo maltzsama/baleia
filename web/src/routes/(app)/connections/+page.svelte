@@ -366,6 +366,9 @@
 					</div>
 
 					<div class="flex flex-wrap gap-1">
+						{#if connection.credentials_read_only}
+							<Badge tone="success">{m.connections_read_only_credentials()}</Badge>
+						{/if}
 						{#if connection.has_credentials}
 							<Badge tone="neutral">{m.connections_credentials_stored()}</Badge>
 						{/if}

@@ -34,12 +34,12 @@ func (s *store) GetEngineWithConnection(context.Context, pgtype.UUID) (db.GetEng
 
 var engineID = pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}
 
-func engineRow(kind string, updated time.Time) *db.GetEngineWithConnectionRow {
+func engineRow(kind string, updated time.Time, readOnlyCreds bool) *db.GetEngineWithConnectionRow {
 	return &db.GetEngineWithConnectionRow{
 		Engine: db.Engine{ID: engineID, Name: "e", Kind: kind, Class: "direct", IdentityMode: "connection", Enabled: true,
 			UpdatedAt: pgtype.Timestamptz{Time: updated, Valid: true}},
 		CatalogConnection: db.CatalogConnection{ID: pgtype.UUID{Bytes: [16]byte{0xC1}, Valid: true}, Type: kind,
-			Config: []byte(`{"url":"fake://"}`)},
+			Config: []byte(`{"url":"fake://"}`), CredentialsReadOnly: readOnlyCreds},
 	}
 }
 
@@ -68,7 +68,7 @@ func TestManagerUsesManagedDialerForSystemOwnedEngines(t *testing.T) {
 	}
 	kinds := testKinds(t)
 
-	user := engineRow(fake.Kind, time.Unix(1, 0))
+	user := engineRow(fake.Kind, time.Unix(1, 0), false)
 	user.CatalogConnection.CreatedBy = pgtype.UUID{Bytes: [16]byte{0x99}, Valid: true}
 	m := queryengine.NewManager(&store{row: user}, nil, nil, strict, managed, kinds)
 	e, err := m.Get(ctx, engineID)
@@ -79,7 +79,7 @@ func TestManagerUsesManagedDialerForSystemOwnedEngines(t *testing.T) {
 		t.Error("user-owned engine did not use the strict dialer")
 	}
 
-	system := engineRow(fake.Kind, time.Unix(1, 0))
+	system := engineRow(fake.Kind, time.Unix(1, 0), false)
 	m = queryengine.NewManager(&store{row: system}, nil, nil, strict, managed, kinds)
 	e, err = m.Get(ctx, engineID)
 	if err != nil {
@@ -119,7 +119,7 @@ func unwrap(t *testing.T, e queryengine.Engine) *fake.Engine {
 
 func TestManager_UsesDialer(t *testing.T) {
 	t.Parallel()
-	m, d := newManager(t, &store{row: engineRow(fake.Kind, time.Unix(1, 0))})
+	m, d := newManager(t, &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)})
 	e, err := m.Get(context.Background(), engineID)
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestManager_UsesDialer(t *testing.T) {
 func TestManager_RebuildsOnUpdate(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	s := &store{row: engineRow(fake.Kind, time.Unix(1, 0))}
+	s := &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)}
 	m, _ := newManager(t, s)
 
 	first, err := m.Get(ctx, engineID)
@@ -148,7 +148,7 @@ func TestManager_RebuildsOnUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.row = engineRow(fake.Kind, time.Unix(2, 0))
+	s.row = engineRow(fake.Kind, time.Unix(2, 0), false)
 	second, err := m.Get(ctx, engineID)
 	if err != nil {
 		t.Fatal(err)
@@ -171,19 +171,35 @@ func TestManager_RebuildsOnUpdate(t *testing.T) {
 	}
 }
 
-// TestReadOnlyIsBestEffort: on an engine that cannot enforce read-only, a
-// read-only spec opens an ordinary session instead of being refused (#651).
-func TestReadOnlyIsBestEffort(t *testing.T) {
+func TestReadOnlyUnsupportedRejected(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	m, _ := newManager(t, &store{row: engineRow(readOnlyNoneKind, time.Unix(1, 0))})
+	m, _ := newManager(t, &store{row: engineRow(readOnlyNoneKind, time.Unix(1, 0), false)})
+	e, err := m.Get(ctx, engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.OpenSession(ctx, queryengine.SessionSpec{ReadOnly: true}); queryengine.CodeOf(err) != queryengine.CodeReadOnly {
+		t.Fatalf("err = %v, want read_only_unsupported", err)
+	}
+	s, err := e.OpenSession(ctx, queryengine.SessionSpec{})
+	if err != nil {
+		t.Fatalf("a read-write session must still open: %v", err)
+	}
+	s.Close()
+}
+
+func TestReadOnlyUnsupportedAllowedWithAssertion(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	m, _ := newManager(t, &store{row: engineRow(readOnlyNoneKind, time.Unix(1, 0), true)})
 	e, err := m.Get(ctx, engineID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s, err := e.OpenSession(ctx, queryengine.SessionSpec{ReadOnly: true})
 	if err != nil {
-		t.Fatalf("a read-only spec on an engine without enforcement: %v, want an ordinary session", err)
+		t.Fatalf("read-only credentials asserted: %v", err)
 	}
 	s.Close()
 }
@@ -191,7 +207,7 @@ func TestReadOnlyIsBestEffort(t *testing.T) {
 func TestManager_Refuses(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	disabled := engineRow(fake.Kind, time.Unix(1, 0))
+	disabled := engineRow(fake.Kind, time.Unix(1, 0), false)
 	disabled.Engine.Enabled = false
 	cases := map[string]struct {
 		row  *db.GetEngineWithConnectionRow
@@ -200,7 +216,7 @@ func TestManager_Refuses(t *testing.T) {
 	}{
 		"missing engine":  {nil, queryengine.CodeNotFound, nil},
 		"disabled engine": {disabled, queryengine.CodeUnavailable, nil},
-		"unknown kind":    {engineRow("nope", time.Unix(1, 0)), "", queryengine.ErrKindNotRegistered},
+		"unknown kind":    {engineRow("nope", time.Unix(1, 0), false), "", queryengine.ErrKindNotRegistered},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -245,7 +261,7 @@ func TestManager_SeveralInstancesAndKinds(t *testing.T) {
 	ids := []pgtype.UUID{}
 	for i, kind := range []string{fake.Kind, fake.Kind, readOnlyNoneKind} {
 		id := pgtype.UUID{Bytes: [16]byte{0xE0, byte(i)}, Valid: true}
-		r := engineRow(kind, time.Unix(1, 0))
+		r := engineRow(kind, time.Unix(1, 0), false)
 		r.Engine.ID = id
 		s[id.Bytes] = r
 		ids = append(ids, id)
@@ -272,7 +288,7 @@ func TestManager_SeveralInstancesAndKinds(t *testing.T) {
 
 func TestManager_DefaultTrinoAndCollectStrings(t *testing.T) {
 	t.Parallel()
-	m, _ := newManager(t, &store{row: engineRow(fake.Kind, time.Unix(1, 0))})
+	m, _ := newManager(t, &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)})
 	e, err := m.DefaultTrino(context.Background())
 	if err != nil {
 		t.Fatal(err)

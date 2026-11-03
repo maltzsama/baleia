@@ -105,8 +105,8 @@ func (e *Engine) Capabilities() queryengine.Capabilities {
 	return queryengine.Capabilities{
 		Dialect:       dialect.Oracle,
 		IdentityModes: []string{"connection"},
-		// DDL commits implicitly and SET TRANSACTION READ ONLY does not stop it,
-		// so a read-only session is not enforced here (#20, #651).
+		// DDL commits implicitly and SET TRANSACTION READ ONLY does not stop it:
+		// a read grant needs the credentials_read_only assertion (#20).
 		ReadOnly:            queryengine.ReadOnlyNone,
 		CancelScope:         scope,
 		SupportsCancel:      true,

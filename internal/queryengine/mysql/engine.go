@@ -120,8 +120,8 @@ func (e *Engine) Capabilities() queryengine.Capabilities {
 	return queryengine.Capabilities{
 		Dialect:       e.Dialect().Name(),
 		IdentityModes: []string{"connection"},
-		// MySQL DDL commits implicitly and escapes START TRANSACTION READ ONLY,
-		// so a read-only session is not enforced here (#20, #651).
+		// MySQL DDL commits implicitly and escapes START TRANSACTION READ ONLY;
+		// read grants and agents need the credentials_read_only assertion (#20).
 		ReadOnly:            queryengine.ReadOnlyNone,
 		CancelScope:         queryengine.CancelAnyProcess,
 		SupportsCancel:      true,

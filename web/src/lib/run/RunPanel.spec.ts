@@ -7,6 +7,7 @@ function state(overrides: Partial<RunState> = {}): RunState {
 	return {
 		executionId: 'e1',
 		status: 'failed',
+		readOnly: false,
 		lastSeq: 5,
 		statements: {
 			1: {

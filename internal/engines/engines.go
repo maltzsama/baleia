@@ -22,8 +22,8 @@ import (
 
 // Options are the server-side settings some kinds need.
 type Options struct {
-	// SQLite confines database files (BALEIA_SQLITE_ROOT), like the SQLite
-	// provider.
+	// SQLite confines database files (BALEIA_SQLITE_ROOT,
+	// BALEIA_SQLITE_ALLOW_WRITE), like the SQLite provider.
 	SQLite sqlite.Options
 	Oracle oracle.Options
 	// Dialects gives every kind the dialect it speaks.

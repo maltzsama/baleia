@@ -71,10 +71,7 @@ func Run(t *testing.T, newEngine func(t *testing.T) queryengine.Engine, fx Fixtu
 	t.Helper()
 	ctx := context.Background()
 	raw := newEngine
-	newEngine = func(t *testing.T) queryengine.Engine {
-		t.Helper()
-		return queryengine.Guard(raw(t))
-	}
+	newEngine = func(t *testing.T) queryengine.Engine { return queryengine.Guard(raw(t), false) }
 	e := newEngine(t)
 	caps := e.Capabilities()
 
@@ -180,14 +177,14 @@ func Run(t *testing.T, newEngine func(t *testing.T) queryengine.Engine, fx Fixtu
 	t.Run("read-only", func(t *testing.T) {
 		spec := queryengine.SessionSpec{ReadOnly: true}
 		s, err := e.OpenSession(ctx, spec)
-		if err != nil {
-			// Read-only is best effort (#651): an engine without enforcement
-			// opens an ordinary session instead of refusing.
-			t.Fatalf("OpenSession(read-only): %v", err)
-		}
 		if caps.ReadOnly == queryengine.ReadOnlyNone {
-			_ = s.Close()
+			if queryengine.CodeOf(err) != queryengine.CodeReadOnly {
+				t.Fatalf("OpenSession(read-only) on an engine without enforcement: err = %v, want read_only_unsupported", err)
+			}
 			return
+		}
+		if err != nil {
+			t.Fatal(err)
 		}
 		defer s.Close()
 		exec(t, s, fx.ReadSQL, nil)

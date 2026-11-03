@@ -111,14 +111,20 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 		return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not encrypt the connection credentials"}, nil
 	}
 
+	credentialsReadOnly := false
+	if request.Body.CredentialsReadOnly != nil {
+		credentialsReadOnly = *request.Body.CredentialsReadOnly
+	}
+
 	conn, err := h.conns.Create(ctx, db.CreateCatalogConnectionParams{
-		ID:             connID,
-		Name:           request.Body.Name,
-		Type:           string(cfg.Kind),
-		Url:            connURL,
-		Config:         config,
-		CredentialsEnc: credsEnc,
-		CreatedBy:      uid,
+		ID:                  connID,
+		Name:                request.Body.Name,
+		Type:                string(cfg.Kind),
+		Url:                 connURL,
+		Config:              config,
+		CredentialsEnc:      credsEnc,
+		CredentialsReadOnly: credentialsReadOnly,
+		CreatedBy:           uid,
 	})
 	if errors.Is(err, conns.ErrNameTaken) {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
@@ -180,7 +186,7 @@ func (h *CatalogHandlers) UpdateCatalogConnection(ctx context.Context, request U
 	// the others untouched, so concurrent PATCHes to different fields do not
 	// overwrite each other.
 	body := *request.Body
-	params := db.UpdateCatalogConnectionParams{ID: connID, Name: body.Name}
+	params := db.UpdateCatalogConnectionParams{ID: connID, Name: body.Name, CredentialsReadOnly: body.CredentialsReadOnly}
 	if body.Url != nil || body.Config != nil || body.Credentials != nil {
 		cfg, err := h.updateConfig(stored, body)
 		var ce *configError
@@ -330,14 +336,15 @@ func (h *core) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UUID) 
 func dbCatalogConnectionToPublic(logger *slog.Logger, c db.CatalogConnection) CatalogConnection {
 	id := openapi_types.UUID(c.ID.Bytes)
 	return CatalogConnection{
-		Id:             id,
-		Name:           c.Name,
-		Type:           c.Type,
-		Url:            redactURLSecrets(c.Url),
-		Config:         publicConfig(logger, c.Config),
-		HasCredentials: c.CredentialsEnc != nil && *c.CredentialsEnc != "",
-		CreatedAt:      pgTimestampToTime(c.CreatedAt),
-		UpdatedAt:      func() *time.Time { t := pgTimestampToTime(c.UpdatedAt); return &t }(),
+		Id:                  id,
+		Name:                c.Name,
+		Type:                c.Type,
+		Url:                 redactURLSecrets(c.Url),
+		Config:              publicConfig(logger, c.Config),
+		HasCredentials:      c.CredentialsEnc != nil && *c.CredentialsEnc != "",
+		CredentialsReadOnly: c.CredentialsReadOnly,
+		CreatedAt:           pgTimestampToTime(c.CreatedAt),
+		UpdatedAt:           func() *time.Time { t := pgTimestampToTime(c.UpdatedAt); return &t }(),
 	}
 }
 

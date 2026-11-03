@@ -17,7 +17,7 @@ import (
 
 // fixture creates a database file with a table "t" holding one row, inside a
 // fresh root.
-func fixture(t *testing.T) (Options, connections.Config) {
+func fixture(t *testing.T, writable bool) (Options, connections.Config) {
 	t.Helper()
 	dir := t.TempDir()
 	createDatabase(t, filepath.Join(dir, "test.db"), "CREATE TABLE t(a INTEGER)", "INSERT INTO t VALUES (1)")
@@ -25,7 +25,10 @@ func fixture(t *testing.T) (Options, connections.Config) {
 		Kind:   connections.KindSQLite,
 		Values: map[string]string{"path": "test.db"},
 	}
-	return Options{Root: dir}, cfg
+	if writable {
+		cfg.Values["read_write"] = "true"
+	}
+	return Options{Root: dir, AllowWrite: writable}, cfg
 }
 
 func createDatabase(t *testing.T, path string, stmts ...string) {
@@ -105,7 +108,7 @@ func TestRootConfinement(t *testing.T) {
 
 func TestRefusesAttachAndTail(t *testing.T) {
 	t.Parallel()
-	o, cfg := fixture(t)
+	o, cfg := fixture(t, true)
 	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o, testDialect)
 	if err != nil {
 		t.Fatal(err)
@@ -137,7 +140,7 @@ func TestRefusesAttachAndTail(t *testing.T) {
 
 func TestReadOnlyEvenWithPragma(t *testing.T) {
 	t.Parallel()
-	o, cfg := fixture(t)
+	o, cfg := fixture(t, true)
 	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o, testDialect)
 	if err != nil {
 		t.Fatal(err)
@@ -188,7 +191,7 @@ func TestMixedTypesFallback(t *testing.T) {
 
 func TestCancelUnsupported(t *testing.T) {
 	t.Parallel()
-	o, cfg := fixture(t)
+	o, cfg := fixture(t, false)
 	e, err := newEngineWithOptions(queryengine.EngineRow{ID: "t", Kind: Kind}, cfg, o, testDialect)
 	if err != nil {
 		t.Fatal(err)
@@ -203,7 +206,7 @@ func TestCancelUnsupported(t *testing.T) {
 // builds engines with the options it was given.
 func TestSpec(t *testing.T) {
 	t.Parallel()
-	o, cfg := fixture(t)
+	o, cfg := fixture(t, false)
 	s := Spec(o, dialect.NewRegistry().MustGet(dialect.SQLite))
 	if s.Name != Kind {
 		t.Fatalf("spec kind = %q, want %q", s.Name, Kind)

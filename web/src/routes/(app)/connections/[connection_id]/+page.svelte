@@ -62,6 +62,7 @@
 	let deleteOpen = $state(false);
 
 	const engine = $derived(engines.find((item) => item.connection_id === connectionId));
+	const readOnly = $derived(conn?.credentials_read_only ?? false);
 
 	async function load() {
 		if (!connectionId) return;
@@ -203,6 +204,8 @@
 				<div class="flex items-center gap-2">
 					<h1 class="text-xl font-semibold tracking-[-0.3px]">{conn.name}</h1>
 					<Badge tone="neutral">{conn.type}</Badge>
+					{#if readOnly}<Badge tone="warning">{m.connections_detail_read_only_credentials()}</Badge
+						>{/if}
 				</div>
 				<p class="mt-1 text-[12px] text-slate-600 dark:text-slate-300">
 					{m.connections_detail_created()}
@@ -236,6 +239,11 @@
 					<dt class="text-slate-600 dark:text-slate-300">{m.connections_detail_credentials()}</dt>
 					<dd>{conn.has_credentials ? m.connections_stored() : m.connections_detail_none()}</dd>
 				</dl>
+				<p class="mt-3 text-[11px] text-slate-600 dark:text-slate-300">
+					{readOnly
+						? m.connections_an_administrator_asserts_these_credentials()
+						: m.connections_read_only_grants_and_agents_need_an_admini()}
+				</p>
 			</div>
 
 			<div class="rounded-lg border border-border bg-bg-panel p-4">

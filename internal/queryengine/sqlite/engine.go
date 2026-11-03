@@ -32,8 +32,8 @@ func Spec(o Options, dl queryengine.Dialect) queryengine.KindSpec {
 	}}
 }
 
-// newEngineWithOptions builds the engine from its connection config (path) and
-// the server-side options. SQLite dials nothing.
+// newEngineWithOptions builds the engine from its connection config (path,
+// read_write) and the server-side options. SQLite dials nothing.
 func newEngineWithOptions(row queryengine.EngineRow, cfg connections.Config, o Options, dl queryengine.Dialect) (queryengine.Engine, error) {
 	if o.Root == "" {
 		return nil, queryengine.NewError(queryengine.CodeUnavailable, Kind, "", "SQLite is not configured: BALEIA_SQLITE_ROOT is not set")
@@ -42,19 +42,23 @@ func newEngineWithOptions(row queryengine.EngineRow, cfg connections.Config, o O
 	if err != nil {
 		return nil, mapPathError(err)
 	}
-	// Sessions write through the read-write pool; the file's own permissions
-	// decide whether a write succeeds (SQLite opens a write-protected file for
-	// reading only). The read-only pool serves Baleia's own read-only probes
-	// (#651).
+	// A read-only pool always exists; a read-write pool only when the
+	// connection and the server both allow writes, so a read-only session is
+	// enforced by the file mode itself (docs/adr/0011).
 	ro, err := openPool(path, false)
 	if err != nil {
 		return nil, err
 	}
-	rw, err := openPool(path, true)
-	if err != nil {
-		return nil, errors.Join(err, ro.Close())
+	e := &Engine{dialect: dl, id: row.ID, ro: ro}
+	if connectionssqlite.WriteAllowed(o.AllowWrite, cfg) {
+		rw, err := openPool(path, true)
+		if err != nil {
+			ro.Close()
+			return nil, err
+		}
+		e.rw = rw
 	}
-	return &Engine{dialect: dl, id: row.ID, ro: ro, rw: rw}, nil
+	return e, nil
 }
 
 func openPool(path string, writable bool) (*sql.DB, error) {

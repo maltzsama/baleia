@@ -48,7 +48,8 @@ func (e *Engine) Capabilities() queryengine.Capabilities {
 	return queryengine.Capabilities{
 		Dialect:       dialect.FlightSQL,
 		IdentityModes: []string{"connection"},
-		// The protocol has no read-only session (#20, #651).
+		// The protocol has no read-only session: a read-only target needs the
+		// credentials_read_only assertion (docs/adr/0011, #20).
 		ReadOnly:           queryengine.ReadOnlyNone,
 		CancelScope:        queryengine.CancelInProcess, // FlightInfo tickets are bearer capabilities, not persisted
 		SupportsCancel:     true,

@@ -8,11 +8,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// managed wraps an engine built by the Manager. It traces sessions and keeps
-// the instance open until its sessions close after it is retired.
+// managed wraps an engine built by the Manager. It enforces the read-only rule
+// for every engine and keeps the instance open until its sessions close after
+// it is retired.
 type managed struct {
 	Engine
-	version time.Time
+	version             time.Time
+	credentialsReadOnly bool
 	// standalone instances (Guard) close their engine on Close; the
 	// Manager's instances live until retired.
 	standalone bool
@@ -23,10 +25,9 @@ type managed struct {
 	closed   bool
 }
 
-// OpenSession opens a session on the engine. A read-only spec is best effort:
-// an engine that can enforce it does, and one that cannot opens an ordinary
-// session. Baleia only asks for it on its own probes, never on user work
-// (#651).
+// OpenSession refuses a read-only session on an engine that cannot enforce it,
+// unless the connection asserts read-only credentials (docs/adr/0011). It
+// never downgrades silently.
 func (m *managed) OpenSession(ctx context.Context, spec SessionSpec) (_ Session, err error) {
 	ctx, span := tracer().Start(ctx, "engine.open_session",
 		trace.WithAttributes(attrKind.String(m.Kind()), attrReadOnly.Bool(spec.ReadOnly)))
@@ -34,6 +35,10 @@ func (m *managed) OpenSession(ctx context.Context, spec SessionSpec) (_ Session,
 		failSpan(span, err)
 		span.End()
 	}()
+	if spec.ReadOnly && m.Capabilities().ReadOnly != ReadOnlyEnforced && !m.credentialsReadOnly {
+		return nil, NewError(CodeReadOnly, m.Kind(), "",
+			"this engine cannot enforce a read-only session and its connection does not assert read-only credentials")
+	}
 	m.mu.Lock()
 	if m.retired || m.closed {
 		m.mu.Unlock()
@@ -86,10 +91,11 @@ func (m *managed) Close() error {
 	return nil
 }
 
-// Guard wraps an engine built outside the Manager, such as in tests and the
-// conformance suite, the way the Manager wraps its own.
-func Guard(e Engine) Engine {
-	return &managed{Engine: e, standalone: true}
+// Guard applies the generic rules the Manager applies to every engine (today
+// the read-only rule) to an engine built outside it, such as in tests and the
+// conformance suite.
+func Guard(e Engine, credentialsReadOnly bool) Engine {
+	return &managed{Engine: e, credentialsReadOnly: credentialsReadOnly, standalone: true}
 }
 
 type managedSession struct {

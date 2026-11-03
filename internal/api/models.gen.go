@@ -390,6 +390,12 @@ const (
 	EngineCapabilitiesIdentityModesPerUser       EngineCapabilitiesIdentityModes = "per_user"
 )
 
+// Defines values for EngineCapabilitiesReadOnly.
+const (
+	EngineCapabilitiesReadOnlyEnforced EngineCapabilitiesReadOnly = "enforced"
+	EngineCapabilitiesReadOnlyNone     EngineCapabilitiesReadOnly = "none"
+)
+
 // Defines values for EngineQueueClass.
 const (
 	EngineQueueClassBackground  EngineQueueClass = "background"
@@ -399,85 +405,87 @@ const (
 
 // Defines values for ErrorCode.
 const (
-	ErrorCodeAccountSuspended         ErrorCode = "account_suspended"
-	ErrorCodeAgentTokenNotAllowed     ErrorCode = "agent_token_not_allowed"
-	ErrorCodeAssistantDisabled        ErrorCode = "assistant_disabled"
-	ErrorCodeBadRequest               ErrorCode = "bad_request"
-	ErrorCodeBindingBusy              ErrorCode = "binding_busy"
-	ErrorCodeBindingDisabled          ErrorCode = "binding_disabled"
-	ErrorCodeBindingExists            ErrorCode = "binding_exists"
-	ErrorCodeBindingIsPrimary         ErrorCode = "binding_is_primary"
-	ErrorCodeBindingNotManaged        ErrorCode = "binding_not_managed"
-	ErrorCodeBindingUnsupported       ErrorCode = "binding_unsupported"
-	ErrorCodeCancelFailed             ErrorCode = "cancel_failed"
-	ErrorCodeCancelled                ErrorCode = "cancelled"
-	ErrorCodeCatalogNotManaged        ErrorCode = "catalog_not_managed"
-	ErrorCodeConcurrentChange         ErrorCode = "concurrent_change"
-	ErrorCodeConflict                 ErrorCode = "conflict"
-	ErrorCodeConnectionError          ErrorCode = "connection_error"
-	ErrorCodeConnectionInUse          ErrorCode = "connection_in_use"
-	ErrorCodeCredentialsUnreadable    ErrorCode = "credentials_unreadable"
-	ErrorCodeCustomSqlForbidden       ErrorCode = "custom_sql_forbidden"
-	ErrorCodeDestinationNotEligible   ErrorCode = "destination_not_eligible"
-	ErrorCodeDropFailed               ErrorCode = "drop_failed"
-	ErrorCodeEncryptionFailed         ErrorCode = "encryption_failed"
-	ErrorCodeEncryptionUnavailable    ErrorCode = "encryption_unavailable"
-	ErrorCodeEngineError              ErrorCode = "engine_error"
-	ErrorCodeEngineInUse              ErrorCode = "engine_in_use"
-	ErrorCodeEngineRequired           ErrorCode = "engine_required"
-	ErrorCodeEngineUnavailable        ErrorCode = "engine_unavailable"
-	ErrorCodeEngineUnreachable        ErrorCode = "engine_unreachable"
-	ErrorCodeEngineUnsupported        ErrorCode = "engine_unsupported"
-	ErrorCodeExecutionsRunning        ErrorCode = "executions_running"
-	ErrorCodeFolderCycle              ErrorCode = "folder_cycle"
-	ErrorCodeForbidden                ErrorCode = "forbidden"
-	ErrorCodeGrainNotAllowed          ErrorCode = "grain_not_allowed"
-	ErrorCodeIdpUnavailable           ErrorCode = "idp_unavailable"
-	ErrorCodeInternal                 ErrorCode = "internal"
-	ErrorCodeInternalError            ErrorCode = "internal_error"
-	ErrorCodeInvalidBundle            ErrorCode = "invalid_bundle"
-	ErrorCodeInvalidCredentials       ErrorCode = "invalid_credentials"
-	ErrorCodeInvalidDefinition        ErrorCode = "invalid_definition"
-	ErrorCodeInvalidIdentifier        ErrorCode = "invalid_identifier"
-	ErrorCodeInvalidSql               ErrorCode = "invalid_sql"
-	ErrorCodeInvalidTimeRange         ErrorCode = "invalid_time_range"
-	ErrorCodeMaintenanceExternal      ErrorCode = "maintenance_external"
-	ErrorCodeNameConflict             ErrorCode = "name_conflict"
-	ErrorCodeNameInUse                ErrorCode = "name_in_use"
-	ErrorCodeNotDirect                ErrorCode = "not_direct"
-	ErrorCodeNotFound                 ErrorCode = "not_found"
-	ErrorCodeNotRunning               ErrorCode = "not_running"
-	ErrorCodeNotSupported             ErrorCode = "not_supported"
-	ErrorCodePermissionDenied         ErrorCode = "permission_denied"
-	ErrorCodePropertyNotOverridable   ErrorCode = "property_not_overridable"
-	ErrorCodeProviderInUse            ErrorCode = "provider_in_use"
-	ErrorCodeProviderUnsupported      ErrorCode = "provider_unsupported"
-	ErrorCodeQueueFull                ErrorCode = "queue_full"
-	ErrorCodeQueueTimeout             ErrorCode = "queue_timeout"
-	ErrorCodeRateLimited              ErrorCode = "rate_limited"
-	ErrorCodeRefused                  ErrorCode = "refused"
-	ErrorCodeReservedName             ErrorCode = "reserved_name"
-	ErrorCodeResourceExhausted        ErrorCode = "resource_exhausted"
-	ErrorCodeServiceUnavailable       ErrorCode = "service_unavailable"
-	ErrorCodeSlugConflict             ErrorCode = "slug_conflict"
-	ErrorCodeSpaceMissing             ErrorCode = "space_missing"
-	ErrorCodeSpaceNotFound            ErrorCode = "space_not_found"
-	ErrorCodeSyncInProgress           ErrorCode = "sync_in_progress"
-	ErrorCodeSyntax                   ErrorCode = "syntax"
-	ErrorCodeTargetNotGranted         ErrorCode = "target_not_granted"
-	ErrorCodeTargetRequired           ErrorCode = "target_required"
-	ErrorCodeTargetUnavailable        ErrorCode = "target_unavailable"
-	ErrorCodeTimeout                  ErrorCode = "timeout"
-	ErrorCodeTurnRunning              ErrorCode = "turn_running"
-	ErrorCodeUnauthorized             ErrorCode = "unauthorized"
-	ErrorCodeUnsupportedBundleVersion ErrorCode = "unsupported_bundle_version"
-	ErrorCodeUnsupportedSyntax        ErrorCode = "unsupported_syntax"
-	ErrorCodeUserInUse                ErrorCode = "user_in_use"
-	ErrorCodeUserOwnsWorkspace        ErrorCode = "user_owns_workspace"
-	ErrorCodeValidationError          ErrorCode = "validation_error"
-	ErrorCodeVersionConflict          ErrorCode = "version_conflict"
-	ErrorCodeWorkspaceNotFound        ErrorCode = "workspace_not_found"
-	ErrorCodeWorkspacePersonal        ErrorCode = "workspace_personal"
+	ErrorCodeAccountSuspended          ErrorCode = "account_suspended"
+	ErrorCodeAgentTokenNotAllowed      ErrorCode = "agent_token_not_allowed"
+	ErrorCodeAssistantDisabled         ErrorCode = "assistant_disabled"
+	ErrorCodeBadRequest                ErrorCode = "bad_request"
+	ErrorCodeBindingBusy               ErrorCode = "binding_busy"
+	ErrorCodeBindingDisabled           ErrorCode = "binding_disabled"
+	ErrorCodeBindingExists             ErrorCode = "binding_exists"
+	ErrorCodeBindingIsPrimary          ErrorCode = "binding_is_primary"
+	ErrorCodeBindingNotManaged         ErrorCode = "binding_not_managed"
+	ErrorCodeBindingUnsupported        ErrorCode = "binding_unsupported"
+	ErrorCodeCancelFailed              ErrorCode = "cancel_failed"
+	ErrorCodeCancelled                 ErrorCode = "cancelled"
+	ErrorCodeCatalogNotManaged         ErrorCode = "catalog_not_managed"
+	ErrorCodeConcurrentChange          ErrorCode = "concurrent_change"
+	ErrorCodeConflict                  ErrorCode = "conflict"
+	ErrorCodeConnectionError           ErrorCode = "connection_error"
+	ErrorCodeConnectionInUse           ErrorCode = "connection_in_use"
+	ErrorCodeCredentialsUnreadable     ErrorCode = "credentials_unreadable"
+	ErrorCodeCustomSqlForbidden        ErrorCode = "custom_sql_forbidden"
+	ErrorCodeCustomSqlRequiresReadOnly ErrorCode = "custom_sql_requires_read_only"
+	ErrorCodeDestinationNotEligible    ErrorCode = "destination_not_eligible"
+	ErrorCodeDropFailed                ErrorCode = "drop_failed"
+	ErrorCodeEncryptionFailed          ErrorCode = "encryption_failed"
+	ErrorCodeEncryptionUnavailable     ErrorCode = "encryption_unavailable"
+	ErrorCodeEngineError               ErrorCode = "engine_error"
+	ErrorCodeEngineInUse               ErrorCode = "engine_in_use"
+	ErrorCodeEngineRequired            ErrorCode = "engine_required"
+	ErrorCodeEngineUnavailable         ErrorCode = "engine_unavailable"
+	ErrorCodeEngineUnreachable         ErrorCode = "engine_unreachable"
+	ErrorCodeEngineUnsupported         ErrorCode = "engine_unsupported"
+	ErrorCodeExecutionsRunning         ErrorCode = "executions_running"
+	ErrorCodeFolderCycle               ErrorCode = "folder_cycle"
+	ErrorCodeForbidden                 ErrorCode = "forbidden"
+	ErrorCodeGrainNotAllowed           ErrorCode = "grain_not_allowed"
+	ErrorCodeIdpUnavailable            ErrorCode = "idp_unavailable"
+	ErrorCodeInternal                  ErrorCode = "internal"
+	ErrorCodeInternalError             ErrorCode = "internal_error"
+	ErrorCodeInvalidBundle             ErrorCode = "invalid_bundle"
+	ErrorCodeInvalidCredentials        ErrorCode = "invalid_credentials"
+	ErrorCodeInvalidDefinition         ErrorCode = "invalid_definition"
+	ErrorCodeInvalidIdentifier         ErrorCode = "invalid_identifier"
+	ErrorCodeInvalidSql                ErrorCode = "invalid_sql"
+	ErrorCodeInvalidTimeRange          ErrorCode = "invalid_time_range"
+	ErrorCodeMaintenanceExternal       ErrorCode = "maintenance_external"
+	ErrorCodeNameConflict              ErrorCode = "name_conflict"
+	ErrorCodeNameInUse                 ErrorCode = "name_in_use"
+	ErrorCodeNotDirect                 ErrorCode = "not_direct"
+	ErrorCodeNotFound                  ErrorCode = "not_found"
+	ErrorCodeNotRunning                ErrorCode = "not_running"
+	ErrorCodeNotSupported              ErrorCode = "not_supported"
+	ErrorCodePermissionDenied          ErrorCode = "permission_denied"
+	ErrorCodePropertyNotOverridable    ErrorCode = "property_not_overridable"
+	ErrorCodeProviderInUse             ErrorCode = "provider_in_use"
+	ErrorCodeProviderUnsupported       ErrorCode = "provider_unsupported"
+	ErrorCodeQueueFull                 ErrorCode = "queue_full"
+	ErrorCodeQueueTimeout              ErrorCode = "queue_timeout"
+	ErrorCodeRateLimited               ErrorCode = "rate_limited"
+	ErrorCodeReadOnlyUnsupported       ErrorCode = "read_only_unsupported"
+	ErrorCodeRefused                   ErrorCode = "refused"
+	ErrorCodeReservedName              ErrorCode = "reserved_name"
+	ErrorCodeResourceExhausted         ErrorCode = "resource_exhausted"
+	ErrorCodeServiceUnavailable        ErrorCode = "service_unavailable"
+	ErrorCodeSlugConflict              ErrorCode = "slug_conflict"
+	ErrorCodeSpaceMissing              ErrorCode = "space_missing"
+	ErrorCodeSpaceNotFound             ErrorCode = "space_not_found"
+	ErrorCodeSyncInProgress            ErrorCode = "sync_in_progress"
+	ErrorCodeSyntax                    ErrorCode = "syntax"
+	ErrorCodeTargetNotGranted          ErrorCode = "target_not_granted"
+	ErrorCodeTargetRequired            ErrorCode = "target_required"
+	ErrorCodeTargetUnavailable         ErrorCode = "target_unavailable"
+	ErrorCodeTimeout                   ErrorCode = "timeout"
+	ErrorCodeTurnRunning               ErrorCode = "turn_running"
+	ErrorCodeUnauthorized              ErrorCode = "unauthorized"
+	ErrorCodeUnsupportedBundleVersion  ErrorCode = "unsupported_bundle_version"
+	ErrorCodeUnsupportedSyntax         ErrorCode = "unsupported_syntax"
+	ErrorCodeUserInUse                 ErrorCode = "user_in_use"
+	ErrorCodeUserOwnsWorkspace         ErrorCode = "user_owns_workspace"
+	ErrorCodeValidationError           ErrorCode = "validation_error"
+	ErrorCodeVersionConflict           ErrorCode = "version_conflict"
+	ErrorCodeWorkspaceNotFound         ErrorCode = "workspace_not_found"
+	ErrorCodeWorkspacePersonal         ErrorCode = "workspace_personal"
 )
 
 // Defines values for ExecutionStatus.
@@ -835,10 +843,10 @@ const (
 
 // Defines values for ReconcileActionKind.
 const (
-	Create   ReconcileActionKind = "create"
-	Drop     ReconcileActionKind = "drop"
-	None     ReconcileActionKind = "none"
-	Recreate ReconcileActionKind = "recreate"
+	ReconcileActionKindCreate   ReconcileActionKind = "create"
+	ReconcileActionKindDrop     ReconcileActionKind = "drop"
+	ReconcileActionKindNone     ReconcileActionKind = "none"
+	ReconcileActionKindRecreate ReconcileActionKind = "recreate"
 )
 
 // Defines values for ReconcileActionResult.
@@ -1754,6 +1762,9 @@ type CatalogConnection struct {
 	Config    map[string]string `json:"config"`
 	CreatedAt time.Time         `json:"created_at"`
 
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	CredentialsReadOnly bool `json:"credentials_read_only"`
+
 	// HasCredentials Whether stored credentials exist; the secret itself is never returned
 	HasCredentials bool               `json:"has_credentials"`
 	Host           *string            `json:"host,omitempty"`
@@ -2051,14 +2062,17 @@ type CreateCatalogConnectionRequest struct {
 	Config *map[string]string `json:"config,omitempty"`
 
 	// Credentials Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config
-	Credentials           *map[string]interface{} `json:"credentials,omitempty"`
-	GlueCredentials       *GlueCredentials        `json:"glue_credentials,omitempty"`
-	HiveCredentials       *HiveCredentials        `json:"hive_credentials,omitempty"`
-	IcebergCredentials    *IcebergCredentials     `json:"iceberg_credentials,omitempty"`
-	MysqlCredentials      *SqlCredentials         `json:"mysql_credentials,omitempty"`
-	Name                  string                  `json:"name"`
-	NessieCredentials     *NessieCredentials      `json:"nessie_credentials,omitempty"`
-	PostgresqlCredentials *SqlCredentials         `json:"postgresql_credentials,omitempty"`
+	Credentials *map[string]interface{} `json:"credentials,omitempty"`
+
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	CredentialsReadOnly   *bool               `json:"credentials_read_only,omitempty"`
+	GlueCredentials       *GlueCredentials    `json:"glue_credentials,omitempty"`
+	HiveCredentials       *HiveCredentials    `json:"hive_credentials,omitempty"`
+	IcebergCredentials    *IcebergCredentials `json:"iceberg_credentials,omitempty"`
+	MysqlCredentials      *SqlCredentials     `json:"mysql_credentials,omitempty"`
+	Name                  string              `json:"name"`
+	NessieCredentials     *NessieCredentials  `json:"nessie_credentials,omitempty"`
+	PostgresqlCredentials *SqlCredentials     `json:"postgresql_credentials,omitempty"`
 
 	// Type A kind listed by GET /connection-providers
 	Type string `json:"type"`
@@ -2320,6 +2334,9 @@ type Engine struct {
 	CostThresholdBytes *int64    `json:"cost_threshold_bytes"`
 	CreatedAt          time.Time `json:"created_at"`
 
+	// CredentialsReadOnly Copied from the connection: its credentials only allow reads
+	CredentialsReadOnly *bool `json:"credentials_read_only,omitempty"`
+
 	// Dialect How to write SQL for it; keyword and function lists are at GET /dialects/{name}
 	Dialect *EngineDialect `json:"dialect"`
 	Enabled bool           `json:"enabled"`
@@ -2366,9 +2383,12 @@ type EngineCapabilities struct {
 	MultipleResultSets  bool `json:"multiple_result_sets"`
 
 	// NamespaceDepth Schema depth in SQL; 0 when the engine has no schemas
-	NamespaceDepth int  `json:"namespace_depth"`
-	SessionSchema  bool `json:"session_schema"`
-	SupportsCancel bool `json:"supports_cancel"`
+	NamespaceDepth int `json:"namespace_depth"`
+
+	// ReadOnly enforced: the engine guarantees read-only sessions; none: only a read-only database role can
+	ReadOnly       EngineCapabilitiesReadOnly `json:"read_only"`
+	SessionSchema  bool                       `json:"session_schema"`
+	SupportsCancel bool                       `json:"supports_cancel"`
 
 	// SupportsCatalogDdl Informational only
 	SupportsCatalogDdl bool `json:"supports_catalog_ddl"`
@@ -2385,6 +2405,9 @@ type EngineCapabilitiesIdentifierCase string
 
 // EngineCapabilitiesIdentityModes defines model for EngineCapabilities.IdentityModes.
 type EngineCapabilitiesIdentityModes string
+
+// EngineCapabilitiesReadOnly enforced: the engine guarantees read-only sessions; none: only a read-only database role can
+type EngineCapabilitiesReadOnly string
 
 // EngineConnectionRef defines model for EngineConnectionRef.
 type EngineConnectionRef struct {
@@ -2489,7 +2512,10 @@ type Execution struct {
 	Id            openapi_types.UUID `json:"id"`
 
 	// Queue The workload queue of a run (#399). Present while the execution is `queued`; `position` is only the caller's own position.
-	Queue        *ExecutionQueue     `json:"queue,omitempty"`
+	Queue *ExecutionQueue `json:"queue,omitempty"`
+
+	// ReadOnly The target ran in a read-only session
+	ReadOnly     *bool               `json:"read_only,omitempty"`
 	RowsReturned *int                `json:"rows_returned"`
 	SavedQueryId *openapi_types.UUID `json:"saved_query_id"`
 	Sql          string              `json:"sql"`
@@ -2613,6 +2639,7 @@ type ExecutionTarget struct {
 	EngineId      *openapi_types.UUID `json:"engine_id"`
 	EngineKind    *string             `json:"engine_kind,omitempty"`
 	EngineName    *string             `json:"engine_name,omitempty"`
+	ReadOnly      *bool               `json:"read_only,omitempty"`
 	Schema        *string             `json:"schema"`
 }
 
@@ -3625,7 +3652,7 @@ type QueryStatement struct {
 	// EngineQueryId The statement's id on its engine. Was trino_query_id
 	EngineQueryId *string `json:"engine_query_id"`
 
-	// ErrorCode Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, conflict, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown).
+	// ErrorCode Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, read_only_unsupported, conflict, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown).
 	ErrorCode    *string `json:"error_code"`
 	ErrorMessage *string `json:"error_message"`
 
@@ -4323,10 +4350,13 @@ type TestConnectionRequest struct {
 	Config *map[string]string `json:"config,omitempty"`
 
 	// Credentials Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config
-	Credentials        *map[string]interface{} `json:"credentials,omitempty"`
-	GlueCredentials    *GlueCredentials        `json:"glue_credentials,omitempty"`
-	HiveCredentials    *HiveCredentials        `json:"hive_credentials,omitempty"`
-	IcebergCredentials *IcebergCredentials     `json:"iceberg_credentials,omitempty"`
+	Credentials *map[string]interface{} `json:"credentials,omitempty"`
+
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	CredentialsReadOnly *bool               `json:"credentials_read_only,omitempty"`
+	GlueCredentials     *GlueCredentials    `json:"glue_credentials,omitempty"`
+	HiveCredentials     *HiveCredentials    `json:"hive_credentials,omitempty"`
+	IcebergCredentials  *IcebergCredentials `json:"iceberg_credentials,omitempty"`
 
 	// Intents Checks to run: metadata, direct_engine, bind:<engine_id>. Default: every role the provider declares (a bind check on the default Trino engine for databases it can bind).
 	Intents               *[]string          `json:"intents,omitempty"`
@@ -4418,7 +4448,10 @@ type UpdateBindingRequest struct {
 type UpdateCatalogConnectionRequest struct {
 	Config      *map[string]string      `json:"config,omitempty"`
 	Credentials *map[string]interface{} `json:"credentials,omitempty"`
-	Name        *string                 `json:"name,omitempty"`
+
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data (#11/#13/#59)
+	CredentialsReadOnly *bool   `json:"credentials_read_only,omitempty"`
+	Name                *string `json:"name,omitempty"`
 
 	// Url Older shape: the endpoint URL. Prefer config
 	Url *string `json:"url,omitempty"`

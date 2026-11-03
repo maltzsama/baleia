@@ -40,6 +40,20 @@ func TestCancelScopeInProcess(t *testing.T) {
 	}
 }
 
+// TestReadOnlyRequiresAssertion: Oracle cannot enforce a read-only session
+// (ReadOnly is none), so without the credentials assertion OpenSession fails.
+func TestReadOnlyRequiresAssertion(t *testing.T) {
+	t.Parallel()
+	e := &Engine{}
+	if got := e.Capabilities().ReadOnly; got != queryengine.ReadOnlyNone {
+		t.Fatalf("ReadOnly = %q, want none", got)
+	}
+	_, err := queryengine.Guard(e, false).OpenSession(context.Background(), queryengine.SessionSpec{ReadOnly: true})
+	if queryengine.CodeOf(err) != queryengine.CodeReadOnly {
+		t.Fatalf("OpenSession(read-only) = %v, want read_only_unsupported", err)
+	}
+}
+
 func TestOraCode(t *testing.T) {
 	t.Parallel()
 	cases := map[int]queryengine.ErrorCode{

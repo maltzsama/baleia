@@ -10,6 +10,7 @@ function caps(overrides: Partial<EngineCapabilities> = {}): EngineCapabilities {
 	return {
 		dialect: 'trino',
 		identity_modes: ['impersonation', 'connection'],
+		read_only: 'enforced',
 		supports_cancel: true,
 		cancel_scope: 'any_process',
 		transactions: true,
@@ -30,7 +31,7 @@ function caps(overrides: Partial<EngineCapabilities> = {}): EngineCapabilities {
 }
 
 describe('engines list', () => {
-	it('lists every engine with its health and no read-only column', async () => {
+	it('shows the three read-only chip variants from capabilities, not kind literals', async () => {
 		server.use(
 			http.get('/engines', ({ response }) =>
 				response(200).json([
@@ -45,7 +46,8 @@ describe('engines list', () => {
 						name: 'analytics_pg',
 						kind: 'postgresql',
 						class: 'direct',
-						capabilities: caps({ dialect: 'postgresql' }),
+						credentials_read_only: true,
+						capabilities: caps({ dialect: 'postgresql', read_only: 'none' }),
 						health: {
 							status: 'unreachable',
 							checked_at: '2026-01-01T00:00:00Z',
@@ -57,7 +59,8 @@ describe('engines list', () => {
 						name: 'local_sqlite',
 						kind: 'sqlite',
 						class: 'direct',
-						capabilities: caps({ dialect: 'sqlite' })
+						credentials_read_only: false,
+						capabilities: caps({ dialect: 'sqlite', read_only: 'none' })
 					})
 				])
 			),
@@ -67,9 +70,9 @@ describe('engines list', () => {
 		render(EnginesPage);
 
 		await waitFor(() => expect(screen.getAllByText('trino').length).toBeGreaterThan(0));
-		expect(screen.getByText('analytics_pg')).toBeTruthy();
-		expect(screen.getByText('local_sqlite')).toBeTruthy();
-		expect(screen.queryByText(/Read-only/)).toBeNull();
+		expect(screen.getByText('Read-only enforced')).toBeTruthy();
+		expect(screen.getByText('Read-only via credentials')).toBeTruthy();
+		expect(screen.getByText('Read-only not available')).toBeTruthy();
 		expect(screen.queryByText('Register engine')).toBeNull();
 		expect(screen.getAllByText('Unreachable').length).toBeGreaterThan(0);
 	});
@@ -88,6 +91,7 @@ describe('engines list', () => {
 						url: '',
 						config: {},
 						has_credentials: true,
+						credentials_read_only: false,
 						created_at: '2026-01-01T00:00:00Z',
 						allowed_actions: ['view', 'update', 'test', 'register_engine']
 					}

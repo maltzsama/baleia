@@ -648,6 +648,17 @@ export const errorCatalog: Record<string, ErrorEntry> = {
 			return m.errors_catalog_ask_an_administrator_for_access_to();
 		}
 	},
+	'statement.read_only_unsupported': {
+		get title() {
+			return m.errors_catalog_writes_are_not_allowed_here();
+		},
+		get explanation() {
+			return m.errors_catalog_this_target_runs_read_only_and();
+		},
+		get remediation() {
+			return m.errors_catalog_run_a_read_only_statement_or();
+		}
+	},
 	'statement.timeout': {
 		get title() {
 			return m.errors_catalog_statement_timed_out();

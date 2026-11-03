@@ -31,11 +31,10 @@ type SessionSpec struct {
 	Catalog  string   // binding.engine_catalog_name ("" = engine default)
 	Schema   []string // namespace parts; the dialect renders them (#14)
 	Identity Identity
-	// ReadOnly asks for a read-only session, best effort: engines that can
-	// enforce it do, the others open an ordinary session. Only Baleia's own
-	// probes (connection tests, metric probes, cost estimates, metadata) set
-	// it; user work never does, because the engine and the catalog manager
-	// decide what a user may write (#651).
+	// ReadOnly comes from Target.ReadOnly (#13) or agent policy (#59). On an
+	// engine that cannot enforce it, OpenSession fails with
+	// read_only_unsupported unless the connection asserts read-only
+	// credentials (docs/adr/0011).
 	ReadOnly bool
 	Timeout  time.Duration // per statement; 0 = engine default
 	Tags     Tags

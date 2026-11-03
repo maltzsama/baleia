@@ -100,8 +100,8 @@ Partially compliant.
 - Physical metadata snapshots are keyed by logical catalog (migration 00032, `internal/metadata`,
   #15): one sync per catalog, however many bindings and workspaces it has. A catalog is read from
   its own source when its provider can (Iceberg catalog managers; databases whose reader walks a
-  catalog in one query), else introspected through its first active binding's engine,
-  read-only where the engine can enforce it, with the service identity. `POST /catalogs/{id}/metadata/sync` starts a pass
+  catalog in one query), else introspected through its first active binding's engine in a
+  read-only session with the service identity. `POST /catalogs/{id}/metadata/sync` starts a pass
   on demand; the `metadata-sync` schedule refreshes every catalog (#17). The explorer, autocomplete
   and search read the snapshot through `/workspaces/{id}/metadata/…` (#18): workspace members only,
   the catalogs the workspace may use only, never an engine call. The live chi explorer routes

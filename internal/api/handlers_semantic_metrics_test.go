@@ -35,6 +35,9 @@ func (e *probeEngine) Capabilities() queryengine.Capabilities {
 }
 
 func (e *probeEngine) OpenSession(_ context.Context, spec queryengine.SessionSpec) (queryengine.Session, error) {
+	if spec.ReadOnly && e.readOnly != queryengine.ReadOnlyEnforced {
+		return nil, queryengine.NewError(queryengine.CodeReadOnly, "trino", "", "read-only unsupported")
+	}
 	return &probeSession{e: e}, nil
 }
 
@@ -173,10 +176,7 @@ func TestSemanticMetrics_EngineRejection422(t *testing.T) {
 	}
 }
 
-// TestSemanticMetrics_CustomSQLOnAnyEngine: custom SQL is accepted on an
-// engine that cannot enforce read-only sessions; Baleia does not require one
-// (#651).
-func TestSemanticMetrics_CustomSQLOnAnyEngine(t *testing.T) {
+func TestSemanticMetrics_CustomSQLRequiresReadOnly422(t *testing.T) {
 	t.Parallel()
 	f, engine := metricFixture(t)
 	ctx := f.as(f.owner)
@@ -187,8 +187,12 @@ func TestSemanticMetrics_CustomSQLOnAnyEngine(t *testing.T) {
 		Slug: "custom", Label: "Custom", CatalogId: f.lake,
 		Namespace: []string{"sales"}, Table: "orders", Definition: def,
 	})
-	if _, ok := r.(CreateSemanticMetric201JSONResponse); !ok {
-		t.Fatalf("custom_sql on an engine without read-only enforcement = %#v, want 201", r)
+	resp, ok := r.(CreateSemanticMetric422JSONResponse)
+	if !ok {
+		t.Fatalf("custom_sql without read-only: %T", r)
+	}
+	if resp.Code != "custom_sql_requires_read_only" {
+		t.Fatalf("code = %q", resp.Code)
 	}
 }
 

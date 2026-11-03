@@ -68,6 +68,7 @@ function mockWorkbench() {
 					capabilities: {
 						dialect: 'trino',
 						identity_modes: ['connection'],
+						read_only: 'enforced',
 						supports_cancel: true,
 						cancel_scope: 'any_process',
 						transactions: false,
@@ -195,7 +196,8 @@ describe('QueryEditor', () => {
 						engine_name: 'trino',
 						catalog_name: 'lake',
 						engine_catalog: 'lake_t',
-						schema: 'sales'
+						schema: 'sales',
+						read_only: false
 					}
 				});
 			})

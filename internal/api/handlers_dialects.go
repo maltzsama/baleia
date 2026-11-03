@@ -63,6 +63,7 @@ func capabilitiesToPublic(c queryengine.Capabilities) *EngineCapabilities {
 	out := &EngineCapabilities{
 		Dialect:             c.Dialect,
 		IdentityModes:       modes,
+		ReadOnly:            EngineCapabilitiesReadOnly(c.ReadOnly),
 		SupportsCancel:      c.SupportsCancel,
 		Transactions:        c.Transactions,
 		MultipleResultSets:  c.MultipleResultSets,
@@ -105,6 +106,8 @@ func (h *core) describeEngine(ctx context.Context, e db.Engine) Engine {
 	}
 	if conn, err := h.topology.Connection(ctx, e.ConnectionID); err == nil {
 		out.Connection = &EngineConnectionRef{Id: openapi_types.UUID(conn.ID.Bytes), Name: conn.Name}
+		readOnly := conn.CredentialsReadOnly
+		out.CredentialsReadOnly = &readOnly
 	}
 	if bindings, err := h.topology.BindingsOfEngine(ctx, e.ID); err == nil {
 		seen := make(map[[16]byte]struct{}, len(bindings))

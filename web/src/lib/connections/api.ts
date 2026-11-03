@@ -25,6 +25,7 @@ export type ConnectionDraft = {
 	type: string;
 	config: Record<string, string>;
 	credentials: Record<string, string>;
+	credentials_read_only?: boolean;
 	intents?: string[];
 };
 

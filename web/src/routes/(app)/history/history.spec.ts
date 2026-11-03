@@ -33,7 +33,8 @@ function makeExecution(overrides: Record<string, unknown> = {}) {
 			engine_name: 'trino',
 			catalog_name: 'lake',
 			engine_catalog: 'lake_t',
-			schema: 'sales'
+			schema: 'sales',
+			read_only: false
 		},
 		...overrides
 	};

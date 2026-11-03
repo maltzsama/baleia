@@ -12,7 +12,8 @@ const snapshot = {
 		workspace_id: 'w1',
 		status: 'running',
 		sql: 'SELECT 1; SELECT 2',
-		created_at: '2026-01-01T00:00:00Z'
+		created_at: '2026-01-01T00:00:00Z',
+		read_only: false
 	},
 	statements: [
 		{ id: 's1', execution_id: 'e1', position: 1, sql: 'SELECT 1', status: 'running' },

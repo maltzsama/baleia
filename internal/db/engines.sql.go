@@ -189,7 +189,7 @@ func (q *Queries) EngineHostsCatalogGrantedToUser(ctx context.Context, arg Engin
 }
 
 const getDefaultTrinoEngine = `-- name: GetDefaultTrinoEngine :one
-SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, e.external_url, e.trino_resource_groups_enabled, c.id, c.name, c.type, c.url, c.credentials_enc, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config
+SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, e.external_url, e.trino_resource_groups_enabled, c.id, c.name, c.type, c.url, c.credentials_enc, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only
 FROM engines e
 JOIN trino_clusters tc ON tc.engine_id = e.id
 JOIN catalog_connections c ON c.id = e.connection_id
@@ -232,6 +232,7 @@ func (q *Queries) GetDefaultTrinoEngine(ctx context.Context) (GetDefaultTrinoEng
 		&i.CatalogConnection.Port,
 		&i.CatalogConnection.CreatedBy,
 		&i.CatalogConnection.Config,
+		&i.CatalogConnection.CredentialsReadOnly,
 	)
 	return i, err
 }
@@ -264,7 +265,7 @@ func (q *Queries) GetEngineByID(ctx context.Context, id pgtype.UUID) (Engine, er
 }
 
 const getEngineWithConnection = `-- name: GetEngineWithConnection :one
-SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, e.external_url, e.trino_resource_groups_enabled, c.id, c.name, c.type, c.url, c.credentials_enc, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config
+SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, e.external_url, e.trino_resource_groups_enabled, c.id, c.name, c.type, c.url, c.credentials_enc, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only
 FROM engines e
 JOIN catalog_connections c ON c.id = e.connection_id
 WHERE e.id = $1
@@ -306,6 +307,7 @@ func (q *Queries) GetEngineWithConnection(ctx context.Context, id pgtype.UUID) (
 		&i.CatalogConnection.Port,
 		&i.CatalogConnection.CreatedBy,
 		&i.CatalogConnection.Config,
+		&i.CatalogConnection.CredentialsReadOnly,
 	)
 	return i, err
 }
@@ -325,7 +327,7 @@ func (q *Queries) LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClust
 }
 
 const listEnabledEnginesWithConnection = `-- name: ListEnabledEnginesWithConnection :many
-SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, e.external_url, e.trino_resource_groups_enabled, c.id, c.name, c.type, c.url, c.credentials_enc, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, tc.id AS cluster_id
+SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, e.external_url, e.trino_resource_groups_enabled, c.id, c.name, c.type, c.url, c.credentials_enc, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only, tc.id AS cluster_id
 FROM engines e
 JOIN catalog_connections c ON c.id = e.connection_id
 LEFT JOIN trino_clusters tc ON tc.engine_id = e.id
@@ -377,6 +379,7 @@ func (q *Queries) ListEnabledEnginesWithConnection(ctx context.Context) ([]ListE
 			&i.CatalogConnection.Port,
 			&i.CatalogConnection.CreatedBy,
 			&i.CatalogConnection.Config,
+			&i.CatalogConnection.CredentialsReadOnly,
 			&i.ClusterID,
 		); err != nil {
 			return nil, err

@@ -6,6 +6,7 @@
 	import { resolve } from '$app/paths';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
+	import Checkbox from '$lib/ui/Checkbox.svelte';
 	import Input from '$lib/ui/Input.svelte';
 	import Select from '$lib/ui/Select.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -68,6 +69,7 @@
 	let name = $state('');
 	let values = $state<Record<string, string>>({});
 	let secrets = $state<Record<string, string>>({});
+	let credentialsReadOnly = $state(false);
 	let direct = $state(false);
 	let bindEngineIds = $state<string[]>([]);
 	let catalogNames = $state<string[]>(['']);
@@ -143,6 +145,7 @@
 			name,
 			values,
 			secrets,
+			credentialsReadOnly,
 			direct,
 			bindEngineIds,
 			catalogNames,
@@ -163,6 +166,7 @@
 		name = '';
 		values = initialValues(next);
 		secrets = {};
+		credentialsReadOnly = false;
 		direct = false;
 		bindEngineIds = [];
 		catalogNames = [''];
@@ -223,6 +227,7 @@
 				type: provider.kind,
 				config: values,
 				credentials: secrets,
+				credentials_read_only: credentialsReadOnly,
 				intents: intentsFor(provider, usage())
 			});
 			testResult = result;
@@ -243,7 +248,8 @@
 				name,
 				type: provider.kind,
 				config: values,
-				credentials: secrets
+				credentials: secrets,
+				credentials_read_only: credentialsReadOnly
 			});
 			let engine: Engine | undefined;
 			const catalogs: Catalog[] = [];
@@ -416,6 +422,15 @@
 					bind:secrets
 					allowReferences={compatibleEngines.length > 0}
 				/>
+			</div>
+			<div class="mt-3 rounded-md border border-border bg-bg-toolbar px-3 py-2.5">
+				<Checkbox
+					label={m.connections_connectionwizard_these_credentials_cannot_modify_data()}
+					bind:checked={credentialsReadOnly}
+				/>
+				<p class="mt-1 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
+					{m.connections_connectionwizard_assert_this_when_the_account_is()}
+				</p>
 			</div>
 		</div>
 

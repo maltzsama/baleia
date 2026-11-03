@@ -97,6 +97,9 @@
 					: ''}
 			</span>
 		{/if}
+		{#if state.readOnly}
+			<Badge tone="warning">{m.common_read_only()}</Badge>
+		{/if}
 		{#if ondetails}
 			<Button size="sm" onclick={ondetails}>{m.history_execution_details()}</Button>
 		{/if}

@@ -175,7 +175,7 @@ func TestDescribeEngine(t *testing.T) {
 			t.Fatalf("version = %v", e.Version)
 		}
 		if e.Dialect == nil || e.Dialect.Name != "trino" || e.Capabilities == nil || e.Capabilities.Dialect != "trino" ||
-			!e.Capabilities.SupportsCatalogDdl || e.Capabilities.CancelScope == nil {
+			!e.Capabilities.SupportsCatalogDdl || e.Capabilities.ReadOnly != "enforced" || e.Capabilities.CancelScope == nil {
 			t.Fatalf("engine = %+v", e)
 		}
 	}
