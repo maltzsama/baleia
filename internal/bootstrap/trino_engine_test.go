@@ -145,3 +145,81 @@ func TestEnsureDefaultTrinoEngine_Identities(t *testing.T) {
 		t.Fatalf("updates = %+v", f.updated)
 	}
 }
+
+// fakeSeal stands in for the keyring: it records what it sealed.
+func fakeSeal(sealed *[]string) func([]byte, pgtype.UUID) (string, error) {
+	return func(plain []byte, _ pgtype.UUID) (string, error) {
+		*sealed = append(*sealed, string(plain))
+		return "sealed", nil
+	}
+}
+
+// TestEnsureDefaultTrinoEngine_Authenticated (#646): with a password the
+// connection logs in as the admin user and stores a sealed reference to the
+// environment variable, never the password; the CA bundle is kept in config.
+func TestEnsureDefaultTrinoEngine_Authenticated(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	t.Run("create", func(t *testing.T) {
+		t.Parallel()
+		var sealed []string
+		f := &fakeEngineStore{cluster: &db.TrinoCluster{Name: "default"}}
+		env := DefaultTrinoEngine{URL: "https://trino:8443", AdminUser: "adm", Password: true, CA: "PEM", Seal: fakeSeal(&sealed)}
+		if err := EnsureDefaultTrinoEngine(ctx, discard, f, env); err != nil {
+			t.Fatal(err)
+		}
+		c := f.createdConn[0]
+		if c.CredentialsEnc == nil || *c.CredentialsEnc != "sealed" {
+			t.Fatalf("credentials = %v", c.CredentialsEnc)
+		}
+		if len(sealed) != 1 || sealed[0] != `{"password":"@baleia-secret[env:BALEIA_TRINO_PASSWORD]"}` {
+			t.Fatalf("sealed = %q", sealed)
+		}
+		if string(c.Config) != `{"admin_user":"adm","ca_cert":"PEM","url":"https://trino:8443","username":"adm"}` {
+			t.Fatalf("config = %s", c.Config)
+		}
+	})
+
+	t.Run("existing connection gets the reference once", func(t *testing.T) {
+		t.Parallel()
+		var sealed []string
+		f := &fakeEngineStore{engine: defaultEngine("https://trino:8443", pgtype.UUID{})}
+		env := DefaultTrinoEngine{URL: "https://trino:8443", AdminUser: "adm", Password: true, Seal: fakeSeal(&sealed)}
+		if err := EnsureDefaultTrinoEngine(ctx, discard, f, env); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.updated) != 1 || f.updated[0].CredentialsEnc == nil || len(sealed) != 1 {
+			t.Fatalf("updates = %+v, sealed = %q", f.updated, sealed)
+		}
+		enc := "sealed"
+		f.engine.CatalogConnection.CredentialsEnc = &enc
+		f.engine.CatalogConnection.Config = f.updated[0].Config
+		if err := EnsureDefaultTrinoEngine(ctx, discard, f, env); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.updated) != 1 || len(sealed) != 1 {
+			t.Fatalf("a second start rewrote the connection: %+v", f.updated)
+		}
+	})
+
+	t.Run("unset removes the login and CA", func(t *testing.T) {
+		t.Parallel()
+		f := &fakeEngineStore{engine: defaultEngine("https://trino:8443", pgtype.UUID{})}
+		f.engine.CatalogConnection.Config = []byte(`{"url":"https://trino:8443","username":"adm","ca_cert":"PEM"}`)
+		if err := EnsureDefaultTrinoEngine(ctx, discard, f, DefaultTrinoEngine{URL: "https://trino:8443"}); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.updated) != 1 || string(f.updated[0].Config) != `{"url":"https://trino:8443"}` || f.updated[0].CredentialsEnc != nil {
+			t.Fatalf("updates = %+v", f.updated)
+		}
+	})
+
+	t.Run("a password needs the keyring", func(t *testing.T) {
+		t.Parallel()
+		f := &fakeEngineStore{cluster: &db.TrinoCluster{Name: "default"}}
+		if err := EnsureDefaultTrinoEngine(ctx, discard, f, DefaultTrinoEngine{URL: "https://trino:8443", Password: true}); err == nil {
+			t.Fatal("want an error without Seal")
+		}
+	})
+}

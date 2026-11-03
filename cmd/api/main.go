@@ -10,12 +10,15 @@ import (
 
 	"github.com/galileostudio/baleia/internal/app"
 	"github.com/galileostudio/baleia/internal/bootstrap"
+	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/server"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func main() {
@@ -64,6 +67,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	if err := pgx.BeginFunc(ctx, core.Pool, func(tx pgx.Tx) error {
 		return bootstrap.EnsureDefaultTrinoEngine(ctx, logger, db.New(tx), bootstrap.DefaultTrinoEngine{
 			URL: cfg.TrinoURL, ServiceUser: cfg.TrinoServiceUser, AdminUser: cfg.TrinoAdminUser,
+			Password: cfg.TrinoPassword != "", CA: core.TrinoCA, Seal: sealCredentials(core.Keyring),
 		})
 	}); err != nil {
 		return fmt.Errorf("default trino engine: %w", err)
@@ -74,4 +78,15 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("server setup: %w", err)
 	}
 	return srv.Run(ctx)
+}
+
+// sealCredentials seals a connection's credentials with the keyring; nil when
+// no keyring is configured (config.Validate refuses a Trino password then).
+func sealCredentials(kr *crypto.Keyring) func([]byte, pgtype.UUID) (string, error) {
+	if kr == nil {
+		return nil
+	}
+	return func(plain []byte, id pgtype.UUID) (string, error) {
+		return kr.Seal(plain, catalogs.CredentialsAAD(id))
+	}
 }

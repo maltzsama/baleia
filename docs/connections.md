@@ -235,6 +235,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `admin_user` | text |  | `baleia-admin` | Identity that cancels queries; never runs user SQL |
 | `username` | text |  |  | Password authentication (HTTPS only); must be allowed to impersonate the identities Baleia sends |
 | `password` | secret |  |  |  |
+| `ca_cert` | text |  |  | PEM bundle trusted for the coordinator's certificate, besides the system roots |
 
 ## `unity` — Unity Catalog
 

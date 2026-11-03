@@ -52,6 +52,7 @@ func (*Provider) ConfigSchema() []connections.Field {
 		{Key: "admin_user", Label: "Admin user", Type: connections.FieldText, Default: "baleia-admin", Help: "Identity that cancels queries; never runs user SQL"},
 		{Key: "username", Label: "Login user", Type: connections.FieldText, Help: "Password authentication (HTTPS only); must be allowed to impersonate the identities Baleia sends"},
 		{Key: "password", Label: "Password", Type: connections.FieldSecret},
+		{Key: "ca_cert", Label: "CA certificate", Type: connections.FieldText, Help: "PEM bundle trusted for the coordinator's certificate, besides the system roots"},
 	}
 }
 
@@ -69,35 +70,48 @@ func (p *Provider) Validate(cfg connections.Config) (connections.Config, error) 
 	case password && u.Scheme != "https":
 		return connections.Config{}, &connections.ValidationError{Fields: []connections.FieldError{{Key: "url", Message: "password authentication needs an https URL"}}}
 	}
+	if ca := out.Values["ca_cert"]; ca != "" {
+		if _, err := trinoclient.WithRootCAs(&http.Client{Transport: &http.Transport{}}, ca); err != nil {
+			return connections.Config{}, &connections.ValidationError{Fields: []connections.FieldError{{Key: "ca_cert", Message: "not a PEM certificate bundle"}}}
+		}
+	}
 	return out, nil
 }
 
-// HTTPClient is the dialer's client, authenticated when the connection has a
-// password. The Trino engine uses it too.
-func HTTPClient(d *connections.Dialer, cfg connections.Config, timeout time.Duration) *http.Client {
-	hc := d.HTTPClient(timeout)
-	if cfg.Secret("password") != "" {
-		hc = trinoclient.WithBasicAuth(hc, cfg.Value("username"), cfg.Secret("password"))
-	}
-	return hc
+// HTTPClient is the dialer's client, trusting the connection's CA bundle and
+// authenticated when the connection has a password. The Trino engine uses it
+// too.
+func HTTPClient(d *connections.Dialer, cfg connections.Config, timeout time.Duration) (*http.Client, error) {
+	return trinoclient.Authenticated(d.HTTPClient(timeout), cfg.Value("username"), cfg.Secret("password"), cfg.Value("ca_cert"))
 }
 
-func (p *Provider) client(cfg connections.Config) *trinoclient.Client {
+func (p *Provider) client(cfg connections.Config) (*trinoclient.Client, error) {
 	user := cfg.Value("service_user")
 	if user == "" {
 		user = "baleia"
 	}
-	return trinoclient.NewWithHTTPClient(cfg.Value("url"), user, HTTPClient(p.dialer, cfg, requestTimeout))
+	hc, err := HTTPClient(p.dialer, cfg, requestTimeout)
+	if err != nil {
+		return nil, err
+	}
+	return trinoclient.NewWithHTTPClient(cfg.Value("url"), user, hc), nil
 }
 
 // Ping runs a statement: /v1/info answers without authentication.
 func (p *Provider) Ping(ctx context.Context, cfg connections.Config) error {
-	_, err := p.client(cfg).Execute(ctx, "SELECT 1", "", "")
+	c, err := p.client(cfg)
+	if err != nil {
+		return err
+	}
+	_, err = c.Execute(ctx, "SELECT 1", "", "")
 	return err
 }
 
 func (p *Provider) OpenMetadata(ctx context.Context, cfg connections.Config) (connections.MetadataReader, error) {
-	c := p.client(cfg)
+	c, err := p.client(cfg)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := c.Execute(ctx, "SELECT 1", "", ""); err != nil {
 		return nil, err
 	}

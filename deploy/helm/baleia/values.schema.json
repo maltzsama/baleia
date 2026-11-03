@@ -26,6 +26,7 @@
             "BALEIA_REGISTRY_KEY_PREVIOUS": { "type": "string" },
             "DATABASE_URL": { "type": "string" },
             "BALEIA_TRINO_DB_PASSWORD": { "type": "string" },
+            "BALEIA_TRINO_PASSWORD": { "type": "string" },
             "S3_ACCESS_KEY": { "type": "string" },
             "S3_SECRET_KEY": { "type": "string" },
             "SMTP_PASSWORD": { "type": "string" },

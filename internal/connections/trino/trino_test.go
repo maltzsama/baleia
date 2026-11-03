@@ -29,6 +29,7 @@ func TestValidate(t *testing.T) {
 		{Values: map[string]string{"url": "http://trino:8080", "username": "u"}, Secrets: map[string]string{"password": "p"}},
 		{Values: map[string]string{"url": "https://trino:8443", "username": "u"}},
 		{Values: map[string]string{"url": "https://trino:8443"}, Secrets: map[string]string{"password": "p"}},
+		{Values: map[string]string{"url": "https://trino:8443", "ca_cert": "not a pem"}},
 	} {
 		if _, err := p.Validate(c); !errors.Is(err, connections.ErrValidation) {
 			t.Errorf("%v accepted: %v", c.Values, err)
@@ -52,7 +53,11 @@ func TestLiteralsKeepPercent(t *testing.T) {
 	defer srv.Close()
 	p := provider(t)
 	cfg, _ := p.Validate(connections.Config{Values: map[string]string{"url": srv.URL}})
-	r := &reader{c: p.client(cfg), dialect: p.dialect}
+	c, err := p.client(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &reader{c: c, dialect: p.dialect}
 	_, _, _ = r.ListTables(context.Background(), "cat{catalog}", connections.Namespace{"a%sb{catalog}"}, "x%d")
 	want := `FROM "cat{catalog}".information_schema.tables`
 	if !strings.Contains(got, want) || !strings.Contains(got, `'a%sb{catalog}'`) || !strings.Contains(got, `'x%d'`) {

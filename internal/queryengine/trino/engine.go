@@ -50,7 +50,11 @@ func newEngine(dl queryengine.Dialect, logger *slog.Logger) queryengine.Factory 
 		}
 		service := valueOr(cfg.Value("service_user"), defaultServiceUser)
 		admin := valueOr(cfg.Value("admin_user"), defaultAdminUser)
-		hc := obs.WrapHTTPClient(trinoprovider.HTTPClient(d, cfg, requestTimeout))
+		hc, err := trinoprovider.HTTPClient(d, cfg, requestTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("trino engine %s: %w", row.Name, err)
+		}
+		hc = obs.WrapHTTPClient(hc)
 		return &Engine{
 			logger:  cmp.Or(logger, slog.New(slog.DiscardHandler)),
 			dialect: dl,

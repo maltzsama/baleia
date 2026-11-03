@@ -73,6 +73,8 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_SQLITE_ALLOW_WRITE` | `false` | Let a SQLite connection that sets `read_write` open its file read-write; otherwise files open read-only |
 | `BALEIA_CONNECTIONS_ALLOW_LOOPBACK` | `false` | Let connections reach loopback addresses. For local development only (`make dev` / `make worker` set it); never in a shared deployment |
 | `BALEIA_TRINO_ADMIN_USER` | `baleia_admin` | Trino identity for catalog DDL/reconcile/maintenance (never user SQL) |
+| `BALEIA_TRINO_PASSWORD` | — | Password of `BALEIA_TRINO_ADMIN_USER` on a coordinator that requires authentication. Baleia logs in with it on every request to `TRINO_URL` (default engine, catalog DDL, Lens) and impersonates the service and per-user identities, so Trino's access control must let that login impersonate them. Needs an `https` `TRINO_URL` and `BALEIA_ENCRYPTION_KEY`: the default engine stores a sealed reference to this variable, never the password. Unset: no authentication |
+| `BALEIA_TRINO_CA_FILE` | — | PEM bundle trusted for the coordinator's certificate, besides the system roots (a private CA or a self-signed certificate) |
 | `BALEIA_TRINO_SERVICE_USER` | `baleia` | Worker fallback identity for executions |
 | `BALEIA_TRINO_USER_IDENTITY` | `uuid` | Map Baleia users to Trino users: `uuid`→`u_<uuid>` or `email` |
 | `BALEIA_AGENTS_ENABLED` | `false` | Mount the agent management API and `/mcp` ([mcp.md](mcp.md)). Off by default |
