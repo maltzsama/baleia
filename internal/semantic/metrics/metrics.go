@@ -342,6 +342,8 @@ func checkFields(f Fields) error {
 		return &InvalidFieldError{Msg: "label is required"}
 	case strings.TrimSpace(f.Table) == "":
 		return &InvalidFieldError{Msg: "table is required"}
+	case len(f.Namespace) == 0:
+		return &InvalidFieldError{Msg: "namespace is required"}
 	}
 	return nil
 }

@@ -74,7 +74,7 @@ func (f *fakeStore) DeleteSemanticMetric(context.Context, pgtype.UUID, pgtype.UU
 }
 
 func fields() Fields {
-	return Fields{Slug: "orders", Label: "Orders", CatalogID: newID(), Table: "orders"}
+	return Fields{Slug: "orders", Label: "Orders", CatalogID: newID(), Namespace: []string{"sf1"}, Table: "orders"}
 }
 
 func TestPrepare(t *testing.T) {
@@ -88,9 +88,10 @@ func TestPrepare(t *testing.T) {
 	}
 	var field *InvalidFieldError
 	for _, f := range []Fields{
-		{Slug: "Bad Slug", Label: "x", Table: "t"},
-		{Slug: "ok", Label: " ", Table: "t"},
-		{Slug: "ok", Label: "x", Table: ""},
+		{Slug: "Bad Slug", Label: "x", Namespace: []string{"ns"}, Table: "t"},
+		{Slug: "ok", Label: " ", Namespace: []string{"ns"}, Table: "t"},
+		{Slug: "ok", Label: "x", Namespace: []string{"ns"}, Table: ""},
+		{Slug: "ok", Label: "x", Table: "t"}, // namespace missing
 	} {
 		if _, err := Prepare(f, count); !errors.As(err, &field) {
 			t.Errorf("Prepare(%+v) = %v, want an InvalidFieldError", f, err)
@@ -123,7 +124,7 @@ func TestCreate_Certification(t *testing.T) {
 func TestMerge(t *testing.T) {
 	t.Parallel()
 	p, _ := Prepare(fields(), count)
-	current := db.SemanticMetric{Slug: p.Slug, Label: p.Label, TableName: p.Table, CatalogID: p.CatalogID, Certified: true, Definition: p.Raw}
+	current := db.SemanticMetric{Slug: p.Slug, Label: p.Label, Namespace: p.Namespace, TableName: p.Table, CatalogID: p.CatalogID, Certified: true, Definition: p.Raw}
 
 	yes, no := true, false
 	if _, err := Merge(current, Change{Certified: &no}, false); !errors.Is(err, ErrCertifyForbidden) {

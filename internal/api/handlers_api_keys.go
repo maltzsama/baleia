@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
@@ -33,6 +34,19 @@ func (h *AuthHandlers) CreateApiKey(ctx context.Context, request CreateApiKeyReq
 	uid, err := uuidFromString(userID)
 	if err != nil {
 		return CreateApiKey401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
+	}
+
+	if !requiredName(request.Body.Name) {
+		return CreateApiKey422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"name is required",
+			FieldError{Field: "name", Code: FieldCodeRequired},
+		)}, nil
+	}
+	if request.Body.ExpiresAt != nil && !request.Body.ExpiresAt.After(time.Now()) {
+		return CreateApiKey422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"expires_at must be in the future",
+			FieldError{Field: "expires_at", Code: FieldCodeOutOfRange},
+		)}, nil
 	}
 
 	key, secret, err := h.apiKeys.Create(ctx, uid, request.Body.Name, request.Body.ExpiresAt)

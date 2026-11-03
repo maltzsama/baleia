@@ -47,6 +47,13 @@ func (h *QueryHandlers) CreateRetriever(ctx context.Context, request CreateRetri
 		}
 		return nil, err
 	}
+	if !requiredName(request.Body.Name) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return CreateRetriever422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"name is required",
+			FieldError{Field: "name", Code: FieldCodeRequired},
+		)}, nil
+	}
 
 	uid, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -115,6 +122,24 @@ func (h *QueryHandlers) UpdateRetriever(ctx context.Context, request UpdateRetri
 	}
 
 	b := request.Body
+	if b.Name != nil && !requiredName(*b.Name) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return UpdateRetriever422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"name is required",
+			FieldError{Field: "name", Code: FieldCodeRequired},
+		)}, nil
+	}
+	if b.Status != nil {
+		switch *b.Status {
+		case UpdateRetrieverRequestStatusActive, UpdateRetrieverRequestStatusPaused:
+		default:
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return UpdateRetriever422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+				"status must be active or paused",
+				FieldError{Field: "status", Code: FieldCodeNotAllowed},
+			)}, nil
+		}
+	}
 	change := retrievers.Change{
 		Name:          b.Name,
 		DefinitionSQL: b.DefinitionSql,
@@ -140,7 +165,7 @@ func (h *QueryHandlers) UpdateRetriever(ctx context.Context, request UpdateRetri
 	}
 	if code, msg, ok := retrieverRejection(err); ok {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return UpdateRetriever422JSONResponse{Code: code, Message: msg}, nil
+		return UpdateRetriever422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(code, msg)}, nil
 	}
 	if err != nil {
 		return nil, err

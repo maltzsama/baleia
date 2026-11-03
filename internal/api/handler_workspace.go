@@ -42,10 +42,23 @@ func (h *WorkspaceHandlers) CreateWorkspace(ctx context.Context, request CreateW
 
 	role := auth.RoleFromContext(ctx)
 
+	if !requiredName(request.Body.Name) {
+		return CreateWorkspace422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"name is required",
+			FieldError{Field: "name", Code: FieldCodeRequired},
+		)}, nil
+	}
+
 	var ownerUserID pgtype.UUID
 	var ownerTeamID pgtype.UUID
 
 	wsType := string(request.Body.Type)
+	if wsType != "personal" && wsType != "shared" {
+		return CreateWorkspace422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"type must be personal or shared",
+			FieldError{Field: "type", Code: FieldCodeNotAllowed},
+		)}, nil
+	}
 
 	if wsType == "shared" {
 		if role != "admin" {

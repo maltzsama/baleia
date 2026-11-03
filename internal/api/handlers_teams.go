@@ -43,6 +43,13 @@ func (h *WorkspaceHandlers) CreateTeam(ctx context.Context, request CreateTeamRe
 		return nil, err
 	}
 
+	if !requiredName(request.Body.Name) {
+		return CreateTeam422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"name is required",
+			FieldError{Field: "name", Code: FieldCodeRequired},
+		)}, nil
+	}
+
 	team, err := h.teams.Create(ctx, request.Body.Name, request.Body.Description, uid)
 	if err != nil {
 		return nil, err

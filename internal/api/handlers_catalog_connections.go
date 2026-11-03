@@ -85,6 +85,17 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return CreateCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only admins may create connections"}}, nil
 	}
+	if request.Body == nil {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
+	}
+	if !requiredName(request.Body.Name) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"name is required",
+			FieldError{Field: "name", Code: FieldCodeRequired},
+		)}, nil
+	}
 	cfg, err := h.createConfig(connID, request.Body)
 	var ce *configError
 	if errors.As(err, &ce) {

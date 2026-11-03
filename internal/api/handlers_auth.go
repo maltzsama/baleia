@@ -559,6 +559,13 @@ func (h *AuthHandlers) UpdateProfile(ctx context.Context, request UpdateProfileR
 		return UpdateProfile401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
+	if request.Body.Email != nil && !validEmail(string(*request.Body.Email)) {
+		return UpdateProfile422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"email must be a valid address",
+			FieldError{Field: "email", Code: FieldCodeInvalidFormat},
+		)}, nil
+	}
+
 	change := account.Profile{Name: request.Body.Name}
 	if request.Body.Email != nil {
 		email := string(*request.Body.Email)

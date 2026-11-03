@@ -178,6 +178,13 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 	if body.ExtraProps != nil {
 		extra = *body.ExtraProps
 	}
+	if !validEngineCatalogName(body.EngineCatalogName) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"engine_catalog_name must match ^[a-z][a-z0-9_]{0,62}$",
+			FieldError{Field: "engine_catalog_name", Code: FieldCodeInvalidFormat},
+		)}, nil
+	}
 	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, body.EngineCatalogName, connector, extra))
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
@@ -272,6 +279,13 @@ func (h *CatalogHandlers) UpdateCatalogBinding(ctx context.Context, request Upda
 	body := *request.Body
 	name, extra, enabled := cur.EngineCatalogName, extraPropsOf(h.logger, cur.ExtraProps), cur.Enabled
 	if body.EngineCatalogName != nil {
+		if !validEngineCatalogName(*body.EngineCatalogName) {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return UpdateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+				"engine_catalog_name must match ^[a-z][a-z0-9_]{0,62}$",
+				FieldError{Field: "engine_catalog_name", Code: FieldCodeInvalidFormat},
+			)}, nil
+		}
 		name = *body.EngineCatalogName
 	}
 	if body.ExtraProps != nil {

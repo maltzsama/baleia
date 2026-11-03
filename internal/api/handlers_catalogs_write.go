@@ -114,6 +114,13 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "trino_catalog_name, name and warehouse are required"}}, nil
 	}
+	if !validEngineCatalogName(body.TrinoCatalogName) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"trino_catalog_name must match ^[a-z][a-z0-9_]{0,62}$",
+			FieldError{Field: "trino_catalog_name", Code: FieldCodeInvalidFormat},
+		)}, nil
+	}
 
 	cluster, err := h.topology.DefaultCluster(ctx)
 	if err != nil {
@@ -122,6 +129,13 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	connector := ""
 	if body.Connector != nil {
 		connector = *body.Connector
+	}
+	if connector != "" && !validEngineCatalogName(connector) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"connector must match ^[a-z][a-z0-9_]{0,62}$",
+			FieldError{Field: "connector", Code: FieldCodeInvalidFormat},
+		)}, nil
 	}
 	extra := map[string]string{}
 	if body.ExtraProps != nil {
@@ -329,6 +343,20 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 		return UpdateCatalog422JSONResponse{UnprocessableEntityJSONResponse: notManaged()}, nil
 	}
 	body := *request.Body
+	if body.TrinoCatalogName != "" && !validEngineCatalogName(body.TrinoCatalogName) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return UpdateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"trino_catalog_name must match ^[a-z][a-z0-9_]{0,62}$",
+			FieldError{Field: "trino_catalog_name", Code: FieldCodeInvalidFormat},
+		)}, nil
+	}
+	if body.Connector != nil && *body.Connector != "" && !validEngineCatalogName(*body.Connector) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return UpdateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"connector must match ^[a-z][a-z0-9_]{0,62}$",
+			FieldError{Field: "connector", Code: FieldCodeInvalidFormat},
+		)}, nil
+	}
 
 	newTrinoName := existing.TrinoName()
 	if body.TrinoCatalogName != "" {
