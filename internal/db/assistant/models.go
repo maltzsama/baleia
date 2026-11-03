@@ -174,19 +174,17 @@ type CatalogBinding struct {
 }
 
 type CatalogConnection struct {
-	ID                  pgtype.UUID        `json:"id"`
-	Name                string             `json:"name"`
-	Type                string             `json:"type"`
-	Url                 string             `json:"url"`
-	CredentialsEnc      *string            `json:"credentials_enc"`
-	DefaultReadonly     bool               `json:"default_readonly"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	Host                *string            `json:"host"`
-	Port                *string            `json:"port"`
-	CreatedBy           pgtype.UUID        `json:"created_by"`
-	Config              []byte             `json:"config"`
-	CredentialsReadOnly bool               `json:"credentials_read_only"`
+	ID             pgtype.UUID        `json:"id"`
+	Name           string             `json:"name"`
+	Type           string             `json:"type"`
+	Url            string             `json:"url"`
+	CredentialsEnc *string            `json:"credentials_enc"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	Host           *string            `json:"host"`
+	Port           *string            `json:"port"`
+	CreatedBy      pgtype.UUID        `json:"created_by"`
+	Config         []byte             `json:"config"`
 }
 
 type CatalogReconcileRun struct {
@@ -839,7 +837,6 @@ type Workspace struct {
 type WorkspaceCatalogGrant struct {
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 	CatalogID   pgtype.UUID        `json:"catalog_id"`
-	Permission  string             `json:"permission"`
 	GrantedBy   pgtype.UUID        `json:"granted_by"`
 	GrantedAt   pgtype.Timestamptz `json:"granted_at"`
 }

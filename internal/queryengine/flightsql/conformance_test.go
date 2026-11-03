@@ -60,16 +60,6 @@ func TestMultiEndpoint(t *testing.T) {
 	}
 }
 
-// TestReadOnlyRequiresAssertion: the protocol has no read-only session, so a
-// read-only target needs the credentials_read_only assertion.
-func TestReadOnlyRequiresAssertion(t *testing.T) {
-	e := newEngineForTest(t, false)
-	guarded := queryengine.Guard(e, false)
-	if _, err := guarded.OpenSession(context.Background(), queryengine.SessionSpec{ReadOnly: true}); queryengine.CodeOf(err) != queryengine.CodeReadOnly {
-		t.Fatalf("OpenSession(read-only) = %v, want read_only_unsupported", err)
-	}
-}
-
 // TestSessionStateIsPerSession: SET/SHOW are tracked per session and do not
 // leak into a new one.
 func TestSessionStateIsPerSession(t *testing.T) {
@@ -130,7 +120,7 @@ func newEngineForTest(t *testing.T, multi bool) queryengine.Engine {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = e.Close() })
-	return queryengine.Guard(e, false)
+	return queryengine.Guard(e)
 }
 
 func seed(t *testing.T, db *sql.DB) {

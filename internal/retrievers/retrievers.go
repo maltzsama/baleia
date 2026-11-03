@@ -71,7 +71,7 @@ var (
 	ErrRefreshNotSupported = errors.New("only 'full' refresh is supported in v1; 'incremental' requires a separate design")
 	// ErrDestinationNotEligible: the destination is not an active Iceberg
 	// binding on a federated engine that the workspace may write to.
-	ErrDestinationNotEligible = errors.New("the destination must be an active Iceberg binding on a federated engine with a write grant")
+	ErrDestinationNotEligible = errors.New("the destination must be an active Iceberg binding, granted to the workspace, on a federated engine")
 	// ErrBindingNotFound: the destination binding is gone.
 	ErrBindingNotFound = errors.New("retrievers: binding not found")
 	// ErrEngineUnavailable: the destination engine cannot be reached.

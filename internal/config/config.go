@@ -153,10 +153,8 @@ type Config struct {
 	// addresses.
 	ConnectionsCreate string
 	// SQLiteRoot confines SQLite connections to files under it; empty
-	// disables the SQLite provider. SQLiteAllowWrite lets a connection that
-	// asks for it open its file read-write.
-	SQLiteRoot       string
-	SQLiteAllowWrite bool
+	// disables the SQLite provider.
+	SQLiteRoot string
 	// AllowAmbientAWSCredentials lets a Glue connection with no explicit keys
 	// or role use the host's default AWS credential chain (#86). Off by
 	// default: any connection owner could otherwise use the platform's IAM role.
@@ -301,7 +299,6 @@ func Load() *Config {
 		ConnectionsAllowLoopback:    getEnv("BALEIA_CONNECTIONS_ALLOW_LOOPBACK", "false") == "true",
 		ConnectionsCreate:           getEnv("BALEIA_CONNECTIONS_CREATE", "admins"),
 		SQLiteRoot:                  getEnv("BALEIA_SQLITE_ROOT", ""),
-		SQLiteAllowWrite:            getEnv("BALEIA_SQLITE_ALLOW_WRITE", "false") == "true",
 		AllowAmbientAWSCredentials:  getEnv("BALEIA_ALLOW_AMBIENT_AWS_CREDENTIALS", "false") == "true",
 		MetricsEnabled:              getEnv("BALEIA_METRICS_ENABLED", "true") == "true",
 		MetricsToken:                getEnv("BALEIA_METRICS_TOKEN", ""),

@@ -29,7 +29,7 @@ func trinoBackends(url string) (engineSource, *bindtrino.Binder) {
 	if err != nil {
 		panic(err)
 	}
-	eng := queryengine.Guard(qtrino.New("test-trino", url, "baleia", "baleia_admin", d, dialect.NewRegistry().MustGet(dialect.Trino)), false)
+	eng := queryengine.Guard(qtrino.New("test-trino", url, "baleia", "baleia_admin", d, dialect.NewRegistry().MustGet(dialect.Trino)))
 	return fixedEngines{eng}, bindtrino.New(slog.New(slog.DiscardHandler), trino.NewWithHTTPClient(url, "baleia_admin", d.HTTPClient(0)), nil)
 }
 

@@ -62,8 +62,6 @@ var (
 	ErrPersonal = errors.New("personal workspaces cannot be deleted")
 	// ErrExecutionsRunning: the workspace has running executions.
 	ErrExecutionsRunning = errors.New("wait for the workspace's running executions to finish")
-	// ErrInvalidPermission: a grant is read or write.
-	ErrInvalidPermission = errors.New("permission must be read or write")
 	// ErrGrantNotFound: the catalog is not granted to the workspace.
 	ErrGrantNotFound = errors.New("grant not found")
 )
@@ -184,13 +182,11 @@ func (s *Service) Grants(ctx context.Context, ws pgtype.UUID) ([]db.ListWorkspac
 	return s.store.ListWorkspaceCatalogGrants(ctx, ws)
 }
 
-// Grant grants a catalog to a workspace, or changes the permission of an
-// existing grant.
-func (s *Service) Grant(ctx context.Context, ws, catalogID pgtype.UUID, permission string, by pgtype.UUID) (db.WorkspaceCatalogGrant, error) {
-	if permission != "read" && permission != "write" {
-		return db.WorkspaceCatalogGrant{}, ErrInvalidPermission
-	}
-	return s.store.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{WorkspaceID: ws, CatalogID: catalogID, Permission: permission, GrantedBy: by})
+// Grant makes a catalog usable in a workspace; granting it again refreshes
+// who granted it. A grant carries no read/write permission: the engine and the
+// catalog manager decide what may be read or written (#651).
+func (s *Service) Grant(ctx context.Context, ws, catalogID pgtype.UUID, by pgtype.UUID) (db.WorkspaceCatalogGrant, error) {
+	return s.store.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{WorkspaceID: ws, CatalogID: catalogID, GrantedBy: by})
 }
 
 // Revoke removes a grant and, in the same transaction, a default target on

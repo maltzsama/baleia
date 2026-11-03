@@ -326,7 +326,7 @@ func (q *Queries) InsertEphemeralRegistryRow(ctx context.Context, arg InsertEphe
 
 const listCatalogGrants = `-- name: ListCatalogGrants :many
 SELECT g.workspace_id, w.name AS workspace_name, w.type AS workspace_type,
-       g.permission, g.granted_by, g.granted_at
+       g.granted_by, g.granted_at
 FROM workspace_catalog_grants g
 JOIN workspaces w ON w.id = g.workspace_id
 WHERE g.catalog_id = $1
@@ -337,7 +337,6 @@ type ListCatalogGrantsRow struct {
 	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
 	WorkspaceName string             `json:"workspace_name"`
 	WorkspaceType string             `json:"workspace_type"`
-	Permission    string             `json:"permission"`
 	GrantedBy     pgtype.UUID        `json:"granted_by"`
 	GrantedAt     pgtype.Timestamptz `json:"granted_at"`
 }
@@ -355,7 +354,6 @@ func (q *Queries) ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) 
 			&i.WorkspaceID,
 			&i.WorkspaceName,
 			&i.WorkspaceType,
-			&i.Permission,
 			&i.GrantedBy,
 			&i.GrantedAt,
 		); err != nil {

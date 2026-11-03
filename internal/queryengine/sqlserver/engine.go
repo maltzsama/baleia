@@ -110,7 +110,7 @@ func (e *Engine) Capabilities() queryengine.Capabilities {
 		Dialect:       dialect.TSQL,
 		IdentityModes: []string{"connection"},
 		// ApplicationIntent=ReadOnly is availability-group routing, not
-		// enforcement: a read grant needs the credentials_read_only assertion.
+		// enforcement, so a read-only session is not enforced here (#651).
 		ReadOnly:            queryengine.ReadOnlyNone,
 		CancelScope:         scope,
 		SupportsCancel:      true,

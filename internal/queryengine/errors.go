@@ -19,7 +19,6 @@ const (
 	CodeCancelled   ErrorCode = "cancelled"
 	CodeResource    ErrorCode = "resource_exhausted"
 	CodeUnavailable ErrorCode = "engine_unavailable"
-	CodeReadOnly    ErrorCode = "read_only_unsupported"
 	CodeConflict    ErrorCode = "conflict" // serialization/deadlock — never retried automatically
 	CodeInternal    ErrorCode = "internal"
 )

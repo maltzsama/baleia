@@ -64,7 +64,6 @@ type Store interface {
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
 	CatalogGrantedToAgent(ctx context.Context, arg db.CatalogGrantedToAgentParams) (bool, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
-	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
 	CountRunningExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error)
 	CountExecutionsByAgentSince(ctx context.Context, arg db.CountExecutionsByAgentSinceParams) (int64, error)
 	OldestExecutionByAgentSince(ctx context.Context, arg db.OldestExecutionByAgentSinceParams) (pgtype.Timestamptz, error)
@@ -243,11 +242,7 @@ func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff
 	if err != nil {
 		return Decision{}, err
 	}
-	conn, err := g.store.GetCatalogConnectionByID(ctx, engine.ConnectionID)
-	if err != nil {
-		return Decision{}, err
-	}
-	if cap != queryengine.ReadOnlyEnforced && !conn.CredentialsReadOnly {
+	if cap != queryengine.ReadOnlyEnforced {
 		return refuse(ReasonScope, "read-only is not enforced on this engine"), nil
 	}
 

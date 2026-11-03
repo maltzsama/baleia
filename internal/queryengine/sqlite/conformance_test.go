@@ -20,10 +20,10 @@ func TestConformance(t *testing.T) {
 	path := filepath.Join(dir, "conformance.db")
 	setupConformance(t, path)
 
-	o := Options{Root: dir, AllowWrite: true}
+	o := Options{Root: dir}
 	cfg := connections.Config{
 		Kind:   connections.KindSQLite,
-		Values: map[string]string{"path": "conformance.db", "read_write": "true"},
+		Values: map[string]string{"path": "conformance.db"},
 	}
 	conformance.Run(t, func(t *testing.T) queryengine.Engine {
 		e, err := newEngineWithOptions(queryengine.EngineRow{ID: "conformance", Kind: Kind}, cfg, o, testDialect)

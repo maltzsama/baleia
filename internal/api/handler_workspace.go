@@ -200,7 +200,6 @@ func (h *WorkspaceHandlers) ListWorkspaceCatalogAccess(ctx context.Context, requ
 		out = append(out, WorkspaceCatalogAccess{
 			CatalogId:   openapi_types.UUID(r.CatalogID.Bytes),
 			CatalogName: &name,
-			Permission:  WorkspaceCatalogAccessPermission(r.Permission),
 			GrantedAt:   pgTimestampToTime(r.GrantedAt),
 		})
 	}
@@ -226,25 +225,11 @@ func (h *WorkspaceHandlers) GrantCatalogAccess(ctx context.Context, request Gran
 	if err != nil {
 		return grantAccessError(err)
 	}
-	grant, err := h.workspaces.Grant(ctx, wsID, cat.ID, string(request.Body.Permission), p.UserID)
-	if errors.Is(err, wsmanage.ErrInvalidPermission) {
-		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return GrantCatalogAccess422JSONResponse{
-			UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{
-				Code:    ErrorCodeValidationError,
-				Message: err.Error(),
-				Errors: []struct {
-					Field   *string `json:"field,omitempty"`
-					Message *string `json:"message,omitempty"`
-				}{{fieldPtr("permission"), msgPtr("must be read or write")}},
-			},
-		}, nil
-	}
+	grant, err := h.workspaces.Grant(ctx, wsID, cat.ID, p.UserID)
 	if err != nil {
 		return nil, err
 	}
 	h.catalogCache.Clear()
-	ev.Changes = map[string]audit.Change{"permission": {To: grant.Permission}}
 	h.audited(ctx, ev.Allowed())
 
 	name := cat.TrinoName()
@@ -254,7 +239,6 @@ func (h *WorkspaceHandlers) GrantCatalogAccess(ctx context.Context, request Gran
 	return GrantCatalogAccess201JSONResponse(WorkspaceCatalogAccess{
 		CatalogId:   openapi_types.UUID(grant.CatalogID.Bytes),
 		CatalogName: &name,
-		Permission:  WorkspaceCatalogAccessPermission(grant.Permission),
 		GrantedAt:   pgTimestampToTime(grant.GrantedAt),
 	}), nil
 }

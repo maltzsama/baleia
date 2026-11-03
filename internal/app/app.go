@@ -165,7 +165,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.Connections, err = providers.New(c.Dialer, providers.Options{
 		Dialects: c.Dialects,
 		Secrets:  connections.SecretResolver{FileBaseDir: cfg.SecretFileBaseDir},
-		SQLite:   sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite, Logger: c.Logger},
+		SQLite:   sqlite.Options{Root: cfg.SQLiteRoot, Logger: c.Logger},
 		Glue:     glue.Options{AllowAmbientCredentials: cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: cfg.ConnectionsAllowLoopback},
 	})
 	if err != nil {
@@ -175,7 +175,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	// (docs/adr/0011).
 	kinds, err := engines.NewRegistry(engines.Options{
 		Dialects: c.Dialects,
-		SQLite:   sqliteengine.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite},
+		SQLite:   sqliteengine.Options{Root: cfg.SQLiteRoot},
 		Oracle:   oracle.Options{LOBMaxBytes: cfg.OracleLOBMaxBytes},
 		Logger:   c.Logger,
 	})

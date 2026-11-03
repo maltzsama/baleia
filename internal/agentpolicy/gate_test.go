@@ -261,11 +261,6 @@ func TestReadOnlyEnforcement(t *testing.T) {
 	if dec := f.check(t, f.call(ToolRunQuery, str("SELECT 1"))); dec.Allowed || dec.Reason != ReasonScope {
 		t.Fatalf("unenforced engine = %+v, want scope refusal", dec)
 	}
-
-	f.store.conn.CredentialsReadOnly = true
-	if dec := f.check(t, f.call(ToolRunQuery, str("SELECT 1"))); !dec.Allowed {
-		t.Fatalf("asserted read-only credentials = %+v, want allowed", dec)
-	}
 }
 
 func TestDisabledAgentAndForeignOwner(t *testing.T) {

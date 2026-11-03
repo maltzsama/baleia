@@ -133,9 +133,9 @@ func TestAuditMatrix(t *testing.T) {
 		t.Fatal(err)
 	}
 	catID := openapi_types.UUID(cat.Bytes)
-	_, _ = h.GrantCatalogAccess(owner, GrantCatalogAccessRequestObject{Id: f.ownerWS, Body: &GrantCatalogAccessRequest{CatalogId: catID, Permission: "read"}})
+	_, _ = h.GrantCatalogAccess(owner, GrantCatalogAccessRequestObject{Id: f.ownerWS, Body: &GrantCatalogAccessRequest{CatalogId: catID}})
 	one(t, "grant.create", mem.take(), audit.GrantCreate, audit.Allowed)
-	_, _ = h.GrantCatalogAccess(stranger, GrantCatalogAccessRequestObject{Id: f.ownerWS, Body: &GrantCatalogAccessRequest{CatalogId: catID, Permission: "read"}})
+	_, _ = h.GrantCatalogAccess(stranger, GrantCatalogAccessRequestObject{Id: f.ownerWS, Body: &GrantCatalogAccessRequest{CatalogId: catID}})
 	one(t, "grant.create by a stranger", mem.take(), audit.GrantCreate, audit.Denied)
 	_, _ = h.RevokeCatalogAccess(owner, RevokeCatalogAccessRequestObject{Id: f.ownerWS, CatalogId: catID})
 	one(t, "grant.revoke", mem.take(), audit.GrantRevoke, audit.Allowed)

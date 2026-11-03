@@ -73,25 +73,21 @@ USING catalog_bindings b
 WHERE b.catalog_id = c.id AND b.engine_id = $1 AND b.mode = 'native' AND c.origin = 'native';
 
 -- name: ListWorkspaceTargets :many
--- Every binding of a catalog the workspace may use, with the strongest
--- permission it holds on that catalog: 'write' for the catalogs of the owner
--- of a personal workspace (their own connections), else the grant (#16).
--- Disabled bindings, engines and catalogs are included; callers filter.
+-- Every binding of a catalog the workspace may use: the catalogs of the owner
+-- of a personal workspace (their own connections) and the granted ones (#16).
+-- A grant only makes a catalog usable; the engine and the catalog manager
+-- decide what may be read or written (#651). Disabled bindings, engines and
+-- catalogs are included; callers filter.
 WITH visible AS (
-    SELECT c.id AS catalog_id, 'write'::text AS permission
+    SELECT c.id AS catalog_id
     FROM catalogs c
     JOIN catalog_connections cc ON cc.id = c.connection_id
     JOIN workspaces w ON w.id = sqlc.arg('workspace_id')
     WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id
-    UNION ALL
-    SELECT g.catalog_id, g.permission
+    UNION
+    SELECT g.catalog_id
     FROM workspace_catalog_grants g
     WHERE g.workspace_id = sqlc.arg('workspace_id')
-), perm AS (
-    SELECT catalog_id,
-           (CASE WHEN bool_or(permission = 'write') THEN 'write' ELSE 'read' END)::text AS permission
-    FROM visible
-    GROUP BY catalog_id
 )
 SELECT
     b.id                  AS binding_id,
@@ -104,9 +100,8 @@ SELECT
     e.enabled             AS engine_enabled,
     c.id                  AS catalog_id,
     c.name                AS catalog_name,
-    c.enabled             AS catalog_enabled,
-    p.permission
-FROM perm p
+    c.enabled             AS catalog_enabled
+FROM visible p
 JOIN catalogs c ON c.id = p.catalog_id
 JOIN catalog_bindings b ON b.catalog_id = c.id
 JOIN engines e ON e.id = b.engine_id

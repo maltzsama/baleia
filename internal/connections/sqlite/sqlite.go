@@ -29,8 +29,7 @@ const Catalog = "main"
 
 // Options are the server-side SQLite settings.
 type Options struct {
-	Root       string // BALEIA_SQLITE_ROOT; empty disables the provider
-	AllowWrite bool   // BALEIA_SQLITE_ALLOW_WRITE
+	Root string // BALEIA_SQLITE_ROOT; empty disables the provider
 	// Logger receives the logs; nil discards them (#379).
 	Logger *slog.Logger
 }
@@ -69,7 +68,6 @@ func (p *Provider) Status() connections.Status {
 func (*Provider) ConfigSchema() []connections.Field {
 	return []connections.Field{
 		{Key: "path", Label: "Database file", Type: connections.FieldFilePath, Required: true, Help: "Path inside BALEIA_SQLITE_ROOT (relative to it, or absolute)"},
-		{Key: "read_write", Label: "Allow writes", Type: connections.FieldBool, Default: "false", Help: "Takes effect only when the server sets BALEIA_SQLITE_ALLOW_WRITE=true"},
 	}
 }
 
@@ -132,17 +130,6 @@ func (p *Provider) Validate(cfg connections.Config) (connections.Config, error) 
 	return out, nil
 }
 
-// writable reports whether both the connection and the server allow writes.
-func (p *Provider) writable(cfg connections.Config) bool {
-	return WriteAllowed(p.opts.AllowWrite, cfg)
-}
-
-// WriteAllowed reports whether a connection may write: both the server
-// (BALEIA_SQLITE_ALLOW_WRITE) and the connection (read_write) must allow it.
-func WriteAllowed(serverAllowWrite bool, cfg connections.Config) bool {
-	return serverAllowWrite && cfg.Value("read_write") == "true"
-}
-
 // DSN is the file: URI of an already-resolved path. It is read-only (mode=ro
 // plus query_only) unless writable, and always bounds lock waits. The query
 // engine (#83) opens through it, so both share the read-only rule.
@@ -167,7 +154,9 @@ func (p *Provider) open(cfg connections.Config) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", DSN(path, p.writable(cfg)))
+	// The provider only reads metadata and pings, so it always opens the file
+	// read-only; queries go through the query engine, which may write (#651).
+	db, err := sql.Open("sqlite", DSN(path, false))
 	if err != nil {
 		return nil, err
 	}

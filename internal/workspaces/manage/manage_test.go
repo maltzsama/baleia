@@ -16,7 +16,7 @@ func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
 
 type fakeStore struct {
 	workspaces map[[16]byte]db.Workspace
-	grants     map[[2][16]byte]string
+	grants     map[[2][16]byte]bool
 	running    int64
 	defaults   []db.SetWorkspaceDefaultTargetParams
 	// clearErr fails clearing a default, to check Revoke is atomic.
@@ -24,7 +24,7 @@ type fakeStore struct {
 }
 
 func newStore() *fakeStore {
-	return &fakeStore{workspaces: map[[16]byte]db.Workspace{}, grants: map[[2][16]byte]string{}}
+	return &fakeStore{workspaces: map[[16]byte]db.Workspace{}, grants: map[[2][16]byte]bool{}}
 }
 
 func (f *fakeStore) ListWorkspacesByUser(context.Context, pgtype.UUID) ([]db.Workspace, error) {
@@ -69,8 +69,8 @@ func (f *fakeStore) DeleteWorkspace(_ context.Context, id pgtype.UUID) (int64, e
 }
 
 func (f *fakeStore) UpsertWorkspaceCatalogGrant(_ context.Context, arg db.UpsertWorkspaceCatalogGrantParams) (db.WorkspaceCatalogGrant, error) {
-	f.grants[[2][16]byte{arg.WorkspaceID.Bytes, arg.CatalogID.Bytes}] = arg.Permission
-	return db.WorkspaceCatalogGrant{WorkspaceID: arg.WorkspaceID, CatalogID: arg.CatalogID, Permission: arg.Permission}, nil
+	f.grants[[2][16]byte{arg.WorkspaceID.Bytes, arg.CatalogID.Bytes}] = true
+	return db.WorkspaceCatalogGrant{WorkspaceID: arg.WorkspaceID, CatalogID: arg.CatalogID}, nil
 }
 
 func (f *fakeStore) UpdateWorkspace(_ context.Context, arg db.UpdateWorkspaceParams) (db.Workspace, error) {
@@ -100,7 +100,7 @@ func (f *fakeStore) ClearWorkspaceDefaultForCatalog(context.Context, db.ClearWor
 
 // tx restores the grants when fn fails.
 func (f *fakeStore) tx(_ context.Context, fn func(TxStore) error) error {
-	saved := map[[2][16]byte]string{}
+	saved := map[[2][16]byte]bool{}
 	for k, v := range f.grants {
 		saved[k] = v
 	}
@@ -164,10 +164,7 @@ func TestGrantAndRevoke(t *testing.T) {
 	st := newStore()
 	s := New(st, st.tx)
 	ws, cat := newID(), newID()
-	if _, err := s.Grant(ctx, ws, cat, "admin", newID()); !errors.Is(err, ErrInvalidPermission) {
-		t.Errorf("bad permission = %v", err)
-	}
-	if _, err := s.Grant(ctx, ws, cat, "read", newID()); err != nil {
+	if _, err := s.Grant(ctx, ws, cat, newID()); err != nil {
 		t.Fatal(err)
 	}
 

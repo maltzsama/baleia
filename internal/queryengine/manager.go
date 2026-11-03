@@ -100,18 +100,17 @@ func (m *Manager) Get(ctx context.Context, engineID pgtype.UUID) (Engine, error)
 		return nil, err
 	}
 	er := EngineRow{
-		ID:                  uuidString(row.Engine.ID),
-		Name:                row.Engine.Name,
-		Kind:                row.Engine.Kind,
-		Class:               Class(row.Engine.Class),
-		IdentityMode:        row.Engine.IdentityMode,
-		CredentialsReadOnly: row.CatalogConnection.CredentialsReadOnly,
+		ID:           uuidString(row.Engine.ID),
+		Name:         row.Engine.Name,
+		Kind:         row.Engine.Kind,
+		Class:        Class(row.Engine.Class),
+		IdentityMode: row.Engine.IdentityMode,
 	}
 	eng, err := entry.factory(ctx, er, cfg, m.dialerFor(row))
 	if err != nil {
 		return nil, err
 	}
-	me := &managed{Engine: eng, version: version, credentialsReadOnly: er.CredentialsReadOnly}
+	me := &managed{Engine: eng, version: version}
 	m.cache[engineID.Bytes] = me
 	return me, nil
 }

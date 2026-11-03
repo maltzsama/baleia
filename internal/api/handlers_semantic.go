@@ -723,9 +723,6 @@ func (h *SemanticHandlers) validateSemanticMetric(ctx context.Context, ws pgtype
 		return err
 	}
 	if def.CustomSQL != nil {
-		if engine.Capabilities().ReadOnly != queryengine.ReadOnlyEnforced && !h.connectionReadOnly(ctx, target.EngineID) {
-			return &targetError{code: ErrorCodeCustomSqlRequiresReadOnly, message: "custom_sql needs an engine that enforces read-only sessions or read-only credentials"}
-		}
 		if policy.ForbiddenInEditor(engine.Dialect(), *def.CustomSQL) {
 			return &targetError{code: ErrorCodeCustomSqlForbidden, message: "custom_sql may not contain catalog DDL or multiple statements"}
 		}
@@ -748,18 +745,6 @@ func (h *SemanticHandlers) validateSemanticMetric(ctx context.Context, ws pgtype
 		return &targetError{code: ErrorCode(queryengine.CodeOf(err)), message: "the engine rejected the metric definition"}
 	}
 	return nil
-}
-
-func (h *core) connectionReadOnly(ctx context.Context, engineID pgtype.UUID) bool {
-	eng, err := h.topology.Engine(ctx, engineID)
-	if err != nil {
-		return false
-	}
-	conn, err := h.topology.Connection(ctx, eng.ConnectionID)
-	if err != nil {
-		return false
-	}
-	return conn.CredentialsReadOnly
 }
 
 // ── converters ──────────────────────────────────────────────────────────────────

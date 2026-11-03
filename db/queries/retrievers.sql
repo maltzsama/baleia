@@ -7,8 +7,9 @@ INSERT INTO retrievers (
 RETURNING *;
 
 -- name: ListRetrieverDestinations :many
--- Bindings a workspace may write to: write grant, Iceberg connector, active
--- binding on an enabled federated engine (#118).
+-- Bindings a retriever of the workspace may write to: a granted catalog, Iceberg
+-- connector, active binding on an enabled federated engine (#118). Whether the
+-- write succeeds is the engine's and the catalog manager's decision (#651).
 SELECT b.id AS binding_id,
        b.engine_catalog_name,
        COALESCE(b.connector, '') AS connector,
@@ -21,8 +22,7 @@ FROM catalog_bindings b
 JOIN catalogs c ON c.id = b.catalog_id
 JOIN engines e ON e.id = b.engine_id
 JOIN workspace_catalog_grants g ON g.catalog_id = c.id AND g.workspace_id = @workspace_id::uuid
-WHERE g.permission = 'write'
-  AND b.connector = 'iceberg'
+WHERE b.connector = 'iceberg'
   AND b.lifecycle_state = 'active'
   AND b.enabled
   AND e.enabled

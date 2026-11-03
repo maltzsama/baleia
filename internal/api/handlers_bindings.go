@@ -510,9 +510,8 @@ func (h *CatalogHandlers) GetEngineBindingSupport(ctx context.Context, request G
 		kinds = append(kinds, k)
 	}
 	slices.Sort(kinds)
-	readOnly := h.binder.ReadOnlySources()
 	for _, k := range kinds {
-		out[string(k)] = BindingSupport{Connectors: h.binder.Supports()[k], ProtectedKeyPatterns: protected, ReservedNames: reserved, WritesSupported: !readOnly[k]}
+		out[string(k)] = BindingSupport{Connectors: h.binder.Supports()[k], ProtectedKeyPatterns: protected, ReservedNames: reserved}
 	}
 	return out, nil
 }

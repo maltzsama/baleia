@@ -16,9 +16,6 @@ type EngineRow struct {
 	Kind         string
 	Class        Class
 	IdentityMode string
-	// CredentialsReadOnly is the admin assertion that the connection's user
-	// cannot write (docs/adr/0011).
-	CredentialsReadOnly bool
 }
 
 // Factory builds an engine instance. Every network dial goes through d

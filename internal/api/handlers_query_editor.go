@@ -1291,9 +1291,6 @@ func dbExecutionToPublic(e db.QueryExecution) Execution {
 		exec.Queue = &queue
 	}
 	exec.Target = executionTargetFrom(e.TargetSnapshot, e.EngineID, e.TargetBindingID, e.TargetCatalogID)
-	if exec.Target != nil {
-		exec.ReadOnly = exec.Target.ReadOnly
-	}
 	return exec
 }
 
