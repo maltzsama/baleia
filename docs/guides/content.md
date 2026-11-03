@@ -8,13 +8,17 @@ Saved work lives in **Content**: saved queries, metrics and semantic models, org
 
 ## Spaces
 
-A workspace has a default space and can have more (**Content → Spaces**). Each space has:
+A workspace has a default space, and its owners can add more (**Content → Spaces**). Each space has:
 
 - **Visibility:** the whole workspace, or **restricted** to its members.
 - **Roles:** members are viewers or editors; the space sets the role new members get.
 - **A slug:** portable, used to match content between instances.
 
 Folders organize saved queries inside a space. The default space cannot be deleted. Deleting another space deletes the content in it.
+
+## Lineage
+
+A saved query's or a model's **Depends on** lists the tables it reads, and a table's **Used by** lists the content that reads it ([data explorer](data.md#lineage)). Check **Used by** before you drop or rename a table.
 
 ## Versions and trash
 
@@ -36,7 +40,7 @@ A space exports to a **bundle**, a JSON document (`baleia.bundle`, version 1) wi
 
 ## Retrievers
 
-A **retriever** materializes a SQL query into an Iceberg table on a schedule: each refresh runs `CREATE OR REPLACE TABLE … AS <your query>` on the destination engine.
+A **retriever** materializes a SQL query into an Iceberg table on a schedule: each refresh runs `CREATE OR REPLACE TABLE … AS <your query>` on the destination engine. Workspace owners and admins create and change retrievers; refreshes run in the `background` [workload class](workload.md#classes).
 
 - **Destination:** an Iceberg catalog bound to a federated engine (Trino) that the workspace has a **write** grant on, plus a schema and a table name. **Content → Retrievers** appears once such a catalog exists.
 - **Definition:** a single `SELECT`. **Validate on the destination** checks it on the destination engine before saving.

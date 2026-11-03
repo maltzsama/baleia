@@ -1,5 +1,5 @@
 ---
-sidebar_position: 6
+sidebar_position: 7
 ---
 
 # Administration
@@ -13,6 +13,7 @@ sidebar_position: 6
   - **Engines and catalogs:** the engines, the bindings, the catalog-store plugin, metadata syncs and reconciliation.
   - **Background work:** the recurring schedules and the audit export.
 - **Assistant:** the optional [assistant](../assistant.md): provider, model and limits.
+- **Workload:** each engine's queues and capacities, and the rules that classify runs ([workload management](workload.md)).
 
 ## Access
 
@@ -36,6 +37,7 @@ The bell in the header lists what needs attention, errors first. It is computed 
 | Metadata sync failed / stale | A catalog's metadata could not be refreshed, or is older than expected |
 | Engine unreachable | An engine does not answer |
 | Retriever error | A [retriever](content.md#retrievers) refresh failed |
+| Broken lineage | A model or metric points at a table or column that no longer exists ([lineage](data.md#lineage)) |
 | Reconcile drift | An engine's catalogs differ from what Baleia manages ([reconciliation](../operations.md#binding-reconciliation)) |
 | Schedule missing | A recurring job is not scheduled in Temporal |
 | Audit export lagging | The audit export is behind |
@@ -49,8 +51,8 @@ The bell in the header lists what needs attention, errors first. It is computed 
 
 These live in the **Connections** area, not in Settings:
 
-- **Connections:** what Baleia reaches. The **New connection** wizard tests the connection, adds catalogs and grants them.
+- **Connections:** what Baleia reaches. The **New connection** wizard tests the connection, adds catalogs and grants them. By default only admins create and edit connections (`BALEIA_CONNECTIONS_CREATE`), and connections may not reach private address ranges unless the operator allows them (`BALEIA_CONNECTIONS_ALLOW_CIDRS`, [configuration](../configuration.md)).
 - **Catalogs:** each catalog's bindings, metadata sync, access, [maintenance](monitoring.md#table-maintenance) and activity.
-- **Engines:** the engines that run SQL, with their bindings and reconciliation.
+- **Engines:** the engines that run SQL, with their bindings and reconciliation. An engine's **External URL** is the address BI clients use to reach it, needed for [Open in a BI tool](data.md#open-in-a-bi-tool).
 
 Destructive actions in all of these ask for confirmation and say what will be affected first.

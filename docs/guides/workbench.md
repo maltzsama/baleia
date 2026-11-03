@@ -17,6 +17,8 @@ Each tab runs against a **target**: an engine binding and, optionally, a schema 
 ## Write
 
 - **Autocomplete** suggests what fits at the cursor (statement keywords, tables, columns, clause keywords) from the target catalog's stored metadata.
+- **Join suggestions:** right after `JOIN <table> ON`, autocomplete offers whole join conditions. They come from joins your workspace has run before (with how often and when) and from foreign keys.
+- **Functions:** the **Functions** button opens the engine's function reference. Search it, filter by kind, and click a function to insert it at the cursor.
 - **Format SQL** reformats the tab for the engine's dialect.
 - **Explain** shows the engine's plan for the statement at the cursor, when the engine supports `EXPLAIN`.
 - **Tabs** keep their SQL and target; open as many as you need.
@@ -36,11 +38,19 @@ Each tab runs against a **target**: an engine binding and, optionally, a schema 
 
 A script runs its statements in order, in one engine session, and stops at the first error; the statements after it are marked skipped. Each statement gets its own result tab.
 
+Two guards apply to everything run from the editor:
+
+- **Row limit:** a `SELECT` is capped at the engine, at 1,000 rows by default. An admin can raise or disable the cap (`BALEIA_EDITOR_ROW_LIMIT`).
+- **Known tables only:** every table a statement names must be in the target catalog's synced metadata. A table that is not, or a name pointing into another catalog, fails the statement. If a table was just created, sync the catalog first.
+
+With [workload management](workload.md) on, a run may wait in its engine's queue before it starts. The run panel then shows *Queued*, its position and the expected wait, and the run can be cancelled while it waits.
+
 ## Results
 
 - **Paging:** results are stored, not held in the browser, so large results scroll page by page.
 - **Export:** a result exports as CSV, TSV, JSON Lines or Arrow.
 - **Limits:** a statement's stored result is capped by `BALEIA_RESULT_MAX_ROWS` and `BALEIA_RESULT_MAX_BYTES` ([configuration](../configuration.md)).
+- **Execution details:** the run panel's **Execution details** shows where the time went: Baleia's queue, the engine's queue, planning and execution. On Trino it adds CPU, peak memory, spilled bytes, input and output, the tables read and the query profile. Direct engines report duration and rows only.
 
 ## Save and share
 
@@ -50,4 +60,8 @@ When someone else saved the same query since you opened it, Baleia shows the con
 
 ## History
 
-**SQL → History** lists every execution in the workspace. You can search it by SQL and filter it by status and time. From there you can open an execution's statements, **Open in editor** to run it again, or cancel one that is still running: the statement running now is stopped on the engine, and statements that already finished keep their results.
+**SQL → History** lists your executions in the workspace; the workspace owner and administrators see everyone's. You can search it by SQL and filter it by status, time and workload class. From there you can:
+
+- open an execution's statements and its **Execution details**
+- **Open in editor** to run it again
+- cancel one that is still running or queued: the statement running now is stopped on the engine, and statements that already finished keep their results

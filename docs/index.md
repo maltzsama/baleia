@@ -12,13 +12,13 @@ Baleia is a **control plane**. It manages connections, catalogs and engines, run
 
 ## What you can do
 
-- **Write and run SQL** in the [workbench](guides/workbench.md): tabs, autocomplete from your catalogs, formatting, EXPLAIN, scripts, and large results you can page through or export.
+- **Write and run SQL** in the [workbench](guides/workbench.md): tabs, autocomplete from your catalogs, join suggestions from your team's history, a function reference, formatting, EXPLAIN, scripts, and large results you can page through or export.
 - **Query many engines from one place**: Trino, plus PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, ClickHouse, SQLite and Arrow Flight SQL directly.
 - **Connect your lakehouse**: register Polaris, Nessie, Lakekeeper, Iceberg REST, Unity, AWS Glue or Hive Metastore, and Baleia sets up the matching Trino catalog ([connections](connections.md)).
-- **Find and document your data** in the [data explorer](guides/data.md).
+- **Find and document your data** in the [data explorer](guides/data.md): search with filters, see the most-read tables, follow lineage from a table to the queries and models that use it, and open a table in Tableau or Power BI.
 - **Share and reuse** saved queries, metrics and semantic models in team [spaces](guides/content.md), with version history and export to Git-friendly bundles, and build questions in [Explore](guides/explore.md) without writing SQL.
 - **Materialize queries** into Iceberg tables on a schedule with [retrievers](guides/content.md#retrievers).
-- **Keep an eye on things**: the cluster, running queries, query history and Iceberg table health, with per-table [maintenance](guides/monitoring.md).
+- **Keep the engines healthy**: [workload management](guides/workload.md) queues runs per engine and class so a heavy report cannot crowd out quick queries, and [monitoring](guides/monitoring.md) shows the cluster, running queries and Iceberg table health, with per-table maintenance.
 - **Control access** with workspaces, teams and roles, OIDC or LDAP sign-in, API keys and an audit trail ([administration](guides/administration.md)).
 - **Bring in AI, if you want**: an optional [assistant](assistant.md) and an [MCP server](mcp.md) for your own agents.
 

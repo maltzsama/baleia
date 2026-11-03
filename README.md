@@ -5,25 +5,72 @@
 
 <p align="center"><strong>A self-hosted SQL workspace for your data platform.</strong></p>
 
-Write and run SQL against Trino and your databases, browse every catalog in one place, and share queries, metrics and models with your team.
+<p align="center">
+  <a href="https://github.com/maltzsama/baleia/actions/workflows/ci.yml"><img src="https://github.com/maltzsama/baleia/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/maltzsama/baleia/releases"><img src="https://img.shields.io/github/v/release/maltzsama/baleia?sort=semver" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/maltzsama/baleia" alt="License"></a>
+</p>
 
-## What you can do
+<p align="center">
+  <a href="https://baleia.galileostd.io/"><b>Documentation</b></a> ·
+  <a href="https://demo.baleia.galileostd.io/"><b>Live demo</b></a> ·
+  <a href="docs/quick-start.md"><b>Quick start</b></a> ·
+  <a href="https://github.com/maltzsama/baleia/releases"><b>Releases</b></a>
+</p>
 
-- **Write and run SQL.** Use tabs, autocomplete that knows your tables and columns, formatting and EXPLAIN. Run one statement or a whole script, and scroll through large results or export them as CSV, TSV, JSON Lines or Arrow.
-- **Query many engines from one place.** Trino, plus PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, ClickHouse, SQLite and Arrow Flight SQL directly.
-- **Connect your lakehouse.** Register Polaris, Nessie, Lakekeeper, Iceberg REST, Unity, AWS Glue or Hive Metastore, and Baleia sets up the matching Trino catalog for you.
-- **Find your data.** Browse catalogs, schemas, tables and columns, search across them, and document tables right next to the data.
-- **Share and reuse.** Keep saved queries, metrics and semantic models in team spaces, each with version history. Build questions in **Explore** by clicking dimensions and metrics instead of writing SQL.
-- **Materialize queries.** Retrievers rebuild an Iceberg table from a query on a schedule, and spaces export to bundles you can keep in Git.
-- **Keep an eye on things.** See the cluster, running queries, query history and Iceberg table health, and run table maintenance.
-- **Control access.** Use workspaces, teams and roles, sign in with OIDC or LDAP, create API keys, and review everything in the audit trail.
-- **Bring in AI, if you want.** An optional assistant, plus an MCP server so your own agents can query within the limits you set.
+Baleia gives your team one place to write SQL against Trino and your databases, find and document the data, and share the queries, metrics and models built on it. It runs on your infrastructure, next to the engines you already have.
+
+Baleia is a **control plane**, not another query engine. It manages connections, catalogs and engines, runs your SQL on those engines and keeps the results. Your BI tools and pipelines keep talking to the engines directly, and joins across sources stay the job of a federated engine such as Trino.
+
+## Features
+
+**Write and run SQL**
+- An editor with tabs, autocomplete from your catalogs' metadata, join suggestions learned from your team's history, a function reference for each engine, formatting and `EXPLAIN`.
+- Run a statement or a whole script; page through large results or export them as CSV, TSV, JSON Lines or Arrow.
+- See where a run's time went: queue, planning, execution, and on Trino CPU, memory and the query profile.
+
+**Find and understand your data**
+- Browse every catalog in one tree, and search tables and columns with filters such as `tag:pii` or `certified:yes`.
+- Document tables and columns next to the data: descriptions, tags, owners and certification.
+- Follow lineage from a table to the saved queries, metrics and models that use it, and see what your workspace reads most.
+- Open a table in Tableau or Power BI with one click.
+
+**Share and reuse**
+- Saved queries, metrics and semantic models live in team spaces, each with version history and a trash.
+- Build questions in **Explore** by picking dimensions and metrics instead of writing SQL.
+- Export a space to a bundle you can keep in Git and import into another instance.
+- Materialize a query into an Iceberg table on a schedule with retrievers.
+
+**Keep the engines healthy**
+- Workload management queues runs per engine and class, so a heavy report cannot crowd out quick queries. Admin rules decide the class, and Trino's own resource groups can take over the queue.
+- Watch the cluster, running queries and Iceberg table health, and maintain each Iceberg table with its own parameters.
+- Prometheus metrics, alerts with runbooks, OpenTelemetry tracing and an audit trail of every security and data operation.
+
+**Control access**
+- Workspaces, teams and roles, with catalog grants per workspace and read-only sessions where the engine enforces them.
+- Sign in with OIDC or LDAP; personal API keys; credentials encrypted at rest.
+
+**Bring in AI, if you want**
+- An optional assistant that knows your catalogs, and an MCP server so your own agents can query within the limits you set.
 
 The interface is available in English and Brazilian Portuguese.
 
-## Try it
+## What it connects to
 
-You need Docker. This starts Baleia with Trino, Polaris and everything else it needs:
+| | |
+|---|---|
+| **Federated engine** | Trino, with catalogs Baleia creates and keeps in sync |
+| **Direct engines** | PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, ClickHouse, SQLite, Arrow Flight SQL |
+| **Lakehouse catalogs** | Polaris, Nessie, Lakekeeper, Iceberg REST, Unity Catalog, AWS Glue, Hive Metastore |
+| **Object storage** | Any S3-compatible store (AWS S3, RustFS, MinIO, Ceph, GCS, OCI) |
+
+Register a lakehouse catalog once and Baleia sets up the matching Trino catalog for you. [Connections](docs/connections.md) has the details of each one.
+
+## Get started
+
+### Try it on your machine
+
+You need Docker with Compose and `make`. This starts Baleia with Trino, Polaris, Temporal, PostgreSQL and S3-compatible storage:
 
 ```bash
 git clone https://github.com/maltzsama/baleia.git
@@ -31,43 +78,53 @@ cd baleia
 make up
 ```
 
-Open http://localhost:8080. On first visit, a setup wizard creates your admin account.
+Open http://localhost:8080. On the first visit, a setup wizard creates your admin account. The [quick start](docs/quick-start.md) walks you through your first query.
 
-## Install on Kubernetes
+### Install on Kubernetes
 
-Each release publishes a container image and a Helm chart:
+Each release publishes multi-arch container images and a Helm chart:
 
 ```bash
 helm install baleia oci://ghcr.io/maltzsama/charts/baleia --version 0.5.0 # x-release-please-version
 ```
 
-Settings are listed in [docs/configuration.md](docs/configuration.md), and running it in production is covered in [docs/operations.md](docs/operations.md). Upgrading from 0.3? Read [Upgrading to 0.4.0](docs/operations.md#upgrading-to-040) first.
+[Install](docs/install.md) covers the chart's values, [configuration](docs/configuration.md) lists every setting, and [operations](docs/operations.md) covers upgrades, metrics, alerts and runbooks. Read the upgrade notes there before moving between minor versions.
+
+## How it works
+
+```mermaid
+flowchart LR
+    Browser["Web app"] -->|REST and WebSocket| API
+    API -->|starts workflows| Temporal
+    Temporal --> Worker
+    Worker -->|runs SQL| Engines
+    Worker -->|writes Arrow results| Storage[("Object storage")]
+    API -->|reads result pages| Storage
+    API --- DB[("PostgreSQL")]
+    Worker --- DB
+```
+
+A Go API serves the web app (SvelteKit) and the REST API. Temporal workflows run everything long-running on a Go worker: executions, metadata syncs, catalog reconciliation and maintenance. Results are stored as Arrow files in object storage and read back page by page, so a large result never has to fit in the browser. [Architecture](docs/architecture.md) explains the parts and how a query runs, and the [decision records](docs/adr/README.md) explain why.
 
 ## Documentation
 
-The documentation is published at **https://baleia.galileostd.io/**, built from [`docs/`](docs/) with the site in [`website/`](website/). A live demo runs at **https://demo.baleia.galileostd.io/**.
+Everything is at **https://baleia.galileostd.io/**, built from [`docs/`](docs/):
 
 | | |
 |---|---|
-| [Quick start](docs/quick-start.md) · [Install](docs/install.md) · [Concepts](docs/concepts.md) | Getting started |
-| [Guides](docs/guides/workbench.md) | The workbench, data explorer, Explore, content and retrievers, monitoring and administration |
-| [Configuration](docs/configuration.md) | Every setting, and how credentials are encrypted |
-| [Operations](docs/operations.md) | Metrics, alerts, the audit trail and runbooks |
-| [Connections](docs/connections.md) | Every source and catalog Baleia can connect to |
-| [Architecture](docs/architecture.md) | How Baleia is built, how a query runs, and the Trino security model |
-| [Secrets](docs/secrets.md) · [LDAP](docs/ldap.md) · [Observability](docs/observability.md) | Specific topics |
-| [Assistant](docs/assistant.md) · [MCP](docs/mcp.md) | AI features |
-| [Development](docs/development.md) | Running from source, tests, and adding a provider |
-| [Releasing](docs/releasing.md) | How versions are cut and published |
-| [Decision records](docs/adr/README.md) | Why things are the way they are |
+| **Start** | [Quick start](docs/quick-start.md) · [Install](docs/install.md) · [Concepts](docs/concepts.md) |
+| **Use** | [Workbench](docs/guides/workbench.md) · [Data explorer](docs/guides/data.md) · [Explore](docs/guides/explore.md) · [Content and retrievers](docs/guides/content.md) · [Monitoring](docs/guides/monitoring.md) · [Workload](docs/guides/workload.md) · [Administration](docs/guides/administration.md) |
+| **Run** | [Configuration](docs/configuration.md) · [Operations](docs/operations.md) · [Connections](docs/connections.md) · [Secrets](docs/secrets.md) · [Observability](docs/observability.md) · [LDAP](docs/ldap.md) |
+| **AI** | [Assistant](docs/assistant.md) · [MCP server](docs/mcp.md) |
+| **Build** | [Architecture](docs/architecture.md) · [Development](docs/development.md) · [Releasing](docs/releasing.md) · [Decision records](docs/adr/README.md) |
 
 ## Status
 
-Baleia is in beta and moving fast; expect changes between minor versions. Bugs and ideas are welcome in [issues](https://github.com/maltzsama/baleia/issues).
+Baleia is in beta and moving fast: expect changes between minor versions, and read the upgrade notes in [operations](docs/operations.md) before upgrading. Bugs and ideas are welcome in [issues](https://github.com/maltzsama/baleia/issues).
 
 ## Contributing
 
-Baleia is mostly a one-person project for now, and help is welcome, especially on the web app (Svelte 5). Start with [docs/development.md](docs/development.md) and [AGENTS.md](AGENTS.md), then open an issue or a pull request. Code, comments and docs are written in English.
+Help is welcome, especially on the web app (Svelte 5). Start with [development](docs/development.md) and [AGENTS.md](AGENTS.md), then open an issue or a pull request. Code, comments and docs are written in English.
 
 ## Credits
 
