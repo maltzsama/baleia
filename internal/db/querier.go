@@ -539,9 +539,9 @@ type Querier interface {
 	ListWorkspacePrincipalUsers(ctx context.Context, arg ListWorkspacePrincipalUsersParams) ([]ListWorkspacePrincipalUsersRow, error)
 	// Every binding of a catalog the workspace may use: the catalogs of the owner
 	// of a personal workspace (their own connections) and the granted ones (#16).
-	// A grant only makes a catalog usable; the engine and the catalog manager
-	// decide what may be read or written (#651). Disabled bindings, engines and
-	// catalogs are included; callers filter.
+	// A catalog linked to a workspace is reachable by the workspace's members
+	// only; what they may read or write in it is the catalog manager's decision
+	// (#651). Disabled bindings, engines and catalogs are included; callers filter.
 	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceTargetsRow, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
 	// Serializes first-admin setup until the transaction ends (#375).

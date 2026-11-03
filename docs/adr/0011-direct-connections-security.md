@@ -29,8 +29,8 @@ access.
   by group or others is logged at startup.
 - **Identity modes:** v1 uses the connection's credentials (`connection`); `per_user` comes later.
 - **Baleia imposes no read-only work** (#651). What a user may read or write is decided by the
-  engine and the catalog manager, or by the connection's service account. Workspace grants only
-  make a catalog usable. `queryengine.Capabilities.ReadOnly` (`enforced` or `none`) remains for
+  engine and the catalog manager, or by the connection's service account. A catalog linked to a
+  workspace is reachable by that workspace's members only; the link carries no read/write level. `queryengine.Capabilities.ReadOnly` (`enforced` or `none`) remains for
   Baleia's own probes, which ask for a read-only session best effort, and for MCP agents, which
   only run on engines that enforce it.
 - **Connection tests (D5)** answer three different questions: `metadata` (can Baleia read

@@ -22,7 +22,7 @@ These take effect with their defaults:
 | Connections are admin-only (#610) | Only admins create, edit and test connections | `BALEIA_CONNECTIONS_CREATE=everyone` |
 | Executions are scoped (#611) | Members see their own executions and results; workspace owners and admins see all | — |
 | Space and retriever writes (#612, #613) | Creating spaces and changing retrievers need a workspace owner or admin | — |
-| Grants carry no read/write level (#651) | A grant only makes a catalog usable; no session is read-only because of a grant. `permission` is gone from the grant API, and `read_only` from targets and executions | — |
+| Grants carry no read/write level (#651) | A catalog linked to a workspace stays reachable by its members only, but no session is read-only because of the link; the catalog manager decides what each member may read or write. `permission` is gone from the grant API, and `read_only` from targets and executions | — |
 | No read-only assertion on connections (#651) | `credentials_read_only` and `default_readonly` are gone from the connection API; MCP agents only run on engines that enforce read-only sessions (Trino, PostgreSQL, ClickHouse, SQLite) | — |
 | SQLite connections write (#651) | SQLite files open read-write; the file's permissions decide. `BALEIA_SQLITE_ALLOW_WRITE` and the `read_write` field are gone. `ATTACH`, `DETACH`, `VACUUM` and `load_extension` stay refused | Make the file read-only on disk |
 | Error codes removed (#651) | `read_only_unsupported` and `custom_sql_requires_read_only` no longer exist; semantic `custom_sql` works on every engine, and Unity bindings are no longer flagged as read-only | — |

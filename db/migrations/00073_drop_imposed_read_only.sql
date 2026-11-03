@@ -1,11 +1,11 @@
 -- +goose Up
--- #651: Baleia no longer imposes read-only work. A workspace grant only makes
--- a catalog usable in the workspace; what a user may read or write is decided
--- by the engine and the catalog manager, or by the connection's service
--- account. The grant's read/write permission, the connection's assertion that
--- its credentials are read-only (which existed only to allow read-only grants
--- on engines without enforcement) and the never-enforced default_readonly
--- flag go away.
+-- #651: Baleia no longer imposes read-only work. A catalog linked to a
+-- workspace stays reachable by that workspace's members only; what they may
+-- read or write in it is decided by the engine and the catalog manager, or by
+-- the connection's service account. The grant's read/write permission, the
+-- connection's assertion that its credentials are read-only (which existed
+-- only to allow read-only grants on engines without enforcement) and the
+-- never-enforced default_readonly flag go away.
 
 ALTER TABLE workspace_catalog_grants DROP COLUMN IF EXISTS permission;
 

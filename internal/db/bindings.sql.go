@@ -670,9 +670,9 @@ type ListWorkspaceTargetsRow struct {
 
 // Every binding of a catalog the workspace may use: the catalogs of the owner
 // of a personal workspace (their own connections) and the granted ones (#16).
-// A grant only makes a catalog usable; the engine and the catalog manager
-// decide what may be read or written (#651). Disabled bindings, engines and
-// catalogs are included; callers filter.
+// A catalog linked to a workspace is reachable by the workspace's members
+// only; what they may read or write in it is the catalog manager's decision
+// (#651). Disabled bindings, engines and catalogs are included; callers filter.
 func (q *Queries) ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceTargetsRow, error) {
 	rows, err := q.db.Query(ctx, listWorkspaceTargets, workspaceID)
 	if err != nil {

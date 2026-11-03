@@ -182,9 +182,10 @@ func (s *Service) Grants(ctx context.Context, ws pgtype.UUID) ([]db.ListWorkspac
 	return s.store.ListWorkspaceCatalogGrants(ctx, ws)
 }
 
-// Grant makes a catalog usable in a workspace; granting it again refreshes
-// who granted it. A grant carries no read/write permission: the engine and the
-// catalog manager decide what may be read or written (#651).
+// Grant links a catalog to a workspace, so the workspace's members (and only
+// they) reach it; granting it again refreshes who granted it. The link carries
+// no read/write level: the catalog manager decides what each member may read
+// or write in it (#651).
 func (s *Service) Grant(ctx context.Context, ws, catalogID pgtype.UUID, by pgtype.UUID) (db.WorkspaceCatalogGrant, error) {
 	return s.store.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{WorkspaceID: ws, CatalogID: catalogID, GrantedBy: by})
 }
