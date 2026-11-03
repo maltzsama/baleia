@@ -138,11 +138,12 @@ func EnsureDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q Defaul
 			changed = true
 		}
 	}
-	// The sealed reference never changes, so it is written once. A later
-	// unset BALEIA_TRINO_PASSWORD leaves it in place: the reference then
-	// resolves to nothing and no login is sent.
+	// The reference is resealed on every start while a password is set, so a
+	// password stored on the connection through the API never overrides the
+	// environment. A later unset BALEIA_TRINO_PASSWORD leaves it in place: the
+	// reference then resolves to nothing and no login is sent.
 	var creds *string
-	if env.Password && (conn.CredentialsEnc == nil || *conn.CredentialsEnc == "") {
+	if env.Password {
 		if creds, err = env.credentials(conn.ID); err != nil {
 			return err
 		}

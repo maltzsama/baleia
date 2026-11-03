@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -623,7 +624,8 @@ func (c *Config) validateTrinoAuth() error {
 	if c.TrinoPassword == "" {
 		return nil
 	}
-	if !strings.HasPrefix(strings.ToLower(c.TrinoURL), "https://") {
+	u, err := url.Parse(c.TrinoURL)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" {
 		return errors.New("BALEIA_TRINO_PASSWORD needs an https TRINO_URL")
 	}
 	if c.EncryptionKey == "" {

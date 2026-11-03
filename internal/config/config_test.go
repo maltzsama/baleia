@@ -212,3 +212,11 @@ func TestConfig_TrinoPassword(t *testing.T) {
 		t.Errorf("https with keyring = %v", err)
 	}
 }
+
+func TestConfig_TrinoPasswordNeedsHost(t *testing.T) {
+	t.Parallel()
+	c := Config{JWTSecret: strings.Repeat("s", MinJWTSecretLen), TrinoURL: "https://", TrinoPassword: "pw", EncryptionKey: strings.Repeat("k", MinEncryptionKeyLen)}
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "BALEIA_TRINO_PASSWORD") {
+		t.Errorf("no host = %v", err)
+	}
+}

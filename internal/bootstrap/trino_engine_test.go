@@ -147,9 +147,10 @@ func TestEnsureDefaultTrinoEngine_Identities(t *testing.T) {
 }
 
 // fakeSeal stands in for the keyring: it records what it sealed.
-func fakeSeal(sealed *[]string) func([]byte, pgtype.UUID) (string, error) {
-	return func(plain []byte, _ pgtype.UUID) (string, error) {
+func fakeSeal(sealed *[]string, ids *[]pgtype.UUID) func([]byte, pgtype.UUID) (string, error) {
+	return func(plain []byte, id pgtype.UUID) (string, error) {
 		*sealed = append(*sealed, string(plain))
+		*ids = append(*ids, id)
 		return "sealed", nil
 	}
 }
@@ -164,12 +165,16 @@ func TestEnsureDefaultTrinoEngine_Authenticated(t *testing.T) {
 	t.Run("create", func(t *testing.T) {
 		t.Parallel()
 		var sealed []string
+		var ids []pgtype.UUID
 		f := &fakeEngineStore{cluster: &db.TrinoCluster{Name: "default"}}
-		env := DefaultTrinoEngine{URL: "https://trino:8443", AdminUser: "adm", Password: true, CA: "PEM", Seal: fakeSeal(&sealed)}
+		env := DefaultTrinoEngine{URL: "https://trino:8443", AdminUser: "adm", Password: true, CA: "PEM", Seal: fakeSeal(&sealed, &ids)}
 		if err := EnsureDefaultTrinoEngine(ctx, discard, f, env); err != nil {
 			t.Fatal(err)
 		}
 		c := f.createdConn[0]
+		if len(ids) != 1 || ids[0] != c.ID {
+			t.Fatalf("sealed for %v, connection %v: the AAD must be the connection id", ids, c.ID)
+		}
 		if c.CredentialsEnc == nil || *c.CredentialsEnc != "sealed" {
 			t.Fatalf("credentials = %v", c.CredentialsEnc)
 		}
@@ -181,25 +186,28 @@ func TestEnsureDefaultTrinoEngine_Authenticated(t *testing.T) {
 		}
 	})
 
-	t.Run("existing connection gets the reference once", func(t *testing.T) {
+	t.Run("every start reseals the reference over stored credentials", func(t *testing.T) {
 		t.Parallel()
 		var sealed []string
+		var ids []pgtype.UUID
 		f := &fakeEngineStore{engine: defaultEngine("https://trino:8443", pgtype.UUID{})}
-		env := DefaultTrinoEngine{URL: "https://trino:8443", AdminUser: "adm", Password: true, Seal: fakeSeal(&sealed)}
-		if err := EnsureDefaultTrinoEngine(ctx, discard, f, env); err != nil {
-			t.Fatal(err)
+		// A password someone stored on the connection through the API.
+		stored := "stored-literal"
+		f.engine.CatalogConnection.CredentialsEnc = &stored
+		f.engine.CatalogConnection.Config = []byte(`{"admin_user":"adm","url":"https://trino:8443","username":"adm"}`)
+		env := DefaultTrinoEngine{URL: "https://trino:8443", AdminUser: "adm", Password: true, Seal: fakeSeal(&sealed, &ids)}
+		for range 2 {
+			if err := EnsureDefaultTrinoEngine(ctx, discard, f, env); err != nil {
+				t.Fatal(err)
+			}
 		}
-		if len(f.updated) != 1 || f.updated[0].CredentialsEnc == nil || len(sealed) != 1 {
+		if len(f.updated) != 2 || len(sealed) != 2 {
 			t.Fatalf("updates = %+v, sealed = %q", f.updated, sealed)
 		}
-		enc := "sealed"
-		f.engine.CatalogConnection.CredentialsEnc = &enc
-		f.engine.CatalogConnection.Config = f.updated[0].Config
-		if err := EnsureDefaultTrinoEngine(ctx, discard, f, env); err != nil {
-			t.Fatal(err)
-		}
-		if len(f.updated) != 1 || len(sealed) != 1 {
-			t.Fatalf("a second start rewrote the connection: %+v", f.updated)
+		for i, u := range f.updated {
+			if u.CredentialsEnc == nil || *u.CredentialsEnc != "sealed" || ids[i] != f.engine.CatalogConnection.ID {
+				t.Fatalf("update %d = %+v", i, u)
+			}
 		}
 	})
 

@@ -11,9 +11,12 @@ import (
 // WithBasicAuth returns a copy of hc that authenticates every request as
 // user/password (Trino password authentication). Trino accepts passwords only
 // over HTTPS; the authenticated user must be allowed to impersonate the
-// X-Trino-User identities the client sends.
+// X-Trino-User identities the client sends. Redirects are not followed, so the
+// password never reaches another host or a plain-HTTP URL: a 3xx answer
+// returns to the caller.
 func WithBasicAuth(hc *http.Client, user, password string) *http.Client {
 	out := *hc
+	out.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	base := hc.Transport
 	if base == nil {
 		base = http.DefaultTransport

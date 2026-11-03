@@ -55,6 +55,17 @@ config:
   BALEIA_CONNECTIONS_ALLOW_CIDRS: ""   # if set, only these; opens the private ranges
   BALEIA_CONNECTIONS_CREATE: admins     # or everyone: any member creates and edits connections
 
+# Extra volumes and mounts for the API and worker pods, e.g. the Secret or
+# ConfigMap holding the PEM bundle that config.BALEIA_TRINO_CA_FILE points at:
+#   extraVolumes:
+#     - name: trino-ca
+#       secret: { secretName: trino-ca }
+#   extraVolumeMounts:
+#     - { name: trino-ca, mountPath: /etc/baleia/trino-ca, readOnly: true }
+#   config.BALEIA_TRINO_CA_FILE: /etc/baleia/trino-ca/ca.crt
+extraVolumes: []
+extraVolumeMounts: []
+
 api:
   replicas: 1
   resources: {}

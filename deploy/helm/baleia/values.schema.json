@@ -39,6 +39,8 @@
       "type": "object",
       "additionalProperties": { "type": "string" }
     },
+    "extraVolumes": { "type": "array", "items": { "type": "object" } },
+    "extraVolumeMounts": { "type": "array", "items": { "type": "object" } },
     "api": {
       "type": "object",
       "properties": {

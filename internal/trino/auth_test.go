@@ -74,3 +74,26 @@ func TestAuthenticated(t *testing.T) {
 		t.Errorf("nothing to apply must keep the client: %v", err)
 	}
 }
+
+// TestWithBasicAuth_NoRedirect: a redirect is not followed, so the password
+// is never sent to the redirect target.
+func TestWithBasicAuth_NoRedirect(t *testing.T) {
+	t.Parallel()
+	var leaked bool
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _, leaked = r.BasicAuth()
+	}))
+	defer target.Close()
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusFound)
+	}))
+	defer srv.Close()
+	resp, err := WithBasicAuth(srv.Client(), "login", "pw").Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusFound || leaked {
+		t.Errorf("status %d, password sent to the redirect target: %t", resp.StatusCode, leaked)
+	}
+}
