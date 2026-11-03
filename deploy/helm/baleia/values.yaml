@@ -43,7 +43,6 @@ config:
   BALEIA_METADATA_SYNC_INTERVAL: "15m"
   BALEIA_RESULT_MAX_ROWS: "1000000"
   BALEIA_RESULT_MAX_BYTES: "536870912"
-  BALEIA_EDITOR_ROW_LIMIT: "0"
   # Trino identity that may manage catalogs. One value: Baleia's DDL emitter
   # runs as it and the chart's catalog guard lists it as the only admin user.
   BALEIA_TRINO_ADMIN_USER: baleia_admin

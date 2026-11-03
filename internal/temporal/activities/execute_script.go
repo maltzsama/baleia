@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
@@ -48,9 +47,6 @@ type ExecuteScriptParams struct {
 	Timeout     time.Duration // per statement; 0 = engine default
 	RequestID   string
 	Class       queryengine.WorkloadClass
-	// Interactive marks an editor/agent run: the table allowlist and the
-	// default row limit apply (#614, #615).
-	Interactive bool
 }
 
 // StatementOutcome is how one statement ended. It is control data only:
@@ -314,15 +310,6 @@ func (s *script) run(sess queryengine.Session, st StatementRef) (stop bool, err 
 		return true, s.finish(StatementOutcome{Position: st.Position, Status: "failed", ErrorCode: codeEditorRejected, Error: policy.ErrForbiddenInEditor.Error()})
 	}
 
-	// An interactive SELECT is capped at the engine only when the operator
-	// sets BALEIA_EDITOR_ROW_LIMIT (#615, off by default since #649). Which
-	// tables a statement may read is the engine's and the catalog manager's
-	// decision, never a Baleia allowlist (#649, #648).
-	stmtSQL := st.SQL
-	if s.p.Interactive && s.a.cfg != nil && s.a.cfg.EditorRowLimit > 0 && isSelectStatement(st.SQL) {
-		stmtSQL = s.eng.Dialect().Limit(st.SQL, s.a.cfg.EditorRowLimit)
-	}
-
 	start := time.Now()
 	var handle queryengine.QueryHandle
 	cb := queryengine.Callbacks{
@@ -344,7 +331,7 @@ func (s *script) run(sess queryengine.Session, st StatementRef) (stop bool, err 
 	sink := &resultSink{a: s.a, ctx: s.ctx, executionID: s.p.ExecutionID, position: st.Position}
 	for attempt := 0; ; attempt++ {
 		handle = queryengine.QueryHandle{}
-		err = sess.Execute(stmtCtx, stmtSQL, cb, sink)
+		err = sess.Execute(stmtCtx, st.SQL, cb, sink)
 		if err == nil || handle.QueryID != "" || sink.began || !s.retryable(err, attempt) {
 			break
 		}
@@ -658,29 +645,4 @@ func (s *resultSink) abort() {
 	}
 	_ = s.pw.CloseWithError(errResultAborted)
 	<-s.done
-}
-
-// isSelectStatement reports whether a statement can be capped with a row limit:
-// SELECT and WITH (a CTE query). DDL/DML statements are left alone.
-func isSelectStatement(sql string) bool {
-	s := strings.TrimSpace(sql)
-	for {
-		switch {
-		case strings.HasPrefix(s, "--"):
-			i := strings.IndexByte(s, '\n')
-			if i < 0 {
-				return false
-			}
-			s = strings.TrimSpace(s[i+1:])
-		case strings.HasPrefix(s, "/*"):
-			i := strings.Index(s, "*/")
-			if i < 0 {
-				return false
-			}
-			s = strings.TrimSpace(s[i+2:])
-		default:
-			u := strings.ToUpper(s)
-			return strings.HasPrefix(u, "SELECT") || strings.HasPrefix(u, "WITH")
-		}
-	}
 }

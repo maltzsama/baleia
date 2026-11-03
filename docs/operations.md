@@ -50,7 +50,7 @@ go run ./cmd/backfill-references --database-url "$DATABASE_URL"
 
 ### 4. New settings
 
-New and all optional: `BALEIA_EDITOR_ROW_LIMIT` (off by default), `BALEIA_WORKLOAD_ENABLED`,
+New and all optional: `BALEIA_WORKLOAD_ENABLED`,
 the `BALEIA_WORKLOAD_ADAPTIVE_*` thresholds and
 `BALEIA_TRINO_RESOURCE_GROUPS_ENVIRONMENT`. `BALEIA_CONNECTIONS_CREATE` now
 defaults to `admins` (it was `everyone`), and `BALEIA_CONNECTIONS_ALLOW_CIDRS`

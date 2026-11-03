@@ -38,7 +38,7 @@ Each tab runs against a **target**: an engine binding and, optionally, a schema 
 
 A script runs its statements in order, in one engine session, and stops at the first error; the statements after it are marked skipped. Each statement gets its own result tab.
 
-Statements run as written: a query can join tables from any catalog the engine can reach, and a script can create a table and write to it in the next statement. What a user may read or change is decided by the engine and the catalog manager. A stored result is capped by `BALEIA_RESULT_MAX_ROWS`; an operator can also cap every editor `SELECT` at the engine with `BALEIA_EDITOR_ROW_LIMIT` (off by default).
+Statements run as written: a query can join tables from any catalog the engine can reach, and a script can create a table and write to it in the next statement. What a user may read or change is decided by the engine and the catalog manager. Baleia never rewrites a query; only the stored result is capped, by `BALEIA_RESULT_MAX_ROWS` and `BALEIA_RESULT_MAX_BYTES`.
 
 With [workload management](workload.md) on, a run may wait in its engine's queue before it starts. The run panel then shows *Queued*, its position and the expected wait, and the run can be cancelled while it waits.
 

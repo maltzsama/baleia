@@ -654,22 +654,8 @@ func shortScriptWorkflow(ctx workflow.Context, p ExecuteScriptParams) error {
 	return workflow.ExecuteActivity(ctx, ExecuteScript, p).Get(ctx, nil)
 }
 
-func TestIsSelectStatement(t *testing.T) {
-	t.Parallel()
-	for _, s := range []string{"SELECT 1", "  select * from t", "WITH x AS (SELECT 1) SELECT * FROM x", "-- hi\nSELECT 1", "/* c */ SELECT 1"} {
-		if !isSelectStatement(s) {
-			t.Errorf("%q: want a SELECT", s)
-		}
-	}
-	for _, s := range []string{"INSERT INTO t VALUES (1)", "CREATE TABLE t AS SELECT 1", "EXPLAIN SELECT 1", "SHOW TABLES", ""} {
-		if isSelectStatement(s) {
-			t.Errorf("%q: want non-SELECT", s)
-		}
-	}
-}
-
-// TestExecuteScript_InteractiveReadsAnyCatalog: Baleia does not filter the
-// tables an interactive statement names. A join across catalogs, a table
+// TestExecuteScript_InteractiveReadsAnyCatalog: Baleia neither filters nor
+// rewrites the statements it runs. A join across catalogs, a table
 // created earlier in the same script and a table missing from the synced
 // metadata all reach the engine, which decides (#649).
 func TestExecuteScript_InteractiveReadsAnyCatalog(t *testing.T) {
@@ -682,15 +668,14 @@ func TestExecuteScript_InteractiveReadsAnyCatalog(t *testing.T) {
 		store := newStatementStore(1)
 		fake := &fakeEngine{Engine: testTrino}
 		p := scriptParams(sql)
-		p.Interactive = true
 		if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
 			t.Fatalf("%q: %v", sql, err)
 		}
 		if got := store.status(); len(got) != 1 || got[0] != "finished" {
 			t.Fatalf("%q: statement = %v, want finished", sql, got)
 		}
-		if len(fake.sqls) != 1 {
-			t.Fatalf("%q: the engine got %d statements, want 1", sql, len(fake.sqls))
+		if len(fake.sqls) != 1 || fake.sqls[0] != sql {
+			t.Fatalf("%q: the engine got %q, want the statement unchanged", sql, fake.sqls)
 		}
 	}
 }

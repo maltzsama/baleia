@@ -60,10 +60,6 @@ type QueryExecutionInput struct {
 	// enforced by admission instead of refusing the run (#589). Zero when the
 	// run is not an agent's.
 	AgentMaxConcurrent int
-	// Interactive marks a run from the SQL editor (or an agent acting there):
-	// the worker enforces the table allowlist and the default row limit
-	// (#614, #615).
-	Interactive bool
 }
 
 // defaultExecutionTimeout caps a script when the input names no cap.
@@ -327,7 +323,6 @@ func runQueryExecution(ctx workflow.Context, in QueryExecutionInput, dialectName
 		Timeout:     statementTimeout,
 		RequestID:   in.RequestID,
 		Class:       in.Class,
-		Interactive: in.Interactive,
 	}).Get(scriptCtx, &res)
 
 	// A cancelled workflow (UI cancel) cancels the script, which stops the
