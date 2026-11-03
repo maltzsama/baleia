@@ -59,6 +59,10 @@ func WithRootCAs(hc *http.Client, caPEM string) (*http.Client, error) {
 		t.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 	t.TLSClientConfig.RootCAs = pool
+	// A custom TLS config turns off HTTP/2 and ALPN in net/http; Trino's
+	// HTTPS port then answers a client that offers no protocol with HTTP/2,
+	// which an HTTP/1.1 client cannot read. Negotiate it.
+	t.ForceAttemptHTTP2 = true
 	out := *hc
 	out.Transport = t
 	return &out, nil

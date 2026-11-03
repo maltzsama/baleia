@@ -104,14 +104,22 @@ trino:
   # poller keeps running and repairs drift.
   queryEvents:
     enabled: false
+  # Authentication of the in-chart Trino (#647). The coordinator serves HTTPS
+  # only to clients and logs in Baleia with secrets.values.BALEIA_TRINO_PASSWORD
+  # (the password of config.BALEIA_TRINO_ADMIN_USER, required). File-based
+  # rules let only that login impersonate other identities, and the catalog
+  # guard keeps catalog management to the authenticated admin. The chart
+  # generates a CA and a certificate, kept across upgrades, unless
+  # tls.existingSecret names a Secret with tls.crt, tls.key and ca.crt; the API
+  # and worker trust ca.crt.
+  auth:
+    enabled: true
+    tls:
+      existingSecret: ""
   catalogGuard:
-    # The in-chart Trino has no authentication, so the guard cannot verify who
-    # claims the admin identity (config.BALEIA_TRINO_ADMIN_USER). When true, ANY
-    # client that reaches the Trino service may connect as that user and run
-    # CREATE/DROP CATALOG. Set true only when the Trino service is reachable from
-    # the API and worker alone (e.g. a NetworkPolicy, single-tenant dev cluster).
-    # When false, the guard denies catalog management to the unauthenticated
-    # admin, so creating, updating and syncing catalogs from Baleia fails.
+    # Only for auth.enabled=false: the guard then cannot verify who claims the
+    # admin identity, and true lets ANY client that reaches the coordinator
+    # manage catalogs. Ignored while auth is enabled.
     allowUnauthenticatedAdmin: false
   # Restrict ingress to the coordinator to the Baleia API and worker (#645).
   # It only takes effect when the cluster's CNI enforces NetworkPolicy; it is

@@ -78,6 +78,14 @@
           }
         },
         "jvmHeap": { "type": "string" },
+        "auth": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "image": { "type": "string" },
+            "tls": { "type": "object", "properties": { "existingSecret": { "type": "string" } } }
+          }
+        },
         "catalogGuard": {
           "type": "object",
           "properties": {

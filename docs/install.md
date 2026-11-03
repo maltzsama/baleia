@@ -65,7 +65,7 @@ trino:
 
 To use a Trino you run yourself instead, leave `trino.enabled` false and set `config.TRINO_URL`. That Trino needs the [catalog-store plugin](https://github.com/maltzsama/baleia-trino-catalog-store) installed for Baleia to manage its catalogs.
 
-The in-chart Trino has no authentication: any client that reaches it can claim any user. The chart restricts it to the API and worker pods with a NetworkPolicy (`trino.networkPolicy.enabled`, on by default; add peers with `trino.networkPolicy.extraIngressFrom`), which only takes effect when your CNI enforces NetworkPolicy. Read [Architecture](architecture.md#trino-security-model) before setting `trino.catalogGuard.allowUnauthenticatedAdmin`, and never expose this Trino outside the cluster.
+The in-chart Trino requires authentication (#647): it serves clients over HTTPS only and logs in Baleia with `secrets.values.BALEIA_TRINO_PASSWORD` (or that key in `existingSecret`), the password of `config.BALEIA_TRINO_ADMIN_USER`, which is required. The chart generates a CA and a server certificate, kept across upgrades, and the API and worker trust that CA; to use your own, set `trino.auth.tls.existingSecret` to a Secret with `tls.crt`, `tls.key` and `ca.crt`. Only Baleia's login may impersonate other identities. The chart also restricts the coordinator to the API and worker pods with a NetworkPolicy (`trino.networkPolicy.enabled`, on by default; add peers with `trino.networkPolicy.extraIngressFrom`), which takes effect when your CNI enforces NetworkPolicy. See [Architecture](architecture.md#trino-security-model).
 
 ## Install
 

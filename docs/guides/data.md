@@ -47,7 +47,7 @@ Lineage comes from the statements themselves, so it stays current as content cha
 
 On a Trino, PostgreSQL, MySQL or SQL Server engine, a table's detail offers **Open in Tableau** and **Open in Power BI**. Each downloads a data-source file (`.tds` or `.pbids`) that opens the table in that tool. The file carries no credentials: you sign in from the BI tool, which connects to the engine directly. The engine needs an **External URL** first: the address BI clients use to reach it, set in the engine's settings (**Connections → Engines**).
 
-The engine must authenticate the BI tool's user itself. The Trino bundled with Baleia has no authentication ([Architecture](../architecture.md#trino-security-model)), so never give it an External URL or expose it to BI clients: anyone reaching it could claim any user. Use an engine that authenticates its clients.
+The engine must authenticate the BI tool's user itself. The Trino bundled with Baleia authenticates only Baleia's own login, which may act as any user ([Architecture](../architecture.md#trino-security-model)), so do not give it an External URL or hand that login to BI clients. Use an engine that authenticates each of its clients.
 
 ## Document
 

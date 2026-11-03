@@ -1,0 +1,6 @@
+{
+  "catalogs": [{"allow": "owner"}],
+  "impersonation": [
+    {"original_user": "^baleia_admin$", "new_user": ".*", "allow": true}
+  ]
+}

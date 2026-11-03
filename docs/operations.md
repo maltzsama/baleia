@@ -24,6 +24,7 @@ These take effect with their defaults:
 | Space and retriever writes (#612, #613) | Creating spaces and changing retrievers need a workspace owner or admin | — |
 | Grants carry no read/write level (#651) | A catalog linked to a workspace stays reachable by its members only, but no session is read-only because of the link; the catalog manager decides what each member may read or write. `permission` is gone from the grant API and from workspace targets; the unused column stays in the database until #654 | — |
 | Connection and binding flags (#651) | `default_readonly`, stored but never enforced, is gone from the connection API; Unity bindings are no longer flagged as unable to write (`writes_supported`), since Unity decides | — |
+| Authenticated bundled Trino (#647) | The in-chart and compose Trino require HTTPS and a password; Baleia logs in with `BALEIA_TRINO_PASSWORD`. The chart refuses to render without `secrets.values.BALEIA_TRINO_PASSWORD` (with `existingSecret`, add the key), and `TRINO_URL` defaults to the HTTPS port 8443. Clients other than Baleia, such as a BI tool or a scraper on port 8080, are refused | Set `trino.auth.enabled=false` (not recommended) |
 | Catalog names (#617) | `trino_catalog_name`, `connector` and `engine_catalog_name` must match `^[a-z][a-z0-9_]{0,62}$` on write | — |
 
 Before upgrading, check that no connection users rely on points at a private

@@ -58,6 +58,9 @@ func TestAuthenticated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if tr, ok := hc.Transport.(basicAuth).base.(*http.Transport); !ok || !tr.ForceAttemptHTTP2 {
+		t.Error("the CA transport must negotiate ALPN (HTTP/2 or HTTP/1.1)")
+	}
 	resp, err := hc.Get(srv.URL)
 	if err != nil {
 		t.Fatalf("trusted CA refused: %v", err)

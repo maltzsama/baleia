@@ -14,8 +14,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
 	trinobinding "github.com/galileostudio/baleia/internal/bindings/trino"
@@ -268,7 +270,21 @@ func ensureTrinoCatalog(ctx context.Context, q *db.Queries, trinoURL string) err
 	if user == "" {
 		user = "baleia_admin"
 	}
-	err = trino.New(trinoURL, user).CreateCatalog(ctx, trino.CatalogSpec{Name: e2eTrinoCatalog, Connector: "tpch", Properties: props})
+	// The dev Trino requires HTTPS and a password (#647): E2E_TRINO_PASSWORD
+	// and the CA bundle in E2E_TRINO_CA_FILE.
+	var ca string
+	if f := os.Getenv("E2E_TRINO_CA_FILE"); f != "" {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return err
+		}
+		ca = string(b)
+	}
+	hc, err := trino.Authenticated(&http.Client{Transport: &http.Transport{}, Timeout: time.Minute}, user, os.Getenv("E2E_TRINO_PASSWORD"), ca)
+	if err != nil {
+		return err
+	}
+	err = trino.NewWithHTTPClient(trinoURL, user, hc).CreateCatalog(ctx, trino.CatalogSpec{Name: e2eTrinoCatalog, Connector: "tpch", Properties: props})
 	if errors.Is(err, trino.ErrCatalogExists) {
 		return nil
 	}

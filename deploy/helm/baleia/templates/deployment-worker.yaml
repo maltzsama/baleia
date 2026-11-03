@@ -40,6 +40,7 @@ spec:
                   name: {{ include "baleia.fullname" $ }}-config
                   key: {{ $key }}
             {{- end }}
+            {{- include "baleia.trinoCAEnv" . | nindent 12 }}
             {{- include "baleia.secretEnv" . | nindent 12 }}
           {{- if .Values.migrate.enabled }}
           lifecycle:
@@ -61,12 +62,14 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- include "baleia.trinoCAMount" . | nindent 12 }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- include "baleia.trinoCAVolume" . | nindent 8 }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
