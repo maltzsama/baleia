@@ -175,6 +175,16 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 
 	for {
 		if stopOnCancel && ctx.Err() != nil {
+			// Tell every queued run, so none waits out its safety timer. The
+			// workflow's own context is cancelled, so signal on a detached one.
+			dctx, cancel := workflow.NewDisconnectedContext(ctx)
+			for _, q := range state.Queued {
+				f := AdmissionFailure{ExecutionID: q.ExecutionID, Code: AdmissionFailureCancelled, Message: "the engine's admission queue was stopped"}
+				if err := signalExecution(dctx, q.ExecutionID, AdmissionFailedSignal, f); err != nil {
+					logger.Warn("could not signal queue stop", "execution_id", q.ExecutionID, "err", err)
+				}
+			}
+			cancel()
 			return ctx.Err()
 		}
 		for _, lease := range state.admitAll() {
@@ -232,6 +242,10 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 			c.Receive(ctx, &caps)
 			state.setCapacities(caps)
 		})
+		if stopOnCancel {
+			// Wakes an idle loop on cancel; the check above then returns.
+			sel.AddReceive(ctx.Done(), func(workflow.ReceiveChannel, bool) {})
+		}
 		sel.AddReceive(throttleCh, func(c workflow.ReceiveChannel, _ bool) {
 			var throttle AdmissionThrottle
 			c.Receive(ctx, &throttle)

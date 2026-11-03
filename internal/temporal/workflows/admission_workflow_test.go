@@ -342,11 +342,16 @@ func TestAdmissionWorkflow_ThrottleAppliesLive(t *testing.T) {
 	// delay: under load the test environment could fire a 1s timer before the
 	// signals sent at 1ms were handled, admitting heavy first (#639).
 	var env *testsuite.TestWorkflowEnvironment
+	gateLifted, heavyAfterLift := false, false
 	env, admitted, _ := newAdmissionEnv(t, func(lease AdmissionLease) {
-		if lease.ExecutionID == "i" {
+		switch lease.ExecutionID {
+		case "i":
 			env.RegisterDelayedCallback(func() {
+				gateLifted = true
 				env.SignalWorkflow(AdmissionThrottleSignal, AdmissionThrottle{Throttled: false})
 			}, time.Second)
+		case "h":
+			heavyAfterLift = gateLifted
 		}
 	})
 	env.RegisterDelayedCallback(func() {
@@ -360,6 +365,7 @@ func TestAdmissionWorkflow_ThrottleAppliesLive(t *testing.T) {
 	require.Len(t, *admitted, 2)
 	require.Equal(t, "i", (*admitted)[0].ExecutionID, "only interactive is admitted while throttled")
 	require.Equal(t, "h", (*admitted)[1].ExecutionID, "heavy starts once the gate lifts")
+	require.True(t, heavyAfterLift, "heavy must not start before the gate lifts")
 }
 
 // TestAdmissionWorkflow_CancelWithQueuedRunEnds: cancelling the workflow
@@ -368,7 +374,7 @@ func TestAdmissionWorkflow_ThrottleAppliesLive(t *testing.T) {
 // until the SDK's deadlock detector stopped it.
 func TestAdmissionWorkflow_CancelWithQueuedRunEnds(t *testing.T) {
 	t.Parallel()
-	env, admitted, _ := newAdmissionEnv(t)
+	env, admitted, failed := newAdmissionEnv(t)
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(AdmissionThrottleSignal, AdmissionThrottle{Throttled: true, Reason: "cluster:queued"})
 		env.SignalWorkflow(AdmissionRequestSignal, AdmissionRequest{ExecutionID: "h", Class: queryengine.ClassHeavy})
@@ -377,6 +383,23 @@ func TestAdmissionWorkflow_CancelWithQueuedRunEnds(t *testing.T) {
 	env.ExecuteWorkflow(AdmissionWorkflow, "e1", admissionState())
 
 	require.Empty(t, *admitted, "heavy waits while throttled")
+	require.True(t, env.IsWorkflowCompleted())
+	var canceled *temporal.CanceledError
+	require.ErrorAs(t, env.GetWorkflowError(), &canceled)
+	// The queued run is told at once instead of waiting out its safety timer.
+	require.Len(t, *failed, 1)
+	require.Equal(t, "h", (*failed)[0].ExecutionID)
+	require.Equal(t, AdmissionFailureCancelled, (*failed)[0].Code)
+}
+
+// TestAdmissionWorkflow_CancelWhileIdleEnds: with nothing queued there is no
+// deadline timer, and the cancellation itself wakes the loop (#639).
+func TestAdmissionWorkflow_CancelWhileIdleEnds(t *testing.T) {
+	t.Parallel()
+	env, _, _ := newAdmissionEnv(t)
+	env.RegisterDelayedCallback(env.CancelWorkflow, time.Second)
+	env.ExecuteWorkflow(AdmissionWorkflow, "e1", admissionState())
+
 	require.True(t, env.IsWorkflowCompleted())
 	var canceled *temporal.CanceledError
 	require.ErrorAs(t, env.GetWorkflowError(), &canceled)
