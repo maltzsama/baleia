@@ -7,15 +7,12 @@ metadata:
     {{- include "baleia.labels" . | nindent 4 }}
 data:
   config.properties: |
-{{ .Files.Get "files/trino/config.properties" | indent 4 }}{{ if .Values.trino.queryEvents.enabled }}
-    event-listener.config-files=/etc/trino/event-listener.properties{{ end }}{{ if include "baleia.trinoAuth" . }}
-    # Clients reach the coordinator over HTTPS with a password (#647); plain
-    # HTTP refuses them and stays for /v1/info and the node's own traffic.
-    http-server.https.enabled=true
-    http-server.https.port=8443
-    http-server.https.keystore.path=/etc/trino/auth/keystore.pem
-    http-server.authentication.type=PASSWORD
-    internal-communication.shared-secret=${ENV:TRINO_INTERNAL_SHARED_SECRET}{{ end }}
+{{- $config := .Files.Get "files/trino/config.properties" }}
+{{- if not (include "baleia.trinoAuth" .) }}
+{{- $config = regexReplaceAll `(?s)# --- authentication \(#647\).*# --- end authentication\n` $config "" }}
+{{- end }}
+{{ $config | indent 4 }}{{ if .Values.trino.queryEvents.enabled }}
+    event-listener.config-files=/etc/trino/event-listener.properties{{ end }}
   catalog-store.properties: |
 {{ .Files.Get "files/trino/catalog-store.properties" | indent 4 }}{{ if .Values.trino.registryEncryption }}
     baleia.registry-key=${ENV:BALEIA_REGISTRY_KEY}{{ if .Values.secrets.values.BALEIA_REGISTRY_KEY_PREVIOUS }}
@@ -36,14 +33,12 @@ data:
     http-event-listener.connect-backoff-base=2
     http-event-listener.connect-max-delay=10s
   {{- end }}
-  {{- if include "baleia.trinoAuth" . }}
+  baleia-base-access-control.properties: |
+{{ .Files.Get "files/trino/baleia-base-access-control.properties" | indent 4 }}
   # File-based base rules (#647): only Baleia's login may impersonate other
   # identities, and catalogs stay fully open (owner, which CREATE/DROP CATALOG
   # needs); the catalog guard stacked after them keeps catalog management to
   # the admin and enforces read-only sessions.
-  baleia-base-access-control.properties: |
-    access-control.name=file
-    security.config-file=/etc/trino/baleia-rules.json
   baleia-rules.json: |
     {
       "catalogs": [{"allow": "owner"}],
@@ -51,12 +46,10 @@ data:
         {"original_user": {{ printf "^%s$" (regexQuoteMeta .Values.config.BALEIA_TRINO_ADMIN_USER) | toJson }}, "new_user": ".*", "allow": true}
       ]
     }
+  {{- if include "baleia.trinoAuth" . }}
   password-authenticator.properties: |
     password-authenticator.name=file
     file.password-file=/etc/trino/auth/password.db
-  {{- else }}
-  baleia-base-access-control.properties: |
-{{ .Files.Get "files/trino/baleia-base-access-control.properties" | indent 4 }}
   {{- end }}
   baleia-catalog-guard.properties: |
 {{ .Files.Get "files/trino/baleia-catalog-guard.properties" | replace "baleia.admin-users=baleia_admin" (printf "baleia.admin-users=%s" .Values.config.BALEIA_TRINO_ADMIN_USER) | replace "baleia.allow-unauthenticated-admin=false" (printf "baleia.allow-unauthenticated-admin=%t" (and (not (include "baleia.trinoAuth" .)) .Values.trino.catalogGuard.allowUnauthenticatedAdmin)) | indent 4 }}
@@ -228,10 +221,10 @@ spec:
             - name: trino-config
               mountPath: /etc/trino/baleia-catalog-guard.properties
               subPath: baleia-catalog-guard.properties
-            {{- if include "baleia.trinoAuth" . }}
             - name: trino-config
               mountPath: /etc/trino/baleia-rules.json
               subPath: baleia-rules.json
+            {{- if include "baleia.trinoAuth" . }}
             - name: trino-config
               mountPath: /etc/trino/password-authenticator.properties
               subPath: password-authenticator.properties
