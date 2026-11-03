@@ -378,9 +378,21 @@ per-engine handover that avoids double queueing: when it is on, Baleia stops
 holding Trino runs in its own admission queue and lets Trino's resource group
 queue them instead.
 
-To hand a Trino engine over, point Trino's resource group manager at the same
-Postgres (the file `deploy/trino/resource-groups.properties` ships this), and
-turn the engine's switch on:
+To hand a Trino engine over:
+
+0. Before you start, make sure Trino already limits Baleia's sessions, e.g.
+   the file-based policy above. From step 1 until step 2 takes effect, Baleia
+   no longer queues the engine's runs while Trino still uses its previous
+   manager; if that manager has no limits, the runs reach the cluster
+   unthrottled. Without such a policy, do the two steps in a quiet window.
+1. Turn the engine's switch on: the `trino_resource_groups_enabled` field of
+   its queues (`PUT /engines/{id}/queues`, or Settings › Workload). Saving
+   publishes the groups in the same transaction as the switch and the
+   capacities; if publishing fails, nothing changes and the save reports the
+   error.
+2. Point Trino's resource group manager at the same Postgres (the file
+   `deploy/trino/resource-groups.properties` ships this). Do it after step 1:
+   a `db` manager reading empty tables has no group to put a query in.
 
 ```properties
 resource-groups.configuration-manager=db
@@ -389,22 +401,35 @@ resource-groups.config-db-user=baleia_trino
 resource-groups.config-db-password=${ENV:BALEIA_TRINO_DB_PASSWORD}
 ```
 
+Each class gets a group under `baleia` and a selector on its `baleia.class`
+tag. A closed class (max running 0) keeps its group with
+`hardConcurrencyLimit` 0, so Trino holds its runs (up to its max queued) as
+Baleia's own queue would, instead of routing them into an open class. Sessions
+without the tag fall back to `interactive`, or to the first open class.
+
 Baleia writes the generated `resource-groups.json` into the `resource_groups`
-and `selectors` tables (one revision per write, kept in
-`trino_resource_group_revisions`). **Trino reloads those tables every second**,
-so a capacity change applies without a coordinator restart. The `environment`
-column Baleia writes must match `node.environment` (Trino's default is
-`production`).
+and `selectors` tables, and records each write as a revision in
+`trino_resource_group_revisions`. Every save of the engine's queues while the
+switch is on publishes a new revision. **Trino reloads those tables every
+second**, so a capacity change applies without a coordinator restart.
 
-The switch is the `trino_resource_groups_enabled` field of the engine's queues
-(`PUT /engines/{id}/queues`). Turning it off restores Baleia's own admission
-queue as the authority, with no restart; the run is held by exactly one queue
-either way.
+The groups are written under `BALEIA_TRINO_RESOURCE_GROUPS_ENVIRONMENT`
+(default `production`), which must match the cluster's `node.environment`. The
+tables hold one set of groups per environment, so only one engine can own them
+at a time: turning the switch on for a second engine is refused until the
+first one's is off. Only a Trino engine has the switch.
 
-**Rollback.** A capacity or ceiling change is one more write, so to undo the
-last change, re-apply the previous revision's document to the same tables —
-the `trino_resource_group_revisions` table keeps every written document, and
-`internal/workload/resourcegroups`' `Rollback` re-publishes a chosen revision.
+Turning the switch off restores Baleia's own admission queue as the authority,
+with no restart. Baleia leaves the tables as they are and publishes nothing
+while the switch is off, so a capacity saved afterwards does not reach Trino:
+as long as Trino's `db` manager still reads the tables, it applies the last
+limits published while the switch was on, to Baleia's runs and to any other
+session. To hand admission back for good, point Trino at its previous manager
+(or remove the `db` manager) after turning the switch off.
+
+**Rollback.** To undo a capacity or ceiling change, save the previous values
+again: that publishes them as a new revision. `trino_resource_group_revisions`
+keeps every written document, so the earlier values can be read from there.
 
 ### Direct engines
 

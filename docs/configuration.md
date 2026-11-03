@@ -38,6 +38,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION` | `1h` | Minimum retention projected into managed Iceberg catalogs for `expire_snapshots` and `remove_orphan_files`; table parameters below the floor a catalog has loaded are refused (at least `1m`). Changing it, including the first deploy that introduces it, changes the catalog version: every managed Iceberg catalog is re-created on its engine once, and until that reconcile the old floor (Trino's `7d`) still applies |
 | `BALEIA_EXECUTION_TIMEOUT` | `2h` | Cap for a whole execution: all statements run in one engine session, so a script may take statements × statement timeout, capped by this |
 | `BALEIA_WORKLOAD_ENABLED` | `false` | Record each run's workload class and admit it through its engine queue (#399); off, runs start immediately and are never `queued` |
+| `BALEIA_TRINO_RESOURCE_GROUPS_ENVIRONMENT` | `production` | Environment the managed Trino resource groups are published under (#635); must match the handed-over cluster's `node.environment` |
 | `BALEIA_RESULT_MAX_ROWS` | `1000000` | Max rows buffered per statement result before truncation |
 | `BALEIA_LOB_MAX_BYTES` | `1048576` | Max bytes an Oracle engine reads from one CLOB/NCLOB/BLOB value into a result (1 MiB) |
 | `BALEIA_RESULT_MAX_BYTES` | `536870912` | Max Arrow bytes per statement result before truncation |

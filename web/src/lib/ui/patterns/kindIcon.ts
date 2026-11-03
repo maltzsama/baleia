@@ -79,6 +79,12 @@ export function hasQueryProfile(kind: string | null | undefined): boolean {
 	return kind === 'trino';
 }
 
+/** hasTrinoResourceGroups: the engine can hand its queue over to Trino's
+ * resource groups (#600, #635); the API refuses the switch on any other kind. */
+export function hasTrinoResourceGroups(kind: string | null | undefined): boolean {
+	return kind === 'trino';
+}
+
 // Connection kinds whose catalogs get Iceberg table health and maintenance
 // (#500): the same list the health pass reads (ListEnabledIcebergCatalogs).
 const tableHealthKinds = ['polaris', 'iceberg', 'nessie'];

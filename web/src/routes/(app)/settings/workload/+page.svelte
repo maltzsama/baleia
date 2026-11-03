@@ -14,6 +14,7 @@
 	import Select from '$lib/ui/Select.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
+	import { hasTrinoResourceGroups } from '$lib/ui/patterns/kindIcon';
 	import Duration from '$lib/ui/patterns/Duration.svelte';
 	import {
 		createWorkloadRule,
@@ -117,6 +118,15 @@
 	let capacities = $state<CapacityRow[]>([]);
 	let maxRunningTotal = $state('');
 	let trinoResourceGroupsEnabled = $state(false);
+	// The switch as stored, so an engine saved with it on before only Trino
+	// engines could hand over can still turn it off.
+	let storedResourceGroups = $state(false);
+	// Only a Trino engine has the resource-group handover; for any other kind
+	// the switch is hidden and never sent, unless it is stored on (#635).
+	let canHandOver = $derived(
+		storedResourceGroups ||
+			hasTrinoResourceGroups(engines.find((engine) => engine.id === engineId)?.kind)
+	);
 	let queuesLoaded = $state(false);
 	let queuesError = $state('');
 	let queuesPoll: PollController<EngineQueues> | undefined;
@@ -203,6 +213,7 @@
 		if (reset) {
 			maxRunningTotal = queues.max_running_total == null ? '' : String(queues.max_running_total);
 			trinoResourceGroupsEnabled = queues.trino_resource_groups_enabled ?? false;
+			storedResourceGroups = trinoResourceGroupsEnabled;
 			capacities = queues.classes.map((row) => ({
 				class: row.class,
 				max_running: String(row.max_running),
@@ -331,7 +342,7 @@
 		return {
 			body: {
 				max_running_total: total,
-				trino_resource_groups_enabled: trinoResourceGroupsEnabled,
+				trino_resource_groups_enabled: canHandOver ? trinoResourceGroupsEnabled : undefined,
 				classes
 			},
 			closesWithQueued
@@ -612,15 +623,17 @@
 							class="rounded border border-border bg-bg-panel px-2 py-1 text-xs text-text-main"
 						/>
 					</label>
-					<label class="flex items-center gap-2 text-[12px] font-medium text-text-main">
-						<input
-							type="checkbox"
-							aria-label={m.workload_trino_resource_groups()}
-							bind:checked={trinoResourceGroupsEnabled}
-							class="h-3.5 w-3.5 rounded border-border"
-						/>
-						<span>{m.workload_trino_resource_groups()}</span>
-					</label>
+					{#if canHandOver}
+						<label class="flex items-center gap-2 text-[12px] font-medium text-text-main">
+							<input
+								type="checkbox"
+								aria-label={m.workload_trino_resource_groups()}
+								bind:checked={trinoResourceGroupsEnabled}
+								class="h-3.5 w-3.5 rounded border-border"
+							/>
+							<span>{m.workload_trino_resource_groups()}</span>
+						</label>
+					{/if}
 				</div>
 				{#if queuesError}
 					<ErrorState title={m.workload_could_not_load()} message={queuesError} />

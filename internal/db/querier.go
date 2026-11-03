@@ -548,6 +548,9 @@ type Querier interface {
 	// Serializes the rounds' capacity check and run creation until the
 	// transaction ends, so concurrent catalogs cannot overfill the limit.
 	LockMaintenanceCapacity(ctx context.Context) error
+	// Serializes the saves that decide who owns the Trino resource groups and
+	// publish them (#635): held until the transaction ends.
+	LockTrinoResourceGroups(ctx context.Context) error
 	ManagedBindingNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
 	MarkDirectorySynced(ctx context.Context, id pgtype.UUID) error
 	MarkEngineCatalogManaged(ctx context.Context, arg MarkEngineCatalogManagedParams) error

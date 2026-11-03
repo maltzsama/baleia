@@ -63,7 +63,9 @@ type Selector struct {
 
 // Generate renders the document. ceiling, when non-nil and positive, becomes
 // the root hardConcurrencyLimit. A class whose capacity is 0 (MaxRunning == 0)
-// is closed: it gets no subgroup and no selector, so the class can never run.
+// is closed: it keeps its subgroup and selector with a hardConcurrencyLimit of
+// 0, so Trino holds its runs (up to maxQueued) as Baleia's own queue would,
+// instead of the catch-all routing them into an open class's capacity (#635).
 func Generate(classes map[queryengine.WorkloadClass]Capacity, ceiling *int) ResourceGroups {
 	root := RootGroup{Name: rootGroupName, SoftMemoryLimit: softMemoryLimit}
 	if ceiling != nil && *ceiling > 0 {
@@ -77,12 +79,9 @@ func Generate(classes map[queryengine.WorkloadClass]Capacity, ceiling *int) Reso
 		if !ok {
 			capacity = Defaults("federated")[class]
 		}
-		if capacity.MaxRunning <= 0 {
-			continue // the class is closed on this engine
-		}
 		root.SubGroups = append(root.SubGroups, SubGroup{
 			Name:                 string(class),
-			HardConcurrencyLimit: capacity.MaxRunning,
+			HardConcurrencyLimit: max(capacity.MaxRunning, 0), // 0: the class is closed
 			MaxQueued:            capacity.MaxQueued,
 		})
 		out.Selectors = append(out.Selectors, Selector{
@@ -91,9 +90,10 @@ func Generate(classes map[queryengine.WorkloadClass]Capacity, ceiling *int) Reso
 		})
 	}
 
-	// The catch-all sends an unclassified session to interactive, or to the
-	// first open class when interactive itself is closed. With every class
-	// closed there is nothing to route to, so no catch-all is emitted.
+	// The catch-all sends an unclassified session (one without a baleia.class
+	// tag) to interactive, or to the first open class when interactive itself
+	// is closed. With every class closed there is nothing to route to, so no
+	// catch-all is emitted.
 	if fallback := firstOpenClass(classes); fallback != "" {
 		out.Selectors = append(out.Selectors, Selector{Group: rootGroupName + "." + fallback})
 	}
@@ -119,8 +119,8 @@ func firstOpenClass(classes map[queryengine.WorkloadClass]Capacity) string {
 
 // Validate checks the document's structural invariants: one root group, every
 // subgroup named and reachable through the root, every selector pointing at an
-// existing group, and no closed (zero-concurrency) group. It is the gate the
-// caller runs before writing the document anywhere.
+// existing group, and no negative limit (0 is a closed class). It is the gate
+// the caller runs before writing the document anywhere.
 func Validate(rg ResourceGroups) error {
 	if len(rg.RootGroups) != 1 {
 		return fmt.Errorf("resource groups: want exactly one root group, got %d", len(rg.RootGroups))
@@ -143,8 +143,8 @@ func Validate(rg ResourceGroups) error {
 			return fmt.Errorf("resource groups: duplicate subgroup %q", sub.Name)
 		}
 		seen[sub.Name] = true
-		if sub.HardConcurrencyLimit <= 0 {
-			return fmt.Errorf("resource groups: subgroup %q has a closed limit", sub.Name)
+		if sub.HardConcurrencyLimit < 0 {
+			return fmt.Errorf("resource groups: subgroup %q has a negative hardConcurrencyLimit", sub.Name)
 		}
 		if sub.MaxQueued < 0 {
 			return fmt.Errorf("resource groups: subgroup %q has a negative maxQueued", sub.Name)
