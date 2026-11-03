@@ -81,6 +81,13 @@
             "allowUnauthenticatedAdmin": { "type": "boolean" }
           }
         },
+        "networkPolicy": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "extraIngressFrom": { "type": "array", "items": { "type": "object" } }
+          }
+        },
         "resources": { "type": "object" }
       }
     }

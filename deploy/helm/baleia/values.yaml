@@ -100,4 +100,11 @@ trino:
     # When false, the guard denies catalog management to the unauthenticated
     # admin, so creating, updating and syncing catalogs from Baleia fails.
     allowUnauthenticatedAdmin: false
+  # Restrict ingress to the coordinator to the Baleia API and worker (#645).
+  # It only takes effect when the cluster's CNI enforces NetworkPolicy; it is
+  # defense in depth, not authentication (#644). Add peers that must reach
+  # Trino, e.g. a metrics scraper, as NetworkPolicy "from" entries.
+  networkPolicy:
+    enabled: true
+    extraIngressFrom: []
   resources: {}
