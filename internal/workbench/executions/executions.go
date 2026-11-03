@@ -217,9 +217,12 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 		eng, err := s.store.GetEngineByID(ctx, r.Target.EngineID)
 		if err != nil {
 			// Without the engine row the admission authority is unknowable, so
-			// the run could wait in both queues. Fail it instead of guessing.
+			// the run could wait in both queues. Fail it instead of guessing,
+			// detached from the request (which may be the reason it failed).
+			failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+			defer cancel()
 			code := "internal"
-			if _, ferr := s.store.FailQueryExecution(ctx, db.FailQueryExecutionParams{ID: execution.ID, ErrorCode: &code}); ferr != nil && !errors.Is(ferr, pgx.ErrNoRows) {
+			if _, ferr := s.store.FailQueryExecution(failCtx, db.FailQueryExecutionParams{ID: execution.ID, ErrorCode: &code}); ferr != nil && !errors.Is(ferr, pgx.ErrNoRows) {
 				s.logger.ErrorContext(ctx, "failed to mark execution failed after engine lookup error", "execution_id", executionID, "lookup_err", err, "mark_err", ferr)
 			}
 			return db.QueryExecution{}, err
