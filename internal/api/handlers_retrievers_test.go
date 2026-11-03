@@ -15,6 +15,13 @@ import (
 type fakeRetrieverQuerier struct {
 	db.Querier
 	created *db.CreateRetrieverParams
+	// notOwner makes IsWorkspaceOwner say the caller is a member but not the
+	// workspace owner, which the retriever mutations must refuse (#613).
+	notOwner bool
+}
+
+func (f *fakeRetrieverQuerier) IsWorkspaceOwner(context.Context, db.IsWorkspaceOwnerParams) (bool, error) {
+	return !f.notOwner, nil
 }
 
 func (f *fakeRetrieverQuerier) CheckWorkspaceAccess(context.Context, db.CheckWorkspaceAccessParams) (bool, error) {
@@ -159,6 +166,24 @@ func TestCreateRetriever_StoresDestinationFields(t *testing.T) {
 	}
 	if fake.created.RefreshType != "full" {
 		t.Fatalf("refresh type = %q, want full (default)", fake.created.RefreshType)
+	}
+}
+
+// TestCreateRetriever_OwnerOnly: a workspace member who is not the owner may
+// not create a retriever even though the workspace has a writable destination
+// (#613).
+func TestCreateRetriever_OwnerOnly(t *testing.T) {
+	t.Parallel()
+	fake := &fakeRetrieverQuerier{notOwner: true}
+	resp, err := (testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: fake})).CreateRetriever(testContext(), retrieverRequest())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, ok := resp.(CreateRetriever403JSONResponse); !ok || got.Code != ErrorCodeForbidden {
+		t.Fatalf("want 403 forbidden, got %T %+v", resp, resp)
+	}
+	if fake.created != nil {
+		t.Fatal("created a retriever despite not owning the workspace")
 	}
 }
 

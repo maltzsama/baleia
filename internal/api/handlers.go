@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/assistant"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/authz"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -307,6 +308,22 @@ func requireWorkspaceAccess(ctx context.Context, svc *wsaccess.Service, workspac
 	err = svc.Check(ctx, workspaceIDFromRequest(workspaceID), actor)
 	if errors.Is(err, wsaccess.ErrNotFound) {
 		return ErrWorkspaceNotFound
+	}
+	return err
+}
+
+// requireWorkspaceOwner checks the caller may change workspace-level content
+// such as retrievers: a workspace owner or a global admin (#613). A non-owner
+// member is ErrForbidden; membership and authentication are already enforced
+// by requireWorkspaceAccess.
+func (h *core) requireWorkspaceOwner(ctx context.Context, workspaceID openapi_types.UUID) error {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return authz.ErrForbidden
+	}
+	_, err = h.authz().Workspace(ctx, p, workspaceIDFromRequest(workspaceID), authz.ActWrite)
+	if errors.Is(err, authz.ErrNotFound) {
+		return authz.ErrForbidden
 	}
 	return err
 }

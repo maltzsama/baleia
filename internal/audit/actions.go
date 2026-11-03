@@ -68,6 +68,8 @@ const (
 
 	ExecutionCreate Action = "execution.create"
 	ExecutionCancel Action = "execution.cancel"
+	// QueryKill cancels a running query observed through engine monitoring.
+	QueryKill Action = "query.kill"
 
 	ResultsDownload Action = "results.download"
 
@@ -119,7 +121,7 @@ var allActions = []Action{
 	AgentTokenCreate, AgentTokenRevoke, AuthAgentTokenRejected,
 	AgentToolCall, AgentPolicyUpdate,
 	AssistantSettingsUpdate,
-	ExecutionCreate, ExecutionCancel,
+	ExecutionCreate, ExecutionCancel, QueryKill,
 	ResultsDownload,
 	MaintenanceTrigger, MaintenanceParametersSet, MaintenanceParametersRemoved, MaintenanceRunRequested,
 	RetrieverCreate, RetrieverUpdate, RetrieverDelete, RetrieverRefresh,

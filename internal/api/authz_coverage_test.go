@@ -200,12 +200,12 @@ var operationAccess = map[string]access{
 	// ── workspace members (query editor, retrievers)
 	"ListExecutions":            {kind: kindChecked, calls: wsMember},
 	"RunQuery":                  checked("requireWorkspaceAccess", "requireSpace"),
-	"GetExecution":              {kind: kindChecked, calls: wsMember},
-	"GetExecutionDetails":       {kind: kindChecked, calls: wsMember},
-	"CancelExecution":           {kind: kindChecked, calls: wsMember},
-	"GetResults":                {kind: kindChecked, calls: wsMember},
-	"ListStatements":            {kind: kindChecked, calls: wsMember},
-	"GetStatementResults":       {kind: kindChecked, calls: wsMember},
+	"GetExecution":              checked("requireWorkspaceAccess", "canSeeExecution"), // owner/admin or self (#611)
+	"GetExecutionDetails":       checked("requireWorkspaceAccess", "canSeeExecution"),
+	"CancelExecution":           checked("requireWorkspaceAccess", "canSeeExecution"),
+	"GetResults":                checked("requireWorkspaceAccess", "canSeeExecution"),
+	"ListStatements":            checked("requireWorkspaceAccess", "canSeeExecution"),
+	"GetStatementResults":       checked("requireWorkspaceAccess", "canSeeExecution"),
 	"ListFolders":               {kind: kindChecked, calls: wsMember},
 	"CreateFolder":              checked("requireWorkspaceAccess", "spaceForWrite"),
 	"DeleteFolder":              checked("requireWorkspaceAccess", "requireSpace"),
@@ -217,12 +217,12 @@ var operationAccess = map[string]access{
 	"ListRetrievers":            {kind: kindChecked, calls: wsMember},
 	"ListRetrieverDestinations": {kind: kindChecked, calls: wsMember},
 	"ValidateRetriever":         {kind: kindChecked, calls: wsMember},
-	"CreateRetriever":           {kind: kindChecked, calls: wsMember},
-	"DeleteRetriever":           {kind: kindChecked, calls: wsMember},
+	"CreateRetriever":           checked("requireWorkspaceAccess", "requireWorkspaceOwner"), // owner/admin only (#613)
+	"DeleteRetriever":           checked("requireWorkspaceAccess", "requireWorkspaceOwner"),
 	"GetRetriever":              {kind: kindChecked, calls: wsMember},
-	"UpdateRetriever":           {kind: kindChecked, calls: wsMember},
+	"UpdateRetriever":           checked("requireWorkspaceAccess", "requireWorkspaceOwner"),
 	"GetRetrieverHistory":       {kind: kindChecked, calls: wsMember},
-	"TriggerRetrieverRefresh":   {kind: kindChecked, calls: wsMember},
+	"TriggerRetrieverRefresh":   checked("requireWorkspaceAccess", "requireWorkspaceOwner"),
 
 	// ── placeholders that answer a constant
 	// Metadata snapshot reads (#18): workspace members (metadataWorkspace

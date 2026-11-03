@@ -22,12 +22,19 @@ import (
 type fakeQuerier struct {
 	db.Querier
 	hasWorkspaceAccess bool
-	execErr            error
-	exec               db.QueryExecution
-	gotExecParams      *db.GetQueryExecutionByIDAndWorkspaceParams
-	cancelErr          error
-	cancelResult       db.QueryExecution
-	statements         []db.QueryStatement
+	// notOwner makes IsWorkspaceOwner say the caller is a member but not the
+	// workspace owner, so only their own executions are visible (#611).
+	notOwner      bool
+	execErr       error
+	exec          db.QueryExecution
+	gotExecParams *db.GetQueryExecutionByIDAndWorkspaceParams
+	cancelErr     error
+	cancelResult  db.QueryExecution
+	statements    []db.QueryStatement
+}
+
+func (f *fakeQuerier) IsWorkspaceOwner(context.Context, db.IsWorkspaceOwnerParams) (bool, error) {
+	return !f.notOwner, nil
 }
 
 func (f *fakeQuerier) CheckWorkspaceAccess(context.Context, db.CheckWorkspaceAccessParams) (bool, error) {
@@ -109,6 +116,48 @@ func TestGetExecutionReturnsOwnExecution(t *testing.T) {
 	}
 	if _, ok := resp.(GetExecution200JSONResponse); !ok {
 		t.Fatalf("want 200 for own execution, got %T", resp)
+	}
+}
+
+// TestGetExecutionHidesAnotherMembersExecution pins #611: a member who is not
+// the workspace owner sees only their own executions.
+func TestGetExecutionHidesAnotherMembersExecution(t *testing.T) {
+	t.Parallel()
+	fake := &fakeQuerier{
+		hasWorkspaceAccess: true,
+		notOwner:           true,
+		exec:               db.QueryExecution{UserID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}},
+	}
+	h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
+	wsID, execID := execRequest()
+
+	resp, err := h.GetExecution(testContext(), GetExecutionRequestObject{Id: wsID, ExecutionId: execID})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := resp.(GetExecution404JSONResponse); !ok {
+		t.Fatalf("want 404 for another member's execution, got %T", resp)
+	}
+}
+
+// TestGetExecutionShowsOwnExecutionToNonOwner: the creator still sees their own
+// execution even without the workspace owner role (#611).
+func TestGetExecutionShowsOwnExecutionToNonOwner(t *testing.T) {
+	t.Parallel()
+	me, err := uuidFromString(testUserID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeQuerier{hasWorkspaceAccess: true, notOwner: true, exec: db.QueryExecution{UserID: me}}
+	h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
+	wsID, execID := execRequest()
+
+	resp, err := h.GetExecution(testContext(), GetExecutionRequestObject{Id: wsID, ExecutionId: execID})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := resp.(GetExecution200JSONResponse); !ok {
+		t.Fatalf("want 200 for the caller's own execution, got %T", resp)
 	}
 }
 
