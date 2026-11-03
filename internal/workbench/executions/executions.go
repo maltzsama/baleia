@@ -32,6 +32,7 @@ type Runs interface {
 	UpdateQueryExecution(ctx context.Context, arg db.UpdateQueryExecutionParams) (db.QueryExecution, error)
 	GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg db.GetQueryExecutionByIDAndWorkspaceParams) (db.QueryExecution, error)
 	CancelQueryExecution(ctx context.Context, arg db.CancelQueryExecutionParams) (db.QueryExecution, error)
+	FailQueryExecution(ctx context.Context, arg db.FailQueryExecutionParams) (db.QueryExecution, error)
 	ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]db.ListRunningStatementHandlesRow, error)
 }
 
@@ -213,13 +214,17 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 	if s.cfg.WorkloadEnabled && r.Target.EngineID.Valid {
 		resolved := s.ensureAdmissionWorkflow(ctx, r.Target)
 		runtimeTimeout = resolved[class].RuntimeTimeout
-		if eng, err := s.store.GetEngineByID(ctx, r.Target.EngineID); err == nil {
-			trinoResourceGroups = eng.TrinoResourceGroupsEnabled
-		} else {
-			// Fail-safe: without the engine row the flag is unknowable, so the
-			// run keeps Baleia's queue. The error is surfaced here, not silently.
-			s.logger.WarnContext(ctx, "could not read the engine's resource-group switch; using Baleia's queue", "engine_id", uuidString(r.Target.EngineID), "err", err)
+		eng, err := s.store.GetEngineByID(ctx, r.Target.EngineID)
+		if err != nil {
+			// Without the engine row the admission authority is unknowable, so
+			// the run could wait in both queues. Fail it instead of guessing.
+			code := "internal"
+			if _, ferr := s.store.FailQueryExecution(ctx, db.FailQueryExecutionParams{ID: execution.ID, ErrorCode: &code}); ferr != nil && !errors.Is(ferr, pgx.ErrNoRows) {
+				s.logger.ErrorContext(ctx, "failed to mark execution failed after engine lookup error", "execution_id", executionID, "lookup_err", err, "mark_err", ferr)
+			}
+			return db.QueryExecution{}, err
 		}
+		trinoResourceGroups = eng.TrinoResourceGroupsEnabled
 	}
 	// The script is split with the target engine's dialect; Trino when the
 	// kind has none.
