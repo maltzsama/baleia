@@ -6,6 +6,7 @@ package providers
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
@@ -20,6 +21,7 @@ type Store interface {
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error)
 	CountUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) (int64, error)
 	UpdateAuthProvider(ctx context.Context, arg db.UpdateAuthProviderParams) (db.AuthProvider, error)
+	DeleteUserIDPTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 }
 
 // Creator writes a new provider; *db.Queries implements it.
@@ -116,8 +118,16 @@ func (s *Service) Create(ctx context.Context, name, typ string, enabled bool, se
 }
 
 // Update stores a provider's name, switch and sealed configuration.
+// Disabling it forgets the identity-provider tokens its sign-ins left (#648).
 func (s *Service) Update(ctx context.Context, id pgtype.UUID, name string, enabled bool, sealed string) (db.AuthProvider, error) {
-	return s.store.UpdateAuthProvider(ctx, db.UpdateAuthProviderParams{ID: id, Name: name, ConfigEnc: sealed, Enabled: enabled})
+	ap, err := s.store.UpdateAuthProvider(ctx, db.UpdateAuthProviderParams{ID: id, Name: name, ConfigEnc: sealed, Enabled: enabled})
+	if err != nil || enabled {
+		return ap, err
+	}
+	if err := s.store.DeleteUserIDPTokensByAuthProvider(ctx, id); err != nil {
+		return ap, fmt.Errorf("forget identity-provider tokens: %w", err)
+	}
+	return ap, nil
 }
 
 // Delete removes a provider. With linked users it refuses with ErrInUse

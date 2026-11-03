@@ -24,6 +24,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0012](0012-semantic-layer-roadmap.md) | Semantic layer roadmap (no dbt) | Accepted |
 | [0013](0013-content-model.md) | Saved content model | Accepted |
 | [0014](0014-workload-management.md) | Workload management: per-engine admission queues | Accepted |
+| [0015](0015-per-user-catalog-identity.md) | Per-user identity to the catalog manager | Accepted |
 
 ## Owner decisions
 

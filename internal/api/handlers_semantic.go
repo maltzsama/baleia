@@ -740,7 +740,7 @@ func (h *SemanticHandlers) validateSemanticMetric(ctx context.Context, ws pgtype
 	}
 	spec := queryengine.SessionSpec{
 		Catalog: target.EngineCatalog, Schema: namespace,
-		Identity: queryengine.Identity{UserID: trinoUser},
+		Identity: queryengine.Identity{UserID: trinoUser, Principal: idString(userID)},
 		ReadOnly: true,
 		Tags:     queryengine.Tags{Source: "semantic", RequestID: middleware.GetReqID(ctx)},
 	}

@@ -160,6 +160,8 @@ type Querier interface {
 	// the revision log that makes a rollback possible.
 	DeleteTrinoResourceGroups(ctx context.Context, environment *string) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
+	DeleteUserIDPToken(ctx context.Context, userID pgtype.UUID) error
+	DeleteUserIDPTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 	DeleteWorkloadRule(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteWorkspace(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error)
@@ -242,6 +244,9 @@ type Querier interface {
 	GetLatestClusterSnapshotByEngine(ctx context.Context, engineID pgtype.UUID) (ClusterSnapshot, error)
 	GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (MaintenanceRun, error)
 	GetManagedBindingOfCatalog(ctx context.Context, arg GetManagedBindingOfCatalogParams) (CatalogBinding, error)
+	// The connection behind a catalog an engine exposes through a managed binding
+	// (#648): its catalog manager may authorize each user.
+	GetManagedConnectionOfEngineCatalog(ctx context.Context, arg GetManagedConnectionOfEngineCatalogParams) (CatalogConnection, error)
 	// A live table by its natural key, for the v1 -> v2 metric migration (#121).
 	GetMetadataTableByName(ctx context.Context, arg GetMetadataTableByNameParams) (pgtype.UUID, error)
 	// Lineage (#558, B4): the tables a model, metric or saved query reads, and
@@ -300,6 +305,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByExternalID(ctx context.Context, arg GetUserByExternalIDParams) (User, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
+	GetUserIDPToken(ctx context.Context, userID pgtype.UUID) (UserIdpToken, error)
 	GetWorkloadRule(ctx context.Context, id pgtype.UUID) (WorkloadRule, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
@@ -744,6 +750,7 @@ type Querier interface {
 	// figure one writer does not know (the poller has no output rows) keeps the
 	// other's.
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error)
+	UpsertUserIDPToken(ctx context.Context, arg UpsertUserIDPTokenParams) error
 	UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWorkspaceCatalogGrantParams) (WorkspaceCatalogGrant, error)
 	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)
 }

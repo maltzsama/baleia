@@ -89,6 +89,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		Storage:       core.Storage,
 		WSTickets:     tickets,
 		Assistant:     runner,
+		Identity:      api.IdentityDeps{OIDC: core.OIDC, IDPTokens: core.IDPTokens},
 	})
 	if err != nil {
 		return nil, err

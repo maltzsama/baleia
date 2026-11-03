@@ -710,7 +710,7 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 		SavedQueryID: savedQueryID,
 		SQL:          request.Body.Sql,
 		Target:       target,
-		Identity:     queryengine.Identity{UserID: trinoUser, AgentID: idString(agentID)},
+		Identity:     queryengine.Identity{UserID: trinoUser, AgentID: idString(agentID), Principal: idString(uid)},
 		AgentID:      agentID,
 		// Correlates the row, the workflow and the activity logs with the
 		// request log line.

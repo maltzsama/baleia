@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/bootstrap"
+	"github.com/galileostudio/baleia/internal/catalogidentity"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/glue"
@@ -28,6 +29,8 @@ import (
 	"github.com/galileostudio/baleia/internal/dbpool"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/engines"
+	"github.com/galileostudio/baleia/internal/identity/idptoken"
+	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -78,6 +81,10 @@ type Core struct {
 	Storage *storage.S3Client
 	// TrinoAdmin is the catalog DDL identity (docs/adr/0005); Binder uses it.
 	TrinoAdmin *trino.Client
+	// OIDC runs OIDC sign-ins and refreshes identity-provider tokens;
+	// IDPTokens keeps each user's (#648). The API and the worker share them.
+	OIDC      *oidclogin.Service
+	IDPTokens *idptoken.Tokens
 	// TrinoHTTP is the HTTP client of the default cluster (TRINO_URL): the
 	// managed dialer, the coordinator's CA bundle and Baleia's password login
 	// (#646). The worker's Lens monitor uses it too.
@@ -191,6 +198,16 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		return nil, fmt.Errorf("engine kinds: %w", err)
 	}
 	c.Engines = queryengine.NewManager(c.Queries, c.Keyring, c.Connections, c.Dialer, c.ManagedDialer, kinds)
+	// Catalog managers set to per-user identity authorize each user with
+	// their identity-provider token, carried by every query session (#648).
+	c.OIDC = oidclogin.New(c.Queries, c.Queries, c.Keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
+		PublicURL: cfg.PublicURL,
+		CacheTTL:  time.Hour,
+		Logger:    c.Logger,
+	})
+	c.IDPTokens = idptoken.New(c.Queries, c.Keyring, c.OIDC, c.Logger)
+	c.OIDC.SetTokens(c.IDPTokens)
+	c.Engines.SetCatalogCredentials(catalogidentity.New(c.Queries, c.Keyring, c.Connections, c.IDPTokens, c.Logger))
 
 	c.Storage, err = storage.New(storage.Options{
 		Endpoint:  cfg.S3Endpoint,

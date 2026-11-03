@@ -86,6 +86,32 @@ export function readsMetadata(provider: ConnectionProvider): boolean {
 	return provider.roles.includes('metadata');
 }
 
+/** The config key of a catalog manager that can authorize each user (#648). */
+const userIdentityKey = 'user_identity';
+
+/** Families whose connections are catalog managers. */
+const catalogManagerFamily: Record<ProviderFamily, boolean> = {
+	iceberg: true,
+	metastore: true,
+	database: false,
+	engine: false
+};
+
+/**
+ * Who a catalog manager sees for the users of a connection (#648): each
+ * Baleia user (`per_user`), or the connection's own account for every user
+ * (`connection`, also every catalog manager that cannot authorize users).
+ * `null` for databases and engines, which are not catalog managers.
+ */
+export function catalogIdentity(
+	provider: ConnectionProvider | undefined,
+	config: Record<string, unknown> | undefined
+): 'per_user' | 'connection' | null {
+	if (!provider || !catalogManagerFamily[provider.family]) return null;
+	const supported = provider.config_schema.some((f) => f.key === userIdentityKey);
+	return supported && config?.[userIdentityKey] === 'true' ? 'per_user' : 'connection';
+}
+
 /** A record of the provider's non-secret defaults, ready for the form. */
 export function initialValues(provider: ConnectionProvider): Record<string, string> {
 	const out: Record<string, string> = {};

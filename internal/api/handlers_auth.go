@@ -216,6 +216,10 @@ func (h *AuthHandlers) Logout(ctx context.Context, request LogoutRequestObject) 
 	}
 	actx := audit.AsUser(ctx, idString(userID), audit.AuthRefreshTok)
 	ev := audit.Event{Action: audit.AuthLogout, ResourceType: "user", ResourceID: idString(userID)}
+	if err == nil && h.idpTokens != nil {
+		// Signing out ends acting as the user towards catalog managers (#648).
+		err = h.idpTokens.Forget(ctx, userID)
+	}
 	if err != nil {
 		h.audited(actx, ev.Failed(audit.ReasonInternal))
 		return nil, fmt.Errorf("logout: %w", err)

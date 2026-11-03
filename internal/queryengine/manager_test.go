@@ -302,3 +302,45 @@ func TestManager_DefaultTrinoAndCollectStrings(t *testing.T) {
 		t.Fatalf("no default engine: %v", err)
 	}
 }
+
+type fakeCreds struct {
+	token string
+	err   error
+	seen  queryengine.SessionSpec
+}
+
+func (f *fakeCreds) CatalogToken(_ context.Context, _ string, spec queryengine.SessionSpec) (string, error) {
+	f.seen = spec
+	return f.token, f.err
+}
+
+// TestManager_CatalogToken (#648): every session gets its CatalogToken from
+// the manager's credentials, never from the caller, and a failure to get one
+// fails the session.
+func TestManager_CatalogToken(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	m, _ := newManager(t, &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)})
+	creds := &fakeCreds{token: "from-creds"}
+	m.SetCatalogCredentials(creds)
+	e, err := m.Get(ctx, engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := e.OpenSession(ctx, queryengine.SessionSpec{Catalog: "lake", CatalogToken: "from-caller", Identity: queryengine.Identity{Principal: "p1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	if got := unwrap(t, e).LastSpec().CatalogToken; got != "from-creds" {
+		t.Errorf("CatalogToken = %q", got)
+	}
+	if creds.seen.Catalog != "lake" || creds.seen.Identity.Principal != "p1" || creds.seen.CatalogToken != "" {
+		t.Errorf("credentials saw %+v", creds.seen)
+	}
+
+	creds.err = errors.New("token endpoint down")
+	if _, err := e.OpenSession(ctx, queryengine.SessionSpec{}); err == nil {
+		t.Fatal("want the credentials error")
+	}
+}

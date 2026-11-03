@@ -2577,5 +2577,7 @@
 	"data_search_filter_type": "tipo: {value}",
 	"data_search_filter_tag": "tag: {value}",
 	"data_search_filter_certified": "certificado: {value}",
-	"data_search_filter_namespace": "namespace: {value}"
+	"data_search_filter_namespace": "namespace: {value}",
+	"connections_identity_per_user": "Identidade por usuário",
+	"connections_identity_connection": "Conta da conexão para todos"
 }

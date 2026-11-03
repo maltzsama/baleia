@@ -423,3 +423,46 @@ func TestSessionCarriesRuntimeTimeout(t *testing.T) {
 		t.Errorf("session = %q, want query_max_execution_time=86400s", got)
 	}
 }
+
+// TestSessionCarriesCatalogToken (#648): the catalog token travels as the
+// "token" extra credential, next to the read-only mode, and never as a header
+// of its own.
+func TestSessionCarriesCatalogToken(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		spec queryengine.SessionSpec
+		want []string
+		not  []string
+	}{
+		{"token only", queryengine.SessionSpec{CatalogToken: "user-jwt"}, []string{"token=user-jwt"}, []string{"baleia.mode"}},
+		{"token and read-only", queryengine.SessionSpec{CatalogToken: "user-jwt", ReadOnly: true}, []string{"token=user-jwt", "baleia.mode=readonly"}, nil},
+		{"read-only only", queryengine.SessionSpec{ReadOnly: true}, []string{"baleia.mode=readonly"}, []string{"token="}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := &fakeCoordinator{respond: func(string) (http.Header, map[string]any) {
+				return http.Header{}, map[string]any{"id": "20260101_000000_00001_abcde"}
+			}}
+			s, err := testEngine(t, f).OpenSession(context.Background(), tt.spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Execute(context.Background(), "SELECT 1", queryengine.Callbacks{}, &collect{}); err != nil {
+				t.Fatal(err)
+			}
+			got := f.last().Get("X-Trino-Extra-Credential")
+			for _, w := range tt.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("extra credential = %q, want %q", got, w)
+				}
+			}
+			for _, n := range tt.not {
+				if strings.Contains(got, n) {
+					t.Errorf("extra credential = %q, must not carry %q", got, n)
+				}
+			}
+		})
+	}
+}

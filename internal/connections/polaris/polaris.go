@@ -37,6 +37,7 @@ func (*Provider) ConfigSchema() []connections.Field {
 		{Key: "realm", Label: "Realm", Type: connections.FieldText, Default: "POLARIS"},
 		{Key: "client_id", Label: "Client ID", Type: connections.FieldText, Required: true},
 		{Key: "client_secret", Label: "Client secret", Type: connections.FieldSecret, Required: true},
+		connections.UserIdentityField,
 	}, connections.S3StorageFields()...)
 }
 
@@ -105,3 +106,14 @@ func (p *Provider) Ping(ctx context.Context, cfg connections.Config) error {
 func (p *Provider) OpenMetadata(_ context.Context, cfg connections.Config) (connections.MetadataReader, error) {
 	return p.client(cfg, p.RESTURI(cfg)).ReaderWithCatalogs(p.listCatalogs(cfg), func(c string) string { return c }), nil
 }
+
+// UserIdentity reports whether Polaris authorizes each Baleia user (#648).
+func (*Provider) UserIdentity(cfg connections.Config) bool { return connections.UserIdentityOn(cfg) }
+
+// ServiceToken is the connection principal's token, from the Iceberg REST
+// token endpoint with the catalog scope.
+func (p *Provider) ServiceToken(ctx context.Context, cfg connections.Config) (string, time.Time, error) {
+	return p.client(cfg, p.RESTURI(cfg)).Bearer(ctx)
+}
+
+var _ connections.UserIdentity = (*Provider)(nil)

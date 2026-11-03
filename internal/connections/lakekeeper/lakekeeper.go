@@ -51,6 +51,7 @@ func (*Provider) ConfigSchema() []connections.Field {
 		{Key: "client_secret", Label: "OAuth2 client secret", Type: connections.FieldSecret, Help: "Required with auth_mode=oauth2"},
 		{Key: "token_endpoint", Label: "OAuth2 token endpoint", Type: connections.FieldURL, Help: "The IdP token endpoint (not the Lakekeeper URL); required with auth_mode=oauth2"},
 		{Key: "scope", Label: "OAuth2 scope", Type: connections.FieldText},
+		connections.UserIdentityField,
 	}, connections.S3StorageFields()...)
 }
 
@@ -137,3 +138,14 @@ func (p *Provider) Ping(ctx context.Context, cfg connections.Config) error {
 func (p *Provider) OpenMetadata(_ context.Context, cfg connections.Config) (connections.MetadataReader, error) {
 	return p.client(cfg).ReaderWithCatalogs(p.listWarehouses(cfg), func(c string) string { return c }), nil
 }
+
+// UserIdentity reports whether Lakekeeper authorizes each Baleia user (#648).
+func (*Provider) UserIdentity(cfg connections.Config) bool { return connections.UserIdentityOn(cfg) }
+
+// ServiceToken is the connection's client-credentials token from its IdP
+// (auth_mode=oauth2); "" for a server with authorization off.
+func (p *Provider) ServiceToken(ctx context.Context, cfg connections.Config) (string, time.Time, error) {
+	return p.client(cfg).Bearer(ctx)
+}
+
+var _ connections.UserIdentity = (*Provider)(nil)

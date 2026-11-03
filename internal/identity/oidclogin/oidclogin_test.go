@@ -75,7 +75,14 @@ func (p *fakeProvider) Exchange(_ context.Context, code, verifier, nonce string)
 	if code != "good" || verifier == "" || nonce != p.nonce {
 		return nil, errors.New("rejected")
 	}
-	return &auth.OIDCUserInfo{Subject: p.subject}, nil
+	return &auth.OIDCUserInfo{Subject: p.subject, Tokens: auth.IDPTokens{AccessToken: "at-" + p.subject, RefreshToken: "rt"}}, nil
+}
+
+func (p *fakeProvider) Refresh(_ context.Context, refreshToken string) (auth.IDPTokens, error) {
+	if refreshToken != "rt" {
+		return auth.IDPTokens{}, errors.New("rejected")
+	}
+	return auth.IDPTokens{AccessToken: "at-refreshed", RefreshToken: "rt"}, nil
 }
 
 type fixture struct {
@@ -240,5 +247,43 @@ func TestProvider_OnlyEnabledOIDC(t *testing.T) {
 				t.Error("an unusable provider must not be discovered")
 			}
 		})
+	}
+}
+
+type savedTokens struct {
+	user, provider pgtype.UUID
+	tok            auth.IDPTokens
+}
+
+func (s *savedTokens) Save(_ context.Context, userID, providerID pgtype.UUID, tok auth.IDPTokens) error {
+	s.user, s.provider, s.tok = userID, providerID, tok
+	return nil
+}
+
+// TestFinish_KeepsTokens (#648): a sign-in keeps its identity-provider tokens
+// for the user, and Refresh goes to the provider that issued them.
+func TestFinish_KeepsTokens(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newFixture(t, "active")
+	saved := &savedTokens{}
+	f.s.SetTokens(saved)
+	_, state, err := f.s.Begin(ctx, f.id, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, _, err := f.s.Finish(ctx, f.id, state, state, "good")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.user != user.ID || saved.provider != f.id || saved.tok.AccessToken != "at-sub-1" || saved.tok.RefreshToken != "rt" {
+		t.Fatalf("saved %v for %v/%v", saved.tok, saved.user, saved.provider)
+	}
+	tok, err := f.s.Refresh(ctx, f.id, "rt")
+	if err != nil || tok.AccessToken != "at-refreshed" {
+		t.Fatalf("Refresh = %v, %v", tok, err)
+	}
+	if _, err := f.s.Refresh(ctx, pgtype.UUID{Bytes: uuid.New(), Valid: true}, "rt"); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("unknown provider = %v", err)
 	}
 }

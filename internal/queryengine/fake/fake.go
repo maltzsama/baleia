@@ -60,9 +60,17 @@ type Options struct {
 
 // Engine is the fake engine.
 type Engine struct {
-	opts   Options
-	mu     sync.Mutex
-	closed bool
+	opts     Options
+	mu       sync.Mutex
+	closed   bool
+	lastSpec queryengine.SessionSpec
+}
+
+// LastSpec is the spec of the latest session opened, for tests.
+func (e *Engine) LastSpec() queryengine.SessionSpec {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.lastSpec
 }
 
 // New returns a fake engine.
@@ -115,6 +123,9 @@ func (e *Engine) Close() error {
 }
 
 func (e *Engine) OpenSession(_ context.Context, spec queryengine.SessionSpec) (queryengine.Session, error) {
+	e.mu.Lock()
+	e.lastSpec = spec
+	e.mu.Unlock()
 	return &session{engine: e, spec: spec, vars: map[string]string{}}, nil
 }
 

@@ -65,16 +65,24 @@ func (e *StatusError) Error() string {
 }
 
 func (c *Client) bearer(ctx context.Context) (string, error) {
+	tok, _, err := c.Bearer(ctx)
+	return tok, err
+}
+
+// Bearer is the token requests authenticate with and when Baleia stops
+// reusing it: the static token (no expiry), a client-credentials token
+// fetched and cached until shortly before it expires, or "" when anonymous.
+func (c *Client) Bearer(ctx context.Context) (string, time.Time, error) {
 	if c.auth.Token != "" {
-		return c.auth.Token, nil
+		return c.auth.Token, time.Time{}, nil
 	}
 	if c.auth.ClientID == "" {
-		return "", nil
+		return "", time.Time{}, nil
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.token != "" && time.Now().Before(c.expiry) {
-		return c.token, nil
+		return c.token, c.expiry, nil
 	}
 
 	form := url.Values{}
@@ -90,7 +98,7 @@ func (c *Client) bearer(ctx context.Context) (string, error) {
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURI, strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	for k, v := range c.headers {
@@ -98,25 +106,25 @@ func (c *Client) bearer(ctx context.Context) (string, error) {
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("iceberg rest auth: %w", err)
+		return "", time.Time{}, fmt.Errorf("iceberg rest auth: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", &StatusError{Op: "auth", Status: resp.StatusCode}
+		return "", time.Time{}, &StatusError{Op: "auth", Status: resp.StatusCode}
 	}
 	var out struct {
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int    `json:"expires_in"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", fmt.Errorf("iceberg rest auth: decode: %w", err)
+		return "", time.Time{}, fmt.Errorf("iceberg rest auth: decode: %w", err)
 	}
 	ttl := time.Duration(out.ExpiresIn)*time.Second - 30*time.Second
 	if ttl <= 0 {
 		ttl = time.Minute
 	}
 	c.token, c.expiry = out.AccessToken, time.Now().Add(ttl)
-	return c.token, nil
+	return c.token, c.expiry, nil
 }
 
 // Get sends an authenticated GET to base+path and decodes the JSON answer.

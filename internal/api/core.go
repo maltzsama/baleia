@@ -12,6 +12,8 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/identity/idptoken"
+	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/storage"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
@@ -31,8 +33,12 @@ type core struct {
 	// tx runs dependent writes in one transaction (poolTx outside tests).
 	tx txRunner
 	// settings is the resolved configuration the handlers read (#363).
-	settings       Settings
-	keyring        *crypto.Keyring
+	settings Settings
+	keyring  *crypto.Keyring
+	// oidcLogin and idpTokens are shared with the worker (#648); nil in
+	// tests, where the auth group builds its own service.
+	oidcLogin      *oidclogin.Service
+	idpTokens      *idptoken.Tokens
 	temporalClient client.Client
 	catalogCache   *TTLStore[[]workspaceCatalogEntry]
 	// versionCache: engine id@updated_at → version and health, read by the

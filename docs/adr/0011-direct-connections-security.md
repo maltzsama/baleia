@@ -25,7 +25,8 @@ access.
   the root and every directory under it must be writable only by operators. A component swapped
   between resolving and opening is caught by resolving again after the open, and a root writable
   by group or others is logged at startup.
-- **Identity modes:** v1 uses the connection's credentials (`connection`); `per_user` comes later.
+- **Identity modes:** v1 uses the connection's credentials (`connection`); per-user identity towards
+  catalog managers is [ADR 0015](0015-per-user-catalog-identity.md).
 - **Read-only enforcement is per engine**, declared in `queryengine.Capabilities.ReadOnly`
   (`enforced` or `none`). Workspace grants carry no read/write level (#651): a catalog linked to a
   workspace is reachable by that workspace's members, and what they may read or write in it is the

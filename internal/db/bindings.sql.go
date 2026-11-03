@@ -286,6 +286,42 @@ func (q *Queries) GetManagedBindingOfCatalog(ctx context.Context, arg GetManaged
 	return i, err
 }
 
+const getManagedConnectionOfEngineCatalog = `-- name: GetManagedConnectionOfEngineCatalog :one
+SELECT cc.id, cc.name, cc.type, cc.url, cc.credentials_enc, cc.default_readonly, cc.created_at, cc.updated_at, cc.host, cc.port, cc.created_by, cc.config, cc.credentials_read_only
+FROM catalog_bindings b
+JOIN catalogs c ON c.id = b.catalog_id
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE b.engine_id = $1 AND b.engine_catalog_name = $2 AND b.mode = 'managed' AND b.enabled
+`
+
+type GetManagedConnectionOfEngineCatalogParams struct {
+	EngineID          pgtype.UUID `json:"engine_id"`
+	EngineCatalogName string      `json:"engine_catalog_name"`
+}
+
+// The connection behind a catalog an engine exposes through a managed binding
+// (#648): its catalog manager may authorize each user.
+func (q *Queries) GetManagedConnectionOfEngineCatalog(ctx context.Context, arg GetManagedConnectionOfEngineCatalogParams) (CatalogConnection, error) {
+	row := q.db.QueryRow(ctx, getManagedConnectionOfEngineCatalog, arg.EngineID, arg.EngineCatalogName)
+	var i CatalogConnection
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Type,
+		&i.Url,
+		&i.CredentialsEnc,
+		&i.DefaultReadonly,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Host,
+		&i.Port,
+		&i.CreatedBy,
+		&i.Config,
+		&i.CredentialsReadOnly,
+	)
+	return i, err
+}
+
 const getReconcileRun = `-- name: GetReconcileRun :one
 SELECT id, engine_id, started_at, finished_at, dry_run, actions, adopted, error FROM catalog_reconcile_runs WHERE engine_id = $1 AND id = $2
 `

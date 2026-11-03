@@ -104,6 +104,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `client_secret` | secret |  |  |  |
 | `oauth2_server_uri` | url |  |  | Default: <REST URI>/v1/oauth/tokens |
 | `scope` | text |  |  |  |
+| `user_identity` | bool |  | `false` | The catalog manager authorizes each Baleia user with the access token of the identity provider they signed in with; it must trust that provider. Users signed in without one, and background work, act as this connection's own credentials. |
 | `storage.endpoint` | text |  |  | Only with an S3 access key, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
 | `storage.region` | text |  |  | Only with an S3 access key, e.g. us-east-1 |
 | `storage.path_style` | bool |  | `false` | Only with an S3 access key; required by most S3-compatible stores |
@@ -120,6 +121,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `client_secret` | secret |  |  | Required with auth_mode=oauth2 |
 | `token_endpoint` | url |  |  | The IdP token endpoint (not the Lakekeeper URL); required with auth_mode=oauth2 |
 | `scope` | text |  |  |  |
+| `user_identity` | bool |  | `false` | The catalog manager authorizes each Baleia user with the access token of the identity provider they signed in with; it must trust that provider. Users signed in without one, and background work, act as this connection's own credentials. |
 | `storage.endpoint` | text |  |  | Only with an S3 access key, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
 | `storage.region` | text |  |  | Only with an S3 access key, e.g. us-east-1 |
 | `storage.path_style` | bool |  | `false` | Only with an S3 access key; required by most S3-compatible stores |
@@ -180,6 +182,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `realm` | text |  | `POLARIS` |  |
 | `client_id` | text | yes |  |  |
 | `client_secret` | secret | yes |  |  |
+| `user_identity` | bool |  | `false` | The catalog manager authorizes each Baleia user with the access token of the identity provider they signed in with; it must trust that provider. Users signed in without one, and background work, act as this connection's own credentials. |
 | `storage.endpoint` | text |  |  | Only with an S3 access key, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
 | `storage.region` | text |  |  | Only with an S3 access key, e.g. us-east-1 |
 | `storage.path_style` | bool |  | `false` | Only with an S3 access key; required by most S3-compatible stores |
@@ -244,6 +247,7 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `url` | url | yes |  | Server root, e.g. http://unity:8080 or a Databricks workspace URL |
 | `token` | secret |  |  | OSS token or a Databricks personal access token |
 | `iceberg_path` | text |  | `/api/2.1/unity-catalog/iceberg` | Override for Databricks: /api/2.1/unity-catalog/iceberg-rest |
+| `user_identity` | bool |  | `false` | The catalog manager authorizes each Baleia user with the access token of the identity provider they signed in with; it must trust that provider. Users signed in without one, and background work, act as this connection's own credentials. |
 | `storage.endpoint` | text |  |  | Only with an S3 access key, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
 | `storage.region` | text |  |  | Only with an S3 access key, e.g. us-east-1 |
 | `storage.path_style` | bool |  | `false` | Only with an S3 access key; required by most S3-compatible stores |

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -177,6 +178,32 @@ type IcebergRESTEndpoint interface {
 	// under).
 	RESTURI(cfg Config) string
 }
+
+// UserIdentityKey is the config key of a connection whose catalog manager
+// authorizes each Baleia user (#648).
+const UserIdentityKey = "user_identity"
+
+// UserIdentityField is the config field of a catalog manager that can
+// authorize each Baleia user with their identity-provider token.
+var UserIdentityField = Field{
+	Key: UserIdentityKey, Label: "Per-user identity", Type: FieldBool, Default: "false",
+	Help: "The catalog manager authorizes each Baleia user with the access token of the identity provider they signed in with; it must trust that provider. Users signed in without one, and background work, act as this connection's own credentials.",
+}
+
+// UserIdentity is implemented by catalog managers that can authorize each
+// Baleia user (#648). Through Trino, the user's identity-provider token
+// reaches the manager as the session's bearer token; a session without one
+// carries the connection's own token, so the manager decides as that account.
+type UserIdentity interface {
+	// UserIdentity reports whether the connection is set to per-user identity.
+	UserIdentity(cfg Config) bool
+	// ServiceToken is a bearer token for the connection's own credentials,
+	// valid for at least the next minute; "" when it has none.
+	ServiceToken(ctx context.Context, cfg Config) (token string, expiry time.Time, err error)
+}
+
+// UserIdentityOn reads the per-user identity flag of a config.
+func UserIdentityOn(cfg Config) bool { return cfg.Value(UserIdentityKey) == "true" }
 
 var (
 	// ErrUnsupported means the provider does not offer the operation.

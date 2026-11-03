@@ -809,6 +809,15 @@ type User struct {
 	Locale              *string            `json:"locale"`
 }
 
+type UserIdpToken struct {
+	UserID          pgtype.UUID        `json:"user_id"`
+	AuthProviderID  pgtype.UUID        `json:"auth_provider_id"`
+	AccessTokenEnc  string             `json:"access_token_enc"`
+	RefreshTokenEnc *string            `json:"refresh_token_enc"`
+	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
 type WorkloadRule struct {
 	ID        pgtype.UUID        `json:"id"`
 	Position  int32              `json:"position"`

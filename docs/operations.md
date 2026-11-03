@@ -7,7 +7,8 @@ The metrics catalog and its rules come from #87.
 
 Read this before `helm upgrade` from 0.5.x. Migrations 00062 to 00072 add the
 workload queues and rules, statement references (lineage, popular tables and
-join suggestions), engine external URLs and the Trino resource-group tables.
+join suggestions), engine external URLs and the Trino resource-group tables;
+migration 00074 adds the identity-provider tokens of OIDC sign-ins (#648).
 They apply as described for 0.4.0 below. Executions already running finish on
 `QueryExecutionWorkflowV3`, which the worker still runs, so there is nothing
 to drain.
@@ -25,6 +26,7 @@ These take effect with their defaults:
 | Grants carry no read/write level (#651) | A catalog linked to a workspace stays reachable by its members only, but no session is read-only because of the link; the catalog manager decides what each member may read or write. `permission` is gone from the grant API and from workspace targets; the unused column stays in the database until #654 | — |
 | Connection and binding flags (#651) | `default_readonly`, stored but never enforced, is gone from the connection API; Unity bindings are no longer flagged as unable to write (`writes_supported`), since Unity decides | — |
 | Authenticated bundled Trino (#647) | The in-chart and compose Trino require HTTPS and a password; Baleia logs in with `BALEIA_TRINO_PASSWORD`. The chart refuses to render without `secrets.values.BALEIA_TRINO_PASSWORD` (with `existingSecret`, add the key), and `TRINO_URL` defaults to the HTTPS port 8443. Clients other than Baleia, such as a BI tool or a scraper on port 8080, are refused | Set `trino.auth.enabled=false` (not recommended) |
+| Per-user identity (#648) | Off by default: catalogs keep acting as the connection's account until an admin turns on **Per-user identity** on a Polaris, Unity, Lakekeeper or Iceberg REST connection. OIDC sign-ins now keep the identity provider's tokens, sealed with `BALEIA_ENCRYPTION_KEY` (migration 00074) | — |
 | Catalog names (#617) | `trino_catalog_name`, `connector` and `engine_catalog_name` must match `^[a-z][a-z0-9_]{0,62}$` on write | — |
 
 Before upgrading, check that no connection users rely on points at a private

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -626,5 +627,44 @@ func TestBinder_IcebergMinRetention(t *testing.T) {
 		if got := retentionDuration(d); got != want {
 			t.Errorf("retentionDuration(%s) = %q, want %q", d, got, want)
 		}
+	}
+}
+
+// TestProject_UserIdentity (#648): a connection set to per-user identity makes
+// the REST session the query's user; off, the projection keeps its version.
+func TestProject_UserIdentity(t *testing.T) {
+	t.Parallel()
+	b := New(slog.New(slog.DiscardHandler), nil, nil)
+	spec := bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "wh"}
+	cases := []struct {
+		name string
+		src  connections.Config
+	}{
+		{"polaris", cfg(connections.KindPolaris, map[string]string{"url": "http://polaris:8181", "client_id": "abc"}, map[string]string{"client_secret": "def"})},
+		{"iceberg rest", cfg(connections.KindIcebergREST, map[string]string{"url": "http://rest:8181", "client_id": "abc"}, map[string]string{"client_secret": "def"})},
+		{"lakekeeper", cfg(connections.KindLakekeeper, map[string]string{"url": "http://lk:8181", "auth_mode": "oauth2", "client_id": "abc", "token_endpoint": "http://idp/token"}, map[string]string{"client_secret": "def"})},
+		{"unity", cfg(connections.KindUnity, map[string]string{"url": "http://unity:8080"}, map[string]string{"token": "tok"})},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			off, err := b.Project(spec, c.src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, set := off.Properties["iceberg.rest-catalog.session"]; set {
+				t.Fatal("session set without per-user identity")
+			}
+			on := c.src
+			on.Values = maps.Clone(c.src.Values)
+			on.Values[connections.UserIdentityKey] = "true"
+			p, err := b.Project(spec, on)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if p.Properties["iceberg.rest-catalog.session"] != "USER" || p.Version == off.Version {
+				t.Errorf("session = %q, version changed %t", p.Properties["iceberg.rest-catalog.session"], p.Version != off.Version)
+			}
+		})
 	}
 }
