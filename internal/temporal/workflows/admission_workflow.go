@@ -156,6 +156,11 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 	capacityCh := workflow.GetSignalChannel(ctx, AdmissionCapacitySignal)
 	throttleCh := workflow.GetSignalChannel(ctx, AdmissionThrottleSignal)
 
+	// From version 1 a cancelled workflow returns (#639). Before it, with a run
+	// still queued, the queue-deadline timer fired at once on the cancelled
+	// context and the loop spun without yielding; older histories replay that.
+	stopOnCancel := workflow.GetVersion(ctx, "admission-stop-on-cancel", workflow.DefaultVersion, 1) == 1
+
 	// Queue metrics are best-effort; a lost sample must not block admission.
 	actx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Second,
@@ -169,6 +174,19 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 	}
 
 	for {
+		if stopOnCancel && ctx.Err() != nil {
+			// Tell every queued run, so none waits out its safety timer. The
+			// workflow's own context is cancelled, so signal on a detached one.
+			dctx, cancel := workflow.NewDisconnectedContext(ctx)
+			for _, q := range state.Queued {
+				f := AdmissionFailure{ExecutionID: q.ExecutionID, Code: AdmissionFailureCancelled, Message: "the engine's admission queue was stopped"}
+				if err := signalExecution(dctx, q.ExecutionID, AdmissionFailedSignal, f); err != nil {
+					logger.Warn("could not signal queue stop", "execution_id", q.ExecutionID, "err", err)
+				}
+			}
+			cancel()
+			return ctx.Err()
+		}
 		for _, lease := range state.admitAll() {
 			if err := signalExecution(ctx, lease.ExecutionID, AdmittedSignal, lease); err != nil {
 				// The execution never learned it had a slot; do not leak it.
@@ -224,6 +242,10 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 			c.Receive(ctx, &caps)
 			state.setCapacities(caps)
 		})
+		if stopOnCancel {
+			// Wakes an idle loop on cancel; the check above then returns.
+			sel.AddReceive(ctx.Done(), func(workflow.ReceiveChannel, bool) {})
+		}
 		sel.AddReceive(throttleCh, func(c workflow.ReceiveChannel, _ bool) {
 			var throttle AdmissionThrottle
 			c.Receive(ctx, &throttle)
