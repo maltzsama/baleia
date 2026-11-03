@@ -69,19 +69,6 @@ func (f *fakeStore) CancelQueryExecution(_ context.Context, arg db.CancelQueryEx
 	return e, nil
 }
 
-func (f *fakeStore) FailQueryExecution(_ context.Context, arg db.FailQueryExecutionParams) (db.QueryExecution, error) {
-	e, ok := f.execs[arg.ID.Bytes]
-	if !ok {
-		return db.QueryExecution{}, pgx.ErrNoRows
-	}
-	e.Status = "failed"
-	if arg.ErrorCode != nil {
-		e.ErrorCode = arg.ErrorCode
-	}
-	f.execs[arg.ID.Bytes] = e
-	return e, nil
-}
-
 func (f *fakeStore) ListRunningStatementHandles(context.Context, pgtype.UUID) ([]db.ListRunningStatementHandlesRow, error) {
 	return f.handles, nil
 }
