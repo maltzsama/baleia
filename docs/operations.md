@@ -22,6 +22,10 @@ These take effect with their defaults:
 | Connections are admin-only (#610) | Only admins create, edit and test connections | `BALEIA_CONNECTIONS_CREATE=everyone` |
 | Executions are scoped (#611) | Members see their own executions and results; workspace owners and admins see all | — |
 | Space and retriever writes (#612, #613) | Creating spaces and changing retrievers need a workspace owner or admin | — |
+| Grants carry no read/write level (#651) | A grant only makes a catalog usable; no session is read-only because of a grant. `permission` is gone from the grant API, and `read_only` from targets and executions | — |
+| No read-only assertion on connections (#651) | `credentials_read_only` and `default_readonly` are gone from the connection API; MCP agents only run on engines that enforce read-only sessions (Trino, PostgreSQL, ClickHouse, SQLite) | — |
+| SQLite connections write (#651) | SQLite files open read-write; the file's permissions decide. `BALEIA_SQLITE_ALLOW_WRITE` and the `read_write` field are gone. `ATTACH`, `DETACH`, `VACUUM` and `load_extension` stay refused | Make the file read-only on disk |
+| Error codes removed (#651) | `read_only_unsupported` and `custom_sql_requires_read_only` no longer exist; semantic `custom_sql` works on every engine, and Unity bindings are no longer flagged as read-only | — |
 | Catalog names (#617) | `trino_catalog_name`, `connector` and `engine_catalog_name` must match `^[a-z][a-z0-9_]{0,62}$` on write | — |
 
 Before upgrading, check that no connection users rely on points at a private
@@ -336,8 +340,8 @@ The explorer, autocomplete and search read stored metadata (namespaces, tables, 
 - **Databases** (PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, SQLite, ClickHouse): one query per
   catalog for every table and column. The fingerprint is an md5 of the columns.
 - **Through an engine** (catalogs adopted from Trino, Flight SQL, kinds Baleia cannot read
-  directly): the dialect's one-query catalog listing, in a read-only session as the engine's
-  service identity, through the catalog's first active binding.
+  directly): the dialect's one-query catalog listing, read-only where the engine can enforce
+  it, as the engine's service identity, through the catalog's first active binding.
 
 Every enabled catalog is refreshed every `BALEIA_METADATA_SYNC_INTERVAL` (default 15 min, at least
 5 min) by the `metadata-sync` schedule, and right after it is created or changed (a new direct

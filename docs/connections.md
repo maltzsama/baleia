@@ -202,7 +202,6 @@ connectors it may use (the first is the default; `internal/bindings`).
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `path` | file_path | yes |  | Path inside BALEIA_SQLITE_ROOT (relative to it, or absolute) |
-| `read_write` | bool |  | `false` | Takes effect only when the server sets BALEIA_SQLITE_ALLOW_WRITE=true |
 
 ## `sqlserver` — SQL Server
 

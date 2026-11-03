@@ -23,7 +23,7 @@ sidebar_position: 7
   - Suspension signs the user out everywhere and revokes their API keys. It is reversible: users are never deleted here.
 - **Teams:** a team owns shared workspaces. Owners manage the team and its workspaces; members do not. Removing someone from a team removes their access to its workspaces.
 - **Workspaces** (workspace menu in the header → **Workspace settings**): each workspace's members, its catalog grants and its default target.
-  - **Grants:** a catalog is granted for read or write. Read grants run in read-only sessions where the engine enforces them. Revoking the catalog used as the default target clears it.
+  - **Grants:** granting a catalog makes it usable in the workspace. A grant carries no read/write level: what a user may read or write is decided by the engine and the catalog manager, or by the connection's service account. Revoking the catalog used as the default target clears it.
   - **Deletion:** deleting a shared workspace removes its spaces, content and grants. Personal workspaces cannot be deleted.
 - **Agents:** read-only clients of the [MCP server](../mcp.md), bound to workspaces. Each agent has tokens, shown once and stored only as a hash. Revoking a token takes effect at once.
 

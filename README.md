@@ -47,7 +47,7 @@ Baleia is a **control plane**, not another query engine. It manages connections,
 - Prometheus metrics, alerts with runbooks, OpenTelemetry tracing and an audit trail of every security and data operation.
 
 **Control access**
-- Workspaces, teams and roles, with catalog grants per workspace and read-only sessions where the engine enforces them.
+- Workspaces, teams and roles, with catalog grants per workspace; what each user may read or write is decided by the engine and the catalog manager.
 - Sign in with OIDC or LDAP; personal API keys; credentials encrypted at rest.
 
 **Bring in AI, if you want**
