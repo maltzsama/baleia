@@ -156,6 +156,11 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 	capacityCh := workflow.GetSignalChannel(ctx, AdmissionCapacitySignal)
 	throttleCh := workflow.GetSignalChannel(ctx, AdmissionThrottleSignal)
 
+	// From version 1 a cancelled workflow returns (#639). Before it, with a run
+	// still queued, the queue-deadline timer fired at once on the cancelled
+	// context and the loop spun without yielding; older histories replay that.
+	stopOnCancel := workflow.GetVersion(ctx, "admission-stop-on-cancel", workflow.DefaultVersion, 1) == 1
+
 	// Queue metrics are best-effort; a lost sample must not block admission.
 	actx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Second,
@@ -169,6 +174,9 @@ func AdmissionWorkflow(ctx workflow.Context, engineID string, in AdmissionState)
 	}
 
 	for {
+		if stopOnCancel && ctx.Err() != nil {
+			return ctx.Err()
+		}
 		for _, lease := range state.admitAll() {
 			if err := signalExecution(ctx, lease.ExecutionID, AdmittedSignal, lease); err != nil {
 				// The execution never learned it had a slot; do not leak it.

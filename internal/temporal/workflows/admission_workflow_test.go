@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.temporal.io/sdk/converter"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
 )
@@ -126,7 +127,9 @@ func TestAdmissionState_Expire(t *testing.T) {
 	require.Empty(t, *failures)
 }
 
-func newAdmissionEnv(t *testing.T) (*testsuite.TestWorkflowEnvironment, *[]AdmissionLease, *[]AdmissionFailure) {
+// newAdmissionEnv mocks the admission workflow's activities and collects the
+// leases and failures it signals; onAdmit, if any, runs for every lease.
+func newAdmissionEnv(t *testing.T, onAdmit ...func(AdmissionLease)) (*testsuite.TestWorkflowEnvironment, *[]AdmissionLease, *[]AdmissionFailure) {
 	t.Helper()
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
@@ -141,6 +144,9 @@ func newAdmissionEnv(t *testing.T) (*testsuite.TestWorkflowEnvironment, *[]Admis
 		Return(func(_, _, _, _ string, arg any) error {
 			if lease, ok := arg.(AdmissionLease); ok {
 				*admitted = append(*admitted, lease)
+				for _, hook := range onAdmit {
+					hook(lease)
+				}
 			}
 			return nil
 		})
@@ -332,21 +338,48 @@ func TestAdmissionState_WithinKeyIsFIFO(t *testing.T) {
 // interactive work while throttled, and lifts without a restart (#551, #579).
 func TestAdmissionWorkflow_ThrottleAppliesLive(t *testing.T) {
 	t.Parallel()
-	env, admitted, _ := newAdmissionEnv(t)
+	// The gate lifts once interactive has been admitted, not after a fixed
+	// delay: under load the test environment could fire a 1s timer before the
+	// signals sent at 1ms were handled, admitting heavy first (#639).
+	var env *testsuite.TestWorkflowEnvironment
+	env, admitted, _ := newAdmissionEnv(t, func(lease AdmissionLease) {
+		if lease.ExecutionID == "i" {
+			env.RegisterDelayedCallback(func() {
+				env.SignalWorkflow(AdmissionThrottleSignal, AdmissionThrottle{Throttled: false})
+			}, time.Second)
+		}
+	})
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(AdmissionThrottleSignal, AdmissionThrottle{Throttled: true, Reason: "cluster:queued"})
 		env.SignalWorkflow(AdmissionRequestSignal, AdmissionRequest{ExecutionID: "h", Class: queryengine.ClassHeavy})
 		env.SignalWorkflow(AdmissionRequestSignal, AdmissionRequest{ExecutionID: "i", Class: queryengine.ClassInteractive})
 	}, time.Millisecond)
-	env.RegisterDelayedCallback(func() {
-		env.SignalWorkflow(AdmissionThrottleSignal, AdmissionThrottle{Throttled: false})
-	}, time.Second)
-	env.RegisterDelayedCallback(env.CancelWorkflow, 2*time.Second)
+	env.RegisterDelayedCallback(env.CancelWorkflow, time.Hour)
 	env.ExecuteWorkflow(AdmissionWorkflow, "e1", admissionState())
 
 	require.Len(t, *admitted, 2)
 	require.Equal(t, "i", (*admitted)[0].ExecutionID, "only interactive is admitted while throttled")
 	require.Equal(t, "h", (*admitted)[1].ExecutionID, "heavy starts once the gate lifts")
+}
+
+// TestAdmissionWorkflow_CancelWithQueuedRunEnds: cancelling the workflow
+// while a run is still queued ends it as cancelled. Before #639 the queue
+// deadline timer fired at once on the cancelled context and the loop spun
+// until the SDK's deadlock detector stopped it.
+func TestAdmissionWorkflow_CancelWithQueuedRunEnds(t *testing.T) {
+	t.Parallel()
+	env, admitted, _ := newAdmissionEnv(t)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(AdmissionThrottleSignal, AdmissionThrottle{Throttled: true, Reason: "cluster:queued"})
+		env.SignalWorkflow(AdmissionRequestSignal, AdmissionRequest{ExecutionID: "h", Class: queryengine.ClassHeavy})
+	}, time.Millisecond)
+	env.RegisterDelayedCallback(env.CancelWorkflow, time.Second)
+	env.ExecuteWorkflow(AdmissionWorkflow, "e1", admissionState())
+
+	require.Empty(t, *admitted, "heavy waits while throttled")
+	require.True(t, env.IsWorkflowCompleted())
+	var canceled *temporal.CanceledError
+	require.ErrorAs(t, env.GetWorkflowError(), &canceled)
 }
 
 // TestAdmissionState_PerKeyCap: an agent's MaxConcurrentQueries caps its own
