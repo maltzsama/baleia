@@ -4141,6 +4141,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ApiKeyCreated" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /api-keys/{id}:
     parameters:
@@ -4888,6 +4889,7 @@ paths:
               schema: { $ref: "#/components/schemas/Team" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /teams/{id}:
     parameters:
@@ -8743,11 +8745,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "422":
-          description: "Unsupported refresh type or invalid payload"
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [Retrievers]
       operationId: deleteRetriever

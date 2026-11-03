@@ -152,7 +152,7 @@ func Prepare(f Fields, definition map[string]any) (Prepared, error) {
 	if err != nil {
 		return Prepared{}, &InvalidDefinitionError{Err: err}
 	}
-	if err := checkFields(f); err != nil {
+	if err := checkFields(f, true); err != nil {
 		return Prepared{}, err
 	}
 	return Prepared{Fields: f, Def: def, Raw: raw}, nil
@@ -263,7 +263,7 @@ func Merge(current db.SemanticMetric, change Change, isManager bool) (Prepared, 
 	if err != nil {
 		return Prepared{}, &InvalidDefinitionError{Err: err}
 	}
-	if err := checkFields(f); err != nil {
+	if err := checkFields(f, change.Namespace != nil); err != nil {
 		return Prepared{}, err
 	}
 	return Prepared{Fields: f, Def: def, Raw: raw}, nil
@@ -334,7 +334,10 @@ func ParseDefinitionRaw(raw []byte) (semantic.SimpleMetricV1, []byte, error) {
 	return def, normalized, nil
 }
 
-func checkFields(f Fields) error {
+// checkFields validates the metric's fields. requireNamespace is set on create
+// and when a PATCH changes the namespace; a PATCH that omits it keeps a legacy
+// metric with an empty namespace updatable.
+func checkFields(f Fields, requireNamespace bool) error {
 	switch {
 	case !slug.Valid(f.Slug):
 		return &InvalidFieldError{Msg: "slug must match ^[a-z][a-z0-9_]{0,62}$"}
@@ -342,6 +345,8 @@ func checkFields(f Fields) error {
 		return &InvalidFieldError{Msg: "label is required"}
 	case strings.TrimSpace(f.Table) == "":
 		return &InvalidFieldError{Msg: "table is required"}
+	case requireNamespace && len(f.Namespace) == 0:
+		return &InvalidFieldError{Msg: "namespace is required"}
 	}
 	return nil
 }

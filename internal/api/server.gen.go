@@ -13733,6 +13733,17 @@ func (response CreateApiKey401JSONResponse) VisitCreateApiKeyResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateApiKey422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateApiKey422JSONResponse) VisitCreateApiKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteApiKeyRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -18184,6 +18195,17 @@ func (response CreateTeam403JSONResponse) VisitCreateTeamResponse(w http.Respons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateTeam422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateTeam422JSONResponse) VisitCreateTeamResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteTeamRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -21073,7 +21095,9 @@ func (response UpdateRetriever404JSONResponse) VisitUpdateRetrieverResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
-type UpdateRetriever422JSONResponse Error
+type UpdateRetriever422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
 
 func (response UpdateRetriever422JSONResponse) VisitUpdateRetrieverResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
