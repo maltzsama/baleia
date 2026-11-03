@@ -288,37 +288,63 @@ services:
     networks:
       - app_net
 
-  # Writes what the coordinator needs to require authentication (#647): a CA
-  # and a server certificate (kept in the volumes once created), and the bcrypt
-  # password file of BALEIA_TRINO_ADMIN_USER from BALEIA_TRINO_PASSWORD
-  # (rewritten on every start). The API and worker get only the CA.
+  # What the coordinator needs to require authentication (#647), from images
+  # the stack already uses, without network access:
+  # - trino-tls-init (openssl from postgres:18): a CA and a server certificate,
+  #   created once and kept in the volumes. If only one of the keystore and the
+  #   CA is left, it fails instead of regenerating: a new CA needs the API, the
+  #   worker and Trino restarted together (`docker compose down` + `up`).
+  # - trino-auth-init (htpasswd from httpd): the bcrypt password file of
+  #   baleia_admin from BALEIA_TRINO_PASSWORD, rewritten on every start.
+  # The API and worker get only the CA.
+  trino-tls-init:
+    image: postgres:18
+    container_name: baleia_trino_tls_init
+    entrypoint: ["sh", "-ec"]
+    volumes:
+      - trino_auth:/auth
+      - trino_ca:/ca
+    command:
+      - |
+        chown 1000:1000 /auth
+        if [ -s /auth/keystore.pem ] && [ -s /ca/ca.crt ]; then exit 0; fi
+        if [ -s /auth/keystore.pem ] || [ -s /ca/ca.crt ]; then
+          echo "trino-tls-init: only one of keystore.pem and ca.crt exists; remove the trino_auth and trino_ca volumes to regenerate both" >&2
+          exit 1
+        fi
+        cd /tmp
+        openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=baleia-trino-ca" -keyout ca.key -out ca.crt 2>/dev/null
+        openssl req -newkey rsa:2048 -nodes -subj "/CN=trino" -keyout tls.key -out tls.csr 2>/dev/null
+        printf 'subjectAltName=DNS:trino,DNS:localhost\n' > san.ext
+        openssl x509 -req -in tls.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 3650 -extfile san.ext -out tls.crt 2>/dev/null
+        umask 077
+        cat tls.crt tls.key > /auth/keystore.pem
+        chown 1000:1000 /auth/keystore.pem
+        install -m 644 ca.crt /ca/ca.crt
+    restart: "no"
+    networks:
+      - app_net
+
   trino-auth-init:
-    image: alpine:3.20
+    image: httpd:2.4-alpine
     container_name: baleia_trino_auth_init
+    user: "1000:1000"
     environment:
       BALEIA_TRINO_ADMIN_USER: baleia_admin
       BALEIA_TRINO_PASSWORD: ${BALEIA_TRINO_PASSWORD:-dev-trino-password-not-for-production}
     volumes:
       - trino_auth:/auth
-      - trino_ca:/ca
     command:
       - sh
       - -ec
       - |
-        apk add --no-cache -q openssl apache2-utils
-        if [ ! -s /auth/keystore.pem ] || [ ! -s /ca/ca.crt ]; then
-          cd /tmp
-          openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=baleia-trino-ca" -keyout ca.key -out ca.crt 2>/dev/null
-          openssl req -newkey rsa:2048 -nodes -subj "/CN=trino" -keyout tls.key -out tls.csr 2>/dev/null
-          printf 'subjectAltName=DNS:trino,DNS:localhost\n' > san.ext
-          openssl x509 -req -in tls.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 3650 -extfile san.ext -out tls.crt 2>/dev/null
-          cat tls.crt tls.key > /auth/keystore.pem
-          cp ca.crt /ca/ca.crt
-        fi
-        htpasswd -bnBC 10 "$$BALEIA_TRINO_ADMIN_USER" "$$BALEIA_TRINO_PASSWORD" > /auth/password.db
-        chown -R 1000:1000 /auth
-        chmod 600 /auth/keystore.pem /auth/password.db
-        chmod 644 /ca/ca.crt
+        umask 077
+        entry="$$(htpasswd -bnBC 10 "$$BALEIA_TRINO_ADMIN_USER" "$$BALEIA_TRINO_PASSWORD")"
+        printf '%s\n' "$$entry" | head -n 1 > /auth/password.db
+        test -s /auth/password.db
+    depends_on:
+      trino-tls-init:
+        condition: service_completed_successfully
     restart: "no"
     networks:
       - app_net
@@ -475,6 +501,8 @@ services:
     networks:
       - app_net
     depends_on:
+      trino-auth-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       temporal:
@@ -507,6 +535,8 @@ services:
     networks:
       - app_net
     depends_on:
+      trino-auth-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       temporal:

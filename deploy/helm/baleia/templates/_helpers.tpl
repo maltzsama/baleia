@@ -123,29 +123,30 @@ securityContext:
 {{- end }}
 
 {{/* Where the API and worker find the in-chart Trino's CA bundle. */}}
-{{- define "baleia.trinoCAFile" }}/etc/baleia/trino-ca/ca.crt{{ end }}
+{{- define "baleia.trinoCAFile" }}/etc/baleia/in-chart-trino-ca/ca.crt{{ end }}
 
 {{/* The CA volume and mount of the API and worker, when Trino is authenticated. */}}
 {{- define "baleia.trinoCAMount" -}}
 {{- if include "baleia.trinoAuth" . }}
-- name: trino-ca
-  mountPath: /etc/baleia/trino-ca
+- name: baleia-in-chart-trino-ca
+  mountPath: /etc/baleia/in-chart-trino-ca
   readOnly: true
 {{- end }}
 {{- end }}
 {{- define "baleia.trinoCAVolume" -}}
 {{- if include "baleia.trinoAuth" . }}
-- name: trino-ca
+- name: baleia-in-chart-trino-ca
   secret:
     secretName: {{ include "baleia.trinoTLSSecret" . }}
     items: [{ key: ca.crt, path: ca.crt }]
 {{- end }}
 {{- end }}
 
-{{/* BALEIA_TRINO_CA_FILE for the in-chart Trino's CA, unless config sets it or
-points TRINO_URL elsewhere. */}}
+{{/* BALEIA_TRINO_CA_FILE for the in-chart Trino's CA, unless config sets a
+non-empty one or TRINO_URL points at another Trino. */}}
 {{- define "baleia.trinoCAEnv" -}}
-{{- if and (include "baleia.trinoAuth" .) (not .Values.config.TRINO_URL) (not (hasKey .Values.config "BALEIA_TRINO_CA_FILE")) }}
+{{- $inChart := or (not .Values.config.TRINO_URL) (eq .Values.config.TRINO_URL (printf "https://%s:8443" (include "baleia.trinoService" .))) }}
+{{- if and (include "baleia.trinoAuth" .) $inChart (not .Values.config.BALEIA_TRINO_CA_FILE) }}
 - name: BALEIA_TRINO_CA_FILE
   value: {{ include "baleia.trinoCAFile" . | quote }}
 {{- end }}

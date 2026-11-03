@@ -31,12 +31,14 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.api.port | quote }}
-            {{- range $key, $_ := .Values.config }}
+            {{- range $key, $value := .Values.config }}
+            {{- if or $value (ne $key "BALEIA_TRINO_CA_FILE") }}
             - name: {{ $key }}
               valueFrom:
                 configMapKeyRef:
                   name: {{ include "baleia.fullname" $ }}-config
                   key: {{ $key }}
+            {{- end }}
             {{- end }}
             {{- include "baleia.trinoCAEnv" . | nindent 12 }}
             {{- include "baleia.secretEnv" . | nindent 12 }}

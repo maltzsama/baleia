@@ -72,6 +72,12 @@ spec:
       labels:
         {{- include "baleia.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: trino
+      {{- if and (include "baleia.trinoAuth" .) .Values.secrets.create }}
+      annotations:
+        # The password file is written at start: a new password restarts
+        # Trino. With existingSecret, restart it yourself (docs/operations.md).
+        checksum/trino-password: {{ .Values.secrets.values.BALEIA_TRINO_PASSWORD | default "" | sha256sum }}
+      {{- end }}
     spec:
       initContainers:
         # The plugin is either bundled (trino.plugin.image: a small image with
@@ -117,8 +123,9 @@ spec:
           args:
             - |
               umask 077
-              htpasswd -bnBC 10 "$BALEIA_TRINO_ADMIN_USER" "$BALEIA_TRINO_PASSWORD" | tr -d '\n' > /auth/password.db
-              echo >> /auth/password.db
+              entry="$(htpasswd -bnBC 10 "$BALEIA_TRINO_ADMIN_USER" "$BALEIA_TRINO_PASSWORD")"
+              printf '%s\n' "$entry" | head -n 1 > /auth/password.db
+              test -s /auth/password.db
               cat /tls/tls.crt /tls/tls.key > /auth/keystore.pem
           env:
             - name: BALEIA_TRINO_ADMIN_USER

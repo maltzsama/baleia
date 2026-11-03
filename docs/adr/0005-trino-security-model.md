@@ -44,7 +44,8 @@ which is separate work.
 - A user cannot manage catalogs even with crafted SQL.
 - A client without Baleia's password cannot reach the bundled Trino, claim an identity or skip
   read-only mode. Whoever holds that password can act as any user, so it stays with the API and
-  worker.
+  worker; the only other holder is the development E2E seed (`make e2e`), which logs in to create
+  its test catalog on the minikube dev cluster.
 - Per-user identity towards Polaris is future work (token exchange), not a property switch.
 
 ## Current compliance

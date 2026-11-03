@@ -59,6 +59,32 @@ the `BALEIA_WORKLOAD_ADAPTIVE_*` thresholds and
 defaults to `admins` (it was `everyone`), and `BALEIA_CONNECTIONS_ALLOW_CIDRS`
 now also opens the internal ranges. See [configuration.md](configuration.md).
 
+
+## Rotating the bundled Trino password or certificate
+
+The in-chart Trino (#647) builds its password file and its keystore when its
+pod starts; the API and the worker read `BALEIA_TRINO_PASSWORD` and the CA
+when they start. Changing either one without restarting all three leaves
+Trino refusing Baleia's login, or serving a certificate Baleia does not trust.
+Schedule the change, since requests fail between the restarts:
+
+1. Update the value: `secrets.values.BALEIA_TRINO_PASSWORD` (or that key in
+   `existingSecret`), or the TLS Secret (`trino.auth.tls.existingSecret`, or
+   delete the chart's `<release>-trino-tls` Secret so the next upgrade
+   generates a new CA and certificate).
+2. Apply it with `helm upgrade`. With `secrets.create`, a new password
+   already restarts Trino.
+3. Restart the three Deployments in one go:
+
+   ```bash
+   kubectl -n <ns> rollout restart deploy/<release>-trino deploy/<release>-api deploy/<release>-worker
+   ```
+
+The chart's TLS Secret is generated once and kept across upgrades
+(`helm.sh/resource-policy: keep`). A render without access to the cluster,
+such as `helm template`, generates a new one; apply such output only together
+with the restart above.
+
 ## Upgrading to 0.4.0
 
 Read this before `helm upgrade` from 0.3.x. Migrations 00060 and 00061 add
