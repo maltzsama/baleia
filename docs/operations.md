@@ -369,6 +369,43 @@ Selectors are evaluated in order and the first match wins; the last one is the
 catch-all for a session with no class. Set the root group's `schedulingPolicy`
 to `weighted` or `query_priority` to also honour the session property.
 
+### Managed Trino resource groups (A-5)
+
+Baleia can also generate this document itself and publish it into Trino's
+**database** resource group manager, so the capacities an admin sets in
+Settings › Workload become Trino's own queue (A-5, #598–#601). This is the
+per-engine handover that avoids double queueing: when it is on, Baleia stops
+holding Trino runs in its own admission queue and lets Trino's resource group
+queue them instead.
+
+To hand a Trino engine over, point Trino's resource group manager at the same
+Postgres (the file `deploy/trino/resource-groups.properties` ships this), and
+turn the engine's switch on:
+
+```properties
+resource-groups.configuration-manager=db
+resource-groups.config-db-url=jdbc:postgresql://postgres:5432/baleia
+resource-groups.config-db-user=baleia_trino
+resource-groups.config-db-password=${ENV:BALEIA_TRINO_DB_PASSWORD}
+```
+
+Baleia writes the generated `resource-groups.json` into the `resource_groups`
+and `selectors` tables (one revision per write, kept in
+`trino_resource_group_revisions`). **Trino reloads those tables every second**,
+so a capacity change applies without a coordinator restart. The `environment`
+column Baleia writes must match `node.environment` (Trino's default is
+`production`).
+
+The switch is the `trino_resource_groups_enabled` field of the engine's queues
+(`PUT /engines/{id}/queues`). Turning it off restores Baleia's own admission
+queue as the authority, with no restart; the run is held by exactly one queue
+either way.
+
+**Rollback.** A capacity or ceiling change is one more write, so to undo the
+last change, re-apply the previous revision's document to the same tables —
+the `trino_resource_group_revisions` table keeps every written document, and
+`internal/workload/resourcegroups`' `Rollback` re-publishes a chosen revision.
+
 ### Direct engines
 
 Where a direct engine has a native workload mechanism, Baleia sends the class

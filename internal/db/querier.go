@@ -612,6 +612,7 @@ type Querier interface {
 	SetAuditExportCursor(ctx context.Context, arg SetAuditExportCursorParams) error
 	SetCatalogEnabled(ctx context.Context, arg SetCatalogEnabledParams) error
 	SetEngineMaxRunningTotal(ctx context.Context, arg SetEngineMaxRunningTotalParams) (Engine, error)
+	SetEngineTrinoResourceGroups(ctx context.Context, arg SetEngineTrinoResourceGroupsParams) (Engine, error)
 	SetExecutionResult(ctx context.Context, arg SetExecutionResultParams) error
 	// Stores the resolved target of an execution. target_snapshot is immutable
 	// context for history and carries no secret.
