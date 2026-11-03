@@ -261,6 +261,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 			Weight:              weight,
 			AgentMaxConcurrent:  r.AgentMaxConcurrent,
 			RuntimeTimeout:      runtimeTimeout,
+			Interactive:         r.Origin == workload.OriginEditor || r.Origin == workload.OriginAgent,
 		})
 	if err != nil {
 		// Detached from the request, which may be the reason it failed.

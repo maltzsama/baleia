@@ -356,7 +356,7 @@ func TestV3_InputHasNoSecrets(t *testing.T) {
 		}
 		return out
 	}
-	require.Equal(t, []string{"ExecutionID", "WorkspaceID", "SQL", "Target", "Identity", "StatementTimeout", "RequestID", "ExecutionTimeout", "RuntimeTimeout", "RerunExecutionID", "RerunFromPosition", "Dialect", "Class", "WorkloadEnabled", "TrinoResourceGroups", "FairnessKey", "Weight", "AgentMaxConcurrent"}, fields(QueryExecutionInput{}))
+	require.Equal(t, []string{"ExecutionID", "WorkspaceID", "SQL", "Target", "Identity", "StatementTimeout", "RequestID", "ExecutionTimeout", "RuntimeTimeout", "RerunExecutionID", "RerunFromPosition", "Dialect", "Class", "WorkloadEnabled", "TrinoResourceGroups", "FairnessKey", "Weight", "AgentMaxConcurrent", "Interactive"}, fields(QueryExecutionInput{}))
 	require.Equal(t, []string{"EngineID", "EngineKind", "EngineName", "BindingID", "CatalogID", "CatalogName", "EngineCatalog", "Schema", "ReadOnly"}, fields(queryengine.Target{}))
 	require.Equal(t, []string{"UserID", "AgentID"}, fields(queryengine.Identity{}))
 }

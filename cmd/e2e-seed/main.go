@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -115,6 +116,9 @@ func main() {
 	}
 	if err := ensureV1Metric(ctx, pool, q, member, catalog, binding); err != nil {
 		log.Fatalf("e2e-seed: v1 metric: %v", err)
+	}
+	if err := ensureMetadata(ctx, q, catalog); err != nil {
+		log.Fatalf("e2e-seed: metadata: %v", err)
 	}
 
 	log.Printf("e2e-seed: ready (admin/member/viewer @e2e.test)")
@@ -353,6 +357,24 @@ func ensureV1Metric(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, memb
 		OwnerUserID: member.ID, UpdatedBy: member.ID,
 	})
 	return err
+}
+
+// ensureMetadata seeds the tpch tables the e2e models and metrics use, so the
+// editor's table allowlist (#614) resolves them without waiting for a sync.
+func ensureMetadata(ctx context.Context, q *db.Queries, catalog db.Catalog) error {
+	for _, t := range []struct{ namespace, name string }{
+		{"tiny", "customer"},
+		{"tiny", "orders"},
+		{"tiny", "nation"},
+	} {
+		if _, err := q.UpsertMetadataTable(ctx, db.UpsertMetadataTableParams{
+			CatalogID: catalog.ID, Namespace: []string{t.namespace}, Name: t.name,
+			Kind: "table", Fingerprint: "e2e", Properties: []byte(`{}`),
+		}); err != nil {
+			return fmt.Errorf("%s.%s: %w", t.namespace, t.name, err)
+		}
+	}
+	return nil
 }
 
 func ensureSharedWorkspace(ctx context.Context, q *db.Queries, name string, teamID pgtype.UUID) (db.Workspace, error) {
