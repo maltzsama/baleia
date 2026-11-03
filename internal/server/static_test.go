@@ -69,6 +69,25 @@ func TestStaticHTMLRedirectsToTheRoute(t *testing.T) {
 	}
 }
 
+// TestStaticHTMLRejectsProtocolRelativeRedirect pins #620: a .html path that
+// starts with // (or /\ which browsers normalize to it) must not become an
+// off-origin Location.
+func TestStaticHTMLRejectsProtocolRelativeRedirect(t *testing.T) {
+	t.Parallel()
+	for _, target := range []string{"//evil.example/x.html", "/\\evil.example/x.html"} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.URL.Path = target
+		rec := httptest.NewRecorder()
+		staticFixture(t, true).ServeHTTP(rec, req)
+		if rec.Code == http.StatusFound {
+			t.Fatalf("path %q redirected to %q", target, rec.Header().Get("Location"))
+		}
+		if loc := rec.Header().Get("Location"); loc != "" {
+			t.Fatalf("path %q set Location %q", target, loc)
+		}
+	}
+}
+
 // TestStaticMovedRoutes: the profile pages left settings; the old URLs
 // answer 308 to the fixed new route.
 func TestStaticMovedRoutes(t *testing.T) {

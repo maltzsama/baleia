@@ -333,7 +333,14 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 				return
 			}
 			if strings.HasSuffix(path, ".html") && path != "/app.html" {
-				http.Redirect(w, r, strings.TrimSuffix(path, ".html"), http.StatusFound)
+				target := strings.TrimSuffix(path, ".html")
+				// A protocol-relative path (//evil.com/x, or /\evil.com/x which
+				// browsers normalize to it) would redirect off-origin (#620).
+				if !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") || strings.HasPrefix(target, "/\\") {
+					http.NotFound(w, r)
+					return
+				}
+				http.Redirect(w, r, target, http.StatusFound) // #nosec G710 -- target is a single-slash relative path; // and /\ are rejected above
 				return
 			}
 		}

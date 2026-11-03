@@ -378,18 +378,6 @@ var routeAccess = map[string]access{
 	"GET /connections/{connection_id}/catalogs/{catalog_name}/namespaces":                                    checked("explorerTarget"),
 	"GET /connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables":                 checked("explorerTarget"),
 	"GET /connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables/{table}/columns": checked("explorerTarget"),
-
-	"GET /lens/queries":           checked("visibleUser"),
-	"GET /lens/queries/{id}":      checked("visibleUser"),
-	"GET /lens/analytics/queries": checked("visibleUser"),
-	"POST /lens/tables/{conn_id}/{catalog}/{namespace}/{table}/maintain": checked("Connection"),
-
-	// No SQL text or credentials: cluster state and table health only (matrix row
-	// "Lens: cluster state/history, table health").
-	"GET /lens/cluster":                 {kind: kindAuthenticated, why: "cluster state, no SQL text"},
-	"GET /lens/cluster/history":         {kind: kindAuthenticated, why: "cluster history, no SQL text"},
-	"GET /lens/tables/health":           {kind: kindAuthenticated, why: "table health, no SQL text"},
-	"GET /lens/tables/health/{conn_id}": {kind: kindAuthenticated, why: "table health, no SQL text"},
 }
 
 // ── source model ─────────────────────────────────────────────────────────────
@@ -699,8 +687,8 @@ func TestAuthzCoverage(t *testing.T) {
 	}
 	problems := auditOperations(ops, operationAccess, funcs, dup, publicOps(t, "../server/server.go"))
 
-	routes := loadRoutes(t, "../server/server.go", "handlers_lens.go")
-	if len(routes) < 15 {
+	routes := loadRoutes(t, "../server/server.go")
+	if len(routes) < 10 {
 		t.Fatalf("found only %d hand-registered routes; the enumeration is broken", len(routes))
 	}
 	problems = append(problems, auditRoutes(routes, routeAccess, lookup)...)

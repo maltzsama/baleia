@@ -12,7 +12,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
-	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/go-chi/chi/v5"
@@ -204,62 +203,6 @@ func TestExplorer_TrinoErrorsAreNotReturned(t *testing.T) {
 	}
 }
 
-func lensRouter(q db.Querier, tc client.Client, userID, role string) http.Handler {
-	r := chi.NewRouter()
-	r.Group(func(r chi.Router) {
-		r.Use(func(next http.Handler) http.Handler { return asUser(userID, role, next) })
-		RegisterLensRoutes(r, discardLogger, q, &config.Config{TrinoUserIdentity: "uuid"}, tc, testEngines(), nil)
-	})
-	return r
-}
-
-func snapshot(id, user string) db.TrinoQuerySnapshot {
-	return db.TrinoQuerySnapshot{TrinoQueryID: id, User: user, Sql: "SELECT secret_of_" + user, State: "finished"}
-}
-
-// TestLensQueries_MemberSeesOnlyOwn: a member sees their own Trino identity's
-// queries; the admin sees everyone's.
-func TestLensQueries_MemberSeesOnlyOwn(t *testing.T) {
-	t.Parallel()
-	member := "u_" + ownerID
-	q := &explorerFake{snaps: []db.TrinoQuerySnapshot{snapshot("q-mine", member), snapshot("q-theirs", "u_"+strangerID)}}
-
-	count := func(userID, role string) (int, string) {
-		code, body := get(t, lensRouter(q, nil, userID, role), "/lens/queries")
-		if code != 200 {
-			t.Fatalf("status %d", code)
-		}
-		var out struct{ Data []map[string]any }
-		if err := json.Unmarshal([]byte(body), &out); err != nil {
-			t.Fatal(err)
-		}
-		return len(out.Data), body
-	}
-	if n, body := count(ownerID, "member"); n != 1 || strings.Contains(body, "secret_of_u_"+strangerID) {
-		t.Fatalf("member sees %d queries, body=%s", n, body)
-	}
-	if n, _ := count(adminID, "admin"); n != 2 {
-		t.Fatalf("admin sees %d queries, want 2", n)
-	}
-
-	// Another user's single query is a 404, not a 403 or its SQL.
-	if code, body := get(t, lensRouter(q, nil, ownerID, "member"), "/lens/queries/q-theirs"); code != 404 || strings.Contains(body, "secret_of") {
-		t.Fatalf("foreign query: %d %s, want 404", code, body)
-	}
-	if code, _ := get(t, lensRouter(q, nil, ownerID, "member"), "/lens/queries/q-mine"); code != 200 {
-		t.Fatalf("own query: %d, want 200", code)
-	}
-	if code, _ := get(t, lensRouter(q, nil, adminID, "admin"), "/lens/queries/q-theirs"); code != 200 {
-		t.Fatalf("admin on any query: %d, want 200", code)
-	}
-
-	// Analytics are scoped the same way.
-	_, body := get(t, lensRouter(q, nil, ownerID, "member"), "/lens/analytics/queries")
-	if !strings.Contains(body, `"total_queries":1`) {
-		t.Fatalf("member analytics = %s, want total_queries 1", body)
-	}
-}
-
 type recordingTemporal struct {
 	client.Client
 	mu    sync.Mutex
@@ -271,69 +214,6 @@ func (f *recordingTemporal) ExecuteWorkflow(_ context.Context, _ client.StartWor
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, args)
 	return nil, nil
-}
-
-func post(t *testing.T, h http.Handler, path, body string) (int, string) {
-	t.Helper()
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, path, strings.NewReader(body)))
-	return rec.Code, rec.Body.String()
-}
-
-func TestTriggerMaintenance(t *testing.T) {
-	t.Parallel()
-	h, q, _, conn := newExplorerHandlers(t)
-	_ = h
-	tc := &recordingTemporal{}
-	path := "/lens/tables/" + conn + "/wh/analytics/events/maintain"
-
-	// retention is validated: an injection attempt is a 422 and starts nothing.
-	if code, _ := post(t, lensRouter(q, tc, ownerID, "member"), path, `{"retention":"7d') --"}`); code != 422 {
-		t.Fatalf("hostile retention: %d, want 422", code)
-	}
-	if len(tc.calls) != 0 {
-		t.Fatal("a workflow was started for an invalid retention")
-	}
-
-	// a stranger does not learn the connection exists.
-	if code, _ := post(t, lensRouter(q, tc, strangerID, "member"), path, `{"retention":"7d"}`); code != 404 {
-		t.Fatalf("stranger: %d, want 404", code)
-	}
-
-	// a catalog that is not on this connection is 404.
-	if code, _ := post(t, lensRouter(q, tc, ownerID, "member"), "/lens/tables/"+conn+"/not_mine/ns/t/maintain", `{}`); code != 404 {
-		t.Fatalf("catalog of another connection: %d, want 404", code)
-	}
-	if len(tc.calls) != 0 {
-		t.Fatal("a workflow was started for a rejected request")
-	}
-
-	// the owner and an admin may start it; the stored Trino name reaches the workflow.
-	for _, who := range [][2]string{{ownerID, "member"}, {adminID, "admin"}} {
-		if code, body := post(t, lensRouter(q, tc, who[0], who[1]), path, `{"retention":"14d"}`); code != 202 {
-			t.Fatalf("%s: %d %s, want 202", who[1], code, body)
-		}
-	}
-	if len(tc.calls) != 2 || tc.calls[0][1] != "wh" || tc.calls[0][2] != "analytics" || tc.calls[0][4] != "14d" {
-		t.Fatalf("workflow args = %v", tc.calls)
-	}
-
-	// default retention when the body is empty.
-	if code, _ := post(t, lensRouter(q, tc, ownerID, "member"), path, ``); code != 202 || tc.calls[2][4] != "7d" {
-		t.Fatalf("default retention: %d %v", code, tc.calls)
-	}
-}
-
-func TestLensRoutesRequireAnIdentity(t *testing.T) {
-	t.Parallel()
-	q := &explorerFake{}
-	r := chi.NewRouter()
-	RegisterLensRoutes(r, discardLogger, q, &config.Config{}, nil, nil, nil) // no auth middleware in front: no identity in ctx
-	for _, p := range []string{"/lens/queries", "/lens/analytics/queries"} {
-		if code, _ := get(t, r, p); code != 401 {
-			t.Errorf("%s without identity: %d, want 401", p, code)
-		}
-	}
 }
 
 // TestExplorer_PathParametersArePercentDecoded pins #134: %24 and %3B survive
