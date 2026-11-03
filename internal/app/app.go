@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -76,7 +78,13 @@ type Core struct {
 	Storage *storage.S3Client
 	// TrinoAdmin is the catalog DDL identity (docs/adr/0005); Binder uses it.
 	TrinoAdmin *trino.Client
-	Binder     *bindtrino.Binder
+	// TrinoHTTP is the HTTP client of the default cluster (TRINO_URL): the
+	// managed dialer, the coordinator's CA bundle and Baleia's password login
+	// (#646). The worker's Lens monitor uses it too.
+	TrinoHTTP *http.Client
+	// TrinoCA is the PEM bundle of BALEIA_TRINO_CA_FILE, empty when unset.
+	TrinoCA string
+	Binder  *bindtrino.Binder
 	// Audit is best effort: a failed write is counted, never fatal.
 	Audit *audit.Postgres
 
@@ -197,7 +205,19 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	}
 	c.Storage.SetMetrics(c.Metrics.Storage())
 
-	c.TrinoAdmin = trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoAdminUser, obs.WrapHTTPClient(c.ManagedDialer.HTTPClient(60*time.Second)))
+	if cfg.TrinoCAFile != "" {
+		ca, err := os.ReadFile(cfg.TrinoCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("BALEIA_TRINO_CA_FILE: %w", err)
+		}
+		c.TrinoCA = string(ca)
+	}
+	hc, err := trino.Authenticated(c.ManagedDialer.HTTPClient(60*time.Second), cfg.TrinoAdminUser, cfg.TrinoPassword, c.TrinoCA)
+	if err != nil {
+		return nil, fmt.Errorf("default trino client: %w", err)
+	}
+	c.TrinoHTTP = obs.WrapHTTPClient(hc)
+	c.TrinoAdmin = trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoAdminUser, c.TrinoHTTP)
 	c.Binder = bindtrino.New(c.Logger, c.TrinoAdmin, c.Queries).WithRegistryKeyring(c.RegistryKeyring).
 		WithIcebergMinRetention(cfg.MaintenanceMinRetention())
 	c.Audit = audit.NewPostgres(c.Logger, c.Queries, c.Connections.SecretKeys(), c.Metrics.Audit().WriteFailed)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -55,6 +56,14 @@ type Config struct {
 	// TrinoServiceUser is the fallback identity for executions when per-user
 	// identity is disabled.
 	TrinoServiceUser string
+	// TrinoPassword is the password of TrinoAdminUser, the login Baleia
+	// authenticates to TRINO_URL with; it impersonates the service and per-user
+	// identities (#646). Empty means no authentication. It is read from the
+	// environment only and never stored in the database.
+	TrinoPassword string
+	// TrinoCAFile is a PEM bundle trusted for the coordinator's certificate,
+	// besides the system roots. Empty uses the system roots only.
+	TrinoCAFile string
 	// TrinoUserIdentity selects how a logged-in Baleia user maps to a Trino
 	// identity for their queries: "uuid" (u_<uuid>) or "email".
 	TrinoUserIdentity string
@@ -254,6 +263,8 @@ func Load() *Config {
 		TrinoDBPassword:                   getEnv("BALEIA_TRINO_DB_PASSWORD", ""),
 		TrinoAdminUser:                    getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),
 		TrinoServiceUser:                  getEnv("BALEIA_TRINO_SERVICE_USER", "baleia"),
+		TrinoPassword:                     getEnv("BALEIA_TRINO_PASSWORD", ""),
+		TrinoCAFile:                       getEnv("BALEIA_TRINO_CA_FILE", ""),
 		TrinoUserIdentity:                 getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
 		PluginVersion:                     getEnv("BALEIA_PLUGIN_VERSION", "0.10.0"),
 		JWTSecret:                         getEnv("JWT_SECRET", DefaultJWTSecret),
@@ -414,6 +425,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("BALEIA_TRINO_EVENTS_TOKEN must be at least %d characters", MinJWTSecretLen)
 	}
 	if err := c.ValidateEncryptionKeys(); err != nil {
+		return err
+	}
+	if err := c.validateTrinoAuth(); err != nil {
 		return err
 	}
 	if err := c.ValidateRegistryKey(); err != nil {
@@ -601,4 +615,21 @@ func (c *Config) MaintenanceMinRetention() time.Duration {
 		return time.Hour
 	}
 	return c.IcebergMaintenanceMinRetention
+}
+
+// validateTrinoAuth checks the default cluster's authentication (#646): Trino
+// accepts passwords over HTTPS only, and the default engine keeps a sealed
+// reference to the password, so the keyring must be configured.
+func (c *Config) validateTrinoAuth() error {
+	if c.TrinoPassword == "" {
+		return nil
+	}
+	u, err := url.Parse(c.TrinoURL)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" {
+		return errors.New("BALEIA_TRINO_PASSWORD needs an https TRINO_URL")
+	}
+	if c.EncryptionKey == "" {
+		return errors.New("BALEIA_TRINO_PASSWORD needs BALEIA_ENCRYPTION_KEY")
+	}
+	return nil
 }

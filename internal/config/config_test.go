@@ -195,3 +195,28 @@ func TestConfig_TrinoEventsToken(t *testing.T) {
 		t.Errorf("no token = %v", err)
 	}
 }
+
+// TestConfig_TrinoPassword (#646): a password needs HTTPS and the keyring.
+func TestConfig_TrinoPassword(t *testing.T) {
+	t.Parallel()
+	base := Config{JWTSecret: strings.Repeat("s", MinJWTSecretLen), TrinoURL: "https://trino:8443", TrinoPassword: "pw", EncryptionKey: strings.Repeat("k", MinEncryptionKeyLen)}
+	plain, noKey := base, base
+	plain.TrinoURL = "http://trino:8080"
+	noKey.EncryptionKey = ""
+	for name, c := range map[string]Config{"http": plain, "no keyring": noKey} {
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "BALEIA_TRINO_PASSWORD") {
+			t.Errorf("%s = %v, want a BALEIA_TRINO_PASSWORD error", name, err)
+		}
+	}
+	if err := base.Validate(); err != nil {
+		t.Errorf("https with keyring = %v", err)
+	}
+}
+
+func TestConfig_TrinoPasswordNeedsHost(t *testing.T) {
+	t.Parallel()
+	c := Config{JWTSecret: strings.Repeat("s", MinJWTSecretLen), TrinoURL: "https://", TrinoPassword: "pw", EncryptionKey: strings.Repeat("k", MinEncryptionKeyLen)}
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "BALEIA_TRINO_PASSWORD") {
+		t.Errorf("no host = %v", err)
+	}
+}
