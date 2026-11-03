@@ -106,6 +106,10 @@ type Config struct {
 	// WorkloadEnabled turns on workload management (#399, ADR 0014). Off by
 	// default: a run starts immediately and is never `queued`.
 	WorkloadEnabled bool
+	// TrinoResourceGroupsEnvironment is the `environment` Baleia writes its
+	// managed Trino resource groups under (#599, #635). It must match the
+	// handed-over cluster's node.environment; Trino's default is production.
+	TrinoResourceGroupsEnvironment string
 	// WorkloadAdaptive* are the adaptive admission gate thresholds (#551,
 	// #579): the cluster's queued and blocked queries, and the memory headroom
 	// percentage below which only interactive work is admitted. A zero value
@@ -280,6 +284,7 @@ func Load() *Config {
 		StatementTimeout:                  getEnvDuration("BALEIA_STATEMENT_TIMEOUT", 30*time.Minute),
 		ExecutionTimeout:                  getEnvDuration("BALEIA_EXECUTION_TIMEOUT", 2*time.Hour),
 		WorkloadEnabled:                   getEnv("BALEIA_WORKLOAD_ENABLED", "false") == "true",
+		TrinoResourceGroupsEnvironment:    getEnv("BALEIA_TRINO_RESOURCE_GROUPS_ENVIRONMENT", "production"),
 		WorkloadAdaptiveQueuedThreshold:   getEnvInt("BALEIA_WORKLOAD_ADAPTIVE_QUEUED_THRESHOLD", 20),
 		WorkloadAdaptiveBlockedThreshold:  getEnvInt("BALEIA_WORKLOAD_ADAPTIVE_BLOCKED_THRESHOLD", 10),
 		WorkloadAdaptiveMemoryHeadroomPct: getEnvInt("BALEIA_WORKLOAD_ADAPTIVE_MEMORY_HEADROOM_PCT", 10),

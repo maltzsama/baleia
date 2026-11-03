@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -11,9 +12,11 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	qtrino "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/workbench/executions"
 	"github.com/galileostudio/baleia/internal/workload"
+	"github.com/galileostudio/baleia/internal/workload/resourcegroups"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
@@ -56,14 +59,18 @@ func (h *CatalogHandlers) GetEngineQueues(ctx context.Context, request GetEngine
 
 // PutEngineQueues — PUT /engines/{id}/queues (#540). Writes the capacities,
 // the queue timeouts and the optional ceiling, then signals the engine's
-// admission workflow so the change applies without a restart.
+// admission workflow so the change applies without a restart. While the
+// engine hands admission to Trino (#600), the same transaction publishes the
+// resource groups generated from those capacities (#635), so Baleia never
+// stops queuing a run that Trino has no group for.
 func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngineQueuesRequestObject) (PutEngineQueuesResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return PutEngineQueues401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
-	if _, _, err := h.authz().Engine(ctx, p, id, authz.ActWrite); errors.Is(err, authz.ErrNotFound) {
+	eng, _, err := h.authz().Engine(ctx, p, id, authz.ActWrite)
+	if errors.Is(err, authz.ErrNotFound) {
 		return PutEngineQueues404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
 	} else if errors.Is(err, authz.ErrForbidden) {
 		return PutEngineQueues403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only the engine owner or an admin may change its queues"}}, nil
@@ -78,6 +85,19 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 	if err != nil {
 		return PutEngineQueues422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	}
+	handover := eng.TrinoResourceGroupsEnabled
+	if request.Body.TrinoResourceGroupsEnabled != nil {
+		handover = *request.Body.TrinoResourceGroupsEnabled
+	}
+	if handover {
+		if refusal, err := h.resourceGroupsRefusal(ctx, eng); err != nil {
+			return nil, err
+		} else if refusal != nil {
+			return PutEngineQueues422JSONResponse{UnprocessableEntityJSONResponse: *refusal}, nil
+		}
+	}
+	environment := cmp.Or(h.settings.Execution.TrinoResourceGroupsEnvironment, defaultResourceGroupsEnvironment)
+	var revision int
 	if err := h.inTx(ctx, func(q db.Querier) error {
 		if err := q.DeleteEngineQueueCapacities(ctx, id); err != nil {
 			return err
@@ -99,10 +119,28 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 				ID:                         id,
 				TrinoResourceGroupsEnabled: *request.Body.TrinoResourceGroupsEnabled,
 			})
+			if err != nil {
+				return err
+			}
 		}
-		return err
+		if !handover {
+			return nil
+		}
+		revision, err = resourcegroups.Publish(ctx, q, id, environment, resourceGroupsDocument(caps))
+		if err != nil {
+			return fmt.Errorf("publish trino resource groups: %w", err)
+		}
+		return nil
 	}); err != nil {
 		return nil, err
+	}
+	changes := map[string]audit.Change{
+		"max_running_total":             {To: request.Body.MaxRunningTotal},
+		"trino_resource_groups_enabled": {To: request.Body.TrinoResourceGroupsEnabled},
+		"classes":                       {To: request.Body.Classes},
+	}
+	if handover {
+		changes["trino_resource_groups_revision"] = audit.Change{To: revision}
 	}
 
 	h.audited(ctx, audit.Event{
@@ -110,15 +148,11 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 		ResourceType: "engine",
 		ResourceID:   idString(id),
 		Outcome:      audit.Allowed,
-		Changes: map[string]audit.Change{
-			"max_running_total":             {To: request.Body.MaxRunningTotal},
-			"trino_resource_groups_enabled": {To: request.Body.TrinoResourceGroupsEnabled},
-			"classes":                       {To: request.Body.Classes},
-		},
+		Changes:      changes,
 	})
 	h.signalAdmission(ctx, idString(id), caps)
 
-	eng, err := h.queries.GetEngineByID(ctx, id)
+	eng, err = h.queries.GetEngineByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -127,6 +161,44 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 		return nil, err
 	}
 	return PutEngineQueues200JSONResponse(out), nil
+}
+
+// defaultResourceGroupsEnvironment is Trino's default node.environment, used
+// when no environment is configured.
+const defaultResourceGroupsEnvironment = "production"
+
+// resourceGroupsRefusal says why eng cannot hand admission over to Trino's
+// resource groups, or nil when it can. Only a Trino engine can, and only one
+// engine at a time: the groups are stored per environment, so a second engine
+// would overwrite the first one's.
+func (h *CatalogHandlers) resourceGroupsRefusal(ctx context.Context, eng db.Engine) (*UnprocessableEntityJSONResponse, error) {
+	if eng.Kind != qtrino.Kind {
+		refusal := unprocessable(ErrorCodeEngineUnsupported, "only a Trino engine can hand its queue over to Trino resource groups")
+		return &refusal, nil
+	}
+	engines, err := h.queries.ListEngines(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, other := range engines {
+		if other.ID != eng.ID && other.TrinoResourceGroupsEnabled {
+			refusal := unprocessable(ErrorCodeConflict, fmt.Sprintf("engine %q already owns the Trino resource groups; turn its switch off first", other.Name))
+			return &refusal, nil
+		}
+	}
+	return nil, nil
+}
+
+// resourceGroupsDocument renders the Trino resource groups from the
+// capacities and the ceiling being written, the same ones Baleia's admission
+// queue enforces.
+func resourceGroupsDocument(caps workflows.AdmissionCapacities) workload.ResourceGroups {
+	classes := make(map[queryengine.WorkloadClass]workload.Capacity, len(caps.Classes))
+	for _, c := range caps.Classes {
+		classes[c.Class] = workload.Capacity{MaxRunning: c.MaxRunning, MaxQueued: c.MaxQueued}
+	}
+	ceiling := caps.MaxRunningTotal
+	return workload.Generate(classes, &ceiling)
 }
 
 // engineQueues merges the configured capacity (or its default) with the live

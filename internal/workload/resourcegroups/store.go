@@ -45,16 +45,24 @@ func (s *Store) inTx(ctx context.Context, fn func(q db.Querier) error) error {
 // Write validates and publishes the document for one cluster's environment,
 // recording a new revision. It returns the revision number.
 func (s *Store) Write(ctx context.Context, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
-	if err := workload.Validate(doc); err != nil {
-		return 0, err
-	}
 	var revision int
 	err := s.inTx(ctx, func(q db.Querier) error {
-		r, err := publish(ctx, q, engineID, environment, doc)
+		r, err := Publish(ctx, q, engineID, environment, doc)
 		revision = r
 		return err
 	})
 	return revision, err
+}
+
+// Publish validates and publishes the document on q, which must already be
+// inside a transaction, and returns the new revision. Callers that change the
+// settings the document is generated from use it so the settings and the
+// published groups commit together (#635).
+func Publish(ctx context.Context, q db.Querier, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
+	if err := workload.Validate(doc); err != nil {
+		return 0, err
+	}
+	return publish(ctx, q, engineID, environment, doc)
 }
 
 // Rollback re-publishes the configuration of an earlier revision as a new

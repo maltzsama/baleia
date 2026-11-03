@@ -60,6 +60,9 @@ type ExecutionSettings struct {
 	ExecutionTimeout  time.Duration
 	// WorkloadEnabled records the workload class of new runs (#399).
 	WorkloadEnabled bool
+	// TrinoResourceGroupsEnvironment is the environment the managed Trino
+	// resource groups are published under (#635).
+	TrinoResourceGroupsEnvironment string
 	// PolarisDefaultCredentials is nil unless both halves are configured.
 	PolarisDefaultCredentials map[string]string
 }
@@ -112,11 +115,12 @@ func SettingsFromConfig(c *config.Config) Settings {
 			MaxToolCallsPerMinute:  c.AgentMaxToolCallsPerMinute,
 		},
 		Execution: ExecutionSettings{
-			TrinoUserIdentity:         c.TrinoUserIdentity,
-			StatementTimeout:          c.StatementTimeout,
-			ExecutionTimeout:          c.ExecutionTimeout,
-			WorkloadEnabled:           c.WorkloadEnabled,
-			PolarisDefaultCredentials: c.PolarisDefaultCredentials(),
+			TrinoUserIdentity:              c.TrinoUserIdentity,
+			StatementTimeout:               c.StatementTimeout,
+			ExecutionTimeout:               c.ExecutionTimeout,
+			WorkloadEnabled:                c.WorkloadEnabled,
+			TrinoResourceGroupsEnvironment: c.TrinoResourceGroupsEnvironment,
+			PolarisDefaultCredentials:      c.PolarisDefaultCredentials(),
 		},
 		Ops: OpsSettings{
 			PluginVersion:       c.PluginVersion,
