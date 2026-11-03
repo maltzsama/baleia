@@ -30,3 +30,8 @@ VALUES ($1, $2, $3);
 -- name: GetTrinoResourceGroupRevision :one
 SELECT config FROM trino_resource_group_revisions
 WHERE engine_id = $1 AND revision = $2;
+
+-- name: LockTrinoResourceGroups :exec
+-- Serializes the saves that decide who owns the Trino resource groups and
+-- publish them (#635): held until the transaction ends.
+SELECT pg_advisory_xact_lock(hashtextextended('baleia.trino_resource_groups', 0));

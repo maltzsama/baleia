@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -137,12 +138,17 @@ func TestPutEngineQueues_PublishesResourceGroups(t *testing.T) {
 		t.Fatalf("groups outside the configured environment = %v", got)
 	}
 
-	// The switch is omitted: it stays on, and the closed class drops its group.
+	// The switch is omitted: it stays on, and the closed class keeps a closed
+	// group, so its runs wait instead of using interactive capacity.
 	if resp := putQueues(t, h, engine, queuesBody(nil, true)); !is200(resp) {
 		t.Fatalf("capacity change = %#v, want 200", resp)
 	}
-	if got := resourceGroupNames(t, pool, "staging"); len(got) != 3 {
-		t.Fatalf("groups after closing background = %v, want root + 2 classes", got)
+	var limit int
+	if err := pool.QueryRow(context.Background(), `SELECT hard_concurrency_limit FROM resource_groups WHERE environment = 'staging' AND name = 'background'`).Scan(&limit); err != nil {
+		t.Fatal(err)
+	}
+	if limit != 0 {
+		t.Fatalf("closed background limit = %d, want 0", limit)
 	}
 	if got := resourceGroupRevisions(t, pool, engine); got != 2 {
 		t.Fatalf("revisions = %d, want 2", got)
@@ -201,5 +207,74 @@ func TestPutEngineQueues_ResourceGroupsRefusals(t *testing.T) {
 	}
 	if resp := putQueues(t, h, second, queuesBody(ptr(true), false)); !is200(resp) {
 		t.Fatalf("second engine's handover after the first let go = %#v, want 200", resp)
+	}
+}
+
+// TestPutEngineQueues_PublishFailureChangesNothing: a save whose publish fails
+// leaves the switch and the capacities as they were, so Baleia never stops
+// queuing an engine whose groups were not written.
+func TestPutEngineQueues_PublishFailureChangesNothing(t *testing.T) {
+	t.Parallel()
+	pool := testdb.New(t)
+	h := queuesAPI(pool, "")
+	engine := queuesEngine(t, pool, "trino", "trino")
+	failWrites(t, pool, "INSERT ON trino_resource_group_revisions")
+
+	resp, err := h.PutEngineQueues(queuesAdminCtx(), PutEngineQueuesRequestObject{Id: engine.Bytes, Body: queuesBody(ptr(true), false)})
+	if err == nil {
+		t.Fatalf("save with a failed publish = %#v, want an error", resp)
+	}
+	if engineHandover(t, pool, engine) {
+		t.Fatal("a failed publish left the switch on")
+	}
+	capacities, err := db.New(pool).ListEngineQueueCapacities(context.Background(), engine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(capacities) != 0 {
+		t.Fatalf("a failed publish kept the capacities: %+v", capacities)
+	}
+	if got := resourceGroupNames(t, pool, defaultResourceGroupsEnvironment); len(got) != 0 {
+		t.Fatalf("a failed publish kept the groups: %v", got)
+	}
+}
+
+// TestPutEngineQueues_ConcurrentHandoverHasOneOwner: two engines turning the
+// switch on at once end with exactly one owner.
+func TestPutEngineQueues_ConcurrentHandoverHasOneOwner(t *testing.T) {
+	t.Parallel()
+	pool := testdb.New(t)
+	h := queuesAPI(pool, "")
+	engines := []pgtype.UUID{
+		queuesEngine(t, pool, "trino-a", "trino"),
+		queuesEngine(t, pool, "trino-b", "trino"),
+	}
+
+	results := make([]PutEngineQueuesResponseObject, len(engines))
+	errs := make([]error, len(engines))
+	var wg sync.WaitGroup
+	for i, engine := range engines {
+		wg.Go(func() {
+			results[i], errs[i] = h.PutEngineQueues(queuesAdminCtx(), PutEngineQueuesRequestObject{Id: engine.Bytes, Body: queuesBody(ptr(true), false)})
+		})
+	}
+	wg.Wait()
+
+	owners := 0
+	for i, engine := range engines {
+		if errs[i] != nil {
+			t.Fatalf("save %d = %v", i, errs[i])
+		}
+		if is200(results[i]) {
+			owners++
+		} else if refusalCode(results[i]) != ErrorCodeConflict {
+			t.Fatalf("save %d = %#v, want 200 or 422 conflict", i, results[i])
+		}
+		if engineHandover(t, pool, engine) != is200(results[i]) {
+			t.Fatalf("engine %d switch disagrees with its save", i)
+		}
+	}
+	if owners != 1 {
+		t.Fatalf("owners = %d, want exactly 1", owners)
 	}
 }

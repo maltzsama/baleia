@@ -69,8 +69,7 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 		return PutEngineQueues401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	id := pgtype.UUID{Bytes: request.Id, Valid: true}
-	eng, _, err := h.authz().Engine(ctx, p, id, authz.ActWrite)
-	if errors.Is(err, authz.ErrNotFound) {
+	if _, _, err := h.authz().Engine(ctx, p, id, authz.ActWrite); errors.Is(err, authz.ErrNotFound) {
 		return PutEngineQueues404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
 	} else if errors.Is(err, authz.ErrForbidden) {
 		return PutEngineQueues403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only the engine owner or an admin may change its queues"}}, nil
@@ -85,20 +84,34 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 	if err != nil {
 		return PutEngineQueues422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	}
-	handover := eng.TrinoResourceGroupsEnabled
-	if request.Body.TrinoResourceGroupsEnabled != nil {
-		handover = *request.Body.TrinoResourceGroupsEnabled
-	}
-	if handover {
-		if refusal, err := h.resourceGroupsRefusal(ctx, eng); err != nil {
-			return nil, err
-		} else if refusal != nil {
-			return PutEngineQueues422JSONResponse{UnprocessableEntityJSONResponse: *refusal}, nil
-		}
-	}
 	environment := cmp.Or(h.settings.Execution.TrinoResourceGroupsEnvironment, defaultResourceGroupsEnvironment)
-	var revision int
-	if err := h.inTx(ctx, func(q db.Querier) error {
+	var (
+		handover bool
+		revision int
+		refusal  *UnprocessableEntityJSONResponse
+	)
+	err = h.inTx(ctx, func(q db.Querier) error {
+		// The switch and the one-owner rule are read under the lock, so two
+		// concurrent saves cannot both take the groups over, nor can a save
+		// that omits the switch miss an enable that commits meanwhile.
+		if err := q.LockTrinoResourceGroups(ctx); err != nil {
+			return err
+		}
+		eng, err := q.GetEngineByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		handover = eng.TrinoResourceGroupsEnabled
+		if request.Body.TrinoResourceGroupsEnabled != nil {
+			handover = *request.Body.TrinoResourceGroupsEnabled
+		}
+		if handover {
+			if refusal, err = resourceGroupsRefusal(ctx, q, eng); err != nil {
+				return err
+			} else if refusal != nil {
+				return errHandoverRefused
+			}
+		}
 		if err := q.DeleteEngineQueueCapacities(ctx, id); err != nil {
 			return err
 		}
@@ -107,7 +120,7 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 				return err
 			}
 		}
-		_, err := q.SetEngineMaxRunningTotal(ctx, db.SetEngineMaxRunningTotalParams{
+		_, err = q.SetEngineMaxRunningTotal(ctx, db.SetEngineMaxRunningTotalParams{
 			ID:              id,
 			MaxRunningTotal: intToInt32(request.Body.MaxRunningTotal),
 		})
@@ -131,7 +144,11 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 			return fmt.Errorf("publish trino resource groups: %w", err)
 		}
 		return nil
-	}); err != nil {
+	})
+	if refusal != nil {
+		return PutEngineQueues422JSONResponse{UnprocessableEntityJSONResponse: *refusal}, nil
+	}
+	if err != nil {
 		return nil, err
 	}
 	changes := map[string]audit.Change{
@@ -152,7 +169,7 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 	})
 	h.signalAdmission(ctx, idString(id), caps)
 
-	eng, err = h.queries.GetEngineByID(ctx, id)
+	eng, err := h.queries.GetEngineByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -167,16 +184,21 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 // when no environment is configured.
 const defaultResourceGroupsEnvironment = "production"
 
+// errHandoverRefused rolls back a save whose handover resourceGroupsRefusal
+// refused; the handler answers with the refusal.
+var errHandoverRefused = errors.New("trino resource group handover refused")
+
 // resourceGroupsRefusal says why eng cannot hand admission over to Trino's
 // resource groups, or nil when it can. Only a Trino engine can, and only one
 // engine at a time: the groups are stored per environment, so a second engine
-// would overwrite the first one's.
-func (h *CatalogHandlers) resourceGroupsRefusal(ctx context.Context, eng db.Engine) (*UnprocessableEntityJSONResponse, error) {
+// would overwrite the first one's. q is the save's transaction, holding
+// LockTrinoResourceGroups.
+func resourceGroupsRefusal(ctx context.Context, q db.Querier, eng db.Engine) (*UnprocessableEntityJSONResponse, error) {
 	if eng.Kind != qtrino.Kind {
 		refusal := unprocessable(ErrorCodeEngineUnsupported, "only a Trino engine can hand its queue over to Trino resource groups")
 		return &refusal, nil
 	}
-	engines, err := h.queries.ListEngines(ctx)
+	engines, err := q.ListEngines(ctx)
 	if err != nil {
 		return nil, err
 	}

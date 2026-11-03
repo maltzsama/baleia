@@ -137,6 +137,17 @@ func (q *Queries) InsertTrinoSelector(ctx context.Context, arg InsertTrinoSelect
 	return err
 }
 
+const lockTrinoResourceGroups = `-- name: LockTrinoResourceGroups :exec
+SELECT pg_advisory_xact_lock(hashtextextended('baleia.trino_resource_groups', 0))
+`
+
+// Serializes the saves that decide who owns the Trino resource groups and
+// publish them (#635): held until the transaction ends.
+func (q *Queries) LockTrinoResourceGroups(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockTrinoResourceGroups)
+	return err
+}
+
 const nextTrinoResourceGroupRevision = `-- name: NextTrinoResourceGroupRevision :one
 SELECT COALESCE(MAX(revision), 0) + 1::integer FROM trino_resource_group_revisions
 WHERE engine_id = $1

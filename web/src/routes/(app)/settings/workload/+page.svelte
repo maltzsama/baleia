@@ -118,10 +118,14 @@
 	let capacities = $state<CapacityRow[]>([]);
 	let maxRunningTotal = $state('');
 	let trinoResourceGroupsEnabled = $state(false);
-	// Only a Trino engine has the resource-group handover; the switch is hidden
-	// and never sent for any other kind (#635).
+	// The switch as stored, so an engine saved with it on before only Trino
+	// engines could hand over can still turn it off.
+	let storedResourceGroups = $state(false);
+	// Only a Trino engine has the resource-group handover; for any other kind
+	// the switch is hidden and never sent, unless it is stored on (#635).
 	let canHandOver = $derived(
-		hasTrinoResourceGroups(engines.find((engine) => engine.id === engineId)?.kind)
+		storedResourceGroups ||
+			hasTrinoResourceGroups(engines.find((engine) => engine.id === engineId)?.kind)
 	);
 	let queuesLoaded = $state(false);
 	let queuesError = $state('');
@@ -209,6 +213,7 @@
 		if (reset) {
 			maxRunningTotal = queues.max_running_total == null ? '' : String(queues.max_running_total);
 			trinoResourceGroupsEnabled = queues.trino_resource_groups_enabled ?? false;
+			storedResourceGroups = trinoResourceGroupsEnabled;
 			capacities = queues.classes.map((row) => ({
 				class: row.class,
 				max_running: String(row.max_running),

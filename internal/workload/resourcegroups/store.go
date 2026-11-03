@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/workload"
@@ -119,19 +120,20 @@ func publish(ctx context.Context, q db.Querier, engineID pgtype.UUID, environmen
 // writeGroups inserts the root group and its subgroups, returning each group's
 // database id keyed by its fully-qualified name. The root's required limits are
 // derived when the ceiling is unset: the total concurrency is the sum of the
-// subgroup limits, and the queued limit is the sum of the subgroup queues.
+// subgroup limits, and the queued limit is the sum of the subgroup queues. A
+// sum past the int32 column is clamped: at that size the root adds no limit of
+// its own, which is what the sum means.
 func writeGroups(ctx context.Context, q db.Querier, environment string, doc workload.ResourceGroups) (map[string]int64, error) {
 	root := doc.RootGroups[0]
 
-	ceiling := 0
+	var ceiling, maxQueued int64
 	if root.HardConcurrencyLimit != nil {
-		ceiling = *root.HardConcurrencyLimit
+		ceiling = int64(*root.HardConcurrencyLimit)
 	}
-	maxQueued := 0
 	for _, sub := range root.SubGroups {
-		maxQueued += sub.MaxQueued
+		maxQueued += int64(sub.MaxQueued)
 		if root.HardConcurrencyLimit == nil {
-			ceiling += sub.HardConcurrencyLimit
+			ceiling += int64(sub.HardConcurrencyLimit)
 		}
 	}
 
@@ -139,8 +141,8 @@ func writeGroups(ctx context.Context, q db.Querier, environment string, doc work
 	rootID, err := q.InsertTrinoResourceGroup(ctx, db.InsertTrinoResourceGroupParams{
 		Name:                 root.Name,
 		SoftMemoryLimit:      root.SoftMemoryLimit,
-		MaxQueued:            int32(maxQueued),
-		HardConcurrencyLimit: int32(ceiling),
+		MaxQueued:            clampInt32(maxQueued),
+		HardConcurrencyLimit: clampInt32(ceiling),
 		Environment:          &env,
 	})
 	if err != nil {
@@ -192,4 +194,9 @@ func writeSelectors(ctx context.Context, q db.Querier, ids map[string]int64, doc
 		}
 	}
 	return nil
+}
+
+// clampInt32 bounds n to the int32 range the resource_groups columns hold.
+func clampInt32(n int64) int32 {
+	return int32(min(max(n, math.MinInt32), math.MaxInt32)) //nolint:gosec // bounded on both sides
 }

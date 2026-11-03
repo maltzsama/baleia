@@ -160,7 +160,11 @@ describe('settings workload page', () => {
 });
 
 describe('Trino resource-group handover (#635)', () => {
-	async function saveFor(kind: string): Promise<Record<string, unknown>> {
+	async function saveFor(
+		kind: string,
+		stored = false,
+		beforeSave: () => Promise<void> = async () => {}
+	): Promise<Record<string, unknown>> {
 		let body: Record<string, unknown> = {};
 		server.use(
 			http.get('/engines', ({ response }) =>
@@ -168,7 +172,7 @@ describe('Trino resource-group handover (#635)', () => {
 			),
 			http.get('/workload-rules', ({ response }) => response(200).json([])),
 			http.get('/engines/{id}/queues', ({ response }) =>
-				response(200).json({ ...makeQueues(), trino_resource_groups_enabled: false })
+				response(200).json({ ...makeQueues(), trino_resource_groups_enabled: stored })
 			),
 			http.put('/engines/{id}/queues', async ({ request, response }) => {
 				body = (await request.json()) as Record<string, unknown>;
@@ -180,6 +184,7 @@ describe('Trino resource-group handover (#635)', () => {
 		renderPage(WorkloadPage, { me, url: '/settings/workload' });
 
 		await screen.findByLabelText('Max running Interactive');
+		await beforeSave();
 		await fireEvent.click(screen.getByRole('button', { name: 'Save capacities' }));
 		await waitFor(() => expect(body.classes).toBeTruthy());
 		return body;
@@ -188,6 +193,15 @@ describe('Trino resource-group handover (#635)', () => {
 	it('offers and sends the switch for a Trino engine', async () => {
 		const body = await saveFor('trino');
 		expect(screen.getByRole('checkbox', { name: /resource groups/i })).toBeTruthy();
+		expect(body.trino_resource_groups_enabled).toBe(false);
+	});
+
+	it('lets another engine turn off a switch stored on', async () => {
+		const body = await saveFor('postgresql', true, async () => {
+			const checkbox = await screen.findByRole('checkbox', { name: /resource groups/i });
+			expect((checkbox as HTMLInputElement).checked).toBe(true);
+			await fireEvent.click(checkbox);
+		});
 		expect(body.trino_resource_groups_enabled).toBe(false);
 	});
 

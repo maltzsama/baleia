@@ -73,35 +73,45 @@ func TestResourceGroups_NoCeiling(t *testing.T) {
 	}
 }
 
-// TestResourceGroups_ClosedClass omits a class whose capacity is 0, and its
-// selector; the catch-all falls back to the next open class.
+// TestResourceGroups_ClosedClass keeps a class whose capacity is 0 as a
+// closed group with its own selector, so its runs wait in Trino instead of
+// falling through to the catch-all and an open class's capacity (#635).
 func TestResourceGroups_ClosedClass(t *testing.T) {
 	t.Parallel()
 	got := Generate(map[queryengine.WorkloadClass]Capacity{
 		queryengine.ClassInteractive: {MaxRunning: 4, MaxQueued: 20},
 		queryengine.ClassHeavy:       {MaxRunning: 1, MaxQueued: 10},
-		queryengine.ClassBackground:  {MaxRunning: 0, MaxQueued: 0},
+		queryengine.ClassBackground:  {MaxRunning: 0, MaxQueued: 7},
 	}, nil)
 
 	if err := Validate(got); err != nil {
 		t.Fatalf("Validate = %v", err)
 	}
-	if len(got.RootGroups[0].SubGroups) != 2 {
-		t.Fatalf("subgroups = %d, want 2", len(got.RootGroups[0].SubGroups))
+	subs := got.RootGroups[0].SubGroups
+	if len(subs) != 3 {
+		t.Fatalf("subgroups = %d, want 3", len(subs))
 	}
+	if bg := subs[2]; bg.Name != "background" || bg.HardConcurrencyLimit != 0 || bg.MaxQueued != 7 {
+		t.Errorf("closed background group = %+v, want limit 0 and maxQueued 7", bg)
+	}
+	routed := false
 	for _, sel := range got.Selectors {
-		if sel.Group == "baleia.background" {
-			t.Errorf("closed class still has a selector: %+v", sel)
+		if len(sel.ClientTags) == 1 && sel.ClientTags[0] == "baleia.class=background" {
+			routed = sel.Group == "baleia.background"
 		}
+	}
+	if !routed {
+		t.Errorf("background runs are not routed to their closed group: %+v", got.Selectors)
 	}
 	// The catch-all still routes to interactive, which is open.
 	last := got.Selectors[len(got.Selectors)-1]
-	if last.Group != "baleia.interactive" {
+	if len(last.ClientTags) != 0 || last.Group != "baleia.interactive" {
 		t.Errorf("catch-all = %+v", last)
 	}
 }
 
-// TestResourceGroups_AllClosed produces an empty graph with no selectors.
+// TestResourceGroups_AllClosed keeps every class as a closed group and emits
+// no catch-all, since there is no open class to route to.
 func TestResourceGroups_AllClosed(t *testing.T) {
 	t.Parallel()
 	got := Generate(map[queryengine.WorkloadClass]Capacity{
@@ -109,11 +119,18 @@ func TestResourceGroups_AllClosed(t *testing.T) {
 		queryengine.ClassHeavy:       {MaxRunning: 0},
 		queryengine.ClassBackground:  {MaxRunning: 0},
 	}, nil)
-	if len(got.RootGroups[0].SubGroups) != 0 {
-		t.Fatalf("subgroups = %d, want 0", len(got.RootGroups[0].SubGroups))
+	if err := Validate(got); err != nil {
+		t.Fatalf("Validate = %v", err)
 	}
-	if len(got.Selectors) != 0 {
-		t.Fatalf("selectors = %d, want 0", len(got.Selectors))
+	for _, sub := range got.RootGroups[0].SubGroups {
+		if sub.HardConcurrencyLimit != 0 {
+			t.Errorf("subgroup %q limit = %d, want 0", sub.Name, sub.HardConcurrencyLimit)
+		}
+	}
+	for _, sel := range got.Selectors {
+		if len(sel.ClientTags) == 0 {
+			t.Errorf("catch-all emitted with every class closed: %+v", sel)
+		}
 	}
 }
 
@@ -136,6 +153,19 @@ func TestResourceGroups_Marshal(t *testing.T) {
 	}
 	if _, ok := doc["selectors"]; !ok {
 		t.Errorf("no selectors in %s", raw)
+	}
+}
+
+// TestResourceGroups_ValidateRejectsNegativeLimit: 0 is a closed class, below
+// it is a mistake.
+func TestResourceGroups_ValidateRejectsNegativeLimit(t *testing.T) {
+	t.Parallel()
+	got := Generate(map[queryengine.WorkloadClass]Capacity{
+		queryengine.ClassInteractive: {MaxRunning: 4, MaxQueued: 20},
+	}, nil)
+	got.RootGroups[0].SubGroups[0].HardConcurrencyLimit = -1
+	if err := Validate(got); err == nil {
+		t.Fatal("Validate accepted a negative hardConcurrencyLimit")
 	}
 }
 
