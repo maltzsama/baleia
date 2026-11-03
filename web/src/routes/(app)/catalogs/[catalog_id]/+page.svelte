@@ -101,7 +101,6 @@
 
 	let grantOpen = $state(false);
 	let grantWorkspaceId = $state('');
-	let grantPermission = $state<'read' | 'write'>('read');
 	let granting = $state(false);
 	let grantError = $state('');
 	let revokeOpen = $state(false);
@@ -377,7 +376,7 @@
 		granting = true;
 		grantError = '';
 		try {
-			await grantCatalog(grantWorkspaceId, catalogId, grantPermission);
+			await grantCatalog(grantWorkspaceId, catalogId);
 			grants = await catalogGrants(catalogId);
 			grantOpen = false;
 		} catch (e) {
@@ -714,7 +713,6 @@
 						>
 							<tr>
 								<th class="px-3 py-2">{m.catalogs_detail_workspace()}</th>
-								<th class="px-3 py-2">{m.catalogs_detail_permission()}</th>
 								<th class="px-3 py-2">{m.catalogs_detail_granted()}</th>
 								<th class="px-3 py-2 text-right">{m.catalogs_detail_actions()}</th>
 							</tr>
@@ -723,7 +721,6 @@
 							{#each grants as grant (grant.workspace.id)}
 								<tr class="border-b border-border/60 last:border-b-0">
 									<td class="px-3 py-1.5">{grant.workspace.name}</td>
-									<td class="px-3 py-1.5"><Badge tone="info">{grant.permission}</Badge></td>
 									<td class="px-3 py-1.5"><RelativeTime at={grant.granted_at} /></td>
 									<td class="px-3 py-1.5 text-right">
 										<button
@@ -856,24 +853,6 @@
 			label={m.common_workspace()}
 			bind:value={grantWorkspaceId}
 			options={workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name }))}
-		/>
-		<Select
-			label={m.common_permission()}
-			bind:value={grantPermission}
-			options={[
-				{
-					value: 'read',
-					get label() {
-						return m.catalogs_detail_read();
-					}
-				},
-				{
-					value: 'write',
-					get label() {
-						return m.catalogs_detail_write();
-					}
-				}
-			]}
 		/>
 		{#if grantError}<p class="text-danger" role="alert">{grantError}</p>{/if}
 	</div>

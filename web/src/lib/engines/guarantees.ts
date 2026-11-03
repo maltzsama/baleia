@@ -1,7 +1,7 @@
 // The guarantees panel (#110) renders capabilities as consequences, never as
 // raw booleans. Kept pure so every engine kind can be table-tested.
 import { m } from '$lib/paraglide/messages';
-import { readOnlyGuarantee, type Engine } from './admin';
+import type { Engine } from './admin';
 
 export type Guarantee = {
 	title: string;
@@ -11,8 +11,6 @@ export type Guarantee = {
 
 export function describeGuarantees(e: Engine): Guarantee[] {
 	const out: Guarantee[] = [];
-	const ro = readOnlyGuarantee(e);
-	out.push({ title: m.engines_guarantees_read_only(), body: ro.detail, tone: ro.tone });
 	const c = e.capabilities;
 	if (!c) {
 		out.push({

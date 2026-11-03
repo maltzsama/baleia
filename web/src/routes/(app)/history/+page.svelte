@@ -499,7 +499,6 @@
 							? `.${selected.target.schema}`
 							: ''}</span
 					>
-					{#if selected.target.read_only}<Badge tone="warning">{m.common_read_only()}</Badge>{/if}
 				</div>
 			{/if}
 

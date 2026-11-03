@@ -258,8 +258,6 @@ export function makeConnection(overrides: Partial<CatalogConnection> = {}): Cata
 		url: 'jdbc:testdb://db:5432/analytics',
 		config: { host: 'db', port: '5432', database: 'analytics' },
 		has_credentials: true,
-		default_readonly: true,
-		credentials_read_only: false,
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
 		allowed_actions: ['view', 'update', 'delete'],
@@ -304,7 +302,6 @@ export function makeBindingSupport(overrides: Partial<BindingSupport> = {}): Bin
 		connectors: ['testdb'],
 		protected_key_patterns: [],
 		reserved_names: [],
-		writes_supported: true,
 		...overrides
 	};
 }

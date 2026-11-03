@@ -47,7 +47,6 @@ function mockWorkbench() {
 					engine_kind: 'trino',
 					engine_catalog_name: 'lake_t',
 					mode: 'adopted',
-					permission: 'write',
 					is_default: true
 				}
 			])
@@ -69,7 +68,6 @@ function mockWorkbench() {
 					capabilities: {
 						dialect: 'trino',
 						identity_modes: ['connection'],
-						read_only: 'enforced',
 						supports_cancel: true,
 						cancel_scope: 'any_process',
 						transactions: false,
@@ -197,8 +195,7 @@ describe('QueryEditor', () => {
 						engine_name: 'trino',
 						catalog_name: 'lake',
 						engine_catalog: 'lake_t',
-						schema: 'sales',
-						read_only: false
+						schema: 'sales'
 					}
 				});
 			})

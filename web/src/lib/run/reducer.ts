@@ -26,7 +26,6 @@ export type RunState = {
 	executionId: string;
 	status: string;
 	errorCode?: string | null;
-	readOnly: boolean;
 	target?: Execution['target'];
 	queue?: ExecutionQueue | null;
 	statements: Record<number, StatementState>;
@@ -63,7 +62,6 @@ export function initialRunState(executionId: string): RunState {
 	return {
 		executionId,
 		status: 'running',
-		readOnly: false,
 		queue: null,
 		statements: {},
 		lastSeq: 0
@@ -83,7 +81,6 @@ export function applyEvent(state: RunState, event: ExecutionEvent): RunState {
 				executionId: event.execution_id,
 				status: event.execution.status,
 				errorCode: event.execution.error_code ?? null,
-				readOnly: event.execution.read_only ?? false,
 				target: event.execution.target,
 				queue: event.execution.queue ?? null,
 				statements,

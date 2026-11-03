@@ -1162,11 +1162,7 @@
 					<option value="">{m.components_queryeditor_no_catalog()}</option>
 				{/if}
 				{#each catalogChoices as target (target.binding_id)}
-					<option value={target.binding_id}>
-						{target.catalog_name}{target.permission === 'read'
-							? m.components_queryeditor_read_only()
-							: ''}
-					</option>
+					<option value={target.binding_id}>{target.catalog_name}</option>
 				{/each}
 			</select>
 

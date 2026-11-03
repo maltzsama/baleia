@@ -7,7 +7,6 @@ function caps(overrides: Partial<EngineCapabilities> = {}): EngineCapabilities {
 	return {
 		dialect: 'trino',
 		identity_modes: ['impersonation', 'connection'],
-		read_only: 'enforced',
 		supports_cancel: true,
 		cancel_scope: 'any_process',
 		transactions: true,
@@ -34,14 +33,14 @@ function text(engine: ReturnType<typeof makeEngine>): string {
 }
 
 describe('engine guarantees', () => {
-	it('states enforced read-only, impersonation and cross-process cancel for Trino', () => {
+	it('states impersonation and cross-process cancel for Trino', () => {
 		const engine = makeEngine({
 			capabilities: caps(),
 			identity_mode: 'impersonation',
 			dialect: { name: 'trino', formatter_language: 'trino', codemirror_base: 'StandardSQL' }
 		});
 		const out = text(engine);
-		expect(out).toContain('The engine itself rejects writes');
+		expect(out).not.toContain('read-only');
 		expect(out).toContain('Queries run as each Baleia user');
 		expect(out).toContain('Cancel works even if the worker running the query restarts');
 		expect(out).toContain('Can join across catalogs');
@@ -49,15 +48,13 @@ describe('engine guarantees', () => {
 		expect(out).toContain('the editor uses trino formatting');
 	});
 
-	it('states credentials-based read-only and in-process cancel for a direct engine', () => {
+	it('states connection identity and in-process cancel for a direct engine', () => {
 		const engine = makeEngine({
 			class: 'direct',
 			kind: 'postgresql',
 			identity_mode: 'connection',
-			credentials_read_only: true,
 			capabilities: caps({
 				dialect: 'postgresql',
-				read_only: 'none',
 				cancel_scope: 'in_process',
 				namespace_depth: 1,
 				monitoring: false,
@@ -68,21 +65,18 @@ describe('engine guarantees', () => {
 			})
 		});
 		const out = text(engine);
-		expect(out).toContain('the connection asserts its credentials only allow reads');
 		expect(out).toContain("Queries run as the connection's user for everyone");
 		expect(out).toContain('a query orphaned by a worker crash cannot be stopped');
 		expect(out).not.toContain('Monitoring:');
 	});
 
-	it('says read-only is unavailable, and explains SQLite has no schemas or transactions', () => {
+	it('explains SQLite has no schemas or transactions', () => {
 		const engine = makeEngine({
 			class: 'direct',
 			kind: 'sqlite',
 			identity_mode: 'connection',
-			credentials_read_only: false,
 			capabilities: caps({
 				dialect: 'sqlite',
-				read_only: 'none',
 				cancel_scope: 'in_process',
 				transactions: false,
 				namespace_depth: 0,
@@ -94,7 +88,6 @@ describe('engine guarantees', () => {
 			})
 		});
 		const out = text(engine);
-		expect(out).toContain('Read-only grants and agents cannot use this engine');
 		expect(out).toContain('No transactions');
 		expect(out).toContain('No schemas — tables are addressed by name only');
 		expect(out).toContain('Default schema cannot be set per session');

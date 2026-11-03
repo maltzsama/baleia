@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
 	import Button from '$lib/ui/Button.svelte';
-	import Checkbox from '$lib/ui/Checkbox.svelte';
 	import Input from '$lib/ui/Input.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import ErrorPanel from '$lib/ui/patterns/ErrorPanel.svelte';
@@ -33,7 +32,6 @@
 	let name = $state('');
 	let values = $state<Record<string, string>>({});
 	let secrets = $state<Record<string, string>>({});
-	let credentialsReadOnly = $state(false);
 	let saving = $state(false);
 	let testing = $state(false);
 	let error = $state('');
@@ -44,7 +42,6 @@
 		name = connection.name;
 		values = { ...connection.config };
 		secrets = {};
-		credentialsReadOnly = connection.credentials_read_only;
 		error = '';
 		testResult = null;
 	});
@@ -61,9 +58,7 @@
 			const updated = await updateConnection(connection.id, {
 				name,
 				config: values,
-				credentials: secrets,
-				default_readonly: connection.default_readonly,
-				credentials_read_only: credentialsReadOnly
+				credentials: secrets
 			});
 			open = false;
 			onsaved(updated);
@@ -111,15 +106,6 @@
 				})}
 			</p>
 		{/if}
-		<div class="rounded-md border border-border bg-bg-toolbar px-3 py-2.5">
-			<Checkbox
-				label={m.connections_editconnectiondialog_these_credentials_cannot_modify_data()}
-				bind:checked={credentialsReadOnly}
-			/>
-			<p class="mt-1 text-[10px] text-text-muted">
-				{m.connections_editconnectiondialog_required_for_read_grants_and_agents_on_eng()}
-			</p>
-		</div>
 		{#if error}
 			<ErrorPanel error={{ code: 'validation_error', message: error }} />
 		{/if}

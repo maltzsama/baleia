@@ -7,7 +7,6 @@ function state(overrides: Partial<RunState> = {}): RunState {
 	return {
 		executionId: 'e1',
 		status: 'failed',
-		readOnly: false,
 		lastSeq: 5,
 		statements: {
 			1: {
@@ -91,33 +90,6 @@ describe('RunPanel', () => {
 		expect(screen.getByText(/The run stopped because the Baleia worker stopped/)).toBeTruthy();
 		await fireEvent.click(screen.getByRole('button', { name: 'Re-run from statement 2' }));
 		expect(onrerun).toHaveBeenCalledWith(2);
-	});
-
-	it('shows the read-only rejection banner', () => {
-		render(RunPanel, {
-			props: {
-				state: state({
-					readOnly: true,
-					target: { catalog_name: 'lake' },
-					statements: {
-						1: {
-							position: 1,
-							sql: 'DELETE FROM t',
-							status: 'failed',
-							errorCode: 'permission_denied',
-							resultCount: 0,
-							truncated: false
-						}
-					}
-				}),
-				executing: false,
-				canCancel: true,
-				oncancel: vi.fn(),
-				onrerun: vi.fn()
-			}
-		});
-
-		expect(screen.getByText(/workspace has read access to lake/)).toBeTruthy();
 	});
 });
 

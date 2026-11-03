@@ -184,8 +184,7 @@ describe('explore page', () => {
 					id: EXEC,
 					workspace_id: WS,
 					status: 'running',
-					sql: 'SELECT 1',
-					read_only: true
+					sql: 'SELECT 1'
 				})
 			),
 			http.get('/workspaces/{id}/executions/{execution_id}', ({ response }) =>
@@ -193,8 +192,7 @@ describe('explore page', () => {
 					id: EXEC,
 					workspace_id: WS,
 					status: 'failed',
-					sql: 'SELECT 1',
-					read_only: true
+					sql: 'SELECT 1'
 				})
 			),
 			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>

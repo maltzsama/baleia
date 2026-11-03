@@ -1,6 +1,5 @@
 // Engine administration calls (#110) — list, register, test, discover, impact,
 // reconcile and delete. Reads that the workbench caches live in ./client.ts.
-import { m } from '$lib/paraglide/messages';
 import { apiErrorMessage, client } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
 
@@ -138,31 +137,4 @@ export async function listCatalogConnections(params: {
 		await client.GET('/catalog-connections', { params: { query: params } }),
 		'Could not load catalog connections'
 	);
-}
-
-/** The read-only guarantee shown on the list and the overview (#110). */
-export function readOnlyGuarantee(engine: Engine): {
-	label: string;
-	tone: 'success' | 'warning' | 'danger';
-	detail: string;
-} {
-	if (engine.capabilities?.read_only === 'enforced') {
-		return {
-			label: m.engines_admin_read_only_enforced(),
-			tone: 'success',
-			detail: m.engines_admin_the_engine_itself_rejects_writes_so()
-		};
-	}
-	if (engine.credentials_read_only) {
-		return {
-			label: m.engines_admin_read_only_via_credentials(),
-			tone: 'warning',
-			detail: m.engines_admin_the_engine_can_write_the_connection()
-		};
-	}
-	return {
-		label: m.engines_admin_read_only_not_available(),
-		tone: 'danger',
-		detail: m.engines_admin_read_only_grants_and_agents_cannot()
-	};
 }

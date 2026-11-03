@@ -25,8 +25,6 @@ export type ConnectionDraft = {
 	type: string;
 	config: Record<string, string>;
 	credentials: Record<string, string>;
-	default_readonly?: boolean;
-	credentials_read_only?: boolean;
 	intents?: string[];
 };
 
@@ -46,7 +44,6 @@ export type CreateCatalogInput = {
 export type GrantInput = {
 	workspaceId: string;
 	catalogId: string;
-	permission: 'read' | 'write';
 };
 
 type ApiErrorBody = {
@@ -228,7 +225,7 @@ export async function listCatalogBindings(catalogId: string): Promise<CatalogBin
 export async function grantCatalogAccess(input: GrantInput): Promise<void> {
 	const { error, response } = await client.POST('/workspaces/{id}/catalog-access', {
 		params: { path: { id: input.workspaceId } },
-		body: { catalog_id: input.catalogId, permission: input.permission }
+		body: { catalog_id: input.catalogId }
 	});
 	if (error) throw toError(error, response?.status, 'Could not grant access');
 }

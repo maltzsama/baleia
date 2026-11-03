@@ -32,11 +32,6 @@
 	);
 	const skipped = $derived(statements.filter((s) => s.status === 'skipped'));
 	const interrupted = $derived(statements.find((s) => s.errorCode === 'interrupted'));
-	const readOnlyRejected = $derived(
-		statements.find(
-			(s) => s.errorCode === 'permission_denied' || s.errorCode === 'read_only_unsupported'
-		)
-	);
 
 	function firstLine(sql: string): string {
 		return (
@@ -102,9 +97,6 @@
 					: ''}
 			</span>
 		{/if}
-		{#if state.readOnly}
-			<Badge tone="warning">{m.common_read_only()}</Badge>
-		{/if}
 		{#if ondetails}
 			<Button size="sm" onclick={ondetails}>{m.history_execution_details()}</Button>
 		{/if}
@@ -152,14 +144,6 @@
 					{m.run_runpanel_re_run_from_statement_2({ position: skipped[0].position })}
 				</Button>
 			</div>
-		</div>
-	{:else if readOnlyRejected && state.readOnly}
-		<div
-			class="border-b border-amber-200 bg-amber-50 px-3.5 py-2 text-[11px] text-amber-900 dark:border-[#4d3600] dark:bg-[#241a06] dark:text-amber-300"
-		>
-			{m.run_runpanel_this_workspace_has_read_access_to({
-				value: state.target?.catalog_name ?? m.run_runpanel_this_catalog()
-			})}
 		</div>
 	{/if}
 

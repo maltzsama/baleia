@@ -179,14 +179,10 @@ export async function bindingSupport(engineId: string): Promise<Record<string, B
 	);
 }
 
-export async function grantCatalog(
-	workspaceId: string,
-	catalogId: string,
-	permission: 'read' | 'write'
-): Promise<void> {
+export async function grantCatalog(workspaceId: string, catalogId: string): Promise<void> {
 	const result = await client.POST('/workspaces/{id}/catalog-access', {
 		params: { path: { id: workspaceId } },
-		body: { catalog_id: catalogId, permission }
+		body: { catalog_id: catalogId }
 	});
 	if (result.error) fail(result, 'Could not grant access');
 }
