@@ -1,0 +1,54 @@
+{{- if include "baleia.trinoAuth" . }}
+{{- $fullname := include "baleia.fullname" . }}
+{{- if not .Values.trino.auth.tls.existingSecret }}
+{{- /* A CA and a server certificate for the in-chart Trino (#647), generated
+once and kept across upgrades: the API and worker trust ca.crt. */}}
+{{- $name := printf "%s-trino-tls" $fullname }}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $name }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trino
+  annotations:
+    helm.sh/resource-policy: keep
+type: kubernetes.io/tls
+data:
+{{- if and $existing (index $existing.data "ca.crt") }}
+  tls.crt: {{ index $existing.data "tls.crt" }}
+  tls.key: {{ index $existing.data "tls.key" }}
+  ca.crt: {{ index $existing.data "ca.crt" }}
+{{- else }}
+{{- $ca := genCA (printf "%s-trino-ca" $fullname) 3650 }}
+{{- $svc := printf "%s-trino" $fullname }}
+{{- $ns := .Release.Namespace }}
+{{- $dns := list $svc (printf "%s.%s" $svc $ns) (printf "%s.%s.svc" $svc $ns) (printf "%s.%s.svc.cluster.local" $svc $ns) (include "baleia.trinoService" .) "localhost" }}
+{{- $cert := genSignedCert $svc nil (uniq $dns) 3650 $ca }}
+  tls.crt: {{ $cert.Cert | b64enc }}
+  tls.key: {{ $cert.Key | b64enc }}
+  ca.crt: {{ $ca.Cert | b64enc }}
+{{- end }}
+---
+{{- end }}
+{{- /* The secret the coordinator's internal communication is signed with. */}}
+{{- $internal := printf "%s-trino-internal" $fullname }}
+{{- $existingInternal := lookup "v1" "Secret" .Release.Namespace $internal }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $internal }}
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trino
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+data:
+{{- if and $existingInternal (index $existingInternal.data "shared-secret") }}
+  shared-secret: {{ index $existingInternal.data "shared-secret" }}
+{{- else }}
+  shared-secret: {{ randAlphaNum 64 | b64enc }}
+{{- end }}
+{{- end }}

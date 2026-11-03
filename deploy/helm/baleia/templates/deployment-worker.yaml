@@ -33,13 +33,16 @@ spec:
               value: {{ .Values.worker.healthPort | quote }}
             - name: BALEIA_WORKER_METRICS_ADDR
               value: {{ printf ":%v" .Values.worker.metricsPort | quote }}
-            {{- range $key, $_ := .Values.config }}
+            {{- range $key, $value := .Values.config }}
+            {{- if or $value (ne $key "BALEIA_TRINO_CA_FILE") }}
             - name: {{ $key }}
               valueFrom:
                 configMapKeyRef:
                   name: {{ include "baleia.fullname" $ }}-config
                   key: {{ $key }}
             {{- end }}
+            {{- end }}
+            {{- include "baleia.trinoCAEnv" . | nindent 12 }}
             {{- include "baleia.secretEnv" . | nindent 12 }}
           {{- if .Values.migrate.enabled }}
           lifecycle:
@@ -61,12 +64,14 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- include "baleia.trinoCAMount" . | nindent 12 }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- include "baleia.trinoCAVolume" . | nindent 8 }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -1,5 +1,8 @@
 # Local debugging override: publish Trino on the host so you can query it
-# directly (e.g. `docker compose exec trino trino`).
+# directly. Trino requires HTTPS and the BALEIA_TRINO_PASSWORD login of
+# baleia_admin (#647), e.g. from inside the container:
+#   docker compose exec -e TRINO_PASSWORD=dev-trino-password-not-for-production trino \
+#     trino --server https://localhost:8443 --insecure --user baleia_admin --password
 #
 #   cp docker-compose.override.yml.example docker-compose.override.yml
 #   docker compose up -d trino
@@ -8,4 +11,4 @@
 services:
   trino:
     ports:
-      - "8088:8080"
+      - "8443:8443"

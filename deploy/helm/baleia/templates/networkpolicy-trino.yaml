@@ -1,6 +1,6 @@
 {{- if and .Values.trino.enabled .Values.trino.networkPolicy.enabled }}
-# The in-chart Trino trusts the user every client claims (#644): only the
-# Baleia API and worker may reach the coordinator. A NetworkPolicy only takes
+# Only the Baleia API and worker may reach the in-chart coordinator (#645),
+# defense in depth on top of its authentication (#647). A NetworkPolicy only takes
 # effect when the cluster's CNI enforces it (Calico, Cilium, …).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -29,6 +29,6 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       ports:
-        - port: http
+        - port: {{ if include "baleia.trinoAuth" . }}https{{ else }}http{{ end }}
           protocol: TCP
 {{- end }}

@@ -30,10 +30,11 @@ which is separate work.
 - The Go check on SQL text (`policy.ForbiddenInEditor`, splitting with the target's dialect) is UX
   and defense in depth only, never the security boundary. It is a policy on users and never reads
   engine capabilities (`TestGateNotCapabilityDriven`).
-- **Trino is private.** The coordinator is not published by default. Because Baleia's Trino has no
-  authentication, the guard's `baleia.allow-unauthenticated-admin` flag is enabled only where Trino
-  is reachable from the API and worker alone (compose, minikube dev values); the Helm chart defaults
-  it to `false` (#147).
+- **Trino is private and authenticated.** The coordinator is not published by default, and the
+  chart limits its ingress to the API and worker (#645). The bundled Trino requires HTTPS and a
+  password (#647); Baleia logs in as the admin identity (#646). File-based base rules let only that
+  login impersonate other identities, and the guard runs with
+  `baleia.allow-unauthenticated-admin=false`, so it verifies the authenticated admin.
 - **Polaris sees one service principal per connection.** Per-user authorization is enforced in
   Trino (guard, read-only mode) and in Baleia (workspace rules, #16), not in Polaris.
 
@@ -41,10 +42,10 @@ which is separate work.
 
 - `system.runtime.queries.user` shows the real Baleia user.
 - A user cannot manage catalogs even with crafted SQL.
-- Exposing Trino to other clients requires real Trino authentication first; until then any
-  identity, the admin's included, can be claimed by anyone who reaches the coordinator, and
-  read-only mode can be skipped by omitting its extra credential. The chart restricts ingress to
-  the API and worker with a NetworkPolicy (#645); authentication is #646 and #647.
+- A client without Baleia's password cannot reach the bundled Trino, claim an identity or skip
+  read-only mode. Whoever holds that password can act as any user, so it stays with the API and
+  worker; the only other holder is the development E2E seed (`make e2e`), which logs in to create
+  its test catalog on the minikube dev cluster.
 - Per-user identity towards Polaris is future work (token exchange), not a property switch.
 
 ## Current compliance
@@ -54,8 +55,8 @@ Partially compliant.
 - Guard, admin identity and per-user identities are in place (#92).
 - Read-only grants were removed (#651). Baleia sends `baleia.mode=readonly` for MCP agents, semantic
   custom SQL and its own probes. Per-user authorization by the catalog manager is #648.
-- The API has no real Trino credential, so the unauthenticated-admin flag is still needed (#147
-  follow-up).
+- Baleia authenticates to Trino (#646) and the bundled Trino requires it (#647), so the
+  unauthenticated-admin flag is off everywhere.
 - The README's claim that access control lives in Polaris holds only per service principal.
 
 ## Alternatives considered

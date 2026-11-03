@@ -96,6 +96,8 @@ seed-tpch:
 	docker compose exec -T postgres psql -U baleia -d baleia < db/seed/tpch_test.sql
 
 # ── End-to-end (#106) ─────────────────────────────────────────────────────────
+# The dev Trino's CA (#647), for the seed's HTTPS login.
+E2E_TRINO_CA ?= $(or $(TMPDIR),/tmp)/baleia-e2e-trino-ca.pem
 # Runs against the minikube dev cluster (not compose). Port-forwards the API,
 # Postgres (for the seed) and Trino (for the run smoke).
 e2e:
@@ -105,15 +107,21 @@ e2e:
 	@until curl -fsS http://localhost:8080/readyz >/dev/null 2>&1; do sleep 1; done
 	@kubectl -n $(K8S_NS) wait --for=condition=ready pod -l app=postgres --timeout=120s
 	@sleep 2
+	@kubectl -n $(K8S_NS) get secret baleia-trino-tls -o jsonpath='{.data.ca\.crt}' | base64 -d > $(E2E_TRINO_CA)
+	@grep -q 'BEGIN CERTIFICATE' $(E2E_TRINO_CA) || { echo "e2e: could not read ca.crt from secret baleia-trino-tls" >&2; exit 1; }
+	@pw="$$(kubectl -n $(K8S_NS) get secret baleia-secret -o jsonpath='{.data.BALEIA_TRINO_PASSWORD}' | base64 -d)"; \
+	if [ -z "$$pw" ]; then echo "e2e: could not read BALEIA_TRINO_PASSWORD from secret baleia-secret" >&2; exit 1; fi; \
 	DATABASE_URL="postgresql://baleia:baleia@localhost:5433/baleia?sslmode=disable" \
-		E2E_TRINO_URL=http://localhost:8081 \
+		E2E_TRINO_URL=https://localhost:8081 \
+		E2E_TRINO_CA_FILE=$(E2E_TRINO_CA) \
+		E2E_TRINO_PASSWORD="$$pw" \
 		go run -tags e2e ./cmd/e2e-seed
 	cd web && E2E_BASE_URL=http://localhost:8080 npx playwright test
 
 e2e-forward:
 	kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080 &
 	kubectl -n $(K8S_NS) port-forward svc/postgres 5433:5432 &
-	kubectl -n $(K8S_NS) port-forward svc/baleia-trino 8081:8080 &
+	kubectl -n $(K8S_NS) port-forward svc/baleia-trino 8081:8443 &
 
 e2e-down:
 	K8S_PURGE=1 $(MAKE) k8s-down

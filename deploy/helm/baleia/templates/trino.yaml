@@ -7,7 +7,11 @@ metadata:
     {{- include "baleia.labels" . | nindent 4 }}
 data:
   config.properties: |
-{{ .Files.Get "files/trino/config.properties" | indent 4 }}{{ if .Values.trino.queryEvents.enabled }}
+{{- $config := .Files.Get "files/trino/config.properties" }}
+{{- if not (include "baleia.trinoAuth" .) }}
+{{- $config = regexReplaceAll `(?s)# --- authentication \(#647\).*# --- end authentication\n` $config "" }}
+{{- end }}
+{{ $config | indent 4 }}{{ if .Values.trino.queryEvents.enabled }}
     event-listener.config-files=/etc/trino/event-listener.properties{{ end }}
   catalog-store.properties: |
 {{ .Files.Get "files/trino/catalog-store.properties" | indent 4 }}{{ if .Values.trino.registryEncryption }}
@@ -31,8 +35,24 @@ data:
   {{- end }}
   baleia-base-access-control.properties: |
 {{ .Files.Get "files/trino/baleia-base-access-control.properties" | indent 4 }}
+  # File-based base rules (#647): only Baleia's login may impersonate other
+  # identities, and catalogs stay fully open (owner, which CREATE/DROP CATALOG
+  # needs); the catalog guard stacked after them keeps catalog management to
+  # the admin and enforces read-only sessions.
+  baleia-rules.json: |
+    {
+      "catalogs": [{"allow": "owner"}],
+      "impersonation": [
+        {"original_user": {{ printf "^%s$" (regexQuoteMeta .Values.config.BALEIA_TRINO_ADMIN_USER) | toJson }}, "new_user": ".*", "allow": true}
+      ]
+    }
+  {{- if include "baleia.trinoAuth" . }}
+  password-authenticator.properties: |
+    password-authenticator.name=file
+    file.password-file=/etc/trino/auth/password.db
+  {{- end }}
   baleia-catalog-guard.properties: |
-{{ .Files.Get "files/trino/baleia-catalog-guard.properties" | replace "baleia.admin-users=baleia_admin" (printf "baleia.admin-users=%s" .Values.config.BALEIA_TRINO_ADMIN_USER) | replace "baleia.allow-unauthenticated-admin=true" (printf "baleia.allow-unauthenticated-admin=%t" .Values.trino.catalogGuard.allowUnauthenticatedAdmin) | indent 4 }}
+{{ .Files.Get "files/trino/baleia-catalog-guard.properties" | replace "baleia.admin-users=baleia_admin" (printf "baleia.admin-users=%s" .Values.config.BALEIA_TRINO_ADMIN_USER) | replace "baleia.allow-unauthenticated-admin=false" (printf "baleia.allow-unauthenticated-admin=%t" (and (not (include "baleia.trinoAuth" .)) .Values.trino.catalogGuard.allowUnauthenticatedAdmin)) | indent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -52,6 +72,12 @@ spec:
       labels:
         {{- include "baleia.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: trino
+      {{- if and (include "baleia.trinoAuth" .) .Values.secrets.create }}
+      annotations:
+        # The password file is written at start: a new password restarts
+        # Trino. With existingSecret, restart it yourself (docs/operations.md).
+        checksum/trino-password: {{ .Values.secrets.values.BALEIA_TRINO_PASSWORD | default "" | sha256sum }}
+      {{- end }}
     spec:
       initContainers:
         # The plugin is either bundled (trino.plugin.image: a small image with
@@ -84,6 +110,34 @@ spec:
               value: {{ include "baleia.pluginURL" . | quote }}
           volumeMounts:
             - { name: plugin, mountPath: /plugin }
+        {{- end }}
+        {{- if include "baleia.trinoAuth" . }}
+        # The password file (bcrypt, from BALEIA_TRINO_PASSWORD) and the PEM
+        # keystore (certificate + key) Trino reads, built at start so neither
+        # the password nor the key is written into a ConfigMap.
+        - name: trino-auth
+          image: {{ .Values.trino.auth.image | default "httpd:2.4-alpine" }}
+          # Trino's user, so the files stay private to it (umask 077).
+          securityContext: { runAsUser: 1000, runAsGroup: 1000 }
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              umask 077
+              entry="$(htpasswd -bnBC 10 "$BALEIA_TRINO_ADMIN_USER" "$BALEIA_TRINO_PASSWORD")"
+              printf '%s\n' "$entry" | head -n 1 > /auth/password.db
+              test -s /auth/password.db
+              cat /tls/tls.crt /tls/tls.key > /auth/keystore.pem
+          env:
+            - name: BALEIA_TRINO_ADMIN_USER
+              value: {{ .Values.config.BALEIA_TRINO_ADMIN_USER | quote }}
+            - name: BALEIA_TRINO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.secretName" . }}
+                  key: BALEIA_TRINO_PASSWORD
+          volumeMounts:
+            - { name: trino-auth, mountPath: /auth }
+            - { name: trino-tls, mountPath: /tls, readOnly: true }
         {{- end }}
         # Trino cannot authenticate to the registry until the API has set the
         # baleia_trino role password (bootstrap). Wait for the registry table.
@@ -131,6 +185,13 @@ spec:
                   name: {{ include "baleia.secretName" . }}
                   key: BALEIA_TRINO_EVENTS_TOKEN
             {{- end }}
+            {{- if include "baleia.trinoAuth" . }}
+            - name: TRINO_INTERNAL_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.fullname" . }}-trino-internal
+                  key: shared-secret
+            {{- end }}
             - name: JAVA_OPTS
               value: "-Xmx{{ .Values.trino.jvmHeap }}"
             # Trino's S3 filesystem auto-detects the region through the EC2
@@ -140,6 +201,9 @@ spec:
               value: {{ .Values.trino.awsRegion | quote }}
           ports:
             - { name: http, containerPort: 8080 }
+            {{- if include "baleia.trinoAuth" . }}
+            - { name: https, containerPort: 8443 }
+            {{- end }}
           readinessProbe:
             httpGet: { path: /v1/info, port: http }
             initialDelaySeconds: 15
@@ -164,6 +228,17 @@ spec:
             - name: trino-config
               mountPath: /etc/trino/baleia-catalog-guard.properties
               subPath: baleia-catalog-guard.properties
+            - name: trino-config
+              mountPath: /etc/trino/baleia-rules.json
+              subPath: baleia-rules.json
+            {{- if include "baleia.trinoAuth" . }}
+            - name: trino-config
+              mountPath: /etc/trino/password-authenticator.properties
+              subPath: password-authenticator.properties
+            - name: trino-auth
+              mountPath: /etc/trino/auth
+              readOnly: true
+            {{- end }}
             {{- if .Values.trino.queryEvents.enabled }}
             - name: trino-config
               mountPath: /etc/trino/event-listener.properties
@@ -175,6 +250,13 @@ spec:
         - name: trino-config
           configMap:
             name: {{ include "baleia.fullname" . }}-trino-config
+        {{- if include "baleia.trinoAuth" . }}
+        - name: trino-auth
+          emptyDir: { medium: Memory }
+        - name: trino-tls
+          secret:
+            secretName: {{ include "baleia.trinoTLSSecret" . }}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -188,5 +270,9 @@ spec:
     {{- include "baleia.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: trino
   ports:
+    {{- if include "baleia.trinoAuth" . }}
+    - { name: https, port: 8443, targetPort: https }
+    {{- else }}
     - { name: http, port: 8080, targetPort: http }
+    {{- end }}
 {{- end }}

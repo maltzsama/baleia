@@ -28,6 +28,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{- define "baleia.trinoURL" -}}
 {{- if .Values.config.TRINO_URL }}{{ .Values.config.TRINO_URL }}
+{{- else if and .Values.trino.enabled (include "baleia.trinoAuth" .) }}https://{{ include "baleia.trinoService" . }}:8443
 {{- else if .Values.trino.enabled }}http://{{ include "baleia.trinoService" . }}:8080
 {{- else }}{{ .Values.config.TRINO_URL }}{{ end }}
 {{- end }}
@@ -110,3 +111,43 @@ securityContext:
   capabilities:
     drop: ["ALL"]
 {{- end -}}
+{{/* Non-empty when the in-chart Trino requires authentication (#647). */}}
+{{- define "baleia.trinoAuth" -}}
+{{- if and .Values.trino.enabled .Values.trino.auth.enabled }}true{{ end }}
+{{- end }}
+
+{{/* The Secret holding the in-chart Trino's tls.crt, tls.key and ca.crt. */}}
+{{- define "baleia.trinoTLSSecret" -}}
+{{- if .Values.trino.auth.tls.existingSecret }}{{ .Values.trino.auth.tls.existingSecret }}
+{{- else }}{{ include "baleia.fullname" . }}-trino-tls{{ end }}
+{{- end }}
+
+{{/* Where the API and worker find the in-chart Trino's CA bundle. */}}
+{{- define "baleia.trinoCAFile" }}/etc/baleia/in-chart-trino-ca/ca.crt{{ end }}
+
+{{/* The CA volume and mount of the API and worker, when Trino is authenticated. */}}
+{{- define "baleia.trinoCAMount" -}}
+{{- if include "baleia.trinoAuth" . }}
+- name: baleia-in-chart-trino-ca
+  mountPath: /etc/baleia/in-chart-trino-ca
+  readOnly: true
+{{- end }}
+{{- end }}
+{{- define "baleia.trinoCAVolume" -}}
+{{- if include "baleia.trinoAuth" . }}
+- name: baleia-in-chart-trino-ca
+  secret:
+    secretName: {{ include "baleia.trinoTLSSecret" . }}
+    items: [{ key: ca.crt, path: ca.crt }]
+{{- end }}
+{{- end }}
+
+{{/* BALEIA_TRINO_CA_FILE for the in-chart Trino's CA, unless config sets a
+non-empty one or TRINO_URL points at another Trino. */}}
+{{- define "baleia.trinoCAEnv" -}}
+{{- $inChart := or (not .Values.config.TRINO_URL) (eq .Values.config.TRINO_URL (printf "https://%s:8443" (include "baleia.trinoService" .))) }}
+{{- if and (include "baleia.trinoAuth" .) $inChart (not .Values.config.BALEIA_TRINO_CA_FILE) }}
+- name: BALEIA_TRINO_CA_FILE
+  value: {{ include "baleia.trinoCAFile" . | quote }}
+{{- end }}
+{{- end }}

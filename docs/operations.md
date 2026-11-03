@@ -24,6 +24,7 @@ These take effect with their defaults:
 | Space and retriever writes (#612, #613) | Creating spaces and changing retrievers need a workspace owner or admin | — |
 | Grants carry no read/write level (#651) | A catalog linked to a workspace stays reachable by its members only, but no session is read-only because of the link; the catalog manager decides what each member may read or write. `permission` is gone from the grant API and from workspace targets; the unused column stays in the database until #654 | — |
 | Connection and binding flags (#651) | `default_readonly`, stored but never enforced, is gone from the connection API; Unity bindings are no longer flagged as unable to write (`writes_supported`), since Unity decides | — |
+| Authenticated bundled Trino (#647) | The in-chart and compose Trino require HTTPS and a password; Baleia logs in with `BALEIA_TRINO_PASSWORD`. The chart refuses to render without `secrets.values.BALEIA_TRINO_PASSWORD` (with `existingSecret`, add the key), and `TRINO_URL` defaults to the HTTPS port 8443. Clients other than Baleia, such as a BI tool or a scraper on port 8080, are refused | Set `trino.auth.enabled=false` (not recommended) |
 | Catalog names (#617) | `trino_catalog_name`, `connector` and `engine_catalog_name` must match `^[a-z][a-z0-9_]{0,62}$` on write | — |
 
 Before upgrading, check that no connection users rely on points at a private
@@ -57,6 +58,32 @@ the `BALEIA_WORKLOAD_ADAPTIVE_*` thresholds and
 `BALEIA_TRINO_RESOURCE_GROUPS_ENVIRONMENT`. `BALEIA_CONNECTIONS_CREATE` now
 defaults to `admins` (it was `everyone`), and `BALEIA_CONNECTIONS_ALLOW_CIDRS`
 now also opens the internal ranges. See [configuration.md](configuration.md).
+
+
+## Rotating the bundled Trino password or certificate
+
+The in-chart Trino (#647) builds its password file and its keystore when its
+pod starts; the API and the worker read `BALEIA_TRINO_PASSWORD` and the CA
+when they start. Changing either one without restarting all three leaves
+Trino refusing Baleia's login, or serving a certificate Baleia does not trust.
+Schedule the change, since requests fail between the restarts:
+
+1. Update the value: `secrets.values.BALEIA_TRINO_PASSWORD` (or that key in
+   `existingSecret`), or the TLS Secret (`trino.auth.tls.existingSecret`, or
+   delete the chart's `<release>-trino-tls` Secret so the next upgrade
+   generates a new CA and certificate).
+2. Apply it with `helm upgrade`. With `secrets.create`, a new password
+   already restarts Trino.
+3. Restart the three Deployments in one go:
+
+   ```bash
+   kubectl -n <ns> rollout restart deploy/<release>-trino deploy/<release>-api deploy/<release>-worker
+   ```
+
+The chart's TLS Secret is generated once and kept across upgrades
+(`helm.sh/resource-policy: keep`). A render without access to the cluster,
+such as `helm template`, generates a new one; apply such output only together
+with the restart above.
 
 ## Upgrading to 0.4.0
 
