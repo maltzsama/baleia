@@ -16,13 +16,6 @@ type RateLimiterConfig struct {
 	Burst             int
 }
 
-func DefaultRateLimiterConfig() RateLimiterConfig {
-	return RateLimiterConfig{
-		RequestsPerSecond: 60,
-		Burst:             10,
-	}
-}
-
 type ipLimiter struct {
 	limiter  *rate.Limiter
 	lastSeen time.Time

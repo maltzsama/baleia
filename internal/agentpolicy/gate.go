@@ -114,9 +114,6 @@ func NewGate(store Store, engines EngineCapabilities, ceilings Ceilings, dialect
 // SetClock is for tests.
 func (g *Gate) SetClock(now func() time.Time) { g.now = now }
 
-// SetLimiter is for tests.
-func (g *Gate) SetLimiter(l *BurstLimiter) { g.limiter = l }
-
 // SetObserver records gate decisions (metrics, #87).
 func (g *Gate) SetObserver(o Observer) { g.observer = o }
 
