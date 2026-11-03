@@ -14916,6 +14916,15 @@ func (response TestConnectionDraft401JSONResponse) VisitTestConnectionDraftRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type TestConnectionDraft403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response TestConnectionDraft403JSONResponse) VisitTestConnectionDraftResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type TestConnectionDraft404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response TestConnectionDraft404JSONResponse) VisitTestConnectionDraftResponse(w http.ResponseWriter) error {

@@ -482,7 +482,7 @@ func TestMayManageConnections(t *testing.T) {
 		role     string
 		expected bool
 	}{
-		{name: "member by default", role: "member", expected: true},
+		{name: "member with create unset", role: "member", expected: true},
 		{name: "member with everyone", create: "everyone", role: "member", expected: true},
 		{name: "member with admins", create: "admins", role: "member", expected: false},
 		{name: "admin with admins", create: "admins", role: authz.RoleAdmin, expected: true},

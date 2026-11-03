@@ -2031,7 +2031,7 @@ export interface paths {
         put?: never;
         /**
          * Test connection settings before saving them
-         * @description Runs the checks on the submitted settings and persists nothing (#12): metadata (can Baleia read it), direct_engine (can Baleia run SQL on it, through a transient engine) and bind:<engine> (can a federated engine reach it, through a short-lived catalog that is always dropped). Rate limited per user.
+         * @description Runs the checks on the submitted settings and persists nothing (#12): metadata (can Baleia read it), direct_engine (can Baleia run SQL on it, through a transient engine) and bind:<engine> (can a federated engine reach it, through a short-lived catalog that is always dropped). Rate limited per user, and refused unless the caller may manage connections (admins by default, #610).
          */
         post: operations["testConnectionDraft"];
         delete?: never;
@@ -10383,6 +10383,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
             /** @description Too many tests */

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/authz"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/config"
@@ -87,13 +88,18 @@ func draft(url string, intents ...string) *TestConnectionRequest {
 	return body
 }
 
-func runDraft(t *testing.T, h *API, user string, body *TestConnectionRequest) TestConnectionDraftResponseObject {
+func runDraftAs(t *testing.T, h *API, user, role string, body *TestConnectionRequest) TestConnectionDraftResponseObject {
 	t.Helper()
-	resp, err := h.TestConnectionDraft(ctxAs(user, "member"), TestConnectionDraftRequestObject{Body: body})
+	resp, err := h.TestConnectionDraft(ctxAs(user, role), TestConnectionDraftRequestObject{Body: body})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return resp
+}
+
+func runDraft(t *testing.T, h *API, user string, body *TestConnectionRequest) TestConnectionDraftResponseObject {
+	t.Helper()
+	return runDraftAs(t, h, user, "member", body)
 }
 
 // TestTransient_RESTPersistsNothing: a draft test of an Iceberg REST
@@ -174,6 +180,27 @@ func TestTransient_RateLimited(t *testing.T) {
 	}
 	if _, ok := runDraft(t, h, strangerID, draft(srv.URL+"/catalog")).(TestConnectionDraft200JSONResponse); !ok {
 		t.Fatal("another user has their own budget")
+	}
+}
+
+// TestTestConnectionDraft_AdminsOnly: testing an unsaved connection dials a
+// user-supplied host, so with BALEIA_CONNECTIONS_CREATE=admins only an admin
+// may do it (#610).
+func TestTestConnectionDraft_AdminsOnly(t *testing.T) {
+	t.Parallel()
+	reg, d := loopbackRegistry(t)
+	h := testAPI(handlerFields{
+		queries: draftQuerier{t: t}, connections: reg,
+		settings: SettingsFromConfig(&config.Config{ConnectionsCreate: "admins"}),
+		kinds:    testKinds(t, d),
+	})
+	srv := fakeREST(t, false)
+
+	if _, ok := runDraftAs(t, h, ownerID, "member", draft(srv.URL+"/catalog")).(TestConnectionDraft403JSONResponse); !ok {
+		t.Fatal("a member must not test connections when only admins manage them")
+	}
+	if _, ok := runDraftAs(t, h, ownerID, authz.RoleAdmin, draft(srv.URL+"/catalog")).(TestConnectionDraft200JSONResponse); !ok {
+		t.Fatal("an admin may test connections")
 	}
 }
 

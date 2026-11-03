@@ -94,7 +94,7 @@ var operationAccess = map[string]access{
 	"DeleteApiKey":            {kind: kindSelf, calls: selfID},
 	"ListWorkspaces":          {kind: kindSelf, calls: selfID},
 	"ListCatalogConnections":  {kind: kindSelf, calls: selfPrincipal},                  // the caller's connections; admin sees all
-	"CreateCatalogConnection": checked("PrincipalFromContext", "mayManageConnections"), // any user (admins only with BALEIA_CONNECTIONS_CREATE=admins, #512); becomes the owner
+	"CreateCatalogConnection": checked("PrincipalFromContext", "mayManageConnections"), // admins by default; "everyone" with BALEIA_CONNECTIONS_CREATE=everyone, #512; becomes the owner
 	"ListTeams":               {kind: kindSelf, calls: selfPrincipal},                  // the caller's teams; admin sees all
 	"ListAttention":           {kind: kindSelf, calls: selfPrincipal},                  // items scoped to what the caller can act on
 	"ListEngines":             {kind: kindSelf, calls: selfPrincipal},                  // engines on the caller's connections or hosting a granted catalog; admin sees all
@@ -163,7 +163,7 @@ var operationAccess = map[string]access{
 	"DeleteCatalogConnection": checked("Connection"),
 	"TestCatalogConnection":   checked("Connection"),
 	// Any signed-in user tests settings they hold; bind: intents go through the engine check.
-	"TestConnectionDraft": checked("PrincipalFromContext", "planTest"),
+	"TestConnectionDraft": checked("PrincipalFromContext", "mayManageConnections", "planTest"),
 	"CreateEngine":        checked("Connection"),
 	"GetEngine":           checked("Engine"),
 	"UpdateEngine":        checked("Engine"),

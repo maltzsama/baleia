@@ -56,6 +56,53 @@ func TestDialerDeniesMetadataIP(t *testing.T) {
 	}
 }
 
+func TestDialerDeniesPrivateNetworksByDefault(t *testing.T) {
+	t.Parallel()
+	d, err := NewDialer(DialerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, addr := range []string{
+		"10.0.0.1",
+		"172.16.0.1",
+		"172.31.255.254",
+		"192.168.1.1",
+		"100.64.0.1",
+		"fc00::1",
+		"fd12:3456:789a::1",
+	} {
+		if d.Permitted(netip.MustParseAddr(addr)) {
+			t.Errorf("%s: private address permitted by default", addr)
+		}
+	}
+	// Public addresses remain reachable.
+	for _, addr := range []string{"8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"} {
+		if !d.Permitted(netip.MustParseAddr(addr)) {
+			t.Errorf("%s: public address denied by default", addr)
+		}
+	}
+}
+
+func TestDialerAllowOpensPrivateNetworks(t *testing.T) {
+	t.Parallel()
+	d, err := NewDialer(DialerOptions{AllowCIDRs: []string{"10.0.0.0/8", "192.168.0.0/16"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, addr := range []string{"10.1.2.3", "192.168.1.1"} {
+		if !d.Permitted(netip.MustParseAddr(addr)) {
+			t.Errorf("%s: allow list did not open the range", addr)
+		}
+	}
+	// Ranges outside the allow list stay denied, including other internal
+	// ranges and the always-denied metadata endpoint.
+	for _, addr := range []string{"172.16.0.1", "100.64.0.1", "169.254.169.254", "127.0.0.1"} {
+		if d.Permitted(netip.MustParseAddr(addr)) {
+			t.Errorf("%s: address outside the allow list permitted", addr)
+		}
+	}
+}
+
 func TestDialerSkipsDeniedAddressesOfAHost(t *testing.T) {
 	t.Parallel()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

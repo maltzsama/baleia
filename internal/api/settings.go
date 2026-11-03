@@ -76,8 +76,8 @@ type OpsSettings struct {
 
 // ConnectionSettings say who may create and edit connections.
 type ConnectionSettings struct {
-	// AdminsOnly is BALEIA_CONNECTIONS_CREATE=admins (#512); false lets
-	// everyone, the default.
+	// AdminsOnly is BALEIA_CONNECTIONS_CREATE=admins (#512, #610), the
+	// default; false lets everyone.
 	AdminsOnly bool
 }
 

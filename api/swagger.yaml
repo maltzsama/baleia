@@ -6704,7 +6704,8 @@ paths:
         (#12): metadata (can Baleia read it), direct_engine (can Baleia run
         SQL on it, through a transient engine) and bind:<engine> (can a
         federated engine reach it, through a short-lived catalog that is
-        always dropped). Rate limited per user.
+        always dropped). Rate limited per user, and refused unless the caller
+        may manage connections (admins by default, #610).
       requestBody:
         required: true
         content:
@@ -6717,6 +6718,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TestCatalogConnectionResult" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "429":
