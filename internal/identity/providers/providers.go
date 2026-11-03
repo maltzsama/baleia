@@ -21,7 +21,6 @@ type Store interface {
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error)
 	CountUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) (int64, error)
 	UpdateAuthProvider(ctx context.Context, arg db.UpdateAuthProviderParams) (db.AuthProvider, error)
-	DeleteUserIDPTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 }
 
 // Creator writes a new provider; *db.Queries implements it.
@@ -37,6 +36,7 @@ type Remover interface {
 	DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 	SuspendUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 	DeleteAuthProvider(ctx context.Context, id pgtype.UUID) error
+	DeleteUserIDPTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 }
 
 // TxStore is the transactional part.
@@ -118,16 +118,25 @@ func (s *Service) Create(ctx context.Context, name, typ string, enabled bool, se
 }
 
 // Update stores a provider's name, switch and sealed configuration.
-// Disabling it forgets the identity-provider tokens its sign-ins left (#648).
+// Disabling it forgets, in the same transaction, the identity-provider
+// tokens its sign-ins left (#648).
 func (s *Service) Update(ctx context.Context, id pgtype.UUID, name string, enabled bool, sealed string) (db.AuthProvider, error) {
-	ap, err := s.store.UpdateAuthProvider(ctx, db.UpdateAuthProviderParams{ID: id, Name: name, ConfigEnc: sealed, Enabled: enabled})
-	if err != nil || enabled {
-		return ap, err
+	params := db.UpdateAuthProviderParams{ID: id, Name: name, ConfigEnc: sealed, Enabled: enabled}
+	if enabled {
+		return s.store.UpdateAuthProvider(ctx, params)
 	}
-	if err := s.store.DeleteUserIDPTokensByAuthProvider(ctx, id); err != nil {
-		return ap, fmt.Errorf("forget identity-provider tokens: %w", err)
-	}
-	return ap, nil
+	var ap db.AuthProvider
+	err := s.tx(ctx, func(q TxStore) error {
+		var err error
+		if ap, err = q.UpdateAuthProvider(ctx, params); err != nil {
+			return err
+		}
+		if err := q.DeleteUserIDPTokensByAuthProvider(ctx, id); err != nil {
+			return fmt.Errorf("forget identity-provider tokens: %w", err)
+		}
+		return nil
+	})
+	return ap, err
 }
 
 // Delete removes a provider. With linked users it refuses with ErrInUse

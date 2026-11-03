@@ -306,6 +306,9 @@ type Querier interface {
 	GetUserByExternalID(ctx context.Context, arg GetUserByExternalIDParams) (User, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserIDPToken(ctx context.Context, userID pgtype.UUID) (UserIdpToken, error)
+	// Serializes a refresh across processes: one refreshes, the others wait and
+	// read its result.
+	GetUserIDPTokenForUpdate(ctx context.Context, userID pgtype.UUID) (UserIdpToken, error)
 	GetWorkloadRule(ctx context.Context, id pgtype.UUID) (WorkloadRule, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
@@ -608,6 +611,11 @@ type Querier interface {
 	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
 	RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
 	RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error
+	// Keeps a sign-in's tokens only while the account is active and its provider
+	// enabled. The share locks make a concurrent suspension or provider disable,
+	// which deletes the tokens in the same transaction as its update, win: this
+	// insert waits for it and then finds nothing to insert.
+	SaveUserIDPTokenOnSignIn(ctx context.Context, arg SaveUserIDPTokenOnSignInParams) (int64, error)
 	SavedQuerySlugExists(ctx context.Context, arg SavedQuerySlugExistsParams) (bool, error)
 	// Tables and columns of the catalogs the workspace may use whose names are
 	// trigram-similar to q (or contain a word similar to it), best first.
@@ -714,6 +722,8 @@ type Querier interface {
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) (TeamMember, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	// A refresh writes over the row it locked; it never recreates a deleted one.
+	UpdateUserIDPToken(ctx context.Context, arg UpdateUserIDPTokenParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserPersonalWorkspace(ctx context.Context, arg UpdateUserPersonalWorkspaceParams) error
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
@@ -750,7 +760,6 @@ type Querier interface {
 	// figure one writer does not know (the poller has no output rows) keeps the
 	// other's.
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error)
-	UpsertUserIDPToken(ctx context.Context, arg UpsertUserIDPTokenParams) error
 	UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWorkspaceCatalogGrantParams) (WorkspaceCatalogGrant, error)
 	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)
 }

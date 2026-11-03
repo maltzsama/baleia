@@ -37,6 +37,7 @@ type Provider interface {
 // TokenSaver keeps the identity-provider tokens of a sign-in (#648).
 type TokenSaver interface {
 	Save(ctx context.Context, userID, providerID pgtype.UUID, tok auth.IDPTokens) error
+	Forget(ctx context.Context, userID pgtype.UUID) error
 }
 
 // Discover reaches an issuer and returns its provider.
@@ -227,6 +228,10 @@ func (s *Service) Finish(ctx context.Context, providerID pgtype.UUID, state, coo
 	if s.tokens != nil {
 		if err := s.tokens.Save(ctx, user.ID, providerID, info.Tokens); err != nil {
 			s.cfg.Logger.WarnContext(ctx, "keep identity-provider tokens", "user_id", user.ID.String(), "err", err)
+			// Never leave the previous sign-in's token in use.
+			if err := s.tokens.Forget(ctx, user.ID); err != nil {
+				s.cfg.Logger.WarnContext(ctx, "forget identity-provider tokens", "user_id", user.ID.String(), "err", err)
+			}
 		}
 	}
 	return user, attempt.Redirect, nil

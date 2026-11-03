@@ -44,9 +44,10 @@ type UserTokens interface {
 	Access(ctx context.Context, userID pgtype.UUID) (string, error)
 }
 
-// serviceTokenFallback bounds how long a token with no stated expiry (a
-// static bearer token) is reused before the connection is read again.
-const serviceTokenFallback = 5 * time.Minute
+// notPerUserTTL is how long a connection found not to be per-user is
+// remembered before its config is read again (the key also changes when the
+// connection is updated).
+const notPerUserTTL = 5 * time.Minute
 
 // Resolver implements queryengine.CatalogCredentials.
 type Resolver struct {
@@ -147,17 +148,18 @@ func (r *Resolver) connectionToken(ctx context.Context, engineID, catalog string
 		return "", fmt.Errorf("catalog identity: config of %s: %w", catalog, err)
 	}
 	if !ui.UserIdentity(cfg) {
-		r.remember(key, "", r.now().Add(serviceTokenFallback))
+		r.remember(key, "", r.now().Add(notPerUserTTL))
 		return "", nil
 	}
 	tok, expiry, err := ui.ServiceToken(ctx, cfg)
 	if err != nil {
 		return "", fmt.Errorf("catalog identity: token of the %s connection: %w", catalog, err)
 	}
-	if expiry.IsZero() {
-		expiry = r.now().Add(serviceTokenFallback)
+	// A token without a stated lifetime (a static token, possibly a secret
+	// reference the operator may rotate) is read again on every use.
+	if !expiry.IsZero() {
+		r.remember(key, tok, expiry)
 	}
-	r.remember(key, tok, expiry)
 	return tok, nil
 }
 

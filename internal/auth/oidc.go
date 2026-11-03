@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -132,7 +133,7 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error)
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  cfg.RedirectURL,
 		Endpoint:     provider.Endpoint(),
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+		Scopes:       signInScopes(provider),
 	}
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
@@ -279,4 +280,18 @@ func (p *OIDCProvider) Refresh(ctx context.Context, refreshToken string) (IDPTok
 		out.RefreshToken = refreshToken
 	}
 	return out, nil
+}
+
+// signInScopes are the scopes a sign-in asks for. offline_access is added when
+// the provider advertises it: some providers issue a refresh token only for
+// it, and Baleia renews the user's token for per-user catalogs (#648).
+func signInScopes(provider *oidc.Provider) []string {
+	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
+	var d struct {
+		ScopesSupported []string `json:"scopes_supported"`
+	}
+	if err := provider.Claims(&d); err == nil && slices.Contains(d.ScopesSupported, oidc.ScopeOfflineAccess) {
+		scopes = append(scopes, oidc.ScopeOfflineAccess)
+	}
+	return scopes
 }

@@ -260,6 +260,8 @@ func (s *savedTokens) Save(_ context.Context, userID, providerID pgtype.UUID, to
 	return nil
 }
 
+func (s *savedTokens) Forget(context.Context, pgtype.UUID) error { return nil }
+
 // TestFinish_KeepsTokens (#648): a sign-in keeps its identity-provider tokens
 // for the user, and Refresh goes to the provider that issued them.
 func TestFinish_KeepsTokens(t *testing.T) {

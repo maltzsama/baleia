@@ -119,9 +119,15 @@ func (c *Client) Bearer(ctx context.Context) (string, time.Time, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", time.Time{}, fmt.Errorf("iceberg rest auth: decode: %w", err)
 	}
-	ttl := time.Duration(out.ExpiresIn)*time.Second - 30*time.Second
-	if ttl <= 0 {
+	// Reuse a token until 30 s before it expires; a token shorter-lived than
+	// that is reused for half its life. No stated lifetime: one minute.
+	life := time.Duration(out.ExpiresIn) * time.Second
+	ttl := life - 30*time.Second
+	switch {
+	case life <= 0:
 		ttl = time.Minute
+	case ttl <= 0:
+		ttl = life / 2
 	}
 	c.token, c.expiry = out.AccessToken, time.Now().Add(ttl)
 	return c.token, c.expiry, nil

@@ -39,6 +39,7 @@ import (
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 )
@@ -205,7 +206,9 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		CacheTTL:  time.Hour,
 		Logger:    c.Logger,
 	})
-	c.IDPTokens = idptoken.New(c.Queries, c.Keyring, c.OIDC, c.Logger)
+	c.IDPTokens = idptoken.New(c.Queries, func(ctx context.Context, fn func(idptoken.Store) error) error {
+		return pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error { return fn(db.New(tx)) })
+	}, c.Keyring, c.OIDC, c.Logger)
 	c.OIDC.SetTokens(c.IDPTokens)
 	c.Engines.SetCatalogCredentials(catalogidentity.New(c.Queries, c.Keyring, c.Connections, c.IDPTokens, c.Logger))
 

@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/retrievers"
 	"github.com/galileostudio/baleia/internal/retrievers/schedule"
 	"github.com/google/uuid"
@@ -293,7 +294,7 @@ func (h *QueryHandlers) ValidateRetriever(ctx context.Context, request ValidateR
 		return nil, err
 	}
 
-	err = h.retrievers.Validate(ctx, workspaceIDFromRequest(request.Id), pgtype.UUID{Bytes: request.Body.DestBindingId, Valid: true}, request.Body.DefinitionSql, identity)
+	err = h.retrievers.Validate(ctx, workspaceIDFromRequest(request.Id), pgtype.UUID{Bytes: request.Body.DestBindingId, Valid: true}, request.Body.DefinitionSql, queryengine.Identity{UserID: identity, Principal: idString(uid)})
 	switch {
 	case errors.Is(err, retrievers.ErrBindingNotFound):
 		return ValidateRetriever404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "binding not found"}}, nil

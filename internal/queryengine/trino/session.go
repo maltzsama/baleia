@@ -175,6 +175,13 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 		began   bool
 		sinkErr error
 	)
+	if src := s.spec.CatalogTokenSource; src != nil {
+		tok, err := src(ctx)
+		if err != nil {
+			return err
+		}
+		s.spec.CatalogToken = tok
+	}
 	opts := s.options(cb, s.applyHeaders)
 	opts.OnQueryID = func(id string) {
 		if cb.OnStart != nil {

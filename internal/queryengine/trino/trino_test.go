@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -464,5 +465,42 @@ func TestSessionCarriesCatalogToken(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestSessionRenewsCatalogToken (#648): a script's later statements carry the
+// token its source returns then, not the one from when the session opened.
+func TestSessionRenewsCatalogToken(t *testing.T) {
+	t.Parallel()
+	f := &fakeCoordinator{respond: func(string) (http.Header, map[string]any) {
+		return http.Header{}, map[string]any{"id": "20260101_000000_00001_abcde"}
+	}}
+	n := 0
+	s, err := testEngine(t, f).OpenSession(context.Background(), queryengine.SessionSpec{
+		CatalogToken: "at-open",
+		CatalogTokenSource: func(context.Context) (string, error) {
+			n++
+			return fmt.Sprintf("renewed-%d", n), nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for want := 1; want <= 2; want++ {
+		if err := s.Execute(context.Background(), "SELECT 1", queryengine.Callbacks{}, &collect{}); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.last().Get("X-Trino-Extra-Credential"); !strings.Contains(got, fmt.Sprintf("token=renewed-%d", want)) {
+			t.Errorf("statement %d sent %q", want, got)
+		}
+	}
+	failing, err := testEngine(t, f).OpenSession(context.Background(), queryengine.SessionSpec{
+		CatalogTokenSource: func(context.Context) (string, error) { return "", errors.New("idp down") },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := failing.Execute(context.Background(), "SELECT 1", queryengine.Callbacks{}, &collect{}); err == nil {
+		t.Error("a statement must fail when its token cannot be renewed")
 	}
 }

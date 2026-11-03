@@ -124,7 +124,8 @@ func TestResolver(t *testing.T) {
 		}
 	}
 
-	// The connection's token is reused until it expires.
+	// A static token is read again on every use (an operator may rotate the
+	// secret it references); only "not per-user" is remembered.
 	before := st.reads
 	for range 3 {
 		if _, err := r.CatalogToken(ctx, engine, spec(localUser, "per_user")); err != nil {
@@ -137,7 +138,7 @@ func TestResolver(t *testing.T) {
 	r.mu.Lock()
 	n := len(r.cache)
 	r.mu.Unlock()
-	if n != 2 {
-		t.Errorf("cached %d connections, want 2", n)
+	if n != 1 {
+		t.Errorf("cached %d connections, want only the one that is not per-user", n)
 	}
 }

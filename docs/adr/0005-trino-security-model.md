@@ -1,6 +1,7 @@
 # 0005. Trino security model
 
-- Status: Accepted (owner decision D8)
+- Status: Accepted (owner decision D8); the decision "Polaris sees one service principal per
+  connection" is superseded by [0015](0015-per-user-catalog-identity.md)
 - Date: 2026-10-14
 - Issues: #9, #92, #147
 
@@ -35,9 +36,8 @@ which is separate work.
   password (#647); Baleia logs in as the admin identity (#646). File-based base rules let only that
   login impersonate other identities, and the guard runs with
   `baleia.allow-unauthenticated-admin=false`, so it verifies the authenticated admin.
-- **Polaris sees one service principal per connection.** Superseded by
-  [ADR 0015](0015-per-user-catalog-identity.md): a connection set to per-user identity makes the
-  catalog manager authorize each Baleia user.
+- **Polaris sees one service principal per connection.** Per-user authorization is enforced in
+  Trino (guard, read-only mode) and in Baleia (workspace rules, #16), not in Polaris.
 
 ## Consequences
 
@@ -47,7 +47,7 @@ which is separate work.
   read-only mode. Whoever holds that password can act as any user, so it stays with the API and
   worker; the only other holder is the development E2E seed (`make e2e`), which logs in to create
   its test catalog on the minikube dev cluster.
-- Per-user identity towards the catalog manager is [ADR 0015](0015-per-user-catalog-identity.md).
+- Per-user identity towards Polaris is future work (token exchange), not a property switch.
 
 ## Current compliance
 
@@ -55,10 +55,12 @@ Partially compliant.
 
 - Guard, admin identity and per-user identities are in place (#92).
 - Read-only grants were removed (#651). Baleia sends `baleia.mode=readonly` for MCP agents, semantic
-  custom SQL and its own probes. Per-user authorization by the catalog manager is #648.
+  custom SQL and its own probes.
 - Baleia authenticates to Trino (#646) and the bundled Trino requires it (#647), so the
   unauthenticated-admin flag is off everywhere.
-- The README's claim that access control lives in Polaris holds only per service principal.
+- Per-user authorization by the catalog manager is ADR 0015 (#648): an opt-in setting of the
+  connection. Without it, and for local or LDAP users, the catalog manager sees the connection's
+  account.
 
 ## Alternatives considered
 

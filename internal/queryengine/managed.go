@@ -49,12 +49,15 @@ func (m *managed) OpenSession(ctx context.Context, spec SessionSpec) (_ Session,
 	m.sessions++
 	m.mu.Unlock()
 
-	spec.CatalogToken = ""
+	spec.CatalogToken, spec.CatalogTokenSource = "", nil
 	if m.creds != nil {
-		if spec.CatalogToken, err = m.creds.CatalogToken(ctx, m.ID(), spec); err != nil {
+		creds, engineID, base := m.creds, m.ID(), spec
+		source := func(ctx context.Context) (string, error) { return creds.CatalogToken(ctx, engineID, base) }
+		if spec.CatalogToken, err = source(ctx); err != nil {
 			m.sessionDone()
 			return nil, err
 		}
+		spec.CatalogTokenSource = source
 	}
 	s, err := m.Engine.OpenSession(ctx, spec)
 	if err != nil {

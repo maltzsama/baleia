@@ -1,8 +1,14 @@
 // Package idptoken keeps the identity-provider tokens of each user's latest
 // OIDC sign-in (#648). Catalog managers set to per-user identity authorize
-// the user with the access token, which Baleia hands to Trino per query and
-// refreshes with the refresh token. Tokens are sealed with the keyring, bound
-// to the user, and are never logged or returned by the API.
+// the user with the access token, which Baleia hands to Trino per statement
+// and refreshes with the refresh token. Tokens are sealed with the keyring,
+// bound to the user, and are never logged or returned by the API.
+//
+// The API and the worker both refresh. A refresh runs in a transaction that
+// locks the user's row, so one process refreshes while the others wait and
+// read its result (a provider that rotates refresh tokens rejects a reused
+// one), and a sign-out or suspension that deletes the row is never undone by
+// a refresh in flight.
 package idptoken
 
 import (
@@ -23,10 +29,15 @@ import (
 
 // Store is the subset of db.Querier the tokens use.
 type Store interface {
-	UpsertUserIDPToken(ctx context.Context, arg db.UpsertUserIDPTokenParams) error
+	SaveUserIDPTokenOnSignIn(ctx context.Context, arg db.SaveUserIDPTokenOnSignInParams) (int64, error)
 	GetUserIDPToken(ctx context.Context, userID pgtype.UUID) (db.UserIdpToken, error)
+	GetUserIDPTokenForUpdate(ctx context.Context, userID pgtype.UUID) (db.UserIdpToken, error)
+	UpdateUserIDPToken(ctx context.Context, arg db.UpdateUserIDPTokenParams) error
 	DeleteUserIDPToken(ctx context.Context, userID pgtype.UUID) error
 }
+
+// Tx runs fn in one database transaction over a Store.
+type Tx func(ctx context.Context, fn func(Store) error) error
 
 // Refresher redeems a refresh token at the provider that issued it.
 type Refresher interface {
@@ -37,66 +48,87 @@ type Refresher interface {
 var ErrNoKeyring = errors.New("idptoken: BALEIA_ENCRYPTION_KEY is not configured")
 
 const (
-	// renewBefore is how long before expiry a token is refreshed, so it
-	// outlives the query it is handed to for planning.
+	// renewBefore is how long before expiry a token is refreshed.
 	renewBefore = 2 * time.Minute
 	// unknownExpiry is assumed when the provider does not say.
 	unknownExpiry = 5 * time.Minute
+	// stripes bounds the in-process locks that keep one process from opening
+	// several refresh transactions for the same user.
+	stripes = 64
 )
 
 // Tokens stores, refreshes and forgets users' identity-provider tokens.
 type Tokens struct {
 	store     Store
+	tx        Tx
 	keyring   *crypto.Keyring
 	refresher Refresher
 	logger    *slog.Logger
 	now       func() time.Time
 
-	locks sync.Map // user id -> *sync.Mutex: one refresh per user at a time
+	locks [stripes]sync.Mutex
 }
 
-// New returns the tokens; refresher may be nil (no refresh: an expired token
-// is dropped). logger nil discards.
-func New(store Store, keyring *crypto.Keyring, refresher Refresher, logger *slog.Logger) *Tokens {
-	return &Tokens{store: store, keyring: keyring, refresher: refresher, logger: cmp.Or(logger, slog.New(slog.DiscardHandler)), now: time.Now}
+// New returns the tokens. refresher may be nil (no refresh: an expired token
+// is dropped); logger nil discards.
+func New(store Store, tx Tx, keyring *crypto.Keyring, refresher Refresher, logger *slog.Logger) *Tokens {
+	return &Tokens{store: store, tx: tx, keyring: keyring, refresher: refresher, logger: cmp.Or(logger, slog.New(slog.DiscardHandler)), now: time.Now}
 }
 
 func aad(userID pgtype.UUID, kind string) string {
 	return "user_idp_token:" + userID.String() + ":" + kind
 }
 
-// Save keeps the tokens of a sign-in, replacing the previous ones.
-func (t *Tokens) Save(ctx context.Context, userID, providerID pgtype.UUID, tok auth.IDPTokens) error {
-	if tok.AccessToken == "" {
-		return t.Forget(ctx, userID)
-	}
+type sealed struct {
+	access  string
+	refresh *string
+	expiry  pgtype.Timestamptz
+}
+
+func (t *Tokens) seal(userID pgtype.UUID, tok auth.IDPTokens) (sealed, error) {
 	if t.keyring == nil {
-		return ErrNoKeyring
+		return sealed{}, ErrNoKeyring
 	}
 	access, err := t.keyring.Seal([]byte(tok.AccessToken), aad(userID, "access"))
 	if err != nil {
-		return fmt.Errorf("seal access token: %w", err)
+		return sealed{}, fmt.Errorf("seal access token: %w", err)
 	}
-	var refresh *string
+	out := sealed{access: access}
 	if tok.RefreshToken != "" {
 		enc, err := t.keyring.Seal([]byte(tok.RefreshToken), aad(userID, "refresh"))
 		if err != nil {
-			return fmt.Errorf("seal refresh token: %w", err)
+			return sealed{}, fmt.Errorf("seal refresh token: %w", err)
 		}
-		refresh = &enc
+		out.refresh = &enc
 	}
 	expiry := tok.Expiry
 	if expiry.IsZero() {
 		expiry = t.now().Add(unknownExpiry)
 	}
-	return t.store.UpsertUserIDPToken(ctx, db.UpsertUserIDPTokenParams{
-		UserID: userID, AuthProviderID: providerID,
-		AccessTokenEnc: access, RefreshTokenEnc: refresh,
-		ExpiresAt: pgtype.Timestamptz{Time: expiry, Valid: true},
-	})
+	out.expiry = pgtype.Timestamptz{Time: expiry, Valid: true}
+	return out, nil
 }
 
-// Forget deletes a user's tokens (sign-out, disabled account).
+// Save keeps the tokens of a sign-in, replacing the previous ones. It keeps
+// nothing for a suspended account or a disabled provider, and a sign-in
+// without an access token clears the previous one.
+func (t *Tokens) Save(ctx context.Context, userID, providerID pgtype.UUID, tok auth.IDPTokens) error {
+	if tok.AccessToken == "" {
+		return t.Forget(ctx, userID)
+	}
+	s, err := t.seal(userID, tok)
+	if err != nil {
+		return err
+	}
+	_, err = t.store.SaveUserIDPTokenOnSignIn(ctx, db.SaveUserIDPTokenOnSignInParams{
+		UserID: userID, AuthProviderID: providerID,
+		AccessTokenEnc: s.access, RefreshTokenEnc: s.refresh, ExpiresAt: s.expiry,
+	})
+	return err
+}
+
+// Forget deletes a user's tokens (sign-out, failed sign-in save). A refresh
+// in flight finishes first; it cannot write the row back.
 func (t *Tokens) Forget(ctx context.Context, userID pgtype.UUID) error {
 	return t.store.DeleteUserIDPToken(ctx, userID)
 }
@@ -119,34 +151,40 @@ func (t *Tokens) Access(ctx context.Context, userID pgtype.UUID) (string, error)
 		return t.open(row.AccessTokenEnc, userID, "access")
 	}
 
-	mu, _ := t.locks.LoadOrStore(userID.Bytes, &sync.Mutex{})
-	lock, _ := mu.(*sync.Mutex)
+	lock := &t.locks[int(userID.Bytes[15])%stripes]
 	lock.Lock()
 	defer lock.Unlock()
-	// Another request may have refreshed it while this one waited.
-	if row, err = t.store.GetUserIDPToken(ctx, userID); err != nil {
+	var token string
+	err = t.tx(ctx, func(q Store) error {
+		row, err := q.GetUserIDPTokenForUpdate(ctx, userID)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", nil
+			return nil // signed out meanwhile
 		}
-		return "", fmt.Errorf("idp token: %w", err)
-	}
-	if t.fresh(row) {
-		return t.open(row.AccessTokenEnc, userID, "access")
-	}
-	return t.refresh(ctx, userID, row)
+		if err != nil {
+			return fmt.Errorf("idp token: %w", err)
+		}
+		if t.fresh(row) { // another process refreshed it
+			token, err = t.open(row.AccessTokenEnc, userID, "access")
+			return err
+		}
+		token, err = t.refresh(ctx, q, userID, row)
+		return err
+	})
+	return token, err
 }
 
 func (t *Tokens) fresh(row db.UserIdpToken) bool {
 	return row.ExpiresAt.Valid && t.now().Add(renewBefore).Before(row.ExpiresAt.Time)
 }
 
-func (t *Tokens) refresh(ctx context.Context, userID pgtype.UUID, row db.UserIdpToken) (string, error) {
+// refresh runs inside the transaction that locked row.
+func (t *Tokens) refresh(ctx context.Context, q Store, userID pgtype.UUID, row db.UserIdpToken) (string, error) {
 	stillValid := row.ExpiresAt.Valid && t.now().Before(row.ExpiresAt.Time)
 	if row.RefreshTokenEnc == nil || t.refresher == nil {
 		if stillValid {
 			return t.open(row.AccessTokenEnc, userID, "access")
 		}
-		return "", t.Forget(ctx, userID)
+		return "", q.DeleteUserIDPToken(ctx, userID)
 	}
 	rt, err := t.open(*row.RefreshTokenEnc, userID, "refresh")
 	if err != nil {
@@ -160,10 +198,19 @@ func (t *Tokens) refresh(ctx context.Context, userID pgtype.UUID, row db.UserIdp
 		if stillValid {
 			return t.open(row.AccessTokenEnc, userID, "access")
 		}
-		return "", t.Forget(ctx, userID)
+		return "", q.DeleteUserIDPToken(ctx, userID)
 	}
-	if err := t.Save(ctx, userID, row.AuthProviderID, tok); err != nil {
+	if tok.RefreshToken == "" {
+		tok.RefreshToken = rt
+	}
+	s, err := t.seal(userID, tok)
+	if err != nil {
 		return "", err
+	}
+	if err := q.UpdateUserIDPToken(ctx, db.UpdateUserIDPTokenParams{
+		UserID: userID, AccessTokenEnc: s.access, RefreshTokenEnc: s.refresh, ExpiresAt: s.expiry,
+	}); err != nil {
+		return "", fmt.Errorf("idp token: %w", err)
 	}
 	return tok.AccessToken, nil
 }

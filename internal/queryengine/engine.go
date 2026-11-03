@@ -46,6 +46,10 @@ type SessionSpec struct {
 	// identity receive (#648). The Manager fills it when the session opens,
 	// from CatalogCredentials; it is never serialized.
 	CatalogToken string `json:"-"`
+	// CatalogTokenSource renews CatalogToken before each statement, so a long
+	// script keeps a token its catalog accepts; nil keeps CatalogToken. Set by
+	// the Manager, never serialized.
+	CatalogTokenSource func(context.Context) (string, error) `json:"-"`
 }
 
 // CatalogCredentials supplies a session's CatalogToken (#648): the
