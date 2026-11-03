@@ -17,7 +17,6 @@ import (
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/sqlref"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
@@ -315,21 +314,13 @@ func (s *script) run(sess queryengine.Session, st StatementRef) (stop bool, err 
 		return true, s.finish(StatementOutcome{Position: st.Position, Status: "failed", ErrorCode: codeEditorRejected, Error: policy.ErrForbiddenInEditor.Error()})
 	}
 
-	// #614/#615: an interactive statement is checked against the target
-	// catalog's synced metadata and capped at the engine. A rejected table
-	// fails the statement and stops the script, like an engine error.
+	// An interactive SELECT is capped at the engine only when the operator
+	// sets BALEIA_EDITOR_ROW_LIMIT (#615, off by default since #649). Which
+	// tables a statement may read is the engine's and the catalog manager's
+	// decision, never a Baleia allowlist (#649, #648).
 	stmtSQL := st.SQL
-	if s.p.Interactive {
-		reason, ok, err := s.a.checkTableAllowlist(s.bk, s.p.Target, st.SQL)
-		if err != nil {
-			return true, err
-		}
-		if !ok {
-			return true, s.finish(StatementOutcome{Position: st.Position, Status: "failed", ErrorCode: codeEditorRejected, Error: reason})
-		}
-		if s.a.cfg != nil && s.a.cfg.EditorRowLimit > 0 && isSelectStatement(st.SQL) {
-			stmtSQL = s.eng.Dialect().Limit(st.SQL, s.a.cfg.EditorRowLimit)
-		}
+	if s.p.Interactive && s.a.cfg != nil && s.a.cfg.EditorRowLimit > 0 && isSelectStatement(st.SQL) {
+		stmtSQL = s.eng.Dialect().Limit(st.SQL, s.a.cfg.EditorRowLimit)
 	}
 
 	start := time.Now()
@@ -667,52 +658,6 @@ func (s *resultSink) abort() {
 	}
 	_ = s.pw.CloseWithError(errResultAborted)
 	<-s.done
-}
-
-// checkTableAllowlist rejects a statement that names a table outside the target
-// catalog's synced metadata (#614). An unqualified name resolves in the target
-// catalog's default schema — and a CTE name is indistinguishable from a table —
-// so only qualified references (schema.table or catalog.schema.table) are
-// checked; they fail closed when the metadata has no such table.
-func (a *Activities) checkTableAllowlist(ctx context.Context, target queryengine.Target, statement string) (string, bool, error) {
-	for _, t := range sqlref.Extract(statement).Tables {
-		namespace, name, check, ok := resolveTableRef(target, t.Path)
-		if !ok {
-			return fmt.Sprintf("%s is outside the target catalog", strings.Join(t.Path, ".")), false, nil
-		}
-		if !check {
-			continue
-		}
-		_, err := a.queries.GetMetadataTableByName(ctx, db.GetMetadataTableByNameParams{
-			CatalogID: target.CatalogID, Namespace: namespace, Name: name,
-		})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Sprintf("%s is not in the catalog metadata", strings.Join(t.Path, ".")), false, nil
-		}
-		if err != nil {
-			return "", false, err
-		}
-	}
-	return "", true, nil
-}
-
-// resolveTableRef maps a table path to its metadata key. check is false for an
-// unqualified name (allowed within the target catalog); ok is false for a
-// three-part name whose catalog part is not the target.
-func resolveTableRef(target queryengine.Target, path []string) (namespace []string, name string, check, ok bool) {
-	switch len(path) {
-	case 1:
-		return nil, path[0], false, true
-	case 2:
-		return []string{path[0]}, path[1], true, true
-	case 3:
-		if path[0] != target.EngineCatalog && path[0] != target.CatalogName {
-			return nil, "", false, false
-		}
-		return []string{path[1]}, path[2], true, true
-	default:
-		return nil, "", false, false
-	}
 }
 
 // isSelectStatement reports whether a statement can be capped with a row limit:

@@ -242,8 +242,7 @@ type Querier interface {
 	GetLatestClusterSnapshotByEngine(ctx context.Context, engineID pgtype.UUID) (ClusterSnapshot, error)
 	GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (MaintenanceRun, error)
 	GetManagedBindingOfCatalog(ctx context.Context, arg GetManagedBindingOfCatalogParams) (CatalogBinding, error)
-	// A live table by its natural key, for the v1 -> v2 metric migration (#121)
-	// and the editor's table allowlist (#614).
+	// A live table by its natural key, for the v1 -> v2 metric migration (#121).
 	GetMetadataTableByName(ctx context.Context, arg GetMetadataTableByNameParams) (pgtype.UUID, error)
 	// Lineage (#558, B4): the tables a model, metric or saved query reads, and
 	// the content that reads a table. Name resolution is best-effort: a reference

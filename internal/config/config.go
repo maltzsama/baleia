@@ -135,8 +135,8 @@ type Config struct {
 	// hit the remaining query is killed and the result is marked truncated.
 	ResultMaxRows  int64
 	ResultMaxBytes int64
-	// EditorRowLimit caps every interactive editor SELECT at the engine (#615).
-	// 0 disables the injected limit.
+	// EditorRowLimit, when positive, caps every interactive editor SELECT at
+	// the engine (#615). 0, the default since #649, injects no limit.
 	EditorRowLimit int
 	// SchedulesEnabled drives whether the worker ensures its recurring Temporal
 	// Schedules at boot. Disabled for tests and local dev that lack Temporal.
@@ -295,7 +295,7 @@ func Load() *Config {
 		ReconcileInterval:                 getEnvDuration("BALEIA_RECONCILE_INTERVAL", 0),
 		ResultMaxRows:                     getEnvInt64("BALEIA_RESULT_MAX_ROWS", 1000000),
 		ResultMaxBytes:                    getEnvInt64("BALEIA_RESULT_MAX_BYTES", 536870912),
-		EditorRowLimit:                    getEnvInt("BALEIA_EDITOR_ROW_LIMIT", 1000),
+		EditorRowLimit:                    getEnvInt("BALEIA_EDITOR_ROW_LIMIT", 0),
 		SchedulesEnabled:                  getEnv("BALEIA_SCHEDULES_ENABLED", "true") == "true",
 		RateLimitRPS:                      getEnvInt("RATE_LIMIT_RPS", 60),
 		RateLimitBurst:                    getEnvInt("RATE_LIMIT_BURST", 10),

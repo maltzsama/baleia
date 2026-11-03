@@ -45,7 +45,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_RESULT_MAX_ROWS` | `1000000` | Max rows buffered per statement result before truncation |
 | `BALEIA_LOB_MAX_BYTES` | `1048576` | Max bytes an Oracle engine reads from one CLOB/NCLOB/BLOB value into a result (1 MiB) |
 | `BALEIA_RESULT_MAX_BYTES` | `536870912` | Max Arrow bytes per statement result before truncation |
-| `BALEIA_EDITOR_ROW_LIMIT` | `1000` | Cap every interactive editor SELECT at the engine (`0` disables the injected `LIMIT`/`TOP`/`FETCH FIRST`); the result caps above still apply |
+| `BALEIA_EDITOR_ROW_LIMIT` | `0` | When positive, cap every interactive editor SELECT at the engine with an injected `LIMIT`/`TOP`/`FETCH FIRST`; `0` injects nothing. The result caps above always apply |
 | `BALEIA_SCHEDULES_ENABLED` | `true` | Ensure recurring Temporal Schedules (Lens pollers, table health, retriever) at worker boot |
 | `BALEIA_CONNECTIONS_DENY_CIDRS` | _(unset)_ | Comma-separated CIDRs that connections may never reach, added to the built-in deny list (loopback, link-local incl. cloud metadata `169.254.169.254`, `0.0.0.0/8`) — see [ADR 0011](adr/0011-direct-connections-security.md) |
 | `BALEIA_CONNECTIONS_ALLOW_CIDRS` | _(unset)_ | If set, connections may only reach these comma-separated CIDRs. It opens the built-in internal ranges (RFC1918, `100.64.0.0/10`, IPv6 ULA) but never loopback, link-local or cloud metadata; an explicit `BALEIA_CONNECTIONS_DENY_CIDRS` entry still wins |

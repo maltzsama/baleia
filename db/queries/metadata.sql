@@ -275,8 +275,7 @@ JOIN visible v ON v.id = t.catalog_id
 WHERE t.id = @table_id::uuid;
 
 -- name: GetMetadataTableByName :one
--- A live table by its natural key, for the v1 -> v2 metric migration (#121)
--- and the editor's table allowlist (#614).
+-- A live table by its natural key, for the v1 -> v2 metric migration (#121).
 SELECT id FROM metadata_tables
 WHERE catalog_id = @catalog_id::uuid AND namespace = @namespace::text[] AND name = @name::text
   AND removed_at IS NULL;
