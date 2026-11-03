@@ -33,6 +33,8 @@ type store struct {
 	// workspace (#59)
 	catalogGrantedToAgent map[[2][16]byte]bool
 	engineHostsForAgent   map[[2][16]byte]bool
+	// {workspace, user} -> workspace role (#653); falls back to owners/members
+	wsRoles map[[2][16]byte]string
 }
 
 func (s store) AgentWorkspaceBound(_ context.Context, a db.AgentWorkspaceBoundParams) (bool, error) {
@@ -79,6 +81,20 @@ func (s store) CheckWorkspaceAccess(_ context.Context, a db.CheckWorkspaceAccess
 
 func (s store) IsWorkspaceOwner(_ context.Context, a db.IsWorkspaceOwnerParams) (bool, error) {
 	return s.owners[[2][16]byte{a.ID.Bytes, a.UserID.Bytes}], nil
+}
+
+func (s store) GetWorkspaceMemberRole(_ context.Context, a db.GetWorkspaceMemberRoleParams) (string, error) {
+	k := [2][16]byte{a.ID.Bytes, a.UserID.Bytes}
+	if r, ok := s.wsRoles[k]; ok {
+		return r, nil
+	}
+	switch {
+	case s.owners[k]:
+		return "admin", nil
+	case s.members[k]:
+		return "editor", nil
+	}
+	return "", nil
 }
 
 func (s store) GetTeamByID(_ context.Context, id pgtype.UUID) (db.Team, error) {

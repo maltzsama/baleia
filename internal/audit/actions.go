@@ -26,10 +26,12 @@ const (
 	GrantCreate Action = "grant.create"
 	GrantRevoke Action = "grant.revoke"
 
-	WorkspaceUpdate      Action = "workspace.update"
-	WorkspaceDelete      Action = "workspace.delete"
-	SemanticDocCertify   Action = "semantic_doc.certify"
-	SemanticDocUncertify Action = "semantic_doc.uncertify"
+	WorkspaceUpdate       Action = "workspace.update"
+	WorkspaceMemberSet    Action = "workspace.member_set"
+	WorkspaceMemberRemove Action = "workspace.member_remove"
+	WorkspaceDelete       Action = "workspace.delete"
+	SemanticDocCertify    Action = "semantic_doc.certify"
+	SemanticDocUncertify  Action = "semantic_doc.uncertify"
 
 	TeamMemberAdd    Action = "team.member_add"
 	TeamMemberRemove Action = "team.member_remove"
@@ -111,7 +113,7 @@ var allActions = []Action{
 	CatalogCreate, CatalogUpdate, CatalogRename, CatalogDelete, CatalogSync, CatalogReconcile,
 	BindingCreate, BindingUpdate, BindingDelete, BindingSync,
 	GrantCreate, GrantRevoke,
-	WorkspaceUpdate,
+	WorkspaceUpdate, WorkspaceMemberSet, WorkspaceMemberRemove,
 	TeamMemberAdd, TeamMemberRemove, TeamRoleChange,
 	UserInvite, UserRoleChange, UserDisable, UserSuspend, UserReinstate,
 	IdentityProviderCreate, IdentityProviderUpdate, IdentityProviderDelete,

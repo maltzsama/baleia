@@ -15,13 +15,20 @@ import (
 type fakeRetrieverQuerier struct {
 	db.Querier
 	created *db.CreateRetrieverParams
-	// notOwner makes IsWorkspaceOwner say the caller is a member but not the
-	// workspace owner, which the retriever mutations must refuse (#613).
-	notOwner bool
+	// role is the caller's workspace role (#653); empty means admin.
+	// Retriever mutations need an editor (#613, #653).
+	role string
 }
 
 func (f *fakeRetrieverQuerier) IsWorkspaceOwner(context.Context, db.IsWorkspaceOwnerParams) (bool, error) {
-	return !f.notOwner, nil
+	return f.role == "" || f.role == "admin", nil
+}
+
+func (f *fakeRetrieverQuerier) GetWorkspaceMemberRole(context.Context, db.GetWorkspaceMemberRoleParams) (string, error) {
+	if f.role == "" {
+		return "admin", nil
+	}
+	return f.role, nil
 }
 
 func (f *fakeRetrieverQuerier) CheckWorkspaceAccess(context.Context, db.CheckWorkspaceAccessParams) (bool, error) {
@@ -169,12 +176,18 @@ func TestCreateRetriever_StoresDestinationFields(t *testing.T) {
 	}
 }
 
-// TestCreateRetriever_OwnerOnly: a workspace member who is not the owner may
-// not create a retriever even though the workspace has a writable destination
-// (#613).
-func TestCreateRetriever_OwnerOnly(t *testing.T) {
+// TestCreateRetriever_EditorsOnly: a workspace viewer may not create a
+// retriever even though the workspace has a writable destination; an editor
+// may (#613, #653).
+func TestCreateRetriever_EditorsOnly(t *testing.T) {
 	t.Parallel()
-	fake := &fakeRetrieverQuerier{notOwner: true}
+	editor := &fakeRetrieverQuerier{role: "editor"}
+	if resp, err := (testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: editor})).CreateRetriever(testContext(), retrieverRequest()); err != nil {
+		t.Fatal(err)
+	} else if _, forbidden := resp.(CreateRetriever403JSONResponse); forbidden || editor.created == nil {
+		t.Fatalf("an editor may create a retriever, got %T", resp)
+	}
+	fake := &fakeRetrieverQuerier{role: "viewer"}
 	resp, err := (testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: fake})).CreateRetriever(testContext(), retrieverRequest())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -183,7 +196,7 @@ func TestCreateRetriever_OwnerOnly(t *testing.T) {
 		t.Fatalf("want 403 forbidden, got %T %+v", resp, resp)
 	}
 	if fake.created != nil {
-		t.Fatal("created a retriever despite not owning the workspace")
+		t.Fatal("a viewer created a retriever")
 	}
 }
 

@@ -1,0 +1,26 @@
+meta {
+  name: Set Owner Role Refused
+  type: http
+  seq: 14
+}
+
+put {
+  url: {{base_url}}/workspaces/{{workspace_id}}/members/{{workspace_owner_user_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "role": "viewer"
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.code: eq workspace_owner_role_fixed
+}

@@ -41,7 +41,7 @@ func (h *QueryHandlers) CreateRetriever(ctx context.Context, request CreateRetri
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return CreateRetriever401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
-	if err := h.requireWorkspaceOwner(ctx, request.Id); err != nil {
+	if err := h.requireWorkspaceRole(ctx, request.Id, authz.WorkspaceEditor); err != nil {
 		if errors.Is(err, authz.ErrForbidden) {
 			h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 			return CreateRetriever403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner may manage retrievers"}}, nil
@@ -114,7 +114,7 @@ func (h *QueryHandlers) UpdateRetriever(ctx context.Context, request UpdateRetri
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return UpdateRetriever401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
-	if err := h.requireWorkspaceOwner(ctx, request.Id); err != nil {
+	if err := h.requireWorkspaceRole(ctx, request.Id, authz.WorkspaceEditor); err != nil {
 		if errors.Is(err, authz.ErrForbidden) {
 			h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 			return UpdateRetriever403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner may manage retrievers"}}, nil
@@ -182,7 +182,7 @@ func (h *QueryHandlers) DeleteRetriever(ctx context.Context, request DeleteRetri
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return DeleteRetriever401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
-	if err := h.requireWorkspaceOwner(ctx, request.Id); err != nil {
+	if err := h.requireWorkspaceRole(ctx, request.Id, authz.WorkspaceEditor); err != nil {
 		if errors.Is(err, authz.ErrForbidden) {
 			h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 			return DeleteRetriever403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner may manage retrievers"}}, nil
@@ -209,7 +209,7 @@ func (h *QueryHandlers) TriggerRetrieverRefresh(ctx context.Context, request Tri
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return TriggerRetrieverRefresh401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
-	if err := h.requireWorkspaceOwner(ctx, request.Id); err != nil {
+	if err := h.requireWorkspaceRole(ctx, request.Id, authz.WorkspaceEditor); err != nil {
 		if errors.Is(err, authz.ErrForbidden) {
 			h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 			return TriggerRetrieverRefresh403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner may manage retrievers"}}, nil

@@ -21,8 +21,10 @@ sidebar_position: 7
 - **Users:** invite people, change their [role](../concepts.md#roles), and suspend or reinstate accounts.
   - A role change takes effect at the next sign-in; existing sessions are revoked.
   - Suspension signs the user out everywhere and revokes their API keys. It is reversible: users are never deleted here.
-- **Teams:** a team owns shared workspaces. Owners manage the team and its workspaces; members do not. Removing someone from a team removes their access to its workspaces.
+- **Teams:** a team owns shared workspaces. Its owners are admins of those workspaces by default and its members editors. Removing someone from a team removes their access to its workspaces.
 - **Workspaces** (workspace menu in the header → **Workspace settings**): each workspace's members, its catalog grants and its default target.
+  - **Roles** ([ADR 0016](../adr/0016-access-layers-and-workspace-roles.md)): a **viewer** sees content and runs queries (saved, Explore and ad-hoc SQL); an **editor** also creates and edits saved queries and scripts, metrics, semantic models and docs, and retrievers; an **admin** also manages members, catalogs, the default target, spaces and settings. A global admin is an admin of every workspace.
+  - **Members:** a shared workspace's members are its team's members; team owners are admins and members editors until a workspace admin sets another role. A personal workspace belongs to its owner, who can share it with anyone by e-mail, with a role. Space roles can only narrow a member's role inside a space, never raise it.
   - **Grants:** granting a catalog links it to the workspace, so only the workspace's members reach it. Inside the catalog, what each member may read or write is decided by the catalog manager, or by the connection's service account; what they may do in Baleia depends on their role. Revoking the catalog used as the default target clears it.
   - **Deletion:** deleting a shared workspace removes its spaces, content and grants. Personal workspaces cannot be deleted.
 - **Agents:** read-only clients of the [MCP server](../mcp.md), bound to workspaces. Each agent has tokens, shown once and stored only as a hash. Revoking a token takes effect at once.

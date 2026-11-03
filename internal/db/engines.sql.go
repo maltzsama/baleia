@@ -140,24 +140,22 @@ const engineHostsCatalogGrantedToAgent = `-- name: EngineHostsCatalogGrantedToAg
 SELECT EXISTS (
     SELECT 1 FROM catalog_bindings b
     JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-    JOIN workspaces w ON w.id = g.workspace_id
     JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = $1
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
-    WHERE b.engine_id = $3
-      AND (w.owner_user_id = $2 OR tm.user_id = $2)
+    WHERE b.engine_id = $2
+      AND baleia_workspace_member_role(g.workspace_id, $3::uuid) IS NOT NULL
 ) AS granted
 `
 
 type EngineHostsCatalogGrantedToAgentParams struct {
 	AgentID  pgtype.UUID `json:"agent_id"`
-	OwnerID  pgtype.UUID `json:"owner_id"`
 	EngineID pgtype.UUID `json:"engine_id"`
+	OwnerID  pgtype.UUID `json:"owner_id"`
 }
 
 // True when the engine hosts a catalog granted to a workspace the agent is
 // bound to and the owner is still a member of that workspace (#59).
 func (q *Queries) EngineHostsCatalogGrantedToAgent(ctx context.Context, arg EngineHostsCatalogGrantedToAgentParams) (bool, error) {
-	row := q.db.QueryRow(ctx, engineHostsCatalogGrantedToAgent, arg.AgentID, arg.OwnerID, arg.EngineID)
+	row := q.db.QueryRow(ctx, engineHostsCatalogGrantedToAgent, arg.AgentID, arg.EngineID, arg.OwnerID)
 	var granted bool
 	err := row.Scan(&granted)
 	return granted, err
@@ -167,22 +165,20 @@ const engineHostsCatalogGrantedToUser = `-- name: EngineHostsCatalogGrantedToUse
 SELECT EXISTS (
     SELECT 1 FROM catalog_bindings b
     JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-    JOIN workspaces w ON w.id = g.workspace_id
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $1
-    WHERE b.engine_id = $2
-      AND (w.owner_user_id = $1 OR tm.user_id = $1)
+    WHERE b.engine_id = $1
+      AND baleia_workspace_member_role(g.workspace_id, $2::uuid) IS NOT NULL
 ) AS granted
 `
 
 type EngineHostsCatalogGrantedToUserParams struct {
-	UserID   pgtype.UUID `json:"user_id"`
 	EngineID pgtype.UUID `json:"engine_id"`
+	UserID   pgtype.UUID `json:"user_id"`
 }
 
 // True when the engine has a binding of a catalog granted to a workspace the
 // user belongs to.
 func (q *Queries) EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error) {
-	row := q.db.QueryRow(ctx, engineHostsCatalogGrantedToUser, arg.UserID, arg.EngineID)
+	row := q.db.QueryRow(ctx, engineHostsCatalogGrantedToUser, arg.EngineID, arg.UserID)
 	var granted bool
 	err := row.Scan(&granted)
 	return granted, err
@@ -513,10 +509,8 @@ WHERE c.created_by = $1
    OR EXISTS (
         SELECT 1 FROM catalog_bindings b
         JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-        JOIN workspaces w ON w.id = g.workspace_id
-        LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $1
         WHERE b.engine_id = e.id
-          AND (w.owner_user_id = $1 OR tm.user_id = $1))
+          AND baleia_workspace_member_role(g.workspace_id, $1::uuid) IS NOT NULL)
 ORDER BY e.name
 `
 

@@ -925,6 +925,53 @@ export interface paths {
         patch: operations["updateTeamMemberRole"];
         trace?: never;
     };
+    "/workspaces/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** List the workspace's members and their roles (#653) */
+        get: operations["listWorkspaceMembers"];
+        put?: never;
+        /**
+         * Share a personal workspace with a user, or set a team member's role, by e-mail — workspace admin only
+         * @description The same rules as PUT /workspaces/{id}/members/{user_id}, addressing the user by their exact e-mail. 404 when no user has it.
+         */
+        post: operations["addWorkspaceMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a member's role, or share a personal workspace with a user — workspace admin only
+         * @description On a shared workspace the user must belong to its team (422 workspace_member_not_in_team); team membership is managed in Teams. On a personal workspace this shares it with the user. The owner of a personal workspace is always its admin (422 workspace_owner_role_fixed).
+         */
+        put: operations["setWorkspaceMember"];
+        post?: never;
+        /** Stop sharing a personal workspace with a user, or reset a team member to their default role — workspace admin only */
+        delete: operations["removeWorkspaceMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces": {
         parameters: {
             query?: never;
@@ -1304,10 +1351,10 @@ export interface paths {
         };
         /** Docs of one table or one column — workspace members */
         get: operations["listSemanticDocs"];
-        /** Create or replace a doc — workspace members */
+        /** Create or replace a doc — workspace editors and admins (#653) */
         put: operations["upsertSemanticDoc"];
         post?: never;
-        /** Delete a doc — workspace members */
+        /** Delete a doc — workspace editors and admins (#653) */
         delete: operations["deleteSemanticDoc"];
         options?: never;
         head?: never;
@@ -3603,7 +3650,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_not_found" | "workspace_personal";
+        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_member_not_in_team" | "workspace_not_found" | "workspace_owner_role_fixed" | "workspace_personal";
         /** @enum {string} */
         Locale: "en" | "pt-BR";
         /** @enum {string} */
@@ -4256,8 +4303,11 @@ export interface components {
         CatalogAllowedAction: "view" | "browse" | "update" | "delete" | "sync_metadata" | "grant" | "create_binding";
         /** @enum {string} */
         CatalogBindingAllowedAction: "view" | "update" | "delete" | "sync";
-        /** @enum {string} */
-        WorkspaceAllowedAction: "view" | "update" | "delete" | "manage_grants" | "set_defaults" | "run" | "create_space";
+        /**
+         * @description From the caller's workspace role (#653): view and run for every member; edit_content (saved queries, scripts, metrics, semantic models and docs, retrievers) from editor up; update, delete, manage_grants, set_defaults, create_space and manage_members for workspace admins.
+         * @enum {string}
+         */
+        WorkspaceAllowedAction: "view" | "update" | "delete" | "manage_grants" | "set_defaults" | "run" | "create_space" | "edit_content" | "manage_members";
         /** @enum {string} */
         GlobalAction: "create_connection" | "create_workspace" | "create_shared_workspace" | "manage_users" | "manage_identity" | "view_all_audit" | "view_system" | "manage_assistant" | "manage_workload";
         Features: {
@@ -4377,10 +4427,36 @@ export interface components {
             owner_user_id?: string | null;
             /** Format: uuid */
             owner_team_id?: string | null;
+            /** @description The caller's role in this workspace (#653); a global admin is admin everywhere */
+            readonly role?: components["schemas"]["WorkspaceRole"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at?: string;
+        };
+        /**
+         * @description What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and run queries, editors also create and edit content, admins also manage the workspace. What they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
+         * @enum {string}
+         */
+        WorkspaceRole: "admin" | "editor" | "viewer";
+        WorkspaceMember: {
+            user: components["schemas"]["UserPublic"];
+            role: components["schemas"]["WorkspaceRole"];
+            /**
+             * @description owner of a personal workspace, member of the owning team, or a user a personal workspace is shared with
+             * @enum {string}
+             */
+            source: "owner" | "team" | "shared";
+            /** @description Whether the role was set explicitly; otherwise a team owner is admin and a team member editor */
+            role_set: boolean;
+        };
+        SetWorkspaceMemberRequest: {
+            role: components["schemas"]["WorkspaceRole"];
+        };
+        AddWorkspaceMemberRequest: {
+            /** Format: email */
+            email: string;
+            role: components["schemas"]["WorkspaceRole"];
         };
         WorkspaceImpact: {
             saved_queries: number;
@@ -8367,6 +8443,110 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
+    listWorkspaceMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMember"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    addWorkspaceMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddWorkspaceMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description The member */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMember"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    setWorkspaceMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetWorkspaceMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description The member */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMember"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    removeWorkspaceMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     listWorkspaces: {
         parameters: {
             query?: never;
@@ -9018,6 +9198,7 @@ export interface operations {
         responses: {
             204: components["responses"]["NoContent"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

@@ -1,0 +1,32 @@
+meta {
+  name: List Workspace Members
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/members
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  const owner = res.body.find((m) => m.source === "owner");
+  bru.setVar("workspace_owner_user_id", owner ? owner.user.id : "");
+}
+
+tests {
+  test("the personal owner is the admin", function () {
+    const owner = res.body.find((m) => m.source === "owner");
+    expect(owner).to.not.equal(undefined);
+    expect(owner.role).to.equal("admin");
+  });
+}

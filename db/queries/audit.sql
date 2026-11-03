@@ -23,11 +23,7 @@ WHERE (sqlc.narg(resource_type)::text IS NULL OR resource_type = sqlc.narg(resou
        OR (sqlc.narg(scope_owner)::uuid IS NOT NULL
            AND workspace_id IN (
              SELECT w.id FROM workspaces w
-             WHERE w.owner_user_id = sqlc.narg(scope_owner)::uuid
-                OR w.owner_team_id IN (
-                  SELECT tm.team_id FROM team_members tm
-                  WHERE tm.user_id = sqlc.narg(scope_owner)::uuid AND tm.role = 'owner'
-                )
+             WHERE baleia_workspace_member_role(w.id, sqlc.narg(scope_owner)::uuid) = 'admin'
            ))
        OR (sqlc.narg(scope_owner)::uuid IS NOT NULL
            AND on_behalf_of = sqlc.narg(scope_owner)::uuid)

@@ -25,6 +25,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0013](0013-content-model.md) | Saved content model | Accepted |
 | [0014](0014-workload-management.md) | Workload management: per-engine admission queues | Accepted |
 | [0015](0015-per-user-catalog-identity.md) | Per-user identity to the catalog manager | Accepted |
+| [0016](0016-access-layers-and-workspace-roles.md) | Three access layers and workspace roles | Accepted |
 
 ## Owner decisions
 
@@ -37,7 +38,7 @@ The owner decisions referenced across the backlog and where each one is recorded
 | D3 | Managed-only authority: adopted catalogs are reported, never mutated | [0003](0003-trino-binding.md) |
 | D4 | Registry secrets: Phase A by default (env/file refs stored as references) | [0003](0003-trino-binding.md), #31 |
 | D5 | Connection test topology: metadata, direct engine and `bind:<engine>` checks | [0011](0011-direct-connections-security.md), #12 |
-| D6 | The workspace role matrix lives in #16 | #16 |
+| D6 | The workspace role matrix | [0016](0016-access-layers-and-workspace-roles.md) (supersedes #16) |
 | D7 | Refresh token in an HttpOnly cookie; no tokens in URLs | #51, #55 |
 | D8 | User SQL runs as a per-user Trino identity | [0005](0005-trino-security-model.md) |
 | D9 | Semantic layer: simple metrics in v1, Lightdash-level in v2, no dbt | [0012](0012-semantic-layer-roadmap.md) |

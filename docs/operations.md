@@ -8,7 +8,8 @@ The metrics catalog and its rules come from #87.
 Read this before `helm upgrade` from 0.5.x. Migrations 00062 to 00072 add the
 workload queues and rules, statement references (lineage, popular tables and
 join suggestions), engine external URLs and the Trino resource-group tables;
-migration 00074 adds the identity-provider tokens of OIDC sign-ins (#648).
+migration 00074 adds the identity-provider tokens of OIDC sign-ins (#648),
+and 00075 the workspace roles (#653).
 They apply as described for 0.4.0 below. Executions already running finish on
 `QueryExecutionWorkflowV3`, which the worker still runs, so there is nothing
 to drain.
@@ -27,6 +28,7 @@ These take effect with their defaults:
 | Connection and binding flags (#651) | `default_readonly`, stored but never enforced, is gone from the connection API; Unity bindings are no longer flagged as unable to write (`writes_supported`), since Unity decides | — |
 | Authenticated bundled Trino (#647) | The in-chart and compose Trino require HTTPS and a password; Baleia logs in with `BALEIA_TRINO_PASSWORD`. The chart refuses to render without `secrets.values.BALEIA_TRINO_PASSWORD` (with `existingSecret`, add the key), and `TRINO_URL` defaults to the HTTPS port 8443. Clients other than Baleia, such as a BI tool or a scraper on port 8080, are refused | Set `trino.auth.enabled=false` (not recommended) |
 | Per-user identity (#648) | Off by default: catalogs keep acting as the connection's account until an admin turns on **Per-user identity** on a Polaris, Unity, Lakekeeper or Iceberg REST connection. OIDC sign-ins now keep the identity provider's tokens, sealed with `BALEIA_ENCRYPTION_KEY` (migration 00074) | — |
+| Workspace roles (#653) | Members have a workspace role: team owners are admins and team members editors, as before, and workspace admins can change them or share personal workspaces (migration 00075). A space entry no longer raises a member above their workspace role: an editor named manager of a space is an editor there. Editors now create retrievers, which needed a workspace owner (#613); documenting tables needs an editor | Give the member the admin role in the workspace |
 | Catalog names (#617) | `trino_catalog_name`, `connector` and `engine_catalog_name` must match `^[a-z][a-z0-9_]{0,62}$` on write | — |
 
 Before upgrading, check that no connection users rely on points at a private

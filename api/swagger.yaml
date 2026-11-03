@@ -181,7 +181,7 @@ components:
     # web/messages/{en,pt-BR}.json (enforced by TestErrorCodesClosed).
     ErrorCode:
       type: string
-      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspacePersonal]
+      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceMemberNotInTeam, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspaceOwnerRoleFixed, ErrorCodeWorkspacePersonal]
       enum:
         - account_suspended
         - agent_token_not_allowed
@@ -262,7 +262,9 @@ components:
         - user_owns_workspace
         - validation_error
         - version_conflict
+        - workspace_member_not_in_team
         - workspace_not_found
+        - workspace_owner_role_fixed
         - workspace_personal
 
     # Supported UI locales (#67): `en` is the source, `pt-BR` the first
@@ -1126,8 +1128,14 @@ components:
       type: string
       x-enum-varnames: [WorkspaceAllowedActionView, WorkspaceAllowedActionUpdate, WorkspaceAllowedActionDelete,
                         WorkspaceAllowedActionManageGrants, WorkspaceAllowedActionSetDefaults,
-                        WorkspaceAllowedActionRun, WorkspaceAllowedActionCreateSpace]
-      enum: [view, update, delete, manage_grants, set_defaults, run, create_space]
+                        WorkspaceAllowedActionRun, WorkspaceAllowedActionCreateSpace,
+                        WorkspaceAllowedActionEditContent, WorkspaceAllowedActionManageMembers]
+      description: >
+        From the caller's workspace role (#653): view and run for every member;
+        edit_content (saved queries, scripts, metrics, semantic models and docs,
+        retrievers) from editor up; update, delete, manage_grants, set_defaults,
+        create_space and manage_members for workspace admins.
+      enum: [view, update, delete, manage_grants, set_defaults, run, create_space, edit_content, manage_members]
     GlobalAction:
       type: string
       enum: [create_connection, create_workspace, create_shared_workspace, manage_users,
@@ -1267,8 +1275,45 @@ components:
         default_schema: { type: string, nullable: true }
         owner_user_id: { type: string, format: uuid, nullable: true }
         owner_team_id: { type: string, format: uuid, nullable: true }
+        role:
+          allOf: [{ $ref: "#/components/schemas/WorkspaceRole" }]
+          readOnly: true
+          description: "The caller's role in this workspace (#653); a global admin is admin everywhere"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    WorkspaceRole:
+      type: string
+      enum: [admin, editor, viewer]
+      description: >
+        What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and
+        run queries, editors also create and edit content, admins also manage the workspace. What
+        they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
+
+    WorkspaceMember:
+      type: object
+      required: [user, role, source, role_set]
+      properties:
+        user: { $ref: "#/components/schemas/UserPublic" }
+        role: { $ref: "#/components/schemas/WorkspaceRole" }
+        source:
+          type: string
+          enum: [owner, team, shared]
+          description: "owner of a personal workspace, member of the owning team, or a user a personal workspace is shared with"
+        role_set: { type: boolean, description: "Whether the role was set explicitly; otherwise a team owner is admin and a team member editor" }
+
+    SetWorkspaceMemberRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: "#/components/schemas/WorkspaceRole" }
+
+    AddWorkspaceMemberRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/WorkspaceRole" }
 
     WorkspaceImpact:
       type: object
@@ -4981,6 +5026,88 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /workspaces/{id}/members:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaceMembers
+      summary: "List the workspace's members and their roles (#653)"
+      responses:
+        "200":
+          description: "Members"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkspaceMember" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Workspaces]
+      operationId: addWorkspaceMember
+      summary: "Share a personal workspace with a user, or set a team member's role, by e-mail — workspace admin only"
+      description: >
+        The same rules as PUT /workspaces/{id}/members/{user_id}, addressing the
+        user by their exact e-mail. 404 when no user has it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddWorkspaceMemberRequest" }
+      responses:
+        "200":
+          description: "The member"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceMember" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/members/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: user_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [Workspaces]
+      operationId: setWorkspaceMember
+      summary: "Set a member's role, or share a personal workspace with a user — workspace admin only"
+      description: >
+        On a shared workspace the user must belong to its team (422
+        workspace_member_not_in_team); team membership is managed in Teams. On a
+        personal workspace this shares it with the user. The owner of a personal
+        workspace is always its admin (422 workspace_owner_role_fixed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetWorkspaceMemberRequest" }
+      responses:
+        "200":
+          description: "The member"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceMember" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Workspaces]
+      operationId: removeWorkspaceMember
+      summary: "Stop sharing a personal workspace with a user, or reset a team member to their default role — workspace admin only"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   # ── Workspaces ────────────────────────────────────────────────
   /workspaces:
     get:
@@ -5527,7 +5654,7 @@ paths:
     put:
       tags: [Semantic]
       operationId: upsertSemanticDoc
-      summary: "Create or replace a doc — workspace members"
+      summary: "Create or replace a doc — workspace editors and admins (#653)"
       requestBody:
         required: true
         content:
@@ -5547,10 +5674,11 @@ paths:
     delete:
       tags: [Semantic]
       operationId: deleteSemanticDoc
-      summary: "Delete a doc — workspace members"
+      summary: "Delete a doc — workspace editors and admins (#653)"
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/semantic/docs/search:

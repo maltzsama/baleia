@@ -61,11 +61,11 @@ SELECT * FROM workspaces WHERE id = $1;
 SELECT * FROM workspaces WHERE polaris_catalog_name = $1;
 
 -- name: ListWorkspacesByUser :many
-SELECT DISTINCT w.*
+-- The workspaces a user is a member of (#653): their personal workspace,
+-- personal workspaces shared with them and their teams' workspaces.
+SELECT w.*
 FROM workspaces w
-LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id
-WHERE w.owner_user_id = $1
-   OR tm.user_id = $1
+WHERE baleia_workspace_member_role(w.id, @user_id::uuid) IS NOT NULL
 ORDER BY w.name;
 
 -- name: UpdateWorkspace :one
@@ -75,35 +75,29 @@ WHERE id = $1
 RETURNING *;
 
 -- name: CheckWorkspaceAccess :one
-SELECT EXISTS (
-    SELECT 1 FROM workspaces w
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
-    WHERE w.id = $1
-      AND (w.owner_user_id = $2 OR tm.user_id = $2)
-) AS has_access;
+SELECT (baleia_workspace_member_role(@id::uuid, @user_id::uuid) IS NOT NULL)::bool AS has_access;
+
+-- name: GetWorkspaceMemberRole :one
+-- The user's role in the workspace (#653): admin, editor or viewer; empty for
+-- a non-member. A global admin is not a member by this query.
+SELECT COALESCE(baleia_workspace_member_role(@id::uuid, @user_id::uuid), '')::text AS role;
 
 -- name: SharesWorkspace :one
 -- Whether two users are both members of one workspace, by the membership
 -- rule of CheckWorkspaceAccess (#432).
 SELECT EXISTS (
     SELECT 1 FROM workspaces w
-    LEFT JOIN team_members a ON a.team_id = w.owner_team_id AND a.user_id = @caller_id::uuid
-    LEFT JOIN team_members b ON b.team_id = w.owner_team_id AND b.user_id = @user_id::uuid
-    WHERE (w.owner_user_id = @caller_id::uuid OR a.user_id IS NOT NULL)
-      AND (w.owner_user_id = @user_id::uuid OR b.user_id IS NOT NULL)
+    WHERE baleia_workspace_member_role(w.id, @caller_id::uuid) IS NOT NULL
+      AND baleia_workspace_member_role(w.id, @user_id::uuid) IS NOT NULL
 ) AS shares;
 
 -- name: DeleteTeam :exec
 DELETE FROM teams WHERE id = $1;
 
 -- name: IsWorkspaceOwner :one
--- A personal workspace is owned by its user; a shared one by the owners of its team.
-SELECT EXISTS (
-    SELECT 1 FROM workspaces w
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2 AND tm.role = 'owner'
-    WHERE w.id = $1
-      AND (w.owner_user_id = $2 OR tm.user_id = $2)
-) AS is_owner;
+-- Whether the user is an admin of the workspace (#653): the owner of a
+-- personal one, and a team owner of a shared one unless another role was set.
+SELECT (baleia_workspace_member_role(@id::uuid, @user_id::uuid) = 'admin')::bool AS is_owner;
 
 -- name: GetTeamMemberRole :one
 SELECT role FROM team_members WHERE team_id = $1 AND user_id = $2;
@@ -131,10 +125,8 @@ DELETE FROM workspace_catalog_grants WHERE workspace_id = $1 AND catalog_id = $2
 -- True when the user is a member of a workspace that has been granted the catalog.
 SELECT EXISTS (
     SELECT 1 FROM workspace_catalog_grants g
-    JOIN workspaces w ON w.id = g.workspace_id
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
-    WHERE g.catalog_id = $1
-      AND (w.owner_user_id = $2 OR tm.user_id = $2)
+    WHERE g.catalog_id = @catalog_id::uuid
+      AND baleia_workspace_member_role(g.workspace_id, @user_id::uuid) IS NOT NULL
 ) AS granted;
 
 -- name: CatalogGrantedToAgent :one
@@ -142,21 +134,17 @@ SELECT EXISTS (
 -- agent's owner is still a member of that workspace (#59).
 SELECT EXISTS (
     SELECT 1 FROM workspace_catalog_grants g
-    JOIN workspaces w ON w.id = g.workspace_id
-    JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = $2
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $3
-    WHERE g.catalog_id = $1
-      AND (w.owner_user_id = $3 OR tm.user_id = $3)
+    JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = @agent_id::uuid
+    WHERE g.catalog_id = @catalog_id::uuid
+      AND baleia_workspace_member_role(g.workspace_id, @user_id::uuid) IS NOT NULL
 ) AS granted;
 
 -- name: ListCatalogsGrantedToUser :many
 -- The catalogs of one connection that a user reaches through workspace grants.
 SELECT DISTINCT c.* FROM catalogs c
 JOIN workspace_catalog_grants g ON g.catalog_id = c.id
-JOIN workspaces w ON w.id = g.workspace_id
-LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
-WHERE c.connection_id = $1
-  AND (w.owner_user_id = $2 OR tm.user_id = $2);
+WHERE c.connection_id = @connection_id::uuid
+  AND baleia_workspace_member_role(g.workspace_id, @user_id::uuid) IS NOT NULL;
 
 -- name: ListGrantedCatalogsOfWorkspace :many
 SELECT c.*, cc.name AS connection_name, cc.type AS connection_type
@@ -173,13 +161,10 @@ SELECT id FROM workspaces WHERE type = 'personal' AND owner_user_id = $1 ORDER B
 SELECT EXISTS (SELECT 1 FROM team_members WHERE user_id = $1 AND role = 'owner') AS owns;
 
 -- name: ListWorkspacePrincipalUsers :many
--- Users who are members of the workspace: the personal owner, or the owning
--- team's members (#113).
-SELECT DISTINCT u.id, u.name, u.email
+-- Users who are members of the workspace (#113, #653).
+SELECT u.id, u.name, u.email
 FROM users u
-JOIN workspaces w ON w.id = @workspace_id::uuid
-LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id
-WHERE w.owner_user_id = u.id OR tm.user_id = u.id
+WHERE baleia_workspace_member_role(@workspace_id::uuid, u.id) IS NOT NULL
 ORDER BY u.name
 LIMIT @lim::int;
 
@@ -218,3 +203,35 @@ UPDATE workspaces
 SET default_binding_id = NULL, default_schema = NULL, updated_at = now()
 WHERE id = @workspace_id::uuid
   AND default_binding_id IN (SELECT id FROM catalog_bindings WHERE catalog_id = @catalog_id::uuid);
+
+-- name: ListWorkspaceMembers :many
+-- The members of a workspace with their role (#653): source is how they are
+-- a member (owner of a personal workspace, member of the owning team, or
+-- shared with them), role_set whether their role was set explicitly.
+SELECT sqlc.embed(u),
+       baleia_workspace_member_role(w.id, u.id)::text AS role,
+       (CASE WHEN w.owner_user_id = u.id THEN 'owner'
+             WHEN w.type = 'shared' THEN 'team'
+             ELSE 'shared' END)::text AS source,
+       (wm.user_id IS NOT NULL)::bool AS role_set
+FROM workspaces w
+JOIN users u ON baleia_workspace_member_role(w.id, u.id) IS NOT NULL
+LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = u.id
+WHERE w.id = @workspace_id::uuid
+ORDER BY u.name;
+
+-- name: UserInWorkspaceTeam :one
+SELECT EXISTS (
+    SELECT 1 FROM workspaces w
+    JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = @user_id::uuid
+    WHERE w.id = @workspace_id::uuid
+) AS in_team;
+
+-- name: UpsertWorkspaceMember :exec
+INSERT INTO workspace_members (workspace_id, user_id, role, granted_by)
+VALUES (@workspace_id::uuid, @user_id::uuid, @role::text, sqlc.narg(granted_by)::uuid)
+ON CONFLICT (workspace_id, user_id) DO UPDATE
+SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now();
+
+-- name: DeleteWorkspaceMember :execrows
+DELETE FROM workspace_members WHERE workspace_id = @workspace_id::uuid AND user_id = @user_id::uuid;
