@@ -63,8 +63,12 @@ type Core struct {
 	Temporal        client.Client
 	// Dialer is the SSRF-safe dialer every outbound connection goes through
 	// (docs/adr/0011).
-	Dialer      *connections.Dialer
-	Connections *connections.Registry
+	Dialer *connections.Dialer
+	// ManagedDialer is Dialer with the internal ranges open for
+	// operator-configured endpoints (the default Trino cluster, the catalog
+	// binder); user-supplied connections keep the strict Dialer (#609).
+	ManagedDialer *connections.Dialer
+	Connections   *connections.Registry
 	// Dialects describe the SQL of every engine kind; built once and injected.
 	Dialects *dialect.Registry
 	// Engines run SQL (docs/adr/0002).
@@ -146,6 +150,17 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	if err != nil {
 		return nil, fmt.Errorf("invalid connection network settings: %w", err)
 	}
+	// The operator's own endpoints (TRINO_URL, the catalog binder) may live on
+	// a private address. They get a dialer with the internal ranges open; the
+	// deny list still wins and user connections keep the strict dialer (#609).
+	c.ManagedDialer, err = connections.NewDialer(connections.DialerOptions{
+		DenyCIDRs:     cfg.ConnectionsDenyCIDRs,
+		AllowLoopback: cfg.ConnectionsAllowLoopback,
+		AllowPrivate:  true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("invalid managed connection network settings: %w", err)
+	}
 	c.Dialects = dialect.NewRegistry()
 	c.Connections, err = providers.New(c.Dialer, providers.Options{
 		Dialects: c.Dialects,
@@ -167,7 +182,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	if err != nil {
 		return nil, fmt.Errorf("engine kinds: %w", err)
 	}
-	c.Engines = queryengine.NewManager(c.Queries, c.Keyring, c.Connections, c.Dialer, kinds)
+	c.Engines = queryengine.NewManager(c.Queries, c.Keyring, c.Connections, c.Dialer, c.ManagedDialer, kinds)
 
 	c.Storage, err = storage.New(storage.Options{
 		Endpoint:  cfg.S3Endpoint,
@@ -182,7 +197,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	}
 	c.Storage.SetMetrics(c.Metrics.Storage())
 
-	c.TrinoAdmin = trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoAdminUser, obs.WrapHTTPClient(c.Dialer.HTTPClient(60*time.Second)))
+	c.TrinoAdmin = trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoAdminUser, obs.WrapHTTPClient(c.ManagedDialer.HTTPClient(60*time.Second)))
 	c.Binder = bindtrino.New(c.Logger, c.TrinoAdmin, c.Queries).WithRegistryKeyring(c.RegistryKeyring).
 		WithIcebergMinRetention(cfg.MaintenanceMinRetention())
 	c.Audit = audit.NewPostgres(c.Logger, c.Queries, c.Connections.SecretKeys(), c.Metrics.Audit().WriteFailed)

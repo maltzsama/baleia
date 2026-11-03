@@ -81,7 +81,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	w := worker.New(core.Temporal, taskQueue, worker.Options{Interceptors: obs.WorkerInterceptors()})
 
 	// Lens reads the Trino coordinator's runtime state as the service identity.
-	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, core.Dialer.HTTPClient(60*time.Second)))
+	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, core.ManagedDialer.HTTPClient(60*time.Second)))
 
 	act := activities.New(logger, pool, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
 	act.SetMetrics(reg)

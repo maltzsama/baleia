@@ -76,6 +76,10 @@ type DialerOptions struct {
 	DenyCIDRs     []string // always refused, in addition to DefaultDeny
 	AllowCIDRs    []string // if set, only these; opens the internal ranges in DefaultDeny
 	AllowLoopback bool     // development: reach databases on localhost
+	// AllowPrivate opens the internal ranges (RFC1918, CGNAT, ULA) by default.
+	// It is for operator-configured endpoints (the default Trino cluster, the
+	// catalog binder), never for user-supplied connection hosts (#609).
+	AllowPrivate bool
 }
 
 // NewDialer builds the dialer from operator options.
@@ -89,7 +93,9 @@ func NewDialer(o DialerOptions) (*Dialer, error) {
 			d.Deny = append(d.Deny, p)
 			continue
 		}
-		d.defaultDeny = append(d.defaultDeny, p)
+		if !o.AllowPrivate {
+			d.defaultDeny = append(d.defaultDeny, p)
+		}
 	}
 	extra, err := parsePrefixes(o.DenyCIDRs)
 	if err != nil {

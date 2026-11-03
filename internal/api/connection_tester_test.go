@@ -196,8 +196,12 @@ func TestTestConnectionDraft_AdminsOnly(t *testing.T) {
 	})
 	srv := fakeREST(t, false)
 
-	if _, ok := runDraftAs(t, h, ownerID, "member", draft(srv.URL+"/catalog")).(TestConnectionDraft403JSONResponse); !ok {
+	resp, ok := runDraftAs(t, h, ownerID, "member", draft(srv.URL+"/catalog")).(TestConnectionDraft403JSONResponse)
+	if !ok {
 		t.Fatal("a member must not test connections when only admins manage them")
+	}
+	if resp.Code != ErrorCodeForbidden || resp.Message == "" {
+		t.Fatalf("unexpected denial payload: %+v", resp)
 	}
 	if _, ok := runDraftAs(t, h, ownerID, authz.RoleAdmin, draft(srv.URL+"/catalog")).(TestConnectionDraft200JSONResponse); !ok {
 		t.Fatal("an admin may test connections")
