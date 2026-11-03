@@ -117,11 +117,6 @@ func Defaults() Limits {
 	}
 }
 
-// DefaultPolicy is the policy stored as `{}`.
-func DefaultPolicy() Policy {
-	return Policy{Version: 1, Tools: append([]string(nil), AllTools...), Limits: Defaults()}
-}
-
 // Effective is the evaluated policy handed to a tool. Tools is a set; an empty
 // Catalogs/Engines set means "any" (unrestricted), matching a nil list.
 type Effective struct {

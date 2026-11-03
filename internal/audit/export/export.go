@@ -40,46 +40,6 @@ type Config struct {
 	Lag      time.Duration
 }
 
-// ConfigFromEnv reads the configuration; getenv is os.Getenv in production.
-func ConfigFromEnv(getenv func(string) string) Config {
-	c := Config{
-		URL:      getenv("BALEIA_AUDIT_EXPORT_URL"),
-		Index:    getenv("BALEIA_AUDIT_EXPORT_INDEX"),
-		Auth:     getenv("BALEIA_AUDIT_EXPORT_AUTH"),
-		User:     getenv("BALEIA_AUDIT_EXPORT_USER"),
-		Password: getenv("BALEIA_AUDIT_EXPORT_PASSWORD"),
-		Token:    getenv("BALEIA_AUDIT_EXPORT_TOKEN"),
-		CAFile:   getenv("BALEIA_AUDIT_EXPORT_CA_FILE"),
-	}
-	if c.Index == "" {
-		c.Index = "baleia-audit"
-	}
-	if c.Auth == "" {
-		c.Auth = "none"
-	}
-	c.Batch = atoiDefault(getenv("BALEIA_AUDIT_EXPORT_BATCH"), 500)
-	c.Interval = durationDefault(getenv("BALEIA_AUDIT_EXPORT_INTERVAL"), 30*time.Second)
-	c.Lag = DefaultSafetyLag
-	return c
-}
-
-// Enabled reports whether an export target is configured.
-func (c Config) Enabled() bool { return c.URL != "" }
-
-func atoiDefault(s string, def int) int {
-	if n, err := strconv.Atoi(s); err == nil && n > 0 {
-		return n
-	}
-	return def
-}
-
-func durationDefault(s string, def time.Duration) time.Duration {
-	if d, err := time.ParseDuration(s); err == nil && d > 0 {
-		return d
-	}
-	return def
-}
-
 // Event is one audit row to export.
 type Event struct {
 	OccurredAt   time.Time

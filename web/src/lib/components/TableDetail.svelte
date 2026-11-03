@@ -594,9 +594,4 @@
 		background: #f8fafc;
 		border-color: #e2e8f0;
 	}
-	.dark .type-other {
-		color: #94a3b8;
-		background: #1c2128;
-		border-color: #30363d;
-	}
 </style>

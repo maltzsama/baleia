@@ -40,25 +40,6 @@ func NativeType(f arrow.Field) string {
 	return f.Type.String()
 }
 
-// RecordWriter writes Arrow record batches as one IPC stream.
-type RecordWriter struct{ w *ipc.Writer }
-
-// NewRecordWriter starts an IPC stream with the schema.
-func NewRecordWriter(w io.Writer, schema *arrow.Schema) *RecordWriter {
-	return &RecordWriter{w: ipc.NewWriter(w, ipc.WithSchema(schema), ipc.WithAllocator(memory.NewGoAllocator()))}
-}
-
-// Write appends a batch; the caller keeps ownership of rec.
-func (r *RecordWriter) Write(rec arrow.RecordBatch) error {
-	if err := r.w.Write(rec); err != nil {
-		return fmt.Errorf("write arrow batch: %w", err)
-	}
-	return nil
-}
-
-// Close writes the end-of-stream marker.
-func (r *RecordWriter) Close() error { return r.w.Close() }
-
 // FileWriter writes Arrow record batches as one IPC *file*: the footer records
 // the offset of every block, which is what lets a reader seek to a row range
 // instead of downloading the whole result (#238).

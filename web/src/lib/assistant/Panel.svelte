@@ -11,7 +11,11 @@
 	import { assistantStore } from './store.svelte';
 
 	let input = $state('');
-	let composer = $state<HTMLTextAreaElement | null>(null);
+	// The panel mounts when the user opens the assistant tab, so moving focus to
+	// the composer answers that action instead of surprising a page load (#637).
+	function focusComposer(el: HTMLTextAreaElement) {
+		el.focus();
+	}
 	let lastWorkspace = '';
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 
@@ -185,13 +189,12 @@
 
 		<div class="border-t border-border p-2">
 			<textarea
-				bind:this={composer}
 				bind:value={input}
 				onkeydown={onKeydown}
 				rows="2"
 				placeholder={m.assistant_panel_ask_about_your_data()}
 				aria-label={m.assistant_panel_message_the_assistant()}
-				autofocus
+				{@attach focusComposer}
 				class="w-full resize-none rounded-md border border-border bg-bg-toolbar px-2 py-1.5 text-[12px] text-text-main outline-none focus:border-primary"
 			></textarea>
 			<div class="mt-1.5 flex justify-end gap-1.5">
