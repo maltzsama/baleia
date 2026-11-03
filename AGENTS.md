@@ -36,7 +36,8 @@ flight.
    English too.
 2. Run the full DoD for what the PR touches (`DoD-standard`, `DoD-web`, or
    both) **before** opening it. Open the PR with `Closes #<issue>` for every
-   issue it closes; grouping sibling issues into one PR is expected.
+   issue it closes; group sibling issues into thematic PRs (one coherent theme
+   per PR, merged sequentially).
 3. **Trigger CodeRabbit on every PR**: comment `@coderabbitai review`.
    - If it reviews, read **all** of its findings (the review body and every
      inline comment) before merging, fix the valid ones, push, and re-check.
