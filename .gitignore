@@ -388,3 +388,6 @@ tmp/
 
 # Contract fixtures of the pinned plugin release (make contract-fetch)
 /internal/contract/testdata/
+
+# Built when running `go build -tags e2e ./cmd/e2e-seed` locally
+/e2e-seed
