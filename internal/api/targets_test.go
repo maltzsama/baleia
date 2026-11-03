@@ -134,7 +134,7 @@ func TestRunQuery_StoresTarget(t *testing.T) {
 	if err := json.Unmarshal(p.TargetSnapshot, &snap); err != nil {
 		t.Fatal(err)
 	}
-	if snap["engine_kind"] != "trino" || snap["catalog_name"] != "cat1" || snap["engine_catalog"] != "eng_cat_1" || snap["schema"] != "tiny" || snap["read_only"] == true {
+	if snap["engine_kind"] != "trino" || snap["catalog_name"] != "cat1" || snap["engine_catalog"] != "eng_cat_1" || snap["schema"] != "tiny" || snap["read_only"] != false {
 		t.Fatalf("snapshot = %v", snap)
 	}
 }

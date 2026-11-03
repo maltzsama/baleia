@@ -4605,7 +4605,7 @@ export interface components {
             port?: string;
             /** @description Whether stored credentials exist; the secret itself is never returned */
             has_credentials: boolean;
-            /** @description The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59) */
+            /** @description The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651) */
             credentials_read_only: boolean;
             /** Format: date-time */
             created_at: string;
@@ -4624,7 +4624,7 @@ export interface components {
                 [key: string]: string;
             };
             /**
-             * @description The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+             * @description The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
              * @default false
              */
             credentials_read_only: boolean;

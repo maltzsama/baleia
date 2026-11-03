@@ -1551,7 +1551,7 @@ components:
         host: { type: string }
         port: { type: string }
         has_credentials: { type: boolean, description: "Whether stored credentials exist; the secret itself is never returned" }
-        credentials_read_only: { type: boolean, description: "The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)" }
+        credentials_read_only: { type: boolean, description: "The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -1573,7 +1573,7 @@ components:
           additionalProperties: { type: string }
           description: "Non-secret fields of the provider's config schema"
         credentials_read_only:
-          { type: boolean, default: false, description: "The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)" }
+          { type: boolean, default: false, description: "The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)" }
         credentials:
           type: object
           description: "Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config"

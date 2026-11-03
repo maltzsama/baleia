@@ -1762,7 +1762,7 @@ type CatalogConnection struct {
 	Config    map[string]string `json:"config"`
 	CreatedAt time.Time         `json:"created_at"`
 
-	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
 	CredentialsReadOnly bool `json:"credentials_read_only"`
 
 	// HasCredentials Whether stored credentials exist; the secret itself is never returned
@@ -2064,7 +2064,7 @@ type CreateCatalogConnectionRequest struct {
 	// Credentials Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config
 	Credentials *map[string]interface{} `json:"credentials,omitempty"`
 
-	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
 	CredentialsReadOnly   *bool               `json:"credentials_read_only,omitempty"`
 	GlueCredentials       *GlueCredentials    `json:"glue_credentials,omitempty"`
 	HiveCredentials       *HiveCredentials    `json:"hive_credentials,omitempty"`
@@ -4352,7 +4352,7 @@ type TestConnectionRequest struct {
 	// Credentials Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config
 	Credentials *map[string]interface{} `json:"credentials,omitempty"`
 
-	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
 	CredentialsReadOnly *bool               `json:"credentials_read_only,omitempty"`
 	GlueCredentials     *GlueCredentials    `json:"glue_credentials,omitempty"`
 	HiveCredentials     *HiveCredentials    `json:"hive_credentials,omitempty"`

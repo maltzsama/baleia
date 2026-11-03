@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/db"
@@ -159,7 +160,7 @@ func (q *authzFake) ListWorkspaceCatalogGrants(_ context.Context, ws pgtype.UUID
 	out := []db.ListWorkspaceCatalogGrantsRow{}
 	for _, g := range q.g.grants {
 		if g.WorkspaceID.Bytes == ws.Bytes {
-			out = append(out, db.ListWorkspaceCatalogGrantsRow{WorkspaceID: g.WorkspaceID, CatalogID: g.CatalogID, CatalogName: q.cat.TrinoName()})
+			out = append(out, db.ListWorkspaceCatalogGrantsRow{WorkspaceID: g.WorkspaceID, CatalogID: g.CatalogID, GrantedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}, CatalogName: q.cat.TrinoName()})
 		}
 	}
 	return out, nil
@@ -292,6 +293,9 @@ func TestGrantCatalogAccess_Persists(t *testing.T) {
 	rows, ok := list.(ListWorkspaceCatalogAccess200JSONResponse)
 	if !ok || len(rows) != 1 || rows[0].CatalogId != q.cat.ID.Bytes {
 		t.Fatalf("list after grant = %#v", list)
+	}
+	if rows[0].GrantedAt.IsZero() {
+		t.Fatalf("granted_at is zero in the listing = %#v", rows[0])
 	}
 
 	// Granting again is idempotent instead of failing.
