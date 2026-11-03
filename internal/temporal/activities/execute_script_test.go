@@ -654,91 +654,28 @@ func shortScriptWorkflow(ctx workflow.Context, p ExecuteScriptParams) error {
 	return workflow.ExecuteActivity(ctx, ExecuteScript, p).Get(ctx, nil)
 }
 
-// TestResolveTableRef pins the allowlist's path rules (#614): an unqualified
-// name is allowed within the target catalog, a qualified name is checked, and
-// a three-part name from another catalog is refused.
-func TestResolveTableRef(t *testing.T) {
+// TestExecuteScript_InteractiveReadsAnyCatalog: Baleia neither filters nor
+// rewrites the statements it runs. A join across catalogs, a table
+// created earlier in the same script and a table missing from the synced
+// metadata all reach the engine, which decides (#649).
+func TestExecuteScript_InteractiveReadsAnyCatalog(t *testing.T) {
 	t.Parallel()
-	target := queryengine.Target{EngineCatalog: "cat", CatalogName: "display"}
-	tests := []struct {
-		path      []string
-		check     bool
-		ok        bool
-		namespace []string
-		name      string
-	}{
-		{[]string{"orders"}, false, true, nil, "orders"},
-		{[]string{"tiny", "orders"}, true, true, []string{"tiny"}, "orders"},
-		{[]string{"cat", "tiny", "orders"}, true, true, []string{"tiny"}, "orders"},
-		{[]string{"display", "tiny", "orders"}, true, true, []string{"tiny"}, "orders"},
-		{[]string{"other", "tiny", "orders"}, false, false, nil, ""},
-	}
-	for _, tt := range tests {
-		ns, name, check, ok := resolveTableRef(target, tt.path)
-		if ok != tt.ok || check != tt.check || name != tt.name {
-			t.Errorf("%v: got (%v, %q, %v, %v), want (%v, %q, %v, %v)", tt.path, ns, name, check, ok, tt.namespace, tt.name, tt.check, tt.ok)
+	for _, sql := range []string{
+		"SELECT * FROM iceberg.sales.orders o JOIN pg.public.customers c ON o.customer_id = c.id",
+		"INSERT INTO sales.fresh SELECT 1",
+		"SELECT * FROM other.not_synced",
+	} {
+		store := newStatementStore(1)
+		fake := &fakeEngine{Engine: testTrino}
+		p := scriptParams(sql)
+		if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
+			t.Fatalf("%q: %v", sql, err)
 		}
-		if tt.namespace != nil && (len(ns) != len(tt.namespace) || ns[0] != tt.namespace[0]) {
-			t.Errorf("%v: namespace = %v, want %v", tt.path, ns, tt.namespace)
+		if got := store.status(); len(got) != 1 || got[0] != "finished" {
+			t.Fatalf("%q: statement = %v, want finished", sql, got)
 		}
-	}
-}
-
-func TestIsSelectStatement(t *testing.T) {
-	t.Parallel()
-	for _, s := range []string{"SELECT 1", "  select * from t", "WITH x AS (SELECT 1) SELECT * FROM x", "-- hi\nSELECT 1", "/* c */ SELECT 1"} {
-		if !isSelectStatement(s) {
-			t.Errorf("%q: want a SELECT", s)
+		if len(fake.sqls) != 1 || fake.sqls[0] != sql {
+			t.Fatalf("%q: the engine got %q, want the statement unchanged", sql, fake.sqls)
 		}
-	}
-	for _, s := range []string{"INSERT INTO t VALUES (1)", "CREATE TABLE t AS SELECT 1", "EXPLAIN SELECT 1", "SHOW TABLES", ""} {
-		if isSelectStatement(s) {
-			t.Errorf("%q: want non-SELECT", s)
-		}
-	}
-}
-
-// allowlistStore answers the metadata lookup from a set of "namespace.name"
-// keys.
-type allowlistStore struct {
-	*statementStore
-	tables map[string]bool
-}
-
-func (s *allowlistStore) GetMetadataTableByName(_ context.Context, p db.GetMetadataTableByNameParams) (pgtype.UUID, error) {
-	if s.tables[strings.Join(p.Namespace, ".")+"."+p.Name] {
-		return pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, nil
-	}
-	return pgtype.UUID{}, pgx.ErrNoRows
-}
-
-// TestExecuteScript_InteractiveAllowlist: a qualified table outside the
-// catalog's metadata fails the statement and stops the script; a known table
-// runs (#614).
-func TestExecuteScript_InteractiveAllowlist(t *testing.T) {
-	t.Parallel()
-	store := &allowlistStore{statementStore: newStatementStore(1), tables: map[string]bool{"tiny.orders": true}}
-	fake := &fakeEngine{Engine: testTrino}
-	p := scriptParams("SELECT * FROM tiny.orders")
-	p.Interactive = true
-	if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
-		t.Fatalf("known table: %v", err)
-	}
-	if got := store.status(); len(got) != 1 || got[0] != "finished" {
-		t.Fatalf("known table statement = %v, want finished", got)
-	}
-
-	store = &allowlistStore{statementStore: newStatementStore(1), tables: map[string]bool{"tiny.orders": true}}
-	p = scriptParams("SELECT * FROM other.orders")
-	p.Interactive = true
-	r, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p)
-	if err != nil {
-		t.Fatalf("unknown table: %v", err)
-	}
-	if got := store.status(); len(got) != 1 || got[0] != "failed" {
-		t.Fatalf("unknown table statement = %v, want failed", got)
-	}
-	if len(r.Statements) != 1 || r.Statements[0].ErrorCode != codeEditorRejected {
-		t.Fatalf("outcome = %+v, want editor_rejected", r.Statements)
 	}
 }

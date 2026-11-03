@@ -271,8 +271,7 @@ type GetMetadataTableByNameParams struct {
 	Name      string      `json:"name"`
 }
 
-// A live table by its natural key, for the v1 -> v2 metric migration (#121)
-// and the editor's table allowlist (#614).
+// A live table by its natural key, for the v1 -> v2 metric migration (#121).
 func (q *Queries) GetMetadataTableByName(ctx context.Context, arg GetMetadataTableByNameParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, getMetadataTableByName, arg.CatalogID, arg.Namespace, arg.Name)
 	var id pgtype.UUID

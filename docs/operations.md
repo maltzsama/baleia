@@ -18,8 +18,6 @@ These take effect with their defaults:
 
 | Change | Effect | To keep the old behavior |
 |---|---|---|
-| Editor row limit (#615) | Interactive `SELECT`s are capped at the engine at 1,000 rows | `BALEIA_EDITOR_ROW_LIMIT=0` |
-| Known tables only (#614) | An editor statement naming a table missing from the target catalog's synced metadata fails | Keep metadata synced; there is no switch |
 | Private ranges denied (#609) | User-owned connections can no longer reach RFC1918, `100.64.0.0/10` or IPv6 ULA addresses. The default Trino cluster (`TRINO_URL`), the monitor and the binder are not affected | List the ranges in `BALEIA_CONNECTIONS_ALLOW_CIDRS` |
 | Connections are admin-only (#610) | Only admins create, edit and test connections | `BALEIA_CONNECTIONS_CREATE=everyone` |
 | Executions are scoped (#611) | Members see their own executions and results; workspace owners and admins see all | — |
@@ -52,7 +50,7 @@ go run ./cmd/backfill-references --database-url "$DATABASE_URL"
 
 ### 4. New settings
 
-New and all optional: `BALEIA_EDITOR_ROW_LIMIT`, `BALEIA_WORKLOAD_ENABLED`,
+New and all optional: `BALEIA_WORKLOAD_ENABLED`,
 the `BALEIA_WORKLOAD_ADAPTIVE_*` thresholds and
 `BALEIA_TRINO_RESOURCE_GROUPS_ENVIRONMENT`. `BALEIA_CONNECTIONS_CREATE` now
 defaults to `admins` (it was `everyone`), and `BALEIA_CONNECTIONS_ALLOW_CIDRS`
