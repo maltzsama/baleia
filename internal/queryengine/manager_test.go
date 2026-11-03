@@ -49,7 +49,45 @@ func newManager(t *testing.T, s *store) (*queryengine.Manager, *connections.Dial
 	if err != nil {
 		t.Fatal(err)
 	}
-	return queryengine.NewManager(s, nil, nil, d, testKinds(t)), d
+	return queryengine.NewManager(s, nil, nil, d, nil, testKinds(t)), d
+}
+
+// TestManagerUsesManagedDialerForSystemOwnedEngines: the default Trino cluster
+// is a system-owned connection seeded from TRINO_URL, so it may reach a private
+// address; a user-owned connection keeps the strict dialer (#609).
+func TestManagerUsesManagedDialerForSystemOwnedEngines(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	strict, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed, err := connections.NewDialer(connections.DialerOptions{AllowPrivate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := testKinds(t)
+
+	user := engineRow(fake.Kind, time.Unix(1, 0), false)
+	user.CatalogConnection.CreatedBy = pgtype.UUID{Bytes: [16]byte{0x99}, Valid: true}
+	m := queryengine.NewManager(&store{row: user}, nil, nil, strict, managed, kinds)
+	e, err := m.Get(ctx, engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := unwrap(t, e).Dialer(); got != strict {
+		t.Error("user-owned engine did not use the strict dialer")
+	}
+
+	system := engineRow(fake.Kind, time.Unix(1, 0), false)
+	m = queryengine.NewManager(&store{row: system}, nil, nil, strict, managed, kinds)
+	e, err = m.Get(ctx, engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := unwrap(t, e).Dialer(); got != managed {
+		t.Error("system-owned engine did not use the managed dialer")
+	}
 }
 
 // testKinds is the registry the manager tests build engines from.
@@ -229,7 +267,7 @@ func TestManager_SeveralInstancesAndKinds(t *testing.T) {
 		ids = append(ids, id)
 	}
 	d, _ := connections.NewDialer(connections.DialerOptions{})
-	m := queryengine.NewManager(s, nil, nil, d, testKinds(t))
+	m := queryengine.NewManager(s, nil, nil, d, nil, testKinds(t))
 	seen := map[*fake.Engine]bool{}
 	for _, id := range ids {
 		e, err := m.Get(ctx, id)

@@ -143,9 +143,10 @@ type Config struct {
 	ConnectionsDenyCIDRs     []string
 	ConnectionsAllowCIDRs    []string
 	ConnectionsAllowLoopback bool
-	// ConnectionsCreate is who may create and edit connections: "everyone"
-	// (the default) or "admins" (#512). The dialer lists apply to admins too,
-	// so this is what keeps self-service users off internal addresses.
+	// ConnectionsCreate is who may create and edit connections: "admins"
+	// (the default) or "everyone" (#512, #610). The dialer lists apply to
+	// admins too, so this is what keeps self-service users off internal
+	// addresses.
 	ConnectionsCreate string
 	// SQLiteRoot confines SQLite connections to files under it; empty
 	// disables the SQLite provider. SQLiteAllowWrite lets a connection that
@@ -293,7 +294,7 @@ func Load() *Config {
 		ConnectionsDenyCIDRs:        splitList(getEnv("BALEIA_CONNECTIONS_DENY_CIDRS", "")),
 		ConnectionsAllowCIDRs:       splitList(getEnv("BALEIA_CONNECTIONS_ALLOW_CIDRS", "")),
 		ConnectionsAllowLoopback:    getEnv("BALEIA_CONNECTIONS_ALLOW_LOOPBACK", "false") == "true",
-		ConnectionsCreate:           getEnv("BALEIA_CONNECTIONS_CREATE", "everyone"),
+		ConnectionsCreate:           getEnv("BALEIA_CONNECTIONS_CREATE", "admins"),
 		SQLiteRoot:                  getEnv("BALEIA_SQLITE_ROOT", ""),
 		SQLiteAllowWrite:            getEnv("BALEIA_SQLITE_ALLOW_WRITE", "false") == "true",
 		AllowAmbientAWSCredentials:  getEnv("BALEIA_ALLOW_AMBIENT_AWS_CREDENTIALS", "false") == "true",

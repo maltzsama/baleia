@@ -471,9 +471,8 @@ func roleContext(role string) context.Context {
 	return context.WithValue(testContext(), auth.ContextKeyRole, role)
 }
 
-// TestMayManageConnections: everyone by default; with
-// BALEIA_CONNECTIONS_CREATE=admins only admins, which is what both handlers and
-// the create_connection global action use.
+// TestMayManageConnections: with BALEIA_CONNECTIONS_CREATE=admins only admins,
+// which is what both handlers and the create_connection global action use.
 func TestMayManageConnections(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -482,7 +481,7 @@ func TestMayManageConnections(t *testing.T) {
 		role     string
 		expected bool
 	}{
-		{name: "member by default", role: "member", expected: true},
+		{name: "member with create unset", role: "member", expected: true},
 		{name: "member with everyone", create: "everyone", role: "member", expected: true},
 		{name: "member with admins", create: "admins", role: "member", expected: false},
 		{name: "admin with admins", create: "admins", role: authz.RoleAdmin, expected: true},
@@ -495,6 +494,17 @@ func TestMayManageConnections(t *testing.T) {
 				t.Errorf("mayManageConnections = %v, want %v", got, tt.expected)
 			}
 		})
+	}
+}
+
+// TestMayManageConnections_DefaultIsAdminsOnly checks the Load default, not a
+// zero-value config. Do not call t.Parallel here: t.Setenv does not support
+// parallel tests.
+func TestMayManageConnections_DefaultIsAdminsOnly(t *testing.T) {
+	t.Setenv("BALEIA_CONNECTIONS_CREATE", "")
+	h := testAPI(handlerFields{settings: SettingsFromConfig(config.Load())})
+	if h.mayManageConnections(authz.Principal{Role: "member"}) {
+		t.Error("member may manage connections by default, want admins only")
 	}
 }
 

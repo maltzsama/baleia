@@ -378,6 +378,11 @@ func (h *CatalogHandlers) TestConnectionDraft(ctx context.Context, request TestC
 	if err != nil {
 		return TestConnectionDraft401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
+	// Testing an unsaved connection dials a user-supplied host, so it needs
+	// the same gate as creating one (#610).
+	if !h.mayManageConnections(p) {
+		return TestConnectionDraft403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only admins may test connections"}}, nil
+	}
 	if !h.connectionTests.allow(p.UserID.String(), time.Now()) {
 		return TestConnectionDraft429JSONResponse{Code: ErrorCodeRateLimited, Message: "too many connection tests; try again in a minute"}, nil
 	}

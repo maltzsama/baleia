@@ -31,16 +31,30 @@ type Manager struct {
 	keyring   *crypto.Keyring
 	providers *connections.Registry
 	dialer    *connections.Dialer
-	kinds     *Registry
+	// managedDialer opens the internal ranges for system-owned engines (the
+	// default Trino cluster seeded from TRINO_URL). User-owned connections
+	// keep the strict dialer (#609). Nil falls back to dialer.
+	managedDialer *connections.Dialer
+	kinds         *Registry
 
 	mu    sync.Mutex
 	cache map[[16]byte]*managed
 }
 
-// NewManager returns a manager that builds engines of the kinds in kinds;
-// the keyring may be nil when no stored connection has credentials.
-func NewManager(store Store, keyring *crypto.Keyring, providers *connections.Registry, dialer *connections.Dialer, kinds *Registry) *Manager {
-	return &Manager{store: store, keyring: keyring, providers: providers, dialer: dialer, kinds: kinds, cache: map[[16]byte]*managed{}}
+// NewManager returns a manager that builds engines of the kinds in kinds; the
+// keyring may be nil when no stored connection has credentials. managedDialer
+// may be nil, in which case every engine uses dialer.
+func NewManager(store Store, keyring *crypto.Keyring, providers *connections.Registry, dialer, managedDialer *connections.Dialer, kinds *Registry) *Manager {
+	return &Manager{store: store, keyring: keyring, providers: providers, dialer: dialer, managedDialer: managedDialer, kinds: kinds, cache: map[[16]byte]*managed{}}
+}
+
+// dialerFor picks the permissive dialer for system-owned (operator-configured)
+// engines and the strict one for user-owned connections.
+func (m *Manager) dialerFor(row db.GetEngineWithConnectionRow) *connections.Dialer {
+	if m.managedDialer != nil && !row.CatalogConnection.CreatedBy.Valid {
+		return m.managedDialer
+	}
+	return m.dialer
 }
 
 // HasKind reports whether the manager can build engines of kind.
@@ -93,7 +107,7 @@ func (m *Manager) Get(ctx context.Context, engineID pgtype.UUID) (Engine, error)
 		IdentityMode:        row.Engine.IdentityMode,
 		CredentialsReadOnly: row.CatalogConnection.CredentialsReadOnly,
 	}
-	eng, err := entry.factory(ctx, er, cfg, m.dialer)
+	eng, err := entry.factory(ctx, er, cfg, m.dialerFor(row))
 	if err != nil {
 		return nil, err
 	}

@@ -293,8 +293,9 @@ func (h *core) globalActions(ctx context.Context, p authz.Principal) []GlobalAct
 }
 
 // mayManageConnections reports whether p may create or edit connections:
-// everyone by default, admins only with BALEIA_CONNECTIONS_CREATE=admins (#512).
-// create_connection in globalActions and the connection handlers both use it.
+// admins by default, everyone with BALEIA_CONNECTIONS_CREATE=everyone (#512,
+// #610). create_connection in globalActions and the connection handlers both
+// use it.
 func (h *core) mayManageConnections(p authz.Principal) bool {
 	return p.IsAdmin() || !h.settings.Connections.AdminsOnly
 }
