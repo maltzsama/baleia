@@ -88,8 +88,16 @@ func (s *session) options(cb queryengine.Callbacks, onHeaders func(http.Header))
 		info, _ := json.Marshal(map[string]string{"execution_id": s.spec.Tags.ExecutionID})
 		o.ClientInfo = string(info)
 	}
+	if s.spec.ReadOnly || s.spec.CatalogToken != "" {
+		o.ExtraCredentials = map[string]string{}
+	}
 	if s.spec.ReadOnly {
-		o.ExtraCredentials = map[string]string{"baleia.mode": "readonly"}
+		o.ExtraCredentials["baleia.mode"] = "readonly"
+	}
+	// Catalogs bound with iceberg.rest-catalog.session=USER hand this to their
+	// catalog manager as the user's bearer token (#648).
+	if s.spec.CatalogToken != "" {
+		o.ExtraCredentials[catalogTokenCredential] = s.spec.CatalogToken
 	}
 	if cb.OnProgress != nil {
 		o.OnProgress = func() { cb.OnProgress(queryengine.Progress{State: "RUNNING"}) }
@@ -167,6 +175,13 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 		began   bool
 		sinkErr error
 	)
+	if src := s.spec.CatalogTokenSource; src != nil {
+		tok, err := src(ctx)
+		if err != nil {
+			return err
+		}
+		s.spec.CatalogToken = tok
+	}
 	opts := s.options(cb, s.applyHeaders)
 	opts.OnQueryID = func(id string) {
 		if cb.OnStart != nil {
@@ -232,3 +247,7 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 	}
 	return sink.End(queryengine.Stats{RowCount: batcher.RowCount(), ElapsedMs: time.Since(start).Milliseconds()})
 }
+
+// catalogTokenCredential is the extra credential the Iceberg REST client in
+// Trino reads as the session's bearer token (iceberg.rest-catalog.session=USER).
+const catalogTokenCredential = "token"

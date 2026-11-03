@@ -49,6 +49,7 @@ type TxStore interface {
 	SuspendUser(ctx context.Context, arg db.SuspendUserParams) (db.User, error)
 	RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error
 	DeleteAPIKeysByUser(ctx context.Context, userID pgtype.UUID) error
+	DeleteUserIDPToken(ctx context.Context, userID pgtype.UUID) error
 }
 
 // Tx runs fn in one transaction over a TxStore.
@@ -218,6 +219,10 @@ func (s *Service) Suspend(ctx context.Context, id pgtype.UUID, reason string) (b
 			return err
 		}
 		if err := q.RevokeUserRefreshTokens(ctx, id); err != nil {
+			return err
+		}
+		// The identity-provider tokens go too (#648).
+		if err := q.DeleteUserIDPToken(ctx, id); err != nil {
 			return err
 		}
 		return q.DeleteAPIKeysByUser(ctx, id)

@@ -361,9 +361,9 @@ func (s *Service) resolveDestination(ctx context.Context, ws pgtype.UUID, bindin
 }
 
 // Validate checks a definition and explains it on the destination engine in
-// a read-only session with identity, the caller's engine user (#118). An
-// engine rejection is an *InvalidError.
-func (s *Service) Validate(ctx context.Context, ws, bindingID pgtype.UUID, definition, identity string) error {
+// a read-only session as identity, the caller's engine user and Baleia
+// principal (#118, #648). An engine rejection is an *InvalidError.
+func (s *Service) Validate(ctx context.Context, ws, bindingID pgtype.UUID, definition string, identity queryengine.Identity) error {
 	if err := s.ValidateDefinition(definition); err != nil {
 		return invalid(err)
 	}
@@ -393,7 +393,7 @@ func (s *Service) Validate(ctx context.Context, ws, bindingID pgtype.UUID, defin
 	if _, err := queryengine.CollectStrings(vctx, eng, queryengine.SessionSpec{
 		ReadOnly: true,
 		Catalog:  binding.EngineCatalogName,
-		Identity: queryengine.Identity{UserID: identity},
+		Identity: identity,
 		Tags:     queryengine.Tags{Source: "retriever-validate"},
 	}, explained, 1); err != nil {
 		return invalid(err)

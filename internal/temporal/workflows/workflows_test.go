@@ -358,7 +358,13 @@ func TestV3_InputHasNoSecrets(t *testing.T) {
 	}
 	require.Equal(t, []string{"ExecutionID", "WorkspaceID", "SQL", "Target", "Identity", "StatementTimeout", "RequestID", "ExecutionTimeout", "RuntimeTimeout", "RerunExecutionID", "RerunFromPosition", "Dialect", "Class", "WorkloadEnabled", "TrinoResourceGroups", "FairnessKey", "Weight", "AgentMaxConcurrent"}, fields(QueryExecutionInput{}))
 	require.Equal(t, []string{"EngineID", "EngineKind", "EngineName", "BindingID", "CatalogID", "CatalogName", "EngineCatalog", "Schema", "ReadOnly"}, fields(queryengine.Target{}))
-	require.Equal(t, []string{"UserID", "AgentID"}, fields(queryengine.Identity{}))
+	// Principal is the Baleia user's id; the user's identity-provider token
+	// is looked up by the worker when the session opens and never travels in
+	// the input (#648).
+	require.Equal(t, []string{"UserID", "AgentID", "Principal"}, fields(queryengine.Identity{}))
+	spec, err := json.Marshal(queryengine.SessionSpec{CatalogToken: "s3cret"})
+	require.NoError(t, err)
+	require.NotContains(t, string(spec), "s3cret")
 }
 
 // TestV3_Replay replays histories recorded on a real cluster (minikube, one

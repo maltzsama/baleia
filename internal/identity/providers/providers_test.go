@@ -13,16 +13,17 @@ import (
 )
 
 type fakeStore struct {
-	providers map[[16]byte]db.AuthProvider
-	linked    map[[16]byte]int64
-	detached  map[[16]byte]bool
+	providers    map[[16]byte]db.AuthProvider
+	linked       map[[16]byte]int64
+	detached     map[[16]byte]bool
+	tokensForgot map[[16]byte]bool
 	// raceLinked makes the delete fail as if a user had been linked after
 	// the count.
 	raceLinked bool
 }
 
 func newStore() *fakeStore {
-	return &fakeStore{providers: map[[16]byte]db.AuthProvider{}, linked: map[[16]byte]int64{}, detached: map[[16]byte]bool{}}
+	return &fakeStore{providers: map[[16]byte]db.AuthProvider{}, linked: map[[16]byte]int64{}, detached: map[[16]byte]bool{}, tokensForgot: map[[16]byte]bool{}}
 }
 
 func (f *fakeStore) ListAllAuthProviders(context.Context) ([]db.AuthProvider, error) {
@@ -66,6 +67,11 @@ func (f *fakeStore) UpdateAuthProvider(_ context.Context, arg db.UpdateAuthProvi
 	ap.Name, ap.ConfigEnc, ap.Enabled = arg.Name, arg.ConfigEnc, arg.Enabled
 	f.providers[arg.ID.Bytes] = ap
 	return ap, nil
+}
+
+func (f *fakeStore) DeleteUserIDPTokensByAuthProvider(_ context.Context, id pgtype.UUID) error {
+	f.tokensForgot[id.Bytes] = true
+	return nil
 }
 
 func (f *fakeStore) RevokeRefreshTokensByAuthProvider(_ context.Context, id pgtype.UUID) error {
@@ -188,5 +194,24 @@ func TestDelete_UserLinkedDuringDelete(t *testing.T) {
 	st.raceLinked = true
 	if err := s.Delete(context.Background(), ap.ID, false); !errors.Is(err, ErrInUse) {
 		t.Fatalf("Delete = %v, want ErrInUse", err)
+	}
+}
+
+// TestUpdate_DisableForgetsTokens (#648): disabling a provider forgets the
+// identity-provider tokens its sign-ins left; enabling keeps them.
+func TestUpdate_DisableForgetsTokens(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	st := newStore()
+	s := New(st, st.tx)
+	ap, err := s.Create(ctx, "corp", "oidc", true, func(pgtype.UUID) (string, error) { return "sealed", nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Update(ctx, ap.ID, "corp", true, "sealed"); err != nil || st.tokensForgot[ap.ID.Bytes] {
+		t.Fatalf("enabled update = %v, forgot %t", err, st.tokensForgot[ap.ID.Bytes])
+	}
+	if _, err := s.Update(ctx, ap.ID, "corp", false, "sealed"); err != nil || !st.tokensForgot[ap.ID.Bytes] {
+		t.Fatalf("disable = %v, forgot %t", err, st.tokensForgot[ap.ID.Bytes])
 	}
 }

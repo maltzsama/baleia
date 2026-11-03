@@ -23,6 +23,8 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	assistantdb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/identity/idptoken"
+	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/metrics"
@@ -155,6 +157,9 @@ type Deps struct {
 	// Assistant receives the turn runner once the server has built it; nil
 	// when the assistant is not provisioned.
 	Assistant *assistant.RunnerSlot
+	// Identity shares the OIDC sign-in service and the identity-provider
+	// tokens with the worker (#648); nil builds a service of its own.
+	Identity IdentityDeps
 	// WSTickets issues the single-use WebSocket tickets (#26); the WebSocket
 	// handler consumes from the same store. Nil builds one.
 	WSTickets *wsticket.Store
@@ -166,6 +171,13 @@ type ObservabilityDeps struct {
 	Audit   audit.Recorder
 	Metrics *metrics.Registry
 	Logger  *slog.Logger
+}
+
+// IdentityDeps are the OIDC sign-in service and the store of users'
+// identity-provider tokens (#648).
+type IdentityDeps struct {
+	OIDC      *oidclogin.Service
+	IDPTokens *idptoken.Tokens
 }
 
 // DataDeps is Baleia's own database.
@@ -226,6 +238,8 @@ func NewAPI(d Deps) (*API, error) {
 		dialects:       d.Engines.Dialects,
 		audit:          d.Observability.Audit,
 		content:        content.New(d.Data.Pool, d.Data.Queries),
+		oidcLogin:      d.Identity.OIDC,
+		idpTokens:      d.Identity.IDPTokens,
 	}
 	if c.audit == nil {
 		c.audit = audit.Nop{}

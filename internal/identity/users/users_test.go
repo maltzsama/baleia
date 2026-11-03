@@ -22,11 +22,12 @@ import (
 // fakeStore is one in-memory database for both the plain and the
 // transactional writes; failTx makes a transaction fail after its writes.
 type fakeStore struct {
-	users   map[[16]byte]db.User
-	resets  map[string]pgtype.UUID
-	revoked map[[16]byte]bool
-	keysDel map[[16]byte]bool
-	deleteE error
+	users     map[[16]byte]db.User
+	resets    map[string]pgtype.UUID
+	revoked   map[[16]byte]bool
+	keysDel   map[[16]byte]bool
+	idpForgot map[[16]byte]bool
+	deleteE   error
 	// emailRace makes CreateUser fail as if a concurrent invite had taken
 	// this e-mail after the check.
 	emailRace string
@@ -36,7 +37,7 @@ type fakeStore struct {
 }
 
 func newStore() *fakeStore {
-	return &fakeStore{users: map[[16]byte]db.User{}, resets: map[string]pgtype.UUID{}, revoked: map[[16]byte]bool{}, keysDel: map[[16]byte]bool{}}
+	return &fakeStore{users: map[[16]byte]db.User{}, resets: map[string]pgtype.UUID{}, revoked: map[[16]byte]bool{}, keysDel: map[[16]byte]bool{}, idpForgot: map[[16]byte]bool{}}
 }
 
 func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
@@ -121,6 +122,11 @@ func (f *fakeStore) RevokeUserRefreshTokens(_ context.Context, id pgtype.UUID) e
 
 func (f *fakeStore) DeleteAPIKeysByUser(_ context.Context, id pgtype.UUID) error {
 	f.keysDel[id.Bytes] = true
+	return nil
+}
+
+func (f *fakeStore) DeleteUserIDPToken(_ context.Context, id pgtype.UUID) error {
+	f.idpForgot[id.Bytes] = true
 	return nil
 }
 
@@ -233,7 +239,7 @@ func TestSuspendReinstate(t *testing.T) {
 			t.Fatalf("Suspend(%q) = %+v, %q, %v", c.asked, after, recorded, err)
 		}
 	}
-	if !st.revoked[u.ID.Bytes] || !st.keysDel[u.ID.Bytes] {
+	if !st.revoked[u.ID.Bytes] || !st.keysDel[u.ID.Bytes] || !st.idpForgot[u.ID.Bytes] {
 		t.Error("a suspension ends sessions and deletes API keys")
 	}
 

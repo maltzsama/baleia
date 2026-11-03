@@ -37,8 +37,19 @@ type Manager struct {
 	managedDialer *connections.Dialer
 	kinds         *Registry
 
+	// creds fills each session's CatalogToken (#648); nil leaves it empty.
+	creds CatalogCredentials
+
 	mu    sync.Mutex
 	cache map[[16]byte]*managed
+}
+
+// SetCatalogCredentials makes every session the manager's engines open carry
+// a CatalogToken from c (#648). Call it before the first Get.
+func (m *Manager) SetCatalogCredentials(c CatalogCredentials) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.creds = c
 }
 
 // NewManager returns a manager that builds engines of the kinds in kinds; the
@@ -111,7 +122,7 @@ func (m *Manager) Get(ctx context.Context, engineID pgtype.UUID) (Engine, error)
 	if err != nil {
 		return nil, err
 	}
-	me := &managed{Engine: eng, version: version, credentialsReadOnly: er.CredentialsReadOnly}
+	me := &managed{Engine: eng, version: version, credentialsReadOnly: er.CredentialsReadOnly, creds: m.creds}
 	m.cache[engineID.Bytes] = me
 	return me, nil
 }

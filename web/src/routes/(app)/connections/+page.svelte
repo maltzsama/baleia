@@ -41,6 +41,7 @@
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import {
 		canQueryDirectly,
+		catalogIdentity,
 		normalizeCatalogName,
 		normalizeEngineName
 	} from '$lib/connections/providers';
@@ -371,6 +372,11 @@
 						{/if}
 						{#if connection.has_credentials}
 							<Badge tone="neutral">{m.connections_credentials_stored()}</Badge>
+						{/if}
+						{#if catalogIdentity(provider, connection.config) === 'per_user'}
+							<Badge tone="success">{m.connections_identity_per_user()}</Badge>
+						{:else if catalogIdentity(provider, connection.config) === 'connection'}
+							<Badge tone="warning">{m.connections_identity_connection()}</Badge>
 						{/if}
 					</div>
 

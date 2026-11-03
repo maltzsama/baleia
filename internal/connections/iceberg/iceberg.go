@@ -38,6 +38,7 @@ func (*Provider) ConfigSchema() []connections.Field {
 		{Key: "client_secret", Label: "OAuth2 client secret", Type: connections.FieldSecret},
 		{Key: "oauth2_server_uri", Label: "OAuth2 token endpoint", Type: connections.FieldURL, Help: "Default: <REST URI>/v1/oauth/tokens"},
 		{Key: "scope", Label: "OAuth2 scope", Type: connections.FieldText},
+		connections.UserIdentityField,
 	}, connections.S3StorageFields()...)
 }
 
@@ -88,3 +89,13 @@ func SingleWarehouseReader(c *icebergrest.Client, warehouse string) connections.
 	}
 	return c.Reader([]connections.CatalogRef{{Name: name, Kind: "iceberg"}}, func(string) string { return warehouse })
 }
+
+// UserIdentity reports whether the catalog authorizes each Baleia user (#648).
+func (*Provider) UserIdentity(cfg connections.Config) bool { return connections.UserIdentityOn(cfg) }
+
+// ServiceToken is the connection's bearer token or client-credentials token.
+func (p *Provider) ServiceToken(ctx context.Context, cfg connections.Config) (string, time.Time, error) {
+	return p.client(cfg).Bearer(ctx)
+}
+
+var _ connections.UserIdentity = (*Provider)(nil)

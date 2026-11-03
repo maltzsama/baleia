@@ -120,7 +120,20 @@ func polarisProjection(spec bindings.BindingSpec, src connections.Config) projec
 		secrets: []string{"iceberg.rest-catalog.oauth2.credential"},
 	}
 	restStorage(&p, src)
+	userSession(&p, src)
 	return p
+}
+
+// userSession makes Trino open the REST session as the query's user (#648)
+// when the connection is set to per-user identity: the Iceberg client then
+// authenticates with the session's "token" extra credential, which Baleia
+// fills with the user's identity-provider token or, without one, the
+// connection's own token. The catalog's own credential stays for catalog
+// initialization. Without the flag the projection is unchanged.
+func userSession(p *projection, src connections.Config) {
+	if connections.UserIdentityOn(src) {
+		p.props["iceberg.rest-catalog.session"] = "USER"
+	}
 }
 
 // restStorage switches a REST catalog from vended credentials to the
@@ -160,6 +173,7 @@ func icebergREST(uri, warehouse string, src connections.Config) projection {
 		p.props["iceberg.rest-catalog.security"] = "NONE"
 	}
 	restStorage(&p, src)
+	userSession(&p, src)
 	return p
 }
 
@@ -219,6 +233,7 @@ func lakekeeperProjection(spec bindings.BindingSpec, src connections.Config) (pr
 		p.secrets = append(p.secrets, "iceberg.rest-catalog.oauth2.credential")
 	}
 	restStorage(&p, src)
+	userSession(&p, src)
 	return p, nil
 }
 
@@ -242,6 +257,7 @@ func unityProjection(spec bindings.BindingSpec, src connections.Config) (project
 		secretProp(&p, "iceberg.rest-catalog.oauth2.token", "token", src)
 	}
 	restStorage(&p, src)
+	userSession(&p, src)
 	return p, nil
 }
 

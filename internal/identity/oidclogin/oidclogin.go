@@ -31,6 +31,13 @@ type Store interface {
 type Provider interface {
 	AuthURL(state, challenge, nonce string) (string, error)
 	Exchange(ctx context.Context, code, verifier, nonce string) (*auth.OIDCUserInfo, error)
+	Refresh(ctx context.Context, refreshToken string) (auth.IDPTokens, error)
+}
+
+// TokenSaver keeps the identity-provider tokens of a sign-in (#648).
+type TokenSaver interface {
+	Save(ctx context.Context, userID, providerID pgtype.UUID, tok auth.IDPTokens) error
+	Forget(ctx context.Context, userID pgtype.UUID) error
 }
 
 // Discover reaches an issuer and returns its provider.
@@ -75,6 +82,21 @@ type Service struct {
 	cfg      Config
 	// cache holds discovered providers keyed by id + config version (#280).
 	cache sync.Map
+	// tokens keeps each sign-in's tokens; nil keeps none.
+	tokens TokenSaver
+}
+
+// SetTokens makes Finish keep each sign-in's identity-provider tokens, which
+// catalog managers set to per-user identity accept (#648).
+func (s *Service) SetTokens(t TokenSaver) { s.tokens = t }
+
+// Refresh redeems a refresh token at the provider that issued it (#648).
+func (s *Service) Refresh(ctx context.Context, providerID pgtype.UUID, refreshToken string) (auth.IDPTokens, error) {
+	provider, _, err := s.Provider(ctx, providerID)
+	if err != nil {
+		return auth.IDPTokens{}, ErrUnavailable
+	}
+	return provider.Refresh(ctx, refreshToken)
 }
 
 type cacheEntry struct {
@@ -200,6 +222,17 @@ func (s *Service) Finish(ctx context.Context, providerID pgtype.UUID, state, coo
 	}
 	if err := auth.RequireActive(user.Status); err != nil {
 		return user, nil, ErrSuspended
+	}
+	// The sign-in still succeeds without them: the user then acts as the
+	// connection's own account on catalogs set to per-user identity.
+	if s.tokens != nil {
+		if err := s.tokens.Save(ctx, user.ID, providerID, info.Tokens); err != nil {
+			s.cfg.Logger.WarnContext(ctx, "keep identity-provider tokens", "user_id", user.ID.String(), "err", err)
+			// Never leave the previous sign-in's token in use.
+			if err := s.tokens.Forget(ctx, user.ID); err != nil {
+				s.cfg.Logger.WarnContext(ctx, "forget identity-provider tokens", "user_id", user.ID.String(), "err", err)
+			}
+		}
 	}
 	return user, attempt.Redirect, nil
 }

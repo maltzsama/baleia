@@ -14,16 +14,17 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0002](0002-connections-engines-catalogs-bindings.md) | Connections, engines, catalogs and bindings | Accepted |
 | [0003](0003-trino-binding.md) | How a catalog reaches Trino (the Trino binder) | Accepted |
 | [0004](0004-plugin-distribution.md) | Catalog-store plugin distribution | Accepted |
-| [0005](0005-trino-security-model.md) | Trino security model | Accepted |
+| [0005](0005-trino-security-model.md) | Trino security model | Accepted; Polaris identity superseded by 0015 |
 | [0006](0006-multi-engine-scope.md) | Multi-engine scope | Accepted |
 | [0007](0007-dispatch-and-wiring.md) | Adapters are constructed only at the wiring sites | Accepted |
 | [0008](0008-error-and-secret-boundaries.md) | Error and secret boundaries | Accepted |
 | [0009](0009-recurring-jobs.md) | Recurring jobs run on Temporal Schedules | Accepted |
 | [0010](0010-dev-environments.md) | Development environments | Proposed |
-| [0011](0011-direct-connections-security.md) | Security of direct connections to user-supplied hosts | Accepted |
+| [0011](0011-direct-connections-security.md) | Security of direct connections to user-supplied hosts | Accepted; identity modes superseded by 0015 |
 | [0012](0012-semantic-layer-roadmap.md) | Semantic layer roadmap (no dbt) | Accepted |
 | [0013](0013-content-model.md) | Saved content model | Accepted |
 | [0014](0014-workload-management.md) | Workload management: per-engine admission queues | Accepted |
+| [0015](0015-per-user-catalog-identity.md) | Per-user identity to the catalog manager | Accepted |
 
 ## Owner decisions
 

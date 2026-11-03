@@ -64,6 +64,7 @@ func (*Provider) ConfigSchema() []connections.Field {
 		{Key: "url", Label: "Unity URL", Type: connections.FieldURL, Required: true, Help: "Server root, e.g. http://unity:8080 or a Databricks workspace URL"},
 		{Key: "token", Label: "Bearer token", Type: connections.FieldSecret, Help: "OSS token or a Databricks personal access token"},
 		{Key: "iceberg_path", Label: "Iceberg REST path", Type: connections.FieldText, Default: defaultIcebergPath, Help: "Override for Databricks: /api/2.1/unity-catalog/iceberg-rest"},
+		connections.UserIdentityField,
 	}, connections.S3StorageFields()...)
 }
 
@@ -135,3 +136,13 @@ func (p *Provider) Ping(ctx context.Context, cfg connections.Config) error {
 func (p *Provider) OpenMetadata(_ context.Context, cfg connections.Config) (connections.MetadataReader, error) {
 	return p.client(cfg).ReaderWithCatalogs(p.listCatalogs(cfg), func(c string) string { return c }), nil
 }
+
+// UserIdentity reports whether Unity authorizes each Baleia user (#648).
+func (*Provider) UserIdentity(cfg connections.Config) bool { return connections.UserIdentityOn(cfg) }
+
+// ServiceToken is the connection's own bearer token.
+func (*Provider) ServiceToken(_ context.Context, cfg connections.Config) (string, time.Time, error) {
+	return cfg.Secret("token"), time.Time{}, nil
+}
+
+var _ connections.UserIdentity = (*Provider)(nil)

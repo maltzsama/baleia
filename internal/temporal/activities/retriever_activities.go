@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/retrievers/schedule"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron"
 	"go.temporal.io/sdk/activity"
@@ -170,7 +171,9 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		spec := queryengine.SessionSpec{
 			Catalog:  destCatalog,
 			Schema:   []string{retriever.DestNamespace},
-			Identity: queryengine.Identity{UserID: identity},
+			// The owner's identity-provider token, when they have one, so
+			// the catalog manager authorizes the refresh as them (#648).
+			Identity: queryengine.Identity{UserID: identity, Principal: uuidStr(retriever.CreatedBy)},
 			Tags:     queryengine.Tags{Source: "retriever"},
 		}
 		result, err = queryengine.CollectStringsWith(ctx, eng, spec, sql, retrieverMaxResultRows, cb)
@@ -263,4 +266,12 @@ func retrieverErrorCode(err error) string {
 		return string(qe.Code)
 	}
 	return "refresh_failed"
+}
+
+// uuidStr renders a valid id as its UUID string, "" otherwise.
+func uuidStr(id pgtype.UUID) string {
+	if !id.Valid {
+		return ""
+	}
+	return uuid.UUID(id.Bytes).String()
 }

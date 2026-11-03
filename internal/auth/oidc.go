@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -96,6 +97,29 @@ type OIDCUserInfo struct {
 	EmailVerified bool
 	Name          string
 	Groups        []string
+	// Tokens are the sign-in's tokens, which catalog managers set to
+	// per-user identity accept (#648).
+	Tokens IDPTokens
+}
+
+// IDPTokens are an identity provider's access and refresh tokens. Printing
+// them (%v, %+v, %#v, %s) reports only which are set, never their values.
+type IDPTokens struct {
+	AccessToken  string
+	RefreshToken string
+	// Expiry of the access token; zero when the provider did not say.
+	Expiry time.Time
+}
+
+func (t IDPTokens) String() string {
+	return fmt.Sprintf("IDPTokens{access:%t refresh:%t expiry:%s}", t.AccessToken != "", t.RefreshToken != "", t.Expiry.Format(time.RFC3339))
+}
+
+// GoString keeps %#v from printing the tokens.
+func (t IDPTokens) GoString() string { return t.String() }
+
+func idpTokenSet(tok *oauth2.Token) IDPTokens {
+	return IDPTokens{AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken, Expiry: tok.Expiry}
 }
 
 func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error) {
@@ -109,7 +133,7 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error)
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  cfg.RedirectURL,
 		Endpoint:     provider.Endpoint(),
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+		Scopes:       signInScopes(provider),
 	}
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
@@ -209,6 +233,7 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier, nonce strin
 		EmailVerified: emailVerified,
 		Name:          name,
 		Groups:        groups,
+		Tokens:        idpTokenSet(token),
 	}, nil
 }
 
@@ -238,4 +263,35 @@ func claimStrings(raw map[string]any, name string) []string {
 		return strings.FieldsFunc(v, func(r rune) bool { return r == ' ' || r == ',' })
 	}
 	return nil
+}
+
+// Refresh redeems a refresh token for new tokens (#648). A provider that does
+// not rotate refresh tokens returns none, so the given one is kept.
+func (p *OIDCProvider) Refresh(ctx context.Context, refreshToken string) (IDPTokens, error) {
+	if refreshToken == "" {
+		return IDPTokens{}, errors.New("oidc: no refresh token")
+	}
+	tok, err := p.config.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken}).Token()
+	if err != nil {
+		return IDPTokens{}, fmt.Errorf("token refresh: %w", err)
+	}
+	out := idpTokenSet(tok)
+	if out.RefreshToken == "" {
+		out.RefreshToken = refreshToken
+	}
+	return out, nil
+}
+
+// signInScopes are the scopes a sign-in asks for. offline_access is added when
+// the provider advertises it: some providers issue a refresh token only for
+// it, and Baleia renews the user's token for per-user catalogs (#648).
+func signInScopes(provider *oidc.Provider) []string {
+	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
+	var d struct {
+		ScopesSupported []string `json:"scopes_supported"`
+	}
+	if err := provider.Claims(&d); err == nil && slices.Contains(d.ScopesSupported, oidc.ScopeOfflineAccess) {
+		scopes = append(scopes, oidc.ScopeOfflineAccess)
+	}
+	return scopes
 }

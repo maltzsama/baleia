@@ -15,6 +15,8 @@ type managed struct {
 	Engine
 	version             time.Time
 	credentialsReadOnly bool
+	// creds fills a session's CatalogToken; nil leaves it empty.
+	creds CatalogCredentials
 	// standalone instances (Guard) close their engine on Close; the
 	// Manager's instances live until retired.
 	standalone bool
@@ -47,6 +49,16 @@ func (m *managed) OpenSession(ctx context.Context, spec SessionSpec) (_ Session,
 	m.sessions++
 	m.mu.Unlock()
 
+	spec.CatalogToken, spec.CatalogTokenSource = "", nil
+	if m.creds != nil {
+		creds, engineID, base := m.creds, m.ID(), spec
+		source := func(ctx context.Context) (string, error) { return creds.CatalogToken(ctx, engineID, base) }
+		if spec.CatalogToken, err = source(ctx); err != nil {
+			m.sessionDone()
+			return nil, err
+		}
+		spec.CatalogTokenSource = source
+	}
 	s, err := m.Engine.OpenSession(ctx, spec)
 	if err != nil {
 		m.sessionDone()

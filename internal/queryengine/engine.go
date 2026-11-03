@@ -24,6 +24,10 @@ const (
 type Identity struct {
 	UserID  string // Baleia user id ("u_<uuid>" for Trino impersonation, #92)
 	AgentID string // set for agent principals (#59)
+	// Principal is the Baleia user's id (a UUID) whose identity-provider
+	// token the session carries to catalog managers set to per-user identity
+	// (#648); "" for work without a user.
+	Principal string
 }
 
 // SessionSpec is everything an engine needs to open a session.
@@ -38,6 +42,21 @@ type SessionSpec struct {
 	ReadOnly bool
 	Timeout  time.Duration // per statement; 0 = engine default
 	Tags     Tags
+	// CatalogToken is the bearer token catalog managers set to per-user
+	// identity receive (#648). The Manager fills it when the session opens,
+	// from CatalogCredentials; it is never serialized.
+	CatalogToken string `json:"-"`
+	// CatalogTokenSource renews CatalogToken before each statement, so a long
+	// script keeps a token its catalog accepts; nil keeps CatalogToken. Set by
+	// the Manager, never serialized.
+	CatalogTokenSource func(context.Context) (string, error) `json:"-"`
+}
+
+// CatalogCredentials supplies a session's CatalogToken (#648): the
+// principal's identity-provider token, or the token of the per-user
+// connection behind the session's catalog when the principal has none.
+type CatalogCredentials interface {
+	CatalogToken(ctx context.Context, engineID string, spec SessionSpec) (string, error)
 }
 
 // Tags correlate a session with Baleia; each engine maps them to its own

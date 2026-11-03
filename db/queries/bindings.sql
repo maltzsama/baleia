@@ -268,3 +268,12 @@ SELECT * FROM catalog_reconcile_runs WHERE engine_id = $1 AND id = $2;
 SELECT DISTINCT ON (engine_id) engine_id, started_at, finished_at, dry_run, error
 FROM catalog_reconcile_runs
 ORDER BY engine_id, started_at DESC;
+
+-- name: GetManagedConnectionOfEngineCatalog :one
+-- The connection behind a catalog an engine exposes through a managed binding
+-- (#648): its catalog manager may authorize each user.
+SELECT cc.*
+FROM catalog_bindings b
+JOIN catalogs c ON c.id = b.catalog_id
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE b.engine_id = $1 AND b.engine_catalog_name = $2 AND b.mode = 'managed' AND b.enabled;

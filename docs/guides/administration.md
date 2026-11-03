@@ -56,3 +56,12 @@ These live in the **Connections** area, not in Settings:
 - **Engines:** the engines that run SQL, with their bindings and reconciliation. An engine's **External URL** is the address BI clients use to reach it, needed for [Open in a BI tool](data.md#open-in-a-bi-tool).
 
 Destructive actions in all of these ask for confirmation and say what will be affected first.
+
+### Who the catalog manager sees
+
+A catalog linked to a workspace is reachable by its members only. Inside it, the catalog manager decides what each one may read and write ([ADR 0015](../adr/0015-per-user-catalog-identity.md)):
+
+- **Per-user identity.** On Polaris, Unity, Lakekeeper and Iceberg REST connections, turn on **Per-user identity** once the catalog manager trusts the identity provider Baleia signs users in with. Each user then reaches the manager with their own token, and the manager's grants apply to them. Users signed in without an identity provider (local or LDAP accounts), and background work such as retrievers and maintenance, act as the connection's own account. A user whose identity-provider session ended is refused until they sign in again; they never act as the connection's account.
+- **Connection account for every user.** With the setting off, and on Glue, Hive Metastore and Nessie, which cannot authorize users, every user acts as the connection's account. The connection card says so.
+
+For Polaris, the manager trusts the provider with `polaris.authentication.type=external` (or `mixed`) and `quarkus.oidc.*` pointing at the same issuer, maps the principal from a token claim (for example `polaris.oidc.principal-mapper.name-claim-path=preferred_username`), and needs a principal of that name with its grants on principal roles. Roles claimed in the token are not trusted.

@@ -1,6 +1,7 @@
 # 0011. Security of direct connections to user-supplied hosts
 
-- Status: Accepted (owner decisions D5, D11)
+- Status: Accepted (owner decisions D5, D11); the identity modes are superseded by
+  [0015](0015-per-user-catalog-identity.md)
 - Date: 2026-10-14
 - Issues: #9, #11, #12, #16, #20
 

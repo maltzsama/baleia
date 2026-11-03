@@ -81,11 +81,14 @@ func newAuthHandlers(c *core) *AuthHandlers {
 		PasswordCost:      c.settings.Auth.PasswordCost,
 		MinPasswordLength: minPasswordLength,
 	})
-	a.oidc = oidclogin.New(c.queries, c.queries, c.keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
-		PublicURL: c.settings.Mail.PublicURL,
-		CacheTTL:  time.Hour,
-		Logger:    c.logger,
-	})
+	a.oidc = c.oidcLogin
+	if a.oidc == nil {
+		a.oidc = oidclogin.New(c.queries, c.queries, c.keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
+			PublicURL: c.settings.Mail.PublicURL,
+			CacheTTL:  time.Hour,
+			Logger:    c.logger,
+		})
+	}
 	a.users = users.New(c.queries, func(ctx context.Context, fn func(users.TxStore) error) error {
 		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
 	}, groupMailer{a}, a.sessions, users.Config{
