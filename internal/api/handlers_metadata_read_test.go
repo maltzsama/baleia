@@ -64,7 +64,7 @@ func newMetaFixture(t *testing.T) *metaFixture {
 	scan(&ownConn, `INSERT INTO catalog_connections (name, type, url, created_by) VALUES ('own', 'postgresql', 'postgres://x', $1) RETURNING id`, ownerID)
 	scan(&f.mine, `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1, 'mine', 'native') RETURNING id`, ownConn)
 	scan(&f.binding, `INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode) VALUES ($1, $2, 'lake_t', 'adopted') RETURNING id`, f.lake, engine)
-	exec(`INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, permission, granted_by) VALUES ($1, $2, 'read', $3)`, f.ws, f.lake, ownerID)
+	exec(`INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, granted_by) VALUES ($1, $2, $3)`, f.ws, f.lake, ownerID)
 	exec(`INSERT INTO metadata_sync_runs (catalog_id, status, source_path, finished_at) VALUES ($1, 'finished', 'provider', now())`, f.lake)
 
 	for _, ns := range []string{`{sales}`, `{ops}`, `{ops,"b.c"}`} {

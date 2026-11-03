@@ -80,8 +80,8 @@ Partially compliant.
   carries the target, the caller's identity and the dialect the API resolved, never a secret
   (`TestV3_InputHasNoSecrets`); V2, which looked the dialect up itself, was removed in #414. The
   script is split with the engine's dialect and every statement runs in ONE `ExecuteScript`
-  activity holding ONE session on the target's engine, opened by id in its catalog and schema,
-  read-only for a `read` grant, so `USE`/`SET`, temporary tables and transactions persist across
+  activity holding ONE session on the target's engine, opened by id in its catalog and schema
+  (a grant never makes it read-only, #651), so `USE`/`SET`, temporary tables and transactions persist across
   statements on every engine (#27). The activity is never retried; after a failure or a cancel the
   remaining statements are `skipped`, and a worker crash ends the running statement
   `failed/interrupted` and cancels it on the engine by its persisted handle. An execution is not a
@@ -144,8 +144,8 @@ Partially compliant.
 - Unity Catalog is a read-oriented provider (`internal/connections/unity`, #32): catalogs/schemas/
   tables are browsed through the Unity REST API and table metadata is read through its Iceberg REST
   endpoint (`<url>/api/2.1/unity-catalog/iceberg`); the binder projects it as an Iceberg REST
-  catalog and marks the kind read-only (`GET /engines/{id}/binding-support` returns
-  `writes_supported=false`). A pinned `unitycatalog/unitycatalog:v0.7.0` runs in the compose
+  catalog. Whether a write succeeds is Unity's decision; Baleia no longer flags the kind
+  read-only (#651). A pinned `unitycatalog/unitycatalog:v0.7.0` runs in the compose
   `sources` profile.
 
 ## Alternatives considered

@@ -242,8 +242,7 @@ FROM catalog_bindings b
 JOIN catalogs c ON c.id = b.catalog_id
 JOIN engines e ON e.id = b.engine_id
 JOIN workspace_catalog_grants g ON g.catalog_id = c.id AND g.workspace_id = $1::uuid
-WHERE g.permission = 'write'
-  AND b.connector = 'iceberg'
+WHERE b.connector = 'iceberg'
   AND b.lifecycle_state = 'active'
   AND b.enabled
   AND e.enabled
@@ -262,8 +261,9 @@ type ListRetrieverDestinationsRow struct {
 	EngineKind        string      `json:"engine_kind"`
 }
 
-// Bindings a workspace may write to: write grant, Iceberg connector, active
-// binding on an enabled federated engine (#118).
+// Bindings a retriever of the workspace may write to: a granted catalog, Iceberg
+// connector, active binding on an enabled federated engine (#118). Whether the
+// write succeeds is the engine's and the catalog manager's decision (#651).
 func (q *Queries) ListRetrieverDestinations(ctx context.Context, workspaceID pgtype.UUID) ([]ListRetrieverDestinationsRow, error) {
 	rows, err := q.db.Query(ctx, listRetrieverDestinations, workspaceID)
 	if err != nil {

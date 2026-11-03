@@ -48,7 +48,7 @@ func sharedWorkspace(t *testing.T, f *metaFixture) openapi_types.UUID {
 	if err := f.pool.QueryRow(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_team_id) VALUES ('shared', 'shared', 'shared', $1) RETURNING id`, team).Scan(&ws); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(ctx, `INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, permission, granted_by) VALUES ($1, $2, 'read', $3)`, ws, pgUUIDOf(f.lake), owner); err != nil {
+	if _, err := f.pool.Exec(ctx, `INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, granted_by) VALUES ($1, $2, $3)`, ws, pgUUIDOf(f.lake), owner); err != nil {
 		t.Fatal(err)
 	}
 	return openapi_types.UUID(ws.Bytes)

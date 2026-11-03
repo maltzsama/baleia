@@ -452,8 +452,9 @@ type Querier interface {
 	// Only returns statements of an execution that belongs to the given workspace.
 	ListQueryStatementsByWorkspace(ctx context.Context, arg ListQueryStatementsByWorkspaceParams) ([]QueryStatement, error)
 	ListReconcileRuns(ctx context.Context, arg ListReconcileRunsParams) ([]CatalogReconcileRun, error)
-	// Bindings a workspace may write to: write grant, Iceberg connector, active
-	// binding on an enabled federated engine (#118).
+	// Bindings a retriever of the workspace may write to: a granted catalog, Iceberg
+	// connector, active binding on an enabled federated engine (#118). Whether the
+	// write succeeds is the engine's and the catalog manager's decision (#651).
 	ListRetrieverDestinations(ctx context.Context, workspaceID pgtype.UUID) ([]ListRetrieverDestinationsRow, error)
 	ListRetrieverRefreshHistory(ctx context.Context, arg ListRetrieverRefreshHistoryParams) ([]RetrieverRefreshHistory, error)
 	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Retriever, error)
@@ -536,10 +537,11 @@ type Querier interface {
 	// Users who are members of the workspace: the personal owner, or the owning
 	// team's members (#113).
 	ListWorkspacePrincipalUsers(ctx context.Context, arg ListWorkspacePrincipalUsersParams) ([]ListWorkspacePrincipalUsersRow, error)
-	// Every binding of a catalog the workspace may use, with the strongest
-	// permission it holds on that catalog: 'write' for the catalogs of the owner
-	// of a personal workspace (their own connections), else the grant (#16).
-	// Disabled bindings, engines and catalogs are included; callers filter.
+	// Every binding of a catalog the workspace may use: the catalogs of the owner
+	// of a personal workspace (their own connections) and the granted ones (#16).
+	// A catalog linked to a workspace is reachable by the workspace's members
+	// only; what they may read or write in it is the catalog manager's decision
+	// (#651). Disabled bindings, engines and catalogs are included; callers filter.
 	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceTargetsRow, error)
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
 	// Serializes first-admin setup until the transaction ends (#375).

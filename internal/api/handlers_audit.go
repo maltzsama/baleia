@@ -241,9 +241,6 @@ func connectionChanges(logger *slog.Logger, before, after db.CatalogConnection, 
 	if before.Name != after.Name {
 		changes["name"] = audit.Change{From: before.Name, To: after.Name}
 	}
-	if before.DefaultReadonly != after.DefaultReadonly {
-		changes["default_readonly"] = audit.Change{From: before.DefaultReadonly, To: after.DefaultReadonly}
-	}
 	if before.CredentialsReadOnly != after.CredentialsReadOnly {
 		changes["credentials_read_only"] = audit.Change{From: before.CredentialsReadOnly, To: after.CredentialsReadOnly}
 	}

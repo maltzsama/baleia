@@ -139,7 +139,7 @@ SELECT
 
 -- name: ListCatalogGrants :many
 SELECT g.workspace_id, w.name AS workspace_name, w.type AS workspace_type,
-       g.permission, g.granted_by, g.granted_at
+       g.granted_by, g.granted_at
 FROM workspace_catalog_grants g
 JOIN workspaces w ON w.id = g.workspace_id
 WHERE g.catalog_id = $1

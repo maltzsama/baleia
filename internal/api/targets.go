@@ -48,7 +48,6 @@ func rowTarget(r db.ListWorkspaceTargetsRow, schema string) queryengine.Target {
 		CatalogName:   r.CatalogName,
 		EngineCatalog: r.EngineCatalogName,
 		Schema:        schema,
-		ReadOnly:      r.Permission == "read",
 	}
 }
 
@@ -62,8 +61,9 @@ func rowTarget(r db.ListWorkspaceTargetsRow, schema string) queryengine.Target {
 //
 // The binding's catalog must be one the workspace may use (#16), else 404; the
 // binding, engine and catalog must be enabled, else 422 target_unavailable. A
-// read grant makes the target read-only. There is no fallback to the
-// workspace owner's first catalog or to polaris_catalog_name.
+// grant never makes the target read-only: the engine and the catalog manager
+// decide what may be written (#651). There is no fallback to the workspace
+// owner's first catalog or to polaris_catalog_name.
 func (h *core) ResolveTarget(ctx context.Context, ws db.Workspace, req *TargetRequest) (queryengine.Target, error) {
 	rows, err := h.access.Targets(ctx, ws.ID)
 	if err != nil {
@@ -168,7 +168,6 @@ func (h *WorkspaceHandlers) ListWorkspaceTargets(ctx context.Context, request Li
 			EngineKind:        r.EngineKind,
 			EngineCatalogName: r.EngineCatalogName,
 			Mode:              WorkspaceTargetMode(r.Mode),
-			Permission:        WorkspaceTargetPermission(r.Permission),
 			IsDefault:         ws.DefaultBindingID.Valid && ws.DefaultBindingID == r.BindingID,
 		})
 	}

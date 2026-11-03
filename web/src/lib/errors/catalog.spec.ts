@@ -15,7 +15,6 @@ const apiCodes = [
 	'target_required',
 	'engine_required',
 	'target_unavailable',
-	'read_only_unenforceable',
 	'name_conflict',
 	'slug_conflict_other_space',
 	'property_not_overridable',

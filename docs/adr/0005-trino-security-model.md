@@ -25,7 +25,8 @@ which is separate work.
   reconciliation and maintenance and never runs user SQL. User SQL runs as a **per-user** Trino
   identity sent in `X-Trino-User` (D8). A service identity is the fallback for jobs without a user.
 - **Read-only mode** is enforced by the guard: a session with the extra credential
-  `baleia.mode=readonly` is denied every write and DDL check.
+  `baleia.mode=readonly` is denied every write and DDL check. Baleia sends it for MCP agents,
+  semantic custom SQL and its own probes; a workspace grant never makes a session read-only (#651).
 - The Go check on SQL text (`policy.ForbiddenInEditor`, splitting with the target's dialect) is UX
   and defense in depth only, never the security boundary. It is a policy on users and never reads
   engine capabilities (`TestGateNotCapabilityDriven`).
@@ -49,8 +50,8 @@ which is separate work.
 Partially compliant.
 
 - Guard, admin identity and per-user identities are in place (#92).
-- Baleia does not send `baleia.mode=readonly` yet; mapping `read` grants to read-only sessions
-  arrives with the engine contract's read-only capability (#20, [0011](0011-direct-connections-security.md)).
+- Read-only grants were removed (#651). Baleia sends `baleia.mode=readonly` for MCP agents, semantic
+  custom SQL and its own probes. Per-user authorization by the catalog manager is #648.
 - The API has no real Trino credential, so the unauthenticated-admin flag is still needed (#147
   follow-up).
 - The README's claim that access control lives in Polaris holds only per service principal.

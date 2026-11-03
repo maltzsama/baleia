@@ -111,10 +111,6 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 		return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not encrypt the connection credentials"}, nil
 	}
 
-	defaultReadonly := true
-	if request.Body.DefaultReadonly != nil {
-		defaultReadonly = *request.Body.DefaultReadonly
-	}
 	credentialsReadOnly := false
 	if request.Body.CredentialsReadOnly != nil {
 		credentialsReadOnly = *request.Body.CredentialsReadOnly
@@ -127,7 +123,6 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 		Url:                 connURL,
 		Config:              config,
 		CredentialsEnc:      credsEnc,
-		DefaultReadonly:     defaultReadonly,
 		CredentialsReadOnly: credentialsReadOnly,
 		CreatedBy:           uid,
 	})
@@ -191,7 +186,7 @@ func (h *CatalogHandlers) UpdateCatalogConnection(ctx context.Context, request U
 	// the others untouched, so concurrent PATCHes to different fields do not
 	// overwrite each other.
 	body := *request.Body
-	params := db.UpdateCatalogConnectionParams{ID: connID, Name: body.Name, DefaultReadonly: body.DefaultReadonly, CredentialsReadOnly: body.CredentialsReadOnly}
+	params := db.UpdateCatalogConnectionParams{ID: connID, Name: body.Name, CredentialsReadOnly: body.CredentialsReadOnly}
 	if body.Url != nil || body.Config != nil || body.Credentials != nil {
 		cfg, err := h.updateConfig(stored, body)
 		var ce *configError
@@ -347,7 +342,6 @@ func dbCatalogConnectionToPublic(logger *slog.Logger, c db.CatalogConnection) Ca
 		Url:                 redactURLSecrets(c.Url),
 		Config:              publicConfig(logger, c.Config),
 		HasCredentials:      c.CredentialsEnc != nil && *c.CredentialsEnc != "",
-		DefaultReadonly:     c.DefaultReadonly,
 		CredentialsReadOnly: c.CredentialsReadOnly,
 		CreatedAt:           pgTimestampToTime(c.CreatedAt),
 		UpdatedAt:           func() *time.Time { t := pgTimestampToTime(c.UpdatedAt); return &t }(),

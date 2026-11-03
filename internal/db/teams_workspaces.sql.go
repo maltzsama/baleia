@@ -650,17 +650,16 @@ func (q *Queries) ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]Te
 }
 
 const listWorkspaceCatalogGrants = `-- name: ListWorkspaceCatalogGrants :many
-SELECT g.workspace_id, g.catalog_id, g.permission, g.granted_at, COALESCE(c.trino_catalog_name, c.name)::text AS catalog_name
+SELECT g.workspace_id, g.catalog_id, g.granted_at, COALESCE(c.trino_catalog_name, c.name)::text AS catalog_name
 FROM workspace_catalog_grants g
 JOIN catalogs c ON c.id = g.catalog_id
 WHERE g.workspace_id = $1
-ORDER BY 5
+ORDER BY 4
 `
 
 type ListWorkspaceCatalogGrantsRow struct {
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 	CatalogID   pgtype.UUID        `json:"catalog_id"`
-	Permission  string             `json:"permission"`
 	GrantedAt   pgtype.Timestamptz `json:"granted_at"`
 	CatalogName string             `json:"catalog_name"`
 }
@@ -679,7 +678,6 @@ func (q *Queries) ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pg
 		if err := rows.Scan(
 			&i.WorkspaceID,
 			&i.CatalogID,
-			&i.Permission,
 			&i.GrantedAt,
 			&i.CatalogName,
 		); err != nil {
@@ -931,27 +929,21 @@ func (q *Queries) UpsertTeamMember(ctx context.Context, arg UpsertTeamMemberPara
 }
 
 const upsertWorkspaceCatalogGrant = `-- name: UpsertWorkspaceCatalogGrant :one
-INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, permission, granted_by)
-VALUES ($1, $2, $3, $4)
+INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, granted_by)
+VALUES ($1, $2, $3)
 ON CONFLICT (workspace_id, catalog_id) DO UPDATE
-SET permission = EXCLUDED.permission, granted_by = EXCLUDED.granted_by, granted_at = now()
+SET granted_by = EXCLUDED.granted_by, granted_at = now()
 RETURNING workspace_id, catalog_id, permission, granted_by, granted_at
 `
 
 type UpsertWorkspaceCatalogGrantParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 	CatalogID   pgtype.UUID `json:"catalog_id"`
-	Permission  string      `json:"permission"`
 	GrantedBy   pgtype.UUID `json:"granted_by"`
 }
 
 func (q *Queries) UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWorkspaceCatalogGrantParams) (WorkspaceCatalogGrant, error) {
-	row := q.db.QueryRow(ctx, upsertWorkspaceCatalogGrant,
-		arg.WorkspaceID,
-		arg.CatalogID,
-		arg.Permission,
-		arg.GrantedBy,
-	)
+	row := q.db.QueryRow(ctx, upsertWorkspaceCatalogGrant, arg.WorkspaceID, arg.CatalogID, arg.GrantedBy)
 	var i WorkspaceCatalogGrant
 	err := row.Scan(
 		&i.WorkspaceID,

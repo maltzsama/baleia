@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/db"
@@ -142,7 +143,7 @@ func (q *authzFake) UpsertWorkspaceCatalogGrant(_ context.Context, p db.UpsertWo
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()
 	q.g.writes++
-	g := db.WorkspaceCatalogGrant{WorkspaceID: p.WorkspaceID, CatalogID: p.CatalogID, Permission: p.Permission, GrantedBy: p.GrantedBy}
+	g := db.WorkspaceCatalogGrant{WorkspaceID: p.WorkspaceID, CatalogID: p.CatalogID, GrantedBy: p.GrantedBy}
 	for i, e := range q.g.grants {
 		if e.WorkspaceID.Bytes == p.WorkspaceID.Bytes && e.CatalogID.Bytes == p.CatalogID.Bytes {
 			q.g.grants[i] = g
@@ -159,7 +160,7 @@ func (q *authzFake) ListWorkspaceCatalogGrants(_ context.Context, ws pgtype.UUID
 	out := []db.ListWorkspaceCatalogGrantsRow{}
 	for _, g := range q.g.grants {
 		if g.WorkspaceID.Bytes == ws.Bytes {
-			out = append(out, db.ListWorkspaceCatalogGrantsRow{WorkspaceID: g.WorkspaceID, CatalogID: g.CatalogID, Permission: g.Permission, CatalogName: q.cat.TrinoName()})
+			out = append(out, db.ListWorkspaceCatalogGrantsRow{WorkspaceID: g.WorkspaceID, CatalogID: g.CatalogID, GrantedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}, CatalogName: q.cat.TrinoName()})
 		}
 	}
 	return out, nil
@@ -225,8 +226,8 @@ func newGrantsHandlers(t *testing.T) (*API, *authzFake) {
 	return h, q
 }
 
-func grantBody(q *authzFake, perm GrantCatalogAccessRequestPermission) *GrantCatalogAccessJSONRequestBody {
-	return &GrantCatalogAccessJSONRequestBody{CatalogId: q.cat.ID.Bytes, Permission: perm}
+func grantBody(q *authzFake) *GrantCatalogAccessJSONRequestBody {
+	return &GrantCatalogAccessJSONRequestBody{CatalogId: q.cat.ID.Bytes}
 }
 
 func wsCode(t *testing.T, resp any) int {
@@ -267,9 +268,9 @@ func wsCode(t *testing.T, resp any) int {
 	return rec.Code
 }
 
-func grant(t *testing.T, h *API, q *authzFake, ctx context.Context, perm GrantCatalogAccessRequestPermission) int { //nolint:revive // thelper wants t first in test helpers
+func grant(t *testing.T, h *API, q *authzFake, ctx context.Context) int { //nolint:revive // thelper wants t first in test helpers
 	t.Helper()
-	resp, err := h.GrantCatalogAccess(ctx, GrantCatalogAccessRequestObject{Id: wsID.Bytes, Body: grantBody(q, perm)})
+	resp, err := h.GrantCatalogAccess(ctx, GrantCatalogAccessRequestObject{Id: wsID.Bytes, Body: grantBody(q)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +283,7 @@ func TestGrantCatalogAccess_Persists(t *testing.T) {
 	h, q := newGrantsHandlers(t)
 	owner := ctxAs(ownerID, "member")
 
-	if got := grant(t, h, q, owner, GrantCatalogAccessRequestPermissionRead); got != 201 {
+	if got := grant(t, h, q, owner); got != 201 {
 		t.Fatalf("grant: %d, want 201", got)
 	}
 	list, err := h.ListWorkspaceCatalogAccess(owner, ListWorkspaceCatalogAccessRequestObject{Id: wsID.Bytes})
@@ -290,16 +291,19 @@ func TestGrantCatalogAccess_Persists(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, ok := list.(ListWorkspaceCatalogAccess200JSONResponse)
-	if !ok || len(rows) != 1 || rows[0].Permission != WorkspaceCatalogAccessPermissionRead || rows[0].CatalogId != q.cat.ID.Bytes {
+	if !ok || len(rows) != 1 || rows[0].CatalogId != q.cat.ID.Bytes {
 		t.Fatalf("list after grant = %#v", list)
 	}
+	if rows[0].GrantedAt.IsZero() {
+		t.Fatalf("granted_at is zero in the listing = %#v", rows[0])
+	}
 
-	// Granting again changes the permission instead of failing.
-	if got := grant(t, h, q, owner, GrantCatalogAccessRequestPermissionWrite); got != 201 {
+	// Granting again is idempotent instead of failing.
+	if got := grant(t, h, q, owner); got != 201 {
 		t.Fatalf("re-grant: %d", got)
 	}
 	list, _ = h.ListWorkspaceCatalogAccess(owner, ListWorkspaceCatalogAccessRequestObject{Id: wsID.Bytes})
-	if rows := list.(ListWorkspaceCatalogAccess200JSONResponse); len(rows) != 1 || rows[0].Permission != WorkspaceCatalogAccessPermissionWrite {
+	if rows := list.(ListWorkspaceCatalogAccess200JSONResponse); len(rows) != 1 {
 		t.Fatalf("list after re-grant = %#v", rows)
 	}
 
@@ -334,7 +338,7 @@ func TestGrantCatalogAccess_Authz(t *testing.T) {
 	}
 	for _, tc := range cases {
 		h, q := newGrantsHandlers(t)
-		if got := grant(t, h, q, tc.ctx, GrantCatalogAccessRequestPermissionRead); got != tc.want {
+		if got := grant(t, h, q, tc.ctx); got != tc.want {
 			t.Errorf("%s: %d, want %d", tc.name, got, tc.want)
 		}
 		if tc.want != 201 && q.g.writes != 0 {
@@ -345,21 +349,13 @@ func TestGrantCatalogAccess_Authz(t *testing.T) {
 	// A workspace owner who does not own the catalog's connection cannot grant it.
 	h, q := newGrantsHandlers(t)
 	q.g.roles[[2][16]byte{teamID.Bytes, uuidOf(strangerID).Bytes}] = "owner"
-	if got := grant(t, h, q, ctxAs(strangerID, "member"), GrantCatalogAccessRequestPermissionRead); got != 404 {
+	if got := grant(t, h, q, ctxAs(strangerID, "member")); got != 404 {
 		t.Errorf("team owner without the catalog: %d, want 404", got)
 	}
 	if q.g.writes != 0 {
 		t.Errorf("denied grant reached the store")
 	}
 
-	// An unknown permission is rejected after authorization and before any write.
-	h, q = newGrantsHandlers(t)
-	if got := grant(t, h, q, ctxAs(ownerID, "member"), GrantCatalogAccessRequestPermission("admin")); got != 422 {
-		t.Errorf("bad permission: %d, want 422", got)
-	}
-	if q.g.writes != 0 {
-		t.Errorf("invalid grant reached the store")
-	}
 }
 
 func TestRevokeCatalogAccess_Authz(t *testing.T) {
@@ -374,7 +370,7 @@ func TestRevokeCatalogAccess_Authz(t *testing.T) {
 		{"owner", ctxAs(ownerID, "member"), 204},
 	} {
 		h, q := newGrantsHandlers(t)
-		if got := grant(t, h, q, ctxAs(ownerID, "member"), GrantCatalogAccessRequestPermissionRead); got != 201 {
+		if got := grant(t, h, q, ctxAs(ownerID, "member")); got != 201 {
 			t.Fatalf("setup grant: %d", got)
 		}
 		before := q.g.writes
@@ -394,7 +390,7 @@ func TestRevokeCatalogAccess_Authz(t *testing.T) {
 func TestListWorkspaceCatalogAccess_Authz(t *testing.T) {
 	t.Parallel()
 	h, q := newGrantsHandlers(t)
-	_ = grant(t, h, q, ctxAs(ownerID, "member"), GrantCatalogAccessRequestPermissionRead)
+	_ = grant(t, h, q, ctxAs(ownerID, "member"))
 	for name, tc := range map[string]struct {
 		ctx  context.Context
 		want int
@@ -434,7 +430,7 @@ func TestGrantMemberCatalogAccess(t *testing.T) {
 	if get() != 404 || list() != 404 {
 		t.Fatal("member must not reach the catalog before it is granted")
 	}
-	_ = grant(t, h, q, ctxAs(ownerID, "member"), GrantCatalogAccessRequestPermissionRead)
+	_ = grant(t, h, q, ctxAs(ownerID, "member"))
 	if got := get(); got != 200 {
 		t.Errorf("granted get: %d, want 200", got)
 	}
@@ -576,7 +572,7 @@ func TestListWorkspaceCatalogs_GrantsAndCache(t *testing.T) {
 	if code, _ := listAs(strangerID); code != 404 {
 		t.Fatalf("stranger: %d, want 404", code)
 	}
-	_ = grant(t, h, q, ctxAs(ownerID, "member"), GrantCatalogAccessRequestPermissionRead)
+	_ = grant(t, h, q, ctxAs(ownerID, "member"))
 	if code, out := listAs(memberID); code != 200 || len(out) != 1 || out[0].CatalogName != q.cat.TrinoName() {
 		t.Fatalf("after grant: %d %v", code, out)
 	}
@@ -650,7 +646,7 @@ func TestRevokeCatalogAccess_Atomic(t *testing.T) {
 	t.Parallel()
 	h, q := newGrantsHandlers(t)
 	owner := ctxAs(ownerID, "member")
-	if got := grant(t, h, q, owner, GrantCatalogAccessRequestPermissionRead); got != 201 {
+	if got := grant(t, h, q, owner); got != 201 {
 		t.Fatalf("grant: %d", got)
 	}
 	h.tx = rollbackTx{q: q}

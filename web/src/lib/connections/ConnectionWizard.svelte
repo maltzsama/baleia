@@ -91,7 +91,6 @@
 	let grantable = $state<Workspace[]>([]);
 	let grantCatalog = $state('');
 	let grantWorkspace = $state('');
-	let grantPermission = $state<'read' | 'write'>('read');
 	let granting = $state(false);
 	let grantError = $state<ConnectionRequestError | null>(null);
 	let grants = $state<string[]>([]);
@@ -228,7 +227,6 @@
 				type: provider.kind,
 				config: values,
 				credentials: secrets,
-				default_readonly: true,
 				credentials_read_only: credentialsReadOnly,
 				intents: intentsFor(provider, usage())
 			});
@@ -251,7 +249,6 @@
 				type: provider.kind,
 				config: values,
 				credentials: secrets,
-				default_readonly: true,
 				credentials_read_only: credentialsReadOnly
 			});
 			let engine: Engine | undefined;
@@ -299,23 +296,21 @@
 		}
 	}
 
-	async function grant(permission: 'read' | 'write') {
+	async function grant() {
 		if (!grantCatalog || !grantWorkspace) return;
 		granting = true;
 		grantError = null;
 		try {
 			await grantCatalogAccess({
 				catalogId: grantCatalog,
-				workspaceId: grantWorkspace,
-				permission
+				workspaceId: grantWorkspace
 			});
 			const catalog = created?.catalogs.find((item) => item.id === grantCatalog);
 			const workspace = grantable.find((item) => item.id === grantWorkspace);
 			grants = [
 				...grants,
-				`${workspace?.name ?? 'Workspace'} can ${permission} ${catalog?.name ?? m.connections_connectionwizard_the_catalog()}`
+				`${workspace?.name ?? grantWorkspace} → ${catalog?.name ?? m.connections_connectionwizard_the_catalog()}`
 			];
-			grantPermission = permission;
 		} catch (e) {
 			grantError = e instanceof ConnectionRequestError ? e : null;
 			if (!grantError) throw e;
@@ -706,7 +701,7 @@
 				<p class="mb-3 text-[11px] text-slate-600 dark:text-slate-300">
 					{m.connections_connectionwizard_give_a_workspace_permission_to_query()}
 				</p>
-				<div class="grid gap-2 sm:grid-cols-3">
+				<div class="grid gap-2 sm:grid-cols-2">
 					<Select
 						label={m.connections_connectionwizard_catalog()}
 						bind:value={grantCatalog}
@@ -717,32 +712,9 @@
 						bind:value={grantWorkspace}
 						options={grantable.map((w) => ({ value: w.id, label: w.name }))}
 					/>
-					<Select
-						label={m.connections_connectionwizard_permission()}
-						bind:value={grantPermission}
-						options={[
-							{
-								value: 'read',
-								get label() {
-									return m.connections_connectionwizard_read();
-								}
-							},
-							{
-								value: 'write',
-								get label() {
-									return m.connections_connectionwizard_write();
-								}
-							}
-						]}
-					/>
 				</div>
 				<div class="mt-3 flex items-center gap-2">
-					<Button
-						variant="primary"
-						loading={granting}
-						disabled={granting}
-						onclick={() => grant(grantPermission)}
-					>
+					<Button variant="primary" loading={granting} disabled={granting} onclick={() => grant()}>
 						{m.connections_connectionwizard_grant()}
 					</Button>
 					{#if grants.length > 0}
@@ -758,11 +730,6 @@
 				{#if grantError}
 					<div class="mt-3">
 						<ErrorPanel error={grantError} />
-						{#if grantError.code === 'read_only_unenforceable'}
-							<Button class="mt-2" size="sm" onclick={() => grant('write')} disabled={granting}>
-								{m.connections_connectionwizard_grant_write_instead()}
-							</Button>
-						{/if}
 					</div>
 				{/if}
 				{#if grants.length > 0}

@@ -47,7 +47,6 @@ function mockWorkbench() {
 					engine_kind: 'trino',
 					engine_catalog_name: 'lake_t',
 					mode: 'adopted',
-					permission: 'write',
 					is_default: true
 				}
 			])

@@ -224,8 +224,7 @@ func lakekeeperProjection(spec bindings.BindingSpec, src connections.Config) (pr
 
 // unityProjection binds a Unity catalog as an Iceberg REST catalog. The
 // catalog (the binding's source ref) is the warehouse; a bearer token
-// authenticates when configured. Unity bindings are read-oriented: the binder
-// marks the kind read-only.
+// authenticates when configured. Whether a write succeeds is Unity's decision.
 func unityProjection(spec bindings.BindingSpec, src connections.Config) (projection, error) {
 	w, err := warehouseOf(spec, src)
 	if err != nil {

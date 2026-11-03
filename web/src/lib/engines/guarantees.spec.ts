@@ -94,7 +94,7 @@ describe('engine guarantees', () => {
 			})
 		});
 		const out = text(engine);
-		expect(out).toContain('Read-only grants and agents cannot use this engine');
+		expect(out).toContain('Agents and semantic custom SQL cannot use this engine');
 		expect(out).toContain('No transactions');
 		expect(out).toContain('No schemas — tables are addressed by name only');
 		expect(out).toContain('Default schema cannot be set per session');

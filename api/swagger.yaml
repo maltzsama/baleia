@@ -1354,7 +1354,7 @@ components:
 
     WorkspaceTarget:
       type: object
-      required: [binding_id, catalog_id, catalog_name, engine_id, engine_name, engine_kind, engine_catalog_name, mode, permission, is_default]
+      required: [binding_id, catalog_id, catalog_name, engine_id, engine_name, engine_kind, engine_catalog_name, mode, is_default]
       properties:
         binding_id: { type: string, format: uuid }
         catalog_id: { type: string, format: uuid }
@@ -1364,7 +1364,6 @@ components:
         engine_kind: { type: string }
         engine_catalog_name: { type: string }
         mode: { type: string, enum: [managed, adopted, native] }
-        permission: { type: string, enum: [read, write], description: "read targets run in read-only sessions where the engine enforces it" }
         is_default: { type: boolean }
 
     # ── Catalogs ─────────────────────────────────────────────────
@@ -1483,7 +1482,7 @@ components:
 
     CatalogGrant:
       type: object
-      required: [workspace, permission, granted_at]
+      required: [workspace, granted_at]
       properties:
         workspace:
           type: object
@@ -1492,7 +1491,6 @@ components:
             id: { type: string, format: uuid }
             name: { type: string }
             type: { type: string }
-        permission: { type: string, enum: [read, write] }
         granted_by: { type: string, format: uuid, nullable: true }
         granted_at: { type: string, format: date-time }
 
@@ -1536,7 +1534,7 @@ components:
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
       type: object
-      required: [id, name, type, url, config, default_readonly, has_credentials, credentials_read_only, created_at, allowed_actions]
+      required: [id, name, type, url, config, has_credentials, credentials_read_only, created_at, allowed_actions]
       properties:
         allowed_actions:
           type: array
@@ -1553,8 +1551,7 @@ components:
         host: { type: string }
         port: { type: string }
         has_credentials: { type: boolean, description: "Whether stored credentials exist; the secret itself is never returned" }
-        default_readonly: { type: boolean }
-        credentials_read_only: { type: boolean, description: "The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)" }
+        credentials_read_only: { type: boolean, description: "The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -1575,9 +1572,8 @@ components:
           type: object
           additionalProperties: { type: string }
           description: "Non-secret fields of the provider's config schema"
-        default_readonly: { type: boolean, default: true }
         credentials_read_only:
-          { type: boolean, default: false, description: "The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)" }
+          { type: boolean, default: false, description: "The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)" }
         credentials:
           type: object
           description: "Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config"
@@ -1653,7 +1649,6 @@ components:
           type: object
           additionalProperties: { type: string }
         credentials: { type: object }
-        default_readonly: { type: boolean }
         credentials_read_only:
           { type: boolean, description: "The administrator asserts these credentials cannot modify data (#11/#13/#59)" }
 
@@ -2462,12 +2457,11 @@ components:
 
     BindingSupport:
       type: object
-      required: [connectors, protected_key_patterns, reserved_names, writes_supported]
+      required: [connectors, protected_key_patterns, reserved_names]
       properties:
         connectors: { type: array, items: { type: string }, description: "The first is the default" }
         protected_key_patterns: { type: array, items: { type: string }, description: "Glob patterns (case-insensitive) of extra-property keys that cannot be overridden" }
         reserved_names: { type: array, items: { type: string } }
-        writes_supported: { type: boolean, description: "Whether Baleia supports writing through a binding of this kind; false for read-oriented sources (Unity Catalog)" }
 
     ConnectionProviderField:
       type: object
@@ -2546,19 +2540,17 @@ components:
 
     WorkspaceCatalogAccess:
       type: object
-      required: [catalog_id, permission, granted_at]
+      required: [catalog_id, granted_at]
       properties:
         catalog_id: { type: string, format: uuid }
         catalog_name: { type: string }
-        permission: { type: string, enum: [read, write] }
         granted_at: { type: string, format: date-time }
 
     GrantCatalogAccessRequest:
       type: object
-      required: [catalog_id, permission]
+      required: [catalog_id]
       properties:
         catalog_id: { type: string, format: uuid }
-        permission: { type: string, enum: [read, write] }
 
     # ── Query Editor ───────────────────────────────────────────
     Space:
@@ -8073,7 +8065,7 @@ paths:
         bound to several engines), target_unavailable (disabled binding, engine
         or catalog), engine_unsupported (no adapter for the engine's kind yet;
         direct engines get theirs in #81-#83). The statements run on the
-        target's engine, catalog and schema, read-only for a read grant.
+        target's engine, catalog and schema.
       requestBody:
         required: true
         content:

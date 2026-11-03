@@ -238,10 +238,6 @@
 					{/each}
 					<dt class="text-slate-600 dark:text-slate-300">{m.connections_detail_credentials()}</dt>
 					<dd>{conn.has_credentials ? m.connections_stored() : m.connections_detail_none()}</dd>
-					<dt class="text-slate-600 dark:text-slate-300">
-						{m.connections_detail_default_read_only()}
-					</dt>
-					<dd>{conn.default_readonly ? m.connections_detail_yes() : m.connections_detail_no()}</dd>
 				</dl>
 				<p class="mt-3 text-[11px] text-slate-600 dark:text-slate-300">
 					{readOnly

@@ -183,17 +183,6 @@ export const errorCatalog: Record<string, ErrorEntry> = {
 			return m.errors_catalog_pick_another_target_or_ask_an();
 		}
 	},
-	read_only_unenforceable: {
-		get title() {
-			return m.errors_catalog_read_only_cannot_be_enforced();
-		},
-		get explanation() {
-			return m.errors_catalog_the_engine_cannot_enforce_read_only();
-		},
-		get remediation() {
-			return m.errors_catalog_grant_write_instead_or_assert_read();
-		}
-	},
 	name_conflict: {
 		get title() {
 			return m.errors_catalog_name_already_in_use();

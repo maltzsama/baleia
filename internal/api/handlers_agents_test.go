@@ -290,7 +290,7 @@ func TestRunQuery_AgentIsReadOnly(t *testing.T) {
 	t.Parallel()
 	fake := &fakeRunQueryQuerier{
 		exec:       db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
-		targets:    []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true)},
+		targets:    []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true)},
 		agentBound: true,
 	}
 	temporal := &fakeTemporalClient{}

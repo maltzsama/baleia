@@ -62,7 +62,6 @@
 				name,
 				config: values,
 				credentials: secrets,
-				default_readonly: connection.default_readonly,
 				credentials_read_only: credentialsReadOnly
 			});
 			open = false;

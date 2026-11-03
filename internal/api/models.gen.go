@@ -221,12 +221,6 @@ const (
 	CatalogConnectionAllowedActionView           CatalogConnectionAllowedAction = "view"
 )
 
-// Defines values for CatalogGrantPermission.
-const (
-	CatalogGrantPermissionRead  CatalogGrantPermission = "read"
-	CatalogGrantPermissionWrite CatalogGrantPermission = "write"
-)
-
 // Defines values for CatalogSummaryMetadataSyncStatus.
 const (
 	CatalogSummaryMetadataSyncStatusFailed   CatalogSummaryMetadataSyncStatus = "failed"
@@ -560,12 +554,6 @@ const (
 	ManageWorkload        GlobalAction = "manage_workload"
 	ViewAllAudit          GlobalAction = "view_all_audit"
 	ViewSystem            GlobalAction = "view_system"
-)
-
-// Defines values for GrantCatalogAccessRequestPermission.
-const (
-	GrantCatalogAccessRequestPermissionRead  GrantCatalogAccessRequestPermission = "read"
-	GrantCatalogAccessRequestPermissionWrite GrantCatalogAccessRequestPermission = "write"
 )
 
 // Defines values for IdentityMappingPreviewRole.
@@ -1161,23 +1149,11 @@ const (
 	WorkspaceAllowedActionView         WorkspaceAllowedAction = "view"
 )
 
-// Defines values for WorkspaceCatalogAccessPermission.
-const (
-	WorkspaceCatalogAccessPermissionRead  WorkspaceCatalogAccessPermission = "read"
-	WorkspaceCatalogAccessPermissionWrite WorkspaceCatalogAccessPermission = "write"
-)
-
 // Defines values for WorkspaceTargetMode.
 const (
 	Adopted WorkspaceTargetMode = "adopted"
 	Managed WorkspaceTargetMode = "managed"
 	Native  WorkspaceTargetMode = "native"
-)
-
-// Defines values for WorkspaceTargetPermission.
-const (
-	WorkspaceTargetPermissionRead  WorkspaceTargetPermission = "read"
-	WorkspaceTargetPermissionWrite WorkspaceTargetPermission = "write"
 )
 
 // Defines values for ListAuditEventsParamsOutcome.
@@ -1634,9 +1610,6 @@ type BindingSupport struct {
 	// ProtectedKeyPatterns Glob patterns (case-insensitive) of extra-property keys that cannot be overridden
 	ProtectedKeyPatterns []string `json:"protected_key_patterns"`
 	ReservedNames        []string `json:"reserved_names"`
-
-	// WritesSupported Whether Baleia supports writing through a binding of this kind; false for read-oriented sources (Unity Catalog)
-	WritesSupported bool `json:"writes_supported"`
 }
 
 // Bundle defines model for Bundle.
@@ -1789,9 +1762,8 @@ type CatalogConnection struct {
 	Config    map[string]string `json:"config"`
 	CreatedAt time.Time         `json:"created_at"`
 
-	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
 	CredentialsReadOnly bool `json:"credentials_read_only"`
-	DefaultReadonly     bool `json:"default_readonly"`
 
 	// HasCredentials Whether stored credentials exist; the secret itself is never returned
 	HasCredentials bool               `json:"has_credentials"`
@@ -1831,18 +1803,14 @@ type CatalogEngineRef struct {
 
 // CatalogGrant defines model for CatalogGrant.
 type CatalogGrant struct {
-	GrantedAt  time.Time              `json:"granted_at"`
-	GrantedBy  *openapi_types.UUID    `json:"granted_by"`
-	Permission CatalogGrantPermission `json:"permission"`
-	Workspace  struct {
+	GrantedAt time.Time           `json:"granted_at"`
+	GrantedBy *openapi_types.UUID `json:"granted_by"`
+	Workspace struct {
 		Id   openapi_types.UUID `json:"id"`
 		Name string             `json:"name"`
 		Type *string            `json:"type,omitempty"`
 	} `json:"workspace"`
 }
-
-// CatalogGrantPermission defines model for CatalogGrant.Permission.
-type CatalogGrantPermission string
 
 // CatalogImpact defines model for CatalogImpact.
 type CatalogImpact struct {
@@ -2096,9 +2064,8 @@ type CreateCatalogConnectionRequest struct {
 	// Credentials Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config
 	Credentials *map[string]interface{} `json:"credentials,omitempty"`
 
-	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
 	CredentialsReadOnly   *bool               `json:"credentials_read_only,omitempty"`
-	DefaultReadonly       *bool               `json:"default_readonly,omitempty"`
 	GlueCredentials       *GlueCredentials    `json:"glue_credentials,omitempty"`
 	HiveCredentials       *HiveCredentials    `json:"hive_credentials,omitempty"`
 	IcebergCredentials    *IcebergCredentials `json:"iceberg_credentials,omitempty"`
@@ -2769,12 +2736,8 @@ type GlueCredentials struct {
 
 // GrantCatalogAccessRequest defines model for GrantCatalogAccessRequest.
 type GrantCatalogAccessRequest struct {
-	CatalogId  openapi_types.UUID                  `json:"catalog_id"`
-	Permission GrantCatalogAccessRequestPermission `json:"permission"`
+	CatalogId openapi_types.UUID `json:"catalog_id"`
 }
-
-// GrantCatalogAccessRequestPermission defines model for GrantCatalogAccessRequest.Permission.
-type GrantCatalogAccessRequestPermission string
 
 // HiveCredentials defines model for HiveCredentials.
 type HiveCredentials struct {
@@ -4389,9 +4352,8 @@ type TestConnectionRequest struct {
 	// Credentials Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config
 	Credentials *map[string]interface{} `json:"credentials,omitempty"`
 
-	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
 	CredentialsReadOnly *bool               `json:"credentials_read_only,omitempty"`
-	DefaultReadonly     *bool               `json:"default_readonly,omitempty"`
 	GlueCredentials     *GlueCredentials    `json:"glue_credentials,omitempty"`
 	HiveCredentials     *HiveCredentials    `json:"hive_credentials,omitempty"`
 	IcebergCredentials  *IcebergCredentials `json:"iceberg_credentials,omitempty"`
@@ -4489,7 +4451,6 @@ type UpdateCatalogConnectionRequest struct {
 
 	// CredentialsReadOnly The administrator asserts these credentials cannot modify data (#11/#13/#59)
 	CredentialsReadOnly *bool   `json:"credentials_read_only,omitempty"`
-	DefaultReadonly     *bool   `json:"default_readonly,omitempty"`
 	Name                *string `json:"name,omitempty"`
 
 	// Url Older shape: the endpoint URL. Prefer config
@@ -4850,14 +4811,10 @@ type WorkspaceAllowedAction string
 
 // WorkspaceCatalogAccess defines model for WorkspaceCatalogAccess.
 type WorkspaceCatalogAccess struct {
-	CatalogId   openapi_types.UUID               `json:"catalog_id"`
-	CatalogName *string                          `json:"catalog_name,omitempty"`
-	GrantedAt   time.Time                        `json:"granted_at"`
-	Permission  WorkspaceCatalogAccessPermission `json:"permission"`
+	CatalogId   openapi_types.UUID `json:"catalog_id"`
+	CatalogName *string            `json:"catalog_name,omitempty"`
+	GrantedAt   time.Time          `json:"granted_at"`
 }
-
-// WorkspaceCatalogAccessPermission defines model for WorkspaceCatalogAccess.Permission.
-type WorkspaceCatalogAccessPermission string
 
 // WorkspaceImpact defines model for WorkspaceImpact.
 type WorkspaceImpact struct {
@@ -4888,16 +4845,10 @@ type WorkspaceTarget struct {
 	EngineName        string              `json:"engine_name"`
 	IsDefault         bool                `json:"is_default"`
 	Mode              WorkspaceTargetMode `json:"mode"`
-
-	// Permission read targets run in read-only sessions where the engine enforces it
-	Permission WorkspaceTargetPermission `json:"permission"`
 }
 
 // WorkspaceTargetMode defines model for WorkspaceTarget.Mode.
 type WorkspaceTargetMode string
-
-// WorkspaceTargetPermission read targets run in read-only sessions where the engine enforces it
-type WorkspaceTargetPermission string
 
 // WsTicket defines model for WsTicket.
 type WsTicket struct {

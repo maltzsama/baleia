@@ -228,7 +228,6 @@ func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) (db
 		if _, err := q.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{
 			WorkspaceID: workspaceID,
 			CatalogID:   catalog.ID,
-			Permission:  "read",
 			GrantedBy:   admin.ID,
 		}); err != nil {
 			return db.Catalog{}, db.CatalogBinding{}, err

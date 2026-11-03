@@ -22,6 +22,8 @@ These take effect with their defaults:
 | Connections are admin-only (#610) | Only admins create, edit and test connections | `BALEIA_CONNECTIONS_CREATE=everyone` |
 | Executions are scoped (#611) | Members see their own executions and results; workspace owners and admins see all | — |
 | Space and retriever writes (#612, #613) | Creating spaces and changing retrievers need a workspace owner or admin | — |
+| Grants carry no read/write level (#651) | A catalog linked to a workspace stays reachable by its members only, but no session is read-only because of the link; the catalog manager decides what each member may read or write. `permission` is gone from the grant API and from workspace targets; the unused column stays in the database until #654 | — |
+| Connection and binding flags (#651) | `default_readonly`, stored but never enforced, is gone from the connection API; Unity bindings are no longer flagged as unable to write (`writes_supported`), since Unity decides | — |
 | Catalog names (#617) | `trino_catalog_name`, `connector` and `engine_catalog_name` must match `^[a-z][a-z0-9_]{0,62}$` on write | — |
 
 Before upgrading, check that no connection users rely on points at a private

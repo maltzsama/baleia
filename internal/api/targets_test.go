@@ -20,12 +20,11 @@ func id(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true
 
 // targetRow is binding 0xB<binding> of catalog 0xC<catalog> on an engine of
 // the given kind.
-func targetRow(binding, catalog byte, kind, permission string, enabled bool) db.ListWorkspaceTargetsRow {
+func targetRow(binding, catalog byte, kind string, enabled bool) db.ListWorkspaceTargetsRow {
 	return db.ListWorkspaceTargetsRow{
 		BindingID: id(0xB0 + binding), EngineCatalogName: "eng_cat_" + string('0'+binding), Mode: "managed", BindingEnabled: enabled,
 		EngineID: id(0xE0 + binding), EngineName: kind + "-engine", EngineKind: kind, EngineEnabled: true,
 		CatalogID: id(0xC0 + catalog), CatalogName: "cat" + string('0'+catalog), CatalogEnabled: true,
-		Permission: permission,
 	}
 }
 
@@ -33,8 +32,8 @@ func tuuid(b byte) *openapi_types.UUID { u := openapi_types.UUID(id(b).Bytes); r
 
 func TestResolveTarget(t *testing.T) {
 	t.Parallel()
-	one := targetRow(1, 1, "trino", "write", true)
-	twoEngines := []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true), targetRow(2, 1, "postgresql", "write", true)}
+	one := targetRow(1, 1, "trino", true)
+	twoEngines := []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true), targetRow(2, 1, "postgresql", true)}
 	schema := "sales"
 
 	cases := []struct {
@@ -53,13 +52,13 @@ func TestResolveTarget(t *testing.T) {
 		{name: "catalog plus engine", rows: twoEngines, req: &TargetRequest{CatalogId: tuuid(0xC1), EngineId: tuuid(0xE2)}, binding: 0xB2},
 		{name: "workspace default", ws: db.Workspace{DefaultBindingID: id(0xB2), DefaultSchema: &schema}, rows: twoEngines, binding: 0xB2, schema: "sales"},
 		{name: "default no longer usable", ws: db.Workspace{DefaultBindingID: id(0xB9)}, rows: twoEngines, code: "target_unavailable"},
-		{name: "the single target", rows: []db.ListWorkspaceTargetsRow{one, targetRow(3, 2, "trino", "write", false)}, binding: 0xB1},
-		{name: "ambiguous", rows: []db.ListWorkspaceTargetsRow{one, targetRow(2, 2, "trino", "write", true)}, code: "target_required"},
+		{name: "the single target", rows: []db.ListWorkspaceTargetsRow{one, targetRow(3, 2, "trino", false)}, binding: 0xB1},
+		{name: "ambiguous", rows: []db.ListWorkspaceTargetsRow{one, targetRow(2, 2, "trino", true)}, code: "target_required"},
 		{name: "no target at all", code: "target_required"},
 		{name: "binding not granted", rows: []db.ListWorkspaceTargetsRow{one}, req: &TargetRequest{BindingId: tuuid(0xB7)}, code: "not_found"},
 		{name: "catalog not granted", rows: []db.ListWorkspaceTargetsRow{one}, req: &TargetRequest{CatalogId: tuuid(0xC7)}, code: "not_found"},
-		{name: "disabled binding", rows: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", false)}, req: &TargetRequest{BindingId: tuuid(0xB1)}, code: "target_unavailable"},
-		{name: "read grant is read-only", rows: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "read", true)}, binding: 0xB1, readOnly: true},
+		{name: "disabled binding", rows: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", false)}, req: &TargetRequest{BindingId: tuuid(0xB1)}, code: "target_unavailable"},
+		{name: "a grant never makes the target read-only", rows: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true)}, binding: 0xB1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -108,7 +107,7 @@ func TestRunQuery_StoresTarget(t *testing.T) {
 	t.Parallel()
 	fake := &fakeRunQueryQuerier{
 		exec:    db.QueryExecution{ID: id(0xBB), Status: "running"},
-		targets: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "read", true)},
+		targets: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true)},
 	}
 	schema := "tiny"
 	rec, tc := runQueryWith(t, fake, &TargetRequest{BindingId: tuuid(0xB1), Schema: &schema})
@@ -123,7 +122,7 @@ func TestRunQuery_StoresTarget(t *testing.T) {
 	if !ok {
 		t.Fatalf("workflow input = %T", tc.started[0])
 	}
-	if in.Target.EngineID != id(0xE1) || in.Target.EngineCatalog != "eng_cat_1" || in.Target.Schema != "tiny" || !in.Target.ReadOnly ||
+	if in.Target.EngineID != id(0xE1) || in.Target.EngineCatalog != "eng_cat_1" || in.Target.Schema != "tiny" || in.Target.ReadOnly ||
 		in.Identity.UserID == "" || in.StatementTimeout != time.Minute || in.SQL != "SELECT 1" || in.Dialect != dialect.Trino {
 		t.Fatalf("workflow input = %+v", in)
 	}
@@ -135,7 +134,7 @@ func TestRunQuery_StoresTarget(t *testing.T) {
 	if err := json.Unmarshal(p.TargetSnapshot, &snap); err != nil {
 		t.Fatal(err)
 	}
-	if snap["engine_kind"] != "trino" || snap["catalog_name"] != "cat1" || snap["engine_catalog"] != "eng_cat_1" || snap["schema"] != "tiny" || snap["read_only"] != true {
+	if snap["engine_kind"] != "trino" || snap["catalog_name"] != "cat1" || snap["engine_catalog"] != "eng_cat_1" || snap["schema"] != "tiny" || snap["read_only"] != false {
 		t.Fatalf("snapshot = %v", snap)
 	}
 }
@@ -148,10 +147,10 @@ func TestRunQuery_TargetErrors(t *testing.T) {
 		status int
 		code   string
 	}{
-		"ambiguous":       {[]db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true), targetRow(2, 2, "trino", "write", true)}, nil, 422, "target_required"},
-		"not granted":     {[]db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", true)}, &TargetRequest{BindingId: tuuid(0xB9)}, 404, "not_found"},
-		"direct engine":   {[]db.ListWorkspaceTargetsRow{targetRow(1, 1, "postgresql", "write", true)}, nil, 422, "engine_unsupported"},
-		"disabled target": {[]db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", "write", false)}, &TargetRequest{BindingId: tuuid(0xB1)}, 422, "target_unavailable"},
+		"ambiguous":       {[]db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true), targetRow(2, 2, "trino", true)}, nil, 422, "target_required"},
+		"not granted":     {[]db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true)}, &TargetRequest{BindingId: tuuid(0xB9)}, 404, "not_found"},
+		"direct engine":   {[]db.ListWorkspaceTargetsRow{targetRow(1, 1, "postgresql", true)}, nil, 422, "engine_unsupported"},
+		"disabled target": {[]db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", false)}, &TargetRequest{BindingId: tuuid(0xB1)}, 422, "target_unavailable"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -188,9 +187,9 @@ func TestListWorkspaceTargets(t *testing.T) {
 	fake := &fakeRunQueryQuerier{
 		workspace: db.Workspace{DefaultBindingID: id(0xB2)},
 		targets: []db.ListWorkspaceTargetsRow{
-			targetRow(1, 1, "trino", "write", true),
-			targetRow(2, 1, "postgresql", "read", true),
-			targetRow(3, 2, "trino", "write", false),
+			targetRow(1, 1, "trino", true),
+			targetRow(2, 1, "postgresql", true),
+			targetRow(3, 2, "trino", false),
 		},
 	}
 	resp, err := (testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})).ListWorkspaceTargets(testContext(), ListWorkspaceTargetsRequestObject{Id: openapi_types.UUID{0xAA}})
@@ -201,7 +200,7 @@ func TestListWorkspaceTargets(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("targets = %+v, want the two enabled ones", got)
 	}
-	if got[0].IsDefault || !got[1].IsDefault || got[1].Permission != "read" || got[1].EngineKind != "postgresql" {
+	if got[0].IsDefault || !got[1].IsDefault || got[1].EngineKind != "postgresql" {
 		t.Fatalf("targets = %+v", got)
 	}
 }

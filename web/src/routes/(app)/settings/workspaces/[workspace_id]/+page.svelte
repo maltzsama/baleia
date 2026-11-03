@@ -6,7 +6,6 @@
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import { workspaceStore, type Workspace } from '$lib/stores/workspace.svelte';
 	import type { components } from '$lib/api/schema';
-	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
@@ -48,7 +47,6 @@
 	let grantOpen = $state(false);
 	let grantCatalogs = $state<Catalog[]>([]);
 	let grantCatalogId = $state('');
-	let grantPermission = $state<'read' | 'write'>('read');
 	let granting = $state(false);
 	let grantError = $state('');
 
@@ -169,7 +167,7 @@
 		try {
 			const { error: err } = await client.POST('/workspaces/{id}/catalog-access', {
 				params: { path: { id: ws.id } },
-				body: { catalog_id: grantCatalogId, permission: grantPermission }
+				body: { catalog_id: grantCatalogId }
 			});
 			if (err) throw new Error('Could not grant access');
 			grantOpen = false;
@@ -334,7 +332,7 @@
 							{ value: '', label: m.settings_workspaces_no_default_the_only_target_applies() },
 							...targets.map((target) => ({
 								value: target.binding_id,
-								label: `${target.catalog_name} · ${target.engine_name} (${target.permission})`
+								label: `${target.catalog_name} · ${target.engine_name}`
 							}))
 						]}
 					/>
@@ -388,7 +386,6 @@
 						>
 							<tr>
 								<th class="px-3 py-2">{m.settings_workspaces_detail_catalog()}</th>
-								<th class="px-3 py-2">{m.settings_workspaces_detail_permission()}</th>
 								<th class="px-3 py-2">{m.settings_workspaces_detail_granted()}</th>
 								<th class="px-3 py-2 text-right">{m.settings_workspaces_detail_actions()}</th>
 							</tr>
@@ -397,7 +394,6 @@
 							{#each grants as grant (grant.catalog_id)}
 								<tr class="border-b border-border/60 last:border-b-0">
 									<td class="px-3 py-1.5">{grant.catalog_name ?? grant.catalog_id}</td>
-									<td class="px-3 py-1.5"><Badge tone="info">{grant.permission}</Badge></td>
 									<td class="px-3 py-1.5"><RelativeTime at={grant.granted_at} /></td>
 									<td class="px-3 py-1.5 text-right">
 										<button
@@ -467,17 +463,6 @@
 			options={grantCatalogs
 				.filter((catalog) => !!catalog.id)
 				.map((catalog) => ({ value: catalog.id!, label: catalog.name ?? catalog.id! }))}
-		/>
-		<Select
-			label={m.common_permission()}
-			bind:value={grantPermission}
-			options={[
-				{
-					value: 'read',
-					label: m.settings_workspaces_read_read_only_sessions_where_the_engine_e()
-				},
-				{ value: 'write', label: m.settings_workspaces_write_queries_may_modify_data() }
-			]}
 		/>
 		{#if grantError}<p class="text-danger" role="alert">{grantError}</p>{/if}
 	</div>

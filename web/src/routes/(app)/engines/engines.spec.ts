@@ -91,7 +91,6 @@ describe('engines list', () => {
 						url: '',
 						config: {},
 						has_credentials: true,
-						default_readonly: true,
 						credentials_read_only: false,
 						created_at: '2026-01-01T00:00:00Z',
 						allowed_actions: ['view', 'update', 'test', 'register_engine']

@@ -27,9 +27,11 @@ access.
   by group or others is logged at startup.
 - **Identity modes:** v1 uses the connection's credentials (`connection`); `per_user` comes later.
 - **Read-only enforcement is per engine**, declared in `queryengine.Capabilities.ReadOnly`
-  (`enforced` or `none`). A `read` grant runs in a read-only session; on an engine that cannot
-  enforce it, granting `read` requires write access or an explicit assertion that the credentials
-  are read-only (#13).
+  (`enforced` or `none`). Workspace grants carry no read/write level (#651): a catalog linked to a
+  workspace is reachable by that workspace's members, and what they may read or write in it is the
+  engine's and the catalog manager's decision. Read-only sessions are used by MCP agents, semantic
+  custom SQL and Baleia's own probes; on an engine that cannot enforce them, they need the
+  connection's explicit assertion that its credentials are read-only (`credentials_read_only`).
 - **Connection tests (D5)** answer three different questions: `metadata` (can Baleia read
   metadata), `direct_engine` (can Baleia run SQL) and `bind:<engine>` (can the federated engine reach
   the source). A check from Baleia is never proof that a federated engine can reach a source (#12).
@@ -39,8 +41,8 @@ access.
 - Local databases in development need an explicit allow (`BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true`).
 - The CIDR lists apply to every caller, admins included. Creating and editing connections is limited to admins by default (`BALEIA_CONNECTIONS_CREATE=admins`); `everyone` opts a deployment into self-service, where the CIDR lists still bind every caller (#512, #610).
 - api and worker must see the same SQLite path (shared volume).
-- MySQL/MariaDB, Oracle, SQL Server and Flight SQL cannot enforce read-only; grants on them are
-  explicit about it.
+- MySQL/MariaDB, Oracle, SQL Server and Flight SQL cannot enforce read-only; agents and semantic
+  custom SQL use them only when the connection asserts read-only credentials.
 
 ## Current compliance
 
@@ -65,4 +67,5 @@ Partially compliant.
 ## Alternatives considered
 
 - **Validate the hostname at save time only.** Rejected: DNS can change after validation.
-- **Trust read-only database users.** Kept only as an explicit, per-grant assertion.
+- **Trust read-only database users.** Kept only as an explicit, per-connection assertion
+  (`credentials_read_only`).

@@ -257,8 +257,7 @@ func (h *CatalogHandlers) ListCatalogGrants(ctx context.Context, request ListCat
 	out := make([]CatalogGrant, 0, len(rows))
 	for _, r := range rows {
 		g := CatalogGrant{
-			Permission: CatalogGrantPermission(r.Permission),
-			GrantedAt:  pgTimestampToTime(r.GrantedAt),
+			GrantedAt: pgTimestampToTime(r.GrantedAt),
 		}
 		g.Workspace.Id = openapi_types.UUID(r.WorkspaceID.Bytes)
 		g.Workspace.Name = r.WorkspaceName

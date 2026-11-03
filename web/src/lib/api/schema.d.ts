@@ -2902,7 +2902,7 @@ export interface paths {
         put?: never;
         /**
          * Submit a query on a target
-         * @description The target is resolved per request (see TargetRequest) and must be a target of the workspace. 404 when the named binding or catalog is not; 422 target_required (nothing to pick), engine_required (the catalog is bound to several engines), target_unavailable (disabled binding, engine or catalog), engine_unsupported (no adapter for the engine's kind yet; direct engines get theirs in #81-#83). The statements run on the target's engine, catalog and schema, read-only for a read grant.
+         * @description The target is resolved per request (see TargetRequest) and must be a target of the workspace. 404 when the named binding or catalog is not; 422 target_required (nothing to pick), engine_required (the catalog is bound to several engines), target_unavailable (disabled binding, engine or catalog), engine_unsupported (no adapter for the engine's kind yet; direct engines get theirs in #81-#83). The statements run on the target's engine, catalog and schema.
          */
         post: operations["runQuery"];
         delete?: never;
@@ -4460,11 +4460,6 @@ export interface components {
             engine_catalog_name: string;
             /** @enum {string} */
             mode: "managed" | "adopted" | "native";
-            /**
-             * @description read targets run in read-only sessions where the engine enforces it
-             * @enum {string}
-             */
-            permission: "read" | "write";
             is_default: boolean;
         };
         Catalog: {
@@ -4562,8 +4557,6 @@ export interface components {
                 name: string;
                 type?: string;
             };
-            /** @enum {string} */
-            permission: "read" | "write";
             /** Format: uuid */
             granted_by?: string | null;
             /** Format: date-time */
@@ -4612,8 +4605,7 @@ export interface components {
             port?: string;
             /** @description Whether stored credentials exist; the secret itself is never returned */
             has_credentials: boolean;
-            default_readonly: boolean;
-            /** @description The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59) */
+            /** @description The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651) */
             credentials_read_only: boolean;
             /** Format: date-time */
             created_at: string;
@@ -4631,10 +4623,8 @@ export interface components {
             config?: {
                 [key: string]: string;
             };
-            /** @default true */
-            default_readonly: boolean;
             /**
-             * @description The administrator asserts these credentials cannot modify data. Required for read-only grants and agents on engines that cannot enforce read-only sessions (#11/#13/#59)
+             * @description The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
              * @default false
              */
             credentials_read_only: boolean;
@@ -4689,7 +4679,6 @@ export interface components {
                 [key: string]: string;
             };
             credentials?: Record<string, never>;
-            default_readonly?: boolean;
             /** @description The administrator asserts these credentials cannot modify data (#11/#13/#59) */
             credentials_read_only?: boolean;
         };
@@ -5468,8 +5457,6 @@ export interface components {
             /** @description Glob patterns (case-insensitive) of extra-property keys that cannot be overridden */
             protected_key_patterns: string[];
             reserved_names: string[];
-            /** @description Whether Baleia supports writing through a binding of this kind; false for read-oriented sources (Unity Catalog) */
-            writes_supported: boolean;
         };
         ConnectionProviderField: {
             key: string;
@@ -5530,16 +5517,12 @@ export interface components {
             /** Format: uuid */
             catalog_id: string;
             catalog_name?: string;
-            /** @enum {string} */
-            permission: "read" | "write";
             /** Format: date-time */
             granted_at: string;
         };
         GrantCatalogAccessRequest: {
             /** Format: uuid */
             catalog_id: string;
-            /** @enum {string} */
-            permission: "read" | "write";
         };
         Space: {
             /** Format: uuid */
