@@ -41,8 +41,10 @@ which is separate work.
 
 - `system.runtime.queries.user` shows the real Baleia user.
 - A user cannot manage catalogs even with crafted SQL.
-- Exposing Trino to other clients requires real Trino authentication first; until then the admin
-  identity can be claimed by anyone who reaches the coordinator.
+- Exposing Trino to other clients requires real Trino authentication first; until then any
+  identity, the admin's included, can be claimed by anyone who reaches the coordinator, and
+  read-only mode can be skipped by omitting its extra credential. The chart restricts ingress to
+  the API and worker with a NetworkPolicy (#645); authentication is #646 and #647.
 - Per-user identity towards Polaris is future work (token exchange), not a property switch.
 
 ## Current compliance
