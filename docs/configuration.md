@@ -39,6 +39,9 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_EXECUTION_TIMEOUT` | `2h` | Cap for a whole execution: all statements run in one engine session, so a script may take statements × statement timeout, capped by this |
 | `BALEIA_WORKLOAD_ENABLED` | `false` | Record each run's workload class and admit it through its engine queue (#399); off, runs start immediately and are never `queued` |
 | `BALEIA_TRINO_RESOURCE_GROUPS_ENVIRONMENT` | `production` | Environment the managed Trino resource groups are published under (#635); must match the handed-over cluster's `node.environment` |
+| `BALEIA_WORKLOAD_ADAPTIVE_QUEUED_THRESHOLD` | `20` | With workload management on, admit only `interactive` runs while the Trino cluster has more queued queries than this (`0` disables the trigger; [adaptive admission](operations.md#adaptive-admission-trino)) |
+| `BALEIA_WORKLOAD_ADAPTIVE_BLOCKED_THRESHOLD` | `10` | The same, for blocked queries |
+| `BALEIA_WORKLOAD_ADAPTIVE_MEMORY_HEADROOM_PCT` | `10` | The same, when the cluster's free memory falls below this percentage |
 | `BALEIA_RESULT_MAX_ROWS` | `1000000` | Max rows buffered per statement result before truncation |
 | `BALEIA_LOB_MAX_BYTES` | `1048576` | Max bytes an Oracle engine reads from one CLOB/NCLOB/BLOB value into a result (1 MiB) |
 | `BALEIA_RESULT_MAX_BYTES` | `536870912` | Max Arrow bytes per statement result before truncation |
@@ -48,6 +51,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_CONNECTIONS_ALLOW_CIDRS` | _(unset)_ | If set, connections may only reach these comma-separated CIDRs. It opens the built-in internal ranges (RFC1918, `100.64.0.0/10`, IPv6 ULA) but never loopback, link-local or cloud metadata; an explicit `BALEIA_CONNECTIONS_DENY_CIDRS` entry still wins |
 | `BALEIA_CONNECTIONS_CREATE` | `admins` | Who may create and edit connections: `admins` (the default), or `everyone`. The CIDR lists bind admins too; `everyone` is for deployments where every authenticated user may point connections at approved hosts |
 | `BALEIA_LOG_LEVEL` | `info` | Lowest level the API, the worker and `cmd/migrate` log: `debug`, `info`, `warn` or `error`. They log JSON lines to stdout; a line logged during a traced request or activity carries its `trace_id` and `span_id` (#379) |
+| `BALEIA_PLUGIN_VERSION` | `0.10.0` | The catalog-store plugin version Baleia expects on Trino; **Settings → System** compares it with what the plugin reports. Keep it equal to the chart's `trino.plugin.version` |
 | `BALEIA_TRINO_EVENTS_TOKEN` | _(unset)_ | Bearer token Trino's HTTP event listener sends to `POST /internal/trino/query-events` (at least 32 characters). Set, the API records each completed query as it ends; unset, the endpoint does not exist. The chart wires both sides with `trino.queryEvents.enabled` (#406) |
 | `BALEIA_PPROF_ADDR` | _(unset)_ | Where the API and the worker serve the Go runtime profiles (`/debug/pprof/`), e.g. `127.0.0.1:6060`; unset serves none. The listener has no authentication: bind it to loopback or a port only reachable from the pod (`kubectl port-forward`), never to a public interface (#380) |
 | `BALEIA_METRICS_ENABLED` | `true` | Serve Prometheus metrics at the API's `/metrics` (the catalog is `internal/metrics`, #87) |

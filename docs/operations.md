@@ -3,6 +3,61 @@
 How to monitor Baleia: what it exposes, how to scrape it, and what to do when an alert fires.
 The metrics catalog and its rules come from #87.
 
+## Upgrading to 0.6.0
+
+Read this before `helm upgrade` from 0.5.x. Migrations 00062 to 00072 add the
+workload queues and rules, statement references (lineage, popular tables and
+join suggestions), engine external URLs and the Trino resource-group tables.
+They apply as described for 0.4.0 below. Executions already running finish on
+`QueryExecutionWorkflowV3`, which the worker still runs, so there is nothing
+to drain.
+
+### 1. Behavior changes
+
+These take effect with their defaults:
+
+| Change | Effect | To keep the old behavior |
+|---|---|---|
+| Editor row limit (#615) | Interactive `SELECT`s are capped at the engine at 1,000 rows | `BALEIA_EDITOR_ROW_LIMIT=0` |
+| Known tables only (#614) | An editor statement naming a table missing from the target catalog's synced metadata fails | Keep metadata synced; there is no switch |
+| Private ranges denied (#609) | User-owned connections can no longer reach RFC1918, `100.64.0.0/10` or IPv6 ULA addresses. The default Trino cluster (`TRINO_URL`), the monitor and the binder are not affected | List the ranges in `BALEIA_CONNECTIONS_ALLOW_CIDRS` |
+| Connections are admin-only (#610) | Only admins create, edit and test connections | `BALEIA_CONNECTIONS_CREATE=everyone` |
+| Executions are scoped (#611) | Members see their own executions and results; workspace owners and admins see all | — |
+| Space and retriever writes (#612, #613) | Creating spaces and changing retrievers need a workspace owner or admin | — |
+| Catalog names (#617) | `trino_catalog_name`, `connector` and `engine_catalog_name` must match `^[a-z][a-z0-9_]{0,62}$` on write | — |
+
+Before upgrading, check that no connection users rely on points at a private
+address, or allow its range first.
+
+### 2. Workload management is opt-in
+
+The queues, rules and classes of [workload management](guides/workload.md)
+stay off until `BALEIA_WORKLOAD_ENABLED=true`. When you turn them on, each
+class's runtime timeout replaces `BALEIA_STATEMENT_TIMEOUT` and
+`BALEIA_EXECUTION_TIMEOUT` for that class (5 minutes for `interactive` by
+default), so review **Settings → Workload** first.
+[Managed Trino resource groups](#managed-trino-resource-groups-a-5) are a
+separate, per-engine switch.
+
+### 3. Index the existing history (optional)
+
+Popular tables and join suggestions are built from query history, and lineage
+from each statement's references. New runs are indexed as they finish. To
+index the history from before the upgrade, run the one-off backfill from a
+checkout of the release tag; it is idempotent and can be re-run:
+
+```bash
+go run ./cmd/backfill-references --database-url "$DATABASE_URL"
+```
+
+### 4. New settings
+
+New and all optional: `BALEIA_EDITOR_ROW_LIMIT`, `BALEIA_WORKLOAD_ENABLED`,
+the `BALEIA_WORKLOAD_ADAPTIVE_*` thresholds and
+`BALEIA_TRINO_RESOURCE_GROUPS_ENVIRONMENT`. `BALEIA_CONNECTIONS_CREATE` now
+defaults to `admins` (it was `everyone`), and `BALEIA_CONNECTIONS_ALLOW_CIDRS`
+now also opens the internal ranges. See [configuration.md](configuration.md).
+
 ## Upgrading to 0.4.0
 
 Read this before `helm upgrade` from 0.3.x. Migrations 00060 and 00061 add
@@ -332,9 +387,9 @@ The Baleia catalog guard denies every system session property except
 but not `query_priority`; a resource-group selector on `baleia.class` is the
 reliable path until the guard allows `query_priority`.
 
-This release only tags; Baleia's own admission queues arrive with the workload
-work behind `BALEIA_WORKLOAD_ENABLED`. Until then, a Trino resource-group
-policy keyed on the client tag gives the same split inside Trino:
+The tag is sent whether or not [workload management](guides/workload.md) is
+on. Without Baleia's own queues, or alongside them, a Trino resource-group
+policy keyed on the client tag splits the classes inside Trino too:
 
 ```properties
 resource-groups.configuration-manager=file

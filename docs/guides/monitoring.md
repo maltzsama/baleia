@@ -8,11 +8,11 @@ sidebar_position: 5
 
 ## Cluster
 
-Workers, running, queued and blocked queries, and memory, sampled by a poller and drawn over time.
+Workers, running, queued and blocked queries, and memory, sampled by a poller and drawn over time. With [workload management](workload.md) on, the same samples can hold back non-interactive runs while the cluster is saturated ([adaptive admission](workload.md#adaptive-admission-trino)).
 
 ## Queries
 
-The queries on the engine, filterable by state and text, with their detail: SQL, user, timings and statistics. A query can be cancelled from here. That cannot be undone: it is stopped on the engine, and its user gets an error instead of the results.
+The queries on the engine, filterable by state and text, with their detail: SQL, user, timings and statistics. You can cancel your own queries from here, and an admin can cancel anyone's. That cannot be undone: the query is stopped on the engine, its user gets an error instead of the results, and the cancellation is audited (best effort, like every audit event).
 
 ## Table health
 
@@ -21,11 +21,11 @@ The queries on the engine, filterable by state and text, with their detail: SQL,
 - **Freshness:** the oldest snapshot.
 - **Maintenance:** what is due, its mode and the last maintenance.
 
-A health pass refreshes these numbers on a schedule; **Analyze now** runs one for a catalog at once. Below the table, the maintenance runs can be filtered by trigger (automatic, manual, dry run) and operation.
+A health pass refreshes these numbers on a schedule; **Analyze now** runs one for a catalog at once. **Configure** on a table opens its [maintenance page](#table-maintenance). Below the table, the maintenance runs can be filtered by trigger (automatic, manual, dry run) and operation.
 
 ## Table maintenance
 
-Iceberg tables need upkeep: small files pile up, snapshots accumulate, and failed writes leave orphan files. Baleia maintains each table with its own **parameters**, because a batch table and a streaming (CDC) table need very different care. Set them in **Data**, in the table's **Maintenance** section.
+Iceberg tables need upkeep: small files pile up, snapshots accumulate, and failed writes leave orphan files. Baleia maintains each table with its own **parameters**, because a batch table and a streaming (CDC) table need very different care. Set them on the table's **Maintenance** page: **Configure** in **Monitoring → Table health**, or a table in the catalog's **Maintenance** tab (**Connections → Catalogs**).
 
 ### Mode
 

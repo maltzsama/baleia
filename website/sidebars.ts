@@ -18,6 +18,7 @@ const sidebars: SidebarsConfig = {
         'guides/explore',
         'guides/content',
         'guides/monitoring',
+        'guides/workload',
         'guides/administration'
       ]
     },

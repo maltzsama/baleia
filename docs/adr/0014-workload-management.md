@@ -66,10 +66,14 @@ Baleia is a control plane ([0001](0001-control-plane-only.md)) and is multi-engi
 
 ## Current compliance
 
-Not implemented yet. The child issues under #399 implement it in order: the queued
-state and capacities (#528, #535), classification (#536), the admission workflow
-(#537, #541), the queue API and UI (#540, #543), metrics (#544) and the E2E (#545);
-rules, fairness and settings follow in #529, #539, #546, #547.
+Implemented in 0.6.0, behind `BALEIA_WORKLOAD_ENABLED`: the queued state and
+capacities (#528, #535), classification (#536), the admission workflow (#537,
+#541), the queue API and UI (#540, #543), metrics (#544), the E2E (#545),
+rules, fairness and settings (#529, #539, #546, #547), agent queueing (#548),
+per-class runtime timeouts (#576–#578), cost routing (#550), adaptive admission
+(#551, #579), native tags on the direct engines (#552) and managed Trino
+resource groups (#598–#601, #635). The user downgrade step is not implemented.
+[Workload management](../guides/workload.md) is the user guide.
 
 ## Managed Trino resource groups (A-5, #553)
 
@@ -80,7 +84,7 @@ Trino runs, so the same run is never queued twice.
 
 **Double queueing is avoided by an explicit handover, per engine:**
 
-- While managed resource groups are off (today), Baleia's admission workflow is
+- While managed resource groups are off (the default), Baleia's admission workflow is
   the queue for every engine, and Trino only sees the class tag.
 - When an admin turns managed resource groups on for an engine, Baleia stops
   granting slots from its own per-class queue for that engine: the admission

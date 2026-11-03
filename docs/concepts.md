@@ -63,3 +63,5 @@ Saved work is **content**: saved queries, metrics and semantic models ([ADR 0013
 ## Executions
 
 Running SQL creates an **execution**. The worker runs the statements in one engine session, stops at the first error, and stores each statement's result as an Arrow file in object storage. The web app reads that file in pages. [Architecture](architecture.md#how-a-query-runs) walks through a run.
+
+With [workload management](guides/workload.md) on, each execution gets a **workload class** (`interactive`, `heavy` or `background`) and may first wait in its engine's queue for that class; it is then `queued` until a slot frees. With it off, no class is recorded and runs start at once.

@@ -33,7 +33,7 @@ flowchart LR
 ## How a query runs
 
 1. You press Run (or ⌘/Ctrl+Enter). The web app sends the selection, or the statement at the cursor, with the target: engine, catalog binding and schema.
-2. The API checks access, records the execution and starts a Temporal workflow.
+2. The API checks access, decides the run's workload class, records the execution and starts a Temporal workflow. With [workload management](guides/workload.md) on, the workflow first asks the engine's admission workflow for a slot in that class, and the execution is `queued` until it gets one.
 3. The worker splits the script with the engine's dialect and runs the statements in order in one engine session (on Trino, as the signed-in user's Trino identity). It stops at the first error; the rest are marked skipped.
 4. Each statement's rows are written to object storage as an Arrow file, capped by `BALEIA_RESULT_MAX_ROWS` and `BALEIA_RESULT_MAX_BYTES`.
 5. The WebSocket sends status events only: a snapshot first, then statement and execution status. Rows never travel over it.
