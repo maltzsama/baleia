@@ -597,17 +597,36 @@ type Page struct {
 	More bool
 }
 
+// seesAll reports whether the viewer sees every execution in the workspace:
+// administrators and the workspace owner do; everyone else sees only their own
+// (#36, #611).
+func (s *Service) seesAll(ctx context.Context, v Viewer, ws pgtype.UUID) (bool, error) {
+	if v.Admin {
+		return true, nil
+	}
+	return s.store.IsWorkspaceOwner(ctx, db.IsWorkspaceOwnerParams{ID: ws, UserID: v.UserID})
+}
+
+// Visible reports whether the viewer may read exec: the workspace owner, an
+// administrator, or the user who ran it (#611).
+func (s *Service) Visible(ctx context.Context, v Viewer, ws pgtype.UUID, exec db.QueryExecution) (bool, error) {
+	seeAll, err := s.seesAll(ctx, v, ws)
+	if err != nil {
+		return false, err
+	}
+	if seeAll {
+		return true, nil
+	}
+	return exec.UserID.Valid && exec.UserID.Bytes == v.UserID.Bytes, nil
+}
+
 // History lists a page of the workspace's executions, newest first. The
 // workspace owner and administrators see every execution and may filter by
 // user (q.UserID); everyone else sees only their own (#36).
 func (s *Service) History(ctx context.Context, v Viewer, q db.ListExecutionHistoryParams, limit int) (Page, error) {
-	seeAll := v.Admin
-	if !seeAll {
-		owner, err := s.store.IsWorkspaceOwner(ctx, db.IsWorkspaceOwnerParams{ID: q.WorkspaceID, UserID: v.UserID})
-		if err != nil {
-			return Page{}, err
-		}
-		seeAll = owner
+	seeAll, err := s.seesAll(ctx, v, q.WorkspaceID)
+	if err != nil {
+		return Page{}, err
 	}
 	if !seeAll {
 		q.UserID = v.UserID

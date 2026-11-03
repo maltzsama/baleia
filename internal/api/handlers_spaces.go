@@ -121,9 +121,13 @@ func (h *WorkspaceHandlers) CreateSpace(ctx context.Context, request CreateSpace
 	ws := workspaceIDFromRequest(request.Id)
 	ev := audit.Event{Action: audit.SpaceCreate, ResourceType: "space", WorkspaceID: idString(ws)}
 	ctx = audit.WithAction(ctx, ev.Action)
-	if _, err := h.authz().Workspace(ctx, p, ws, authz.ActRead); err != nil {
-		if errors.Is(err, authz.ErrNotFound) {
+	if _, err := h.authz().Workspace(ctx, p, ws, authz.ActWrite); err != nil {
+		switch {
+		case errors.Is(err, authz.ErrNotFound):
 			return CreateSpace404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
+		case errors.Is(err, authz.ErrForbidden):
+			h.audited(ctx, ev.Failed(audit.ReasonForbidden))
+			return CreateSpace403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner may create a space"}}, nil
 		}
 		return nil, err
 	}

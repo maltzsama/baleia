@@ -53,11 +53,11 @@ func (h *OpsHandlers) ListMonitoringEngines(ctx context.Context, _ ListMonitorin
 	return ListMonitoringEngines200JSONResponse(out), nil
 }
 
-func (h *core) engineForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Engine, bool) {
+func (h *core) engineForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID, act authz.Action) (db.Engine, bool) {
 	if h.engines == nil {
 		return db.Engine{}, false
 	}
-	engine, _, err := h.authz().Engine(ctx, p, id, authz.ActRead)
+	engine, _, err := h.authz().Engine(ctx, p, id, act)
 	if err != nil {
 		return db.Engine{}, false
 	}
@@ -71,7 +71,7 @@ func (h *OpsHandlers) GetEngineCluster(ctx context.Context, request GetEngineClu
 		return GetEngineCluster401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
-	if _, ok := h.engineForMonitoring(ctx, p, engineID); !ok {
+	if _, ok := h.engineForMonitoring(ctx, p, engineID, authz.ActRead); !ok {
 		return GetEngineCluster404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	}
 
@@ -121,7 +121,7 @@ func (h *OpsHandlers) ListMonitoringQueries(ctx context.Context, request ListMon
 		return ListMonitoringQueries401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
-	if _, ok := h.engineForMonitoring(ctx, p, engineID); !ok {
+	if _, ok := h.engineForMonitoring(ctx, p, engineID, authz.ActRead); !ok {
 		return ListMonitoringQueries404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	}
 
@@ -221,7 +221,7 @@ func (h *OpsHandlers) GetMonitoringQuery(ctx context.Context, request GetMonitor
 		return GetMonitoringQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
-	if _, ok := h.engineForMonitoring(ctx, p, engineID); !ok {
+	if _, ok := h.engineForMonitoring(ctx, p, engineID, authz.ActRead); !ok {
 		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
 	snapshot, err := h.monitor.Query(ctx, engineID, request.QueryId)
@@ -309,8 +309,10 @@ func (h *OpsHandlers) KillMonitoringQuery(ctx context.Context, request KillMonit
 	if err != nil {
 		return KillMonitoringQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
+	ev := audit.Event{Action: audit.QueryKill, ResourceType: "query", ResourceID: request.QueryId}
 	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
-	if _, ok := h.engineForMonitoring(ctx, p, engineID); !ok {
+	if _, ok := h.engineForMonitoring(ctx, p, engineID, authz.ActWrite); !ok {
+		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return KillMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
 	snapshot, err := h.monitor.Query(ctx, engineID, request.QueryId)
@@ -318,9 +320,11 @@ func (h *OpsHandlers) KillMonitoringQuery(ctx context.Context, request KillMonit
 		return nil, err
 	}
 	if err != nil || !h.maySeeQuery(ctx, p, snapshot) {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return KillMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
 	if snapshot.State != "running" {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return KillMonitoringQuery409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeNotRunning, Message: "the query is no longer running"}}, nil
 	}
 	eng, err := h.engines.Get(ctx, engineID)
@@ -328,8 +332,10 @@ func (h *OpsHandlers) KillMonitoringQuery(ctx context.Context, request KillMonit
 		return nil, err
 	}
 	if err := eng.Cancel(ctx, queryengine.QueryHandle{QueryID: request.QueryId}); err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return KillMonitoringQuery409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeCancelFailed, Message: "the engine did not cancel the query"}}, nil
 	}
+	h.audited(ctx, ev.Allowed())
 	return KillMonitoringQuery202Response{}, nil
 }
 

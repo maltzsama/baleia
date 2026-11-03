@@ -28,7 +28,7 @@ func (h *QueryHandlers) GetExecutionDetails(ctx context.Context, request GetExec
 	if err != nil {
 		return nil, err
 	}
-	if !agentOwnsExecution(ctx, execution) {
+	if !h.canSeeExecution(ctx, wsID, execution) {
 		return GetExecutionDetails404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
 	statements, err := h.executions.Statements(ctx, wsID, executionID)

@@ -751,7 +751,7 @@ func (h *QueryHandlers) GetExecution(ctx context.Context, request GetExecutionRe
 	if err != nil {
 		return nil, err
 	}
-	if !agentOwnsExecution(ctx, execution) {
+	if !h.canSeeExecution(ctx, workspaceIDFromRequest(request.Id), execution) {
 		return GetExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
 
@@ -768,6 +768,24 @@ func agentOwnsExecution(ctx context.Context, exec db.QueryExecution) bool {
 	return exec.AgentID.Valid && exec.AgentID.Bytes == p.AgentID.Bytes
 }
 
+// canSeeExecution enforces who may read an execution: an agent only its own
+// (#58); a human the workspace owner's/admin's or their own, mirroring
+// executions.History (#611).
+func (h *QueryHandlers) canSeeExecution(ctx context.Context, ws pgtype.UUID, exec db.QueryExecution) bool {
+	if !agentOwnsExecution(ctx, exec) {
+		return false
+	}
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return false
+	}
+	if p.IsAgent() {
+		return true
+	}
+	ok, err := h.executions.Visible(ctx, executions.Viewer{UserID: p.UserID, Admin: p.IsAdmin()}, ws, exec)
+	return err == nil && ok
+}
+
 func (h *QueryHandlers) CancelExecution(ctx context.Context, request CancelExecutionRequestObject) (CancelExecutionResponseObject, error) {
 	ev := audit.Event{Action: audit.ExecutionCancel, ResourceType: "execution", ResourceID: uuid.UUID(request.ExecutionId).String(), WorkspaceID: request.Id.String()}
 	if err := requireWorkspaceAccess(ctx, h.access, request.Id); err != nil {
@@ -780,15 +798,15 @@ func (h *QueryHandlers) CancelExecution(ctx context.Context, request CancelExecu
 	executionID.Valid = true
 	wsID := workspaceIDFromRequest(request.Id)
 
-	// Agents may cancel only the executions they created (#58).
-	if p, err := authz.PrincipalFromContext(ctx); err == nil && p.IsAgent() {
-		exec, err := h.executions.Get(ctx, wsID, executionID)
-		if err != nil && !errors.Is(err, executions.ErrNotFound) {
-			return nil, err
-		}
-		if err != nil || !agentOwnsExecution(ctx, exec) {
-			return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
-		}
+	// The workspace owner/admin or the user who ran it may cancel (#611); an
+	// agent may cancel only the executions it created (#58).
+	exec, err := h.executions.Get(ctx, wsID, executionID)
+	if err != nil && !errors.Is(err, executions.ErrNotFound) {
+		return nil, err
+	}
+	if err != nil || !h.canSeeExecution(ctx, wsID, exec) {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return CancelExecution404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
 
 	// Only a running execution is cancelled; a completion racing this call
@@ -821,7 +839,18 @@ func (h *QueryHandlers) ListStatements(ctx context.Context, request ListStatemen
 	wsID := workspaceIDFromRequest(request.Id)
 
 	// A foreign or absent execution is a 404, never an empty 200 that would
-	// hide a cross-workspace id.
+	// hide a cross-workspace id. A member who may not see the execution gets
+	// the same 404 (#611).
+	exec, err := h.executions.Get(ctx, wsID, executionID)
+	if err != nil {
+		if errors.Is(err, executions.ErrNotFound) {
+			return ListStatements404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
+		}
+		return nil, err
+	}
+	if !h.canSeeExecution(ctx, wsID, exec) {
+		return ListStatements404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
+	}
 	statements, err := h.executions.Statements(ctx, wsID, executionID)
 	if errors.Is(err, executions.ErrNotFound) {
 		return ListStatements404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
@@ -854,7 +883,7 @@ func (h *QueryHandlers) GetResults(ctx context.Context, request GetResultsReques
 	if err != nil {
 		return nil, err
 	}
-	if !agentOwnsExecution(ctx, execution) {
+	if !h.canSeeExecution(ctx, workspaceIDFromRequest(request.Id), execution) {
 		return GetResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "execution not found"}}, nil
 	}
 
@@ -930,7 +959,17 @@ func (h *QueryHandlers) GetStatementResults(ctx context.Context, request GetStat
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil
 	}
-	statement, err := h.executions.Statement(ctx, workspaceIDFromRequest(request.Id), executionID, int32(request.Position))
+	wsID := workspaceIDFromRequest(request.Id)
+	exec, err := h.executions.Get(ctx, wsID, executionID)
+	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil
+	}
+	if !h.canSeeExecution(ctx, wsID, exec) {
+		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
+		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil
+	}
+	statement, err := h.executions.Statement(ctx, wsID, executionID, int32(request.Position))
 	if errors.Is(err, executions.ErrNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return GetStatementResults404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "statement not found"}}, nil

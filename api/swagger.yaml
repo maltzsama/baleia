@@ -6324,6 +6324,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Space" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
@@ -8702,6 +8703,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Retriever" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/retrievers/{retriever_id}:
@@ -8739,6 +8741,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Retriever" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422":
           description: "Unsupported refresh type or invalid payload"
@@ -8752,6 +8755,7 @@ paths:
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/retrievers/{retriever_id}/refresh:
@@ -8784,6 +8788,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RetrieverRefreshHistory" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 

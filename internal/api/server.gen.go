@@ -20855,6 +20855,15 @@ func (response CreateRetriever401JSONResponse) VisitCreateRetrieverResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CreateRetriever403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateRetriever403JSONResponse) VisitCreateRetrieverResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateRetriever422JSONResponse struct {
 	UnprocessableEntityJSONResponse
 }
@@ -20964,6 +20973,15 @@ func (response DeleteRetriever401JSONResponse) VisitDeleteRetrieverResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeleteRetriever403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteRetriever403JSONResponse) VisitDeleteRetrieverResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteRetriever404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteRetriever404JSONResponse) VisitDeleteRetrieverResponse(w http.ResponseWriter) error {
@@ -21033,6 +21051,15 @@ type UpdateRetriever401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response UpdateRetriever401JSONResponse) VisitUpdateRetrieverResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateRetriever403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateRetriever403JSONResponse) VisitUpdateRetrieverResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -21119,6 +21146,15 @@ type TriggerRetrieverRefresh401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response TriggerRetrieverRefresh401JSONResponse) VisitTriggerRetrieverRefreshResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TriggerRetrieverRefresh403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response TriggerRetrieverRefresh403JSONResponse) VisitTriggerRetrieverRefreshResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -22531,6 +22567,15 @@ type CreateSpace401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response CreateSpace401JSONResponse) VisitCreateSpaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSpace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateSpace403JSONResponse) VisitCreateSpaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }

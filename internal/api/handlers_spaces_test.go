@@ -258,6 +258,28 @@ func TestSpaces_AccessListAndForceDelete(t *testing.T) {
 	}
 }
 
+// TestSpaces_CreateRequiresWorkspaceOwner pins #612: a member who is not a
+// workspace owner cannot create a space (which would make them its manager).
+func TestSpaces_CreateRequiresWorkspaceOwner(t *testing.T) {
+	t.Parallel()
+	f := newMetaFixture(t)
+	ws := sharedWorkspace(t, f)
+	member := f.as(f.stranger)
+
+	r, err := f.h.CreateSpace(member, CreateSpaceRequestObject{
+		Id: ws, Body: &CreateSpaceRequest{Name: "escalate", Visibility: CreateSpaceRequestVisibilityWorkspace},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.(CreateSpace403JSONResponse); !ok {
+		t.Fatalf("non-owner create: %T, want 403", r)
+	}
+
+	// The workspace owner still creates.
+	createSpaceIn(t, f, f.as(f.owner), ws, CreateSpaceRequest{Name: "ok", Visibility: CreateSpaceRequestVisibilityWorkspace})
+}
+
 func TestSpaces_ForeignWorkspace404(t *testing.T) {
 	t.Parallel()
 	f := newMetaFixture(t)
