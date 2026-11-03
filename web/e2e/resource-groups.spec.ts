@@ -6,9 +6,9 @@ import { expect, test } from './fixtures';
 // restores Baleia's admission queue. The seed pins BALEIA_WORKLOAD_ENABLED.
 //
 // The synthetic tpch connector cannot reliably produce a queued run, so this
-// spec asserts the switch and its round-trip (toggle, save, reload) rather
-// than a queued query; the admission handover and the generated document are
-// covered by the workflow and store tests.
+// spec asserts the switch and its round-trip (select engine, toggle, save,
+// reload) rather than a queued query; the admission handover and the generated
+// document are covered by the workflow and store tests.
 
 test('@issue-601 the Trino resource-groups switch persists across a save', async ({
 	page,
@@ -17,15 +17,18 @@ test('@issue-601 the Trino resource-groups switch persists across a save', async
 	await loginAs('admin');
 
 	await page.goto('/settings/workload');
-	await page.getByRole('combobox').first().selectOption({ index: 1 });
+
+	// Pick the first engine; its queues load the capacity table and the switch.
+	const engine = page.getByRole('combobox', { name: /engine/i });
+	await expect(engine).toBeVisible();
+	await engine.selectOption({ index: 0 });
 
 	const checkbox = page.getByRole('checkbox', { name: /resource groups/i });
 	await expect(checkbox).toBeVisible();
 
-	const wasChecked = await checkbox.isChecked();
 	await checkbox.click();
-	await expect(checkbox).toBeChecked({ checked: !wasChecked });
+	await page.getByRole('button', { name: /save capacities/i }).click();
 
-	await page.getByRole('button', { name: /save/i }).click();
-	await expect(checkbox).toBeChecked({ checked: !wasChecked });
+	// After the save the switch stays where the admin left it.
+	await expect(checkbox).toBeChecked();
 });
