@@ -60,7 +60,7 @@ The interface is available in English and Brazilian Portuguese.
 | | |
 |---|---|
 | **Federated engine** | Trino, with catalogs Baleia creates and keeps in sync |
-| **Direct engines** | PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, ClickHouse, SQLite, Arrow Flight SQL |
+| **Direct engines** | PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, ClickHouse, Arrow Flight SQL, and SQLite files under `BALEIA_SQLITE_ROOT` |
 | **Lakehouse catalogs** | Polaris, Nessie, Lakekeeper, Iceberg REST, Unity Catalog, AWS Glue, Hive Metastore |
 | **Object storage** | Any S3-compatible store (AWS S3, RustFS, MinIO, Ceph, GCS, OCI) |
 

@@ -38,7 +38,7 @@ Each engine has a queue per class. Admins manage them in **Settings → Workload
 
 | Setting | Meaning |
 |---|---|
-| **Max running** | Runs of the class on the engine at once. `0` closes the class: its runs wait until their queue timeout |
+| **Max running** | Runs of the class on the engine at once. `0` closes the class: new runs fail at once, and runs already queued wait until their queue timeout |
 | **Max queued** | Runs that may wait. Beyond it, a new run fails at once with *the queue is full* |
 | **Queue timeout** | How long a run may wait before it fails with *the queue timed out* |
 | **Runtime timeout** | How long a run of the class may run once admitted |
@@ -56,7 +56,7 @@ The **Live queues** table shows, per class, what is running, what is queued and 
 
 ### Fairness
 
-Within a class, slots are shared across workspaces by weight (a rule can set a weight; the default is 1). A run's priority rises the longer it waits, so `background` work is never starved.
+Within a class, slots are shared across workspaces by weight (a rule can set a weight; the default is 1). A run's priority rises the longer it waits, so while a class is open its runs are never starved by busier workspaces.
 
 ## Rules
 
@@ -93,7 +93,7 @@ When the Trino cluster is already saturated, Baleia can hold back everything but
 
 ## Agents
 
-An agent's policy caps how many queries it runs at once ([MCP](../mcp.md#policy-and-limits)). With workload management on, a run over that cap waits in the `background` queue instead of being refused; the hourly quota still refuses.
+An agent's policy caps how many queries it runs at once ([MCP](../mcp.md#policy-and-limits)). With workload management on, a run over that cap waits in its class's queue instead of being refused: `background`, unless a rule or cost routing gives agent runs another class. The hourly quota still refuses.
 
 ## Inside the engines
 

@@ -12,7 +12,7 @@ Workers, running, queued and blocked queries, and memory, sampled by a poller an
 
 ## Queries
 
-The queries on the engine, filterable by state and text, with their detail: SQL, user, timings and statistics. The engine's owner or an admin can cancel a query from here. That cannot be undone: it is stopped on the engine, its user gets an error instead of the results, and the cancellation is recorded in the audit trail.
+The queries on the engine, filterable by state and text, with their detail: SQL, user, timings and statistics. You can cancel your own queries from here, and an admin can cancel anyone's. That cannot be undone: the query is stopped on the engine, its user gets an error instead of the results, and the cancellation is audited (best effort, like every audit event).
 
 ## Table health
 

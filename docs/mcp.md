@@ -71,8 +71,9 @@ concurrency/hourly quotas. A refusal is returned as:
 `reason` is one of `policy`, `scope`, `rate`, `quota`, `budget`, `statement`.
 
 With [workload management](guides/workload.md) on, a run over the agent's
-concurrency limit is not refused: it waits in the `background` queue of its
-engine, with the agent as its fairness key. The hourly quota still refuses.
+concurrency limit is not refused: it waits in its engine's queue for its
+class (`background`, unless a rule or cost routing assigns another), with the
+agent as its fairness key. The hourly quota still refuses.
 
 ## How it is built
 
