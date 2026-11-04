@@ -19,8 +19,8 @@ Baleia is a **control plane**. It manages connections, catalogs and engines, run
 - **Share and reuse** saved queries, metrics and semantic models in team [spaces](guides/content.md), with version history and export to Git-friendly bundles, and build questions in [Explore](guides/explore.md) without writing SQL.
 - **Materialize queries** into Iceberg tables on a schedule with [retrievers](guides/content.md#retrievers).
 - **Keep the engines healthy**: [workload management](guides/workload.md) queues runs per engine and class so a heavy report cannot crowd out quick queries, and [monitoring](guides/monitoring.md) shows the cluster, running queries and Iceberg table health, with per-table maintenance.
-- **Control access** with workspaces, teams and roles, OIDC or LDAP sign-in, API keys and an audit trail ([administration](guides/administration.md)).
-- **Bring in AI, if you want**: an optional [assistant](assistant.md) and an [MCP server](mcp.md) for your own agents.
+- **Control access** with workspaces, teams and a viewer, editor or admin role in each workspace, service accounts for agents and integrations, OIDC or LDAP sign-in with identity-provider groups mapped to roles, API keys and an audit trail ([administration](guides/administration.md)). With per-user identity, your catalog manager authorizes each user with their own token ([concepts](concepts.md#roles)).
+- **Bring in AI, if you want**: an optional [assistant](assistant.md) and an [MCP server](mcp.md) for your own agents, which act with their owner's role: a viewer's agent only reads, an editor's may also write.
 
 The interface is available in English and Brazilian Portuguese.
 

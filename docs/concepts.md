@@ -37,7 +37,7 @@ When you run a query you pick a **target**: a binding and, optionally, a schema.
 
 ## Workspaces
 
-A **workspace** is where people run queries. It is **personal** (yours) or **shared** (owned by a team). Catalogs are **granted** to a workspace for reading or writing, and a workspace can set a default target. Members see only what their workspace was granted.
+A **workspace** is where people run queries. It is **personal** (yours) or **shared** (owned by a team). Catalogs are **granted** to a workspace, which links them to its members, and a workspace can set a default target. A grant carries no read or write level: the catalog manager decides that per user. Members see only what their workspace was granted.
 
 **Teams** group users. A team owns shared workspaces, and its members are owners or members of the team.
 
