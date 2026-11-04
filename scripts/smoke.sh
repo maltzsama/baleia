@@ -88,7 +88,13 @@ for _ in {1..60}; do
   [[ "$STATUS" == "running" ]] || break
   sleep 2
 done
-[[ "$STATUS" == "finished" ]] || { echo "FAIL execution ended $STATUS"; exit 1; }
+if [[ "$STATUS" != "finished" ]]; then
+  echo "FAIL execution ended $STATUS"
+  # Say why: the execution's own error code, target and statements.
+  curl -s -H "Authorization: Bearer $TOKEN" "$API/workspaces/$WS/executions/$EID" \
+    | jq '{status, error_code, engine_kind, target, statements}' || true
+  exit 1
+fi
 
 # ── 6. Value check through Trino ────────────────────────────────────────────
 step "verify value on the cluster"
