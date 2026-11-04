@@ -83,6 +83,9 @@ func (q *authzFake) GetCatalogSyncState(context.Context, pgtype.UUID) (db.GetCat
 }
 
 func (q *authzFake) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
+	if id.Bytes == [16]byte{0xC9} { // the engine's own, system-owned connection
+		return db.CatalogConnection{ID: id, Name: "trino", Type: "trino", Config: []byte(`{"url":"http://trino:8080"}`)}, nil
+	}
 	if id.Bytes != q.conn.ID.Bytes {
 		return db.CatalogConnection{}, pgx.ErrNoRows
 	}
@@ -98,6 +101,51 @@ func (q *authzFake) GetCatalogByID(_ context.Context, id pgtype.UUID) (db.Catalo
 
 func (q *authzFake) ListCatalogsByConnection(context.Context, pgtype.UUID) ([]db.Catalog, error) {
 	return []db.Catalog{q.cat}, nil
+}
+
+func (q *authzFake) ListBindingsByCatalog(_ context.Context, id pgtype.UUID) ([]db.CatalogBinding, error) {
+	q.lmu.Lock()
+	defer q.lmu.Unlock()
+	var out []db.CatalogBinding
+	for _, b := range q.tracked {
+		if b.CatalogID == id {
+			out = append(out, b)
+		}
+	}
+	return out, nil
+}
+
+func (q *authzFake) EngineHostsCatalogGrantedToUser(context.Context, db.EngineHostsCatalogGrantedToUserParams) (bool, error) {
+	return false, nil
+}
+
+func (q *authzFake) GetTrinoClusterByEngine(_ context.Context, id pgtype.UUID) (db.TrinoCluster, error) {
+	return db.TrinoCluster{ID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Name: "default", EngineID: id}, nil
+}
+
+func (q *authzFake) GetBinding(_ context.Context, id pgtype.UUID) (db.CatalogBinding, error) {
+	if b, ok := q.current(id); ok {
+		return b, nil
+	}
+	return db.CatalogBinding{}, pgx.ErrNoRows
+}
+
+func (q *authzFake) UpdateCatalogConnection(_ context.Context, p db.UpdateCatalogConnectionParams) (db.CatalogConnection, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if p.Name != nil {
+		q.conn.Name = *p.Name
+	}
+	if p.Url != nil {
+		q.conn.Url = *p.Url
+	}
+	if p.Config != nil {
+		q.conn.Config = p.Config
+	}
+	if p.CredentialsEnc != nil {
+		q.conn.CredentialsEnc = p.CredentialsEnc
+	}
+	return q.conn, nil
 }
 
 func (q *authzFake) UpdateCatalog(_ context.Context, p db.UpdateCatalogParams) (db.Catalog, error) {
@@ -475,6 +523,52 @@ func TestConnectionHandlers_Authz(t *testing.T) {
 			t.Errorf("get as owner/admin: %d", got)
 		}
 	}
+}
+
+// TestUpdateCatalogConnection_ReappliesBindings (#664): editing a
+// connection's settings applies its managed bindings to the engine again,
+// while an edit that leaves the settings alone (a rename) does not.
+func TestUpdateCatalogConnection_ReappliesBindings(t *testing.T) {
+	t.Parallel()
+	h, q, ft := newAuthzHandlers(t)
+	admin := ctxAs(adminID, "admin")
+	id := q.conn.ID.Bytes
+
+	name := "renamed"
+	if got := codeOf(t, mustUpdate(t, h, admin, id, UpdateCatalogConnectionRequest{Name: &name}), nil); got != 200 {
+		t.Fatalf("rename: %d", got)
+	}
+	if len(ft.statements()) != 0 || len(q.upserts) != 0 {
+		t.Fatalf("a rename re-applied the binding: trino %q, registry %v", ft.statements(), q.upserts)
+	}
+
+	if got := codeOf(t, mustUpdate(t, h, admin, id, UpdateCatalogConnectionRequest{Config: strMap("realm", "OTHER")}), nil); got != 200 {
+		t.Fatalf("config edit: %d", got)
+	}
+	if !slices.Contains(q.upserts, "wh") {
+		t.Errorf("registry upserts = %v, want the catalog re-applied", q.upserts)
+	}
+	applied := false
+	for _, st := range ft.statements() {
+		if strings.HasPrefix(st, "CREATE CATALOG") {
+			applied = true
+		}
+	}
+	if !applied {
+		t.Errorf("trino statements = %q, want a CREATE CATALOG", ft.statements())
+	}
+	if b, ok := q.current(pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true}); !ok || b.LifecycleState != "active" {
+		t.Errorf("binding = %+v, want active", b)
+	}
+}
+
+func mustUpdate(t *testing.T, h *API, ctx context.Context, id [16]byte, body UpdateCatalogConnectionRequest) UpdateCatalogConnectionResponseObject { //nolint:revive // thelper wants t first
+	t.Helper()
+	r, err := h.UpdateCatalogConnection(ctx, UpdateCatalogConnectionRequestObject{Id: id, Body: &body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }
 
 // visitCode renders a strict response object and returns its HTTP status.

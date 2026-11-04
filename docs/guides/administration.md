@@ -54,7 +54,7 @@ The bell in the header lists what needs attention, errors first. It is computed 
 
 These live in the **Connections** area, not in Settings:
 
-- **Connections:** what Baleia reaches. The **New connection** wizard tests the connection, adds catalogs and grants them. By default only admins create and edit connections (`BALEIA_CONNECTIONS_CREATE`), and connections may not reach private address ranges unless the operator allows them (`BALEIA_CONNECTIONS_ALLOW_CIDRS`, [configuration](../configuration.md)).
+- **Connections:** what Baleia reaches. The **New connection** wizard tests the connection, adds catalogs and grants them. Saving changed settings or credentials applies the connection's managed catalogs to their engines again; one that cannot be applied shows as a binding error in Attention. By default only admins create and edit connections (`BALEIA_CONNECTIONS_CREATE`), and connections may not reach private address ranges unless the operator allows them (`BALEIA_CONNECTIONS_ALLOW_CIDRS`, [configuration](../configuration.md)).
 - **Catalogs:** each catalog's bindings, metadata sync, access, [maintenance](monitoring.md#table-maintenance) and activity.
 - **Engines:** the engines that run SQL, with their bindings and reconciliation. An engine's **External URL** is the address BI clients use to reach it, needed for [Open in a BI tool](data.md#open-in-a-bi-tool).
 
