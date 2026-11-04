@@ -1,0 +1,58 @@
+# Values for the public demo on Oracle OKE (Basic) with Oracle Object Storage.
+#
+# The Secret `demo-secrets` must exist in the namespace before installing
+# (see deploy/oke/create-secrets.sh). Replace <object-storage-namespace> with
+# the tenancy's Object Storage namespace (`oci os ns get`).
+image:
+  repository: ghcr.io/maltzsama/baleia
+  tag: "0.5.0"
+
+secrets:
+  create: false
+existingSecret: demo-secrets
+
+config:
+  PUBLIC_URL: https://demo.baleia.galileostd.io
+  TEMPORAL_HOST: temporal.baleia-dev.svc:7233
+  POLARIS_URL: http://polaris.baleia-dev.svc:8181
+  S3_ENDPOINT: <object-storage-namespace>.compat.objectstorage.sa-saopaulo-1.oraclecloud.com
+  S3_BUCKET: baleia-demo
+  S3_REGION: sa-saopaulo-1
+  S3_USE_SSL: "true"
+  # The demo publishes shared accounts: visitors must not be able to create
+  # connections (the dialer reaches private addresses).
+  BALEIA_CONNECTIONS_CREATE: admins
+
+api:
+  replicas: 1
+  resources:
+    requests: { cpu: 200m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+worker:
+  replicas: 1
+  resources:
+    requests: { cpu: 200m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+migrate:
+  enabled: true
+
+trino:
+  enabled: true
+  image:
+    # OKE 1.36 nodes run CRI-O with short-name mode enforcing: every image
+    # must carry its registry host.
+    repository: docker.io/trinodb/trino
+    tag: "484"
+  awsRegion: sa-saopaulo-1
+  plugin:
+    version: "0.10.0"   # baleia-trino-catalog-store release
+  jvmHeap: 1G
+  # Trino has no authentication here; it is ClusterIP-only, so only the API
+  # reaches it.
+  catalogGuard:
+    allowUnauthenticatedAdmin: true
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { memory: 2Gi }

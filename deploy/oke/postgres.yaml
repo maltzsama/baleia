@@ -1,0 +1,72 @@
+# Demo database. Everything else in the stack is stateless; this is the only
+# PVC, so it can use the whole Always Free block-storage budget that the node
+# boot volumes leave free.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: oci-bv
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+data:
+  10-databases.sql: |
+    CREATE DATABASE temporal;
+    CREATE DATABASE polaris;
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:18
+          env:
+            - { name: POSTGRES_USER, value: baleia }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: PG_PASSWORD }
+            - { name: POSTGRES_DB, value: baleia }
+          ports:
+            - { containerPort: 5432 }
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "baleia"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql }
+            - { name: initdb, mountPath: /docker-entrypoint-initdb.d }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: postgres-data }
+        - name: initdb
+          configMap: { name: postgres-initdb }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector: { app: postgres }
+  ports:
+    - { port: 5432, targetPort: 5432 }

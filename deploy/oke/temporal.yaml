@@ -1,0 +1,60 @@
+# Temporal is the only durable dependency of the worker. It keeps its state in
+# Postgres; the UI is not part of the demo.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: temporal }
+  template:
+    metadata:
+      labels: { app: temporal }
+    spec:
+      containers:
+        - name: temporal
+          image: docker.io/temporalio/auto-setup:latest
+          env:
+            - { name: DB, value: postgres12 }
+            - { name: DB_PORT, value: "5432" }
+            - { name: POSTGRES_USER, value: baleia }
+            - name: POSTGRES_PWD
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: PG_PASSWORD }
+            - { name: POSTGRES_SEEDS, value: postgres }
+            - { name: TEMPORAL_DBNAME, value: temporal }
+            - { name: DYNAMIC_CONFIG_FILE_PATH, value: /etc/temporal/config/dynamicconfig/development-sql.yaml }
+          ports:
+            - { containerPort: 7233 }
+          readinessProbe:
+            tcpSocket: { port: 7233 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 300m, memory: 512Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: dynamicconfig, mountPath: /etc/temporal/config/dynamicconfig }
+      volumes:
+        - name: dynamicconfig
+          configMap: { name: temporal-dynamicconfig }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temporal-dynamicconfig
+data:
+  development-sql.yaml: |
+    system.forceSearchAttributesCacheRefreshOnRead:
+      - value: true
+        constraints: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal
+spec:
+  selector: { app: temporal }
+  ports:
+    - { port: 7233, targetPort: 7233 }

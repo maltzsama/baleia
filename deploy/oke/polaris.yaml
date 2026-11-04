@@ -1,0 +1,133 @@
+# Polaris backs the demo's Iceberg catalog. On Oracle Object Storage there is
+# no STS, so the catalog is created with stsUnavailable and the S3 keys are
+# passed through; the AWS SDK must not send aws-chunked uploads (OCI answers
+# 501 to them), hence the two checksum variables.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: polaris-bootstrap
+spec:
+  backoffLimit: 8
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: docker.io/apache/polaris-admin-tool:1.6.0
+          env:
+            - { name: POLARIS_PERSISTENCE_TYPE, value: relational-jdbc }
+            - { name: QUARKUS_DATASOURCE_USERNAME, value: baleia }
+            - name: QUARKUS_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: PG_PASSWORD }
+            - { name: QUARKUS_DATASOURCE_JDBC_URL, value: "jdbc:postgresql://postgres:5432/polaris" }
+            - name: POLARIS_BOOTSTRAP_CREDENTIALS
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: POLARIS_BOOTSTRAP_CREDENTIALS }
+          args: ["bootstrap", "-r", "POLARIS", "-c", "$(POLARIS_BOOTSTRAP_CREDENTIALS)"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: polaris
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: polaris }
+  template:
+    metadata:
+      labels: { app: polaris }
+    spec:
+      containers:
+        - name: polaris
+          image: docker.io/apache/polaris:1.6.0
+          env:
+            - { name: POLARIS_PERSISTENCE_TYPE, value: relational-jdbc }
+            - { name: QUARKUS_DATASOURCE_USERNAME, value: baleia }
+            - name: QUARKUS_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: PG_PASSWORD }
+            - { name: QUARKUS_DATASOURCE_JDBC_URL, value: "jdbc:postgresql://postgres:5432/polaris" }
+            - { name: "polaris.realm-context.realms", value: POLARIS }
+            - { name: POLARIS_FEATURES_ALLOW_INSECURE_STORAGE_TYPES, value: "true" }
+            - { name: POLARIS_FEATURES_SUPPORTED_CATALOG_STORAGE_TYPES, value: '["FILE","S3","GCS","AZURE"]' }
+            - { name: "polaris.readiness.ignore-severe-issues", value: "true" }
+            - { name: POLARIS_AUTHORIZATION_ENABLED, value: "false" }
+            - { name: "polaris.auth.enabled", value: "true" }
+            - { name: "polaris.auth.type", value: basic }
+            - name: "polaris.auth.basic.users"
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: POLARIS_BASIC_USERS }
+            - { name: "polaris.auth.default-realm", value: POLARIS }
+            - { name: AWS_REGION, value: sa-saopaulo-1 }
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: S3_ACCESS_KEY }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: S3_SECRET_KEY }
+            - { name: AWS_REQUEST_CHECKSUM_CALCULATION, value: WHEN_REQUIRED }
+            - { name: AWS_RESPONSE_CHECKSUM_VALIDATION, value: WHEN_REQUIRED }
+            - { name: JAVA_OPTS_APPEND, value: "-Daws.s3UsePathStyle=true" }
+          ports:
+            - { containerPort: 8181 }
+            - { containerPort: 8182 }
+          readinessProbe:
+            httpGet: { path: /q/health, port: 8182 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 300m, memory: 512Mi }
+            limits: { memory: 1.5Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: polaris
+spec:
+  selector: { app: polaris }
+  ports:
+    - { name: api, port: 8181, targetPort: 8181 }
+    - { name: health, port: 8182, targetPort: 8182 }
+---
+# Seeds the baleia_polaris catalog/namespace/table through the Polaris REST
+# API, exactly as scripts/seed_polaris.py does for the dev stack.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: polaris-seed
+spec:
+  backoffLimit: 8
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: docker.io/library/python:3.11-slim
+          env:
+            - { name: POLARIS_URL, value: "http://polaris:8181" }
+            - { name: POLARIS_REALM, value: POLARIS }
+            - { name: POLARIS_CLIENT_ID, value: admin }
+            - name: POLARIS_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: POLARIS_SECRET }
+            - { name: S3_ENDPOINT, value: "https://grlwu7snfomo.compat.objectstorage.sa-saopaulo-1.oraclecloud.com" }
+            - { name: S3_REGION, value: sa-saopaulo-1 }
+            - { name: BUCKET, value: baleia-demo }
+            - { name: STS_UNAVAILABLE, value: "true" }
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: S3_ACCESS_KEY }
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: demo-secrets, key: S3_SECRET_KEY }
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              pip install --quiet pyiceberg pyarrow requests
+              python /scripts/seed_polaris.py
+          volumeMounts:
+            - { name: seed, mountPath: /scripts }
+      volumes:
+        - name: seed
+          configMap: { name: polaris-seed }

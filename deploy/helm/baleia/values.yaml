@@ -92,7 +92,12 @@ trino:
     url: ""               # default: GitHub release URL built from version
     image: ""             # optional small image with /baleia-catalog-store (air-gapped)
     imagePullPolicy: ""
-  jvmHeap: 2G
+  # Maximum heap of the coordinator (-Xmx), e.g. "4G". Empty keeps the image's
+  # default, a percentage of the container's memory limit (80%), or of the
+  # node's memory when trino.resources sets no limit. Leave room above the heap
+  # for the code cache, metaspace, direct buffers and the Parquet readers: with
+  # a limit set, keep the heap at most about 75% of it.
+  jvmHeap: ""
   # Phase B (#200): when true, the Trino plugin decrypts @baleia-enc[...]
   # registry values. Requires secrets.values.BALEIA_REGISTRY_KEY (or an
   # existing secret carrying that key) and a plugin release that supports it.
