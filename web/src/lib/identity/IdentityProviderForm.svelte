@@ -14,6 +14,8 @@
 	type Update = components['schemas']['UpdateIdentityProviderRequest'];
 	type RoleMapping = { group: string; role: 'admin' | 'member' };
 	type TeamMapping = { group: string; team_id: string; team_role: 'owner' | 'member' };
+	type WorkspaceRole = components['schemas']['WorkspaceRole'];
+	type WorkspaceMapping = { group: string; workspace_id: string; role: WorkspaceRole };
 	type Preview = components['schemas']['IdentityMappingPreview'];
 
 	let {
@@ -40,6 +42,27 @@
 			}
 		}
 	];
+	const workspaceRoleOptions = [
+		{
+			value: 'viewer',
+			get label() {
+				return m.workspace_role_viewer();
+			}
+		},
+		{
+			value: 'editor',
+			get label() {
+				return m.workspace_role_editor();
+			}
+		},
+		{
+			value: 'admin',
+			get label() {
+				return m.workspace_role_admin();
+			}
+		}
+	];
+
 	const teamRoleOptions = [
 		{
 			value: 'member',
@@ -86,6 +109,7 @@
 
 	let roleMappings = $state<RoleMapping[]>([]);
 	let teamMappings = $state<TeamMapping[]>([]);
+	let workspaceMappings = $state<WorkspaceMapping[]>([]);
 
 	// Mapping preview (#264)
 	let previewGroups = $state('');
@@ -136,6 +160,11 @@
 			team_id: m.team_id,
 			team_role: m.team_role as 'owner' | 'member'
 		}));
+		workspaceMappings = (oidc?.workspace_mapping ?? ldap?.workspace_mapping ?? []).map((m) => ({
+			group: m.group,
+			workspace_id: m.workspace_id,
+			role: m.role
+		}));
 	}
 
 	$effect(() => {
@@ -161,6 +190,12 @@
 	function removeTeam(index: number) {
 		teamMappings = teamMappings.filter((_, i) => i !== index);
 	}
+	function addWorkspace() {
+		workspaceMappings = [...workspaceMappings, { group: '', workspace_id: '', role: 'viewer' }];
+	}
+	function removeWorkspace(index: number) {
+		workspaceMappings = workspaceMappings.filter((_, i) => i !== index);
+	}
 
 	function config() {
 		if (type === 'oidc') {
@@ -175,7 +210,8 @@
 					.filter(Boolean),
 				default_role: oidcDefaultRole,
 				role_mapping: roleMappings,
-				team_mapping: teamMappings
+				team_mapping: teamMappings,
+				workspace_mapping: workspaceMappings
 			};
 		}
 		return {
@@ -193,7 +229,8 @@
 			timeout_seconds: Number(timeoutSeconds) || 10,
 			default_role: ldapDefaultRole,
 			role_mapping: roleMappings,
-			team_mapping: teamMappings
+			team_mapping: teamMappings,
+			workspace_mapping: workspaceMappings
 		};
 	}
 
@@ -246,6 +283,7 @@
 						.filter(Boolean),
 					role_mapping: roleMappings,
 					team_mapping: teamMappings,
+					workspace_mapping: workspaceMappings,
 					default_role: type === 'oidc' ? oidcDefaultRole : ldapDefaultRole
 				}
 			});
@@ -454,6 +492,41 @@
 		</div>
 
 		<div class="rounded-md border border-border p-3">
+			<div class="mb-2 flex items-center justify-between">
+				<p class="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+					{m.identity_identityproviderform_workspace_mapping()}
+				</p>
+				<Button size="sm" variant="ghost" onclick={addWorkspace}
+					>{m.identity_identityproviderform_add_rule()}</Button
+				>
+			</div>
+			<p class="mb-2 text-[11px] text-text-muted">
+				{m.identity_identityproviderform_workspace_mapping_hint()}
+			</p>
+			{#each workspaceMappings as rule, index (index)}
+				<div class="mb-2 grid grid-cols-[1fr_1fr_120px_32px] items-end gap-2">
+					<Input
+						label={m.identity_identityproviderform_directory_group()}
+						bind:value={rule.group}
+					/>
+					<Input
+						label={m.identity_identityproviderform_workspace_id()}
+						bind:value={rule.workspace_id}
+					/>
+					<Select
+						label={m.workspace_members_role()}
+						bind:value={rule.role}
+						options={workspaceRoleOptions}
+					/>
+					<IconButton
+						label={m.identity_identityproviderform_remove_rule()}
+						onclick={() => removeWorkspace(index)}>×</IconButton
+					>
+				</div>
+			{/each}
+		</div>
+
+		<div class="rounded-md border border-border p-3">
 			<p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
 				{m.identity_identityproviderform_preview_mapping()}
 			</p>
@@ -475,6 +548,10 @@
 					{#if preview.teams.length > 0}
 						{m.identity_identityproviderform_teams()}
 						{preview.teams.map((t) => `${t.team_id} (${t.team_role})`).join(', ')}
+					{/if}
+					{#if preview.workspaces.length > 0}
+						{m.identity_identityproviderform_workspaces()}
+						{preview.workspaces.map((w) => `${w.workspace_id} (${w.role})`).join(', ')}
 					{/if}
 				</p>
 			{/if}

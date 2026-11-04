@@ -221,7 +221,7 @@ func (h *AuthHandlers) CreateServiceAccount(ctx context.Context, request CreateS
 			return err
 		}
 		if home.Valid {
-			n, err := q.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: home, UserID: sa.ID, Role: role, GrantedBy: p.UserID})
+			n, err := q.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: home, UserID: sa.ID, Role: role, GrantedBy: p.UserID, Source: "manual"})
 			if err == nil && n == 0 {
 				err = errors.New("service account: not added to its workspace")
 			}

@@ -152,6 +152,9 @@ type Querier interface {
 	DeleteServiceAccount(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteSpace(ctx context.Context, arg DeleteSpaceParams) (int64, error)
 	DeleteSpaceMember(ctx context.Context, arg DeleteSpaceMemberParams) (int64, error)
+	// At sign-in, drops the group-derived roles the member's groups no longer
+	// give (#653); roles an admin set stay.
+	DeleteStaleGroupWorkspaceMembers(ctx context.Context, arg DeleteStaleGroupWorkspaceMembersParams) error
 	DeleteStatementJoins(ctx context.Context, statementID pgtype.UUID) error
 	// Statement references and equi-joins (B0, #530, #538).
 	DeleteStatementReferences(ctx context.Context, statementID pgtype.UUID) error
@@ -795,6 +798,7 @@ type Querier interface {
 	// Writes nothing (0 rows) when the user cannot be a member: on a shared
 	// workspace a person must be in its team (a service account need not). The share lock on their team row makes
 	// a concurrent removal from the team either wait for this write or win.
+	// A role an admin set is never overwritten by an identity-provider group.
 	UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) (int64, error)
 	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)
 }

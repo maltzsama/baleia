@@ -583,6 +583,25 @@ components:
         team_id: { type: string }
         team_role: { type: string, enum: [owner, member] }
 
+    IdentityWorkspaceMapping:
+      type: object
+      description: >
+        Binds a directory group to a role in a workspace (#653), applied at each sign-in. It sets the
+        role only: a shared workspace's members still come from its team (team_mapping). A role a
+        workspace admin set wins over a group.
+      required: [group, workspace_id, role]
+      properties:
+        group: { type: string, minLength: 1 }
+        workspace_id: { type: string }
+        role: { $ref: "#/components/schemas/WorkspaceRole" }
+
+    IdentityWorkspaceAssignment:
+      type: object
+      required: [workspace_id, role]
+      properties:
+        workspace_id: { type: string }
+        role: { $ref: "#/components/schemas/WorkspaceRole" }
+
     OIDCClaimsConfig:
       type: object
       description: "Claim names published by the provider; empty uses the standard name."
@@ -604,6 +623,7 @@ components:
         allowed_email_domains: { type: array, items: { type: string } }
         role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
         team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        workspace_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityWorkspaceMapping" } }
         default_role: { type: string, enum: [admin, member] }
         claims: { $ref: "#/components/schemas/OIDCClaimsConfig" }
 
@@ -617,6 +637,7 @@ components:
         allowed_email_domains: { type: array, items: { type: string } }
         role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
         team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        workspace_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityWorkspaceMapping" } }
         default_role: { type: string, enum: [admin, member] }
         claims: { $ref: "#/components/schemas/OIDCClaimsConfig" }
 
@@ -639,6 +660,7 @@ components:
         timeout_seconds: { type: integer, minimum: 1, maximum: 60 }
         role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
         team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        workspace_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityWorkspaceMapping" } }
         default_role: { type: string, enum: [admin, member] }
 
     LDAPConfigAdmin:
@@ -658,6 +680,7 @@ components:
         timeout_seconds: { type: integer }
         role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
         team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        workspace_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityWorkspaceMapping" } }
         default_role: { type: string, enum: [admin, member] }
 
     IdentityProvider:
@@ -714,6 +737,7 @@ components:
         allowed_email_domains: { type: array, items: { type: string } }
         role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
         team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        workspace_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityWorkspaceMapping" } }
         default_role: { type: string, enum: [admin, member] }
         claims: { $ref: "#/components/schemas/OIDCClaimsConfig" }
 
@@ -737,6 +761,7 @@ components:
         timeout_seconds: { type: integer, minimum: 1, maximum: 60 }
         role_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityRoleMapping" } }
         team_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityTeamMapping" } }
+        workspace_mapping: { type: array, items: { $ref: "#/components/schemas/IdentityWorkspaceMapping" } }
         default_role: { type: string, enum: [admin, member] }
 
     UpdateIdentityProviderRequest:
@@ -793,6 +818,9 @@ components:
         team_mapping:
           type: array
           items: { $ref: "#/components/schemas/IdentityTeamMapping" }
+        workspace_mapping:
+          type: array
+          items: { $ref: "#/components/schemas/IdentityWorkspaceMapping" }
         default_role: { type: string, enum: [admin, member] }
 
     IdentityTeamAssignment:
@@ -804,12 +832,15 @@ components:
 
     IdentityMappingPreview:
       type: object
-      required: [role, teams]
+      required: [role, teams, workspaces]
       properties:
         role: { type: string, enum: [admin, member] }
         teams:
           type: array
           items: { $ref: "#/components/schemas/IdentityTeamAssignment" }
+        workspaces:
+          type: array
+          items: { $ref: "#/components/schemas/IdentityWorkspaceAssignment" }
 
     PasswordResetRequestBody:
       type: object

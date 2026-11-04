@@ -51,6 +51,14 @@ func (f *fakeStore) UpdateUserRole(_ context.Context, arg db.UpdateUserRoleParam
 	return nil
 }
 
+func (f *fakeStore) UpsertWorkspaceMember(context.Context, db.UpsertWorkspaceMemberParams) (int64, error) {
+	return 1, nil
+}
+
+func (f *fakeStore) DeleteStaleGroupWorkspaceMembers(context.Context, db.DeleteStaleGroupWorkspaceMembersParams) error {
+	return nil
+}
+
 func (f *fakeStore) UpsertTeamMember(_ context.Context, arg db.UpsertTeamMemberParams) error {
 	f.teams = append(f.teams, arg)
 	return nil

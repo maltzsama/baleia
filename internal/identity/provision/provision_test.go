@@ -18,6 +18,19 @@ import (
 type fakeMembers struct {
 	added []db.UpsertTeamMemberParams
 	fail  map[string]bool
+	// workspace roles written and the group roles kept at the last sign-in
+	workspaces []db.UpsertWorkspaceMemberParams
+	kept       []pgtype.UUID
+}
+
+func (f *fakeMembers) UpsertWorkspaceMember(_ context.Context, arg db.UpsertWorkspaceMemberParams) (int64, error) {
+	f.workspaces = append(f.workspaces, arg)
+	return 1, nil
+}
+
+func (f *fakeMembers) DeleteStaleGroupWorkspaceMembers(_ context.Context, arg db.DeleteStaleGroupWorkspaceMembersParams) error {
+	f.kept = arg.Keep
+	return nil
 }
 
 func (f *fakeMembers) UpsertTeamMember(_ context.Context, arg db.UpsertTeamMemberParams) error {

@@ -2,6 +2,7 @@ package identity
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -142,6 +143,37 @@ func TestMapIdentity_Deterministic(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got, first) {
 			t.Fatalf("run %d = %v, want stable %v", i, got, first)
+		}
+	}
+}
+
+// TestMapIdentity_Workspaces (#653): groups map to workspace roles, the most
+// privileged role per workspace wins, and malformed rules are errors.
+func TestMapIdentity_Workspaces(t *testing.T) {
+	t.Parallel()
+	got, err := MapIdentity(MappingInput{
+		Groups: []string{"analysts", "finance-leads"},
+		WorkspaceMapping: []WorkspaceMapping{
+			{Group: "analysts", WorkspaceID: "ws-finance", Role: "viewer"},
+			{Group: "finance-leads", WorkspaceID: "ws-finance", Role: "admin"},
+			{Group: "analysts", WorkspaceID: "ws-sales", Role: "editor"},
+			{Group: "engineers", WorkspaceID: "ws-eng", Role: "editor"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []WorkspaceAssignment{{WorkspaceID: "ws-finance", Role: "admin"}, {WorkspaceID: "ws-sales", Role: "editor"}}
+	if !slices.Equal(got.Workspaces, want) {
+		t.Errorf("workspaces = %v, want %v", got.Workspaces, want)
+	}
+	for name, m := range map[string]WorkspaceMapping{
+		"empty group":     {WorkspaceID: "w", Role: "viewer"},
+		"empty workspace": {Group: "g", Role: "viewer"},
+		"bad role":        {Group: "g", WorkspaceID: "w", Role: "owner"},
+	} {
+		if _, err := MapIdentity(MappingInput{WorkspaceMapping: []WorkspaceMapping{m}}); err == nil {
+			t.Errorf("%s: want an error", name)
 		}
 	}
 }

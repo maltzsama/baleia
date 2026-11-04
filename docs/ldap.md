@@ -74,6 +74,7 @@ slice). The JSON shape is:
 | `required_group` | no | Case-insensitive group DN/name the user must belong to. |
 | `timeout_seconds` | no | 1–60; defaults to 10. |
 | `role_mapping`, `team_mapping`, `default_role` | no | Same semantics and precedence as OIDC: the most privileged mapped role wins, `default_role` defaults to `member`. |
+| `workspace_mapping` | no | `[{group, workspace_id, role}]` with role `admin`, `editor` or `viewer` (#653): the workspace role each sign-in sets; the most privileged wins per workspace. It sets the role only: a team's workspace still gets its members from `team_mapping`. A role a workspace admin set wins. |
 
 The login request sends `provider_id` and `username`:
 

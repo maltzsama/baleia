@@ -95,7 +95,7 @@ func (h *core) setMember(ctx context.Context, wsID pgtype.UUID, user *db.User, r
 	}
 	// The write itself checks a shared workspace's team membership, so a
 	// concurrent removal from the team cannot leave a role that has no effect.
-	n, err := h.queries.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: wsID, UserID: user.ID, Role: role, GrantedBy: p.UserID})
+	n, err := h.queries.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: wsID, UserID: user.ID, Role: role, GrantedBy: p.UserID, Source: "manual"})
 	if err != nil {
 		return db.ListWorkspaceMembersRow{}, 0, err
 	}

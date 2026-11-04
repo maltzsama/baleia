@@ -3940,6 +3940,16 @@ export interface components {
             /** @enum {string} */
             team_role: "owner" | "member";
         };
+        /** @description Binds a directory group to a role in a workspace (#653), applied at each sign-in. It sets the role only: a shared workspace's members still come from its team (team_mapping). A role a workspace admin set wins over a group. */
+        IdentityWorkspaceMapping: {
+            group: string;
+            workspace_id: string;
+            role: components["schemas"]["WorkspaceRole"];
+        };
+        IdentityWorkspaceAssignment: {
+            workspace_id: string;
+            role: components["schemas"]["WorkspaceRole"];
+        };
         /** @description Claim names published by the provider; empty uses the standard name. */
         OIDCClaimsConfig: {
             subject?: string;
@@ -3961,6 +3971,7 @@ export interface components {
             allowed_email_domains?: string[];
             role_mapping?: components["schemas"]["IdentityRoleMapping"][];
             team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            workspace_mapping?: components["schemas"]["IdentityWorkspaceMapping"][];
             /** @enum {string} */
             default_role?: "admin" | "member";
             claims?: components["schemas"]["OIDCClaimsConfig"];
@@ -3973,6 +3984,7 @@ export interface components {
             allowed_email_domains?: string[];
             role_mapping?: components["schemas"]["IdentityRoleMapping"][];
             team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            workspace_mapping?: components["schemas"]["IdentityWorkspaceMapping"][];
             /** @enum {string} */
             default_role?: "admin" | "member";
             claims?: components["schemas"]["OIDCClaimsConfig"];
@@ -3995,6 +4007,7 @@ export interface components {
             timeout_seconds?: number;
             role_mapping?: components["schemas"]["IdentityRoleMapping"][];
             team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            workspace_mapping?: components["schemas"]["IdentityWorkspaceMapping"][];
             /** @enum {string} */
             default_role?: "admin" | "member";
         };
@@ -4013,6 +4026,7 @@ export interface components {
             timeout_seconds?: number;
             role_mapping?: components["schemas"]["IdentityRoleMapping"][];
             team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            workspace_mapping?: components["schemas"]["IdentityWorkspaceMapping"][];
             /** @enum {string} */
             default_role?: "admin" | "member";
         };
@@ -4069,6 +4083,7 @@ export interface components {
             allowed_email_domains?: string[];
             role_mapping?: components["schemas"]["IdentityRoleMapping"][];
             team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            workspace_mapping?: components["schemas"]["IdentityWorkspaceMapping"][];
             /** @enum {string} */
             default_role?: "admin" | "member";
             claims?: components["schemas"]["OIDCClaimsConfig"];
@@ -4090,6 +4105,7 @@ export interface components {
             timeout_seconds?: number;
             role_mapping?: components["schemas"]["IdentityRoleMapping"][];
             team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            workspace_mapping?: components["schemas"]["IdentityWorkspaceMapping"][];
             /** @enum {string} */
             default_role?: "admin" | "member";
         };
@@ -4124,6 +4140,7 @@ export interface components {
             groups: string[];
             role_mapping?: components["schemas"]["IdentityRoleMapping"][];
             team_mapping?: components["schemas"]["IdentityTeamMapping"][];
+            workspace_mapping?: components["schemas"]["IdentityWorkspaceMapping"][];
             /** @enum {string} */
             default_role?: "admin" | "member";
         };
@@ -4136,6 +4153,7 @@ export interface components {
             /** @enum {string} */
             role: "admin" | "member";
             teams: components["schemas"]["IdentityTeamAssignment"][];
+            workspaces: components["schemas"]["IdentityWorkspaceAssignment"][];
         };
         PasswordResetRequestBody: {
             /** Format: email */

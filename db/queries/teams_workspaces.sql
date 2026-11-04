@@ -253,11 +253,20 @@ allowed AS (
     JOIN users u ON u.id = @user_id::uuid AND u.kind = 'service_account'
     WHERE w.id = @workspace_id::uuid AND w.type = 'shared'
 )
-INSERT INTO workspace_members (workspace_id, user_id, role, granted_by)
-SELECT @workspace_id::uuid, @user_id::uuid, @role::text, sqlc.narg(granted_by)::uuid
+INSERT INTO workspace_members (workspace_id, user_id, role, granted_by, source)
+SELECT @workspace_id::uuid, @user_id::uuid, @role::text, sqlc.narg(granted_by)::uuid, @source::text
 FROM allowed
 ON CONFLICT (workspace_id, user_id) DO UPDATE
-SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now();
+SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now(), source = EXCLUDED.source
+-- A role an admin set is never overwritten by an identity-provider group.
+WHERE EXCLUDED.source = 'manual' OR workspace_members.source = 'idp_group';
 
 -- name: DeleteWorkspaceMember :execrows
 DELETE FROM workspace_members WHERE workspace_id = @workspace_id::uuid AND user_id = @user_id::uuid;
+
+-- name: DeleteStaleGroupWorkspaceMembers :exec
+-- At sign-in, drops the group-derived roles the member's groups no longer
+-- give (#653); roles an admin set stay.
+DELETE FROM workspace_members
+WHERE user_id = @user_id::uuid AND source = 'idp_group'
+  AND NOT (workspace_id = ANY(@keep::uuid[]));

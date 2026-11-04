@@ -2833,8 +2833,9 @@ type IcebergCredentials struct {
 
 // IdentityMappingPreview defines model for IdentityMappingPreview.
 type IdentityMappingPreview struct {
-	Role  IdentityMappingPreviewRole `json:"role"`
-	Teams []IdentityTeamAssignment   `json:"teams"`
+	Role       IdentityMappingPreviewRole    `json:"role"`
+	Teams      []IdentityTeamAssignment      `json:"teams"`
+	Workspaces []IdentityWorkspaceAssignment `json:"workspaces"`
 }
 
 // IdentityMappingPreviewRole defines model for IdentityMappingPreview.Role.
@@ -2842,10 +2843,11 @@ type IdentityMappingPreviewRole string
 
 // IdentityMappingPreviewRequest Groups and mapping rules evaluated exactly as login does.
 type IdentityMappingPreviewRequest struct {
-	DefaultRole *IdentityMappingPreviewRequestDefaultRole `json:"default_role,omitempty"`
-	Groups      []string                                  `json:"groups"`
-	RoleMapping *[]IdentityRoleMapping                    `json:"role_mapping,omitempty"`
-	TeamMapping *[]IdentityTeamMapping                    `json:"team_mapping,omitempty"`
+	DefaultRole      *IdentityMappingPreviewRequestDefaultRole `json:"default_role,omitempty"`
+	Groups           []string                                  `json:"groups"`
+	RoleMapping      *[]IdentityRoleMapping                    `json:"role_mapping,omitempty"`
+	TeamMapping      *[]IdentityTeamMapping                    `json:"team_mapping,omitempty"`
+	WorkspaceMapping *[]IdentityWorkspaceMapping               `json:"workspace_mapping,omitempty"`
 }
 
 // IdentityMappingPreviewRequestDefaultRole defines model for IdentityMappingPreviewRequest.DefaultRole.
@@ -2937,6 +2939,22 @@ type IdentityTeamMapping struct {
 // IdentityTeamMappingTeamRole defines model for IdentityTeamMapping.TeamRole.
 type IdentityTeamMappingTeamRole string
 
+// IdentityWorkspaceAssignment defines model for IdentityWorkspaceAssignment.
+type IdentityWorkspaceAssignment struct {
+	// Role What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and run queries, editors also create and edit content, admins also manage the workspace. What they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
+	Role        WorkspaceRole `json:"role"`
+	WorkspaceId string        `json:"workspace_id"`
+}
+
+// IdentityWorkspaceMapping Binds a directory group to a role in a workspace (#653), applied at each sign-in. It sets the role only: a shared workspace's members still come from its team (team_mapping). A role a workspace admin set wins over a group.
+type IdentityWorkspaceMapping struct {
+	Group string `json:"group"`
+
+	// Role What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and run queries, editors also create and edit content, admins also manage the workspace. What they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
+	Role        WorkspaceRole `json:"role"`
+	WorkspaceId string        `json:"workspace_id"`
+}
+
 // ImportItem defines model for ImportItem.
 type ImportItem struct {
 	Action ImportItemAction `json:"action"`
@@ -3013,7 +3031,8 @@ type LDAPConfig struct {
 	Url string `json:"url"`
 
 	// UserFilter Must contain exactly one {{username}} placeholder.
-	UserFilter string `json:"user_filter"`
+	UserFilter       string                      `json:"user_filter"`
+	WorkspaceMapping *[]IdentityWorkspaceMapping `json:"workspace_mapping,omitempty"`
 }
 
 // LDAPConfigDefaultRole defines model for LDAPConfig.DefaultRole.
@@ -3021,20 +3040,21 @@ type LDAPConfigDefaultRole string
 
 // LDAPConfigAdmin LDAP provider configuration without the bind password.
 type LDAPConfigAdmin struct {
-	BaseDn         *string                     `json:"base_dn,omitempty"`
-	BindDn         *string                     `json:"bind_dn,omitempty"`
-	DefaultRole    *LDAPConfigAdminDefaultRole `json:"default_role,omitempty"`
-	EmailAttribute *string                     `json:"email_attribute,omitempty"`
-	GroupAttribute *string                     `json:"group_attribute,omitempty"`
-	NameAttribute  *string                     `json:"name_attribute,omitempty"`
-	NestedGroups   *bool                       `json:"nested_groups,omitempty"`
-	RequiredGroup  *string                     `json:"required_group,omitempty"`
-	RoleMapping    *[]IdentityRoleMapping      `json:"role_mapping,omitempty"`
-	StartTls       *bool                       `json:"start_tls,omitempty"`
-	TeamMapping    *[]IdentityTeamMapping      `json:"team_mapping,omitempty"`
-	TimeoutSeconds *int                        `json:"timeout_seconds,omitempty"`
-	Url            *string                     `json:"url,omitempty"`
-	UserFilter     *string                     `json:"user_filter,omitempty"`
+	BaseDn           *string                     `json:"base_dn,omitempty"`
+	BindDn           *string                     `json:"bind_dn,omitempty"`
+	DefaultRole      *LDAPConfigAdminDefaultRole `json:"default_role,omitempty"`
+	EmailAttribute   *string                     `json:"email_attribute,omitempty"`
+	GroupAttribute   *string                     `json:"group_attribute,omitempty"`
+	NameAttribute    *string                     `json:"name_attribute,omitempty"`
+	NestedGroups     *bool                       `json:"nested_groups,omitempty"`
+	RequiredGroup    *string                     `json:"required_group,omitempty"`
+	RoleMapping      *[]IdentityRoleMapping      `json:"role_mapping,omitempty"`
+	StartTls         *bool                       `json:"start_tls,omitempty"`
+	TeamMapping      *[]IdentityTeamMapping      `json:"team_mapping,omitempty"`
+	TimeoutSeconds   *int                        `json:"timeout_seconds,omitempty"`
+	Url              *string                     `json:"url,omitempty"`
+	UserFilter       *string                     `json:"user_filter,omitempty"`
+	WorkspaceMapping *[]IdentityWorkspaceMapping `json:"workspace_mapping,omitempty"`
 }
 
 // LDAPConfigAdminDefaultRole defines model for LDAPConfigAdmin.DefaultRole.
@@ -3634,13 +3654,14 @@ type OIDCConfig struct {
 	AutoCreate *bool `json:"auto_create,omitempty"`
 
 	// Claims Claim names published by the provider; empty uses the standard name.
-	Claims       *OIDCClaimsConfig      `json:"claims,omitempty"`
-	ClientId     string                 `json:"client_id"`
-	ClientSecret string                 `json:"client_secret"`
-	DefaultRole  *OIDCConfigDefaultRole `json:"default_role,omitempty"`
-	IssuerUrl    string                 `json:"issuer_url"`
-	RoleMapping  *[]IdentityRoleMapping `json:"role_mapping,omitempty"`
-	TeamMapping  *[]IdentityTeamMapping `json:"team_mapping,omitempty"`
+	Claims           *OIDCClaimsConfig           `json:"claims,omitempty"`
+	ClientId         string                      `json:"client_id"`
+	ClientSecret     string                      `json:"client_secret"`
+	DefaultRole      *OIDCConfigDefaultRole      `json:"default_role,omitempty"`
+	IssuerUrl        string                      `json:"issuer_url"`
+	RoleMapping      *[]IdentityRoleMapping      `json:"role_mapping,omitempty"`
+	TeamMapping      *[]IdentityTeamMapping      `json:"team_mapping,omitempty"`
+	WorkspaceMapping *[]IdentityWorkspaceMapping `json:"workspace_mapping,omitempty"`
 }
 
 // OIDCConfigDefaultRole defines model for OIDCConfig.DefaultRole.
@@ -3652,12 +3673,13 @@ type OIDCConfigAdmin struct {
 	AutoCreate          *bool     `json:"auto_create,omitempty"`
 
 	// Claims Claim names published by the provider; empty uses the standard name.
-	Claims      *OIDCClaimsConfig           `json:"claims,omitempty"`
-	ClientId    *string                     `json:"client_id,omitempty"`
-	DefaultRole *OIDCConfigAdminDefaultRole `json:"default_role,omitempty"`
-	IssuerUrl   *string                     `json:"issuer_url,omitempty"`
-	RoleMapping *[]IdentityRoleMapping      `json:"role_mapping,omitempty"`
-	TeamMapping *[]IdentityTeamMapping      `json:"team_mapping,omitempty"`
+	Claims           *OIDCClaimsConfig           `json:"claims,omitempty"`
+	ClientId         *string                     `json:"client_id,omitempty"`
+	DefaultRole      *OIDCConfigAdminDefaultRole `json:"default_role,omitempty"`
+	IssuerUrl        *string                     `json:"issuer_url,omitempty"`
+	RoleMapping      *[]IdentityRoleMapping      `json:"role_mapping,omitempty"`
+	TeamMapping      *[]IdentityTeamMapping      `json:"team_mapping,omitempty"`
+	WorkspaceMapping *[]IdentityWorkspaceMapping `json:"workspace_mapping,omitempty"`
 }
 
 // OIDCConfigAdminDefaultRole defines model for OIDCConfigAdmin.DefaultRole.
@@ -4633,19 +4655,20 @@ type UpdateLDAPConfig struct {
 	BindDn *string `json:"bind_dn,omitempty"`
 
 	// BindPassword Omit to keep the stored secret; send an empty string to clear it.
-	BindPassword   *string                      `json:"bind_password,omitempty"`
-	DefaultRole    *UpdateLDAPConfigDefaultRole `json:"default_role,omitempty"`
-	EmailAttribute *string                      `json:"email_attribute,omitempty"`
-	GroupAttribute *string                      `json:"group_attribute,omitempty"`
-	NameAttribute  *string                      `json:"name_attribute,omitempty"`
-	NestedGroups   *bool                        `json:"nested_groups,omitempty"`
-	RequiredGroup  *string                      `json:"required_group,omitempty"`
-	RoleMapping    *[]IdentityRoleMapping       `json:"role_mapping,omitempty"`
-	StartTls       *bool                        `json:"start_tls,omitempty"`
-	TeamMapping    *[]IdentityTeamMapping       `json:"team_mapping,omitempty"`
-	TimeoutSeconds *int                         `json:"timeout_seconds,omitempty"`
-	Url            *string                      `json:"url,omitempty"`
-	UserFilter     *string                      `json:"user_filter,omitempty"`
+	BindPassword     *string                      `json:"bind_password,omitempty"`
+	DefaultRole      *UpdateLDAPConfigDefaultRole `json:"default_role,omitempty"`
+	EmailAttribute   *string                      `json:"email_attribute,omitempty"`
+	GroupAttribute   *string                      `json:"group_attribute,omitempty"`
+	NameAttribute    *string                      `json:"name_attribute,omitempty"`
+	NestedGroups     *bool                        `json:"nested_groups,omitempty"`
+	RequiredGroup    *string                      `json:"required_group,omitempty"`
+	RoleMapping      *[]IdentityRoleMapping       `json:"role_mapping,omitempty"`
+	StartTls         *bool                        `json:"start_tls,omitempty"`
+	TeamMapping      *[]IdentityTeamMapping       `json:"team_mapping,omitempty"`
+	TimeoutSeconds   *int                         `json:"timeout_seconds,omitempty"`
+	Url              *string                      `json:"url,omitempty"`
+	UserFilter       *string                      `json:"user_filter,omitempty"`
+	WorkspaceMapping *[]IdentityWorkspaceMapping  `json:"workspace_mapping,omitempty"`
 }
 
 // UpdateLDAPConfigDefaultRole defines model for UpdateLDAPConfig.DefaultRole.
@@ -4661,11 +4684,12 @@ type UpdateOIDCConfig struct {
 	ClientId *string           `json:"client_id,omitempty"`
 
 	// ClientSecret Omit to keep the stored secret; send an empty string to clear it.
-	ClientSecret *string                      `json:"client_secret,omitempty"`
-	DefaultRole  *UpdateOIDCConfigDefaultRole `json:"default_role,omitempty"`
-	IssuerUrl    *string                      `json:"issuer_url,omitempty"`
-	RoleMapping  *[]IdentityRoleMapping       `json:"role_mapping,omitempty"`
-	TeamMapping  *[]IdentityTeamMapping       `json:"team_mapping,omitempty"`
+	ClientSecret     *string                      `json:"client_secret,omitempty"`
+	DefaultRole      *UpdateOIDCConfigDefaultRole `json:"default_role,omitempty"`
+	IssuerUrl        *string                      `json:"issuer_url,omitempty"`
+	RoleMapping      *[]IdentityRoleMapping       `json:"role_mapping,omitempty"`
+	TeamMapping      *[]IdentityTeamMapping       `json:"team_mapping,omitempty"`
+	WorkspaceMapping *[]IdentityWorkspaceMapping  `json:"workspace_mapping,omitempty"`
 }
 
 // UpdateOIDCConfigDefaultRole defines model for UpdateOIDCConfig.DefaultRole.

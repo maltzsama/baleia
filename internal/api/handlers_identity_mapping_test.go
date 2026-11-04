@@ -83,3 +83,24 @@ func TestMappingPreview_Validation422(t *testing.T) {
 		t.Fatalf("preview = %T, want 422", got)
 	}
 }
+
+// TestPreviewIdentityMapping_Workspaces (#653): the preview shows the
+// workspace roles a set of groups gives, as sign-in applies them.
+func TestPreviewIdentityMapping_Workspaces(t *testing.T) {
+	t.Parallel()
+	h := testAPI(handlerFields{})
+	resp, err := h.PreviewIdentityMapping(ctxAs(adminID, "admin"), PreviewIdentityMappingRequestObject{Body: &PreviewIdentityMappingJSONRequestBody{
+		Groups: []string{"analysts", "leads"},
+		WorkspaceMapping: &[]IdentityWorkspaceMapping{
+			{Group: "analysts", WorkspaceId: "ws-1", Role: WorkspaceRoleViewer},
+			{Group: "leads", WorkspaceId: "ws-1", Role: WorkspaceRoleAdmin},
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := resp.(PreviewIdentityMapping200JSONResponse)
+	if !ok || len(got.Workspaces) != 1 || got.Workspaces[0].WorkspaceId != "ws-1" || got.Workspaces[0].Role != WorkspaceRoleAdmin {
+		t.Fatalf("preview = %+v", resp)
+	}
+}

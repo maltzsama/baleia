@@ -22,6 +22,7 @@ type User struct {
 	Groups     []string
 	Role       string
 	Teams      []identity.TeamAssignment
+	Workspaces []identity.WorkspaceAssignment
 }
 
 // Authenticate verifies the submitted password with a user bind and resolves
@@ -60,10 +61,11 @@ func authenticate(ctx context.Context, cfg Config, username, password string, di
 		return nil, err
 	}
 	mapped, err := identity.MapIdentity(identity.MappingInput{
-		Groups:      groups,
-		RoleMapping: cfg.RoleMapping,
-		TeamMapping: cfg.TeamMapping,
-		DefaultRole: cfg.DefaultRole,
+		Groups:           groups,
+		RoleMapping:      cfg.RoleMapping,
+		TeamMapping:      cfg.TeamMapping,
+		WorkspaceMapping: cfg.WorkspaceMapping,
+		DefaultRole:      cfg.DefaultRole,
 	})
 	if err != nil {
 		return nil, err
@@ -76,6 +78,7 @@ func authenticate(ctx context.Context, cfg Config, username, password string, di
 		Groups:     groups,
 		Role:       mapped.Role,
 		Teams:      mapped.Teams,
+		Workspaces: mapped.Workspaces,
 	}, nil
 }
 

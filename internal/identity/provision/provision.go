@@ -39,6 +39,38 @@ func ApplyTeams(ctx context.Context, logger *slog.Logger, store TeamMembers, use
 	}
 }
 
+// WorkspaceMembers writes group-derived workspace roles; *db.Queries
+// implements it.
+type WorkspaceMembers interface {
+	UpsertWorkspaceMember(ctx context.Context, arg db.UpsertWorkspaceMemberParams) (int64, error)
+	DeleteStaleGroupWorkspaceMembers(ctx context.Context, arg db.DeleteStaleGroupWorkspaceMembersParams) error
+}
+
+// ApplyWorkspaces sets the workspace roles the identity's groups give (#653)
+// and drops the group-derived roles they no longer give. A role an admin set
+// is kept. On a shared workspace the role takes effect only for a member of
+// its team; team membership comes from the team mapping, applied first.
+func ApplyWorkspaces(ctx context.Context, logger *slog.Logger, store WorkspaceMembers, userID pgtype.UUID, workspaces []identity.WorkspaceAssignment) {
+	keep := make([]pgtype.UUID, 0, len(workspaces))
+	for _, w := range workspaces {
+		var wsID pgtype.UUID
+		if err := wsID.Scan(w.WorkspaceID); err != nil {
+			continue
+		}
+		n, err := store.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: wsID, UserID: userID, Role: w.Role, Source: "idp_group"})
+		if err != nil {
+			logger.WarnContext(ctx, "workspace mapping failed", "workspace_id", w.WorkspaceID, "err", err)
+			continue
+		}
+		if n > 0 {
+			keep = append(keep, wsID)
+		}
+	}
+	if err := store.DeleteStaleGroupWorkspaceMembers(ctx, db.DeleteStaleGroupWorkspaceMembersParams{UserID: userID, Keep: keep}); err != nil {
+		logger.WarnContext(ctx, "drop stale workspace mappings failed", "err", err)
+	}
+}
+
 // Accounts finds, creates and updates directory-linked accounts;
 // *db.Queries implements it.
 type Accounts interface {
@@ -46,6 +78,7 @@ type Accounts interface {
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
 	UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error
 	TeamMembers
+	WorkspaceMembers
 }
 
 // ErrNotProvisioned: the OIDC subject has no account and may not get one.
@@ -57,10 +90,11 @@ var ErrNotProvisioned = errors.New("provision: not provisioned")
 // teams are applied on every login.
 func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, providerID pgtype.UUID, cfg auth.OIDCProviderConfig, info *auth.OIDCUserInfo) (db.User, error) {
 	mapped, err := identity.MapIdentity(identity.MappingInput{
-		Groups:      info.Groups,
-		RoleMapping: cfg.RoleMapping,
-		TeamMapping: cfg.TeamMapping,
-		DefaultRole: cfg.DefaultRole,
+		Groups:           info.Groups,
+		RoleMapping:      cfg.RoleMapping,
+		TeamMapping:      cfg.TeamMapping,
+		WorkspaceMapping: cfg.WorkspaceMapping,
+		DefaultRole:      cfg.DefaultRole,
 	})
 	if err != nil {
 		return db.User{}, err
@@ -85,6 +119,7 @@ func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, provider
 		})
 		if err == nil {
 			ApplyTeams(ctx, logger, store, user.ID, mapped.Teams)
+			ApplyWorkspaces(ctx, logger, store, user.ID, mapped.Workspaces)
 			return user, nil
 		}
 		if !isUniqueViolation(err) {
@@ -104,6 +139,7 @@ func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, provider
 		user.Role = mapped.Role
 	}
 	ApplyTeams(ctx, logger, store, user.ID, mapped.Teams)
+	ApplyWorkspaces(ctx, logger, store, user.ID, mapped.Workspaces)
 	return user, nil
 }
 

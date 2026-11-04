@@ -29,6 +29,9 @@ func (h *AuthHandlers) PreviewIdentityMapping(ctx context.Context, request Previ
 	if body.TeamMapping != nil {
 		input.TeamMapping = teamMappings(*body.TeamMapping)
 	}
+	if body.WorkspaceMapping != nil {
+		input.WorkspaceMapping = workspaceMappings(*body.WorkspaceMapping)
+	}
 	if body.DefaultRole != nil {
 		input.DefaultRole = string(*body.DefaultRole)
 	}
@@ -39,8 +42,12 @@ func (h *AuthHandlers) PreviewIdentityMapping(ctx context.Context, request Previ
 	}
 
 	out := IdentityMappingPreview{
-		Role:  IdentityMappingPreviewRole(mapped.Role),
-		Teams: make([]IdentityTeamAssignment, 0, len(mapped.Teams)),
+		Role:       IdentityMappingPreviewRole(mapped.Role),
+		Teams:      make([]IdentityTeamAssignment, 0, len(mapped.Teams)),
+		Workspaces: make([]IdentityWorkspaceAssignment, 0, len(mapped.Workspaces)),
+	}
+	for _, w := range mapped.Workspaces {
+		out.Workspaces = append(out.Workspaces, IdentityWorkspaceAssignment{WorkspaceId: w.WorkspaceID, Role: WorkspaceRole(w.Role)})
 	}
 	for _, t := range mapped.Teams {
 		out.Teams = append(out.Teams, IdentityTeamAssignment{
