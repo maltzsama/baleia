@@ -2,6 +2,7 @@ package identity
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -142,6 +143,50 @@ func TestMapIdentity_Deterministic(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got, first) {
 			t.Fatalf("run %d = %v, want stable %v", i, got, first)
+		}
+	}
+}
+
+// TestMapIdentity_Workspaces (#653): groups map to workspace roles, the most
+// privileged role per workspace wins, and malformed rules are errors.
+func TestMapIdentity_Workspaces(t *testing.T) {
+	t.Parallel()
+	got, err := MapIdentity(MappingInput{
+		Groups: []string{"analysts", "finance-leads"},
+		WorkspaceMapping: []WorkspaceMapping{
+			{Group: "analysts", WorkspaceID: "11111111-1111-1111-1111-111111111111", Role: "viewer"},
+			{Group: "finance-leads", WorkspaceID: "11111111-1111-1111-1111-111111111111", Role: "admin"},
+			{Group: "analysts", WorkspaceID: "22222222-2222-2222-2222-222222222222", Role: "editor"},
+			{Group: "engineers", WorkspaceID: "33333333-3333-3333-3333-333333333333", Role: "editor"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []WorkspaceAssignment{{WorkspaceID: "11111111-1111-1111-1111-111111111111", Role: "admin"}, {WorkspaceID: "22222222-2222-2222-2222-222222222222", Role: "editor"}}
+	if !slices.Equal(got.Workspaces, want) {
+		t.Errorf("workspaces = %v, want %v", got.Workspaces, want)
+	}
+	// Two spellings of one workspace id are one workspace: the higher role wins.
+	upper, err := MapIdentity(MappingInput{
+		Groups: []string{"a", "b"},
+		WorkspaceMapping: []WorkspaceMapping{
+			{Group: "a", WorkspaceID: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", Role: "admin"},
+			{Group: "b", WorkspaceID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", Role: "viewer"},
+		},
+	})
+	if err != nil || len(upper.Workspaces) != 1 || upper.Workspaces[0].Role != "admin" || upper.Workspaces[0].WorkspaceID != "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" {
+		t.Errorf("canonical ids = %v, %v", upper.Workspaces, err)
+	}
+	const ws = "44444444-4444-4444-4444-444444444444"
+	for name, m := range map[string]WorkspaceMapping{
+		"empty group":     {WorkspaceID: ws, Role: "viewer"},
+		"empty workspace": {Group: "g", Role: "viewer"},
+		"not a uuid":      {Group: "g", WorkspaceID: "ws-finance", Role: "viewer"},
+		"bad role":        {Group: "g", WorkspaceID: ws, Role: "owner"},
+	} {
+		if _, err := MapIdentity(MappingInput{WorkspaceMapping: []WorkspaceMapping{m}}); err == nil {
+			t.Errorf("%s: want an error", name)
 		}
 	}
 }

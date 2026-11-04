@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // Platform roles. They match the users.role vocabulary.
@@ -43,6 +45,28 @@ type TeamMapping struct {
 	TeamRole string `json:"team_role"`
 }
 
+// Workspace roles (#653). They match the workspace_members.role vocabulary.
+const (
+	WorkspaceRoleAdmin  = "admin"
+	WorkspaceRoleEditor = "editor"
+	WorkspaceRoleViewer = "viewer"
+)
+
+// WorkspaceMapping binds a directory group to a role in a workspace (#653).
+// It sets the role only: membership of a shared workspace still comes from its
+// team (TeamMapping).
+type WorkspaceMapping struct {
+	Group       string `json:"group"`
+	WorkspaceID string `json:"workspace_id"`
+	Role        string `json:"role"`
+}
+
+// WorkspaceAssignment is one workspace role the identity gets.
+type WorkspaceAssignment struct {
+	WorkspaceID string
+	Role        string
+}
+
 // TeamAssignment is one team the identity belongs to.
 type TeamAssignment struct {
 	TeamID   string
@@ -55,6 +79,8 @@ type MappingInput struct {
 	Groups      []string
 	RoleMapping []RoleMapping
 	TeamMapping []TeamMapping
+	// WorkspaceMapping maps groups to workspace roles (#653).
+	WorkspaceMapping []WorkspaceMapping
 	// DefaultRole applies when no role group matches: "admin" or "member".
 	DefaultRole string
 }
@@ -62,8 +88,9 @@ type MappingInput struct {
 // MappingResult is the platform role and the teams to assign. Teams are sorted
 // by id so previews and tests are stable.
 type MappingResult struct {
-	Role  string
-	Teams []TeamAssignment
+	Role       string
+	Teams      []TeamAssignment
+	Workspaces []WorkspaceAssignment
 }
 
 // MapIdentity derives the platform role and team assignments of an identity.
@@ -138,7 +165,50 @@ func MapIdentity(in MappingInput) (MappingResult, error) {
 		}
 		return strings.Compare(a.TeamRole, b.TeamRole)
 	})
-	return MappingResult{Role: role, Teams: out}, nil
+	workspaces := make(map[string]string, len(in.WorkspaceMapping))
+	for i, m := range in.WorkspaceMapping {
+		group := strings.TrimSpace(m.Group)
+		wsID := strings.TrimSpace(m.WorkspaceID)
+		wsRole := strings.TrimSpace(m.Role)
+		if group == "" {
+			return MappingResult{}, fmt.Errorf("identity: workspace mapping %d has an empty group", i)
+		}
+		id, err := uuid.Parse(wsID)
+		if err != nil {
+			return MappingResult{}, fmt.Errorf("identity: workspace mapping %d has workspace id %q, not a UUID", i, m.WorkspaceID)
+		}
+		// One key per workspace, whatever the spelling of its id.
+		wsID = id.String()
+		if workspaceRank(wsRole) == 0 {
+			return MappingResult{}, fmt.Errorf("identity: workspace mapping %d has invalid role %q", i, wsRole)
+		}
+		if _, ok := groups[group]; !ok {
+			continue
+		}
+		// One role per workspace: the most privileged wins.
+		if prev, ok := workspaces[wsID]; !ok || workspaceRank(wsRole) > workspaceRank(prev) {
+			workspaces[wsID] = wsRole
+		}
+	}
+	wsOut := make([]WorkspaceAssignment, 0, len(workspaces))
+	for id, r := range workspaces {
+		wsOut = append(wsOut, WorkspaceAssignment{WorkspaceID: id, Role: r})
+	}
+	slices.SortFunc(wsOut, func(a, b WorkspaceAssignment) int { return strings.Compare(a.WorkspaceID, b.WorkspaceID) })
+	return MappingResult{Role: role, Teams: out, Workspaces: wsOut}, nil
+}
+
+// workspaceRank orders workspace roles by privilege; 0 for an unknown role.
+func workspaceRank(role string) int {
+	switch role {
+	case WorkspaceRoleAdmin:
+		return 3
+	case WorkspaceRoleEditor:
+		return 2
+	case WorkspaceRoleViewer:
+		return 1
+	}
+	return 0
 }
 
 func validRole(role string) bool { return role == RoleAdmin || role == RoleMember }

@@ -66,7 +66,9 @@ type Config struct {
 
 	RoleMapping []identity.RoleMapping `json:"role_mapping"`
 	TeamMapping []identity.TeamMapping `json:"team_mapping"`
-	DefaultRole string                 `json:"default_role"`
+	// WorkspaceMapping maps groups to workspace roles at each sign-in (#653).
+	WorkspaceMapping []identity.WorkspaceMapping `json:"workspace_mapping"`
+	DefaultRole      string                      `json:"default_role"`
 }
 
 // Normalize fills defaults. It is applied after decoding and before
@@ -154,6 +156,9 @@ func (c Config) Validate() error {
 		if !validTeamRole(m.TeamRole) {
 			return fmt.Errorf("ldap config: team_mapping %d has invalid team role %q", i, m.TeamRole)
 		}
+	}
+	if _, err := identity.MapIdentity(identity.MappingInput{WorkspaceMapping: c.WorkspaceMapping}); err != nil {
+		return fmt.Errorf("ldap config: %w", err)
 	}
 	return nil
 }

@@ -65,8 +65,12 @@ service accounts:
 - A global admin manages every service account; a workspace admin those created in their
   workspace. An agent can be linked to a service account and then acts with its roles.
 
-MCP following roles and identity-provider groups mapped to workspace roles follow under the same
-issue.
+- **Identity-provider groups → workspace roles.** An OIDC or LDAP provider's `workspace_mapping`
+  binds a directory group to a role in a workspace; each sign-in applies it and drops the group
+  roles the member no longer has. It sets the role only: a team's workspace still gets its members
+  from the team mapping. A role a workspace admin set wins over a group.
+
+MCP following roles follows under the same issue.
 
 ## Alternatives considered
 

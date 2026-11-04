@@ -2630,5 +2630,9 @@
 	"service_accounts_revoke": "Revoke token",
 	"service_accounts_revoke_consequence": "Clients using this token stop signing in at once.",
 	"service_accounts_load_failed": "Could not load the service accounts",
-	"service_accounts_save_failed": "Could not save the service account"
+	"service_accounts_save_failed": "Could not save the service account",
+	"identity_identityproviderform_workspace_mapping": "Workspace mapping",
+	"identity_identityproviderform_workspace_mapping_hint": "Each sign-in sets the member's role in these workspaces from their groups. It sets the role only: a team's workspace still gets its members from the team mapping. A role a workspace admin set wins.",
+	"identity_identityproviderform_workspace_id": "Workspace ID",
+	"identity_identityproviderform_workspaces": "Workspaces:"
 }

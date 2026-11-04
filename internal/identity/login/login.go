@@ -29,6 +29,7 @@ type Store interface {
 	GetUserByExternalID(ctx context.Context, arg db.GetUserByExternalIDParams) (db.User, error)
 	UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error
 	provision.TeamMembers
+	provision.WorkspaceMembers
 }
 
 // Directory verifies a user's credentials against an LDAP directory.
@@ -142,6 +143,9 @@ func (s *Service) Directory(ctx context.Context, providerID pgtype.UUID, usernam
 		user.Role = result.Role
 	}
 	provision.ApplyTeams(ctx, s.logger, s.store, user.ID, result.Teams)
+	if err := provision.ApplyWorkspaces(ctx, s.store, user.ID, result.Workspaces); err != nil {
+		return db.User{}, err
+	}
 	return user, nil
 }
 

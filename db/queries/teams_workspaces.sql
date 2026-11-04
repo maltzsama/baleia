@@ -253,11 +253,16 @@ allowed AS (
     JOIN users u ON u.id = @user_id::uuid AND u.kind = 'service_account'
     WHERE w.id = @workspace_id::uuid AND w.type = 'shared'
 )
-INSERT INTO workspace_members (workspace_id, user_id, role, granted_by)
-SELECT @workspace_id::uuid, @user_id::uuid, @role::text, sqlc.narg(granted_by)::uuid
+INSERT INTO workspace_members (workspace_id, user_id, role, granted_by, source)
+SELECT @workspace_id::uuid, @user_id::uuid, @role::text, sqlc.narg(granted_by)::uuid, 'manual'
 FROM allowed
 ON CONFLICT (workspace_id, user_id) DO UPDATE
-SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now();
+SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now(), source = 'manual';
 
 -- name: DeleteWorkspaceMember :execrows
 DELETE FROM workspace_members WHERE workspace_id = @workspace_id::uuid AND user_id = @user_id::uuid;
+
+-- name: ApplyGroupWorkspaceRoles :exec
+-- Sets the workspace roles a member's identity-provider groups give, at
+-- sign-in (#653): see baleia_apply_group_workspace_roles (migration 00077).
+SELECT baleia_apply_group_workspace_roles(@user_id::uuid, @assignments::jsonb);

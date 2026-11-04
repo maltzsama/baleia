@@ -23,8 +23,10 @@ type OIDCProviderConfig struct {
 	AllowedEmailDomains []string               `json:"allowed_email_domains"`
 	RoleMapping         []identity.RoleMapping `json:"role_mapping"`
 	TeamMapping         []identity.TeamMapping `json:"team_mapping"`
-	DefaultRole         string                 `json:"default_role"`
-	Claims              OIDCClaimsConfig       `json:"claims"`
+	// WorkspaceMapping maps groups to workspace roles at each sign-in (#653).
+	WorkspaceMapping []identity.WorkspaceMapping `json:"workspace_mapping"`
+	DefaultRole      string                      `json:"default_role"`
+	Claims           OIDCClaimsConfig            `json:"claims"`
 }
 
 // Validate checks a provider config before it is sealed. It is the validator
@@ -56,9 +58,10 @@ func (c OIDCProviderConfig) Validate() error {
 		}
 	}
 	if _, err := identity.MapIdentity(identity.MappingInput{
-		RoleMapping: c.RoleMapping,
-		TeamMapping: c.TeamMapping,
-		DefaultRole: c.DefaultRole,
+		RoleMapping:      c.RoleMapping,
+		TeamMapping:      c.TeamMapping,
+		WorkspaceMapping: c.WorkspaceMapping,
+		DefaultRole:      c.DefaultRole,
 	}); err != nil {
 		return fmt.Errorf("oidc config: %w", err)
 	}

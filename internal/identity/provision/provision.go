@@ -4,7 +4,9 @@ package provision
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -39,6 +41,37 @@ func ApplyTeams(ctx context.Context, logger *slog.Logger, store TeamMembers, use
 	}
 }
 
+// WorkspaceMembers writes group-derived workspace roles; *db.Queries
+// implements it.
+type WorkspaceMembers interface {
+	ApplyGroupWorkspaceRoles(ctx context.Context, arg db.ApplyGroupWorkspaceRolesParams) error
+}
+
+// ApplyWorkspaces sets the workspace roles the identity's groups give (#653)
+// and drops the group-derived roles they no longer give, in one statement
+// serialized per user. A role an admin set is kept, a personal workspace is
+// never reached, and on a team's workspace the role needs team membership,
+// which ApplyTeams applies first. A failure is returned so the sign-in fails
+// instead of leaving a removed group's role in effect.
+func ApplyWorkspaces(ctx context.Context, store WorkspaceMembers, userID pgtype.UUID, workspaces []identity.WorkspaceAssignment) error {
+	type assignment struct {
+		WorkspaceID string `json:"workspace_id"`
+		Role        string `json:"role"`
+	}
+	in := make([]assignment, 0, len(workspaces))
+	for _, w := range workspaces {
+		in = append(in, assignment{WorkspaceID: w.WorkspaceID, Role: w.Role})
+	}
+	raw, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	if err := store.ApplyGroupWorkspaceRoles(ctx, db.ApplyGroupWorkspaceRolesParams{UserID: userID, Assignments: raw}); err != nil {
+		return fmt.Errorf("apply workspace mapping: %w", err)
+	}
+	return nil
+}
+
 // Accounts finds, creates and updates directory-linked accounts;
 // *db.Queries implements it.
 type Accounts interface {
@@ -46,6 +79,7 @@ type Accounts interface {
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
 	UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error
 	TeamMembers
+	WorkspaceMembers
 }
 
 // ErrNotProvisioned: the OIDC subject has no account and may not get one.
@@ -57,10 +91,11 @@ var ErrNotProvisioned = errors.New("provision: not provisioned")
 // teams are applied on every login.
 func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, providerID pgtype.UUID, cfg auth.OIDCProviderConfig, info *auth.OIDCUserInfo) (db.User, error) {
 	mapped, err := identity.MapIdentity(identity.MappingInput{
-		Groups:      info.Groups,
-		RoleMapping: cfg.RoleMapping,
-		TeamMapping: cfg.TeamMapping,
-		DefaultRole: cfg.DefaultRole,
+		Groups:           info.Groups,
+		RoleMapping:      cfg.RoleMapping,
+		TeamMapping:      cfg.TeamMapping,
+		WorkspaceMapping: cfg.WorkspaceMapping,
+		DefaultRole:      cfg.DefaultRole,
 	})
 	if err != nil {
 		return db.User{}, err
@@ -85,6 +120,9 @@ func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, provider
 		})
 		if err == nil {
 			ApplyTeams(ctx, logger, store, user.ID, mapped.Teams)
+			if err := ApplyWorkspaces(ctx, store, user.ID, mapped.Workspaces); err != nil {
+				return db.User{}, err
+			}
 			return user, nil
 		}
 		if !isUniqueViolation(err) {
@@ -104,6 +142,9 @@ func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, provider
 		user.Role = mapped.Role
 	}
 	ApplyTeams(ctx, logger, store, user.ID, mapped.Teams)
+	if err := ApplyWorkspaces(ctx, store, user.ID, mapped.Workspaces); err != nil {
+		return db.User{}, err
+	}
 	return user, nil
 }
 

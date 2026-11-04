@@ -9,7 +9,8 @@ Read this before `helm upgrade` from 0.5.x. Migrations 00062 to 00072 add the
 workload queues and rules, statement references (lineage, popular tables and
 join suggestions), engine external URLs and the Trino resource-group tables;
 migration 00074 adds the identity-provider tokens of OIDC sign-ins (#648),
-00075 the workspace roles and 00076 service accounts (#653).
+00075 the workspace roles, 00076 service accounts and 00077 the source of a
+workspace role (#653).
 They apply as described for 0.4.0 below. Executions already running finish on
 `QueryExecutionWorkflowV3`, which the worker still runs, so there is nothing
 to drain.

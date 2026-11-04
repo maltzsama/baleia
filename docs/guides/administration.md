@@ -17,7 +17,7 @@ sidebar_position: 7
 
 ## Access
 
-- **Identity:** OIDC and [LDAP](../ldap.md) providers. Users sign in locally until a provider is added. Provider secrets are written once and never shown again. Removing a provider suspends and detaches its users; it never deletes them.
+- **Identity:** OIDC and [LDAP](../ldap.md) providers. Users sign in locally until a provider is added. Provider secrets are written once and never shown again. Removing a provider suspends and detaches its users; it never deletes them. Each provider maps directory groups, at every sign-in, to the platform role, to teams and to **workspace roles** (`workspace_mapping`: group → workspace and admin/editor/viewer). A workspace role from a group needs team membership for a team's workspace, and a role a workspace admin set wins over it.
 - **Users:** invite people, change their [role](../concepts.md#roles), and suspend or reinstate accounts.
   - A role change takes effect at the next sign-in; existing sessions are revoked.
   - Suspension signs the user out everywhere and revokes their API keys. It is reversible: users are never deleted here.

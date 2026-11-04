@@ -217,6 +217,9 @@ func mergeOIDCConfig(current auth.OIDCProviderConfig, upd *UpdateOIDCConfig) aut
 	if upd.TeamMapping != nil {
 		out.TeamMapping = teamMappings(*upd.TeamMapping)
 	}
+	if upd.WorkspaceMapping != nil {
+		out.WorkspaceMapping = workspaceMappings(*upd.WorkspaceMapping)
+	}
 	if upd.DefaultRole != nil {
 		out.DefaultRole = string(*upd.DefaultRole)
 	}
@@ -288,6 +291,9 @@ func mergeLDAPConfig(current identityldap.Config, upd *UpdateLDAPConfig) identit
 	if upd.TeamMapping != nil {
 		out.TeamMapping = teamMappings(*upd.TeamMapping)
 	}
+	if upd.WorkspaceMapping != nil {
+		out.WorkspaceMapping = workspaceMappings(*upd.WorkspaceMapping)
+	}
 	if upd.DefaultRole != nil {
 		out.DefaultRole = string(*upd.DefaultRole)
 	}
@@ -306,6 +312,14 @@ func teamMappings(in []IdentityTeamMapping) []identity.TeamMapping {
 	out := make([]identity.TeamMapping, 0, len(in))
 	for _, m := range in {
 		out = append(out, identity.TeamMapping{Group: m.Group, TeamID: m.TeamId, TeamRole: string(m.TeamRole)})
+	}
+	return out
+}
+
+func workspaceMappings(in []IdentityWorkspaceMapping) []identity.WorkspaceMapping {
+	out := make([]identity.WorkspaceMapping, 0, len(in))
+	for _, m := range in {
+		out = append(out, identity.WorkspaceMapping{Group: m.Group, WorkspaceID: m.WorkspaceId, Role: string(m.Role)})
 	}
 	return out
 }

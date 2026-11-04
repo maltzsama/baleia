@@ -2630,5 +2630,9 @@
 	"service_accounts_revoke": "Revogar token",
 	"service_accounts_revoke_consequence": "Clientes que usam este token deixam de entrar na hora.",
 	"service_accounts_load_failed": "Não foi possível carregar as service accounts",
-	"service_accounts_save_failed": "Não foi possível salvar a service account"
+	"service_accounts_save_failed": "Não foi possível salvar a service account",
+	"identity_identityproviderform_workspace_mapping": "Mapeamento de workspace",
+	"identity_identityproviderform_workspace_mapping_hint": "Cada login define o papel do membro nestes workspaces pelos grupos dele. Só define o papel: o workspace de um time continua recebendo os membros pelo mapeamento de time. Um papel definido por um admin do workspace prevalece.",
+	"identity_identityproviderform_workspace_id": "ID do workspace",
+	"identity_identityproviderform_workspaces": "Workspaces:"
 }

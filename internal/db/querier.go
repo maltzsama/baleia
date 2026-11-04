@@ -24,6 +24,9 @@ type Querier interface {
 	// burst of runs afterwards.
 	AdvanceRetrieverSchedule(ctx context.Context, arg AdvanceRetrieverScheduleParams) error
 	AgentWorkspaceBound(ctx context.Context, arg AgentWorkspaceBoundParams) (bool, error)
+	// Sets the workspace roles a member's identity-provider groups give, at
+	// sign-in (#653): see baleia_apply_group_workspace_roles (migration 00077).
+	ApplyGroupWorkspaceRoles(ctx context.Context, arg ApplyGroupWorkspaceRolesParams) error
 	// Age of the export cursor for the system status section (#291). Zero when no
 	// cursor exists (nothing exported yet).
 	AuditExportLagSeconds(ctx context.Context) (float64, error)

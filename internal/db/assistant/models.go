@@ -862,4 +862,5 @@ type WorkspaceMember struct {
 	Role        string             `json:"role"`
 	GrantedBy   pgtype.UUID        `json:"granted_by"`
 	GrantedAt   pgtype.Timestamptz `json:"granted_at"`
+	Source      string             `json:"source"`
 }

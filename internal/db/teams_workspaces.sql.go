@@ -36,6 +36,22 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (T
 	return i, err
 }
 
+const applyGroupWorkspaceRoles = `-- name: ApplyGroupWorkspaceRoles :exec
+SELECT baleia_apply_group_workspace_roles($1::uuid, $2::jsonb)
+`
+
+type ApplyGroupWorkspaceRolesParams struct {
+	UserID      pgtype.UUID `json:"user_id"`
+	Assignments []byte      `json:"assignments"`
+}
+
+// Sets the workspace roles a member's identity-provider groups give, at
+// sign-in (#653): see baleia_apply_group_workspace_roles (migration 00077).
+func (q *Queries) ApplyGroupWorkspaceRoles(ctx context.Context, arg ApplyGroupWorkspaceRolesParams) error {
+	_, err := q.db.Exec(ctx, applyGroupWorkspaceRoles, arg.UserID, arg.Assignments)
+	return err
+}
+
 const catalogGrantedToAgent = `-- name: CatalogGrantedToAgent :one
 SELECT EXISTS (
     SELECT 1 FROM workspace_catalog_grants g
@@ -1080,11 +1096,11 @@ allowed AS (
     JOIN users u ON u.id = $2::uuid AND u.kind = 'service_account'
     WHERE w.id = $1::uuid AND w.type = 'shared'
 )
-INSERT INTO workspace_members (workspace_id, user_id, role, granted_by)
-SELECT $1::uuid, $2::uuid, $3::text, $4::uuid
+INSERT INTO workspace_members (workspace_id, user_id, role, granted_by, source)
+SELECT $1::uuid, $2::uuid, $3::text, $4::uuid, 'manual'
 FROM allowed
 ON CONFLICT (workspace_id, user_id) DO UPDATE
-SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now()
+SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now(), source = 'manual'
 `
 
 type UpsertWorkspaceMemberParams struct {
