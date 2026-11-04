@@ -83,6 +83,9 @@ var (
 	ErrNotFound = errors.New("users: not found")
 	// ErrEmailTaken: an account already uses this e-mail.
 	ErrEmailTaken = errors.New("users: e-mail already exists")
+	// ErrServiceAccountRole: a service account never has the global admin
+	// role; what it may do comes from its workspace roles (#653).
+	ErrServiceAccountRole = errors.New("users: a service account is never a global admin")
 )
 
 // Suspension reasons; anything else is recorded as ReasonAdmin, which keeps
@@ -175,6 +178,9 @@ func (s *Service) Invite(ctx context.Context, email, role string) (db.User, erro
 func (s *Service) ChangeRole(ctx context.Context, id pgtype.UUID, role string) (before, after db.User, err error) {
 	if before, err = s.get(ctx, id); err != nil {
 		return db.User{}, db.User{}, err
+	}
+	if before.Kind == "service_account" && role != "member" {
+		return db.User{}, db.User{}, ErrServiceAccountRole
 	}
 	if err := s.store.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: id, Role: role}); err != nil {
 		return db.User{}, db.User{}, err

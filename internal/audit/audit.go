@@ -48,6 +48,8 @@ const (
 	AuthAPIKey      = "api_key"
 	AuthAgentToken  = "agent_token"
 	AuthAccessToken = "access_token" // a request carrying an access token
+	// AuthClientToken: a service account's identity-provider client-credentials token (#653).
+	AuthClientToken = "client_token"
 )
 
 // Event is one audited operation. Actor, auth method, correlation and the

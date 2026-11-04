@@ -1,0 +1,31 @@
+meta {
+  name: Create Service Account Token
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/service-accounts/{{service_account_id}}/tokens
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "bruno"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.secret: isString
+}
+
+vars:post-response {
+  service_account_token_id: res.body.id
+  service_account_secret: res.body.secret
+}

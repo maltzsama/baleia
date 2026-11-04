@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -294,4 +295,51 @@ func signInScopes(provider *oidc.Provider) []string {
 		scopes = append(scopes, oidc.ScopeOfflineAccess)
 	}
 	return scopes
+}
+
+// ErrNotClientToken means a bearer token is not a client-credentials access
+// token this provider signed for a client.
+var ErrNotClientToken = errors.New("oidc: not a client access token of this provider")
+
+// ClientAccessToken verifies a JWT access token the provider issued to a
+// client with the client-credentials grant (#653) and returns the client's
+// id and the token's expiry. The audience is not checked: the token was
+// issued for a resource, not for Baleia's sign-in client; the client id is
+// what identifies the service account.
+func (p *OIDCProvider) ClientAccessToken(ctx context.Context, raw string) (string, time.Time, error) {
+	tok, err := p.provider.Verifier(&oidc.Config{SkipClientIDCheck: true}).Verify(ctx, raw)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("%w: %w", ErrNotClientToken, err)
+	}
+	var claims map[string]any
+	if err := tok.Claims(&claims); err != nil {
+		return "", time.Time{}, fmt.Errorf("%w: %w", ErrNotClientToken, err)
+	}
+	// azp (Keycloak, Auth0), client_id (RFC 9068), cid (Okta), appid (Entra).
+	for _, k := range []string{"client_id", "azp", "cid", "appid"} {
+		if v := claimString(claims, k); v != "" {
+			return v, tok.Expiry, nil
+		}
+	}
+	return "", time.Time{}, ErrNotClientToken
+}
+
+// TokenIssuer reads a JWT's iss claim without verifying it, to pick the
+// provider that must verify it; "" for anything that is not a JWT.
+func TokenIssuer(raw string) string {
+	parts := strings.Split(raw, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var c struct {
+		Iss string `json:"iss"`
+	}
+	if json.Unmarshal(payload, &c) != nil {
+		return ""
+	}
+	return c.Iss
 }

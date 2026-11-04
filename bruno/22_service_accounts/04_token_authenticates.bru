@@ -1,0 +1,24 @@
+meta {
+  name: Service Account Token Authenticates
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/workspaces
+  body: none
+  auth: none
+}
+
+headers {
+  X-Api-Key: {{service_account_secret}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+docs {
+  The account belongs to no workspace yet, so it sees none.
+}

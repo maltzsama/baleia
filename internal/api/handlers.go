@@ -282,6 +282,10 @@ func dbUserToPublic(u db.User) UserPublic {
 		Status:       UserPublicStatus(u.Status),
 		CreatedAt:    pgTimestampToTime(u.CreatedAt),
 	}
+	if u.Kind != "" {
+		kind := UserPublicKind(u.Kind)
+		out.Kind = &kind
+	}
 	if u.Locale != nil {
 		locale := Locale(*u.Locale)
 		out.Locale = &locale

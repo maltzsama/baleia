@@ -64,7 +64,7 @@ func runAuth(t *testing.T, q db.Querier, method, path, operation, apiKey string)
 		req.Header.Set("X-Api-Key", apiKey)
 	}
 	rec := httptest.NewRecorder()
-	if _, err := authMiddlewareFunc("test-secret", q)(handler, operation)(context.Background(), rec, req, nil); err != nil {
+	if _, err := authMiddlewareFunc("test-secret", q, nil)(handler, operation)(context.Background(), rec, req, nil); err != nil {
 		t.Fatal(err)
 	}
 	return rec, got, called

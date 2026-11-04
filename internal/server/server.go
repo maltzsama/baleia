@@ -38,12 +38,15 @@ import (
 )
 
 type Server struct {
-	logger  *slog.Logger
-	cfg     *config.Config
-	mux     *chi.Mux
-	pool    *pgxpool.Pool
-	queries *db.Queries
-	metrics *metrics.Registry
+	// serviceAccounts authenticates service accounts by their identity
+	// provider's client-credentials token (#653).
+	serviceAccounts serviceAccountAuth
+	logger          *slog.Logger
+	cfg             *config.Config
+	mux             *chi.Mux
+	pool            *pgxpool.Pool
+	queries         *db.Queries
+	metrics         *metrics.Registry
 
 	handlers *api.API
 	// background is the handlers' work that outlives a request; Run waits
@@ -115,8 +118,13 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	s.ws = ws.New(s.logger, wsQuerier{q: core.Queries}, cfg.JWTSecret, core.Temporal, cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
 	s.ws.SetTickets(tickets)
 
+	var saAuth serviceAccountAuth
+	if core.OIDC != nil {
+		saAuth = core.OIDC.ServiceAccountForToken
+	}
+	s.serviceAccounts = saAuth
 	s.strict = api.NewStrictHandlerWithOptions(h, []api.StrictMiddlewareFunc{
-		authMiddlewareFunc(cfg.JWTSecret, core.Queries),
+		authMiddlewareFunc(cfg.JWTSecret, core.Queries, saAuth),
 		csrfMiddleware,
 		refreshCookieMiddleware(cfg),
 		oidcMiddleware(cfg),
@@ -245,7 +253,7 @@ func (s *Server) routes() {
 		// Non-oapi routes (dynamic catalog browsing) share the chi auth
 		// middleware; handlers read the caller from the request context.
 		r.Group(func(r chi.Router) {
-			r.Use(chiAuthMiddleware(s.cfg.JWTSecret, s.queries))
+			r.Use(chiAuthMiddleware(s.cfg.JWTSecret, s.queries, s.serviceAccounts))
 			r.Get("/workspaces/{id}/catalogs", s.handlers.ListWorkspaceCatalogs)
 			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces", s.handlers.HandleListNamespaces)
 			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables", s.handlers.HandleListTables)
@@ -357,7 +365,31 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 	})
 }
 
-func authMiddlewareFunc(secret string, queries db.Querier) api.StrictMiddlewareFunc {
+// serviceAccountAuth authenticates a service account by its identity
+// provider's client-credentials token (#653); nil disables it.
+type serviceAccountAuth func(ctx context.Context, raw string) (db.User, error)
+
+// bearerContext authenticates a bearer token: a Baleia access token, else a
+// service account's client-credentials token.
+func bearerContext(ctx context.Context, token, secret string, sa serviceAccountAuth) (context.Context, bool) {
+	if claims, err := auth.ParseToken(token, secret); err == nil {
+		ctx = context.WithValue(ctx, auth.ContextKeyUserID, claims.UserID)
+		ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
+		return audit.WithAuthMethod(ctx, audit.AuthAccessToken), true
+	}
+	if sa == nil {
+		return ctx, false
+	}
+	user, err := sa(ctx, token)
+	if err != nil {
+		return ctx, false
+	}
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, user.ID.String())
+	ctx = context.WithValue(ctx, auth.ContextKeyRole, user.Role)
+	return audit.WithAuthMethod(ctx, audit.AuthClientToken), true
+}
+
+func authMiddlewareFunc(secret string, queries db.Querier, sa serviceAccountAuth) api.StrictMiddlewareFunc {
 	publicOps := map[string]bool{
 		"GetSetupStatus":       true,
 		"CreateFirstAdmin":     true,
@@ -407,21 +439,17 @@ func authMiddlewareFunc(secret string, queries db.Querier) api.StrictMiddlewareF
 				return nil, nil
 			}
 
-			claims, err := auth.ParseToken(token, secret)
-			if err != nil {
+			ctx, ok := bearerContext(ctx, token, secret, sa)
+			if !ok {
 				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
 				return nil, nil
 			}
-
-			ctx = context.WithValue(ctx, auth.ContextKeyUserID, claims.UserID)
-			ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
-			ctx = audit.WithAuthMethod(ctx, audit.AuthAccessToken)
 			return f(ctx, w, r, args)
 		}
 	}
 }
 
-func chiAuthMiddleware(secret string, queries db.Querier) func(http.Handler) http.Handler {
+func chiAuthMiddleware(secret string, queries db.Querier, sa serviceAccountAuth) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if raw := r.Header.Get("X-Api-Key"); raw != "" {
@@ -447,14 +475,11 @@ func chiAuthMiddleware(secret string, queries db.Querier) func(http.Handler) htt
 				writeAuthError(w, http.StatusUnauthorized, "agent_token_not_allowed", "agent tokens are only valid on /mcp")
 				return
 			}
-			claims, err := auth.ParseToken(token, secret)
-			if err != nil {
+			ctx, ok := bearerContext(r.Context(), token, secret, sa)
+			if !ok {
 				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
 				return
 			}
-			ctx := context.WithValue(r.Context(), auth.ContextKeyUserID, claims.UserID)
-			ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
-			ctx = audit.WithAuthMethod(ctx, audit.AuthAccessToken)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

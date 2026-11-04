@@ -234,7 +234,7 @@ ORDER BY u.name;
 
 -- name: UpsertWorkspaceMember :execrows
 -- Writes nothing (0 rows) when the user cannot be a member: on a shared
--- workspace they must be in its team. The share lock on their team row makes
+-- workspace a person must be in its team (a service account need not). The share lock on their team row makes
 -- a concurrent removal from the team either wait for this write or win.
 WITH in_team AS (
     SELECT w.id
@@ -247,6 +247,11 @@ allowed AS (
     SELECT w.id FROM workspaces w WHERE w.id = @workspace_id::uuid AND w.type = 'personal'
     UNION ALL
     SELECT id FROM in_team
+    UNION ALL
+    -- A service account joins a shared workspace directly (#653).
+    SELECT w.id FROM workspaces w
+    JOIN users u ON u.id = @user_id::uuid AND u.kind = 'service_account'
+    WHERE w.id = @workspace_id::uuid AND w.type = 'shared'
 )
 INSERT INTO workspace_members (workspace_id, user_id, role, granted_by)
 SELECT @workspace_id::uuid, @user_id::uuid, @role::text, sqlc.narg(granted_by)::uuid

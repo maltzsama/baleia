@@ -702,9 +702,16 @@ const (
 
 // Defines values for MeAuthProvider.
 const (
-	MeAuthProviderLdap  MeAuthProvider = "ldap"
-	MeAuthProviderLocal MeAuthProvider = "local"
-	MeAuthProviderOidc  MeAuthProvider = "oidc"
+	MeAuthProviderLdap    MeAuthProvider = "ldap"
+	MeAuthProviderLocal   MeAuthProvider = "local"
+	MeAuthProviderOidc    MeAuthProvider = "oidc"
+	MeAuthProviderService MeAuthProvider = "service"
+)
+
+// Defines values for MeKind.
+const (
+	MeKindHuman          MeKind = "human"
+	MeKindServiceAccount MeKind = "service_account"
 )
 
 // Defines values for MeRole.
@@ -883,6 +890,20 @@ const (
 	RetrieverRefreshHistoryStatusFailed   RetrieverRefreshHistoryStatus = "failed"
 	RetrieverRefreshHistoryStatusFinished RetrieverRefreshHistoryStatus = "finished"
 	RetrieverRefreshHistoryStatusRunning  RetrieverRefreshHistoryStatus = "running"
+)
+
+// Defines values for ServiceAccountAllowedActions.
+const (
+	Delete       ServiceAccountAllowedActions = "delete"
+	ManageTokens ServiceAccountAllowedActions = "manage_tokens"
+	Update       ServiceAccountAllowedActions = "update"
+	View         ServiceAccountAllowedActions = "view"
+)
+
+// Defines values for ServiceAccountStatus.
+const (
+	ServiceAccountStatusActive    ServiceAccountStatus = "active"
+	ServiceAccountStatusSuspended ServiceAccountStatus = "suspended"
 )
 
 // Defines values for SetSpaceMemberRequestRole.
@@ -1076,9 +1097,16 @@ const (
 
 // Defines values for UserPublicAuthProvider.
 const (
-	Ldap  UserPublicAuthProvider = "ldap"
-	Local UserPublicAuthProvider = "local"
-	Oidc  UserPublicAuthProvider = "oidc"
+	Ldap    UserPublicAuthProvider = "ldap"
+	Local   UserPublicAuthProvider = "local"
+	Oidc    UserPublicAuthProvider = "oidc"
+	Service UserPublicAuthProvider = "service"
+)
+
+// Defines values for UserPublicKind.
+const (
+	UserPublicKindHuman          UserPublicKind = "human"
+	UserPublicKindServiceAccount UserPublicKind = "service_account"
 )
 
 // Defines values for UserPublicRole.
@@ -1089,8 +1117,8 @@ const (
 
 // Defines values for UserPublicStatus.
 const (
-	Active    UserPublicStatus = "active"
-	Suspended UserPublicStatus = "suspended"
+	UserPublicStatusActive    UserPublicStatus = "active"
+	UserPublicStatusSuspended UserPublicStatus = "suspended"
 )
 
 // Defines values for WorkloadRuleClass.
@@ -2049,9 +2077,12 @@ type CreateAdminRequest struct {
 
 // CreateAgentRequest defines model for CreateAgentRequest.
 type CreateAgentRequest struct {
-	Description  *string               `json:"description,omitempty"`
-	Name         string                `json:"name"`
-	WorkspaceIds *[]openapi_types.UUID `json:"workspace_ids,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+
+	// ServiceAccountId Link the agent to this service account instead of the caller (#653): the agent then acts with the service account's workspace roles, and whoever manages the service account manages the agent. Its workspaces must be ones the service account belongs to.
+	ServiceAccountId *openapi_types.UUID   `json:"service_account_id,omitempty"`
+	WorkspaceIds     *[]openapi_types.UUID `json:"workspace_ids,omitempty"`
 }
 
 // CreateAgentTokenRequest defines model for CreateAgentTokenRequest.
@@ -2212,6 +2243,20 @@ type CreateSavedQueryRequest struct {
 	SpaceId *openapi_types.UUID `json:"space_id"`
 	Sql     string              `json:"sql"`
 	Target  *SavedQueryTarget   `json:"target,omitempty"`
+}
+
+// CreateServiceAccountRequest defines model for CreateServiceAccountRequest.
+type CreateServiceAccountRequest struct {
+	ClientId           *string             `json:"client_id,omitempty"`
+	Description        *string             `json:"description,omitempty"`
+	IdentityProviderId *openapi_types.UUID `json:"identity_provider_id,omitempty"`
+	Name               string              `json:"name"`
+
+	// Role What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and run queries, editors also create and edit content, admins also manage the workspace. What they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
+	Role *WorkspaceRole `json:"role,omitempty"`
+
+	// WorkspaceId Create it in this workspace with role (default viewer); needed unless the caller is a global admin
+	WorkspaceId *openapi_types.UUID `json:"workspace_id,omitempty"`
 }
 
 // CreateSpaceRequest defines model for CreateSpaceRequest.
@@ -3206,6 +3251,9 @@ type Me struct {
 	GlobalActions []GlobalAction      `json:"global_actions"`
 	Id            openapi_types.UUID  `json:"id"`
 
+	// Kind A person, or a Baleia service account (#653)
+	Kind *MeKind `json:"kind,omitempty"`
+
 	// Locale UI language preference; null follows the browser (#67).
 	Locale              *Locale             `json:"locale"`
 	Name                string              `json:"name"`
@@ -3216,6 +3264,9 @@ type Me struct {
 
 // MeAuthProvider defines model for Me.AuthProvider.
 type MeAuthProvider string
+
+// MeKind A person, or a Baleia service account (#653)
+type MeKind string
 
 // MeRole defines model for Me.Role.
 type MeRole string
@@ -4095,6 +4146,32 @@ type SendAssistantMessageResponse struct {
 	Seq int `json:"seq"`
 }
 
+// ServiceAccount A non-human principal agents and other clients sign in as. It has workspace roles like a person and never the global admin role. It signs in with a Baleia token (an API key, header X-Api-Key) or, when linked to an identity provider, with that provider's client-credentials access token, which is then also its identity towards per-user catalogs (ADR 0015).
+type ServiceAccount struct {
+	AllowedActions *[]ServiceAccountAllowedActions `json:"allowed_actions,omitempty"`
+
+	// ClientId The identity provider's client it signs in as
+	ClientId    *string   `json:"client_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	Description *string   `json:"description"`
+
+	// Email Synthetic, never mailed; the address to share a workspace with it
+	Email string `json:"email"`
+
+	// HomeWorkspaceId Created in this workspace; its admins manage it
+	HomeWorkspaceId    *openapi_types.UUID  `json:"home_workspace_id"`
+	Id                 openapi_types.UUID   `json:"id"`
+	IdentityProviderId *openapi_types.UUID  `json:"identity_provider_id"`
+	Name               string               `json:"name"`
+	Status             ServiceAccountStatus `json:"status"`
+}
+
+// ServiceAccountAllowedActions defines model for ServiceAccount.AllowedActions.
+type ServiceAccountAllowedActions string
+
+// ServiceAccountStatus defines model for ServiceAccount.Status.
+type ServiceAccountStatus string
+
 // SetSpaceMemberRequest defines model for SetSpaceMemberRequest.
 type SetSpaceMemberRequest struct {
 	Role SetSpaceMemberRequestRole `json:"role"`
@@ -4641,6 +4718,14 @@ type UpdateSavedQueryRequest struct {
 	Target     *SavedQueryTarget   `json:"target,omitempty"`
 }
 
+// UpdateServiceAccountRequest defines model for UpdateServiceAccountRequest.
+type UpdateServiceAccountRequest struct {
+	ClientId           *string             `json:"client_id"`
+	Description        *string             `json:"description"`
+	IdentityProviderId *openapi_types.UUID `json:"identity_provider_id"`
+	Name               string              `json:"name"`
+}
+
 // UpdateSpaceRequest defines model for UpdateSpaceRequest.
 type UpdateSpaceRequest struct {
 	DefaultRole *UpdateSpaceRequestDefaultRole `json:"default_role,omitempty"`
@@ -4707,6 +4792,9 @@ type UserPublic struct {
 	Email        openapi_types.Email    `json:"email"`
 	Id           openapi_types.UUID     `json:"id"`
 
+	// Kind A person, or a Baleia service account (#653)
+	Kind *UserPublicKind `json:"kind,omitempty"`
+
 	// Locale UI language preference; null follows the browser (#67).
 	Locale *Locale          `json:"locale"`
 	Name   string           `json:"name"`
@@ -4716,6 +4804,9 @@ type UserPublic struct {
 
 // UserPublicAuthProvider defines model for UserPublic.AuthProvider.
 type UserPublicAuthProvider string
+
+// UserPublicKind A person, or a Baleia service account (#653)
+type UserPublicKind string
 
 // UserPublicRole defines model for UserPublic.Role.
 type UserPublicRole string
@@ -5558,6 +5649,15 @@ type UpdatePasswordJSONRequestBody = UpdatePasswordRequest
 
 // CreateMigrationJSONRequestBody defines body for CreateMigration for application/json ContentType.
 type CreateMigrationJSONRequestBody = CreateMigrationRequest
+
+// CreateServiceAccountJSONRequestBody defines body for CreateServiceAccount for application/json ContentType.
+type CreateServiceAccountJSONRequestBody = CreateServiceAccountRequest
+
+// UpdateServiceAccountJSONRequestBody defines body for UpdateServiceAccount for application/json ContentType.
+type UpdateServiceAccountJSONRequestBody = UpdateServiceAccountRequest
+
+// CreateServiceAccountTokenJSONRequestBody defines body for CreateServiceAccountToken for application/json ContentType.
+type CreateServiceAccountTokenJSONRequestBody = CreateApiKeyRequest
 
 // CreateFirstAdminJSONRequestBody defines body for CreateFirstAdmin for application/json ContentType.
 type CreateFirstAdminJSONRequestBody = CreateAdminRequest

@@ -1,0 +1,25 @@
+meta {
+  name: Service Account Never Global Admin
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{base_url}}/users/{{service_account_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "role": "admin"
+  }
+}
+
+assert {
+  res.status: eq 403
+}

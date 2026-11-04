@@ -852,6 +852,53 @@ components:
         name: { type: string }
         expires_at: { type: string, format: date-time, nullable: true }
 
+    # ── Service accounts (#653) ─────────────────────────────────
+    ServiceAccount:
+      type: object
+      required: [id, name, email, status, created_at, allowed_actions]
+      description: >
+        A non-human principal agents and other clients sign in as. It has workspace roles like a
+        person and never the global admin role. It signs in with a Baleia token (an API key, header
+        X-Api-Key) or, when linked to an identity provider, with that provider's client-credentials
+        access token, which is then also its identity towards per-user catalogs (ADR 0015).
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, description: "Synthetic, never mailed; the address to share a workspace with it" }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [active, suspended] }
+        identity_provider_id: { type: string, format: uuid, nullable: true }
+        client_id: { type: string, nullable: true, description: "The identity provider's client it signs in as" }
+        home_workspace_id: { type: string, format: uuid, nullable: true, description: "Created in this workspace; its admins manage it" }
+        created_at: { type: string, format: date-time }
+        allowed_actions:
+          type: array
+          readOnly: true
+          items: { type: string, enum: [view, update, delete, manage_tokens] }
+
+    CreateServiceAccountRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        workspace_id:
+          type: string
+          format: uuid
+          description: "Create it in this workspace with role (default viewer); needed unless the caller is a global admin"
+        role: { $ref: "#/components/schemas/WorkspaceRole" }
+        identity_provider_id: { type: string, format: uuid }
+        client_id: { type: string, maxLength: 255 }
+
+    UpdateServiceAccountRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000, nullable: true }
+        identity_provider_id: { type: string, format: uuid, nullable: true }
+        client_id: { type: string, maxLength: 255, nullable: true }
+
     # ── Agents (#59) ───────────────────────────────────────────
     AgentAllowedAction:
       type: string
@@ -911,6 +958,13 @@ components:
         workspace_ids:
           type: array
           items: { type: string, format: uuid }
+        service_account_id:
+          type: string
+          format: uuid
+          description: >
+            Link the agent to this service account instead of the caller (#653): the agent then acts
+            with the service account's workspace roles, and whoever manages the service account manages
+            the agent. Its workspaces must be ones the service account belongs to.
     UpdateAgentRequest:
       type: object
       properties:
@@ -1102,7 +1156,11 @@ components:
         name: { type: string }
         email: { type: string, format: email }
         role: { type: string, enum: [admin, member] }
-        auth_provider: { type: string, enum: [local, oidc, ldap] }
+        auth_provider: { type: string, enum: [local, oidc, ldap, service] }
+        kind:
+          type: string
+          enum: [human, service_account]
+          description: "A person, or a Baleia service account (#653)"
         status: { type: string, enum: [active, suspended] }
         created_at: { type: string, format: date-time }
         locale:
@@ -4148,6 +4206,136 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   # ── API Keys ──────────────────────────────────────────────────
+  /service-accounts:
+    get:
+      tags: [ServiceAccounts]
+      operationId: listServiceAccounts
+      summary: "Service accounts the caller manages: every one for a global admin, those of the workspaces they administer otherwise (#653)"
+      responses:
+        "200":
+          description: "Service accounts"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ServiceAccount" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [ServiceAccounts]
+      operationId: createServiceAccount
+      summary: "Create a service account — global admin, or workspace admin in their workspace (#653)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateServiceAccountRequest" }
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceAccount" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /service-accounts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [ServiceAccounts]
+      operationId: getServiceAccount
+      summary: "Get a service account — its managers"
+      responses:
+        "200":
+          description: "The service account"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceAccount" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [ServiceAccounts]
+      operationId: updateServiceAccount
+      summary: "Rename, describe or link a service account to an identity provider client — its managers"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateServiceAccountRequest" }
+      responses:
+        "200":
+          description: "Updated"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceAccount" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [ServiceAccounts]
+      operationId: deleteServiceAccount
+      summary: "Delete a service account with its tokens, agents and memberships — its managers"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /service-accounts/{id}/tokens:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [ServiceAccounts]
+      operationId: listServiceAccountTokens
+      summary: "The service account's Baleia tokens (never their secrets) — its managers"
+      responses:
+        "200":
+          description: "Tokens"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ApiKey" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [ServiceAccounts]
+      operationId: createServiceAccountToken
+      summary: "Issue a Baleia token for the service account, shown once — its managers"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateApiKeyRequest" }
+      responses:
+        "201":
+          description: "The token with its secret, shown once"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyCreated" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /service-accounts/{id}/tokens/{token_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: token_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [ServiceAccounts]
+      operationId: revokeServiceAccountToken
+      summary: "Revoke a Baleia token of the service account — its managers"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /api-keys:
     get:
       tags: [ApiKeys]

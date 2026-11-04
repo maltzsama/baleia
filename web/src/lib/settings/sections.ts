@@ -72,6 +72,13 @@ export const settingsSections: SettingsSection[] = [
 		group: 'access'
 	},
 	{
+		href: '/settings/service-accounts',
+		get label() {
+			return m.settings_sections_service_accounts();
+		},
+		group: 'access'
+	},
+	{
 		href: '/settings/agents',
 		get label() {
 			return m.settings_sections_agents();

@@ -29,6 +29,9 @@ Every request needs an agent token minted in the UI (`/settings/agents`):
   are not accepted on any other route.
 - The agent acts for its owner with the owner's **member** rights intersected
   with the workspaces it is bound to. It is always read-only.
+- An agent can be linked to a [service account](guides/administration.md#access)
+  instead of a person (#653): it then acts with that account's workspace roles,
+  and whoever manages the account manages the agent.
 - `BALEIA_MCP_ALLOWED_ORIGINS` is a comma-separated allow-list for the `Origin`
   header. Empty (the default) rejects any request that carries one; native MCP
   clients do not send it.
