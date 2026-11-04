@@ -3,8 +3,10 @@
 The assistant answers data questions from the workbench. It is **off by default**
 and configured by an administrator. It never touches a database or engine
 directly: the model proposes tool calls, and Baleia executes them through the
-same read-only MCP tools external agents use (`/mcp`), so the capability policy
-and the audit trail apply unchanged.
+same MCP tools external agents use (`/mcp`), always in read-only sessions, so
+the capability policy and the audit trail apply unchanged. External agents
+follow their owner's workspace role instead ([MCP](mcp.md)); the assistant
+never writes.
 
 ## Enabling it
 

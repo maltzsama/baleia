@@ -47,11 +47,12 @@ Baleia is a **control plane**, not another query engine. It manages connections,
 - Prometheus metrics, alerts with runbooks, OpenTelemetry tracing and an audit trail of every security and data operation.
 
 **Control access**
-- Workspaces, teams and roles: a catalog granted to a workspace is reachable by its members only. Inside the catalog, the engine and the catalog manager decide what may be read or written: with per-user identity, Polaris, Unity or Lakekeeper authorize each user who signed in through an identity provider with their own token, while local and LDAP users act as the connection's account ([ADR 0015](docs/adr/0015-per-user-catalog-identity.md)).
-- Sign in with OIDC or LDAP; personal API keys; credentials encrypted at rest.
+- Workspaces, teams and roles: a catalog granted to a workspace is reachable by its members only, and in each workspace a member is a viewer, an editor or an admin, which decides what they may do in Baleia ([ADR 0016](docs/adr/0016-access-layers-and-workspace-roles.md)). Inside the catalog, the engine and the catalog manager decide what may be read or written: with per-user identity, Polaris, Unity or Lakekeeper authorize each user who signed in through an identity provider with their own token, while local and LDAP users act as the connection's account ([ADR 0015](docs/adr/0015-per-user-catalog-identity.md)).
+- Sign in with OIDC or LDAP and map identity-provider groups to workspace roles. Service accounts give agents and integrations their own identity, with an API key or the provider's client credentials. Personal API keys; credentials encrypted at rest.
+- The bundled Trino requires HTTPS and a password, and only Baleia reaches it.
 
 **Bring in AI, if you want**
-- An optional assistant that knows your catalogs, and an MCP server so your own agents can query within the limits you set.
+- An optional assistant that knows your catalogs, and an MCP server so your own agents can query within the limits you set. An agent acts with its owner's role in each workspace: a viewer's agent only reads, an editor's may also write.
 
 The interface is available in English and Brazilian Portuguese.
 

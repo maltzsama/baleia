@@ -6,6 +6,15 @@ Connection credentials are sealed with `BALEIA_ENCRYPTION_KEY` (AEAD, bound to
 the connection row) in `catalog_connections.credentials_enc`. `JWT_SECRET` never
 encrypts them.
 
+## Identity-provider tokens
+
+With an OIDC provider, Baleia keeps each user's access and refresh tokens from
+sign-in (#648) so it can send the access token to the catalog manager on the
+user's behalf. They are sealed with `BALEIA_ENCRYPTION_KEY` in `user_idp_tokens`,
+renewed when they near expiry, and deleted when the user signs out, is
+suspended, or the provider is disabled or removed. The tokens only reach the
+catalog for connections set to per-user identity ([ADR 0015](adr/0015-per-user-catalog-identity.md)).
+
 ## External secret references
 
 A connection credential **can instead hold a reference**, so the secret never

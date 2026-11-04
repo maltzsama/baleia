@@ -25,10 +25,12 @@ There are two ([ADR 0010](adr/0010-dev-environments.md)):
 
   ```bash
   make k8s-up          # start minikube, install the dependencies and the Baleia chart
-  make k8s-forward     # port-forward the API, Trino, Temporal UI, Mailpit and Polaris
+  make k8s-forward     # port-forward the API, the Polaris console and Mailpit
   make k8s-logs        # follow every Baleia pod
   make k8s-down        # uninstall (keeps volumes unless K8S_PURGE=1)
   ```
+
+Both stacks run the bundled Trino with HTTPS and password authentication (#647), as in production: it serves clients on port 8443 and refuses plain HTTP except for `/v1/info`. Baleia logs in as `baleia_admin` with `BALEIA_TRINO_PASSWORD`, a fixed development value in `docker-compose.yaml` and `deploy/dev/values-dev.yaml` that is never for production. To use the Trino CLI on minikube, extract `ca.crt` from the `baleia-trino-tls` Secret, port-forward `svc/baleia-trino 8443`, and connect with `--server https://localhost:8443 --truststore-path` on a truststore built from that CA (or `--insecure`), `--user baleia_admin` and `--password`.
 
 To work on the code with fast reloads, run the processes on the host against either stack: `make dev` (API on :9000) and `make worker`, and `cd web && npm run dev` for the web app with hot reload.
 
