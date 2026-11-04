@@ -55,3 +55,10 @@ jobs:
           kubectl -n baleia-dev get pods -o wide || true
           kubectl -n baleia-dev get events --sort-by=.lastTimestamp || true
           kubectl -n baleia-dev logs -l app.kubernetes.io/name=baleia --all-containers --tail=200 || true
+          echo "== errors and warnings"
+          for d in baleia-api baleia-worker; do
+            echo "-- $d"
+            kubectl -n baleia-dev logs deploy/$d --tail=2000 | grep -E '"level":"(ERROR|WARN)"' | tail -20 || true
+          done
+          echo "-- baleia-trino failed queries"
+          kubectl -n baleia-dev logs deploy/baleia-trino --tail=3000 | grep -E 'FAILED|Query .* failed' | tail -10 || true

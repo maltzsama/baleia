@@ -209,8 +209,12 @@ spec:
             {{- if include "baleia.trinoAuth" . }}
             - { name: https, containerPort: 8443 }
             {{- end }}
+          # /v1/info answers 200 while Trino is still starting, so an httpGet
+          # on it marks the pod Ready before it accepts queries (#672). The
+          # image's health-check script succeeds only once "starting" is false.
           readinessProbe:
-            httpGet: { path: /v1/info, port: http }
+            exec:
+              command: ["/usr/lib/trino/bin/health-check"]
             initialDelaySeconds: 15
             periodSeconds: 10
           {{- if .Values.trino.resources }}

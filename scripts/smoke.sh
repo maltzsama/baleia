@@ -19,11 +19,22 @@ EXPECTED=25
 step() { echo; echo "── $*"; }
 
 # trino_sql runs a statement inside the cluster's Trino and returns stdout.
+# The bundled Trino serves clients over HTTPS only and wants a password
+# (#647), so the CLI logs in as the admin user the way Baleia does. It runs
+# inside the Trino container, whose certificate is self-signed for its own
+# name, hence --insecure.
 trino_sql() {
   if [[ "$STACK" == "k8s" ]]; then
-    kubectl -n baleia-dev exec -i deploy/baleia-trino -- trino --output-format TSV --execute "$1"
+    local pw
+    pw=$(kubectl -n baleia-dev get secret baleia-secret -o jsonpath='{.data.BALEIA_TRINO_PASSWORD}' | base64 -d)
+    kubectl -n baleia-dev exec -i -c trino deploy/baleia-trino -- env TRINO_PASSWORD="$pw" \
+      trino --server https://localhost:8443 --insecure --user baleia_admin --password \
+      --output-format TSV --execute "$1"
   else
-    docker compose -f docker-compose.yaml exec -T trino trino --output-format TSV --execute "$1"
+    docker compose -f docker-compose.yaml exec -T \
+      -e TRINO_PASSWORD="${BALEIA_TRINO_PASSWORD:-dev-trino-password-not-for-production}" trino \
+      trino --server https://localhost:8443 --insecure --user baleia_admin --password \
+      --output-format TSV --execute "$1"
   fi
 }
 
@@ -88,7 +99,13 @@ for _ in {1..60}; do
   [[ "$STATUS" == "running" ]] || break
   sleep 2
 done
-[[ "$STATUS" == "finished" ]] || { echo "FAIL execution ended $STATUS"; exit 1; }
+if [[ "$STATUS" != "finished" ]]; then
+  echo "FAIL execution ended $STATUS"
+  # Say why: the execution's own error code, target and statements.
+  curl -s -H "Authorization: Bearer $TOKEN" "$API/workspaces/$WS/executions/$EID" \
+    | jq '{status, error_code, engine_kind, target, statements}' || true
+  exit 1
+fi
 
 # ── 6. Value check through Trino ────────────────────────────────────────────
 step "verify value on the cluster"
