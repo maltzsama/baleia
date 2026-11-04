@@ -264,34 +264,5 @@ DELETE FROM workspace_members WHERE workspace_id = @workspace_id::uuid AND user_
 
 -- name: ApplyGroupWorkspaceRoles :exec
 -- Sets the workspace roles a member's identity-provider groups give, at
--- sign-in (#653), in one statement: the roles mapped for workspaces of teams
--- the member is in are written, the group roles no longer mapped are
--- dropped, and roles an admin set ('manual') are never touched. Personal
--- workspaces are never reached by a group: only their owner shares them. A
--- per-user advisory lock serializes concurrent sign-ins of the same member.
-WITH locked AS (
-    SELECT pg_advisory_xact_lock(653, hashtext(CAST(@user_id::uuid AS text))) AS ok
-),
-input AS (
-    SELECT (e ->> 'workspace_id')::uuid AS workspace_id, (e ->> 'role')::text AS role
-    FROM jsonb_array_elements(@assignments::jsonb) AS e
-),
-allowed AS (
-    SELECT i.workspace_id, i.role
-    FROM input i
-    CROSS JOIN locked
-    JOIN workspaces w ON w.id = i.workspace_id AND w.type = 'shared'
-    JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = @user_id::uuid
-),
-written AS (
-    INSERT INTO workspace_members (workspace_id, user_id, role, source)
-    SELECT a.workspace_id, @user_id::uuid, a.role, 'idp_group' FROM allowed a
-    ON CONFLICT (workspace_id, user_id) DO UPDATE
-    SET role = EXCLUDED.role, granted_at = now()
-    WHERE workspace_members.source = 'idp_group'
-    RETURNING workspace_members.workspace_id
-)
-DELETE FROM workspace_members d
-WHERE d.user_id = @user_id::uuid AND d.source = 'idp_group'
-  AND d.workspace_id NOT IN (SELECT workspace_id FROM allowed)
-  AND EXISTS (SELECT 1 FROM locked);
+-- sign-in (#653): see baleia_apply_group_workspace_roles (migration 00077).
+SELECT baleia_apply_group_workspace_roles(@user_id::uuid, @assignments::jsonb);

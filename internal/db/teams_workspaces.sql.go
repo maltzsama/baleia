@@ -37,32 +37,7 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (T
 }
 
 const applyGroupWorkspaceRoles = `-- name: ApplyGroupWorkspaceRoles :exec
-WITH locked AS (
-    SELECT pg_advisory_xact_lock(653, hashtext(CAST($1::uuid AS text))) AS ok
-),
-input AS (
-    SELECT (e ->> 'workspace_id')::uuid AS workspace_id, (e ->> 'role')::text AS role
-    FROM jsonb_array_elements($2::jsonb) AS e
-),
-allowed AS (
-    SELECT i.workspace_id, i.role
-    FROM input i
-    CROSS JOIN locked
-    JOIN workspaces w ON w.id = i.workspace_id AND w.type = 'shared'
-    JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $1::uuid
-),
-written AS (
-    INSERT INTO workspace_members (workspace_id, user_id, role, source)
-    SELECT a.workspace_id, $1::uuid, a.role, 'idp_group' FROM allowed a
-    ON CONFLICT (workspace_id, user_id) DO UPDATE
-    SET role = EXCLUDED.role, granted_at = now()
-    WHERE workspace_members.source = 'idp_group'
-    RETURNING workspace_members.workspace_id
-)
-DELETE FROM workspace_members d
-WHERE d.user_id = $1::uuid AND d.source = 'idp_group'
-  AND d.workspace_id NOT IN (SELECT workspace_id FROM allowed)
-  AND EXISTS (SELECT 1 FROM locked)
+SELECT baleia_apply_group_workspace_roles($1::uuid, $2::jsonb)
 `
 
 type ApplyGroupWorkspaceRolesParams struct {
@@ -71,11 +46,7 @@ type ApplyGroupWorkspaceRolesParams struct {
 }
 
 // Sets the workspace roles a member's identity-provider groups give, at
-// sign-in (#653), in one statement: the roles mapped for workspaces of teams
-// the member is in are written, the group roles no longer mapped are
-// dropped, and roles an admin set ('manual') are never touched. Personal
-// workspaces are never reached by a group: only their owner shares them. A
-// per-user advisory lock serializes concurrent sign-ins of the same member.
+// sign-in (#653): see baleia_apply_group_workspace_roles (migration 00077).
 func (q *Queries) ApplyGroupWorkspaceRoles(ctx context.Context, arg ApplyGroupWorkspaceRolesParams) error {
 	_, err := q.db.Exec(ctx, applyGroupWorkspaceRoles, arg.UserID, arg.Assignments)
 	return err

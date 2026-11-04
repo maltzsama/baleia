@@ -25,11 +25,7 @@ type Querier interface {
 	AdvanceRetrieverSchedule(ctx context.Context, arg AdvanceRetrieverScheduleParams) error
 	AgentWorkspaceBound(ctx context.Context, arg AgentWorkspaceBoundParams) (bool, error)
 	// Sets the workspace roles a member's identity-provider groups give, at
-	// sign-in (#653), in one statement: the roles mapped for workspaces of teams
-	// the member is in are written, the group roles no longer mapped are
-	// dropped, and roles an admin set ('manual') are never touched. Personal
-	// workspaces are never reached by a group: only their owner shares them. A
-	// per-user advisory lock serializes concurrent sign-ins of the same member.
+	// sign-in (#653): see baleia_apply_group_workspace_roles (migration 00077).
 	ApplyGroupWorkspaceRoles(ctx context.Context, arg ApplyGroupWorkspaceRolesParams) error
 	// Age of the export cursor for the system status section (#291). Zero when no
 	// cursor exists (nothing exported yet).
