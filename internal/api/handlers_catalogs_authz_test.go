@@ -562,6 +562,26 @@ func TestUpdateCatalogConnection_ReappliesBindings(t *testing.T) {
 	}
 }
 
+// TestUpdateCatalogConnection_ReappliesAfterClientLeaves (#664): the re-apply
+// runs detached from the request, so a client that disconnects once the edit
+// is saved does not leave the engine on the old catalog.
+func TestUpdateCatalogConnection_ReappliesAfterClientLeaves(t *testing.T) {
+	t.Parallel()
+	h, q, ft := newAuthzHandlers(t)
+	ctx, cancel := context.WithCancel(ctxAs(adminID, "admin"))
+	cancel()
+
+	if got := codeOf(t, mustUpdate(t, h, ctx, q.conn.ID.Bytes, UpdateCatalogConnectionRequest{Config: strMap("realm", "OTHER")}), nil); got != 200 {
+		t.Fatalf("config edit: %d", got)
+	}
+	for _, st := range ft.statements() {
+		if strings.HasPrefix(st, "CREATE CATALOG") {
+			return
+		}
+	}
+	t.Errorf("trino statements = %q, want a CREATE CATALOG although the request was canceled", ft.statements())
+}
+
 func mustUpdate(t *testing.T, h *API, ctx context.Context, id [16]byte, body UpdateCatalogConnectionRequest) UpdateCatalogConnectionResponseObject { //nolint:revive // thelper wants t first
 	t.Helper()
 	r, err := h.UpdateCatalogConnection(ctx, UpdateCatalogConnectionRequestObject{Id: id, Body: &body})
