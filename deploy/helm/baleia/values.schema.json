@@ -77,7 +77,7 @@
             "url": { "type": "string" }
           }
         },
-        "jvmHeap": { "type": "string" },
+        "jvmHeap": { "type": "string", "pattern": "^([0-9]+[kKmMgG]?)?$" },
         "auth": {
           "type": "object",
           "properties": {

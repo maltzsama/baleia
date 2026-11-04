@@ -192,8 +192,13 @@ spec:
                   name: {{ include "baleia.fullname" . }}-trino-internal
                   key: shared-secret
             {{- end }}
-            - name: JAVA_OPTS
-              value: "-Xmx{{ .Values.trino.jvmHeap }}"
+            {{- with .Values.trino.jvmHeap }}
+            # The image's launcher builds the JVM command line from etc/jvm.config
+            # and ignores JAVA_OPTS (#669); the JVM itself reads this variable, and
+            # an explicit -Xmx wins over the image's -XX:MaxRAMPercentage=80.
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xmx{{ . }}"
+            {{- end }}
             # Trino's S3 filesystem auto-detects the region through the EC2
             # instance metadata endpoint when none is set, which hangs
             # CREATE CATALOG on clusters where that address is unreachable.
