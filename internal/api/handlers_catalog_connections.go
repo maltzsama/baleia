@@ -7,11 +7,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/bindings"
 	catalogs "github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/catalogs/conns"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -220,7 +222,98 @@ func (h *CatalogHandlers) UpdateCatalogConnection(ctx context.Context, request U
 	h.catalogCache.Clear()
 	ev.Changes = connectionChanges(h.logger, stored, conn, body.Credentials)
 	h.audited(ctx, ev.Allowed())
+	if body.Url != nil || body.Config != nil || body.Credentials != nil {
+		h.resyncConnectionBindings(ctx, p, connID)
+	}
 	return UpdateCatalogConnection200JSONResponse(h.withConnectionActions(ctx, conn)), nil
+}
+
+// resyncTimeout bounds one connection's re-apply, which outlives the request.
+const resyncTimeout = 5 * time.Minute
+
+// resyncLocks serializes the re-apply per connection, so two quick edits
+// apply in order and each projection reads the latest stored connection. It
+// covers one API replica; across replicas the reconciler and a manual sync
+// repair a binding left on older settings.
+var resyncLocks sync.Map // [16]byte -> *sync.Mutex
+
+// resyncConnectionBindings applies the managed bindings of a connection to
+// their engines again after its settings changed (#664). A binding's
+// projection is built from the stored connection, so without this the engine
+// keeps the catalog it was given before the edit until someone syncs the
+// binding by hand. The edit has already succeeded: a binding that cannot be
+// applied is left in error with the reason (it shows in Attention), and one
+// whose projection cannot be built, or that the editor may not apply, is
+// logged and audited. It runs detached from the request, so a client that
+// disconnects does not leave bindings half applied.
+func (h *CatalogHandlers) resyncConnectionBindings(ctx context.Context, p authz.Principal, connID pgtype.UUID) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resyncTimeout)
+	defer cancel()
+	mu, _ := resyncLocks.LoadOrStore(connID.Bytes, &sync.Mutex{})
+	if lock, ok := mu.(*sync.Mutex); ok {
+		lock.Lock()
+		defer lock.Unlock()
+	}
+
+	cats, err := h.queries.ListCatalogsByConnection(ctx, connID)
+	if err != nil {
+		h.logger.ErrorContext(ctx, "list catalogs to re-apply bindings; sync them by hand", "connection_id", idString(connID), "err", err)
+		return
+	}
+	ctx = audit.WithAction(ctx, audit.BindingSync)
+	for _, c := range cats {
+		bs, err := h.queries.ListBindingsByCatalog(ctx, c.ID)
+		if err != nil {
+			h.logger.ErrorContext(ctx, "list bindings to re-apply; sync them by hand", "catalog_id", idString(c.ID), "err", err)
+			continue
+		}
+		for _, b := range bs {
+			if b.Mode == "managed" && b.Enabled {
+				h.resyncBinding(ctx, p, b.ID)
+			}
+		}
+	}
+}
+
+func (h *CatalogHandlers) resyncBinding(ctx context.Context, p authz.Principal, id pgtype.UUID) {
+	ev := audit.Event{Action: audit.BindingSync, ResourceType: "binding", ResourceID: idString(id)}
+	cur, t, denied, invalid, err := h.managedBinding(ctx, p, id)
+	switch {
+	case denied != nil:
+		// The editor may change the connection but not apply to this engine
+		// (connections open to everyone): record it, an engine admin syncs.
+		h.logger.WarnContext(ctx, "binding not re-applied: the editor may not apply it to the engine", "binding_id", idString(id))
+		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
+		return
+	case err != nil || invalid != nil:
+		h.logger.WarnContext(ctx, "re-apply binding after a connection edit", "binding_id", idString(id), "err", err)
+		return
+	case !cur.Enabled: // disabled since it was listed (its catalog is being deleted)
+		return
+	}
+	connector := ""
+	if cur.Connector != nil {
+		connector = *cur.Connector
+	}
+	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, cur.EngineCatalogName, connector, extraPropsOf(h.logger, cur.ExtraProps)))
+	if err != nil {
+		h.logger.WarnContext(ctx, "project binding after a connection edit", "binding_id", idString(id), "err", err)
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return
+	}
+	l := h.lifecycleOn(t.cluster, t.engine)
+	synced, err := l.Sync(ctx, cur, proj)
+	if err != nil {
+		h.logger.WarnContext(ctx, "re-apply binding after a connection edit", "binding_id", idString(id), "err", err)
+		h.audited(ctx, ev.Failed(audit.ReasonEngineError))
+		return
+	}
+	h.observe(ctx, l)
+	if synced.LifecycleState != bindings.StateActive {
+		h.audited(ctx, ev.Failed(audit.ReasonEngineError))
+		return
+	}
+	h.audited(ctx, ev.Allowed())
 }
 
 func (h *CatalogHandlers) DeleteCatalogConnection(ctx context.Context, request DeleteCatalogConnectionRequestObject) (DeleteCatalogConnectionResponseObject, error) {

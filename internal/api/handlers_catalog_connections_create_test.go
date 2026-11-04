@@ -240,6 +240,12 @@ func (f *updateConnQuerier) GetCatalogConnectionByID(context.Context, pgtype.UUI
 	return f.conn, nil
 }
 
+// ListCatalogsByConnection: these tests edit a connection nothing is bound
+// from, so there is nothing to re-apply (#664).
+func (f *updateConnQuerier) ListCatalogsByConnection(context.Context, pgtype.UUID) ([]db.Catalog, error) {
+	return nil, nil
+}
+
 func (f *updateConnQuerier) UpdateCatalogConnection(_ context.Context, p db.UpdateCatalogConnectionParams) (db.CatalogConnection, error) {
 	f.updates = append(f.updates, p)
 	c := f.conn
