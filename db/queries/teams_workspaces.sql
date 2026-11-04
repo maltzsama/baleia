@@ -232,16 +232,25 @@ LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = u.id
 WHERE w.id = @workspace_id::uuid
 ORDER BY u.name;
 
--- name: UserInWorkspaceTeam :one
-SELECT EXISTS (
-    SELECT 1 FROM workspaces w
+-- name: UpsertWorkspaceMember :execrows
+-- Writes nothing (0 rows) when the user cannot be a member: on a shared
+-- workspace they must be in its team. The share lock on their team row makes
+-- a concurrent removal from the team either wait for this write or win.
+WITH in_team AS (
+    SELECT w.id
+    FROM workspaces w
     JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = @user_id::uuid
-    WHERE w.id = @workspace_id::uuid
-) AS in_team;
-
--- name: UpsertWorkspaceMember :exec
+    WHERE w.id = @workspace_id::uuid AND w.type = 'shared'
+    FOR SHARE OF tm
+),
+allowed AS (
+    SELECT w.id FROM workspaces w WHERE w.id = @workspace_id::uuid AND w.type = 'personal'
+    UNION ALL
+    SELECT id FROM in_team
+)
 INSERT INTO workspace_members (workspace_id, user_id, role, granted_by)
-VALUES (@workspace_id::uuid, @user_id::uuid, @role::text, sqlc.narg(granted_by)::uuid)
+SELECT @workspace_id::uuid, @user_id::uuid, @role::text, sqlc.narg(granted_by)::uuid
+FROM allowed
 ON CONFLICT (workspace_id, user_id) DO UPDATE
 SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now();
 

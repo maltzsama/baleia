@@ -776,8 +776,10 @@ type Querier interface {
 	// other's.
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error)
 	UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWorkspaceCatalogGrantParams) (WorkspaceCatalogGrant, error)
-	UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) error
-	UserInWorkspaceTeam(ctx context.Context, arg UserInWorkspaceTeamParams) (bool, error)
+	// Writes nothing (0 rows) when the user cannot be a member: on a shared
+	// workspace they must be in its team. The share lock on their team row makes
+	// a concurrent removal from the team either wait for this write or win.
+	UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) (int64, error)
 	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)
 }
 

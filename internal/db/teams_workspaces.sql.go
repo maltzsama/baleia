@@ -1059,9 +1059,22 @@ func (q *Queries) UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWor
 	return i, err
 }
 
-const upsertWorkspaceMember = `-- name: UpsertWorkspaceMember :exec
+const upsertWorkspaceMember = `-- name: UpsertWorkspaceMember :execrows
+WITH in_team AS (
+    SELECT w.id
+    FROM workspaces w
+    JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2::uuid
+    WHERE w.id = $1::uuid AND w.type = 'shared'
+    FOR SHARE OF tm
+),
+allowed AS (
+    SELECT w.id FROM workspaces w WHERE w.id = $1::uuid AND w.type = 'personal'
+    UNION ALL
+    SELECT id FROM in_team
+)
 INSERT INTO workspace_members (workspace_id, user_id, role, granted_by)
-VALUES ($1::uuid, $2::uuid, $3::text, $4::uuid)
+SELECT $1::uuid, $2::uuid, $3::text, $4::uuid
+FROM allowed
 ON CONFLICT (workspace_id, user_id) DO UPDATE
 SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now()
 `
@@ -1073,34 +1086,20 @@ type UpsertWorkspaceMemberParams struct {
 	GrantedBy   pgtype.UUID `json:"granted_by"`
 }
 
-func (q *Queries) UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) error {
-	_, err := q.db.Exec(ctx, upsertWorkspaceMember,
+// Writes nothing (0 rows) when the user cannot be a member: on a shared
+// workspace they must be in its team. The share lock on their team row makes
+// a concurrent removal from the team either wait for this write or win.
+func (q *Queries) UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, upsertWorkspaceMember,
 		arg.WorkspaceID,
 		arg.UserID,
 		arg.Role,
 		arg.GrantedBy,
 	)
-	return err
-}
-
-const userInWorkspaceTeam = `-- name: UserInWorkspaceTeam :one
-SELECT EXISTS (
-    SELECT 1 FROM workspaces w
-    JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $1::uuid
-    WHERE w.id = $2::uuid
-) AS in_team
-`
-
-type UserInWorkspaceTeamParams struct {
-	UserID      pgtype.UUID `json:"user_id"`
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-}
-
-func (q *Queries) UserInWorkspaceTeam(ctx context.Context, arg UserInWorkspaceTeamParams) (bool, error) {
-	row := q.db.QueryRow(ctx, userInWorkspaceTeam, arg.UserID, arg.WorkspaceID)
-	var in_team bool
-	err := row.Scan(&in_team)
-	return in_team, err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const userOwnsTeam = `-- name: UserOwnsTeam :one

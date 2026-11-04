@@ -2600,5 +2600,6 @@
 	"workspace_members_stop_sharing_consequence": "Esta pessoa perde o acesso ao workspace e ao conteúdo dele.",
 	"workspace_members_default_role_consequence": "O papel deste membro volta ao do time: admin para donos do time, editor para membros.",
 	"workspace_members_load_failed": "Não foi possível carregar os membros",
-	"workspace_members_change_failed": "Não foi possível alterar o membro"
+	"workspace_members_change_failed": "Não foi possível alterar o membro",
+	"settings_workspaces_refresh_failed": "Não foi possível recarregar o workspace após a alteração."
 }

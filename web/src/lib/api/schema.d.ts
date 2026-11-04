@@ -1827,7 +1827,7 @@ export interface paths {
         /** Spaces the caller can see, with their role — workspace members */
         get: operations["listSpaces"];
         put?: never;
-        /** Create a space; the creator becomes its manager — workspace members */
+        /** Create a space; the creator becomes its manager — workspace admins */
         post: operations["createSpace"];
         delete?: never;
         options?: never;

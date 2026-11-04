@@ -49,6 +49,7 @@
 	let granting = $state(false);
 	let grantError = $state('');
 
+	let refreshError = $state('');
 	let deleteOpen = $state(false);
 	let revokeOpen = $state(false);
 	let revokeCatalog = $state<Access | null>(null);
@@ -95,12 +96,26 @@
 	}
 
 	// A member change may change the caller's own role and actions.
+	// Removing their own share can end the caller's access (404): the page then
+	// shows "not found". Any other failure keeps the page and offers a retry.
 	async function refreshWorkspace() {
-		const { data } = await client.GET('/workspaces/{id}', {
-			params: { path: { id: workspaceId } }
-		});
-		if (data) ws = data;
-		await workspaceStore.load();
+		refreshError = '';
+		try {
+			const { data, response } = await client.GET('/workspaces/{id}', {
+				params: { path: { id: workspaceId } }
+			});
+			if (response.status === 404) {
+				ws = null;
+				error = m.settings_workspaces_workspace_not_found();
+			} else if (data) {
+				ws = data;
+			} else {
+				refreshError = m.settings_workspaces_refresh_failed();
+			}
+			await workspaceStore.load();
+		} catch {
+			refreshError = m.settings_workspaces_refresh_failed();
+		}
 	}
 
 	function selectTab(next: Tab) {
@@ -413,6 +428,12 @@
 				</div>
 			{/if}
 		{:else if tab === 'members'}
+			{#if refreshError}
+				<div class="mb-2 flex items-center gap-2 text-[12px]">
+					<p class="text-danger" role="alert">{refreshError}</p>
+					<Button size="sm" onclick={refreshWorkspace}>{m.common_retry()}</Button>
+				</div>
+			{/if}
 			<WorkspaceMembers
 				workspaceId={ws.id}
 				personal={ws.type === 'personal'}

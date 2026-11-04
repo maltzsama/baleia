@@ -89,23 +89,19 @@ func (h *core) setMember(ctx context.Context, wsID pgtype.UUID, user *db.User, r
 		return db.ListWorkspaceMembersRow{}, memberUserNotFound, nil
 	}
 	ev.Changes["member"] = audit.Change{To: idString(user.ID)}
-	if ws.Type == "personal" {
-		if ws.OwnerUserID == user.ID {
-			h.audited(ctx, ev.Failed(audit.ReasonValidation))
-			return db.ListWorkspaceMembersRow{}, memberOwnerFixed, nil
-		}
-	} else {
-		inTeam, err := h.queries.UserInWorkspaceTeam(ctx, db.UserInWorkspaceTeamParams{WorkspaceID: wsID, UserID: user.ID})
-		if err != nil {
-			return db.ListWorkspaceMembersRow{}, 0, err
-		}
-		if !inTeam {
-			h.audited(ctx, ev.Failed(audit.ReasonValidation))
-			return db.ListWorkspaceMembersRow{}, memberNotInTeam, nil
-		}
+	if ws.Type == "personal" && ws.OwnerUserID == user.ID {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return db.ListWorkspaceMembersRow{}, memberOwnerFixed, nil
 	}
-	if err := h.queries.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: wsID, UserID: user.ID, Role: role, GrantedBy: p.UserID}); err != nil {
+	// The write itself checks a shared workspace's team membership, so a
+	// concurrent removal from the team cannot leave a role that has no effect.
+	n, err := h.queries.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: wsID, UserID: user.ID, Role: role, GrantedBy: p.UserID})
+	if err != nil {
 		return db.ListWorkspaceMembersRow{}, 0, err
+	}
+	if n == 0 {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return db.ListWorkspaceMembersRow{}, memberNotInTeam, nil
 	}
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())

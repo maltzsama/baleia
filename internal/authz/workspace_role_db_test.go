@@ -46,13 +46,13 @@ func TestWorkspaceRoles_Postgres(t *testing.T) {
 	}
 	set := func(ws, u pgtype.UUID, role string) {
 		t.Helper()
-		if err := q.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: ws, UserID: u, Role: role}); err != nil {
+		if _, err := q.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: ws, UserID: u, Role: role}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	set(shared.ID, viewer.ID, "viewer")
 	set(personal.ID, guest.ID, "editor")
-	set(shared.ID, outsider.ID, "admin") // stale: not in the team
+	set(shared.ID, outsider.ID, "admin") // refused: not in the team (0 rows)
 
 	role := func(ws pgtype.UUID, u db.User) WorkspaceRole {
 		t.Helper()

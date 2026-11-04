@@ -2600,5 +2600,6 @@
 	"workspace_members_stop_sharing_consequence": "This person loses access to the workspace and its content.",
 	"workspace_members_default_role_consequence": "This member's role goes back to their team role: admin for team owners, editor for members.",
 	"workspace_members_load_failed": "Could not load the members",
-	"workspace_members_change_failed": "Could not change the member"
+	"workspace_members_change_failed": "Could not change the member",
+	"settings_workspaces_refresh_failed": "Could not reload the workspace after the change."
 }
