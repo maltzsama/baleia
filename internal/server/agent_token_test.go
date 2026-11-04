@@ -21,7 +21,7 @@ func TestAgentTokenRejectedOnRESTAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("Authorization", "Bearer bal_agt_deadbeef")
 		rec := httptest.NewRecorder()
-		if _, err := authMiddlewareFunc("test-secret", nil)(handler, "ListWorkspaces")(context.Background(), rec, req, nil); err != nil {
+		if _, err := authMiddlewareFunc("test-secret", nil, nil)(handler, "ListWorkspaces")(context.Background(), rec, req, nil); err != nil {
 			t.Fatal(err)
 		}
 		if rec.Code != http.StatusUnauthorized {
@@ -41,7 +41,7 @@ func TestAgentTokenRejectedOnChiRoutes(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/lens/overview", nil)
 	req.Header.Set("Authorization", "Bearer bal_agt_deadbeef")
 	rec := httptest.NewRecorder()
-	chiAuthMiddleware("test-secret", nil)(next).ServeHTTP(rec, req)
+	chiAuthMiddleware("test-secret", nil, nil)(next).ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", rec.Code)
 	}
@@ -62,7 +62,7 @@ func TestLogoutNeedsNoAccessToken(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 	rec := httptest.NewRecorder()
-	if _, err := authMiddlewareFunc("test-secret", nil)(handler, "Logout")(context.Background(), rec, req, nil); err != nil {
+	if _, err := authMiddlewareFunc("test-secret", nil, nil)(handler, "Logout")(context.Background(), rec, req, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !called {

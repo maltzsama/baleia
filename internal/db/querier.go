@@ -106,6 +106,10 @@ type Querier interface {
 	CreateSavedQuery(ctx context.Context, arg CreateSavedQueryParams) (SavedQuery, error)
 	CreateSemanticMetric(ctx context.Context, arg CreateSemanticMetricParams) (SemanticMetric, error)
 	CreateSemanticModel(ctx context.Context, arg CreateSemanticModelParams) (SemanticModel, error)
+	// A service account (#653): a user of kind 'service_account' with no password.
+	// auth_provider is 'oidc' with external_id 'client:<client id>' when it is
+	// linked to an identity provider, 'service' otherwise.
+	CreateServiceAccount(ctx context.Context, arg CreateServiceAccountParams) (User, error)
 	// Spaces (#40): named containers inside a workspace with their own access list.
 	// The effective role is computed by baleia_effective_space_role so listing and
 	// single-space checks share one rule (#16 matrix).
@@ -145,6 +149,7 @@ type Querier interface {
 	DeleteSemanticDoc(ctx context.Context, arg DeleteSemanticDocParams) (int64, error)
 	DeleteSemanticMetric(ctx context.Context, arg DeleteSemanticMetricParams) (int64, error)
 	DeleteSemanticModel(ctx context.Context, arg DeleteSemanticModelParams) (int64, error)
+	DeleteServiceAccount(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteSpace(ctx context.Context, arg DeleteSpaceParams) (int64, error)
 	DeleteSpaceMember(ctx context.Context, arg DeleteSpaceMemberParams) (int64, error)
 	DeleteStatementJoins(ctx context.Context, statementID pgtype.UUID) error
@@ -284,6 +289,10 @@ type Querier interface {
 	GetSemanticModel(ctx context.Context, arg GetSemanticModelParams) (SemanticModel, error)
 	GetSemanticModelBySlug(ctx context.Context, arg GetSemanticModelBySlugParams) (SemanticModel, error)
 	GetSemanticModelForUpdate(ctx context.Context, arg GetSemanticModelForUpdateParams) (SemanticModel, error)
+	GetServiceAccount(ctx context.Context, id pgtype.UUID) (User, error)
+	// The active service account a client-credentials token of a provider
+	// authenticates as.
+	GetServiceAccountByClient(ctx context.Context, arg GetServiceAccountByClientParams) (User, error)
 	GetSpace(ctx context.Context, arg GetSpaceParams) (Space, error)
 	// The statement row and the workspace it belongs to, for the live persistence
 	// path. It reads the workspace from the execution so V3's activity input does
@@ -355,6 +364,8 @@ type Querier interface {
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
+	// The workspaces the user administers (#653).
+	ListAdminWorkspaceIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	ListAgentTokensByAgent(ctx context.Context, agentID pgtype.UUID) ([]AgentToken, error)
 	ListAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) ([]Workspace, error)
 	ListAgentsByOwner(ctx context.Context, ownerID pgtype.UUID) ([]Agent, error)
@@ -495,6 +506,10 @@ type Querier interface {
 	// Distinct tags of docs on catalogs the workspace may use (#116). Prefix
 	// matches rank first.
 	ListSemanticTags(ctx context.Context, arg ListSemanticTagsParams) ([]ListSemanticTagsRow, error)
+	// Every service account, for a global admin.
+	ListServiceAccounts(ctx context.Context) ([]User, error)
+	// The service accounts created in, or members of, the given workspaces.
+	ListServiceAccountsOfWorkspaces(ctx context.Context, workspaceIds []pgtype.UUID) ([]User, error)
 	// Bundles (#34): deterministic, portable content-as-code. Items are matched by
 	// (kind, slug), never by id; omitted items are never deleted.
 	ListSpaceFolders(ctx context.Context, spaceID pgtype.UUID) ([]QueryFolder, error)
@@ -731,6 +746,7 @@ type Querier interface {
 	UpdateSavedQuery(ctx context.Context, arg UpdateSavedQueryParams) (SavedQuery, error)
 	UpdateSemanticMetric(ctx context.Context, arg UpdateSemanticMetricParams) (SemanticMetric, error)
 	UpdateSemanticModel(ctx context.Context, arg UpdateSemanticModelParams) (SemanticModel, error)
+	UpdateServiceAccount(ctx context.Context, arg UpdateServiceAccountParams) (User, error)
 	UpdateSpace(ctx context.Context, arg UpdateSpaceParams) (Space, error)
 	// No row comes back when the revision moved on (optimistic concurrency).
 	UpdateTableMaintenancePolicy(ctx context.Context, arg UpdateTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
@@ -777,7 +793,7 @@ type Querier interface {
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error)
 	UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWorkspaceCatalogGrantParams) (WorkspaceCatalogGrant, error)
 	// Writes nothing (0 rows) when the user cannot be a member: on a shared
-	// workspace they must be in its team. The share lock on their team row makes
+	// workspace a person must be in its team (a service account need not). The share lock on their team row makes
 	// a concurrent removal from the team either wait for this write or win.
 	UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) (int64, error)
 	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)

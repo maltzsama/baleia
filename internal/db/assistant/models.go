@@ -807,6 +807,9 @@ type User struct {
 	SuspendedReason     *string            `json:"suspended_reason"`
 	DirectorySyncedAt   pgtype.Timestamptz `json:"directory_synced_at"`
 	Locale              *string            `json:"locale"`
+	Kind                string             `json:"kind"`
+	HomeWorkspaceID     pgtype.UUID        `json:"home_workspace_id"`
+	Description         *string            `json:"description"`
 }
 
 type UserIdpToken struct {

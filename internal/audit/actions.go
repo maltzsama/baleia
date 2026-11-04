@@ -33,6 +33,12 @@ const (
 	SemanticDocCertify    Action = "semantic_doc.certify"
 	SemanticDocUncertify  Action = "semantic_doc.uncertify"
 
+	ServiceAccountCreate      Action = "service_account.create"
+	ServiceAccountUpdate      Action = "service_account.update"
+	ServiceAccountDelete      Action = "service_account.delete"
+	ServiceAccountTokenCreate Action = "service_account.token_create"
+	ServiceAccountTokenRevoke Action = "service_account.token_revoke"
+
 	TeamMemberAdd    Action = "team.member_add"
 	TeamMemberRemove Action = "team.member_remove"
 	TeamRoleChange   Action = "team.role_change"
@@ -115,6 +121,7 @@ var allActions = []Action{
 	GrantCreate, GrantRevoke,
 	WorkspaceUpdate, WorkspaceMemberSet, WorkspaceMemberRemove,
 	TeamMemberAdd, TeamMemberRemove, TeamRoleChange,
+	ServiceAccountCreate, ServiceAccountUpdate, ServiceAccountDelete, ServiceAccountTokenCreate, ServiceAccountTokenRevoke,
 	UserInvite, UserRoleChange, UserDisable, UserSuspend, UserReinstate,
 	IdentityProviderCreate, IdentityProviderUpdate, IdentityProviderDelete,
 	AuthLogin, AuthLogout, AuthRefresh, AuthPasswordResetRequest, AuthPasswordResetConfirm,

@@ -94,6 +94,10 @@ func (h *AuthHandlers) UpdateUserRole(ctx context.Context, request UpdateUserRol
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return UpdateUserRole404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "user not found"}}, nil
 	}
+	if errors.Is(err, users.ErrServiceAccountRole) {
+		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
+		return UpdateUserRole403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: err.Error()}}, nil
+	}
 	if err != nil {
 		return nil, err
 	}

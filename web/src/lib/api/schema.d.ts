@@ -275,6 +275,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/service-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Service accounts the caller manages: every one for a global admin, those of the workspaces they administer otherwise (#653) */
+        get: operations["listServiceAccounts"];
+        put?: never;
+        /** Create a service account — global admin, or workspace admin in their workspace (#653) */
+        post: operations["createServiceAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service-accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Get a service account — its managers */
+        get: operations["getServiceAccount"];
+        put?: never;
+        post?: never;
+        /** Delete a service account with its tokens, agents and memberships — its managers */
+        delete: operations["deleteServiceAccount"];
+        options?: never;
+        head?: never;
+        /** Rename, describe or link a service account to an identity provider client — its managers */
+        patch: operations["updateServiceAccount"];
+        trace?: never;
+    };
+    "/service-accounts/{id}/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** The service account's Baleia tokens (never their secrets) — its managers */
+        get: operations["listServiceAccountTokens"];
+        put?: never;
+        /** Issue a Baleia token for the service account, shown once — its managers */
+        post: operations["createServiceAccountToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service-accounts/{id}/tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a Baleia token of the service account — its managers */
+        delete: operations["revokeServiceAccountToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api-keys": {
         parameters: {
             query?: never;
@@ -4086,6 +4165,49 @@ export interface components {
             /** Format: date-time */
             expires_at?: string | null;
         };
+        /** @description A non-human principal agents and other clients sign in as. It has workspace roles like a person and never the global admin role. It signs in with a Baleia token (an API key, header X-Api-Key) or, when linked to an identity provider, with that provider's client-credentials access token, which is then also its identity towards per-user catalogs (ADR 0015). */
+        ServiceAccount: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description Synthetic, never mailed; the address to share a workspace with it */
+            email: string;
+            description?: string | null;
+            /** @enum {string} */
+            status: "active" | "suspended";
+            /** Format: uuid */
+            identity_provider_id?: string | null;
+            /** @description The identity provider's client it signs in as */
+            client_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Created in this workspace; its admins manage it
+             */
+            home_workspace_id?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            readonly allowed_actions: ("view" | "update" | "delete" | "manage_tokens")[];
+        };
+        CreateServiceAccountRequest: {
+            name: string;
+            description?: string;
+            /**
+             * Format: uuid
+             * @description Create it in this workspace with role (default viewer); needed unless the caller is a global admin
+             */
+            workspace_id?: string;
+            role?: components["schemas"]["WorkspaceRole"];
+            /** Format: uuid */
+            identity_provider_id?: string;
+            client_id?: string;
+        };
+        UpdateServiceAccountRequest: {
+            name: string;
+            description?: string | null;
+            /** Format: uuid */
+            identity_provider_id?: string | null;
+            client_id?: string | null;
+        };
         /** @enum {string} */
         AgentAllowedAction: "view" | "update" | "disable" | "delete" | "manage_tokens" | "manage_policy";
         AgentWorkspace: {
@@ -4137,6 +4259,11 @@ export interface components {
             name: string;
             description?: string;
             workspace_ids?: string[];
+            /**
+             * Format: uuid
+             * @description Link the agent to this service account instead of the caller (#653): the agent then acts with the service account's workspace roles, and whoever manages the service account manages the agent. Its workspaces must be ones the service account belongs to.
+             */
+            service_account_id?: string;
         };
         UpdateAgentRequest: {
             name?: string;
@@ -4287,7 +4414,12 @@ export interface components {
             /** @enum {string} */
             role: "admin" | "member";
             /** @enum {string} */
-            auth_provider: "local" | "oidc" | "ldap";
+            auth_provider: "local" | "oidc" | "ldap" | "service";
+            /**
+             * @description A person, or a Baleia service account (#653)
+             * @enum {string}
+             */
+            kind?: "human" | "service_account";
             /** @enum {string} */
             status: "active" | "suspended";
             /** Format: date-time */
@@ -7204,6 +7336,196 @@ export interface operations {
             204: components["responses"]["NoContent"];
             401: components["responses"]["Unauthorized"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listServiceAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Service accounts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAccount"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createServiceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateServiceAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAccount"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getServiceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The service account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAccount"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteServiceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateServiceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateServiceAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAccount"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listServiceAccountTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tokens */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKey"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createServiceAccountToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateApiKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description The token with its secret, shown once */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyCreated"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    revokeServiceAccountToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     listApiKeys: {

@@ -402,6 +402,30 @@ type ServerInterface interface {
 	// Engines with runtime monitoring the caller can view
 	// (GET /monitoring/engines)
 	ListMonitoringEngines(w http.ResponseWriter, r *http.Request)
+	// Service accounts the caller manages: every one for a global admin, those of the workspaces they administer otherwise (#653)
+	// (GET /service-accounts)
+	ListServiceAccounts(w http.ResponseWriter, r *http.Request)
+	// Create a service account — global admin, or workspace admin in their workspace (#653)
+	// (POST /service-accounts)
+	CreateServiceAccount(w http.ResponseWriter, r *http.Request)
+	// Delete a service account with its tokens, agents and memberships — its managers
+	// (DELETE /service-accounts/{id})
+	DeleteServiceAccount(w http.ResponseWriter, r *http.Request, id PathId)
+	// Get a service account — its managers
+	// (GET /service-accounts/{id})
+	GetServiceAccount(w http.ResponseWriter, r *http.Request, id PathId)
+	// Rename, describe or link a service account to an identity provider client — its managers
+	// (PATCH /service-accounts/{id})
+	UpdateServiceAccount(w http.ResponseWriter, r *http.Request, id PathId)
+	// The service account's Baleia tokens (never their secrets) — its managers
+	// (GET /service-accounts/{id}/tokens)
+	ListServiceAccountTokens(w http.ResponseWriter, r *http.Request, id PathId)
+	// Issue a Baleia token for the service account, shown once — its managers
+	// (POST /service-accounts/{id}/tokens)
+	CreateServiceAccountToken(w http.ResponseWriter, r *http.Request, id PathId)
+	// Revoke a Baleia token of the service account — its managers
+	// (DELETE /service-accounts/{id}/tokens/{token_id})
+	RevokeServiceAccountToken(w http.ResponseWriter, r *http.Request, id PathId, tokenId openapi_types.UUID)
 	// Create first admin user
 	// (POST /setup/admin)
 	CreateFirstAdmin(w http.ResponseWriter, r *http.Request)
@@ -1518,6 +1542,54 @@ func (_ Unimplemented) StartMigration(w http.ResponseWriter, r *http.Request, id
 // Engines with runtime monitoring the caller can view
 // (GET /monitoring/engines)
 func (_ Unimplemented) ListMonitoringEngines(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Service accounts the caller manages: every one for a global admin, those of the workspaces they administer otherwise (#653)
+// (GET /service-accounts)
+func (_ Unimplemented) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a service account — global admin, or workspace admin in their workspace (#653)
+// (POST /service-accounts)
+func (_ Unimplemented) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a service account with its tokens, agents and memberships — its managers
+// (DELETE /service-accounts/{id})
+func (_ Unimplemented) DeleteServiceAccount(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get a service account — its managers
+// (GET /service-accounts/{id})
+func (_ Unimplemented) GetServiceAccount(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename, describe or link a service account to an identity provider client — its managers
+// (PATCH /service-accounts/{id})
+func (_ Unimplemented) UpdateServiceAccount(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The service account's Baleia tokens (never their secrets) — its managers
+// (GET /service-accounts/{id}/tokens)
+func (_ Unimplemented) ListServiceAccountTokens(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Issue a Baleia token for the service account, shown once — its managers
+// (POST /service-accounts/{id}/tokens)
+func (_ Unimplemented) CreateServiceAccountToken(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Revoke a Baleia token of the service account — its managers
+// (DELETE /service-accounts/{id}/tokens/{token_id})
+func (_ Unimplemented) RevokeServiceAccountToken(w http.ResponseWriter, r *http.Request, id PathId, tokenId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6787,6 +6859,257 @@ func (siw *ServerInterfaceWrapper) ListMonitoringEngines(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListMonitoringEngines(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListServiceAccounts operation middleware
+func (siw *ServerInterfaceWrapper) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListServiceAccounts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateServiceAccount operation middleware
+func (siw *ServerInterfaceWrapper) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateServiceAccount(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteServiceAccount operation middleware
+func (siw *ServerInterfaceWrapper) DeleteServiceAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteServiceAccount(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetServiceAccount operation middleware
+func (siw *ServerInterfaceWrapper) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServiceAccount(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateServiceAccount operation middleware
+func (siw *ServerInterfaceWrapper) UpdateServiceAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateServiceAccount(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListServiceAccountTokens operation middleware
+func (siw *ServerInterfaceWrapper) ListServiceAccountTokens(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListServiceAccountTokens(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateServiceAccountToken operation middleware
+func (siw *ServerInterfaceWrapper) CreateServiceAccountToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateServiceAccountToken(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeServiceAccountToken operation middleware
+func (siw *ServerInterfaceWrapper) RevokeServiceAccountToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "token_id" -------------
+	var tokenId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "token_id", chi.URLParam(r, "token_id"), &tokenId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeServiceAccountToken(w, r, id, tokenId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12422,6 +12745,30 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/monitoring/engines", wrapper.ListMonitoringEngines)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/service-accounts", wrapper.ListServiceAccounts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/service-accounts", wrapper.CreateServiceAccount)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/service-accounts/{id}", wrapper.DeleteServiceAccount)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/service-accounts/{id}", wrapper.GetServiceAccount)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/service-accounts/{id}", wrapper.UpdateServiceAccount)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/service-accounts/{id}/tokens", wrapper.ListServiceAccountTokens)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/service-accounts/{id}/tokens", wrapper.CreateServiceAccountToken)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/service-accounts/{id}/tokens/{token_id}", wrapper.RevokeServiceAccountToken)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/setup/admin", wrapper.CreateFirstAdmin)
@@ -18280,6 +18627,335 @@ func (response ListMonitoringEngines401JSONResponse) VisitListMonitoringEnginesR
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListServiceAccountsRequestObject struct {
+}
+
+type ListServiceAccountsResponseObject interface {
+	VisitListServiceAccountsResponse(w http.ResponseWriter) error
+}
+
+type ListServiceAccounts200JSONResponse []ServiceAccount
+
+func (response ListServiceAccounts200JSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListServiceAccounts401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListServiceAccounts401JSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateServiceAccountRequestObject struct {
+	Body *CreateServiceAccountJSONRequestBody
+}
+
+type CreateServiceAccountResponseObject interface {
+	VisitCreateServiceAccountResponse(w http.ResponseWriter) error
+}
+
+type CreateServiceAccount201JSONResponse ServiceAccount
+
+func (response CreateServiceAccount201JSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateServiceAccount401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateServiceAccount401JSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateServiceAccount403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateServiceAccount403JSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateServiceAccount404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateServiceAccount404JSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateServiceAccount409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateServiceAccount409JSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateServiceAccount422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateServiceAccount422JSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteServiceAccountRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type DeleteServiceAccountResponseObject interface {
+	VisitDeleteServiceAccountResponse(w http.ResponseWriter) error
+}
+
+type DeleteServiceAccount204Response = NoContentResponse
+
+func (response DeleteServiceAccount204Response) VisitDeleteServiceAccountResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteServiceAccount401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteServiceAccount401JSONResponse) VisitDeleteServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteServiceAccount404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteServiceAccount404JSONResponse) VisitDeleteServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetServiceAccountRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetServiceAccountResponseObject interface {
+	VisitGetServiceAccountResponse(w http.ResponseWriter) error
+}
+
+type GetServiceAccount200JSONResponse ServiceAccount
+
+func (response GetServiceAccount200JSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetServiceAccount401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetServiceAccount401JSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetServiceAccount404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetServiceAccount404JSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateServiceAccountRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *UpdateServiceAccountJSONRequestBody
+}
+
+type UpdateServiceAccountResponseObject interface {
+	VisitUpdateServiceAccountResponse(w http.ResponseWriter) error
+}
+
+type UpdateServiceAccount200JSONResponse ServiceAccount
+
+func (response UpdateServiceAccount200JSONResponse) VisitUpdateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateServiceAccount401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateServiceAccount401JSONResponse) VisitUpdateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateServiceAccount404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateServiceAccount404JSONResponse) VisitUpdateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateServiceAccount409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateServiceAccount409JSONResponse) VisitUpdateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateServiceAccount422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateServiceAccount422JSONResponse) VisitUpdateServiceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListServiceAccountTokensRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListServiceAccountTokensResponseObject interface {
+	VisitListServiceAccountTokensResponse(w http.ResponseWriter) error
+}
+
+type ListServiceAccountTokens200JSONResponse []ApiKey
+
+func (response ListServiceAccountTokens200JSONResponse) VisitListServiceAccountTokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListServiceAccountTokens401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListServiceAccountTokens401JSONResponse) VisitListServiceAccountTokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListServiceAccountTokens404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListServiceAccountTokens404JSONResponse) VisitListServiceAccountTokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateServiceAccountTokenRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *CreateServiceAccountTokenJSONRequestBody
+}
+
+type CreateServiceAccountTokenResponseObject interface {
+	VisitCreateServiceAccountTokenResponse(w http.ResponseWriter) error
+}
+
+type CreateServiceAccountToken201JSONResponse ApiKeyCreated
+
+func (response CreateServiceAccountToken201JSONResponse) VisitCreateServiceAccountTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateServiceAccountToken401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateServiceAccountToken401JSONResponse) VisitCreateServiceAccountTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateServiceAccountToken404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateServiceAccountToken404JSONResponse) VisitCreateServiceAccountTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateServiceAccountToken422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateServiceAccountToken422JSONResponse) VisitCreateServiceAccountTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RevokeServiceAccountTokenRequestObject struct {
+	Id      PathId             `json:"id"`
+	TokenId openapi_types.UUID `json:"token_id"`
+}
+
+type RevokeServiceAccountTokenResponseObject interface {
+	VisitRevokeServiceAccountTokenResponse(w http.ResponseWriter) error
+}
+
+type RevokeServiceAccountToken204Response = NoContentResponse
+
+func (response RevokeServiceAccountToken204Response) VisitRevokeServiceAccountTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeServiceAccountToken401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RevokeServiceAccountToken401JSONResponse) VisitRevokeServiceAccountTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RevokeServiceAccountToken404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RevokeServiceAccountToken404JSONResponse) VisitRevokeServiceAccountTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateFirstAdminRequestObject struct {
 	Body *CreateFirstAdminJSONRequestBody
 }
@@ -23950,6 +24626,30 @@ type StrictServerInterface interface {
 	// Engines with runtime monitoring the caller can view
 	// (GET /monitoring/engines)
 	ListMonitoringEngines(ctx context.Context, request ListMonitoringEnginesRequestObject) (ListMonitoringEnginesResponseObject, error)
+	// Service accounts the caller manages: every one for a global admin, those of the workspaces they administer otherwise (#653)
+	// (GET /service-accounts)
+	ListServiceAccounts(ctx context.Context, request ListServiceAccountsRequestObject) (ListServiceAccountsResponseObject, error)
+	// Create a service account — global admin, or workspace admin in their workspace (#653)
+	// (POST /service-accounts)
+	CreateServiceAccount(ctx context.Context, request CreateServiceAccountRequestObject) (CreateServiceAccountResponseObject, error)
+	// Delete a service account with its tokens, agents and memberships — its managers
+	// (DELETE /service-accounts/{id})
+	DeleteServiceAccount(ctx context.Context, request DeleteServiceAccountRequestObject) (DeleteServiceAccountResponseObject, error)
+	// Get a service account — its managers
+	// (GET /service-accounts/{id})
+	GetServiceAccount(ctx context.Context, request GetServiceAccountRequestObject) (GetServiceAccountResponseObject, error)
+	// Rename, describe or link a service account to an identity provider client — its managers
+	// (PATCH /service-accounts/{id})
+	UpdateServiceAccount(ctx context.Context, request UpdateServiceAccountRequestObject) (UpdateServiceAccountResponseObject, error)
+	// The service account's Baleia tokens (never their secrets) — its managers
+	// (GET /service-accounts/{id}/tokens)
+	ListServiceAccountTokens(ctx context.Context, request ListServiceAccountTokensRequestObject) (ListServiceAccountTokensResponseObject, error)
+	// Issue a Baleia token for the service account, shown once — its managers
+	// (POST /service-accounts/{id}/tokens)
+	CreateServiceAccountToken(ctx context.Context, request CreateServiceAccountTokenRequestObject) (CreateServiceAccountTokenResponseObject, error)
+	// Revoke a Baleia token of the service account — its managers
+	// (DELETE /service-accounts/{id}/tokens/{token_id})
+	RevokeServiceAccountToken(ctx context.Context, request RevokeServiceAccountTokenRequestObject) (RevokeServiceAccountTokenResponseObject, error)
 	// Create first admin user
 	// (POST /setup/admin)
 	CreateFirstAdmin(ctx context.Context, request CreateFirstAdminRequestObject) (CreateFirstAdminResponseObject, error)
@@ -27876,6 +28576,232 @@ func (sh *strictHandler) ListMonitoringEngines(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMonitoringEnginesResponseObject); ok {
 		if err := validResponse.VisitListMonitoringEnginesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListServiceAccounts operation middleware
+func (sh *strictHandler) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
+	var request ListServiceAccountsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListServiceAccounts(ctx, request.(ListServiceAccountsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListServiceAccounts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListServiceAccountsResponseObject); ok {
+		if err := validResponse.VisitListServiceAccountsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateServiceAccount operation middleware
+func (sh *strictHandler) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
+	var request CreateServiceAccountRequestObject
+
+	var body CreateServiceAccountJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateServiceAccount(ctx, request.(CreateServiceAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateServiceAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateServiceAccountResponseObject); ok {
+		if err := validResponse.VisitCreateServiceAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteServiceAccount operation middleware
+func (sh *strictHandler) DeleteServiceAccount(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request DeleteServiceAccountRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteServiceAccount(ctx, request.(DeleteServiceAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteServiceAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteServiceAccountResponseObject); ok {
+		if err := validResponse.VisitDeleteServiceAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetServiceAccount operation middleware
+func (sh *strictHandler) GetServiceAccount(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetServiceAccountRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetServiceAccount(ctx, request.(GetServiceAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetServiceAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetServiceAccountResponseObject); ok {
+		if err := validResponse.VisitGetServiceAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateServiceAccount operation middleware
+func (sh *strictHandler) UpdateServiceAccount(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request UpdateServiceAccountRequestObject
+
+	request.Id = id
+
+	var body UpdateServiceAccountJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateServiceAccount(ctx, request.(UpdateServiceAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateServiceAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateServiceAccountResponseObject); ok {
+		if err := validResponse.VisitUpdateServiceAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListServiceAccountTokens operation middleware
+func (sh *strictHandler) ListServiceAccountTokens(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListServiceAccountTokensRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListServiceAccountTokens(ctx, request.(ListServiceAccountTokensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListServiceAccountTokens")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListServiceAccountTokensResponseObject); ok {
+		if err := validResponse.VisitListServiceAccountTokensResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateServiceAccountToken operation middleware
+func (sh *strictHandler) CreateServiceAccountToken(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request CreateServiceAccountTokenRequestObject
+
+	request.Id = id
+
+	var body CreateServiceAccountTokenJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateServiceAccountToken(ctx, request.(CreateServiceAccountTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateServiceAccountToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateServiceAccountTokenResponseObject); ok {
+		if err := validResponse.VisitCreateServiceAccountTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeServiceAccountToken operation middleware
+func (sh *strictHandler) RevokeServiceAccountToken(w http.ResponseWriter, r *http.Request, id PathId, tokenId openapi_types.UUID) {
+	var request RevokeServiceAccountTokenRequestObject
+
+	request.Id = id
+	request.TokenId = tokenId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeServiceAccountToken(ctx, request.(RevokeServiceAccountTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeServiceAccountToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeServiceAccountTokenResponseObject); ok {
+		if err := validResponse.VisitRevokeServiceAccountTokenResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

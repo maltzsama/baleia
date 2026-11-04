@@ -2,8 +2,11 @@ package oidclogin
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +19,8 @@ import (
 )
 
 type fakeStore struct {
-	providers map[[16]byte]db.AuthProvider
+	providers       map[[16]byte]db.AuthProvider
+	serviceAccounts map[string]db.User // external id -> service account
 	attempts  map[string]db.OidcLoginAttempt
 }
 
@@ -25,6 +29,23 @@ func (f *fakeStore) GetAuthProviderByID(_ context.Context, id pgtype.UUID) (db.A
 		return ap, nil
 	}
 	return db.AuthProvider{}, pgx.ErrNoRows
+}
+
+func (f *fakeStore) ListAuthProviders(context.Context) ([]db.AuthProvider, error) {
+	out := make([]db.AuthProvider, 0, len(f.providers))
+	for _, ap := range f.providers {
+		if ap.Enabled {
+			out = append(out, ap)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) GetServiceAccountByClient(_ context.Context, a db.GetServiceAccountByClientParams) (db.User, error) {
+	if sa, ok := f.serviceAccounts[a.ExternalID]; ok && sa.AuthProviderID == a.AuthProviderID {
+		return sa, nil
+	}
+	return db.User{}, pgx.ErrNoRows
 }
 
 func (f *fakeStore) CreateOIDCLoginAttempt(_ context.Context, arg db.CreateOIDCLoginAttemptParams) error {
@@ -76,6 +97,15 @@ func (p *fakeProvider) Exchange(_ context.Context, code, verifier, nonce string)
 		return nil, errors.New("rejected")
 	}
 	return &auth.OIDCUserInfo{Subject: p.subject, Tokens: auth.IDPTokens{AccessToken: "at-" + p.subject, RefreshToken: "rt"}}, nil
+}
+
+// ClientAccessToken accepts tokens whose signature part is "signed-by-idp".
+func (p *fakeProvider) ClientAccessToken(_ context.Context, raw string) (string, time.Time, error) {
+	parts := strings.Split(raw, ".")
+	if len(parts) != 3 || parts[2] != "signed-by-idp" {
+		return "", time.Time{}, auth.ErrNotClientToken
+	}
+	return "reporting-bot", time.Now().Add(time.Hour), nil
 }
 
 func (p *fakeProvider) Refresh(_ context.Context, refreshToken string) (auth.IDPTokens, error) {
@@ -287,5 +317,45 @@ func TestFinish_KeepsTokens(t *testing.T) {
 	}
 	if _, err := f.s.Refresh(ctx, pgtype.UUID{Bytes: uuid.New(), Valid: true}, "rt"); !errors.Is(err, ErrUnavailable) {
 		t.Errorf("unknown provider = %v", err)
+	}
+}
+
+func jwtFor(iss, sig string) string {
+	payload, _ := json.Marshal(map[string]string{"iss": iss, "azp": "reporting-bot"})
+	return "eyJhbGciOiJSUzI1NiJ9." + base64.RawURLEncoding.EncodeToString(payload) + "." + sig
+}
+
+// TestServiceAccountForToken (#653): a client-credentials token of an enabled
+// provider authenticates the service account linked to that client, and its
+// token is kept for per-user catalogs; anything else is refused.
+func TestServiceAccountForToken(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newFixture(t, "active")
+	sa := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Kind: "service_account", AuthProviderID: f.id}
+	f.store.serviceAccounts = map[string]db.User{"client:reporting-bot": sa}
+	saved := &savedTokens{}
+	f.s.SetTokens(saved)
+
+	tok := jwtFor("https://idp.example/", "signed-by-idp")
+	got, err := f.s.ServiceAccountForToken(ctx, tok)
+	if err != nil || got.ID != sa.ID {
+		t.Fatalf("ServiceAccountForToken = %+v, %v", got, err)
+	}
+	if saved.user != sa.ID || saved.tok.AccessToken != tok {
+		t.Errorf("the token was not kept for per-user catalogs: %v", saved.tok)
+	}
+	for name, raw := range map[string]string{
+		"forged signature": jwtFor("https://idp.example", "forged"),
+		"another issuer":   jwtFor("https://evil.example", "signed-by-idp"),
+		"not a JWT":        "opaque-token",
+	} {
+		if _, err := f.s.ServiceAccountForToken(ctx, raw); !errors.Is(err, ErrNoServiceAccount) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	delete(f.store.serviceAccounts, "client:reporting-bot")
+	if _, err := f.s.ServiceAccountForToken(ctx, tok); !errors.Is(err, ErrNoServiceAccount) {
+		t.Errorf("unlinked client: %v", err)
 	}
 }

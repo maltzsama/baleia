@@ -46,6 +46,23 @@ func (h *AgentHandlers) agentScope(ctx context.Context, p authz.Principal, id pg
 	return h.agents.Visible(ctx, agentmanage.Viewer{UserID: p.UserID, Admin: p.IsAdmin()}, id)
 }
 
+// asAgentOwner is p, or, for an agent linked to a service account p manages,
+// p acting as that service account (#653): the account cannot sign in to the
+// web app, so its managers manage its agents.
+func (h *AgentHandlers) asAgentOwner(ctx context.Context, p authz.Principal, id pgtype.UUID) authz.Principal {
+	a, err := h.queries.GetAgentByID(ctx, id)
+	if err != nil || a.OwnerID == p.UserID {
+		return p
+	}
+	sa, err := h.queries.GetServiceAccount(ctx, a.OwnerID)
+	if err != nil || !h.managesServiceAccount(ctx, p, sa) {
+		return p
+	}
+	q := p
+	q.UserID = sa.ID
+	return q
+}
+
 // agentOwned loads an external agent only when the caller owns it.
 func (h *AgentHandlers) agentOwned(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
 	return h.agents.Owned(ctx, agentmanage.Viewer{UserID: p.UserID, Admin: p.IsAdmin()}, id)
@@ -197,9 +214,22 @@ func (h *AgentHandlers) CreateAgent(ctx context.Context, request CreateAgentRequ
 		description = *request.Body.Description
 	}
 
+	// An agent linked to a service account acts as that account (#653).
+	owner := p.UserID
+	if sid := request.Body.ServiceAccountId; sid != nil {
+		_, sa, ok, err := h.managedServiceAccount(ctx, *sid)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return CreateAgent404JSONResponse{NotFoundJSONResponse: serviceAccountNotFound()}, nil
+		}
+		owner = sa.ID
+	}
+
 	var workspaceIDs []pgtype.UUID
 	if request.Body.WorkspaceIds != nil {
-		workspaceIDs, err = h.validateAgentWorkspaces(ctx, p.UserID, *request.Body.WorkspaceIds)
+		workspaceIDs, err = h.validateAgentWorkspaces(ctx, owner, *request.Body.WorkspaceIds)
 		if err != nil {
 			if errors.Is(err, agentmanage.ErrWorkspaceNotVisible) {
 				return CreateAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
@@ -210,9 +240,12 @@ func (h *AgentHandlers) CreateAgent(ctx context.Context, request CreateAgentRequ
 
 	// The agent and its workspace set are one write: a partial set would
 	// silently widen or narrow the agent's reach.
-	agent, err := h.agents.Create(ctx, p.UserID, name, description, workspaceIDs)
+	agent, err := h.agents.Create(ctx, owner, name, description, workspaceIDs)
 	if err != nil {
 		return nil, err
+	}
+	if owner != p.UserID {
+		p.UserID = owner // the caller manages the agent as its service account
 	}
 
 	h.audited(ctx, audit.Event{Action: audit.AgentCreate, ResourceType: "agent", ResourceID: idString(agent.ID), Outcome: audit.Allowed,
@@ -236,6 +269,7 @@ func (h *AgentHandlers) GetAgent(ctx context.Context, request GetAgentRequestObj
 	if err != nil {
 		return GetAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
+	p = h.asAgentOwner(ctx, p, id)
 	agent, ok, err := h.agentScope(ctx, p, id)
 	if err != nil {
 		return nil, err
@@ -265,6 +299,7 @@ func (h *AgentHandlers) UpdateAgent(ctx context.Context, request UpdateAgentRequ
 	if err != nil {
 		return UpdateAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
+	p = h.asAgentOwner(ctx, p, id)
 	agent, ok, err := h.agentScope(ctx, p, id)
 	if err != nil {
 		return nil, err
@@ -373,6 +408,7 @@ func (h *AgentHandlers) DeleteAgent(ctx context.Context, request DeleteAgentRequ
 	if err != nil {
 		return DeleteAgent404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
+	p = h.asAgentOwner(ctx, p, id)
 	agent, ok, err := h.agentScope(ctx, p, id)
 	if err != nil {
 		return nil, err
@@ -399,6 +435,7 @@ func (h *AgentHandlers) ListAgentTokens(ctx context.Context, request ListAgentTo
 	if err != nil {
 		return ListAgentTokens404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
+	p = h.asAgentOwner(ctx, p, id)
 	agent, ok, err := h.agentScope(ctx, p, id)
 	if err != nil {
 		return nil, err
@@ -436,6 +473,7 @@ func (h *AgentHandlers) CreateAgentToken(ctx context.Context, request CreateAgen
 	if err != nil {
 		return CreateAgentToken404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
+	p = h.asAgentOwner(ctx, p, id)
 	agent, ok, err := h.agentOwned(ctx, p, id)
 	if err != nil {
 		return nil, err
@@ -481,6 +519,7 @@ func (h *AgentHandlers) RevokeAgentToken(ctx context.Context, request RevokeAgen
 	if err != nil {
 		return RevokeAgentToken404JSONResponse{NotFoundJSONResponse: agentNotFound()}, nil
 	}
+	p = h.asAgentOwner(ctx, p, id)
 	agent, ok, err := h.agentOwned(ctx, p, id)
 	if err != nil {
 		return nil, err

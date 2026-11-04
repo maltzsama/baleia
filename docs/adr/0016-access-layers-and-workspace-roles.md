@@ -53,9 +53,20 @@ Three separate layers, each decided in one place:
 
 ## Current compliance
 
-Workspace roles, personal sharing and the space ceiling are in place (#653). Baleia service
-accounts, agents linked to them, MCP following roles and identity-provider groups mapped to
-workspace roles follow under the same issue.
+Workspace roles, personal sharing and the space ceiling are in place (#653), and so are Baleia
+service accounts:
+
+- A service account is a user of kind `service_account`: it has workspace roles like a person
+  (directly, also in a team's workspace), never the global admin role, and no password.
+- It signs in with a Baleia token (an API key) or, linked to an identity provider client, with that
+  provider's client-credentials access token. Such a token is also its identity towards per-user
+  catalogs ([ADR 0015](0015-per-user-catalog-identity.md)); without one it acts as the
+  connection's account, like any user signed in without an identity provider.
+- A global admin manages every service account; a workspace admin those created in their
+  workspace. An agent can be linked to a service account and then acts with its roles.
+
+MCP following roles and identity-provider groups mapped to workspace roles follow under the same
+issue.
 
 ## Alternatives considered
 

@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +26,8 @@ type Store interface {
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error)
 	CreateOIDCLoginAttempt(ctx context.Context, arg db.CreateOIDCLoginAttemptParams) error
 	ConsumeOIDCLoginAttempt(ctx context.Context, state string) (db.OidcLoginAttempt, error)
+	ListAuthProviders(ctx context.Context) ([]db.AuthProvider, error)
+	GetServiceAccountByClient(ctx context.Context, arg db.GetServiceAccountByClientParams) (db.User, error)
 }
 
 // Provider is a discovered identity provider.
@@ -32,6 +35,7 @@ type Provider interface {
 	AuthURL(state, challenge, nonce string) (string, error)
 	Exchange(ctx context.Context, code, verifier, nonce string) (*auth.OIDCUserInfo, error)
 	Refresh(ctx context.Context, refreshToken string) (auth.IDPTokens, error)
+	ClientAccessToken(ctx context.Context, raw string) (clientID string, expiry time.Time, err error)
 }
 
 // TokenSaver keeps the identity-provider tokens of a sign-in (#648).
@@ -242,4 +246,48 @@ func newState() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// ErrNoServiceAccount means a bearer token is not a client-credentials token
+// of an enabled provider for an active service account.
+var ErrNoServiceAccount = errors.New("oidclogin: no service account for this token")
+
+// ServiceAccountForToken authenticates a service account by its identity
+// provider's client-credentials access token (#653): the token must be a JWT
+// signed by an enabled OIDC provider whose issuer it names, for a client a
+// service account is linked to. The token is kept as the service account's
+// identity-provider token for per-user catalogs (ADR 0015).
+func (s *Service) ServiceAccountForToken(ctx context.Context, raw string) (db.User, error) {
+	iss := strings.TrimRight(auth.TokenIssuer(raw), "/")
+	if iss == "" {
+		return db.User{}, ErrNoServiceAccount
+	}
+	aps, err := s.store.ListAuthProviders(ctx)
+	if err != nil {
+		return db.User{}, err
+	}
+	for _, ap := range aps {
+		if ap.Type != "oidc" {
+			continue
+		}
+		provider, cfg, err := s.Provider(ctx, ap.ID)
+		if err != nil || strings.TrimRight(cfg.IssuerURL, "/") != iss {
+			continue
+		}
+		clientID, expiry, err := provider.ClientAccessToken(ctx, raw)
+		if err != nil {
+			return db.User{}, ErrNoServiceAccount
+		}
+		sa, err := s.store.GetServiceAccountByClient(ctx, db.GetServiceAccountByClientParams{AuthProviderID: ap.ID, ExternalID: "client:" + clientID})
+		if err != nil {
+			return db.User{}, ErrNoServiceAccount
+		}
+		if s.tokens != nil {
+			if err := s.tokens.Save(ctx, sa.ID, ap.ID, auth.IDPTokens{AccessToken: raw, Expiry: expiry}); err != nil {
+				s.cfg.Logger.WarnContext(ctx, "keep a service account's identity-provider token", "user_id", sa.ID.String(), "err", err)
+			}
+		}
+		return sa, nil
+	}
+	return db.User{}, ErrNoServiceAccount
 }

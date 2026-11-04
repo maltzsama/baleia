@@ -737,7 +737,7 @@ func (q *Queries) ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pg
 }
 
 const listWorkspaceMembers = `-- name: ListWorkspaceMembers :many
-SELECT u.id, u.name, u.email, u.password_hash, u.role, u.auth_provider, u.auth_provider_id, u.external_id, u.personal_workspace_id, u.created_at, u.updated_at, u.status, u.suspended_at, u.suspended_reason, u.directory_synced_at, u.locale,
+SELECT u.id, u.name, u.email, u.password_hash, u.role, u.auth_provider, u.auth_provider_id, u.external_id, u.personal_workspace_id, u.created_at, u.updated_at, u.status, u.suspended_at, u.suspended_reason, u.directory_synced_at, u.locale, u.kind, u.home_workspace_id, u.description,
        baleia_workspace_member_role(w.id, u.id)::text AS role,
        (CASE WHEN w.owner_user_id = u.id THEN 'owner'
              WHEN w.type = 'shared' THEN 'team'
@@ -786,6 +786,9 @@ func (q *Queries) ListWorkspaceMembers(ctx context.Context, workspaceID pgtype.U
 			&i.User.SuspendedReason,
 			&i.User.DirectorySyncedAt,
 			&i.User.Locale,
+			&i.User.Kind,
+			&i.User.HomeWorkspaceID,
+			&i.User.Description,
 			&i.Role,
 			&i.Source,
 			&i.RoleSet,
@@ -1071,6 +1074,11 @@ allowed AS (
     SELECT w.id FROM workspaces w WHERE w.id = $1::uuid AND w.type = 'personal'
     UNION ALL
     SELECT id FROM in_team
+    UNION ALL
+    -- A service account joins a shared workspace directly (#653).
+    SELECT w.id FROM workspaces w
+    JOIN users u ON u.id = $2::uuid AND u.kind = 'service_account'
+    WHERE w.id = $1::uuid AND w.type = 'shared'
 )
 INSERT INTO workspace_members (workspace_id, user_id, role, granted_by)
 SELECT $1::uuid, $2::uuid, $3::text, $4::uuid
@@ -1087,7 +1095,7 @@ type UpsertWorkspaceMemberParams struct {
 }
 
 // Writes nothing (0 rows) when the user cannot be a member: on a shared
-// workspace they must be in its team. The share lock on their team row makes
+// workspace a person must be in its team (a service account need not). The share lock on their team row makes
 // a concurrent removal from the team either wait for this write or win.
 func (q *Queries) UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) (int64, error) {
 	result, err := q.db.Exec(ctx, upsertWorkspaceMember,
