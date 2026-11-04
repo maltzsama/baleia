@@ -852,3 +852,11 @@ type WorkspaceCatalogGrant struct {
 	GrantedBy   pgtype.UUID        `json:"granted_by"`
 	GrantedAt   pgtype.Timestamptz `json:"granted_at"`
 }
+
+type WorkspaceMember struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	Role        string             `json:"role"`
+	GrantedBy   pgtype.UUID        `json:"granted_by"`
+	GrantedAt   pgtype.Timestamptz `json:"granted_at"`
+}

@@ -10,6 +10,7 @@ type SpaceMember = components['schemas']['SpaceMember'];
 type QueryFolder = components['schemas']['QueryFolder'];
 type Engine = components['schemas']['Engine'];
 type Me = components['schemas']['Me'];
+type WorkspaceMember = components['schemas']['WorkspaceMember'];
 type MetadataCatalog = components['schemas']['MetadataCatalog'];
 type MetadataCatalogBinding = components['schemas']['MetadataCatalogBinding'];
 type MetadataTableDetail = components['schemas']['MetadataTableDetail'];
@@ -493,4 +494,23 @@ export function makeLineageNode(overrides: Partial<LineageNode> = {}): LineageNo
 		href: '/models/00000000-0000-0000-0000-0000000000d1',
 		...overrides
 	};
+}
+
+export function makeWorkspaceMember(overrides: Partial<WorkspaceMember> = {}): WorkspaceMember {
+	return {
+		user: {
+			id: '00000000-0000-0000-0000-0000000000a1',
+			name: 'Grace Hopper',
+			email: 'grace@example.com',
+			role: 'member',
+			auth_provider: 'local',
+			status: 'active',
+			locale: null,
+			created_at: '2026-01-01T00:00:00Z'
+		},
+		role: 'editor',
+		source: 'team',
+		role_set: false,
+		...overrides
+	} as WorkspaceMember;
 }

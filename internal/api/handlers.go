@@ -326,16 +326,15 @@ func requireWorkspaceAccess(ctx context.Context, svc *wsaccess.Service, workspac
 	return err
 }
 
-// requireWorkspaceOwner checks the caller may change workspace-level content
-// such as retrievers: a workspace owner or a global admin (#613). A non-owner
-// member is ErrForbidden; membership and authentication are already enforced
-// by requireWorkspaceAccess.
-func (h *core) requireWorkspaceOwner(ctx context.Context, workspaceID openapi_types.UUID) error {
+// requireWorkspaceRole requires at least minRole in the workspace (#653). A
+// non-member is ErrForbidden here too: membership and authentication are
+// already enforced by requireWorkspaceAccess.
+func (h *core) requireWorkspaceRole(ctx context.Context, workspaceID openapi_types.UUID, minRole authz.WorkspaceRole) error {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return authz.ErrForbidden
 	}
-	_, err = h.authz().Workspace(ctx, p, workspaceIDFromRequest(workspaceID), authz.ActWrite)
+	_, err = h.authz().RequireWorkspaceRole(ctx, p, workspaceIDFromRequest(workspaceID), minRole)
 	if errors.Is(err, authz.ErrNotFound) {
 		return authz.ErrForbidden
 	}

@@ -70,10 +70,8 @@ SELECT
 SELECT EXISTS (
     SELECT 1 FROM catalog_bindings b
     JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-    JOIN workspaces w ON w.id = g.workspace_id
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = sqlc.arg('user_id')
     WHERE b.engine_id = sqlc.arg('engine_id')
-      AND (w.owner_user_id = sqlc.arg('user_id') OR tm.user_id = sqlc.arg('user_id'))
+      AND baleia_workspace_member_role(g.workspace_id, sqlc.arg('user_id')::uuid) IS NOT NULL
 ) AS granted;
 
 -- name: EngineHostsCatalogGrantedToAgent :one
@@ -82,11 +80,9 @@ SELECT EXISTS (
 SELECT EXISTS (
     SELECT 1 FROM catalog_bindings b
     JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-    JOIN workspaces w ON w.id = g.workspace_id
     JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = sqlc.arg('agent_id')
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = sqlc.arg('owner_id')
     WHERE b.engine_id = sqlc.arg('engine_id')
-      AND (w.owner_user_id = sqlc.arg('owner_id') OR tm.user_id = sqlc.arg('owner_id'))
+      AND baleia_workspace_member_role(g.workspace_id, sqlc.arg('owner_id')::uuid) IS NOT NULL
 ) AS granted;
 
 -- name: ListEnginesVisibleToUser :many
@@ -98,10 +94,8 @@ WHERE c.created_by = sqlc.arg('user_id')
    OR EXISTS (
         SELECT 1 FROM catalog_bindings b
         JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-        JOIN workspaces w ON w.id = g.workspace_id
-        LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = sqlc.arg('user_id')
         WHERE b.engine_id = e.id
-          AND (w.owner_user_id = sqlc.arg('user_id') OR tm.user_id = sqlc.arg('user_id')))
+          AND baleia_workspace_member_role(g.workspace_id, sqlc.arg('user_id')::uuid) IS NOT NULL)
 ORDER BY e.name;
 
 -- name: ListEngineObservations :many

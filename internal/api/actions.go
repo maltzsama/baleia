@@ -91,20 +91,25 @@ func (h *core) engineActions(ctx context.Context, id pgtype.UUID) []EngineAllowe
 	return acts
 }
 
-func (h *core) workspaceActions(ctx context.Context, id pgtype.UUID) []WorkspaceAllowedAction {
+func (h *core) workspaceActions(ctx context.Context, id pgtype.UUID) ([]WorkspaceAllowedAction, authz.WorkspaceRole) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
-		return nil
+		return nil, authz.WorkspaceNone
 	}
-	if _, err := h.authz().Workspace(ctx, p, id, authz.ActRead); err != nil {
-		return nil
+	role, err := h.authz().WorkspaceRole(ctx, p, id)
+	if err != nil || role == authz.WorkspaceNone {
+		return nil, authz.WorkspaceNone
 	}
 	acts := []WorkspaceAllowedAction{WorkspaceAllowedActionView, WorkspaceAllowedActionRun}
-	if _, err := h.authz().Workspace(ctx, p, id, authz.ActWrite); err == nil {
-		acts = append(acts, WorkspaceAllowedActionUpdate, WorkspaceAllowedActionDelete,
-			WorkspaceAllowedActionManageGrants, WorkspaceAllowedActionSetDefaults, WorkspaceAllowedActionCreateSpace)
+	if role >= authz.WorkspaceEditor {
+		acts = append(acts, WorkspaceAllowedActionEditContent)
 	}
-	return acts
+	if role >= authz.WorkspaceAdmin {
+		acts = append(acts, WorkspaceAllowedActionUpdate, WorkspaceAllowedActionDelete,
+			WorkspaceAllowedActionManageGrants, WorkspaceAllowedActionSetDefaults, WorkspaceAllowedActionCreateSpace,
+			WorkspaceAllowedActionManageMembers)
+	}
+	return acts, role
 }
 
 func (h *core) withConnectionActions(ctx context.Context, c db.CatalogConnection) CatalogConnection {
@@ -117,8 +122,10 @@ func (h *core) withConnectionActions(ctx context.Context, c db.CatalogConnection
 
 func (h *core) withWorkspaceActions(ctx context.Context, w db.Workspace) Workspace {
 	out := dbWorkspaceToPublic(w)
-	if acts := h.workspaceActions(ctx, w.ID); acts != nil {
+	if acts, role := h.workspaceActions(ctx, w.ID); acts != nil {
 		out.AllowedActions = &acts
+		r := WorkspaceRole(role.String())
+		out.Role = &r
 	}
 	return out
 }

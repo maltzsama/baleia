@@ -98,6 +98,16 @@ func (q *authzFake) IsWorkspaceOwner(_ context.Context, a db.IsWorkspaceOwnerPar
 	return w.OwnerTeamID.Valid && q.g.roles[[2][16]byte{w.OwnerTeamID.Bytes, a.UserID.Bytes}] == "owner", nil
 }
 
+func (q *authzFake) GetWorkspaceMemberRole(ctx context.Context, a db.GetWorkspaceMemberRoleParams) (string, error) {
+	if owner, _ := q.IsWorkspaceOwner(ctx, db.IsWorkspaceOwnerParams(a)); owner {
+		return "admin", nil
+	}
+	if member, _ := q.CheckWorkspaceAccess(ctx, db.CheckWorkspaceAccessParams(a)); member {
+		return "editor", nil
+	}
+	return "", nil
+}
+
 func (q *authzFake) GetTeamByID(_ context.Context, id pgtype.UUID) (db.Team, error) {
 	if t, ok := q.g.teams[id.Bytes]; ok {
 		return t, nil

@@ -104,6 +104,12 @@ func (h *SemanticHandlers) UpsertSemanticDoc(ctx context.Context, request Upsert
 	if nf {
 		return UpsertSemanticDoc404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
 	}
+	if err := h.requireWorkspaceRole(ctx, request.Id, authz.WorkspaceEditor); err != nil {
+		if errors.Is(err, authz.ErrForbidden) {
+			return UpsertSemanticDoc403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "documenting needs the editor role"}}, nil
+		}
+		return nil, err
+	}
 	if request.Body == nil {
 		return nil, errors.New("semantic doc: missing body")
 	}
@@ -165,7 +171,12 @@ func (h *core) canCertifyDocs(ctx context.Context, ws pgtype.UUID) bool {
 }
 
 func (h *core) docActions(ctx context.Context, ws pgtype.UUID) []string {
-	acts := []string{"view", "update"}
+	acts := []string{"view"}
+	if p, err := authz.PrincipalFromContext(ctx); err == nil {
+		if role, err := h.authz().WorkspaceRole(ctx, p, ws); err == nil && role >= authz.WorkspaceEditor {
+			acts = append(acts, "update")
+		}
+	}
 	if h.canCertifyDocs(ctx, ws) {
 		acts = append(acts, "certify")
 	}
@@ -187,6 +198,12 @@ func (h *SemanticHandlers) DeleteSemanticDoc(ctx context.Context, request Delete
 	}
 	if nf {
 		return DeleteSemanticDoc404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
+	}
+	if err := h.requireWorkspaceRole(ctx, request.Id, authz.WorkspaceEditor); err != nil {
+		if errors.Is(err, authz.ErrForbidden) {
+			return DeleteSemanticDoc403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "documenting needs the editor role"}}, nil
+		}
+		return nil, err
 	}
 
 	err = h.docs.Delete(ctx, docKey(ws, request.Params.CatalogId, request.Params.Ns, request.Params.Table, request.Params.Column))

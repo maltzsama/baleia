@@ -484,7 +484,9 @@ const (
 	ErrorCodeUserOwnsWorkspace         ErrorCode = "user_owns_workspace"
 	ErrorCodeValidationError           ErrorCode = "validation_error"
 	ErrorCodeVersionConflict           ErrorCode = "version_conflict"
+	ErrorCodeWorkspaceMemberNotInTeam  ErrorCode = "workspace_member_not_in_team"
 	ErrorCodeWorkspaceNotFound         ErrorCode = "workspace_not_found"
+	ErrorCodeWorkspaceOwnerRoleFixed   ErrorCode = "workspace_owner_role_fixed"
 	ErrorCodeWorkspacePersonal         ErrorCode = "workspace_personal"
 )
 
@@ -1081,8 +1083,8 @@ const (
 
 // Defines values for UserPublicRole.
 const (
-	Admin  UserPublicRole = "admin"
-	Member UserPublicRole = "member"
+	UserPublicRoleAdmin  UserPublicRole = "admin"
+	UserPublicRoleMember UserPublicRole = "member"
 )
 
 // Defines values for UserPublicStatus.
@@ -1140,13 +1142,29 @@ const (
 
 // Defines values for WorkspaceAllowedAction.
 const (
-	WorkspaceAllowedActionCreateSpace  WorkspaceAllowedAction = "create_space"
-	WorkspaceAllowedActionDelete       WorkspaceAllowedAction = "delete"
-	WorkspaceAllowedActionManageGrants WorkspaceAllowedAction = "manage_grants"
-	WorkspaceAllowedActionRun          WorkspaceAllowedAction = "run"
-	WorkspaceAllowedActionSetDefaults  WorkspaceAllowedAction = "set_defaults"
-	WorkspaceAllowedActionUpdate       WorkspaceAllowedAction = "update"
-	WorkspaceAllowedActionView         WorkspaceAllowedAction = "view"
+	WorkspaceAllowedActionCreateSpace   WorkspaceAllowedAction = "create_space"
+	WorkspaceAllowedActionDelete        WorkspaceAllowedAction = "delete"
+	WorkspaceAllowedActionEditContent   WorkspaceAllowedAction = "edit_content"
+	WorkspaceAllowedActionManageGrants  WorkspaceAllowedAction = "manage_grants"
+	WorkspaceAllowedActionManageMembers WorkspaceAllowedAction = "manage_members"
+	WorkspaceAllowedActionRun           WorkspaceAllowedAction = "run"
+	WorkspaceAllowedActionSetDefaults   WorkspaceAllowedAction = "set_defaults"
+	WorkspaceAllowedActionUpdate        WorkspaceAllowedAction = "update"
+	WorkspaceAllowedActionView          WorkspaceAllowedAction = "view"
+)
+
+// Defines values for WorkspaceMemberSource.
+const (
+	WorkspaceMemberSourceOwner  WorkspaceMemberSource = "owner"
+	WorkspaceMemberSourceShared WorkspaceMemberSource = "shared"
+	WorkspaceMemberSourceTeam   WorkspaceMemberSource = "team"
+)
+
+// Defines values for WorkspaceRole.
+const (
+	WorkspaceRoleAdmin  WorkspaceRole = "admin"
+	WorkspaceRoleEditor WorkspaceRole = "editor"
+	WorkspaceRoleViewer WorkspaceRole = "viewer"
 )
 
 // Defines values for WorkspaceTargetMode.
@@ -1263,6 +1281,14 @@ type AddTeamMemberRequest struct {
 
 // AddTeamMemberRequestRole defines model for AddTeamMemberRequest.Role.
 type AddTeamMemberRequestRole string
+
+// AddWorkspaceMemberRequest defines model for AddWorkspaceMemberRequest.
+type AddWorkspaceMemberRequest struct {
+	Email openapi_types.Email `json:"email"`
+
+	// Role What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and run queries, editors also create and edit content, admins also manage the workspace. What they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
+	Role WorkspaceRole `json:"role"`
+}
 
 // Agent defines model for Agent.
 type Agent struct {
@@ -4077,6 +4103,12 @@ type SetSpaceMemberRequest struct {
 // SetSpaceMemberRequestRole defines model for SetSpaceMemberRequest.Role.
 type SetSpaceMemberRequestRole string
 
+// SetWorkspaceMemberRequest defines model for SetWorkspaceMemberRequest.
+type SetWorkspaceMemberRequest struct {
+	// Role What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and run queries, editors also create and edit content, admins also manage the workspace. What they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
+	Role WorkspaceRole `json:"role"`
+}
+
 // SetupStatus defines model for SetupStatus.
 type SetupStatus struct {
 	IsConfigured bool   `json:"is_configured"`
@@ -4798,15 +4830,18 @@ type Workspace struct {
 
 	// PolarisCatalogName Legacy; never used to resolve an execution target
 	// Deprecated:
-	PolarisCatalogName *string       `json:"polaris_catalog_name,omitempty"`
-	Type               WorkspaceType `json:"type"`
-	UpdatedAt          *time.Time    `json:"updated_at,omitempty"`
+	PolarisCatalogName *string `json:"polaris_catalog_name,omitempty"`
+
+	// Role The caller's role in this workspace (#653); a global admin is admin everywhere
+	Role      *WorkspaceRole `json:"role,omitempty"`
+	Type      WorkspaceType  `json:"type"`
+	UpdatedAt *time.Time     `json:"updated_at,omitempty"`
 }
 
 // WorkspaceType defines model for Workspace.Type.
 type WorkspaceType string
 
-// WorkspaceAllowedAction defines model for WorkspaceAllowedAction.
+// WorkspaceAllowedAction From the caller's workspace role (#653): view and run for every member; edit_content (saved queries, scripts, metrics, semantic models and docs, retrievers) from editor up; update, delete, manage_grants, set_defaults, create_space and manage_members for workspace admins.
 type WorkspaceAllowedAction string
 
 // WorkspaceCatalogAccess defines model for WorkspaceCatalogAccess.
@@ -4825,6 +4860,22 @@ type WorkspaceImpact struct {
 	Spaces                int  `json:"spaces"`
 }
 
+// WorkspaceMember defines model for WorkspaceMember.
+type WorkspaceMember struct {
+	// Role What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and run queries, editors also create and edit content, admins also manage the workspace. What they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
+	Role WorkspaceRole `json:"role"`
+
+	// RoleSet Whether the role was set explicitly; otherwise a team owner is admin and a team member editor
+	RoleSet bool `json:"role_set"`
+
+	// Source owner of a personal workspace, member of the owning team, or a user a personal workspace is shared with
+	Source WorkspaceMemberSource `json:"source"`
+	User   UserPublic            `json:"user"`
+}
+
+// WorkspaceMemberSource owner of a personal workspace, member of the owning team, or a user a personal workspace is shared with
+type WorkspaceMemberSource string
+
 // WorkspacePrincipal defines model for WorkspacePrincipal.
 type WorkspacePrincipal struct {
 	Email       *string            `json:"email"`
@@ -4833,6 +4884,9 @@ type WorkspacePrincipal struct {
 	Name        string             `json:"name"`
 	Type        string             `json:"type"`
 }
+
+// WorkspaceRole What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and run queries, editors also create and edit content, admins also manage the workspace. What they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
+type WorkspaceRole string
 
 // WorkspaceTarget defines model for WorkspaceTarget.
 type WorkspaceTarget struct {
@@ -5552,6 +5606,12 @@ type CreateFolderJSONRequestBody = CreateFolderRequest
 
 // UpdateFolderJSONRequestBody defines body for UpdateFolder for application/json ContentType.
 type UpdateFolderJSONRequestBody = UpdateFolderRequest
+
+// AddWorkspaceMemberJSONRequestBody defines body for AddWorkspaceMember for application/json ContentType.
+type AddWorkspaceMemberJSONRequestBody = AddWorkspaceMemberRequest
+
+// SetWorkspaceMemberJSONRequestBody defines body for SetWorkspaceMember for application/json ContentType.
+type SetWorkspaceMemberJSONRequestBody = SetWorkspaceMemberRequest
 
 // CreateSavedQueryJSONRequestBody defines body for CreateSavedQuery for application/json ContentType.
 type CreateSavedQueryJSONRequestBody = CreateSavedQueryRequest

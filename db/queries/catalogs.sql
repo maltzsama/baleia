@@ -103,10 +103,8 @@ WHERE sqlc.arg(is_admin)::bool
    OR cc.created_by = sqlc.arg(user_id)
    OR EXISTS (
         SELECT 1 FROM workspace_catalog_grants g
-        JOIN workspaces w ON w.id = g.workspace_id
-        LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = sqlc.arg(user_id)
         WHERE g.catalog_id = c.id
-          AND (w.owner_user_id = sqlc.arg(user_id) OR tm.user_id = sqlc.arg(user_id)))
+          AND baleia_workspace_member_role(g.workspace_id, sqlc.arg(user_id)::uuid) IS NOT NULL)
 ORDER BY c.name;
 
 -- name: CountNamespacesByCatalog :one

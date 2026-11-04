@@ -540,6 +540,18 @@ type ServerInterface interface {
 	// What depends on what: the lineage graph around one node (B4)
 	// (GET /workspaces/{id}/lineage)
 	ListLineage(w http.ResponseWriter, r *http.Request, id PathId, params ListLineageParams)
+	// List the workspace's members and their roles (#653)
+	// (GET /workspaces/{id}/members)
+	ListWorkspaceMembers(w http.ResponseWriter, r *http.Request, id PathId)
+	// Share a personal workspace with a user, or set a team member's role, by e-mail — workspace admin only
+	// (POST /workspaces/{id}/members)
+	AddWorkspaceMember(w http.ResponseWriter, r *http.Request, id PathId)
+	// Stop sharing a personal workspace with a user, or reset a team member to their default role — workspace admin only
+	// (DELETE /workspaces/{id}/members/{user_id})
+	RemoveWorkspaceMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID)
+	// Set a member's role, or share a personal workspace with a user — workspace admin only
+	// (PUT /workspaces/{id}/members/{user_id})
+	SetWorkspaceMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID)
 	// Catalogs the workspace may browse, with freshness and bindings — workspace members
 	// (GET /workspaces/{id}/metadata/catalogs)
 	ListMetadataCatalogs(w http.ResponseWriter, r *http.Request, id PathId)
@@ -615,13 +627,13 @@ type ServerInterface interface {
 	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID)
-	// Delete a doc — workspace members
+	// Delete a doc — workspace editors and admins (#653)
 	// (DELETE /workspaces/{id}/semantic/docs)
 	DeleteSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params DeleteSemanticDocParams)
 	// Docs of one table or one column — workspace members
 	// (GET /workspaces/{id}/semantic/docs)
 	ListSemanticDocs(w http.ResponseWriter, r *http.Request, id PathId, params ListSemanticDocsParams)
-	// Create or replace a doc — workspace members
+	// Create or replace a doc — workspace editors and admins (#653)
 	// (PUT /workspaces/{id}/semantic/docs)
 	UpsertSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params UpsertSemanticDocParams)
 	// Search docs by text and tag — workspace members
@@ -696,7 +708,7 @@ type ServerInterface interface {
 	// Spaces the caller can see, with their role — workspace members
 	// (GET /workspaces/{id}/spaces)
 	ListSpaces(w http.ResponseWriter, r *http.Request, id PathId)
-	// Create a space; the creator becomes its manager — workspace members
+	// Create a space; the creator becomes its manager — workspace admins
 	// (POST /workspaces/{id}/spaces)
 	CreateSpace(w http.ResponseWriter, r *http.Request, id PathId)
 	// Delete a space, its content, and its access list — manager
@@ -1785,6 +1797,30 @@ func (_ Unimplemented) ListLineage(w http.ResponseWriter, r *http.Request, id Pa
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// List the workspace's members and their roles (#653)
+// (GET /workspaces/{id}/members)
+func (_ Unimplemented) ListWorkspaceMembers(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Share a personal workspace with a user, or set a team member's role, by e-mail — workspace admin only
+// (POST /workspaces/{id}/members)
+func (_ Unimplemented) AddWorkspaceMember(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop sharing a personal workspace with a user, or reset a team member to their default role — workspace admin only
+// (DELETE /workspaces/{id}/members/{user_id})
+func (_ Unimplemented) RemoveWorkspaceMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set a member's role, or share a personal workspace with a user — workspace admin only
+// (PUT /workspaces/{id}/members/{user_id})
+func (_ Unimplemented) SetWorkspaceMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Catalogs the workspace may browse, with freshness and bindings — workspace members
 // (GET /workspaces/{id}/metadata/catalogs)
 func (_ Unimplemented) ListMetadataCatalogs(w http.ResponseWriter, r *http.Request, id PathId) {
@@ -1935,7 +1971,7 @@ func (_ Unimplemented) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Delete a doc — workspace members
+// Delete a doc — workspace editors and admins (#653)
 // (DELETE /workspaces/{id}/semantic/docs)
 func (_ Unimplemented) DeleteSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params DeleteSemanticDocParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -1947,7 +1983,7 @@ func (_ Unimplemented) ListSemanticDocs(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Create or replace a doc — workspace members
+// Create or replace a doc — workspace editors and admins (#653)
 // (PUT /workspaces/{id}/semantic/docs)
 func (_ Unimplemented) UpsertSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params UpsertSemanticDocParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -2097,7 +2133,7 @@ func (_ Unimplemented) ListSpaces(w http.ResponseWriter, r *http.Request, id Pat
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Create a space; the creator becomes its manager — workspace members
+// Create a space; the creator becomes its manager — workspace admins
 // (POST /workspaces/{id}/spaces)
 func (_ Unimplemented) CreateSpace(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -8494,6 +8530,156 @@ func (siw *ServerInterfaceWrapper) ListLineage(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorkspaceMembers operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkspaceMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkspaceMembers(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddWorkspaceMember operation middleware
+func (siw *ServerInterfaceWrapper) AddWorkspaceMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddWorkspaceMember(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveWorkspaceMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveWorkspaceMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", chi.URLParam(r, "user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveWorkspaceMember(w, r, id, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetWorkspaceMember operation middleware
+func (siw *ServerInterfaceWrapper) SetWorkspaceMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user_id" -------------
+	var userId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user_id", chi.URLParam(r, "user_id"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetWorkspaceMember(w, r, id, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMetadataCatalogs operation middleware
 func (siw *ServerInterfaceWrapper) ListMetadataCatalogs(w http.ResponseWriter, r *http.Request) {
 
@@ -12374,6 +12560,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/lineage", wrapper.ListLineage)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/members", wrapper.ListWorkspaceMembers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/members", wrapper.AddWorkspaceMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}/members/{user_id}", wrapper.RemoveWorkspaceMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/workspaces/{id}/members/{user_id}", wrapper.SetWorkspaceMember)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/metadata/catalogs", wrapper.ListMetadataCatalogs)
@@ -20085,6 +20283,208 @@ func (response ListLineage422JSONResponse) VisitListLineageResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListWorkspaceMembersRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListWorkspaceMembersResponseObject interface {
+	VisitListWorkspaceMembersResponse(w http.ResponseWriter) error
+}
+
+type ListWorkspaceMembers200JSONResponse []WorkspaceMember
+
+func (response ListWorkspaceMembers200JSONResponse) VisitListWorkspaceMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListWorkspaceMembers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListWorkspaceMembers401JSONResponse) VisitListWorkspaceMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListWorkspaceMembers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListWorkspaceMembers404JSONResponse) VisitListWorkspaceMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AddWorkspaceMemberRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *AddWorkspaceMemberJSONRequestBody
+}
+
+type AddWorkspaceMemberResponseObject interface {
+	VisitAddWorkspaceMemberResponse(w http.ResponseWriter) error
+}
+
+type AddWorkspaceMember200JSONResponse WorkspaceMember
+
+func (response AddWorkspaceMember200JSONResponse) VisitAddWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AddWorkspaceMember401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response AddWorkspaceMember401JSONResponse) VisitAddWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AddWorkspaceMember403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response AddWorkspaceMember403JSONResponse) VisitAddWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AddWorkspaceMember404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response AddWorkspaceMember404JSONResponse) VisitAddWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AddWorkspaceMember422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response AddWorkspaceMember422JSONResponse) VisitAddWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RemoveWorkspaceMemberRequestObject struct {
+	Id     PathId             `json:"id"`
+	UserId openapi_types.UUID `json:"user_id"`
+}
+
+type RemoveWorkspaceMemberResponseObject interface {
+	VisitRemoveWorkspaceMemberResponse(w http.ResponseWriter) error
+}
+
+type RemoveWorkspaceMember204Response = NoContentResponse
+
+func (response RemoveWorkspaceMember204Response) VisitRemoveWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveWorkspaceMember401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RemoveWorkspaceMember401JSONResponse) VisitRemoveWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RemoveWorkspaceMember403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RemoveWorkspaceMember403JSONResponse) VisitRemoveWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RemoveWorkspaceMember404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RemoveWorkspaceMember404JSONResponse) VisitRemoveWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RemoveWorkspaceMember422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response RemoveWorkspaceMember422JSONResponse) VisitRemoveWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetWorkspaceMemberRequestObject struct {
+	Id     PathId             `json:"id"`
+	UserId openapi_types.UUID `json:"user_id"`
+	Body   *SetWorkspaceMemberJSONRequestBody
+}
+
+type SetWorkspaceMemberResponseObject interface {
+	VisitSetWorkspaceMemberResponse(w http.ResponseWriter) error
+}
+
+type SetWorkspaceMember200JSONResponse WorkspaceMember
+
+func (response SetWorkspaceMember200JSONResponse) VisitSetWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetWorkspaceMember401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SetWorkspaceMember401JSONResponse) VisitSetWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetWorkspaceMember403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetWorkspaceMember403JSONResponse) VisitSetWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetWorkspaceMember404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetWorkspaceMember404JSONResponse) VisitSetWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetWorkspaceMember422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SetWorkspaceMember422JSONResponse) VisitSetWorkspaceMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListMetadataCatalogsRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -21224,6 +21624,15 @@ type DeleteSemanticDoc401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response DeleteSemanticDoc401JSONResponse) VisitDeleteSemanticDocResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSemanticDoc403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteSemanticDoc403JSONResponse) VisitDeleteSemanticDocResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -23679,6 +24088,18 @@ type StrictServerInterface interface {
 	// What depends on what: the lineage graph around one node (B4)
 	// (GET /workspaces/{id}/lineage)
 	ListLineage(ctx context.Context, request ListLineageRequestObject) (ListLineageResponseObject, error)
+	// List the workspace's members and their roles (#653)
+	// (GET /workspaces/{id}/members)
+	ListWorkspaceMembers(ctx context.Context, request ListWorkspaceMembersRequestObject) (ListWorkspaceMembersResponseObject, error)
+	// Share a personal workspace with a user, or set a team member's role, by e-mail — workspace admin only
+	// (POST /workspaces/{id}/members)
+	AddWorkspaceMember(ctx context.Context, request AddWorkspaceMemberRequestObject) (AddWorkspaceMemberResponseObject, error)
+	// Stop sharing a personal workspace with a user, or reset a team member to their default role — workspace admin only
+	// (DELETE /workspaces/{id}/members/{user_id})
+	RemoveWorkspaceMember(ctx context.Context, request RemoveWorkspaceMemberRequestObject) (RemoveWorkspaceMemberResponseObject, error)
+	// Set a member's role, or share a personal workspace with a user — workspace admin only
+	// (PUT /workspaces/{id}/members/{user_id})
+	SetWorkspaceMember(ctx context.Context, request SetWorkspaceMemberRequestObject) (SetWorkspaceMemberResponseObject, error)
 	// Catalogs the workspace may browse, with freshness and bindings — workspace members
 	// (GET /workspaces/{id}/metadata/catalogs)
 	ListMetadataCatalogs(ctx context.Context, request ListMetadataCatalogsRequestObject) (ListMetadataCatalogsResponseObject, error)
@@ -23754,13 +24175,13 @@ type StrictServerInterface interface {
 	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(ctx context.Context, request TriggerRetrieverRefreshRequestObject) (TriggerRetrieverRefreshResponseObject, error)
-	// Delete a doc — workspace members
+	// Delete a doc — workspace editors and admins (#653)
 	// (DELETE /workspaces/{id}/semantic/docs)
 	DeleteSemanticDoc(ctx context.Context, request DeleteSemanticDocRequestObject) (DeleteSemanticDocResponseObject, error)
 	// Docs of one table or one column — workspace members
 	// (GET /workspaces/{id}/semantic/docs)
 	ListSemanticDocs(ctx context.Context, request ListSemanticDocsRequestObject) (ListSemanticDocsResponseObject, error)
-	// Create or replace a doc — workspace members
+	// Create or replace a doc — workspace editors and admins (#653)
 	// (PUT /workspaces/{id}/semantic/docs)
 	UpsertSemanticDoc(ctx context.Context, request UpsertSemanticDocRequestObject) (UpsertSemanticDocResponseObject, error)
 	// Search docs by text and tag — workspace members
@@ -23835,7 +24256,7 @@ type StrictServerInterface interface {
 	// Spaces the caller can see, with their role — workspace members
 	// (GET /workspaces/{id}/spaces)
 	ListSpaces(ctx context.Context, request ListSpacesRequestObject) (ListSpacesResponseObject, error)
-	// Create a space; the creator becomes its manager — workspace members
+	// Create a space; the creator becomes its manager — workspace admins
 	// (POST /workspaces/{id}/spaces)
 	CreateSpace(ctx context.Context, request CreateSpaceRequestObject) (CreateSpaceResponseObject, error)
 	// Delete a space, its content, and its access list — manager
@@ -28761,6 +29182,126 @@ func (sh *strictHandler) ListLineage(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListLineageResponseObject); ok {
 		if err := validResponse.VisitListLineageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWorkspaceMembers operation middleware
+func (sh *strictHandler) ListWorkspaceMembers(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListWorkspaceMembersRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWorkspaceMembers(ctx, request.(ListWorkspaceMembersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWorkspaceMembers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWorkspaceMembersResponseObject); ok {
+		if err := validResponse.VisitListWorkspaceMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddWorkspaceMember operation middleware
+func (sh *strictHandler) AddWorkspaceMember(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request AddWorkspaceMemberRequestObject
+
+	request.Id = id
+
+	var body AddWorkspaceMemberJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddWorkspaceMember(ctx, request.(AddWorkspaceMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddWorkspaceMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddWorkspaceMemberResponseObject); ok {
+		if err := validResponse.VisitAddWorkspaceMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveWorkspaceMember operation middleware
+func (sh *strictHandler) RemoveWorkspaceMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID) {
+	var request RemoveWorkspaceMemberRequestObject
+
+	request.Id = id
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveWorkspaceMember(ctx, request.(RemoveWorkspaceMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveWorkspaceMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveWorkspaceMemberResponseObject); ok {
+		if err := validResponse.VisitRemoveWorkspaceMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetWorkspaceMember operation middleware
+func (sh *strictHandler) SetWorkspaceMember(w http.ResponseWriter, r *http.Request, id PathId, userId openapi_types.UUID) {
+	var request SetWorkspaceMemberRequestObject
+
+	request.Id = id
+	request.UserId = userId
+
+	var body SetWorkspaceMemberJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetWorkspaceMember(ctx, request.(SetWorkspaceMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetWorkspaceMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetWorkspaceMemberResponseObject); ok {
+		if err := validResponse.VisitSetWorkspaceMemberResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

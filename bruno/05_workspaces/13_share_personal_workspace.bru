@@ -1,0 +1,28 @@
+meta {
+  name: Share Personal Workspace
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/members
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "email": "outsider@baleia.io",
+    "role": "viewer"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.source: eq shared
+  res.body.role: eq viewer
+}

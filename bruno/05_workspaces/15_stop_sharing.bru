@@ -1,0 +1,24 @@
+meta {
+  name: Stop Sharing Personal Workspace
+  type: http
+  seq: 15
+}
+
+delete {
+  url: {{base_url}}/workspaces/{{workspace_id}}/members/{{outsider_user_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Sharing ends here so the later `*_foreign` requests, which expect the
+  outsider not to see the admin's workspace, keep their meaning.
+}

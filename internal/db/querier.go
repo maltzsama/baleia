@@ -165,6 +165,7 @@ type Querier interface {
 	DeleteWorkloadRule(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteWorkspace(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error)
+	DeleteWorkspaceMember(ctx context.Context, arg DeleteWorkspaceMemberParams) (int64, error)
 	DisableManagedBindingsOfCatalog(ctx context.Context, catalogID pgtype.UUID) error
 	// Adopted catalogs the engine no longer reports are disabled, never deleted
 	// (#17): their metadata and history stay.
@@ -312,6 +313,9 @@ type Querier interface {
 	GetWorkloadRule(ctx context.Context, id pgtype.UUID) (WorkloadRule, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
+	// The user's role in the workspace (#653): admin, editor or viewer; empty for
+	// a non-member. A global admin is not a member by this query.
+	GetWorkspaceMemberRole(ctx context.Context, arg GetWorkspaceMemberRoleParams) (string, error)
 	HasUsers(ctx context.Context) (bool, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error
 	InsertClusterSnapshot(ctx context.Context, arg InsertClusterSnapshotParams) (ClusterSnapshot, error)
@@ -334,8 +338,14 @@ type Querier interface {
 	InsertTrinoResourceGroup(ctx context.Context, arg InsertTrinoResourceGroupParams) (int64, error)
 	InsertTrinoResourceGroupRevision(ctx context.Context, arg InsertTrinoResourceGroupRevisionParams) error
 	InsertTrinoSelector(ctx context.Context, arg InsertTrinoSelectorParams) error
-	// A personal workspace is owned by its user; a shared one by the owners of its team.
+	// Whether the user is an admin of the workspace (#653): the owner of a
+	// personal one, and a team owner of a shared one unless another role was set.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
+	// The workspace's owner by structure, not by role: the user of a personal
+	// workspace, an owner of the team of a shared one. Seeing other members'
+	// executions and the workspace's audit stay with them (#36, #611); a workspace
+	// admin role does not grant it (#653).
+	IsWorkspaceStructuralOwner(ctx context.Context, arg IsWorkspaceStructuralOwnerParams) (bool, error)
 	// The latest finished run of each operation on a table.
 	LastSuccessfulMaintenanceByOperation(ctx context.Context, arg LastSuccessfulMaintenanceByOperationParams) ([]LastSuccessfulMaintenanceByOperationRow, error)
 	LatestContentVersion(ctx context.Context, arg LatestContentVersionParams) (ContentVersion, error)
@@ -543,8 +553,11 @@ type Querier interface {
 	// catalog_name is the Trino name of a source catalog (what the UI showed
 	// before bindings) and the logical name of a native one.
 	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error)
-	// Users who are members of the workspace: the personal owner, or the owning
-	// team's members (#113).
+	// The members of a workspace with their role (#653): source is how they are
+	// a member (owner of a personal workspace, member of the owning team, or
+	// shared with them), role_set whether their role was set explicitly.
+	ListWorkspaceMembers(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceMembersRow, error)
+	// Users who are members of the workspace (#113, #653).
 	ListWorkspacePrincipalUsers(ctx context.Context, arg ListWorkspacePrincipalUsersParams) ([]ListWorkspacePrincipalUsersRow, error)
 	// Every binding of a catalog the workspace may use: the catalogs of the owner
 	// of a personal workspace (their own connections) and the granted ones (#16).
@@ -552,7 +565,9 @@ type Querier interface {
 	// only; what they may read or write in it is the catalog manager's decision
 	// (#651). Disabled bindings, engines and catalogs are included; callers filter.
 	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceTargetsRow, error)
-	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error)
+	// The workspaces a user is a member of (#653): their personal workspace,
+	// personal workspaces shared with them and their teams' workspaces.
+	ListWorkspacesByUser(ctx context.Context, userID pgtype.UUID) ([]Workspace, error)
 	// Serializes first-admin setup until the transaction ends (#375).
 	LockFirstAdminSetup(ctx context.Context) error
 	// Serializes the rounds' capacity check and run creation until the
@@ -761,6 +776,10 @@ type Querier interface {
 	// other's.
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg UpsertTrinoQuerySnapshotParams) (TrinoQuerySnapshot, error)
 	UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWorkspaceCatalogGrantParams) (WorkspaceCatalogGrant, error)
+	// Writes nothing (0 rows) when the user cannot be a member: on a shared
+	// workspace they must be in its team. The share lock on their team row makes
+	// a concurrent removal from the team either wait for this write or win.
+	UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) (int64, error)
 	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)
 }
 

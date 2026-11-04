@@ -39,24 +39,22 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (T
 const catalogGrantedToAgent = `-- name: CatalogGrantedToAgent :one
 SELECT EXISTS (
     SELECT 1 FROM workspace_catalog_grants g
-    JOIN workspaces w ON w.id = g.workspace_id
-    JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = $2
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $3
-    WHERE g.catalog_id = $1
-      AND (w.owner_user_id = $3 OR tm.user_id = $3)
+    JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = $1::uuid
+    WHERE g.catalog_id = $2::uuid
+      AND baleia_workspace_member_role(g.workspace_id, $3::uuid) IS NOT NULL
 ) AS granted
 `
 
 type CatalogGrantedToAgentParams struct {
-	CatalogID pgtype.UUID `json:"catalog_id"`
 	AgentID   pgtype.UUID `json:"agent_id"`
+	CatalogID pgtype.UUID `json:"catalog_id"`
 	UserID    pgtype.UUID `json:"user_id"`
 }
 
 // True when the catalog is granted to a workspace the agent is bound to and the
 // agent's owner is still a member of that workspace (#59).
 func (q *Queries) CatalogGrantedToAgent(ctx context.Context, arg CatalogGrantedToAgentParams) (bool, error) {
-	row := q.db.QueryRow(ctx, catalogGrantedToAgent, arg.CatalogID, arg.AgentID, arg.UserID)
+	row := q.db.QueryRow(ctx, catalogGrantedToAgent, arg.AgentID, arg.CatalogID, arg.UserID)
 	var granted bool
 	err := row.Scan(&granted)
 	return granted, err
@@ -65,10 +63,8 @@ func (q *Queries) CatalogGrantedToAgent(ctx context.Context, arg CatalogGrantedT
 const catalogGrantedToUser = `-- name: CatalogGrantedToUser :one
 SELECT EXISTS (
     SELECT 1 FROM workspace_catalog_grants g
-    JOIN workspaces w ON w.id = g.workspace_id
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
-    WHERE g.catalog_id = $1
-      AND (w.owner_user_id = $2 OR tm.user_id = $2)
+    WHERE g.catalog_id = $1::uuid
+      AND baleia_workspace_member_role(g.workspace_id, $2::uuid) IS NOT NULL
 ) AS granted
 `
 
@@ -86,12 +82,7 @@ func (q *Queries) CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedTo
 }
 
 const checkWorkspaceAccess = `-- name: CheckWorkspaceAccess :one
-SELECT EXISTS (
-    SELECT 1 FROM workspaces w
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
-    WHERE w.id = $1
-      AND (w.owner_user_id = $2 OR tm.user_id = $2)
-) AS has_access
+SELECT (baleia_workspace_member_role($1::uuid, $2::uuid) IS NOT NULL)::bool AS has_access
 `
 
 type CheckWorkspaceAccessParams struct {
@@ -310,6 +301,23 @@ func (q *Queries) DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWor
 	return result.RowsAffected(), nil
 }
 
+const deleteWorkspaceMember = `-- name: DeleteWorkspaceMember :execrows
+DELETE FROM workspace_members WHERE workspace_id = $1::uuid AND user_id = $2::uuid
+`
+
+type DeleteWorkspaceMemberParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteWorkspaceMember(ctx context.Context, arg DeleteWorkspaceMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteWorkspaceMember, arg.WorkspaceID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getTeamByID = `-- name: GetTeamByID :one
 SELECT id, name, description, created_by, created_at, updated_at FROM teams WHERE id = $1
 `
@@ -390,13 +398,26 @@ func (q *Queries) GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogN
 	return i, err
 }
 
+const getWorkspaceMemberRole = `-- name: GetWorkspaceMemberRole :one
+SELECT COALESCE(baleia_workspace_member_role($1::uuid, $2::uuid), '')::text AS role
+`
+
+type GetWorkspaceMemberRoleParams struct {
+	ID     pgtype.UUID `json:"id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+// The user's role in the workspace (#653): admin, editor or viewer; empty for
+// a non-member. A global admin is not a member by this query.
+func (q *Queries) GetWorkspaceMemberRole(ctx context.Context, arg GetWorkspaceMemberRoleParams) (string, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceMemberRole, arg.ID, arg.UserID)
+	var role string
+	err := row.Scan(&role)
+	return role, err
+}
+
 const isWorkspaceOwner = `-- name: IsWorkspaceOwner :one
-SELECT EXISTS (
-    SELECT 1 FROM workspaces w
-    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2 AND tm.role = 'owner'
-    WHERE w.id = $1
-      AND (w.owner_user_id = $2 OR tm.user_id = $2)
-) AS is_owner
+SELECT COALESCE(baleia_workspace_member_role($1::uuid, $2::uuid) = 'admin', false)::bool AS is_owner
 `
 
 type IsWorkspaceOwnerParams struct {
@@ -404,9 +425,35 @@ type IsWorkspaceOwnerParams struct {
 	UserID pgtype.UUID `json:"user_id"`
 }
 
-// A personal workspace is owned by its user; a shared one by the owners of its team.
+// Whether the user is an admin of the workspace (#653): the owner of a
+// personal one, and a team owner of a shared one unless another role was set.
 func (q *Queries) IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error) {
 	row := q.db.QueryRow(ctx, isWorkspaceOwner, arg.ID, arg.UserID)
+	var is_owner bool
+	err := row.Scan(&is_owner)
+	return is_owner, err
+}
+
+const isWorkspaceStructuralOwner = `-- name: IsWorkspaceStructuralOwner :one
+SELECT EXISTS (
+    SELECT 1 FROM workspaces w
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $1::uuid AND tm.role = 'owner'
+    WHERE w.id = $2::uuid
+      AND (w.owner_user_id = $1::uuid OR tm.user_id IS NOT NULL)
+) AS is_owner
+`
+
+type IsWorkspaceStructuralOwnerParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	ID     pgtype.UUID `json:"id"`
+}
+
+// The workspace's owner by structure, not by role: the user of a personal
+// workspace, an owner of the team of a shared one. Seeing other members'
+// executions and the workspace's audit stay with them (#36, #611); a workspace
+// admin role does not grant it (#653).
+func (q *Queries) IsWorkspaceStructuralOwner(ctx context.Context, arg IsWorkspaceStructuralOwnerParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isWorkspaceStructuralOwner, arg.UserID, arg.ID)
 	var is_owner bool
 	err := row.Scan(&is_owner)
 	return is_owner, err
@@ -415,10 +462,8 @@ func (q *Queries) IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerPara
 const listCatalogsGrantedToUser = `-- name: ListCatalogsGrantedToUser :many
 SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref FROM catalogs c
 JOIN workspace_catalog_grants g ON g.catalog_id = c.id
-JOIN workspaces w ON w.id = g.workspace_id
-LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
-WHERE c.connection_id = $1
-  AND (w.owner_user_id = $2 OR tm.user_id = $2)
+WHERE c.connection_id = $1::uuid
+  AND baleia_workspace_member_role(g.workspace_id, $2::uuid) IS NOT NULL
 `
 
 type ListCatalogsGrantedToUserParams struct {
@@ -691,12 +736,74 @@ func (q *Queries) ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pg
 	return items, nil
 }
 
+const listWorkspaceMembers = `-- name: ListWorkspaceMembers :many
+SELECT u.id, u.name, u.email, u.password_hash, u.role, u.auth_provider, u.auth_provider_id, u.external_id, u.personal_workspace_id, u.created_at, u.updated_at, u.status, u.suspended_at, u.suspended_reason, u.directory_synced_at, u.locale,
+       baleia_workspace_member_role(w.id, u.id)::text AS role,
+       (CASE WHEN w.owner_user_id = u.id THEN 'owner'
+             WHEN w.type = 'shared' THEN 'team'
+             ELSE 'shared' END)::text AS source,
+       (wm.user_id IS NOT NULL)::bool AS role_set
+FROM workspaces w
+JOIN users u ON baleia_workspace_member_role(w.id, u.id) IS NOT NULL
+LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = u.id
+WHERE w.id = $1::uuid
+ORDER BY u.name
+`
+
+type ListWorkspaceMembersRow struct {
+	User    User   `json:"user"`
+	Role    string `json:"role"`
+	Source  string `json:"source"`
+	RoleSet bool   `json:"role_set"`
+}
+
+// The members of a workspace with their role (#653): source is how they are
+// a member (owner of a personal workspace, member of the owning team, or
+// shared with them), role_set whether their role was set explicitly.
+func (q *Queries) ListWorkspaceMembers(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceMembersRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceMembers, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListWorkspaceMembersRow
+	for rows.Next() {
+		var i ListWorkspaceMembersRow
+		if err := rows.Scan(
+			&i.User.ID,
+			&i.User.Name,
+			&i.User.Email,
+			&i.User.PasswordHash,
+			&i.User.Role,
+			&i.User.AuthProvider,
+			&i.User.AuthProviderID,
+			&i.User.ExternalID,
+			&i.User.PersonalWorkspaceID,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
+			&i.User.Status,
+			&i.User.SuspendedAt,
+			&i.User.SuspendedReason,
+			&i.User.DirectorySyncedAt,
+			&i.User.Locale,
+			&i.Role,
+			&i.Source,
+			&i.RoleSet,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkspacePrincipalUsers = `-- name: ListWorkspacePrincipalUsers :many
-SELECT DISTINCT u.id, u.name, u.email
+SELECT u.id, u.name, u.email
 FROM users u
-JOIN workspaces w ON w.id = $1::uuid
-LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id
-WHERE w.owner_user_id = u.id OR tm.user_id = u.id
+WHERE baleia_workspace_member_role($1::uuid, u.id) IS NOT NULL
 ORDER BY u.name
 LIMIT $2::int
 `
@@ -712,8 +819,7 @@ type ListWorkspacePrincipalUsersRow struct {
 	Email string      `json:"email"`
 }
 
-// Users who are members of the workspace: the personal owner, or the owning
-// team's members (#113).
+// Users who are members of the workspace (#113, #653).
 func (q *Queries) ListWorkspacePrincipalUsers(ctx context.Context, arg ListWorkspacePrincipalUsersParams) ([]ListWorkspacePrincipalUsersRow, error) {
 	rows, err := q.db.Query(ctx, listWorkspacePrincipalUsers, arg.WorkspaceID, arg.Lim)
 	if err != nil {
@@ -735,16 +841,16 @@ func (q *Queries) ListWorkspacePrincipalUsers(ctx context.Context, arg ListWorks
 }
 
 const listWorkspacesByUser = `-- name: ListWorkspacesByUser :many
-SELECT DISTINCT w.id, w.name, w.description, w.type, w.polaris_catalog_name, w.owner_user_id, w.owner_team_id, w.created_at, w.updated_at, w.default_binding_id, w.default_schema
+SELECT w.id, w.name, w.description, w.type, w.polaris_catalog_name, w.owner_user_id, w.owner_team_id, w.created_at, w.updated_at, w.default_binding_id, w.default_schema
 FROM workspaces w
-LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id
-WHERE w.owner_user_id = $1
-   OR tm.user_id = $1
+WHERE baleia_workspace_member_role(w.id, $1::uuid) IS NOT NULL
 ORDER BY w.name
 `
 
-func (q *Queries) ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]Workspace, error) {
-	rows, err := q.db.Query(ctx, listWorkspacesByUser, ownerUserID)
+// The workspaces a user is a member of (#653): their personal workspace,
+// personal workspaces shared with them and their teams' workspaces.
+func (q *Queries) ListWorkspacesByUser(ctx context.Context, userID pgtype.UUID) ([]Workspace, error) {
+	rows, err := q.db.Query(ctx, listWorkspacesByUser, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -806,10 +912,8 @@ func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberPara
 const sharesWorkspace = `-- name: SharesWorkspace :one
 SELECT EXISTS (
     SELECT 1 FROM workspaces w
-    LEFT JOIN team_members a ON a.team_id = w.owner_team_id AND a.user_id = $1::uuid
-    LEFT JOIN team_members b ON b.team_id = w.owner_team_id AND b.user_id = $2::uuid
-    WHERE (w.owner_user_id = $1::uuid OR a.user_id IS NOT NULL)
-      AND (w.owner_user_id = $2::uuid OR b.user_id IS NOT NULL)
+    WHERE baleia_workspace_member_role(w.id, $1::uuid) IS NOT NULL
+      AND baleia_workspace_member_role(w.id, $2::uuid) IS NOT NULL
 ) AS shares
 `
 
@@ -953,6 +1057,49 @@ func (q *Queries) UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWor
 		&i.GrantedAt,
 	)
 	return i, err
+}
+
+const upsertWorkspaceMember = `-- name: UpsertWorkspaceMember :execrows
+WITH in_team AS (
+    SELECT w.id
+    FROM workspaces w
+    JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2::uuid
+    WHERE w.id = $1::uuid AND w.type = 'shared'
+    FOR SHARE OF tm
+),
+allowed AS (
+    SELECT w.id FROM workspaces w WHERE w.id = $1::uuid AND w.type = 'personal'
+    UNION ALL
+    SELECT id FROM in_team
+)
+INSERT INTO workspace_members (workspace_id, user_id, role, granted_by)
+SELECT $1::uuid, $2::uuid, $3::text, $4::uuid
+FROM allowed
+ON CONFLICT (workspace_id, user_id) DO UPDATE
+SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now()
+`
+
+type UpsertWorkspaceMemberParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	Role        string      `json:"role"`
+	GrantedBy   pgtype.UUID `json:"granted_by"`
+}
+
+// Writes nothing (0 rows) when the user cannot be a member: on a shared
+// workspace they must be in its team. The share lock on their team row makes
+// a concurrent removal from the team either wait for this write or win.
+func (q *Queries) UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, upsertWorkspaceMember,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Role,
+		arg.GrantedBy,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const userOwnsTeam = `-- name: UserOwnsTeam :one

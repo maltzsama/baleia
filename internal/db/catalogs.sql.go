@@ -524,10 +524,8 @@ WHERE $1::bool
    OR cc.created_by = $2
    OR EXISTS (
         SELECT 1 FROM workspace_catalog_grants g
-        JOIN workspaces w ON w.id = g.workspace_id
-        LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $2
         WHERE g.catalog_id = c.id
-          AND (w.owner_user_id = $2 OR tm.user_id = $2))
+          AND baleia_workspace_member_role(g.workspace_id, $2::uuid) IS NOT NULL)
 ORDER BY c.name
 `
 

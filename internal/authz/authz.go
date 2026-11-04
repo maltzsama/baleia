@@ -93,6 +93,7 @@ type Store interface {
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (db.Workspace, error)
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
 	IsWorkspaceOwner(ctx context.Context, arg db.IsWorkspaceOwnerParams) (bool, error)
+	GetWorkspaceMemberRole(ctx context.Context, arg db.GetWorkspaceMemberRoleParams) (string, error)
 	GetTeamByID(ctx context.Context, id pgtype.UUID) (db.Team, error)
 	GetTeamMemberRole(ctx context.Context, arg db.GetTeamMemberRoleParams) (string, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
@@ -309,9 +310,9 @@ func (c *Checker) CatalogOfConnection(ctx context.Context, p Principal, connID, 
 }
 
 // Workspace loads the workspace and checks the caller on it. A global admin may
-// do anything; a member may read; changing it needs its owner (the user of a
-// personal workspace, an owner of the team of a shared one). A non-member gets
-// ErrNotFound, a member who is not an owner gets ErrForbidden.
+// do anything; a member may read; managing it (ActWrite, ActAdmin) needs the
+// workspace admin role (#653). A non-member gets ErrNotFound, a member below
+// admin gets ErrForbidden.
 func (c *Checker) Workspace(ctx context.Context, p Principal, wsID pgtype.UUID, act Action) (_ db.Workspace, err error) {
 	defer c.observe(ctx, "workspace", wsID, &err)
 	if p.IsAgent() && act != ActRead {

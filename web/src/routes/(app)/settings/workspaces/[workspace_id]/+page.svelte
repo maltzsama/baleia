@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { client } from '$lib/api/client';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
+	import WorkspaceMembers from '$lib/workspaces/WorkspaceMembers.svelte';
 	import { workspaceStore, type Workspace } from '$lib/stores/workspace.svelte';
 	import type { components } from '$lib/api/schema';
 	import Button from '$lib/ui/Button.svelte';
@@ -20,7 +21,6 @@
 	type Target = components['schemas']['WorkspaceTarget'];
 	type Access = components['schemas']['WorkspaceCatalogAccess'];
 	type Impact = components['schemas']['WorkspaceImpact'];
-	type TeamMember = components['schemas']['TeamMember'];
 	type Catalog = components['schemas']['CatalogSummary'];
 
 	const workspaceId = $derived(page.params.workspace_id ?? '');
@@ -32,7 +32,6 @@
 	let targets = $state<Target[]>([]);
 	let grants = $state<Access[]>([]);
 	let impact = $state<Impact | null>(null);
-	let members = $state<TeamMember[]>([]);
 
 	let name = $state('');
 	let description = $state('');
@@ -50,6 +49,7 @@
 	let granting = $state(false);
 	let grantError = $state('');
 
+	let refreshError = $state('');
 	let deleteOpen = $state(false);
 	let revokeOpen = $state(false);
 	let revokeCatalog = $state<Access | null>(null);
@@ -88,16 +88,33 @@
 			impact = impactRes.data ?? null;
 			targetBindingId = currentTarget?.binding_id ?? '';
 			targetSchema = currentTarget ? '' : (ws.default_schema ?? '');
-			if (ws.owner_team_id) {
-				const { data } = await client.GET('/teams/{id}/members', {
-					params: { path: { id: ws.owner_team_id } }
-				});
-				members = data ?? [];
-			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
 			loading = false;
+		}
+	}
+
+	// A member change may change the caller's own role and actions.
+	// Removing their own share can end the caller's access (404): the page then
+	// shows "not found". Any other failure keeps the page and offers a retry.
+	async function refreshWorkspace() {
+		refreshError = '';
+		try {
+			const { data, response } = await client.GET('/workspaces/{id}', {
+				params: { path: { id: workspaceId } }
+			});
+			if (response.status === 404) {
+				ws = null;
+				error = m.settings_workspaces_workspace_not_found();
+			} else if (data) {
+				ws = data;
+			} else {
+				refreshError = m.settings_workspaces_refresh_failed();
+			}
+			await workspaceStore.load();
+		} catch {
+			refreshError = m.settings_workspaces_refresh_failed();
 		}
 	}
 
@@ -411,40 +428,18 @@
 				</div>
 			{/if}
 		{:else if tab === 'members'}
-			{#if ws.type === 'personal'}
-				<p class="text-[12px]">{m.settings_workspaces_detail_this_is_a_personal_workspace_its()}</p>
-			{:else if members.length === 0}
-				<EmptyState
-					title={m.settings_workspaces_detail_no_members()}
-					description={m.settings_workspaces_detail_team_membership_is_managed_in_settings()}
-				/>
-			{:else}
-				<div class="overflow-x-auto rounded-lg border border-border bg-bg-panel">
-					<table class="w-full text-left text-[11px]">
-						<thead
-							class="border-b border-border text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300"
-						>
-							<tr
-								><th class="px-3 py-2">{m.settings_workspaces_detail_member()}</th><th
-									class="px-3 py-2">{m.settings_workspaces_detail_team_role()}</th
-								></tr
-							>
-						</thead>
-						<tbody>
-							{#each members as member (member.user.id)}
-								<tr class="border-b border-border/60 last:border-b-0">
-									<td class="px-3 py-1.5"
-										>{member.user.name}
-										<span class="text-slate-600 dark:text-slate-300">({member.user.email})</span
-										></td
-									>
-									<td class="px-3 py-1.5">{member.role}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
+			{#if refreshError}
+				<div class="mb-2 flex items-center gap-2 text-[12px]">
+					<p class="text-danger" role="alert">{refreshError}</p>
+					<Button size="sm" onclick={refreshWorkspace}>{m.common_retry()}</Button>
 				</div>
 			{/if}
+			<WorkspaceMembers
+				workspaceId={ws.id}
+				personal={ws.type === 'personal'}
+				canManage={!!ws.allowed_actions?.includes('manage_members')}
+				onchange={refreshWorkspace}
+			/>
 		{:else if tab === 'activity'}
 			<ActivityPanel
 				resourceType="workspace"

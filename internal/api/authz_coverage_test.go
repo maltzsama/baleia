@@ -217,12 +217,12 @@ var operationAccess = map[string]access{
 	"ListRetrievers":            {kind: kindChecked, calls: wsMember},
 	"ListRetrieverDestinations": {kind: kindChecked, calls: wsMember},
 	"ValidateRetriever":         {kind: kindChecked, calls: wsMember},
-	"CreateRetriever":           checked("requireWorkspaceAccess", "requireWorkspaceOwner"), // owner/admin only (#613)
-	"DeleteRetriever":           checked("requireWorkspaceAccess", "requireWorkspaceOwner"),
+	"CreateRetriever":           checked("requireWorkspaceAccess", "requireWorkspaceRole"), // editors and up (#613, #653)
+	"DeleteRetriever":           checked("requireWorkspaceAccess", "requireWorkspaceRole"),
 	"GetRetriever":              {kind: kindChecked, calls: wsMember},
-	"UpdateRetriever":           checked("requireWorkspaceAccess", "requireWorkspaceOwner"),
+	"UpdateRetriever":           checked("requireWorkspaceAccess", "requireWorkspaceRole"),
 	"GetRetrieverHistory":       {kind: kindChecked, calls: wsMember},
-	"TriggerRetrieverRefresh":   checked("requireWorkspaceAccess", "requireWorkspaceOwner"),
+	"TriggerRetrieverRefresh":   checked("requireWorkspaceAccess", "requireWorkspaceRole"),
 
 	// ── placeholders that answer a constant
 	// Metadata snapshot reads (#18): workspace members (metadataWorkspace
@@ -314,6 +314,10 @@ var operationAccess = map[string]access{
 	"UpdateFolder":            checked("PrincipalFromContext", "Workspace"),
 	// Workspace settings (#108).
 	"DeleteWorkspace":        checked("PrincipalFromContext", "Workspace"),
+	"ListWorkspaceMembers":   checked("PrincipalFromContext", "Workspace"),
+	"SetWorkspaceMember":     checked("PrincipalFromContext", "setMember"),
+	"AddWorkspaceMember":     checked("PrincipalFromContext", "setMember"),
+	"RemoveWorkspaceMember":  checked("PrincipalFromContext", "Workspace"),
 	"GetWorkspaceImpact":     checked("PrincipalFromContext", "Workspace"),
 	"GetCatalogAccessImpact": checked("PrincipalFromContext", "Workspace"),
 	// Semantic metrics (#115).

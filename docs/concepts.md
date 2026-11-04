@@ -45,10 +45,10 @@ A **workspace** is where people run queries. It is **personal** (yours) or **sha
 
 Each user has a global role, **admin** or **member**. Admins manage connections, engines, users and the platform. Members work in the workspaces they belong to.
 
-Finer access comes from where the user is:
-- **Team:** owner or member.
-- **Space:** viewer or editor.
-- **Workspace:** the catalogs it was granted.
+Access has three layers ([ADR 0016](adr/0016-access-layers-and-workspace-roles.md)):
+- **Workspace → catalog:** a catalog linked to a workspace is reachable by its members only.
+- **Catalog → data:** inside it, the catalog manager decides what each user may read or write ([ADR 0015](adr/0015-per-user-catalog-identity.md)).
+- **Baleia roles → features:** in each workspace a member is a **viewer** (sees content, runs queries), an **editor** (also creates and edits content) or an **admin** (also manages the workspace). A shared workspace's members come from its team; a personal workspace can be shared by e-mail. A space role can only narrow the workspace role inside that space.
 
 The interface shows only the actions the server allows, from each resource's allowed actions.
 
