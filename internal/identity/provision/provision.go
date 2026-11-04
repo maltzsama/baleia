@@ -4,7 +4,9 @@ package provision
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -42,33 +44,32 @@ func ApplyTeams(ctx context.Context, logger *slog.Logger, store TeamMembers, use
 // WorkspaceMembers writes group-derived workspace roles; *db.Queries
 // implements it.
 type WorkspaceMembers interface {
-	UpsertWorkspaceMember(ctx context.Context, arg db.UpsertWorkspaceMemberParams) (int64, error)
-	DeleteStaleGroupWorkspaceMembers(ctx context.Context, arg db.DeleteStaleGroupWorkspaceMembersParams) error
+	ApplyGroupWorkspaceRoles(ctx context.Context, arg db.ApplyGroupWorkspaceRolesParams) error
 }
 
 // ApplyWorkspaces sets the workspace roles the identity's groups give (#653)
-// and drops the group-derived roles they no longer give. A role an admin set
-// is kept. On a shared workspace the role takes effect only for a member of
-// its team; team membership comes from the team mapping, applied first.
-func ApplyWorkspaces(ctx context.Context, logger *slog.Logger, store WorkspaceMembers, userID pgtype.UUID, workspaces []identity.WorkspaceAssignment) {
-	keep := make([]pgtype.UUID, 0, len(workspaces))
+// and drops the group-derived roles they no longer give, in one statement
+// serialized per user. A role an admin set is kept, a personal workspace is
+// never reached, and on a team's workspace the role needs team membership,
+// which ApplyTeams applies first. A failure is returned so the sign-in fails
+// instead of leaving a removed group's role in effect.
+func ApplyWorkspaces(ctx context.Context, store WorkspaceMembers, userID pgtype.UUID, workspaces []identity.WorkspaceAssignment) error {
+	type assignment struct {
+		WorkspaceID string `json:"workspace_id"`
+		Role        string `json:"role"`
+	}
+	in := make([]assignment, 0, len(workspaces))
 	for _, w := range workspaces {
-		var wsID pgtype.UUID
-		if err := wsID.Scan(w.WorkspaceID); err != nil {
-			continue
-		}
-		n, err := store.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: wsID, UserID: userID, Role: w.Role, Source: "idp_group"})
-		if err != nil {
-			logger.WarnContext(ctx, "workspace mapping failed", "workspace_id", w.WorkspaceID, "err", err)
-			continue
-		}
-		if n > 0 {
-			keep = append(keep, wsID)
-		}
+		in = append(in, assignment{WorkspaceID: w.WorkspaceID, Role: w.Role})
 	}
-	if err := store.DeleteStaleGroupWorkspaceMembers(ctx, db.DeleteStaleGroupWorkspaceMembersParams{UserID: userID, Keep: keep}); err != nil {
-		logger.WarnContext(ctx, "drop stale workspace mappings failed", "err", err)
+	raw, err := json.Marshal(in)
+	if err != nil {
+		return err
 	}
+	if err := store.ApplyGroupWorkspaceRoles(ctx, db.ApplyGroupWorkspaceRolesParams{UserID: userID, Assignments: raw}); err != nil {
+		return fmt.Errorf("apply workspace mapping: %w", err)
+	}
+	return nil
 }
 
 // Accounts finds, creates and updates directory-linked accounts;
@@ -119,7 +120,9 @@ func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, provider
 		})
 		if err == nil {
 			ApplyTeams(ctx, logger, store, user.ID, mapped.Teams)
-			ApplyWorkspaces(ctx, logger, store, user.ID, mapped.Workspaces)
+			if err := ApplyWorkspaces(ctx, store, user.ID, mapped.Workspaces); err != nil {
+				return db.User{}, err
+			}
 			return user, nil
 		}
 		if !isUniqueViolation(err) {
@@ -139,7 +142,9 @@ func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, provider
 		user.Role = mapped.Role
 	}
 	ApplyTeams(ctx, logger, store, user.ID, mapped.Teams)
-	ApplyWorkspaces(ctx, logger, store, user.ID, mapped.Workspaces)
+	if err := ApplyWorkspaces(ctx, store, user.ID, mapped.Workspaces); err != nil {
+		return db.User{}, err
+	}
 	return user, nil
 }
 

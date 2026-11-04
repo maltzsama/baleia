@@ -36,6 +36,51 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (T
 	return i, err
 }
 
+const applyGroupWorkspaceRoles = `-- name: ApplyGroupWorkspaceRoles :exec
+WITH locked AS (
+    SELECT pg_advisory_xact_lock(653, hashtext(CAST($1::uuid AS text))) AS ok
+),
+input AS (
+    SELECT (e ->> 'workspace_id')::uuid AS workspace_id, (e ->> 'role')::text AS role
+    FROM jsonb_array_elements($2::jsonb) AS e
+),
+allowed AS (
+    SELECT i.workspace_id, i.role
+    FROM input i
+    CROSS JOIN locked
+    JOIN workspaces w ON w.id = i.workspace_id AND w.type = 'shared'
+    JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $1::uuid
+),
+written AS (
+    INSERT INTO workspace_members (workspace_id, user_id, role, source)
+    SELECT a.workspace_id, $1::uuid, a.role, 'idp_group' FROM allowed a
+    ON CONFLICT (workspace_id, user_id) DO UPDATE
+    SET role = EXCLUDED.role, granted_at = now()
+    WHERE workspace_members.source = 'idp_group'
+    RETURNING workspace_members.workspace_id
+)
+DELETE FROM workspace_members d
+WHERE d.user_id = $1::uuid AND d.source = 'idp_group'
+  AND d.workspace_id NOT IN (SELECT workspace_id FROM allowed)
+  AND EXISTS (SELECT 1 FROM locked)
+`
+
+type ApplyGroupWorkspaceRolesParams struct {
+	UserID      pgtype.UUID `json:"user_id"`
+	Assignments []byte      `json:"assignments"`
+}
+
+// Sets the workspace roles a member's identity-provider groups give, at
+// sign-in (#653), in one statement: the roles mapped for workspaces of teams
+// the member is in are written, the group roles no longer mapped are
+// dropped, and roles an admin set ('manual') are never touched. Personal
+// workspaces are never reached by a group: only their owner shares them. A
+// per-user advisory lock serializes concurrent sign-ins of the same member.
+func (q *Queries) ApplyGroupWorkspaceRoles(ctx context.Context, arg ApplyGroupWorkspaceRolesParams) error {
+	_, err := q.db.Exec(ctx, applyGroupWorkspaceRoles, arg.UserID, arg.Assignments)
+	return err
+}
+
 const catalogGrantedToAgent = `-- name: CatalogGrantedToAgent :one
 SELECT EXISTS (
     SELECT 1 FROM workspace_catalog_grants g
@@ -261,24 +306,6 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.DefaultSchema,
 	)
 	return i, err
-}
-
-const deleteStaleGroupWorkspaceMembers = `-- name: DeleteStaleGroupWorkspaceMembers :exec
-DELETE FROM workspace_members
-WHERE user_id = $1::uuid AND source = 'idp_group'
-  AND NOT (workspace_id = ANY($2::uuid[]))
-`
-
-type DeleteStaleGroupWorkspaceMembersParams struct {
-	UserID pgtype.UUID   `json:"user_id"`
-	Keep   []pgtype.UUID `json:"keep"`
-}
-
-// At sign-in, drops the group-derived roles the member's groups no longer
-// give (#653); roles an admin set stay.
-func (q *Queries) DeleteStaleGroupWorkspaceMembers(ctx context.Context, arg DeleteStaleGroupWorkspaceMembersParams) error {
-	_, err := q.db.Exec(ctx, deleteStaleGroupWorkspaceMembers, arg.UserID, arg.Keep)
-	return err
 }
 
 const deleteTeam = `-- name: DeleteTeam :exec
@@ -1099,11 +1126,10 @@ allowed AS (
     WHERE w.id = $1::uuid AND w.type = 'shared'
 )
 INSERT INTO workspace_members (workspace_id, user_id, role, granted_by, source)
-SELECT $1::uuid, $2::uuid, $3::text, $4::uuid, $5::text
+SELECT $1::uuid, $2::uuid, $3::text, $4::uuid, 'manual'
 FROM allowed
 ON CONFLICT (workspace_id, user_id) DO UPDATE
-SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now(), source = EXCLUDED.source
-WHERE EXCLUDED.source = 'manual' OR workspace_members.source = 'idp_group'
+SET role = EXCLUDED.role, granted_by = EXCLUDED.granted_by, granted_at = now(), source = 'manual'
 `
 
 type UpsertWorkspaceMemberParams struct {
@@ -1111,20 +1137,17 @@ type UpsertWorkspaceMemberParams struct {
 	UserID      pgtype.UUID `json:"user_id"`
 	Role        string      `json:"role"`
 	GrantedBy   pgtype.UUID `json:"granted_by"`
-	Source      string      `json:"source"`
 }
 
 // Writes nothing (0 rows) when the user cannot be a member: on a shared
 // workspace a person must be in its team (a service account need not). The share lock on their team row makes
 // a concurrent removal from the team either wait for this write or win.
-// A role an admin set is never overwritten by an identity-provider group.
 func (q *Queries) UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) (int64, error) {
 	result, err := q.db.Exec(ctx, upsertWorkspaceMember,
 		arg.WorkspaceID,
 		arg.UserID,
 		arg.Role,
 		arg.GrantedBy,
-		arg.Source,
 	)
 	if err != nil {
 		return 0, err

@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // Platform roles. They match the users.role vocabulary.
@@ -171,9 +173,12 @@ func MapIdentity(in MappingInput) (MappingResult, error) {
 		if group == "" {
 			return MappingResult{}, fmt.Errorf("identity: workspace mapping %d has an empty group", i)
 		}
-		if wsID == "" {
-			return MappingResult{}, fmt.Errorf("identity: workspace mapping %d has an empty workspace id", i)
+		id, err := uuid.Parse(wsID)
+		if err != nil {
+			return MappingResult{}, fmt.Errorf("identity: workspace mapping %d has workspace id %q, not a UUID", i, m.WorkspaceID)
 		}
+		// One key per workspace, whatever the spelling of its id.
+		wsID = id.String()
 		if workspaceRank(wsRole) == 0 {
 			return MappingResult{}, fmt.Errorf("identity: workspace mapping %d has invalid role %q", i, wsRole)
 		}

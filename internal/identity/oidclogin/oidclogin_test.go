@@ -75,11 +75,7 @@ func (f *fakeAccounts) CreateUser(context.Context, db.CreateUserParams) (db.User
 	return db.User{}, errors.New("not used")
 }
 func (f *fakeAccounts) UpdateUserRole(context.Context, db.UpdateUserRoleParams) error { return nil }
-func (f *fakeAccounts) UpsertWorkspaceMember(context.Context, db.UpsertWorkspaceMemberParams) (int64, error) {
-	return 1, nil
-}
-
-func (f *fakeAccounts) DeleteStaleGroupWorkspaceMembers(context.Context, db.DeleteStaleGroupWorkspaceMembersParams) error {
+func (f *fakeAccounts) ApplyGroupWorkspaceRoles(context.Context, db.ApplyGroupWorkspaceRolesParams) error {
 	return nil
 }
 

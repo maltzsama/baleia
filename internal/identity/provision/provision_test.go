@@ -18,19 +18,12 @@ import (
 type fakeMembers struct {
 	added []db.UpsertTeamMemberParams
 	fail  map[string]bool
-	// workspace roles written and the group roles kept at the last sign-in
-	workspaces []db.UpsertWorkspaceMemberParams
-	kept       []pgtype.UUID
+	// workspaceErr fails the group workspace roles (#653)
+	workspaceErr error
 }
 
-func (f *fakeMembers) UpsertWorkspaceMember(_ context.Context, arg db.UpsertWorkspaceMemberParams) (int64, error) {
-	f.workspaces = append(f.workspaces, arg)
-	return 1, nil
-}
-
-func (f *fakeMembers) DeleteStaleGroupWorkspaceMembers(_ context.Context, arg db.DeleteStaleGroupWorkspaceMembersParams) error {
-	f.kept = arg.Keep
-	return nil
+func (f *fakeMembers) ApplyGroupWorkspaceRoles(context.Context, db.ApplyGroupWorkspaceRolesParams) error {
+	return f.workspaceErr
 }
 
 func (f *fakeMembers) UpsertTeamMember(_ context.Context, arg db.UpsertTeamMemberParams) error {
@@ -107,6 +100,15 @@ func TestOIDCUser(t *testing.T) {
 	info := func(subject, email string, verified bool, groups ...string) *auth.OIDCUserInfo {
 		return &auth.OIDCUserInfo{Subject: subject, Email: email, EmailVerified: verified, Groups: groups}
 	}
+
+	t.Run("a failed workspace mapping fails the sign-in", func(t *testing.T) {
+		t.Parallel()
+		st := newAccounts()
+		st.workspaceErr = errors.New("database down")
+		if _, err := OIDCUser(ctx, slog.New(slog.DiscardHandler), st, provider, cfg, info("s9", "ana9@x.io", true, "data")); err == nil {
+			t.Fatal("a sign-in must not succeed with stale group roles")
+		}
+	})
 
 	t.Run("creates an allowed verified account with its teams", func(t *testing.T) {
 		t.Parallel()

@@ -551,7 +551,12 @@
 					{/if}
 					{#if preview.workspaces.length > 0}
 						{m.identity_identityproviderform_workspaces()}
-						{preview.workspaces.map((w) => `${w.workspace_id} (${w.role})`).join(', ')}
+						{preview.workspaces
+							.map(
+								(w) =>
+									`${w.workspace_id} (${workspaceRoleOptions.find((o) => o.value === w.role)?.label ?? w.role})`
+							)
+							.join(', ')}
 					{/if}
 				</p>
 			{/if}

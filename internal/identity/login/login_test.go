@@ -51,11 +51,7 @@ func (f *fakeStore) UpdateUserRole(_ context.Context, arg db.UpdateUserRoleParam
 	return nil
 }
 
-func (f *fakeStore) UpsertWorkspaceMember(context.Context, db.UpsertWorkspaceMemberParams) (int64, error) {
-	return 1, nil
-}
-
-func (f *fakeStore) DeleteStaleGroupWorkspaceMembers(context.Context, db.DeleteStaleGroupWorkspaceMembersParams) error {
+func (f *fakeStore) ApplyGroupWorkspaceRoles(context.Context, db.ApplyGroupWorkspaceRolesParams) error {
 	return nil
 }
 

@@ -143,7 +143,9 @@ func (s *Service) Directory(ctx context.Context, providerID pgtype.UUID, usernam
 		user.Role = result.Role
 	}
 	provision.ApplyTeams(ctx, s.logger, s.store, user.ID, result.Teams)
-	provision.ApplyWorkspaces(ctx, s.logger, s.store, user.ID, result.Workspaces)
+	if err := provision.ApplyWorkspaces(ctx, s.store, user.ID, result.Workspaces); err != nil {
+		return db.User{}, err
+	}
 	return user, nil
 }
 

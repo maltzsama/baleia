@@ -92,15 +92,15 @@ func TestPreviewIdentityMapping_Workspaces(t *testing.T) {
 	resp, err := h.PreviewIdentityMapping(ctxAs(adminID, "admin"), PreviewIdentityMappingRequestObject{Body: &PreviewIdentityMappingJSONRequestBody{
 		Groups: []string{"analysts", "leads"},
 		WorkspaceMapping: &[]IdentityWorkspaceMapping{
-			{Group: "analysts", WorkspaceId: "ws-1", Role: WorkspaceRoleViewer},
-			{Group: "leads", WorkspaceId: "ws-1", Role: WorkspaceRoleAdmin},
+			{Group: "analysts", WorkspaceId: "55555555-5555-5555-5555-555555555555", Role: WorkspaceRoleViewer},
+			{Group: "leads", WorkspaceId: "55555555-5555-5555-5555-555555555555", Role: WorkspaceRoleAdmin},
 		},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got, ok := resp.(PreviewIdentityMapping200JSONResponse)
-	if !ok || len(got.Workspaces) != 1 || got.Workspaces[0].WorkspaceId != "ws-1" || got.Workspaces[0].Role != WorkspaceRoleAdmin {
+	if !ok || len(got.Workspaces) != 1 || got.Workspaces[0].WorkspaceId != "55555555-5555-5555-5555-555555555555" || got.Workspaces[0].Role != WorkspaceRoleAdmin {
 		t.Fatalf("preview = %+v", resp)
 	}
 }

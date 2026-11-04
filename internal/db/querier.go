@@ -24,6 +24,13 @@ type Querier interface {
 	// burst of runs afterwards.
 	AdvanceRetrieverSchedule(ctx context.Context, arg AdvanceRetrieverScheduleParams) error
 	AgentWorkspaceBound(ctx context.Context, arg AgentWorkspaceBoundParams) (bool, error)
+	// Sets the workspace roles a member's identity-provider groups give, at
+	// sign-in (#653), in one statement: the roles mapped for workspaces of teams
+	// the member is in are written, the group roles no longer mapped are
+	// dropped, and roles an admin set ('manual') are never touched. Personal
+	// workspaces are never reached by a group: only their owner shares them. A
+	// per-user advisory lock serializes concurrent sign-ins of the same member.
+	ApplyGroupWorkspaceRoles(ctx context.Context, arg ApplyGroupWorkspaceRolesParams) error
 	// Age of the export cursor for the system status section (#291). Zero when no
 	// cursor exists (nothing exported yet).
 	AuditExportLagSeconds(ctx context.Context) (float64, error)
@@ -152,9 +159,6 @@ type Querier interface {
 	DeleteServiceAccount(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteSpace(ctx context.Context, arg DeleteSpaceParams) (int64, error)
 	DeleteSpaceMember(ctx context.Context, arg DeleteSpaceMemberParams) (int64, error)
-	// At sign-in, drops the group-derived roles the member's groups no longer
-	// give (#653); roles an admin set stay.
-	DeleteStaleGroupWorkspaceMembers(ctx context.Context, arg DeleteStaleGroupWorkspaceMembersParams) error
 	DeleteStatementJoins(ctx context.Context, statementID pgtype.UUID) error
 	// Statement references and equi-joins (B0, #530, #538).
 	DeleteStatementReferences(ctx context.Context, statementID pgtype.UUID) error
@@ -798,7 +802,6 @@ type Querier interface {
 	// Writes nothing (0 rows) when the user cannot be a member: on a shared
 	// workspace a person must be in its team (a service account need not). The share lock on their team row makes
 	// a concurrent removal from the team either wait for this write or win.
-	// A role an admin set is never overwritten by an identity-provider group.
 	UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) (int64, error)
 	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)
 }

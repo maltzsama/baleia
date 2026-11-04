@@ -2,7 +2,7 @@ package provision
 
 import (
 	"context"
-	"log/slog"
+	"sync"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
@@ -18,7 +18,6 @@ func TestApplyWorkspaces_Postgres(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	q := db.New(testdb.New(t))
-	logger := slog.New(slog.DiscardHandler)
 	pw := "x"
 	newUser := func(email string) db.User {
 		u, err := q.CreateUser(ctx, db.CreateUserParams{Name: email, Email: email, PasswordHash: &pw, Role: "member", AuthProvider: "local"})
@@ -55,7 +54,12 @@ func TestApplyWorkspaces_Postgres(t *testing.T) {
 		}
 		return r
 	}
-	assign := func(ws ...identity.WorkspaceAssignment) { ApplyWorkspaces(ctx, logger, q, ana.ID, ws) }
+	assign := func(ws ...identity.WorkspaceAssignment) {
+		t.Helper()
+		if err := ApplyWorkspaces(ctx, q, ana.ID, ws); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	// A group makes her a viewer of Fin; Ops is not hers (not in its team).
 	assign(identity.WorkspaceAssignment{WorkspaceID: fin.ID.String(), Role: "viewer"},
@@ -74,7 +78,7 @@ func TestApplyWorkspaces_Postgres(t *testing.T) {
 	}
 
 	// An admin's role wins over a group, and survives the group going away.
-	if _, err := q.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: fin.ID, UserID: ana.ID, Role: "admin", Source: "manual"}); err != nil {
+	if _, err := q.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: fin.ID, UserID: ana.ID, Role: "admin"}); err != nil {
 		t.Fatal(err)
 	}
 	assign(identity.WorkspaceAssignment{WorkspaceID: fin.ID.String(), Role: "viewer"})
@@ -84,5 +88,41 @@ func TestApplyWorkspaces_Postgres(t *testing.T) {
 	assign()
 	if got := role(fin.ID); got != "admin" {
 		t.Errorf("an admin's role was dropped with the group: %q", got)
+	}
+
+	// A group never reaches someone else's personal workspace.
+	mine, err := q.CreateWorkspace(ctx, db.CreateWorkspaceParams{Name: "Mine", Type: "personal", PolarisCatalogName: "ws_g_mine", OwnerUserID: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assign(identity.WorkspaceAssignment{WorkspaceID: mine.ID.String(), Role: "admin"})
+	if got := role(mine.ID); got != "" {
+		t.Errorf("a group reached a personal workspace: %q", got)
+	}
+
+	// Concurrent sign-ins of the same member are serialized: the last one's
+	// mapping holds, never a mix that drops both.
+	if _, err := q.DeleteWorkspaceMember(ctx, db.DeleteWorkspaceMemberParams{WorkspaceID: fin.ID, UserID: ana.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team2.ID, UserID: ana.ID, Role: "member"}); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := range 20 {
+		wg.Go(func() {
+			a := identity.WorkspaceAssignment{WorkspaceID: fin.ID.String(), Role: "viewer"}
+			if i%2 == 1 {
+				a = identity.WorkspaceAssignment{WorkspaceID: ops.ID.String(), Role: "viewer"}
+			}
+			if err := ApplyWorkspaces(ctx, q, ana.ID, []identity.WorkspaceAssignment{a}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	finViewer, opsViewer := role(fin.ID) == "viewer", role(ops.ID) == "viewer"
+	if finViewer == opsViewer {
+		t.Errorf("after concurrent sign-ins exactly one group role must hold: fin=%t ops=%t", finViewer, opsViewer)
 	}
 }
