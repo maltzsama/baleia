@@ -660,6 +660,12 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 	agentID := pgtype.UUID{}
 	origin := workload.OriginEditor
 	if principal.IsAgent() {
+		// The policy applies to the resolved target, not to the ids the
+		// agent sent: a binding brings its own catalog and engine.
+		if !agentScopeAllows(ctx, idString(target.CatalogID), idString(target.EngineID)) {
+			h.audited(ctx, ev.Denied(audit.ReasonForbidden))
+			return RunQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "target not allowed by the agent policy"}}, nil
+		}
 		role, err := h.authz().WorkspaceRole(ctx, principal, workspace.ID)
 		if err != nil {
 			return nil, err

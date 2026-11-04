@@ -441,3 +441,36 @@ func TestAgentPolicy_Scope(t *testing.T) {
 		t.Fatalf("admin get = %T, want 200", got)
 	}
 }
+
+// TestRunQuery_AgentScopeOnResolvedTarget (#653): the agent policy applies to
+// the target RunQuery resolves, so a binding cannot reach a catalog or engine
+// the policy leaves out.
+func TestRunQuery_AgentScopeOnResolvedTarget(t *testing.T) {
+	t.Parallel()
+	fake := &fakeRunQueryQuerier{
+		exec:       db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
+		targets:    []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true)},
+		agentBound: true,
+		role:       "editor",
+	}
+	h := testAPI(handlerFields{
+		queries: fake, tx: directTx{q: fake},
+		settings:       SettingsFromConfig(&config.Config{StatementTimeout: 30 * time.Minute}),
+		temporalClient: &fakeTemporalClient{},
+		kinds:          testKinds(t, nil),
+		dialects:       dialect.NewRegistry(),
+	})
+	agentCtx := context.WithValue(context.Background(), auth.ContextKeyUserID, testUserID)
+	agentCtx = context.WithValue(agentCtx, auth.ContextKeyRole, "member")
+	agentCtx = context.WithValue(agentCtx, auth.ContextKeyActorKind, auth.ActorAgent)
+	agentCtx = context.WithValue(agentCtx, auth.ContextKeyAgentID, "22222222-2222-2222-2222-222222222222")
+	agentCtx = WithAgentScope(agentCtx, map[string]bool{"99999999-9999-9999-9999-999999999999": true}, nil)
+
+	resp, err := h.RunQuery(agentCtx, RunQueryRequestObject{Id: PathId{0xAA}, Body: &RunQueryJSONRequestBody{Sql: "INSERT INTO t VALUES (1)"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(RunQuery404JSONResponse); !ok || len(fake.created) != 0 {
+		t.Fatalf("out-of-policy target = %T, executions %d", resp, len(fake.created))
+	}
+}
