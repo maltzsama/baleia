@@ -104,6 +104,13 @@ if [[ "$STATUS" != "finished" ]]; then
   # Say why: the execution's own error code, target and statements.
   curl -s -H "Authorization: Bearer $TOKEN" "$API/workspaces/$WS/executions/$EID" \
     | jq '{status, error_code, engine_kind, target, statements}' || true
+  # The reason lives on the statement row, not in the execution JSON.
+  if [[ "$STACK" == "k8s" ]]; then
+    kubectl -n baleia-dev exec postgres-0 -- psql -U baleia -d baleia -c \
+      "SELECT e.status AS execution, s.status AS statement, left(s.error_message, 600) AS error
+         FROM query_executions e JOIN query_statements s ON s.execution_id = e.id
+        WHERE e.id = '$EID'" || true
+  fi
   exit 1
 fi
 
