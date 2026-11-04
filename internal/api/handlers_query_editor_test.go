@@ -244,6 +244,25 @@ type fakeRunQueryQuerier struct {
 	targets      []db.ListWorkspaceTargetsRow
 	created      []db.CreateQueryExecutionParams
 	agentBound   bool
+	// role is the caller's workspace role (#653); empty means editor.
+	role string
+	// agentKind is the calling agent's kind; empty means external.
+	agentKind string
+}
+
+func (f *fakeRunQueryQuerier) GetAgentByID(_ context.Context, id pgtype.UUID) (db.Agent, error) {
+	kind := f.agentKind
+	if kind == "" {
+		kind = "external"
+	}
+	return db.Agent{ID: id, Kind: kind, Status: "active"}, nil
+}
+
+func (f *fakeRunQueryQuerier) GetWorkspaceMemberRole(context.Context, db.GetWorkspaceMemberRoleParams) (string, error) {
+	if f.role == "" {
+		return "editor", nil
+	}
+	return f.role, nil
 }
 
 func (f *fakeRunQueryQuerier) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {

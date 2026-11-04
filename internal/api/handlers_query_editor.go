@@ -651,15 +651,25 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 	if err != nil {
 		return nil, err
 	}
-	// Agents are always read-only, whatever the workspace grant says (#59).
-	// The engine enforces it; an engine that cannot is refused when the session
-	// opens (queryengine.CodeReadOnly) unless its credentials are asserted
-	// read-only.
+	// An agent follows its owner's workspace role, like a person (#653): a
+	// viewer agent's session is read-only, enforced by the engine (an engine
+	// that cannot is refused when the session opens, queryengine.CodeReadOnly,
+	// unless its credentials are asserted read-only); an editor or admin
+	// agent may write, and the catalog manager decides what (ADR 0015).
 	principal, _ := authz.PrincipalFromContext(ctx)
 	agentID := pgtype.UUID{}
 	origin := workload.OriginEditor
 	if principal.IsAgent() {
-		target.ReadOnly = true
+		role, err := h.authz().WorkspaceRole(ctx, principal, workspace.ID)
+		if err != nil {
+			return nil, err
+		}
+		// The built-in assistant stays read-only whatever its owner's role.
+		agent, err := h.queries.GetAgentByID(ctx, principal.AgentID)
+		if err != nil {
+			return nil, err
+		}
+		target.ReadOnly = role < authz.WorkspaceEditor || agent.Kind != "external"
 		agentID = principal.AgentID
 		origin = workload.OriginAgent
 	}

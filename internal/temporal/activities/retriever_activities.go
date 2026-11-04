@@ -169,8 +169,8 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		err = fmt.Errorf("retriever owner unavailable: %w", idErr)
 	} else {
 		spec := queryengine.SessionSpec{
-			Catalog:  destCatalog,
-			Schema:   []string{retriever.DestNamespace},
+			Catalog: destCatalog,
+			Schema:  []string{retriever.DestNamespace},
 			// The owner's identity-provider token, when they have one, so
 			// the catalog manager authorizes the refresh as them (#648).
 			Identity: queryengine.Identity{UserID: identity, Principal: uuidStr(retriever.CreatedBy)},

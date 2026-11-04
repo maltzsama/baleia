@@ -62,6 +62,7 @@ type Store interface {
 	GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, error)
 	AgentWorkspaceBound(ctx context.Context, arg db.AgentWorkspaceBoundParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
+	GetWorkspaceMemberRole(ctx context.Context, arg db.GetWorkspaceMemberRoleParams) (string, error)
 	CatalogGrantedToAgent(ctx context.Context, arg db.CatalogGrantedToAgentParams) (bool, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
@@ -200,12 +201,12 @@ func (g *Gate) Check(ctx context.Context, p authz.Principal, c Call) (dec Decisi
 		return refuse(ReasonRate, "tool-call rate exceeded"), nil
 	}
 	if c.Tool == ToolRunQuery {
-		return g.checkRunQuery(ctx, p, c, eff)
+		return g.checkRunQuery(ctx, p, c, eff, agent)
 	}
 	return allow(eff), nil
 }
 
-func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff Effective) (Decision, error) {
+func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff Effective, agent db.Agent) (Decision, error) {
 	if c.SQL == nil || strings.TrimSpace(*c.SQL) == "" {
 		return refuse(ReasonStatement, "run_query requires SQL"), nil
 	}
@@ -233,22 +234,32 @@ func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff
 	if policy.ForbiddenInEditor(d, *c.SQL) {
 		return refuse(ReasonStatement, "catalog management and session authorization are not allowed"), nil
 	}
-	if !readOnlyKeyword(leadingKeyword(*c.SQL)) {
-		return refuse(ReasonStatement, "agents may only run read statements"), nil
+	// MCP follows the owner's workspace role, like a person (#653): a viewer
+	// agent only reads; an editor or admin agent may also write (create
+	// tables, load data), and the catalog manager still decides what it may
+	// write where (ADR 0015).
+	writer, err := g.agentWrites(ctx, p, agent, c.WorkspaceID)
+	if err != nil {
+		return Decision{}, err
+	}
+	if !writer && !readOnlyKeyword(leadingKeyword(*c.SQL)) {
+		return refuse(ReasonStatement, "a viewer agent may only run read statements"), nil
 	}
 	if len(eff.Engines) > 0 && !eff.Engines[uuidString(engine.ID)] {
 		return refuse(ReasonPolicy, "engine is not allowed by the policy"), nil
 	}
-	cap, err := g.engines.ReadOnly(ctx, engine.ID)
-	if err != nil {
-		return Decision{}, err
-	}
-	conn, err := g.store.GetCatalogConnectionByID(ctx, engine.ConnectionID)
-	if err != nil {
-		return Decision{}, err
-	}
-	if cap != queryengine.ReadOnlyEnforced && !conn.CredentialsReadOnly {
-		return refuse(ReasonScope, "read-only is not enforced on this engine"), nil
+	if !writer {
+		support, err := g.engines.ReadOnly(ctx, engine.ID)
+		if err != nil {
+			return Decision{}, err
+		}
+		conn, err := g.store.GetCatalogConnectionByID(ctx, engine.ConnectionID)
+		if err != nil {
+			return Decision{}, err
+		}
+		if support != queryengine.ReadOnlyEnforced && !conn.CredentialsReadOnly {
+			return refuse(ReasonScope, "read-only is not enforced on this engine"), nil
+		}
 	}
 
 	running, err := g.store.CountRunningExecutionsByAgent(ctx, p.AgentID)
@@ -372,3 +383,21 @@ func uuidString(id pgtype.UUID) string {
 	}
 	return uuid.UUID(id.Bytes).String()
 }
+
+// agentWrites reports whether the agent may run write statements in the
+// workspace: an external agent whose owner's workspace role is editor or
+// admin (#653). The built-in assistant stays read-only.
+func (g *Gate) agentWrites(ctx context.Context, p authz.Principal, agent db.Agent, ws pgtype.UUID) (bool, error) {
+	if !ws.Valid || agent.Kind != "external" {
+		return false, nil
+	}
+	role, err := g.store.GetWorkspaceMemberRole(ctx, db.GetWorkspaceMemberRoleParams{ID: ws, UserID: p.UserID})
+	if err != nil {
+		return false, err
+	}
+	return AgentWrites(role), nil
+}
+
+// AgentWrites reports whether an agent whose owner has role in a workspace
+// may write there: editors and admins may, viewers only read (#653).
+func AgentWrites(role string) bool { return role == "editor" || role == "admin" }

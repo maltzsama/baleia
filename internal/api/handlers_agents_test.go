@@ -283,50 +283,58 @@ func TestRequireWorkspaceAccess_AgentBinding(t *testing.T) {
 	}
 }
 
-// TestRunQuery_AgentIsReadOnly: an agent execution forces a read-only target
-// even when the workspace grants write, records agent_id and carries the agent
-// identity into the workflow (#59).
-func TestRunQuery_AgentIsReadOnly(t *testing.T) {
+// TestRunQuery_AgentFollowsRole: an agent execution follows its owner's
+// workspace role (#653): a viewer agent's target is read-only, an editor
+// agent's is not; agent_id is recorded and the agent identity reaches the
+// workflow (#59).
+func TestRunQuery_AgentFollowsRole(t *testing.T) {
 	t.Parallel()
-	fake := &fakeRunQueryQuerier{
-		exec:       db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
-		targets:    []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true)},
-		agentBound: true,
-	}
-	temporal := &fakeTemporalClient{}
-	h := testAPI(handlerFields{
-		queries: fake, tx: directTx{q: fake},
-		settings:       SettingsFromConfig(&config.Config{StatementTimeout: 30 * time.Minute}),
-		temporalClient: temporal,
-		kinds:          testKinds(t, nil),
-		dialects:       dialect.NewRegistry(),
-	})
-	agentCtx := context.WithValue(context.Background(), auth.ContextKeyUserID, testUserID)
-	agentCtx = context.WithValue(agentCtx, auth.ContextKeyRole, "member")
-	agentCtx = context.WithValue(agentCtx, auth.ContextKeyActorKind, auth.ActorAgent)
-	agentCtx = context.WithValue(agentCtx, auth.ContextKeyAgentID, "22222222-2222-2222-2222-222222222222")
+	for _, tc := range []struct {
+		role, kind string
+		readOnly   bool
+	}{{"viewer", "external", true}, {"editor", "external", false}, {"admin", "external", false}, {"editor", "assistant", true}} {
+		t.Run(tc.role+"/"+tc.kind, func(t *testing.T) {
+			t.Parallel()
+			fake := &fakeRunQueryQuerier{
+				exec:       db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
+				targets:    []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true)},
+				agentBound: true,
+				role:       tc.role,
+				agentKind:  tc.kind,
+			}
+			temporal := &fakeTemporalClient{}
+			h := testAPI(handlerFields{
+				queries: fake, tx: directTx{q: fake},
+				settings:       SettingsFromConfig(&config.Config{StatementTimeout: 30 * time.Minute}),
+				temporalClient: temporal,
+				kinds:          testKinds(t, nil),
+				dialects:       dialect.NewRegistry(),
+			})
+			agentCtx := context.WithValue(context.Background(), auth.ContextKeyUserID, testUserID)
+			agentCtx = context.WithValue(agentCtx, auth.ContextKeyRole, "member")
+			agentCtx = context.WithValue(agentCtx, auth.ContextKeyActorKind, auth.ActorAgent)
+			agentCtx = context.WithValue(agentCtx, auth.ContextKeyAgentID, "22222222-2222-2222-2222-222222222222")
 
-	if _, err := h.RunQuery(agentCtx, RunQueryRequestObject{
-		Id:   PathId{0xAA},
-		Body: &RunQueryJSONRequestBody{Sql: "SELECT 1"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if len(fake.created) != 1 {
-		t.Fatalf("executions created = %d, want 1", len(fake.created))
-	}
-	if !fake.created[0].AgentID.Valid {
-		t.Error("query_executions.agent_id was not set")
-	}
-	input, ok := temporal.started[0].(workflows.QueryExecutionInput)
-	if !ok {
-		t.Fatalf("workflow input = %T", temporal.started[0])
-	}
-	if !input.Target.ReadOnly {
-		t.Error("agent execution target is not read-only")
-	}
-	if input.Identity.AgentID == "" {
-		t.Error("workflow identity has no agent id")
+			if _, err := h.RunQuery(agentCtx, RunQueryRequestObject{
+				Id:   PathId{0xAA},
+				Body: &RunQueryJSONRequestBody{Sql: "SELECT 1"},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if len(fake.created) != 1 || !fake.created[0].AgentID.Valid {
+				t.Fatalf("executions created = %+v", fake.created)
+			}
+			input, ok := temporal.started[0].(workflows.QueryExecutionInput)
+			if !ok {
+				t.Fatalf("workflow input = %T", temporal.started[0])
+			}
+			if input.Target.ReadOnly != tc.readOnly {
+				t.Errorf("read-only = %t, want %t", input.Target.ReadOnly, tc.readOnly)
+			}
+			if input.Identity.AgentID == "" {
+				t.Error("workflow identity has no agent id")
+			}
+		})
 	}
 }
 

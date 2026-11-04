@@ -21,7 +21,7 @@ import (
 type fakeStore struct {
 	providers       map[[16]byte]db.AuthProvider
 	serviceAccounts map[string]db.User // external id -> service account
-	attempts  map[string]db.OidcLoginAttempt
+	attempts        map[string]db.OidcLoginAttempt
 }
 
 func (f *fakeStore) GetAuthProviderByID(_ context.Context, id pgtype.UUID) (db.AuthProvider, error) {
