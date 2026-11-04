@@ -20,8 +20,15 @@
 	let {
 		workspaceId,
 		personal,
-		canManage
-	}: { workspaceId: string; personal: boolean; canManage: boolean } = $props();
+		canManage,
+		onchange
+	}: {
+		workspaceId: string;
+		personal: boolean;
+		canManage: boolean;
+		/** Called after a member changes: the caller's own role may have changed. */
+		onchange?: () => void;
+	} = $props();
 
 	let members = $state.raw<Member[]>([]);
 	let loading = $state(true);
@@ -52,27 +59,39 @@
 	async function load() {
 		loading = true;
 		loadError = '';
-		const { data, error } = await client.GET('/workspaces/{id}/members', {
-			params: { path: { id: workspaceId } }
-		});
-		if (error) {
-			loadError = apiErrorMessage(error, m.workspace_members_load_failed());
-		} else {
-			members = data ?? [];
+		try {
+			const { data, error } = await client.GET('/workspaces/{id}/members', {
+				params: { path: { id: workspaceId } }
+			});
+			if (error) {
+				loadError = apiErrorMessage(error, m.workspace_members_load_failed());
+			} else {
+				members = data ?? [];
+			}
+		} catch (e) {
+			loadError = apiErrorMessage(e, m.workspace_members_load_failed());
+		} finally {
+			loading = false;
 		}
-		loading = false;
+	}
+
+	async function changed() {
+		await load();
+		onchange?.();
 	}
 
 	async function setRole(member: Member, role: string) {
 		actionError = '';
-		const { error } = await client.PUT('/workspaces/{id}/members/{user_id}', {
-			params: { path: { id: workspaceId, user_id: member.user.id } },
-			body: { role: role as Role }
-		});
-		if (error) {
-			actionError = apiErrorMessage(error, m.workspace_members_change_failed());
+		try {
+			const { error } = await client.PUT('/workspaces/{id}/members/{user_id}', {
+				params: { path: { id: workspaceId, user_id: member.user.id } },
+				body: { role: role as Role }
+			});
+			if (error) actionError = apiErrorMessage(error, m.workspace_members_change_failed());
+		} catch (e) {
+			actionError = apiErrorMessage(e, m.workspace_members_change_failed());
 		}
-		await load();
+		await changed();
 	}
 
 	async function add(event: SubmitEvent) {
@@ -80,17 +99,22 @@
 		if (!email.trim() || adding) return;
 		adding = true;
 		actionError = '';
-		const { error } = await client.POST('/workspaces/{id}/members', {
-			params: { path: { id: workspaceId } },
-			body: { email: email.trim(), role: newRole }
-		});
-		if (error) {
-			actionError = apiErrorMessage(error, m.workspace_members_change_failed());
-		} else {
-			email = '';
-			await load();
+		try {
+			const { error } = await client.POST('/workspaces/{id}/members', {
+				params: { path: { id: workspaceId } },
+				body: { email: email.trim(), role: newRole }
+			});
+			if (error) {
+				actionError = apiErrorMessage(error, m.workspace_members_change_failed());
+			} else {
+				email = '';
+				await changed();
+			}
+		} catch (e) {
+			actionError = apiErrorMessage(e, m.workspace_members_change_failed());
+		} finally {
+			adding = false;
 		}
-		adding = false;
 	}
 
 	async function remove() {
@@ -100,7 +124,7 @@
 		});
 		if (error) throw error;
 		removing = null;
-		await load();
+		await changed();
 	}
 
 	$effect(() => {

@@ -46,20 +46,6 @@ func (h *WorkspaceHandlers) ListWorkspaceMembers(ctx context.Context, request Li
 	return out, nil
 }
 
-// memberRow reads one member back after a change.
-func (h *core) memberRow(ctx context.Context, wsID, userID pgtype.UUID) (db.ListWorkspaceMembersRow, bool, error) {
-	rows, err := h.queries.ListWorkspaceMembers(ctx, wsID)
-	if err != nil {
-		return db.ListWorkspaceMembersRow{}, false, err
-	}
-	for _, r := range rows {
-		if r.User.ID == userID {
-			return r, true, nil
-		}
-	}
-	return db.ListWorkspaceMembersRow{}, false, nil
-}
-
 // memberOutcome is the result of setting a member's role.
 type memberOutcome int
 
@@ -95,6 +81,7 @@ func (h *core) setMember(ctx context.Context, wsID pgtype.UUID, user *db.User, r
 		return db.ListWorkspaceMembersRow{}, 0, err
 	}
 	if authz.ParseWorkspaceRole(role) == authz.WorkspaceNone {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return db.ListWorkspaceMembersRow{}, memberInvalidRole, nil
 	}
 	if user == nil {
@@ -122,14 +109,13 @@ func (h *core) setMember(ctx context.Context, wsID pgtype.UUID, user *db.User, r
 	}
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())
-	row, ok, err := h.memberRow(ctx, wsID, user.ID)
-	if err != nil {
-		return db.ListWorkspaceMembersRow{}, 0, err
+	// Built from what was written: the change is committed and audited, so
+	// a failed read-back must not turn it into an error.
+	source := "team"
+	if ws.Type == "personal" {
+		source = "shared"
 	}
-	if !ok {
-		return db.ListWorkspaceMembersRow{}, 0, errors.New("workspace member not found after setting it")
-	}
-	return row, memberSet, nil
+	return db.ListWorkspaceMembersRow{User: *user, Role: role, Source: source, RoleSet: true}, memberSet, nil
 }
 
 // lookupUser returns nil when no user matches.

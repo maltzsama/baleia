@@ -101,7 +101,11 @@ WHERE ($1::text IS NULL OR resource_type = $1::text)
        OR ($9::uuid IS NOT NULL
            AND workspace_id IN (
              SELECT w.id FROM workspaces w
-             WHERE baleia_workspace_member_role(w.id, $9::uuid) = 'admin'
+             WHERE w.owner_user_id = $9::uuid
+                OR w.owner_team_id IN (
+                  SELECT tm.team_id FROM team_members tm
+                  WHERE tm.user_id = $9::uuid AND tm.role = 'owner'
+                )
            ))
        OR ($9::uuid IS NOT NULL
            AND on_behalf_of = $9::uuid)

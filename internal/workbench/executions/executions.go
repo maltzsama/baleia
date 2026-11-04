@@ -40,7 +40,7 @@ type Runs interface {
 // implements it.
 type History interface {
 	ListExecutionHistory(ctx context.Context, arg db.ListExecutionHistoryParams) ([]db.ListExecutionHistoryRow, error)
-	IsWorkspaceOwner(ctx context.Context, arg db.IsWorkspaceOwnerParams) (bool, error)
+	IsWorkspaceStructuralOwner(ctx context.Context, arg db.IsWorkspaceStructuralOwnerParams) (bool, error)
 	ListQueryStatementsByWorkspace(ctx context.Context, arg db.ListQueryStatementsByWorkspaceParams) ([]db.QueryStatement, error)
 	GetQueryStatementByPosition(ctx context.Context, arg db.GetQueryStatementByPositionParams) (db.QueryStatement, error)
 }
@@ -598,13 +598,14 @@ type Page struct {
 }
 
 // seesAll reports whether the viewer sees every execution in the workspace:
-// administrators and the workspace owner do; everyone else sees only their own
-// (#36, #611).
+// administrators and the workspace owner do (the personal user or a team
+// owner, not a member given the admin role, #653); everyone else sees only
+// their own (#36, #611).
 func (s *Service) seesAll(ctx context.Context, v Viewer, ws pgtype.UUID) (bool, error) {
 	if v.Admin {
 		return true, nil
 	}
-	return s.store.IsWorkspaceOwner(ctx, db.IsWorkspaceOwnerParams{ID: ws, UserID: v.UserID})
+	return s.store.IsWorkspaceStructuralOwner(ctx, db.IsWorkspaceStructuralOwnerParams{ID: ws, UserID: v.UserID})
 }
 
 // Visible reports whether the viewer may read exec: the workspace owner, an

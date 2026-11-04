@@ -6433,7 +6433,7 @@ paths:
     post:
       tags: [Spaces]
       operationId: createSpace
-      summary: "Create a space; the creator becomes its manager — workspace members"
+      summary: "Create a space; the creator becomes its manager — workspace admins"
       requestBody:
         required: true
         content:

@@ -94,7 +94,7 @@ func (f *fakeStore) ListExecutionHistory(_ context.Context, arg db.ListExecution
 	return f.history, nil
 }
 
-func (f *fakeStore) IsWorkspaceOwner(context.Context, db.IsWorkspaceOwnerParams) (bool, error) {
+func (f *fakeStore) IsWorkspaceStructuralOwner(context.Context, db.IsWorkspaceStructuralOwnerParams) (bool, error) {
 	return f.owner, nil
 }
 

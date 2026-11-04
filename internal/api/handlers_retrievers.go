@@ -44,7 +44,7 @@ func (h *QueryHandlers) CreateRetriever(ctx context.Context, request CreateRetri
 	if err := h.requireWorkspaceRole(ctx, request.Id, authz.WorkspaceEditor); err != nil {
 		if errors.Is(err, authz.ErrForbidden) {
 			h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-			return CreateRetriever403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner may manage retrievers"}}, nil
+			return CreateRetriever403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "managing retrievers needs the editor or admin role"}}, nil
 		}
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (h *QueryHandlers) UpdateRetriever(ctx context.Context, request UpdateRetri
 	if err := h.requireWorkspaceRole(ctx, request.Id, authz.WorkspaceEditor); err != nil {
 		if errors.Is(err, authz.ErrForbidden) {
 			h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-			return UpdateRetriever403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner may manage retrievers"}}, nil
+			return UpdateRetriever403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "managing retrievers needs the editor or admin role"}}, nil
 		}
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func (h *QueryHandlers) DeleteRetriever(ctx context.Context, request DeleteRetri
 	if err := h.requireWorkspaceRole(ctx, request.Id, authz.WorkspaceEditor); err != nil {
 		if errors.Is(err, authz.ErrForbidden) {
 			h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-			return DeleteRetriever403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner may manage retrievers"}}, nil
+			return DeleteRetriever403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "managing retrievers needs the editor or admin role"}}, nil
 		}
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func (h *QueryHandlers) TriggerRetrieverRefresh(ctx context.Context, request Tri
 	if err := h.requireWorkspaceRole(ctx, request.Id, authz.WorkspaceEditor); err != nil {
 		if errors.Is(err, authz.ErrForbidden) {
 			h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-			return TriggerRetrieverRefresh403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace owner may manage retrievers"}}, nil
+			return TriggerRetrieverRefresh403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "managing retrievers needs the editor or admin role"}}, nil
 		}
 		return nil, err
 	}

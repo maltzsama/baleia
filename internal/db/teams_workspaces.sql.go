@@ -417,7 +417,7 @@ func (q *Queries) GetWorkspaceMemberRole(ctx context.Context, arg GetWorkspaceMe
 }
 
 const isWorkspaceOwner = `-- name: IsWorkspaceOwner :one
-SELECT (baleia_workspace_member_role($1::uuid, $2::uuid) = 'admin')::bool AS is_owner
+SELECT COALESCE(baleia_workspace_member_role($1::uuid, $2::uuid) = 'admin', false)::bool AS is_owner
 `
 
 type IsWorkspaceOwnerParams struct {
@@ -429,6 +429,31 @@ type IsWorkspaceOwnerParams struct {
 // personal one, and a team owner of a shared one unless another role was set.
 func (q *Queries) IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error) {
 	row := q.db.QueryRow(ctx, isWorkspaceOwner, arg.ID, arg.UserID)
+	var is_owner bool
+	err := row.Scan(&is_owner)
+	return is_owner, err
+}
+
+const isWorkspaceStructuralOwner = `-- name: IsWorkspaceStructuralOwner :one
+SELECT EXISTS (
+    SELECT 1 FROM workspaces w
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = $1::uuid AND tm.role = 'owner'
+    WHERE w.id = $2::uuid
+      AND (w.owner_user_id = $1::uuid OR tm.user_id IS NOT NULL)
+) AS is_owner
+`
+
+type IsWorkspaceStructuralOwnerParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	ID     pgtype.UUID `json:"id"`
+}
+
+// The workspace's owner by structure, not by role: the user of a personal
+// workspace, an owner of the team of a shared one. Seeing other members'
+// executions and the workspace's audit stay with them (#36, #611); a workspace
+// admin role does not grant it (#653).
+func (q *Queries) IsWorkspaceStructuralOwner(ctx context.Context, arg IsWorkspaceStructuralOwnerParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isWorkspaceStructuralOwner, arg.UserID, arg.ID)
 	var is_owner bool
 	err := row.Scan(&is_owner)
 	return is_owner, err

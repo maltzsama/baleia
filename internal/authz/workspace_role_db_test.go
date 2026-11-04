@@ -113,6 +113,22 @@ func TestWorkspaceRoles_Postgres(t *testing.T) {
 		t.Errorf("non-member = %v, want none", got)
 	}
 
+	// An admin by role manages the workspace, but other members' executions
+	// and the workspace's audit stay with its structural owner (#611).
+	set(shared.ID, member.ID, "admin")
+	if ok, err := q.IsWorkspaceOwner(ctx, db.IsWorkspaceOwnerParams{ID: shared.ID, UserID: member.ID}); err != nil || !ok {
+		t.Errorf("admin by role is a workspace admin: %v, %v", ok, err)
+	}
+	if ok, err := q.IsWorkspaceStructuralOwner(ctx, db.IsWorkspaceStructuralOwnerParams{ID: shared.ID, UserID: member.ID}); err != nil || ok {
+		t.Errorf("admin by role is not the structural owner: %v, %v", ok, err)
+	}
+	if ok, err := q.IsWorkspaceStructuralOwner(ctx, db.IsWorkspaceStructuralOwnerParams{ID: shared.ID, UserID: owner.ID}); err != nil || !ok {
+		t.Errorf("team owner is the structural owner: %v, %v", ok, err)
+	}
+	if ok, err := q.IsWorkspaceOwner(ctx, db.IsWorkspaceOwnerParams{ID: personal.ID, UserID: member.ID}); err != nil || ok {
+		t.Errorf("a non-member is not an owner (and no NULL scan error): %v, %v", ok, err)
+	}
+
 	// Leaving the team ends the membership, even with an explicit role.
 	if _, err := q.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{TeamID: team.ID, UserID: viewer.ID}); err != nil {
 		t.Fatal(err)

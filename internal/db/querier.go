@@ -341,6 +341,11 @@ type Querier interface {
 	// Whether the user is an admin of the workspace (#653): the owner of a
 	// personal one, and a team owner of a shared one unless another role was set.
 	IsWorkspaceOwner(ctx context.Context, arg IsWorkspaceOwnerParams) (bool, error)
+	// The workspace's owner by structure, not by role: the user of a personal
+	// workspace, an owner of the team of a shared one. Seeing other members'
+	// executions and the workspace's audit stay with them (#36, #611); a workspace
+	// admin role does not grant it (#653).
+	IsWorkspaceStructuralOwner(ctx context.Context, arg IsWorkspaceStructuralOwnerParams) (bool, error)
 	// The latest finished run of each operation on a table.
 	LastSuccessfulMaintenanceByOperation(ctx context.Context, arg LastSuccessfulMaintenanceByOperationParams) ([]LastSuccessfulMaintenanceByOperationRow, error)
 	LatestContentVersion(ctx context.Context, arg LatestContentVersionParams) (ContentVersion, error)

@@ -2591,7 +2591,7 @@
 	"workspace_members_source_shared": "Compartilhado",
 	"workspace_members_role": "Papel",
 	"workspace_members_role_of": "Papel de {name}",
-	"workspace_members_personal_hint": "Leitores veem o conteúdo e rodam queries, editores também criam e editam conteúdo, admins também gerenciam o workspace. Compartilhe este workspace com qualquer pessoa pelo e-mail. O que cada um pode ler nos catálogos é decisão do gerenciador de catálogo.",
+	"workspace_members_personal_hint": "Leitores veem o conteúdo e rodam queries, editores também criam e editam conteúdo, admins também gerenciam o workspace. Compartilhe este workspace pelo e-mail com quem já tem conta. O que cada um pode ler nos catálogos é decisão do gerenciador de catálogo.",
 	"workspace_members_team_hint": "Os membros são os do time: donos do time são admins e membros são editores, a menos que você defina outro papel. A participação no time é gerenciada em Configurações → Times. O que cada um pode ler nos catálogos é decisão do gerenciador de catálogo.",
 	"workspace_members_share_email": "Compartilhar com (e-mail)",
 	"workspace_members_share": "Compartilhar",

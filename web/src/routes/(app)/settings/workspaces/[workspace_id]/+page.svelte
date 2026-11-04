@@ -94,6 +94,15 @@
 		}
 	}
 
+	// A member change may change the caller's own role and actions.
+	async function refreshWorkspace() {
+		const { data } = await client.GET('/workspaces/{id}', {
+			params: { path: { id: workspaceId } }
+		});
+		if (data) ws = data;
+		await workspaceStore.load();
+	}
+
 	function selectTab(next: Tab) {
 		tab = next;
 		window.history.replaceState(null, '', `${page.url.pathname}?tab=${next}`);
@@ -408,6 +417,7 @@
 				workspaceId={ws.id}
 				personal={ws.type === 'personal'}
 				canManage={!!ws.allowed_actions?.includes('manage_members')}
+				onchange={refreshWorkspace}
 			/>
 		{:else if tab === 'activity'}
 			<ActivityPanel

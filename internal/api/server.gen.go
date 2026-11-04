@@ -708,7 +708,7 @@ type ServerInterface interface {
 	// Spaces the caller can see, with their role — workspace members
 	// (GET /workspaces/{id}/spaces)
 	ListSpaces(w http.ResponseWriter, r *http.Request, id PathId)
-	// Create a space; the creator becomes its manager — workspace members
+	// Create a space; the creator becomes its manager — workspace admins
 	// (POST /workspaces/{id}/spaces)
 	CreateSpace(w http.ResponseWriter, r *http.Request, id PathId)
 	// Delete a space, its content, and its access list — manager
@@ -2133,7 +2133,7 @@ func (_ Unimplemented) ListSpaces(w http.ResponseWriter, r *http.Request, id Pat
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Create a space; the creator becomes its manager — workspace members
+// Create a space; the creator becomes its manager — workspace admins
 // (POST /workspaces/{id}/spaces)
 func (_ Unimplemented) CreateSpace(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -24256,7 +24256,7 @@ type StrictServerInterface interface {
 	// Spaces the caller can see, with their role — workspace members
 	// (GET /workspaces/{id}/spaces)
 	ListSpaces(ctx context.Context, request ListSpacesRequestObject) (ListSpacesResponseObject, error)
-	// Create a space; the creator becomes its manager — workspace members
+	// Create a space; the creator becomes its manager — workspace admins
 	// (POST /workspaces/{id}/spaces)
 	CreateSpace(ctx context.Context, request CreateSpaceRequestObject) (CreateSpaceResponseObject, error)
 	// Delete a space, its content, and its access list — manager

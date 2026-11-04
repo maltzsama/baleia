@@ -37,6 +37,10 @@ func (f *fakeQuerier) IsWorkspaceOwner(context.Context, db.IsWorkspaceOwnerParam
 	return !f.notOwner, nil
 }
 
+func (f *fakeQuerier) IsWorkspaceStructuralOwner(context.Context, db.IsWorkspaceStructuralOwnerParams) (bool, error) {
+	return !f.notOwner, nil
+}
+
 func (f *fakeQuerier) GetWorkspaceMemberRole(context.Context, db.GetWorkspaceMemberRoleParams) (string, error) {
 	switch {
 	case !f.hasWorkspaceAccess:

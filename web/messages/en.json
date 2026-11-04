@@ -2591,7 +2591,7 @@
 	"workspace_members_source_shared": "Shared",
 	"workspace_members_role": "Role",
 	"workspace_members_role_of": "Role of {name}",
-	"workspace_members_personal_hint": "Viewers see content and run queries, editors also create and edit content, admins also manage the workspace. Share this workspace with anyone by e-mail. What each person may read in its catalogs is decided by the catalog manager.",
+	"workspace_members_personal_hint": "Viewers see content and run queries, editors also create and edit content, admins also manage the workspace. Share this workspace by e-mail with anyone who already has an account. What each person may read in its catalogs is decided by the catalog manager.",
 	"workspace_members_team_hint": "The members are the team's members: team owners are admins and members editors unless you set another role. Team membership is managed in Settings → Teams. What each person may read in its catalogs is decided by the catalog manager.",
 	"workspace_members_share_email": "Share with (e-mail)",
 	"workspace_members_share": "Share",

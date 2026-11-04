@@ -97,7 +97,19 @@ DELETE FROM teams WHERE id = $1;
 -- name: IsWorkspaceOwner :one
 -- Whether the user is an admin of the workspace (#653): the owner of a
 -- personal one, and a team owner of a shared one unless another role was set.
-SELECT (baleia_workspace_member_role(@id::uuid, @user_id::uuid) = 'admin')::bool AS is_owner;
+SELECT COALESCE(baleia_workspace_member_role(@id::uuid, @user_id::uuid) = 'admin', false)::bool AS is_owner;
+
+-- name: IsWorkspaceStructuralOwner :one
+-- The workspace's owner by structure, not by role: the user of a personal
+-- workspace, an owner of the team of a shared one. Seeing other members'
+-- executions and the workspace's audit stay with them (#36, #611); a workspace
+-- admin role does not grant it (#653).
+SELECT EXISTS (
+    SELECT 1 FROM workspaces w
+    LEFT JOIN team_members tm ON tm.team_id = w.owner_team_id AND tm.user_id = @user_id::uuid AND tm.role = 'owner'
+    WHERE w.id = @id::uuid
+      AND (w.owner_user_id = @user_id::uuid OR tm.user_id IS NOT NULL)
+) AS is_owner;
 
 -- name: GetTeamMemberRole :one
 SELECT role FROM team_members WHERE team_id = $1 AND user_id = $2;
