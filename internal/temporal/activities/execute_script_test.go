@@ -684,14 +684,27 @@ func TestExecuteScript_InteractiveReadsAnyCatalog(t *testing.T) {
 type agentRoleStore struct {
 	*statementStore
 	kind, status, role string
+	unbound            bool
+	policy             string
+}
+
+func (s *agentRoleStore) AgentWorkspaceBound(context.Context, db.AgentWorkspaceBoundParams) (bool, error) {
+	return !s.unbound, nil
 }
 
 func (s *agentRoleStore) GetQueryExecutionByID(_ context.Context, id pgtype.UUID) (db.QueryExecution, error) {
-	return db.QueryExecution{ID: id, AgentID: pgtype.UUID{Bytes: [16]byte{0xA1}, Valid: true}, WorkspaceID: pgtype.UUID{Bytes: [16]byte{0xB1}, Valid: true}}, nil
+	return db.QueryExecution{
+		ID: id, AgentID: pgtype.UUID{Bytes: [16]byte{0xA1}, Valid: true}, WorkspaceID: pgtype.UUID{Bytes: [16]byte{0xB1}, Valid: true},
+		TargetCatalogID: pgtype.UUID{Bytes: [16]byte{0xD1}, Valid: true}, EngineID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true},
+	}, nil
 }
 
 func (s *agentRoleStore) GetAgentByID(_ context.Context, id pgtype.UUID) (db.Agent, error) {
-	return db.Agent{ID: id, OwnerID: pgtype.UUID{Bytes: [16]byte{0xC1}, Valid: true}, Kind: s.kind, Status: s.status}, nil
+	policy := s.policy
+	if policy == "" {
+		policy = "{}"
+	}
+	return db.Agent{ID: id, OwnerID: pgtype.UUID{Bytes: [16]byte{0xC1}, Valid: true}, Kind: s.kind, Status: s.status, Policy: []byte(policy)}, nil
 }
 
 func (s *agentRoleStore) GetWorkspaceMemberRole(context.Context, db.GetWorkspaceMemberRoleParams) (string, error) {
@@ -702,15 +715,25 @@ func (s *agentRoleStore) GetWorkspaceMemberRole(context.Context, db.GetWorkspace
 // a write opens a read-only session when, by the time it runs, its owner is
 // no longer an editor, the agent is disabled, or it is the assistant.
 func TestExecuteScript_AgentWriteRechecksRole(t *testing.T) {
+	const (
+		catalog = "d1000000-0000-0000-0000-000000000000"
+		engine  = "e1000000-0000-0000-0000-000000000000"
+	)
 	cases := []struct {
 		name, kind, status, role string
+		unbound                  bool
+		policy                   string
 		readOnly                 bool
 	}{
-		{"still editor", "external", "active", "editor", false},
-		{"demoted to viewer", "external", "active", "viewer", true},
-		{"removed from workspace", "external", "active", "", true},
-		{"agent disabled", "external", "disabled", "admin", true},
-		{"assistant", "assistant", "active", "admin", true},
+		{name: "still editor", kind: "external", status: "active", role: "editor"},
+		{name: "allowed by the policy", kind: "external", status: "active", role: "editor", policy: `{"catalogs":["` + catalog + `"],"engines":["` + engine + `"]}`},
+		{name: "demoted to viewer", kind: "external", status: "active", role: "viewer", readOnly: true},
+		{name: "removed from workspace", kind: "external", status: "active", readOnly: true},
+		{name: "agent disabled", kind: "external", status: "disabled", role: "admin", readOnly: true},
+		{name: "assistant", kind: "assistant", status: "active", role: "admin", readOnly: true},
+		{name: "unbound from workspace", kind: "external", status: "active", role: "editor", unbound: true, readOnly: true},
+		{name: "catalog no longer allowed", kind: "external", status: "active", role: "editor", policy: `{"catalogs":["99999999-9999-9999-9999-999999999999"]}`, readOnly: true},
+		{name: "engine no longer allowed", kind: "external", status: "active", role: "editor", policy: `{"engines":["99999999-9999-9999-9999-999999999999"]}`, readOnly: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -718,7 +741,7 @@ func TestExecuteScript_AgentWriteRechecksRole(t *testing.T) {
 			p := scriptParams("INSERT INTO t VALUES (1)")
 			p.Target.ReadOnly = false
 			p.Identity.AgentID = "a-1"
-			store := &agentRoleStore{statementStore: newStatementStore(1), kind: tc.kind, status: tc.status, role: tc.role}
+			store := &agentRoleStore{statementStore: newStatementStore(1), kind: tc.kind, status: tc.status, role: tc.role, unbound: tc.unbound, policy: tc.policy}
 			if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), queries: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
 				t.Fatal(err)
 			}
