@@ -62,7 +62,9 @@
 	}
 </script>
 
-<div class="bg-bg-app text-text-main min-h-screen flex">
+<!-- The document does not scroll (app.css), so the page is the window tall and the
+     right panel scrolls. -->
+<div class="bg-bg-app text-text-main h-screen flex">
 	<div
 		class="w-[280px] shrink-0 bg-brand-dark flex flex-col p-10 relative overflow-hidden
 		before:content-[''] before:absolute before:inset-0
@@ -130,9 +132,9 @@
 		</div>
 	</div>
 
-	<div class="flex-1 flex flex-col items-center justify-center py-12 px-10 overflow-y-auto">
+	<div class="min-w-0 flex-1 flex flex-col items-center py-12 px-10 overflow-y-auto">
 		{#if step === 1}
-			<div class="w-full max-w-[480px] animate-[fadeIn_.2s_ease]">
+			<div class="my-auto w-full max-w-[480px] animate-[fadeIn_.2s_ease]">
 				<div class="mb-7">
 					<div class="text-[11px] font-bold uppercase tracking-[.7px] text-primary mb-1.5">
 						{m.setup_step_1_of_3()}
@@ -242,7 +244,7 @@
 				</form>
 			</div>
 		{:else if step === 2}
-			<div class="w-full max-w-[920px] animate-[fadeIn_.2s_ease]">
+			<div class="my-auto w-full max-w-[920px] animate-[fadeIn_.2s_ease]">
 				<div class="mb-6 text-center">
 					<div class="text-[11px] font-bold uppercase tracking-[.7px] text-primary mb-1.5">
 						{m.setup_step_2_of_3_optional()}
@@ -267,7 +269,7 @@
 				</div>
 			</div>
 		{:else}
-			<div class="w-full max-w-[480px] animate-[fadeIn_.2s_ease]">
+			<div class="my-auto w-full max-w-[480px] animate-[fadeIn_.2s_ease]">
 				<div class="flex flex-col items-center text-center gap-4">
 					<div
 						class="w-16 h-16 rounded-full bg-green-50 border border-green-200 flex items-center justify-center"
