@@ -70,7 +70,9 @@ service accounts:
   roles the member no longer has. It sets the role only: a team's workspace still gets its members
   from the team mapping. A role a workspace admin set wins over a group.
 
-MCP following roles follows under the same issue.
+- **MCP follows the roles.** An agent acts with its owner's workspace role: a viewer's agent runs
+  read statements in read-only sessions; an editor's or admin's agent may also write (DDL, DML),
+  and the catalog manager decides what. The built-in assistant stays read-only.
 
 ## Alternatives considered
 

@@ -28,6 +28,15 @@ type fakeStore struct {
 	running        int64
 	hourly         int64
 	oldest         pgtype.Timestamptz
+	// role is the owner's workspace role (#653); empty means viewer.
+	role string
+}
+
+func (s *fakeStore) GetWorkspaceMemberRole(context.Context, db.GetWorkspaceMemberRoleParams) (string, error) {
+	if s.role == "" {
+		return "viewer", nil
+	}
+	return s.role, nil
 }
 
 func (s *fakeStore) GetAgentByID(context.Context, pgtype.UUID) (db.Agent, error) {
@@ -179,6 +188,48 @@ func TestStatementRules(t *testing.T) {
 		if !tc.want && dec.Reason != ReasonStatement {
 			t.Errorf("%q: reason = %q, want statement", tc.sql, dec.Reason)
 		}
+	}
+}
+
+// TestStatementRules_FollowRole (#653): an agent follows its owner's
+// workspace role; an editor or admin agent may write, a viewer agent only
+// reads, and nobody manages catalogs.
+func TestStatementRules_FollowRole(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		role string
+		sql  string
+		want bool
+	}{
+		{"viewer", "CREATE TABLE lake.s.t AS SELECT 1 AS n", false},
+		{"editor", "CREATE TABLE lake.s.t AS SELECT 1 AS n", true},
+		{"editor", "INSERT INTO t VALUES (1)", true},
+		{"admin", "DELETE FROM t WHERE n = 1", true},
+		{"editor", "CREATE CATALOG evil USING iceberg", false},
+		{"editor", "SELECT 1; DROP TABLE t", false},
+	}
+	for _, tc := range cases {
+		f := newFixture()
+		f.store.role = tc.role
+		dec := f.check(t, f.call(ToolRunQuery, str(tc.sql)))
+		if dec.Allowed != tc.want {
+			t.Errorf("%s %q: decision = %+v, want allowed=%v", tc.role, tc.sql, dec, tc.want)
+		}
+	}
+	// The built-in assistant stays read-only whatever its owner's role.
+	assistant := newFixture()
+	assistant.store.role = "editor"
+	assistant.store.agent.Kind = "assistant"
+	if dec := assistant.check(t, assistant.call(ToolRunQuery, str("INSERT INTO t VALUES (1)"))); dec.Allowed {
+		t.Errorf("assistant wrote = %+v", dec)
+	}
+	// A writing agent does not need an engine that enforces read-only.
+	f := newFixture()
+	f.store.role = "editor"
+	f.gate = NewGate(f.store, fakeEngines{readOnly: queryengine.ReadOnlyNone}, DefaultCeilings(), dialect.NewRegistry())
+	f.gate.SetClock(func() time.Time { return f.now })
+	if dec := f.check(t, f.call(ToolRunQuery, str("INSERT INTO t VALUES (1)"))); !dec.Allowed {
+		t.Errorf("editor agent on a non-enforcing engine = %+v", dec)
 	}
 }
 

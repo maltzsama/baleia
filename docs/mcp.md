@@ -1,8 +1,8 @@
 # MCP server
 
-Baleia exposes a **read-only** Model Context Protocol server at `POST /mcp` so
+Baleia exposes a Model Context Protocol server at `POST /mcp` so
 external agents (Claude Desktop/Code, IDE assistants, automations) can discover
-governed metadata and run read-only queries with the rights of a dedicated agent
+governed metadata and run queries with the rights of a dedicated agent
 identity (#58).
 
 The server is mounted only when `BALEIA_AGENTS_ENABLED=true`. It is stateless
@@ -28,7 +28,12 @@ Every request needs an agent token minted in the UI (`/settings/agents`):
 - User JWTs, API keys and cookies are **not** accepted on `/mcp`; agent tokens
   are not accepted on any other route.
 - The agent acts for its owner with the owner's **member** rights intersected
-  with the workspaces it is bound to. It is always read-only.
+  with the workspaces it is bound to. It follows the owner's workspace role, like a
+  person (#653): in a workspace where the owner is a **viewer** the agent only reads
+  (read-only session, read statements only); where the owner is an **editor** or
+  **admin** it may also write, for example create tables or load data, and the
+  catalog manager decides what it may write where. Catalog management and session
+  authorization stay refused for every agent. The built-in assistant stays read-only.
 - An agent can be linked to a [service account](guides/administration.md#access)
   instead of a person (#653): it then acts with that account's workspace roles,
   and whoever manages the account manages the agent.
@@ -51,7 +56,7 @@ Every request needs an agent token minted in the UI (`/settings/agents`):
 | `list_models` | Semantic models visible in a workspace |
 | `describe_model` | A model's source, dimensions, metrics and joins |
 | `query_semantic` | Compile an explore query over a model to SQL; run it with `run_query` |
-| `run_query` | Run **one** read-only statement and wait for it |
+| `run_query` | Run **one** statement and wait for it; read-only for a viewer agent, read or write for an editor or admin agent |
 | `get_execution` | State of an execution this agent created |
 | `get_results` | Stored rows of a finished execution, with caps |
 | `cancel_execution` | Cancel an execution this agent created |

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/galileostudio/baleia/internal/agentpolicy"
 	"github.com/galileostudio/baleia/internal/arrowipc"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metrics"
@@ -169,10 +170,18 @@ func (s *script) openSession() (queryengine.Session, error) {
 	if s.p.Identity.AgentID != "" {
 		source = "agent"
 	}
+	readOnly := s.p.Target.ReadOnly
+	if !readOnly && s.p.Identity.AgentID != "" {
+		writes, err := s.a.agentStillWrites(s.ctx, s.p.ExecutionID)
+		if err != nil {
+			return nil, err
+		}
+		readOnly = !writes
+	}
 	spec := queryengine.SessionSpec{
 		Catalog:  s.p.Target.EngineCatalog,
 		Identity: s.p.Identity,
-		ReadOnly: s.p.Target.ReadOnly,
+		ReadOnly: readOnly,
 		// Timeout is the class's runtime bound when workload management is on
 		// (#578), the global statement timeout otherwise; every builder maps it
 		// to its engine's own mechanism.
@@ -645,4 +654,54 @@ func (s *resultSink) abort() {
 	}
 	_ = s.pw.CloseWithError(errResultAborted)
 	<-s.done
+}
+
+// agentStillWrites rechecks, when the session opens, that an agent's run may
+// still write (#653): it was submitted while the agent's owner was an editor
+// or admin of the workspace, and a queued run must not write after the owner
+// became a viewer or left the workspace, the agent was disabled or unbound
+// from the workspace, or its policy stopped allowing the target.
+func (a *Activities) agentStillWrites(ctx context.Context, executionID string) (bool, error) {
+	var id pgtype.UUID
+	if err := id.Scan(executionID); err != nil {
+		return false, nil
+	}
+	exec, err := a.queries.GetQueryExecutionByID(ctx, id)
+	if err != nil {
+		return false, fmt.Errorf("recheck agent role: %w", err)
+	}
+	if !exec.AgentID.Valid {
+		return false, nil
+	}
+	agent, err := a.queries.GetAgentByID(ctx, exec.AgentID)
+	if err != nil {
+		return false, fmt.Errorf("recheck agent role: %w", err)
+	}
+	if agent.Kind != "external" || agent.Status != "active" {
+		return false, nil
+	}
+	bound, err := a.queries.AgentWorkspaceBound(ctx, db.AgentWorkspaceBoundParams{AgentID: agent.ID, WorkspaceID: exec.WorkspaceID})
+	if err != nil {
+		return false, fmt.Errorf("recheck agent role: %w", err)
+	}
+	if !bound {
+		return false, nil
+	}
+	// The policy may have narrowed since the run was queued.
+	policy, err := agentpolicy.Parse(agent.Policy)
+	if err != nil {
+		return false, nil
+	}
+	eff := policy.Effective(agentpolicy.DefaultCeilings())
+	if len(eff.Catalogs) > 0 && !eff.Catalogs[uuidStr(exec.TargetCatalogID)] {
+		return false, nil
+	}
+	if len(eff.Engines) > 0 && !eff.Engines[uuidStr(exec.EngineID)] {
+		return false, nil
+	}
+	role, err := a.queries.GetWorkspaceMemberRole(ctx, db.GetWorkspaceMemberRoleParams{ID: exec.WorkspaceID, UserID: agent.OwnerID})
+	if err != nil {
+		return false, fmt.Errorf("recheck agent role: %w", err)
+	}
+	return agentpolicy.AgentWrites(role), nil
 }

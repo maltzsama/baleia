@@ -32,7 +32,7 @@ func (s *Server) registerTools() {
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolListModels, Description: "List the semantic models visible in a workspace."}, s.listModels)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolDescribeModel, Description: "Describe a semantic model: source, dimensions, metrics and joins."}, s.describeModel)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolQuerySemantic, Description: "Compile an explore query over a semantic model to SQL; run it with run_query."}, s.querySemantic)
-	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolRunQuery, Description: "Run one read-only SQL statement and wait for the result."}, s.runQuery)
+	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolRunQuery, Description: "Run one SQL statement and wait for the result. A viewer agent may only read; an editor or admin agent may also write (create tables, load data)."}, s.runQuery)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolGetExecution, Description: "Get the state of an execution this agent created."}, s.getExecution)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolGetResults, Description: "Read stored rows of a finished execution, with caps."}, s.getResults)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolCancelExecution, Description: "Cancel an execution this agent created."}, s.cancelExecution)
@@ -574,6 +574,7 @@ func (s *Server) runQuery(ctx context.Context, _ *mcpsdk.CallToolRequest, in run
 		// Admission enforces the per-agent limit (#589): the gate already
 		// evaluated the policy, so carry its effective value.
 		ctx = api.WithAgentMaxConcurrent(ctx, eff.MaxConcurrentQueries)
+		ctx = api.WithAgentScope(ctx, eff.Catalogs, eff.Engines)
 		got, err := s.handlers.RunQuery(ctx, api.RunQueryRequestObject{Id: pathOf(ws), Body: body})
 		if err != nil {
 			return nil, err
