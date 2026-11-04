@@ -54,6 +54,10 @@ trino:
     image: "baleia-plugins:0.10.0"  # built by `make k8s-plugin-bundle`; tag = plugin release version
     imagePullPolicy: Never
   jvmHeap: 1G
+  # The image's jvm.config sets -XX:MaxRAMPercentage=80 and no -Xmx, so the heap
+  # is 80% of the memory limit and jvmHeap above is ignored. Code cache,
+  # metaspace, direct buffers and the Parquet readers come on top of the heap:
+  # at 2Gi the pod was OOMKilled reading a table (#665).
   resources:
-    requests: { cpu: 500m, memory: 1Gi }
-    limits: { memory: 2Gi }
+    requests: { cpu: 500m, memory: 3Gi }
+    limits: { memory: 6Gi }
