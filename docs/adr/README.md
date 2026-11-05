@@ -10,11 +10,11 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 
 | ADR | Title | Status |
 |---|---|---|
-| [0001](0001-control-plane-only.md) | Baleia is a control plane, never a data plane | Accepted |
+| [0001](0001-control-plane-only.md) | Baleia is a control plane, never a data plane | Accepted; BI clause amended by 0017 |
 | [0002](0002-connections-engines-catalogs-bindings.md) | Connections, engines, catalogs and bindings | Accepted |
 | [0003](0003-trino-binding.md) | How a catalog reaches Trino (the Trino binder) | Accepted |
 | [0004](0004-plugin-distribution.md) | Catalog-store plugin distribution | Accepted |
-| [0005](0005-trino-security-model.md) | Trino security model | Accepted; Polaris identity superseded by 0015 |
+| [0005](0005-trino-security-model.md) | Trino security model | Accepted; Polaris identity superseded by 0015, scope added by 0018 |
 | [0006](0006-multi-engine-scope.md) | Multi-engine scope | Accepted |
 | [0007](0007-dispatch-and-wiring.md) | Adapters are constructed only at the wiring sites | Accepted |
 | [0008](0008-error-and-secret-boundaries.md) | Error and secret boundaries | Accepted |
@@ -25,7 +25,9 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0013](0013-content-model.md) | Saved content model | Accepted |
 | [0014](0014-workload-management.md) | Workload management: per-engine admission queues | Accepted |
 | [0015](0015-per-user-catalog-identity.md) | Per-user identity to the catalog manager | Accepted |
-| [0016](0016-access-layers-and-workspace-roles.md) | Three access layers and workspace roles | Accepted |
+| [0016](0016-access-layers-and-workspace-roles.md) | Three access layers and workspace roles | Accepted; layer 1 / grant flow superseded by 0018 |
+| [0017](0017-bi-gateway.md) | BI tools reach the engines only through Baleia (the BI gateway) | Proposed; amends 0001 |
+| [0018](0018-workspace-catalog-scope.md) | Workspace-scoped catalog access | Proposed; supersedes 0016 layer 1, extends 0005 |
 
 ## Owner decisions
 

@@ -1,7 +1,8 @@
 # 0005. Trino security model
 
 - Status: Accepted (owner decision D8); the decision "Polaris sees one service principal per
-  connection" is superseded by [0015](0015-per-user-catalog-identity.md)
+  connection" is superseded by [0015](0015-per-user-catalog-identity.md); catalog scope and query
+  visibility added by [0018](0018-workspace-catalog-scope.md)
 - Date: 2026-10-14
 - Issues: #9, #92, #147
 
