@@ -40,7 +40,9 @@ func mapError(err error) error {
 		return queryengine.NewError(queryengine.CodeCancelled, Kind, "", "statement cancelled")
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return queryengine.NewError(queryengine.CodeTimeout, Kind, "", "statement timed out")
+		// Keep what timed out (a dial, a TLS handshake, a response) in Native:
+		// "statement timed out" alone hides whether Trino ever saw the query.
+		return queryengine.NewError(queryengine.CodeTimeout, Kind, err.Error(), "statement timed out")
 	}
 	var te *trinoclient.TransportError
 	if errors.As(err, &te) {
