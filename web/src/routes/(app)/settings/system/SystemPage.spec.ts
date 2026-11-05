@@ -1,5 +1,5 @@
-import { screen } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { fireEvent, screen } from '@testing-library/svelte';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '$lib/api/schema';
 import { http, server } from '../../../../test/server';
 import { makeMe } from '../../../../test/factories';
@@ -62,5 +62,26 @@ describe('system status page', () => {
 	it('offers a manual refresh', async () => {
 		renderPage(SystemPage, { me: makeMe(), url: '/settings/system' });
 		expect(await screen.findByRole('button', { name: 'Refresh' })).toBeTruthy();
+	});
+
+	// #695: "Checked" is refreshed to now on every load. A frozen reference
+	// clock rendered it as "in N minutes" once the page had been open a while;
+	// it must reset to "just now" instead.
+	it('resets the checked stamp on refresh, never reading as future', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T12:00:00Z'));
+		try {
+			renderPage(SystemPage, { me: makeMe(), url: '/settings/system' });
+			await vi.advanceTimersByTimeAsync(0);
+			expect(screen.getByText('just now')).toBeTruthy();
+
+			// 42 minutes later the page is refreshed.
+			await vi.advanceTimersByTimeAsync(42 * 60_000);
+			await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+			await vi.advanceTimersByTimeAsync(0);
+			expect(screen.getByText('just now')).toBeTruthy();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

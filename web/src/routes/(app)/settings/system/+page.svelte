@@ -109,7 +109,7 @@
 				{#if checkedAt}
 					<span class="text-[11px] text-text-muted">
 						{m.settings_system_checked()}
-						<RelativeTime at={checkedAt} />
+						<RelativeTime at={checkedAt} live />
 					</span>
 				{/if}
 				<Button {loading} onclick={load}>{m.settings_system_refresh()}</Button>
