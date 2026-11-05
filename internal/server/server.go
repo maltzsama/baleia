@@ -83,8 +83,16 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	// they get the slot now and the runner once it is built (#363).
 	runner := &assistant.RunnerSlot{}
 	h, err := api.NewAPI(api.Deps{
-		Data:          api.DataDeps{Queries: core.Queries, Pool: core.Pool},
-		Engines:       api.EngineDeps{Connections: core.Connections, Engines: core.Engines, Kinds: core.Engines, Dialects: core.Dialects, Binder: core.Binder, Dialer: core.Dialer},
+		Data: api.DataDeps{Queries: core.Queries, Pool: core.Pool},
+		Engines: api.EngineDeps{
+			Connections:        core.Connections,
+			ManagedConnections: core.ManagedConnections,
+			Engines:            core.Engines,
+			Kinds:              core.Engines,
+			Dialects:           core.Dialects,
+			Binder:             core.Binder,
+			Dialer:             core.Dialer,
+		},
 		Observability: api.ObservabilityDeps{Audit: core.Audit, Metrics: core.Metrics, Logger: core.Logger},
 		Settings:      api.SettingsFromConfig(cfg),
 		Keyring:       core.Keyring,

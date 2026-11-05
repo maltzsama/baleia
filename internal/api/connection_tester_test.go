@@ -21,6 +21,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/icebergrest"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -160,6 +161,140 @@ func TestTransient_DeniedCIDR(t *testing.T) {
 	r := runDraft(t, draftHandlers(t, testRegistry(t)), ownerID, draft("http://169.254.169.254/catalog")).(TestConnectionDraft200JSONResponse)
 	if r.Success || *r.ErrorCode != codeDeniedNetwork {
 		t.Fatalf("result = %+v", r)
+	}
+}
+
+// TestConnectionConfig_UsesManagedRegistryForSystemOwned: a system-owned
+// connection (created_by NULL) is the operator's own endpoint and may live on
+// a private address, so its provider dials through the managed registry; a
+// user-owned connection keeps the strict one (#609).
+func TestConnectionConfig_UsesManagedRegistryForSystemOwned(t *testing.T) {
+	t.Parallel()
+	srv := fakeREST(t, false) // loopback: only the permissive managed dialer reaches it
+	managed, _ := loopbackRegistry(t)
+	h := testAPI(handlerFields{connections: testRegistry(t), managedConnections: managed})
+
+	conn := db.CatalogConnection{
+		ID:   pgtype.UUID{Bytes: [16]byte{0x01}, Valid: true},
+		Name: "lake", Type: "iceberg", Url: srv.URL,
+		Config: []byte(fmt.Sprintf(`{"url":%q}`, srv.URL)),
+	}
+	p, cfg, err := h.connectionConfig(conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Ping(context.Background(), cfg); err != nil {
+		t.Fatalf("system-owned connection through the managed dialer: %v", err)
+	}
+
+	user := conn
+	user.CreatedBy = pgtype.UUID{Bytes: [16]byte{0x99}, Valid: true}
+	p, cfg, err = h.connectionConfig(user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Ping(context.Background(), cfg); !errors.Is(err, connections.ErrDeniedNetwork) {
+		t.Fatalf("user-owned connection ping = %v, want ErrDeniedNetwork", err)
+	}
+}
+
+// routingKinds records which transient builder directEngine picks.
+type routingKinds struct {
+	strict, managed bool
+}
+
+func (*routingKinds) HasKind(string) bool { return true }
+func (k *routingKinds) Transient(context.Context, string, connections.Config) (queryengine.Engine, error) {
+	k.strict = true
+	return nil, errors.New("boom")
+}
+func (k *routingKinds) ManagedTransient(context.Context, string, connections.Config) (queryengine.Engine, error) {
+	k.managed = true
+	return nil, errors.New("boom")
+}
+
+// TestDirectEngine_RoutesByOwnership: the direct check dials through the
+// managed transient for a system-owned connection and the strict one for a
+// user-owned connection (#609).
+func TestDirectEngine_RoutesByOwnership(t *testing.T) {
+	t.Parallel()
+	p, _ := testRegistry(t).Get(connections.KindTrino)
+	for _, tc := range []struct {
+		managed bool
+		strict  bool
+		dialed  bool
+	}{
+		{managed: false, strict: true, dialed: false},
+		{managed: true, strict: false, dialed: true},
+	} {
+		k := &routingKinds{}
+		h := testAPI(handlerFields{kinds: k}).CatalogHandlers
+		_, _ = connectionTest{h: h, provider: p, managed: tc.managed}.directEngine(context.Background())
+		if k.strict != tc.strict || k.managed != tc.dialed {
+			t.Errorf("managed=%v: strict=%v managed=%v", tc.managed, k.strict, k.managed)
+		}
+	}
+}
+
+// fakeDirectProvider is a RoleDirect provider with a no-op Ping, so a handler
+// test reaches the direct check without a real server.
+type fakeDirectProvider struct{ kind connections.Kind }
+
+func (p fakeDirectProvider) Kind() connections.Kind   { return p.kind }
+func (fakeDirectProvider) Label() string              { return "Fake direct" }
+func (fakeDirectProvider) Family() connections.Family { return connections.FamilyDatabase }
+func (fakeDirectProvider) Roles() []connections.Role {
+	return []connections.Role{connections.RoleDirect}
+}
+func (fakeDirectProvider) ConfigSchema() []connections.Field { return nil }
+func (p fakeDirectProvider) Validate(cfg connections.Config) (connections.Config, error) {
+	return cfg, nil
+}
+func (fakeDirectProvider) EngineKind() string { return "trino" }
+func (fakeDirectProvider) OpenMetadata(context.Context, connections.Config) (connections.MetadataReader, error) {
+	return nil, errors.New("no metadata")
+}
+func (fakeDirectProvider) Ping(context.Context, connections.Config) error { return nil }
+func (fakeDirectProvider) Status() connections.Status {
+	return connections.Status{State: connections.StateSupported}
+}
+
+// TestTestCatalogConnection_RoutesByOwnership goes through the handler so the
+// ownership assignment in TestCatalogConnection is covered: a system-owned
+// connection's direct check uses ManagedTransient, a user-owned one the strict
+// Transient (#692).
+func TestTestCatalogConnection_RoutesByOwnership(t *testing.T) {
+	t.Parallel()
+	kind := connections.Kind("fake-direct")
+	strict, err := connections.NewRegistry(fakeDirectProvider{kind: kind})
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed, err := connections.NewRegistry(fakeDirectProvider{kind: kind})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		owner  pgtype.UUID
+		dialed bool // the managed transient
+	}{
+		{"system-owned", pgtype.UUID{}, true},
+		{"user-owned", pgtype.UUID{Bytes: [16]byte{0x99}, Valid: true}, false},
+	} {
+		k := &routingKinds{}
+		h := testAPI(handlerFields{
+			queries: &fakeConnQuerier{conn: db.CatalogConnection{
+				ID: pgtype.UUID{Bytes: [16]byte{0x01}, Valid: true}, Name: "d", Type: string(kind), CreatedBy: tc.owner,
+			}},
+			connections: strict, managedConnections: managed, kinds: k,
+		})
+		if _, err := h.TestCatalogConnection(ctxAs(adminID, "admin"), TestCatalogConnectionRequestObject{Id: PathId{0x01}}); err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if k.managed != tc.dialed || k.strict == tc.dialed {
+			t.Errorf("%s: strict=%v managed=%v, want managed=%v", tc.name, k.strict, k.managed, tc.dialed)
+		}
 	}
 }
 
