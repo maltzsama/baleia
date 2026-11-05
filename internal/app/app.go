@@ -75,6 +75,10 @@ type Core struct {
 	// binder); user-supplied connections keep the strict Dialer (#609).
 	ManagedDialer *connections.Dialer
 	Connections   *connections.Registry
+	// ManagedConnections is Connections dialing through ManagedDialer, for the
+	// operator's own catalog managers (Polaris, …) that live on a private
+	// address; user-supplied connections keep the strict Connections (#609).
+	ManagedConnections *connections.Registry
 	// Dialects describe the SQL of every engine kind; built once and injected.
 	Dialects *dialect.Registry
 	// Engines run SQL (docs/adr/0002).
@@ -178,14 +182,19 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		return nil, fmt.Errorf("invalid managed connection network settings: %w", err)
 	}
 	c.Dialects = dialect.NewRegistry()
-	c.Connections, err = providers.New(c.Dialer, providers.Options{
+	pOpts := providers.Options{
 		Dialects: c.Dialects,
 		Secrets:  connections.SecretResolver{FileBaseDir: cfg.SecretFileBaseDir},
 		SQLite:   sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite, Logger: c.Logger},
 		Glue:     glue.Options{AllowAmbientCredentials: cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: cfg.ConnectionsAllowLoopback},
-	})
+	}
+	c.Connections, err = providers.New(c.Dialer, pOpts)
 	if err != nil {
 		return nil, fmt.Errorf("connection providers: %w", err)
+	}
+	c.ManagedConnections, err = providers.New(c.ManagedDialer, pOpts)
+	if err != nil {
+		return nil, fmt.Errorf("managed connection providers: %w", err)
 	}
 	// The SQLite engine confines files to the same root the provider uses
 	// (docs/adr/0011).

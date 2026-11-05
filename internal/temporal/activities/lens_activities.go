@@ -266,20 +266,28 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 		return fmt.Errorf("get catalog connection: %w", err)
 	}
 
+	// The operator's own catalog managers (Polaris, …) live on a private
+	// address: read them through the managed dialer. User-supplied connections
+	// keep the strict one (#609).
+	reg := a.connections
+	if a.managedConnections != nil && !conn.CreatedBy.Valid {
+		reg = a.managedConnections
+	}
+
 	// Open the stored envelope; the raw column value is ciphertext and must
 	// never reach the catalog client.
 	plain, err := credcat.OpenCredentials(conn, a.keyring)
 	if err != nil {
 		return fmt.Errorf("connection %s: %w", params.CatalogConnectionID, err)
 	}
-	provider, err := a.connections.Get(connections.Kind(conn.Type))
+	provider, err := reg.Get(connections.Kind(conn.Type))
 	if err != nil {
 		return err
 	}
 	if provider.Family() != connections.FamilyIceberg {
 		return fmt.Errorf("table health needs an Iceberg catalog, connection is %q: %w", conn.Type, connections.ErrUnsupported)
 	}
-	cfg, err := providers.FromStored(a.connections, connections.Kind(conn.Type), conn.ID, conn.Url, conn.Config, plain)
+	cfg, err := providers.FromStored(reg, connections.Kind(conn.Type), conn.ID, conn.Url, conn.Config, plain)
 	if err != nil {
 		return err
 	}
