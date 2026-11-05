@@ -95,7 +95,7 @@ spec:
             - { name: plugin, mountPath: /plugin }
         {{- else }}
         - name: install-plugin
-          image: alpine:3.20
+          image: docker.io/library/alpine:3.20
           command: ["/bin/sh", "-ec"]
           args:
             - |
@@ -116,7 +116,7 @@ spec:
         # keystore (certificate + key) Trino reads, built at start so neither
         # the password nor the key is written into a ConfigMap.
         - name: trino-auth
-          image: {{ .Values.trino.auth.image | default "httpd:2.4-alpine" }}
+          image: {{ .Values.trino.auth.image | default "docker.io/library/httpd:2.4-alpine" }}
           # Trino's user, so the files stay private to it (umask 077).
           securityContext: { runAsUser: 1000, runAsGroup: 1000 }
           command: ["/bin/sh", "-ec"]
@@ -142,7 +142,7 @@ spec:
         # Trino cannot authenticate to the registry until the API has set the
         # baleia_trino role password (bootstrap). Wait for the registry table.
         - name: wait-for-registry
-          image: postgres:18
+          image: docker.io/library/postgres:18
           command: ["/bin/sh", "-ec"]
           args:
             - |
