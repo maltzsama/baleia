@@ -8,9 +8,9 @@ RUN apk add --no-cache python3 make g++
 # The network here answers in ~0.3 s per TCP connection, but Node's happy
 # eyeballs gives each address only 250 ms (net.autoSelectFamily), so every
 # connection to the npm registry aborts with ETIMEDOUT and `npm ci` dies with
-# "Exit handler never called!". Pick one address and use the normal TCP
-# timeout instead.
-ENV NODE_OPTIONS=--no-network-family-autoselection
+# "Exit handler never called!". Give each address long enough to connect while
+# keeping the fallback to the next one.
+ENV NODE_OPTIONS=--network-family-autoselection-attempt-timeout=2000
 
 COPY web/package.json web/package-lock.json* ./
 
