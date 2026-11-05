@@ -1,0 +1,315 @@
+<script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { m } from '$lib/paraglide/messages';
+	import { apiErrorMessage, client, setAccessToken } from '$lib/api/client';
+	import { PasswordInput } from '$lib/ui';
+	import ConnectionWizard from '$lib/connections/ConnectionWizard.svelte';
+
+	// Each step has its own URL (/setup, /setup/connect, /setup/done), so a refresh
+	// stays on the step instead of starting over, and only "Skip" skips.
+	let { step }: { step: 1 | 2 | 3 } = $props();
+	let firstName = $state('');
+	let lastName = $state('');
+	let email = $state('');
+	let password = $state('');
+	let confirmPass = $state('');
+	let strengthScore = $state(0);
+	let error = $state('');
+	let busy = $state(false);
+
+	const steps = [
+		{ label: m.setup_admin_account(), sub: m.setup_name_email_password() },
+		{ label: m.setup_first_connection(), sub: m.setup_connect_a_datasource(), optional: true },
+		{ label: m.common_done(), sub: m.setup_open_the_editor() }
+	];
+
+	const inputBase =
+		'w-full h-10 bg-bg-app border border-border rounded-[7px] px-3 text-[13px] text-text-main outline-none transition-all duration-150 placeholder:text-slate-600 dark:text-slate-300 focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)] focus:bg-bg-panel';
+
+	function checkStrength(val: string) {
+		let s = 0;
+		if (val.length >= 8) s++;
+		if (/[A-Z]/.test(val) && /[0-9]/.test(val)) s++;
+		if (/[^A-Za-z0-9]/.test(val) && val.length >= 12) s++;
+		strengthScore = s;
+	}
+
+	async function createAdmin() {
+		// One submission at a time: Enter while a request runs does nothing.
+		if (busy) return;
+		error = '';
+		if (!firstName || !email || !password || password !== confirmPass) {
+			error = m.setup_fill_in_the_required_fields_and_make_sure();
+			return;
+		}
+		if (password.length < 8) {
+			error = m.setup_password_must_be_at_least_8_characters();
+			return;
+		}
+		busy = true;
+		try {
+			const { data, error: err } = await client.POST('/setup/admin', {
+				body: { name: `${firstName} ${lastName}`.trim(), email, password }
+			});
+			if (err || !data) {
+				error = apiErrorMessage(err, m.setup_failed_to_create_the_admin_account());
+				return;
+			}
+			setAccessToken(data.token);
+			await goto(resolve('/setup/connect'));
+		} catch {
+			error = m.setup_connection_error_is_the_server_running();
+		} finally {
+			busy = false;
+		}
+	}
+</script>
+
+<!-- The document does not scroll (app.css), so the page is the window tall and the
+     right panel scrolls. -->
+<div class="bg-bg-app text-text-main h-screen flex">
+	<div
+		class="w-[280px] shrink-0 bg-brand-dark flex flex-col p-10 relative overflow-hidden
+		before:content-[''] before:absolute before:inset-0
+		before:[background-image:linear-gradient(rgba(59,130,246,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,.05)_1px,transparent_1px)]
+		before:bg-[length:32px_32px]
+		after:content-[''] after:absolute after:w-[280px] after:h-[280px] after:rounded-full
+		after:[background:radial-gradient(circle,rgba(59,130,246,.14)_0%,transparent_70%)]
+		after:-bottom-20 after:-left-[60px] after:pointer-events-none"
+	>
+		<div class="relative z-[1] flex flex-col h-full">
+			<div class="flex items-center gap-2.5 mb-12">
+				<div
+					class="w-8 h-8 bg-primary/15 border border-primary/30 rounded-lg flex items-center justify-center"
+				>
+					<svg viewBox="0 0 24 24" class="w-4 h-4 stroke-primary"
+						><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
+					>
+				</div>
+				<span class="text-base font-bold text-slate-100 tracking-[-.3px]">{m.common_baleia()}</span>
+			</div>
+
+			<div class="flex flex-col gap-1 flex-1">
+				{#each steps as s, i (s.label)}
+					{@const n = i + 1}
+					{@const done = step > n}
+					{@const active = step === n}
+					<div class="flex items-start gap-3 py-2.5 px-3 rounded-lg">
+						<div
+							class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 border-2 font-mono transition-all duration-200 relative z-[1]
+							{done
+								? 'bg-green-500 border-green-500 text-white'
+								: active
+									? 'bg-primary border-primary text-white'
+									: 'border-slate-800 text-slate-600'}"
+						>
+							{#if done}
+								<svg viewBox="0 0 24 24" class="w-[11px] h-[11px] stroke-white" stroke-width="3"
+									><polyline points="20 6 9 17 4 12" /></svg
+								>
+							{:else}
+								{n}
+							{/if}
+						</div>
+						<div class="pt-0.5">
+							<div
+								class="text-xs font-semibold transition-colors duration-200
+								{active ? 'text-slate-100' : done ? 'text-slate-400' : 'text-slate-600'}"
+							>
+								{s.label}{#if s.optional}
+									<span class="text-[10px] font-semibold text-slate-700">{m.setup_optional()}</span
+									>{/if}
+							</div>
+							<div class="text-[11px] text-slate-700 mt-px">{s.sub}</div>
+						</div>
+					</div>
+				{/each}
+			</div>
+
+			<div class="relative z-[1] text-[11px] text-slate-700 leading-relaxed">
+				{m.setup_baleia_is_open_source()}<br />
+				<a href="https://github.com" target="_blank" class="text-primary no-underline"
+					>{m.setup_github_com_baleia()}</a
+				>
+			</div>
+		</div>
+	</div>
+
+	<div class="min-w-0 flex-1 flex flex-col items-center py-12 px-10 overflow-y-auto">
+		{#if step === 1}
+			<div class="my-auto w-full max-w-[480px] animate-[fadeIn_.2s_ease]">
+				<div class="mb-7">
+					<div class="text-[11px] font-bold uppercase tracking-[.7px] text-primary mb-1.5">
+						{m.setup_step_1_of_3()}
+					</div>
+					<div class="text-[22px] font-bold tracking-[-.4px] mb-1.5">
+						{m.setup_create_admin_account()}
+					</div>
+					<div class="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.6]">
+						{m.setup_this_will_be_the_first_administrator_of_yo()}
+					</div>
+				</div>
+				<!-- A form, so Enter in any field submits once (#484). -->
+				<form
+					onsubmit={(event) => {
+						event.preventDefault();
+						void createAdmin();
+					}}
+				>
+					{#if error}
+						<div
+							role="alert"
+							class="bg-red-50 border border-red-200 rounded-md py-[9px] px-3 text-xs text-red-600 mb-3.5"
+						>
+							{error}
+						</div>
+					{/if}
+					<div class="grid grid-cols-2 gap-3 mb-3.5">
+						<div class="flex flex-col gap-[5px]">
+							<label class="text-[11px] font-semibold" for="setup-first"
+								>{m.setup_first_name()}</label
+							>
+							<input
+								id="setup-first"
+								class={inputBase}
+								type="text"
+								bind:value={firstName}
+								placeholder={m.setup_john()}
+							/>
+						</div>
+						<div class="flex flex-col gap-[5px]">
+							<label class="text-[11px] font-semibold" for="setup-last">{m.setup_last_name()}</label
+							>
+							<input
+								id="setup-last"
+								class={inputBase}
+								type="text"
+								bind:value={lastName}
+								placeholder={m.setup_doe()}
+							/>
+						</div>
+					</div>
+					<div class="flex flex-col gap-[5px] mb-3.5">
+						<label class="text-[11px] font-semibold" for="setup-email">{m.common_email()}</label>
+						<input
+							id="setup-email"
+							class="{inputBase} font-mono text-xs"
+							type="email"
+							bind:value={email}
+							placeholder={m.setup_admin_company_com()}
+						/>
+					</div>
+					<div class="mb-3.5">
+						<PasswordInput
+							id="setup-password"
+							label={m.common_password()}
+							autocomplete="new-password"
+							bind:value={password}
+							placeholder="••••••••"
+							oninput={(e) => checkStrength((e.target as HTMLInputElement).value)}
+						/>
+						<div class="flex gap-1 mt-1.5">
+							{#each [1, 2, 3] as bar (bar)}
+								<div
+									class="flex-1 h-[3px] rounded-sm transition-colors duration-300 {strengthScore >=
+									bar
+										? bar === 3
+											? 'bg-green-500'
+											: bar === 2
+												? 'bg-amber-500'
+												: 'bg-red-500'
+										: 'bg-border'}"
+								></div>
+							{/each}
+						</div>
+					</div>
+					<div class="mb-3.5">
+						<PasswordInput
+							id="setup-confirm"
+							label={m.setup_confirm_password()}
+							autocomplete="new-password"
+							bind:value={confirmPass}
+							placeholder="••••••••"
+						/>
+					</div>
+					<div class="flex items-center justify-end mt-6">
+						<button
+							type="submit"
+							disabled={busy}
+							class="h-10 px-5 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center gap-[7px] transition-colors duration-150 border-none bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
+						>
+							{busy ? m.setup_creating() : m.setup_continue()}
+							<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
+								><polyline points="9 18 15 12 9 6" /></svg
+							>
+						</button>
+					</div>
+				</form>
+			</div>
+		{:else if step === 2}
+			<div class="my-auto w-full max-w-[920px] animate-[fadeIn_.2s_ease]">
+				<div class="mb-6 text-center">
+					<div class="text-[11px] font-bold uppercase tracking-[.7px] text-primary mb-1.5">
+						{m.setup_step_2_of_3_optional()}
+					</div>
+					<div class="text-[22px] font-bold tracking-[-.4px] mb-1.5">
+						{m.setup_connect_a_datasource()}
+					</div>
+					<div class="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.6]">
+						{m.setup_add_your_first_connection_you_can()}
+					</div>
+				</div>
+				<div class="rounded-xl border border-border bg-bg-panel p-5">
+					<ConnectionWizard ondone={() => goto(resolve('/setup/done'))} />
+				</div>
+				<div class="mt-4 text-center">
+					<button
+						onclick={() => goto(resolve('/setup/done'))}
+						class="bg-transparent border-none text-slate-600 dark:text-slate-300 text-xs font-semibold cursor-pointer p-0 transition-colors duration-150 hover:text-text-main"
+					>
+						{m.setup_skip_for_now()}
+					</button>
+				</div>
+			</div>
+		{:else}
+			<div class="my-auto w-full max-w-[480px] animate-[fadeIn_.2s_ease]">
+				<div class="flex flex-col items-center text-center gap-4">
+					<div
+						class="w-16 h-16 rounded-full bg-green-50 border border-green-200 flex items-center justify-center"
+					>
+						<svg viewBox="0 0 24 24" class="w-7 h-7 stroke-green-600"
+							><polyline points="20 6 9 17 4 12" /></svg
+						>
+					</div>
+					<div class="text-[22px] font-bold tracking-[-.4px]">{m.setup_baleia_is_ready()}</div>
+					<div class="text-[13px] text-slate-600 dark:text-slate-300 max-w-[340px] leading-[1.6]">
+						{m.setup_your_instance_is_configured_head_to()}
+					</div>
+					<button
+						onclick={() => (window.location.href = '/sql')}
+						class="w-full h-10 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center justify-center gap-[7px] transition-colors duration-150 border-none bg-primary text-white hover:bg-primary-hover"
+					>
+						<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
+							><path d="M4 17l6-6-6-6M12 19h8" /></svg
+						>
+						{m.setup_open_editor()}
+					</button>
+				</div>
+			</div>
+		{/if}
+	</div>
+</div>
+
+<style>
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+			transform: translateY(5px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+</style>
