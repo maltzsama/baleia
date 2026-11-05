@@ -15,6 +15,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/execscope"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/workload"
@@ -50,6 +51,7 @@ type Store interface {
 	Runs
 	History
 	Queues
+	Scope
 }
 
 // Queues reads the per-engine workload capacities and the workload rules
@@ -58,6 +60,12 @@ type Queues interface {
 	ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]db.EngineQueueCapacity, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
 	ListWorkloadRules(ctx context.Context) ([]db.WorkloadRule, error)
+}
+
+// Scope reads the workspace catalog scope a session may reach (ADR 0018 §5);
+// *db.Queries implements it.
+type Scope interface {
+	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)
 }
 
 // Workflows starts and cancels Temporal workflows; client.Client implements it.
@@ -339,6 +347,8 @@ func (s *Service) costHeavy(ctx context.Context, r Run, statements []string) boo
 		ReadOnly: true,
 		Timeout:  costRoutingTimeout,
 		Tags:     queryengine.Tags{RequestID: r.RequestID, Source: "classification", Class: queryengine.ClassInteractive},
+		// The run's workspace catalog scope (ADR 0018 §5).
+		AllowedCatalogsSource: execscope.For(s.store, r.WorkspaceID, r.Target.EngineID),
 	}
 	if r.Target.Schema != "" {
 		spec.Schema = []string{r.Target.Schema}
