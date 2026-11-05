@@ -193,6 +193,13 @@ func TestManager_RebuildsOnConnectionUpdate(t *testing.T) {
 	if unwrap(t, second) == unwrap(t, first) {
 		t.Fatal("a changed connection reused the old instance")
 	}
+	third, err := m.Get(ctx, engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unwrap(t, third) != unwrap(t, second) {
+		t.Fatal("an unchanged row built a new instance")
+	}
 }
 
 func TestReadOnlyUnsupportedRejected(t *testing.T) {
