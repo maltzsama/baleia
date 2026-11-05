@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/galileostudio/baleia/internal/app"
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/catalogs"
@@ -28,6 +30,19 @@ func main() {
 	logger := obs.NewLogger(os.Stdout, level)
 	// Libraries that log through the default logger get the same output.
 	slog.SetDefault(logger)
+	// Cap the Go heap to the container's cgroup limit so the GC runs before
+	// the OOM killer: Go otherwise targets the host's (effectively unlimited)
+	// memory and grows until the kernel SIGKILLs the process.
+	if _, err := memlimit.Set(); err != nil {
+		// Not in a cgroup, or the cgroup has no memory limit: leave GOMEMLIMIT
+		// unset (the pre-automemlimit behavior). Anything else is a real
+		// misconfiguration worth surfacing.
+		if errors.Is(err, memlimit.ErrNoCgroup) || errors.Is(err, memlimit.ErrNoLimit) {
+			logger.Debug("no cgroup memory limit; GOMEMLIMIT left unset", "err", err)
+		} else {
+			logger.Warn("could not set GOMEMLIMIT from the cgroup", "err", err)
+		}
+	}
 
 	if err := run(cfg, logger); err != nil {
 		logger.ErrorContext(context.Background(), "api", "err", err)
