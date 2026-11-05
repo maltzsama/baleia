@@ -14,13 +14,21 @@
 	} = $props();
 
 	const appearance = $derived(appearanceFor(kind, family));
+
+	// A brand mark's chip: dark marks get a light one in dark mode, light marks
+	// get a dark one in light mode, so the mark stays legible on both themes.
+	const chip = $derived(
+		appearance.contrast
+			? 'dark:bg-white/90 dark:p-px dark:ring-1 dark:ring-black/10'
+			: appearance.lightMark
+				? 'bg-brand-dark p-px ring-1 ring-black/10 dark:bg-transparent dark:p-0 dark:ring-0'
+				: ''
+	);
 </script>
 
 {#if appearance.brand}
 	<span
-		class="inline-flex shrink-0 items-center justify-center rounded-[3px] {appearance.contrast
-			? 'dark:bg-white/90 dark:p-px dark:ring-1 dark:ring-black/10'
-			: ''} {className}"
+		class="inline-flex shrink-0 items-center justify-center rounded-[3px] {chip} {className}"
 		style:width={`${size}px`}
 		style:height={`${size}px`}
 		aria-hidden="true"
