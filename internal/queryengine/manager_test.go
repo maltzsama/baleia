@@ -90,6 +90,42 @@ func TestManagerUsesManagedDialerForSystemOwnedEngines(t *testing.T) {
 	}
 }
 
+// TestManagerManagedTransientUsesManagedDialer: a one-off engine for a
+// system-owned connection (a connection test) may reach a private address;
+// without a managed dialer it falls back to the strict one (#609).
+func TestManagerManagedTransientUsesManagedDialer(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	strict, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed, err := connections.NewDialer(connections.DialerOptions{AllowPrivate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := testKinds(t)
+	cfg := connections.Config{Kind: fake.Kind}
+
+	m := queryengine.NewManager(&store{}, nil, nil, strict, managed, kinds)
+	e, err := m.ManagedTransient(ctx, fake.Kind, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := unwrap(t, e).Dialer(); got != managed {
+		t.Error("managed transient did not use the managed dialer")
+	}
+
+	m = queryengine.NewManager(&store{}, nil, nil, strict, nil, kinds)
+	e, err = m.ManagedTransient(ctx, fake.Kind, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := unwrap(t, e).Dialer(); got != strict {
+		t.Error("managed transient did not fall back to the strict dialer")
+	}
+}
+
 // testKinds is the registry the manager tests build engines from.
 func testKinds(t *testing.T) *queryengine.Registry {
 	t.Helper()

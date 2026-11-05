@@ -78,6 +78,18 @@ func (m *Manager) Transient(ctx context.Context, kind string, cfg connections.Co
 	return m.kinds.Transient(ctx, kind, cfg, m.dialer)
 }
 
+// ManagedTransient is Transient dialing through the managed dialer, for a
+// system-owned connection to the operator's own endpoint that may live on a
+// private address (docs/adr/0011, #609). Without a managed dialer it falls
+// back to the strict one.
+func (m *Manager) ManagedTransient(ctx context.Context, kind string, cfg connections.Config) (Engine, error) {
+	d := m.managedDialer
+	if d == nil {
+		d = m.dialer
+	}
+	return m.kinds.Transient(ctx, kind, cfg, d)
+}
+
 // Get returns the engine of an `engines` row.
 func (m *Manager) Get(ctx context.Context, engineID pgtype.UUID) (Engine, error) {
 	row, err := m.store.GetEngineWithConnection(ctx, engineID)

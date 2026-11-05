@@ -141,6 +141,10 @@ type engineSource interface {
 type engineKinds interface {
 	HasKind(kind string) bool
 	Transient(ctx context.Context, kind string, cfg connections.Config) (queryengine.Engine, error)
+	// ManagedTransient dials through the managed dialer, for a system-owned
+	// connection to the operator's own endpoint that may live on a private
+	// address (docs/adr/0011, #609).
+	ManagedTransient(ctx context.Context, kind string, cfg connections.Config) (queryengine.Engine, error)
 }
 
 // Deps is everything the API handlers need, built by the composition root
@@ -189,10 +193,14 @@ type DataDeps struct {
 // EngineDeps are the connections, engines and catalog bindings.
 type EngineDeps struct {
 	Connections *connections.Registry
-	Engines     engineSource
-	Kinds       engineKinds
-	Dialects    *dialect.Registry
-	Binder      *bindtrino.Binder
+	// ManagedConnections is Connections dialing through the managed (internal-
+	// range) dialer, used for system-owned connections to the operator's own
+	// endpoints (#609). Nil falls back to Connections.
+	ManagedConnections *connections.Registry
+	Engines            engineSource
+	Kinds              engineKinds
+	Dialects           *dialect.Registry
+	Binder             *bindtrino.Binder
 	// Dialer is the SSRF-safe dialer outbound calls go through (#12, #378).
 	Dialer *connections.Dialer
 }
@@ -222,24 +230,25 @@ func NewAPI(d Deps) (*API, error) {
 		return nil, fmt.Errorf("api: missing dependencies: %s", strings.Join(missing, ", "))
 	}
 	c := &core{
-		logger:         cmp.Or(d.Observability.Logger, slog.New(slog.DiscardHandler)),
-		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),
-		s3:             d.Storage,
-		queries:        d.Data.Queries,
-		pool:           d.Data.Pool,
-		tx:             poolTx{pool: d.Data.Pool},
-		settings:       d.Settings,
-		keyring:        d.Keyring,
-		temporalClient: d.Temporal,
-		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
-		connections:    d.Engines.Connections,
-		engines:        d.Engines.Engines,
-		kinds:          d.Engines.Kinds,
-		dialects:       d.Engines.Dialects,
-		audit:          d.Observability.Audit,
-		content:        content.New(d.Data.Pool, d.Data.Queries),
-		oidcLogin:      d.Identity.OIDC,
-		idpTokens:      d.Identity.IDPTokens,
+		logger:             cmp.Or(d.Observability.Logger, slog.New(slog.DiscardHandler)),
+		versionCache:       NewTTLStore[engineProbe](engineVersionTTL),
+		s3:                 d.Storage,
+		queries:            d.Data.Queries,
+		pool:               d.Data.Pool,
+		tx:                 poolTx{pool: d.Data.Pool},
+		settings:           d.Settings,
+		keyring:            d.Keyring,
+		temporalClient:     d.Temporal,
+		catalogCache:       NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
+		connections:        d.Engines.Connections,
+		managedConnections: d.Engines.ManagedConnections,
+		engines:            d.Engines.Engines,
+		kinds:              d.Engines.Kinds,
+		dialects:           d.Engines.Dialects,
+		audit:              d.Observability.Audit,
+		content:            content.New(d.Data.Pool, d.Data.Queries),
+		oidcLogin:          d.Identity.OIDC,
+		idpTokens:          d.Identity.IDPTokens,
 	}
 	if c.audit == nil {
 		c.audit = audit.Nop{}

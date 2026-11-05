@@ -141,6 +141,10 @@ type connectionTest struct {
 	metadata bool
 	direct   bool
 	binds    []testBind
+	// managed dials the direct check through the managed dialer: the
+	// connection is system-owned and reaches the operator's own endpoint, which
+	// may be on a private address (#609). Drafts are always user-supplied.
+	managed bool
 }
 
 func ptr[T any](v T) *T { return &v }
@@ -227,7 +231,11 @@ func (t connectionTest) directEngine(ctx context.Context) (ConnectionCheck, erro
 	}
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
-	eng, err := t.h.kinds.Transient(ctx, kind, t.cfg)
+	transient := t.h.kinds.Transient
+	if t.managed {
+		transient = t.h.kinds.ManagedTransient
+	}
+	eng, err := transient(ctx, kind, t.cfg)
 	if err != nil {
 		return c, err
 	}

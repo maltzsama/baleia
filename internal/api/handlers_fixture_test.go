@@ -23,42 +23,44 @@ import (
 // through testAPI, so splitting the handlers by domain (#365) changes
 // this file, not every fixture.
 type handlerFields struct {
-	queries        db.Querier
-	pool           *pgxpool.Pool
-	tx             txRunner
-	schema         schemaVersioner
-	settings       Settings
-	keyring        *crypto.Keyring
-	temporalClient client.Client
-	catalogCache   *TTLStore[[]workspaceCatalogEntry]
-	versionCache   *TTLStore[engineProbe]
-	attentionCache *TTLStore[[]AttentionItem]
-	connections    *connections.Registry
-	engines        engineSource
-	kinds          engineKinds
-	dialects       *dialect.Registry
-	binder         *bindtrino.Binder
-	audit          audit.Recorder
-	dialer         *connections.Dialer
+	queries            db.Querier
+	pool               *pgxpool.Pool
+	tx                 txRunner
+	schema             schemaVersioner
+	settings           Settings
+	keyring            *crypto.Keyring
+	temporalClient     client.Client
+	catalogCache       *TTLStore[[]workspaceCatalogEntry]
+	versionCache       *TTLStore[engineProbe]
+	attentionCache     *TTLStore[[]AttentionItem]
+	connections        *connections.Registry
+	managedConnections *connections.Registry
+	engines            engineSource
+	kinds              engineKinds
+	dialects           *dialect.Registry
+	binder             *bindtrino.Binder
+	audit              audit.Recorder
+	dialer             *connections.Dialer
 }
 
 // testAPI builds handlers from the fields a test sets; the rest stay zero.
 func testAPI(f handlerFields) *API {
 	c := &core{
-		logger:         discardLogger,
-		versionCache:   f.versionCache,
-		queries:        f.queries,
-		pool:           f.pool,
-		tx:             f.tx,
-		settings:       f.settings,
-		keyring:        f.keyring,
-		temporalClient: f.temporalClient,
-		catalogCache:   f.catalogCache,
-		connections:    f.connections,
-		engines:        f.engines,
-		kinds:          f.kinds,
-		dialects:       f.dialects,
-		audit:          f.audit,
+		logger:             discardLogger,
+		versionCache:       f.versionCache,
+		queries:            f.queries,
+		pool:               f.pool,
+		tx:                 f.tx,
+		settings:           f.settings,
+		keyring:            f.keyring,
+		temporalClient:     f.temporalClient,
+		catalogCache:       f.catalogCache,
+		connections:        f.connections,
+		managedConnections: f.managedConnections,
+		engines:            f.engines,
+		kinds:              f.kinds,
+		dialects:           f.dialects,
+		audit:              f.audit,
 	}
 	c.history = history.New(c.queries)
 	c.browse = browse.New(c.queries)
