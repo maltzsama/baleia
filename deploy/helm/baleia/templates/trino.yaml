@@ -142,7 +142,7 @@ spec:
         # Trino cannot authenticate to the registry until the API has set the
         # baleia_trino role password (bootstrap). Wait for the registry table.
         - name: wait-for-registry
-          image: docker.io/library/postgres:18
+          image: {{ .Values.trino.waitImage }}
           command: ["/bin/sh", "-ec"]
           args:
             - |
