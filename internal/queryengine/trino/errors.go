@@ -39,17 +39,21 @@ func mapError(err error) error {
 	if errors.Is(err, context.Canceled) {
 		return queryengine.NewError(queryengine.CodeCancelled, Kind, "", "statement cancelled")
 	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		// Keep what timed out (a dial, a TLS handshake, a response) in Native:
-		// "statement timed out" alone hides whether Trino ever saw the query.
-		return queryengine.NewError(queryengine.CodeTimeout, Kind, err.Error(), "statement timed out")
-	}
+	// A transport error means Trino never answered: a dial, DNS or TLS timeout
+	// before the response arrived is an unavailable engine, not a statement
+	// timeout. Check it before the deadline branch because net timeouts match
+	// context.DeadlineExceeded, which would otherwise stop the retry (#672).
 	var te *trinoclient.TransportError
 	if errors.As(err, &te) {
 		if te.Status == http.StatusUnauthorized || te.Status == http.StatusForbidden {
 			return queryengine.NewError(queryengine.CodePermission, Kind, fmt.Sprintf("HTTP %d", te.Status), te.Error())
 		}
 		return queryengine.NewError(queryengine.CodeUnavailable, Kind, "", te.Error())
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		// Keep what timed out (a response that never arrived) in Native:
+		// "statement timed out" alone hides whether Trino ever saw the query.
+		return queryengine.NewError(queryengine.CodeTimeout, Kind, err.Error(), "statement timed out")
 	}
 	var qe *trinoclient.QueryError
 	if !errors.As(err, &qe) {

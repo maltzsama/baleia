@@ -65,6 +65,14 @@ func TestErrorMapping(t *testing.T) {
 	if got := queryengine.CodeOf(mapError(context.Canceled)); got != queryengine.CodeCancelled {
 		t.Errorf("cancelled context → %s", got)
 	}
+	// net timeouts match context.DeadlineExceeded, but a timeout before the
+	// engine answered is a transport failure and must stay retryable (#672).
+	if got := queryengine.CodeOf(mapError(&trinoclient.TransportError{Err: context.DeadlineExceeded})); got != queryengine.CodeUnavailable {
+		t.Errorf("transport timeout before the engine answered → %s", got)
+	}
+	if got := queryengine.CodeOf(mapError(context.DeadlineExceeded)); got != queryengine.CodeTimeout {
+		t.Errorf("statement deadline → %s", got)
+	}
 }
 
 // fakeCoordinator answers the statement protocol and records request headers.
