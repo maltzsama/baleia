@@ -220,3 +220,39 @@ func TestConfig_TrinoPasswordNeedsHost(t *testing.T) {
 		t.Errorf("no host = %v", err)
 	}
 }
+
+func TestCatalogScopeEnforced(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		version string
+		want    bool
+	}{
+		{"0.10.0", false},
+		{"0.10.1", false},
+		{"0.10.2", true},
+		{"0.10.2+trino484", true},
+		{"0.11.0", true},
+		{"1.0.0", true},
+	}
+	for _, tc := range cases {
+		c := &Config{PluginVersion: tc.version}
+		if got := c.CatalogScopeEnforced(); got != tc.want {
+			t.Errorf("CatalogScopeEnforced(%q) = %v, want %v", tc.version, got, tc.want)
+		}
+	}
+}
+
+func TestCatalogScopeWarning(t *testing.T) {
+	t.Parallel()
+	if got := (&Config{PluginVersion: "0.10.2"}).CatalogScopeWarning(); got != "" {
+		t.Errorf("enforced version warns: %q", got)
+	}
+	warn := (&Config{PluginVersion: "0.10.0"}).CatalogScopeWarning()
+	if warn == "" || !strings.Contains(warn, "0.10.2") {
+		t.Errorf("old version should warn about 0.10.2: %q", warn)
+	}
+	refuse := (&Config{PluginVersion: "0.10.0", RequireCatalogScope: true}).CatalogScopeWarning()
+	if refuse == "" || !strings.Contains(refuse, "refused") {
+		t.Errorf("require flag should refuse: %q", refuse)
+	}
+}

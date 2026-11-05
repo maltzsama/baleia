@@ -130,6 +130,12 @@ func (a *Activities) executeScript(ctx context.Context, p ExecuteScriptParams) (
 	if len(p.Statements) == 0 {
 		return &s.res, nil
 	}
+	// A Trino guard below 0.10.2 does not enforce baleia.catalogs (ADR 0018 §5);
+	// BALEIA_REQUIRE_CATALOG_SCOPE=true fails the run closed instead of running
+	// it unscoped.
+	if a.cfg != nil && a.cfg.RequireCatalogScope && !a.cfg.CatalogScopeEnforced() {
+		return s.failBeforeStart(queryengine.NewError(queryengine.CodeUnavailable, "", "", "the Trino guard does not enforce the catalog scope; refusing the query"))
+	}
 	activity.GetLogger(ctx).Info("executing script", "execution_id", p.ExecutionID, "request_id", p.RequestID, "statements", len(p.Statements))
 
 	eng, err := s.engine()
