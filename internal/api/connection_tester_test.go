@@ -236,6 +236,68 @@ func TestDirectEngine_RoutesByOwnership(t *testing.T) {
 	}
 }
 
+// fakeDirectProvider is a RoleDirect provider with a no-op Ping, so a handler
+// test reaches the direct check without a real server.
+type fakeDirectProvider struct{ kind connections.Kind }
+
+func (p fakeDirectProvider) Kind() connections.Kind   { return p.kind }
+func (fakeDirectProvider) Label() string              { return "Fake direct" }
+func (fakeDirectProvider) Family() connections.Family { return connections.FamilyDatabase }
+func (fakeDirectProvider) Roles() []connections.Role {
+	return []connections.Role{connections.RoleDirect}
+}
+func (fakeDirectProvider) ConfigSchema() []connections.Field { return nil }
+func (p fakeDirectProvider) Validate(cfg connections.Config) (connections.Config, error) {
+	return cfg, nil
+}
+func (fakeDirectProvider) EngineKind() string { return "trino" }
+func (fakeDirectProvider) OpenMetadata(context.Context, connections.Config) (connections.MetadataReader, error) {
+	return nil, errors.New("no metadata")
+}
+func (fakeDirectProvider) Ping(context.Context, connections.Config) error { return nil }
+func (fakeDirectProvider) Status() connections.Status {
+	return connections.Status{State: connections.StateSupported}
+}
+
+// TestTestCatalogConnection_RoutesByOwnership goes through the handler so the
+// ownership assignment in TestCatalogConnection is covered: a system-owned
+// connection's direct check uses ManagedTransient, a user-owned one the strict
+// Transient (#692).
+func TestTestCatalogConnection_RoutesByOwnership(t *testing.T) {
+	t.Parallel()
+	kind := connections.Kind("fake-direct")
+	strict, err := connections.NewRegistry(fakeDirectProvider{kind: kind})
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed, err := connections.NewRegistry(fakeDirectProvider{kind: kind})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		owner  pgtype.UUID
+		dialed bool // the managed transient
+	}{
+		{"system-owned", pgtype.UUID{}, true},
+		{"user-owned", pgtype.UUID{Bytes: [16]byte{0x99}, Valid: true}, false},
+	} {
+		k := &routingKinds{}
+		h := testAPI(handlerFields{
+			queries: &fakeConnQuerier{conn: db.CatalogConnection{
+				ID: pgtype.UUID{Bytes: [16]byte{0x01}, Valid: true}, Name: "d", Type: string(kind), CreatedBy: tc.owner,
+			}},
+			connections: strict, managedConnections: managed, kinds: k,
+		})
+		if _, err := h.TestCatalogConnection(ctxAs(adminID, "admin"), TestCatalogConnectionRequestObject{Id: PathId{0x01}}); err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if k.managed != tc.dialed || k.strict == tc.dialed {
+			t.Errorf("%s: strict=%v managed=%v, want managed=%v", tc.name, k.strict, k.managed, tc.dialed)
+		}
+	}
+}
+
 // TestTransient_RateLimited: the 11th test of a user in a minute is a 429;
 // another user is not affected.
 func TestTransient_RateLimited(t *testing.T) {
