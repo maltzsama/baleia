@@ -127,29 +127,29 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	if retriever.DestBindingID.Valid {
 		binding, err := a.queries.GetBinding(ctx, retriever.DestBindingID)
 		if err != nil {
-			return fmt.Errorf("retriever %s: destination binding unavailable: %w", retriever.ID, err)
+			return a.failRefresh(ctx, retrieverID, history.ID, fmt.Errorf("retriever %s: destination binding unavailable: %w", retriever.ID, err))
 		}
 		destCatalog = binding.EngineCatalogName
 		engineID = binding.EngineID
 		eng, err = a.engines.Get(ctx, binding.EngineID)
 		if err != nil {
-			return fmt.Errorf("retriever %s: destination engine unavailable: %w", retriever.ID, err)
+			return a.failRefresh(ctx, retrieverID, history.ID, fmt.Errorf("retriever %s: destination engine unavailable: %w", retriever.ID, err))
 		}
 	} else {
 		row, err := a.queries.GetDefaultTrinoEngine(ctx)
 		if err != nil {
-			return fmt.Errorf("retriever %s: %w", retriever.ID, err)
+			return a.failRefresh(ctx, retrieverID, history.ID, fmt.Errorf("retriever %s: default engine unavailable: %w", retriever.ID, err))
 		}
 		engineID = row.Engine.ID
 		var err2 error
 		eng, err2 = a.engines.DefaultTrino(ctx)
 		if err2 != nil {
-			return fmt.Errorf("retriever %s: %w", retriever.ID, err2)
+			return a.failRefresh(ctx, retrieverID, history.ID, fmt.Errorf("retriever %s: %w", retriever.ID, err2))
 		}
 	}
 	sql, err := buildRefreshSQL(eng.Dialect(), destCatalog, retriever.DestNamespace, retriever.DestTable, retriever.DefinitionSql)
 	if err != nil {
-		return fmt.Errorf("retriever %s has an invalid destination: %w", retriever.ID, err)
+		return a.failRefresh(ctx, retrieverID, history.ID, fmt.Errorf("retriever %s has an invalid destination: %w", retriever.ID, err))
 	}
 	logger.Info("refreshing retriever", "sql", sql)
 
@@ -239,6 +239,30 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		return fmt.Errorf("refresh failed: %s", *errorMsg)
 	}
 	return nil
+}
+
+// failRefresh records a failed run before returning: the retriever flips to
+// 'error' and the history row created as 'running' becomes 'failed', so a
+// binding/engine lookup failure never leaves the run stuck as running.
+func (a *Activities) failRefresh(ctx context.Context, retrieverID, historyID pgtype.UUID, err error) error {
+	msg := err.Error()
+	code := retrieverErrorCode(err)
+	if uerr := a.queries.UpdateRetrieverAfterRefresh(ctx, db.UpdateRetrieverAfterRefreshParams{
+		ID:        retrieverID,
+		Status:    "error",
+		ErrorCode: &code,
+	}); uerr != nil {
+		return fmt.Errorf("update retriever after refresh: %w", uerr)
+	}
+	if uerr := a.queries.UpdateRetrieverRefreshHistory(ctx, db.UpdateRetrieverRefreshHistoryParams{
+		ID:           historyID,
+		Status:       "failed",
+		ErrorMessage: &msg,
+		ErrorCode:    &code,
+	}); uerr != nil {
+		return fmt.Errorf("update refresh history: %w", uerr)
+	}
+	return fmt.Errorf("refresh failed: %s", msg)
 }
 
 // retrieverMaxResultRows bounds what a refresh statement may return: a CREATE
