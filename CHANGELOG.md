@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.6.1](https://github.com/maltzsama/baleia/compare/v0.6.0...v0.6.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **connections:** make the binding re-apply robust ([7633f16](https://github.com/maltzsama/baleia/commit/7633f16f50ec4f45e5f6e2fead5f81b063749108))
+* **connections:** re-apply managed bindings when a connection is edited ([6829d1a](https://github.com/maltzsama/baleia/commit/6829d1a1fd516b760a9b769baff41320d551323b))
+* **connections:** re-apply managed bindings when a connection is edited ([1d41cd9](https://github.com/maltzsama/baleia/commit/1d41cd9ad6a398192a3981a288d4c121460d9efc)), closes [#664](https://github.com/maltzsama/baleia/issues/664)
+* **dev:** give the dev Trino enough memory to read a table ([c96d85b](https://github.com/maltzsama/baleia/commit/c96d85b8b483e5fa3cc6508d7487f99c16293c4f))
+* **dev:** give the dev Trino enough memory to read a table ([2e3a2ae](https://github.com/maltzsama/baleia/commit/2e3a2ae5307eb88fceaa7f60d2f162556a61987e)), closes [#665](https://github.com/maltzsama/baleia/issues/665)
+* **helm:** make trino.jvmHeap set the heap ([5d6201f](https://github.com/maltzsama/baleia/commit/5d6201f7e7bc12d0de87741400b85f79d79dbd88))
+* **helm:** make trino.jvmHeap set the heap ([30cb7b9](https://github.com/maltzsama/baleia/commit/30cb7b95101260e9a341276d1976a8a96aa9c8b9)), closes [#669](https://github.com/maltzsama/baleia/issues/669)
+* **queryengine:** retire a cached engine when its connection changes ([bac375b](https://github.com/maltzsama/baleia/commit/bac375b48681da534e050efa3dd68a6d18c03668))
+* **queryengine:** retire a cached engine when its connection changes ([6b16f1b](https://github.com/maltzsama/baleia/commit/6b16f1b80c012a845718bc53684f74aa0d8b5f47)), closes [#681](https://github.com/maltzsama/baleia/issues/681)
+* **smoke,helm:** log in to the authenticated Trino and wait for it to be ready ([92d21ad](https://github.com/maltzsama/baleia/commit/92d21ad6cc1ee6b82136937d11c048477985f5af))
+* **smoke,helm:** log in to the authenticated Trino and wait for it to be ready ([4c1e554](https://github.com/maltzsama/baleia/commit/4c1e554ce27590c1e5b359aba0d87a068c3e0b29)), closes [#672](https://github.com/maltzsama/baleia/issues/672)
+* **trino:** keep the original timeout error in the statement error ([c22350d](https://github.com/maltzsama/baleia/commit/c22350d67421278d9f7f43173bd930a3597b007f)), closes [#672](https://github.com/maltzsama/baleia/issues/672)
+* **trino:** treat a timeout before the engine answered as unavailable ([29d0b44](https://github.com/maltzsama/baleia/commit/29d0b446496671ca46a4576cced707858f45e181)), closes [#672](https://github.com/maltzsama/baleia/issues/672)
+* **web:** give each setup step its own URL so a refresh stays on it ([8bedf75](https://github.com/maltzsama/baleia/commit/8bedf75ce91adb0deffea40deb2f7f9475aba3de))
+* **web:** give each setup step its own URL so a refresh stays on it ([14ff171](https://github.com/maltzsama/baleia/commit/14ff171bbee9b494f8836391b15d2535c279650f)), closes [#676](https://github.com/maltzsama/baleia/issues/676)
+* **web:** make the setup page scroll ([67f9f1f](https://github.com/maltzsama/baleia/commit/67f9f1fab537d8bad48633cd6d637aab01a9a0a1))
+* **web:** make the setup page scroll ([9028267](https://github.com/maltzsama/baleia/commit/9028267d2d792e777dbe9699ef932f39df152d0f)), closes [#674](https://github.com/maltzsama/baleia/issues/674)
+* **worker:** retry a timeout before the engine accepts the statement ([6d13f45](https://github.com/maltzsama/baleia/commit/6d13f45f194017993d6c81a5d69d431accb51d76))
+
+
+### Miscellaneous
+
+* **queryengine:** assert the cached engine is reused on an unchanged row ([9e7a7df](https://github.com/maltzsama/baleia/commit/9e7a7df444d509bd7ff2dcab9de01018b1b66645)), closes [#681](https://github.com/maltzsama/baleia/issues/681)
+* **smoke:** print the statement error when the query fails ([b2f1896](https://github.com/maltzsama/baleia/commit/b2f18960b41c265a2e2db3f3349d228277cc9b39)), closes [#672](https://github.com/maltzsama/baleia/issues/672)
+* **smoke:** say why the query failed ([5dbd50f](https://github.com/maltzsama/baleia/commit/5dbd50f2b37a6584c701bbe53710ddbaf886029a)), closes [#672](https://github.com/maltzsama/baleia/issues/672)
+
 ## [0.6.0](https://github.com/maltzsama/baleia/compare/v0.5.0...v0.6.0) (2026-11-04)
 
 
