@@ -78,6 +78,7 @@
           }
         },
         "jvmHeap": { "type": "string", "pattern": "^([0-9]+[kKmMgG]?)?$" },
+        "waitImage": { "type": "string" },
         "auth": {
           "type": "object",
           "properties": {
