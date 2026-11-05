@@ -187,12 +187,18 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 		}
 		s.spec.CatalogToken = tok
 	}
-	if src := s.spec.AllowedCatalogsSource; src != nil {
-		scope, err := src(ctx)
-		if err != nil {
-			return err
+	// Only a user identity carries a scope: the service identity sends no
+	// baleia.catalogs, so refreshing it would be a wasted lookup that can also
+	// abort the statement for nothing (a trusted session runs unscoped by
+	// design). A revoked scope still stops the next statement for a user.
+	if s.spec.Identity.UserID != "" {
+		if src := s.spec.AllowedCatalogsSource; src != nil {
+			scope, err := src(ctx)
+			if err != nil {
+				return err
+			}
+			s.spec.AllowedCatalogs = scope
 		}
-		s.spec.AllowedCatalogs = scope
 	}
 	opts := s.options(cb, s.applyHeaders)
 	opts.OnQueryID = func(id string) {

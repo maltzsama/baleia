@@ -48,6 +48,33 @@ func TestForFiltersToEngine(t *testing.T) {
 	}
 }
 
+// TestForExcludesDisabledEngine: a binding on a disabled engine never counts.
+func TestForExcludesDisabledEngine(t *testing.T) {
+	t.Parallel()
+	store := &fakeStore{rows: []db.ListWorkspaceTargetsRow{
+		row(1, "lake", true, false, true),
+	}}
+	got, err := For(store, id(9), id(1))(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("scope = %v, want empty", got)
+	}
+}
+
+// TestForRejectsAmbiguousName: a catalog name with "," or "=" would be read as
+// two grants or break the header, so the scope fails closed.
+func TestForRejectsAmbiguousName(t *testing.T) {
+	t.Parallel()
+	store := &fakeStore{rows: []db.ListWorkspaceTargetsRow{
+		row(1, "lake,secret", true, true, true),
+	}}
+	if _, err := For(store, id(9), id(1))(context.Background()); err == nil {
+		t.Fatal("a catalog name with a comma must fail closed")
+	}
+}
+
 // TestForRereads: the source re-reads the store on every call, so a revocation
 // is reflected by the next statement, not the next run.
 func TestForRereads(t *testing.T) {
