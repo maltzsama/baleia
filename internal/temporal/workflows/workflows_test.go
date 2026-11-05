@@ -334,6 +334,8 @@ func TestScriptTimeout(t *testing.T) {
 	require.Equal(t, 2*time.Hour, scriptTimeout(10, 30*time.Minute, 2*time.Hour), "capped by the execution timeout")
 	require.Equal(t, defaultExecutionTimeout, scriptTimeout(10, 30*time.Minute, 0), "no cap given: the default cap")
 	require.Equal(t, time.Hour, scriptTimeout(1, 0, time.Hour), "no statement timeout: the cap")
+	require.Equal(t, time.Hour, scriptTimeout(0, 30*time.Minute, time.Hour), "no statements still gets a valid timeout")
+	require.Equal(t, defaultExecutionTimeout, scriptTimeout(0, 30*time.Minute, 0), "no statements and no cap: the default cap")
 }
 
 // TestV3_InputHasNoSecrets: the workflow input is recorded in Temporal
