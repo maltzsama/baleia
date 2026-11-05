@@ -60,14 +60,7 @@ WHERE workspace_id = @workspace_id::uuid
 -- Trigram search over docs of catalogs the workspace may use. A tag narrows
 -- the result to docs carrying it.
 WITH visible AS (
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = @workspace_id::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+    SELECT baleia_workspace_catalog_ids(@workspace_id::uuid) AS id
 )
 SELECT d.*, greatest(
     similarity(d.description, @q::text),
@@ -163,14 +156,7 @@ RETURNING *;
 -- Distinct tags of docs on catalogs the workspace may use (#116). Prefix
 -- matches rank first.
 WITH visible AS (
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = @workspace_id::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+    SELECT baleia_workspace_catalog_ids(@workspace_id::uuid) AS id
 )
 SELECT tag::text AS tag, count(*)::bigint AS count
 FROM semantic_docs d, unnest(d.tags) AS tag
@@ -187,14 +173,7 @@ LIMIT @lim::int;
 -- Model visibility is space role (#40) AND a catalog grant (#16); space_id
 -- narrows it.
 WITH visible AS (
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = @workspace_id::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+    SELECT baleia_workspace_catalog_ids(@workspace_id::uuid) AS id
 )
 SELECT m.* FROM semantic_models m
 WHERE m.workspace_id = @workspace_id::uuid

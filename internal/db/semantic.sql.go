@@ -536,14 +536,7 @@ func (q *Queries) ListSemanticModelVersions(ctx context.Context, workspaceID pgt
 
 const listSemanticTags = `-- name: ListSemanticTags :many
 WITH visible AS (
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = $1::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = $1::uuid AND c.enabled
+    SELECT baleia_workspace_catalog_ids($1::uuid) AS id
 )
 SELECT tag::text AS tag, count(*)::bigint AS count
 FROM semantic_docs d, unnest(d.tags) AS tag
@@ -689,14 +682,7 @@ func (q *Queries) ListVisibleSemanticMetrics(ctx context.Context, arg ListVisibl
 const listVisibleSemanticModels = `-- name: ListVisibleSemanticModels :many
 
 WITH visible AS (
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = $1::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = $1::uuid AND c.enabled
+    SELECT baleia_workspace_catalog_ids($1::uuid) AS id
 )
 SELECT m.id, m.workspace_id, m.space_id, m.slug, m.label, m.description, m.certified, m.certified_by, m.certified_at, m.catalog_id, m.binding_id, m.definition, m.format_version, m.owner_user_id, m.updated_by, m.updated_at FROM semantic_models m
 WHERE m.workspace_id = $1::uuid
@@ -754,14 +740,7 @@ func (q *Queries) ListVisibleSemanticModels(ctx context.Context, arg ListVisible
 
 const searchSemanticDocs = `-- name: SearchSemanticDocs :many
 WITH visible AS (
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = $2::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = $2::uuid AND c.enabled
+    SELECT baleia_workspace_catalog_ids($2::uuid) AS id
 )
 SELECT d.id, d.workspace_id, d.catalog_id, d.namespace, d.table_name, d.column_name, d.description, d.tags, d.owner_user_id, d.updated_by, d.updated_at, d.certified, d.certified_by, d.certified_at, greatest(
     similarity(d.description, $1::text),

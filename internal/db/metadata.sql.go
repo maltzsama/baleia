@@ -165,16 +165,8 @@ func (q *Queries) GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID
 
 const getGrantedMetadataCatalog = `-- name: GetGrantedMetadataCatalog :one
 WITH visible AS (
-    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
-    -- owner's own catalogs in a personal workspace, and the granted ones.
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = $2::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = $2::uuid AND c.enabled
+    -- The catalogs a workspace may use (ADR 0018): the granted, enabled catalogs.
+    SELECT baleia_workspace_catalog_ids($2::uuid) AS id
 )
 SELECT v.id,
        (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = v.id AND r.status = 'finished')::timestamptz AS metadata_synced_at
@@ -203,16 +195,8 @@ func (q *Queries) GetGrantedMetadataCatalog(ctx context.Context, arg GetGrantedM
 
 const getGrantedMetadataTable = `-- name: GetGrantedMetadataTable :one
 WITH visible AS (
-    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
-    -- owner's own catalogs in a personal workspace, and the granted ones.
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = $2::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = $2::uuid AND c.enabled
+    -- The catalogs a workspace may use (ADR 0018): the granted, enabled catalogs.
+    SELECT baleia_workspace_catalog_ids($2::uuid) AS id
 )
 SELECT t.id, t.catalog_id, t.namespace, t.name, t.kind, t.properties, t.comment, t.last_changed_at, t.removed_at,
        (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = t.catalog_id AND r.status = 'finished')::timestamptz AS metadata_synced_at
@@ -407,16 +391,8 @@ func (q *Queries) ListChildNamespaces(ctx context.Context, arg ListChildNamespac
 
 const listMetadataCatalogs = `-- name: ListMetadataCatalogs :many
 WITH visible AS (
-    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
-    -- owner's own catalogs in a personal workspace, and the granted ones.
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = $1::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = $1::uuid AND c.enabled
+    -- The catalogs a workspace may use (ADR 0018): the granted, enabled catalogs.
+    SELECT baleia_workspace_catalog_ids($1::uuid) AS id
 )
 SELECT c.id, c.name, c.origin, cc.type AS provider_kind,
        (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = c.id AND r.status = 'finished')::timestamptz AS metadata_synced_at,
@@ -795,16 +771,8 @@ func (q *Queries) ReleaseMetadataSyncLock(ctx context.Context, catalogID string)
 
 const searchMetadata = `-- name: SearchMetadata :many
 WITH visible AS (
-    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
-    -- owner's own catalogs in a personal workspace, and the granted ones.
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = $1::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = $1::uuid AND c.enabled
+    -- The catalogs a workspace may use (ADR 0018): the granted, enabled catalogs.
+    SELECT baleia_workspace_catalog_ids($1::uuid) AS id
 ), granted AS (
     SELECT id FROM visible
     WHERE $6::uuid IS NULL OR id = $6::uuid

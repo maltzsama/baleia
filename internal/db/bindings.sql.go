@@ -287,7 +287,7 @@ func (q *Queries) GetManagedBindingOfCatalog(ctx context.Context, arg GetManaged
 }
 
 const getManagedConnectionOfEngineCatalog = `-- name: GetManagedConnectionOfEngineCatalog :one
-SELECT cc.id, cc.name, cc.type, cc.url, cc.credentials_enc, cc.default_readonly, cc.created_at, cc.updated_at, cc.host, cc.port, cc.created_by, cc.config, cc.credentials_read_only, cc.system_owned
+SELECT cc.id, cc.name, cc.type, cc.url, cc.credentials_enc, cc.created_at, cc.updated_at, cc.host, cc.port, cc.created_by, cc.config, cc.credentials_read_only, cc.system_owned
 FROM catalog_bindings b
 JOIN catalogs c ON c.id = b.catalog_id
 JOIN catalog_connections cc ON cc.id = c.connection_id
@@ -310,7 +310,6 @@ func (q *Queries) GetManagedConnectionOfEngineCatalog(ctx context.Context, arg G
 		&i.Type,
 		&i.Url,
 		&i.CredentialsEnc,
-		&i.DefaultReadonly,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Host,
@@ -662,12 +661,6 @@ func (q *Queries) ListReconcileRuns(ctx context.Context, arg ListReconcileRunsPa
 
 const listWorkspaceTargets = `-- name: ListWorkspaceTargets :many
 WITH visible AS (
-    SELECT c.id AS catalog_id
-    FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = $1
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id
-    UNION
     SELECT g.catalog_id
     FROM workspace_catalog_grants g
     WHERE g.workspace_id = $1
@@ -705,8 +698,7 @@ type ListWorkspaceTargetsRow struct {
 	CatalogEnabled    bool        `json:"catalog_enabled"`
 }
 
-// Every binding of a catalog the workspace may use: the catalogs of the owner
-// of a personal workspace (their own connections) and the granted ones (#16).
+// Every binding of a catalog the workspace may use: the granted ones (ADR 0018).
 // A catalog linked to a workspace is reachable by the workspace's members
 // only; what they may read or write in it is the catalog manager's decision
 // (#651). Disabled bindings, engines and catalogs are included; callers filter.
@@ -1155,7 +1147,7 @@ const upsertNativeCatalog = `-- name: UpsertNativeCatalog :one
 INSERT INTO catalogs (connection_id, name, origin, enabled)
 VALUES ($1, $2, 'native', true)
 ON CONFLICT (connection_id, name) DO UPDATE SET updated_at = now()
-RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref
+RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref, discoverable
 `
 
 type UpsertNativeCatalogParams struct {
@@ -1182,6 +1174,7 @@ func (q *Queries) UpsertNativeCatalog(ctx context.Context, arg UpsertNativeCatal
 		&i.UpdatedAt,
 		&i.Origin,
 		&i.SourceRef,
+		&i.Discoverable,
 	)
 	return i, err
 }

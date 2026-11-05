@@ -73,18 +73,11 @@ USING catalog_bindings b
 WHERE b.catalog_id = c.id AND b.engine_id = $1 AND b.mode = 'native' AND c.origin = 'native';
 
 -- name: ListWorkspaceTargets :many
--- Every binding of a catalog the workspace may use: the catalogs of the owner
--- of a personal workspace (their own connections) and the granted ones (#16).
+-- Every binding of a catalog the workspace may use: the granted ones (ADR 0018).
 -- A catalog linked to a workspace is reachable by the workspace's members
 -- only; what they may read or write in it is the catalog manager's decision
 -- (#651). Disabled bindings, engines and catalogs are included; callers filter.
 WITH visible AS (
-    SELECT c.id AS catalog_id
-    FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = sqlc.arg('workspace_id')
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id
-    UNION
     SELECT g.catalog_id
     FROM workspace_catalog_grants g
     WHERE g.workspace_id = sqlc.arg('workspace_id')

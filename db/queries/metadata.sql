@@ -188,16 +188,8 @@ WHERE c.enabled
 -- The catalogs a workspace may use with their freshness and their enabled
 -- bindings (what the editor's target selector offers, #24).
 WITH visible AS (
-    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
-    -- owner's own catalogs in a personal workspace, and the granted ones.
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = @workspace_id::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+    -- The catalogs a workspace may use (ADR 0018): the granted, enabled catalogs.
+    SELECT baleia_workspace_catalog_ids(@workspace_id::uuid) AS id
 )
 SELECT c.id, c.name, c.origin, cc.type AS provider_kind,
        (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = c.id AND r.status = 'finished')::timestamptz AS metadata_synced_at,
@@ -221,16 +213,8 @@ ORDER BY c.name, c.id;
 -- A catalog the workspace may use, with its freshness; no row: not visible
 -- from this workspace.
 WITH visible AS (
-    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
-    -- owner's own catalogs in a personal workspace, and the granted ones.
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = @workspace_id::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+    -- The catalogs a workspace may use (ADR 0018): the granted, enabled catalogs.
+    SELECT baleia_workspace_catalog_ids(@workspace_id::uuid) AS id
 )
 SELECT v.id,
        (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = v.id AND r.status = 'finished')::timestamptz AS metadata_synced_at
@@ -257,16 +241,8 @@ LIMIT @lim;
 -- A table of a catalog the workspace may use (tombstoned ones too, with
 -- removed_at), with its catalog freshness.
 WITH visible AS (
-    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
-    -- owner's own catalogs in a personal workspace, and the granted ones.
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = @workspace_id::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+    -- The catalogs a workspace may use (ADR 0018): the granted, enabled catalogs.
+    SELECT baleia_workspace_catalog_ids(@workspace_id::uuid) AS id
 )
 SELECT t.id, t.catalog_id, t.namespace, t.name, t.kind, t.properties, t.comment, t.last_changed_at, t.removed_at,
        (SELECT max(r.finished_at) FROM metadata_sync_runs r WHERE r.catalog_id = t.catalog_id AND r.status = 'finished')::timestamptz AS metadata_synced_at
@@ -301,16 +277,8 @@ LIMIT 1;
 -- Tables and columns of the catalogs the workspace may use whose names are
 -- trigram-similar to q (or contain a word similar to it), best first.
 WITH visible AS (
-    -- The catalogs a workspace may use (#16, as ListWorkspaceTargets): the
-    -- owner's own catalogs in a personal workspace, and the granted ones.
-    SELECT c.id FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = @workspace_id::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT g.catalog_id FROM workspace_catalog_grants g
-    JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+    -- The catalogs a workspace may use (ADR 0018): the granted, enabled catalogs.
+    SELECT baleia_workspace_catalog_ids(@workspace_id::uuid) AS id
 ), granted AS (
     SELECT id FROM visible
     WHERE sqlc.narg(catalog_id)::uuid IS NULL OR id = sqlc.narg(catalog_id)::uuid
