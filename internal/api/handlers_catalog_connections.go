@@ -636,8 +636,10 @@ func (h *core) exploreEngine(r *http.Request) (queryengine.Engine, error) {
 
 // exploreQuery runs one metadata statement as the caller's Trino identity
 // under the request context with a 30 s deadline, so a client disconnect
-// cancels it.
-func (h *core) exploreQuery(r *http.Request, eng queryengine.Engine, sql string) ([][]string, error) {
+// cancels it. catalog is the single catalog the statement addresses, which the
+// session's scope carries (ADR 0018 §5): the legacy explorer is per-catalog,
+// not per-workspace, and #704 replaces it.
+func (h *core) exploreQuery(r *http.Request, eng queryengine.Engine, catalog, sql string) ([][]string, error) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "explorer", RequestID: middleware.GetReqID(ctx)}}
@@ -647,6 +649,7 @@ func (h *core) exploreQuery(r *http.Request, eng queryengine.Engine, sql string)
 			return nil, err
 		}
 		spec.Identity = queryengine.Identity{UserID: identity}
+		spec.AllowedCatalogs = []string{catalog}
 	}
 	return queryengine.CollectStrings(ctx, eng, spec, sql, exploreMaxRows)
 }
@@ -667,7 +670,7 @@ func (h *CatalogHandlers) HandleListNamespaces(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	rows, err := h.exploreQuery(r, eng, "SHOW SCHEMAS FROM "+target)
+	rows, err := h.exploreQuery(r, eng, cat.TrinoName(), "SHOW SCHEMAS FROM "+target)
 	if err != nil {
 		h.writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list namespaces", err)
 		return
@@ -702,7 +705,7 @@ func (h *CatalogHandlers) HandleListTables(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	rows, err := h.exploreQuery(r, eng, "SHOW TABLES FROM "+target)
+	rows, err := h.exploreQuery(r, eng, cat.TrinoName(), "SHOW TABLES FROM "+target)
 	if err != nil {
 		h.writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list tables", err)
 		return
@@ -748,7 +751,7 @@ func (h *CatalogHandlers) HandleListColumns(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	meta, err := h.exploreQuery(r, eng, "DESCRIBE "+target)
+	meta, err := h.exploreQuery(r, eng, cat.TrinoName(), "DESCRIBE "+target)
 	if err != nil {
 		h.writeAPIError(w, r, http.StatusBadGateway, "engine_error", "could not list columns", err)
 		return

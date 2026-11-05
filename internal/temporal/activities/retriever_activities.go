@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/execscope"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/retrievers/schedule"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
@@ -121,6 +122,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	// v1 refresh: one atomic statement replaced under a new Iceberg snapshot.
 	// The binding names the engine that runs it and the catalog to write.
 	var eng queryengine.Engine
+	var engineID pgtype.UUID
 	destCatalog := retriever.DestCatalog
 	if retriever.DestBindingID.Valid {
 		binding, err := a.queries.GetBinding(ctx, retriever.DestBindingID)
@@ -128,15 +130,21 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 			return fmt.Errorf("retriever %s: destination binding unavailable: %w", retriever.ID, err)
 		}
 		destCatalog = binding.EngineCatalogName
+		engineID = binding.EngineID
 		eng, err = a.engines.Get(ctx, binding.EngineID)
 		if err != nil {
 			return fmt.Errorf("retriever %s: destination engine unavailable: %w", retriever.ID, err)
 		}
 	} else {
-		var err error
-		eng, err = a.engines.DefaultTrino(ctx)
+		row, err := a.queries.GetDefaultTrinoEngine(ctx)
 		if err != nil {
 			return fmt.Errorf("retriever %s: %w", retriever.ID, err)
+		}
+		engineID = row.Engine.ID
+		var err2 error
+		eng, err2 = a.engines.DefaultTrino(ctx)
+		if err2 != nil {
+			return fmt.Errorf("retriever %s: %w", retriever.ID, err2)
 		}
 	}
 	sql, err := buildRefreshSQL(eng.Dialect(), destCatalog, retriever.DestNamespace, retriever.DestTable, retriever.DefinitionSql)
@@ -175,6 +183,9 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 			// the catalog manager authorizes the refresh as them (#648).
 			Identity: queryengine.Identity{UserID: identity, Principal: uuidStr(retriever.CreatedBy)},
 			Tags:     queryengine.Tags{Source: "retriever"},
+			// The owner's workspace catalog scope on the destination engine
+			// (ADR 0018 §5).
+			AllowedCatalogsSource: execscope.For(a.queries, retriever.WorkspaceID, engineID),
 		}
 		result, err = queryengine.CollectStringsWith(ctx, eng, spec, sql, retrieverMaxResultRows, cb)
 	}
