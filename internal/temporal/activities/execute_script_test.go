@@ -64,6 +64,10 @@ func (st *statementStore) row(pos int32) stmtRow {
 	return *st.rows[pos]
 }
 
+func (st *statementStore) GetQueryExecutionByID(_ context.Context, id pgtype.UUID) (db.QueryExecution, error) {
+	return db.QueryExecution{ID: id, WorkspaceID: pgtype.UUID{Bytes: [16]byte{0xB1}, Valid: true}}, nil
+}
+
 func (st *statementStore) StartQueryStatement(_ context.Context, p db.StartQueryStatementParams) (int64, error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()

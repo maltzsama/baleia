@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/agentpolicy"
 	"github.com/galileostudio/baleia/internal/arrowipc"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/execscope"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -178,6 +179,13 @@ func (s *script) openSession() (queryengine.Session, error) {
 		}
 		readOnly = !writes
 	}
+	// The execution's workspace owns its catalog scope (ADR 0018 §5); resolve
+	// it once here and hand the engine a source it re-reads per statement, so a
+	// revocation stops the next statement instead of the next run.
+	exec, err := s.a.queries.GetQueryExecutionByID(s.ctx, s.execID)
+	if err != nil {
+		return nil, err
+	}
 	spec := queryengine.SessionSpec{
 		Catalog:  s.p.Target.EngineCatalog,
 		Identity: s.p.Identity,
@@ -187,6 +195,9 @@ func (s *script) openSession() (queryengine.Session, error) {
 		// to its engine's own mechanism.
 		Timeout: s.p.Timeout,
 		Tags:    queryengine.Tags{ExecutionID: s.p.ExecutionID, RequestID: s.p.RequestID, Source: source, Class: s.p.Class},
+		// A user identity must carry its scope; a service/agent identity leaves
+		// it nil (the guard lets trusted identities through anyway).
+		AllowedCatalogsSource: execscope.For(s.a.queries, exec.WorkspaceID, s.p.Target.EngineID),
 	}
 	if s.p.Target.Schema != "" {
 		spec.Schema = []string{s.p.Target.Schema}
