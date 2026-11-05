@@ -268,9 +268,10 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 
 	// The operator's own catalog managers (Polaris, …) live on a private
 	// address: read them through the managed dialer. User-supplied connections
-	// keep the strict one (#609).
+	// keep the strict one (#609); an orphan whose creator was deleted keeps it
+	// too (#694).
 	reg := a.connections
-	if a.managedConnections != nil && !conn.CreatedBy.Valid {
+	if a.managedConnections != nil && conn.IsSystemOwned() {
 		reg = a.managedConnections
 	}
 

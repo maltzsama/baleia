@@ -40,13 +40,13 @@ type recordingConnQuerier struct {
 
 func (f *recordingConnQuerier) CreateCatalogConnection(_ context.Context, p db.CreateCatalogConnectionParams) (db.CatalogConnection, error) {
 	f.created = append(f.created, p)
-	return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy}, nil
+	return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy, SystemOwned: p.SystemOwned}, nil
 }
 
 func (f *recordingConnQuerier) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
 	for _, p := range f.created {
 		if p.ID == id {
-			return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy}, nil
+			return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy, SystemOwned: p.SystemOwned}, nil
 		}
 	}
 	return db.CatalogConnection{ID: id}, nil

@@ -66,7 +66,7 @@ func (q *bindingQuerier) GetCatalogConnectionByID(_ context.Context, id pgtype.U
 		return db.CatalogConnection{ID: id, Name: "pg", Type: "postgresql", CreatedBy: q.sourceCreated,
 			Config: []byte(`{"host":"db.example","port":"5432","database":"sales","username":"u"}`)}, nil
 	case bEngineConn:
-		return db.CatalogConnection{ID: id, Name: "trino", Type: "trino", Config: []byte(`{"url":"http://trino:8080"}`)}, nil // system-owned
+		return db.CatalogConnection{ID: id, Name: "trino", Type: "trino", Config: []byte(`{"url":"http://trino:8080"}`), SystemOwned: true}, nil // system-owned
 	}
 	return db.CatalogConnection{}, pgx.ErrNoRows
 }
