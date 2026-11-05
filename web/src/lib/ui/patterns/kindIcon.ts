@@ -30,6 +30,8 @@ export type KindAppearance = {
 	brand?: string;
 	/** A dark mark: give it a light backdrop in dark mode so it stays legible. */
 	contrast?: boolean;
+	/** A light mark (yellow): give it a dark backdrop in light mode so it stays legible. */
+	lightMark?: boolean;
 };
 
 const appearances: Record<string, KindAppearance> = {
@@ -43,7 +45,7 @@ const appearances: Record<string, KindAppearance> = {
 		contrast: true
 	},
 	unity: { color: 'text-indigo-600', glyph: 'nodes' },
-	hive: { color: 'text-orange-600', glyph: 'metastore', brand: hiveMark },
+	hive: { color: 'text-orange-600', glyph: 'metastore', brand: hiveMark, lightMark: true },
 	glue: { color: 'text-amber-600', glyph: 'metastore' },
 	postgresql: { color: 'text-blue-600', glyph: 'database', brand: postgresqlMark },
 	mysql: { color: 'text-orange-500', glyph: 'database', brand: mysqlMark },
@@ -51,7 +53,12 @@ const appearances: Record<string, KindAppearance> = {
 	sqlserver: { color: 'text-red-600', glyph: 'database', brand: sqlserverMark },
 	oracle: { color: 'text-rose-600', glyph: 'database', brand: oracleMark },
 	sqlite: { color: 'text-slate-600', glyph: 'file', brand: sqliteMark, contrast: true },
-	clickhouse: { color: 'text-yellow-600', glyph: 'database', brand: clickhouseMark },
+	clickhouse: {
+		color: 'text-yellow-600',
+		glyph: 'database',
+		brand: clickhouseMark,
+		lightMark: true
+	},
 	flightsql: { color: 'text-violet-600', glyph: 'engine', brand: flightsqlMark, contrast: true },
 	trino: { color: 'text-pink-600', glyph: 'engine', brand: trinoMark },
 	doris: { color: 'text-cyan-700', glyph: 'engine', brand: dorisMark },
