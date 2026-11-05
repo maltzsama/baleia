@@ -150,9 +150,10 @@ func TestSessionAppliesResponseHeaders(t *testing.T) {
 	e := testEngine(t, f)
 	ctx := context.Background()
 	s, err := e.OpenSession(ctx, queryengine.SessionSpec{
-		Identity: queryengine.Identity{UserID: "u_123"},
-		ReadOnly: true,
-		Tags:     queryengine.Tags{ExecutionID: "exec-1", RequestID: "req-1", Source: "editor"},
+		Identity:        queryengine.Identity{UserID: "u_123"},
+		ReadOnly:        true,
+		AllowedCatalogs: []string{"lake", "raw"},
+		Tags:            queryengine.Tags{ExecutionID: "exec-1", RequestID: "req-1", Source: "editor"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -169,7 +170,7 @@ func TestSessionAppliesResponseHeaders(t *testing.T) {
 		"X-Trino-Schema":             "public",
 		"X-Trino-Session":            "query_max_run_time=5m",
 		"X-Trino-Prepared-Statement": "q=SELECT+1",
-		"X-Trino-Extra-Credential":   "baleia.mode=readonly",
+		"X-Trino-Extra-Credential":   "baleia.catalogs=lake%2Craw,baleia.mode=readonly",
 		"X-Trino-Source":             "baleia",
 		"X-Trino-Client-Tags":        "baleia,editor",
 		"X-Trino-Trace-Token":        "req-1",

@@ -500,3 +500,92 @@ func TestNoDefaultServeMux(t *testing.T) {
 		})
 	})
 }
+
+// fileImports maps a file's package aliases to their import paths, resolving
+// the same major-version suffixes guardedCalls does.
+func fileImports(f *ast.File) map[string]string {
+	imports := map[string]string{}
+	for _, imp := range f.Imports {
+		p, err := strconv.Unquote(imp.Path.Value)
+		if err != nil {
+			continue
+		}
+		name := p[strings.LastIndex(p, "/")+1:]
+		if strings.HasPrefix(name, "v") && strings.Count(p, "/") > 0 {
+			if _, err := strconv.Atoi(name[1:]); err == nil {
+				trimmed := p[:strings.LastIndex(p, "/")]
+				name = trimmed[strings.LastIndex(trimmed, "/")+1:]
+			}
+		}
+		if imp.Name != nil {
+			name = imp.Name.Name
+		}
+		imports[name] = p
+	}
+	return imports
+}
+
+// isExecscopeFor reports whether e is a call of execscope.For through alias.
+func isExecscopeFor(e ast.Expr, alias string) bool {
+	call, ok := e.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	id, ok := sel.X.(*ast.Ident)
+	return ok && id.Name == alias && sel.Sel.Name == "For"
+}
+
+// TestSessionScopeFromExecscope: a session's workspace catalog scope is the
+// guard's deny-by-default surface (ADR 0018 §5), so the only way to build its
+// re-resolving source is execscope.For. A hand-rolled AllowedCatalogsSource
+// could widen the scope, and a fixed AllowedCatalogs allowlist is allowed only
+// for a single, explicitly-authorized catalog (the legacy explorer, removed in
+// #704). internal/queryengine defines and consumes the field.
+func TestSessionScopeFromExecscope(t *testing.T) {
+	t.Parallel()
+	const execscopePkg = "github.com/galileostudio/baleia/internal/execscope"
+	goSources(t, func(rel string, f *ast.File) {
+		if strings.HasPrefix(rel, "internal/queryengine/") {
+			return
+		}
+		alias := ""
+		for name, path := range fileImports(f) {
+			if path == execscopePkg {
+				alias = name
+			}
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			switch n := n.(type) {
+			case *ast.CompositeLit:
+				for _, el := range n.Elts {
+					kv, ok := el.(*ast.KeyValueExpr)
+					if !ok {
+						continue
+					}
+					key, ok := kv.Key.(*ast.Ident)
+					if !ok || key.Name != "AllowedCatalogsSource" {
+						continue
+					}
+					if !isExecscopeFor(kv.Value, alias) {
+						t.Errorf("%s sets AllowedCatalogsSource outside execscope.For", rel)
+					}
+				}
+			case *ast.AssignStmt:
+				for i, lhs := range n.Lhs {
+					sel, ok := lhs.(*ast.SelectorExpr)
+					if !ok || sel.Sel.Name != "AllowedCatalogsSource" {
+						continue
+					}
+					if i >= len(n.Rhs) || !isExecscopeFor(n.Rhs[i], alias) {
+						t.Errorf("%s assigns AllowedCatalogsSource outside execscope.For", rel)
+					}
+				}
+			}
+			return true
+		})
+	})
+}

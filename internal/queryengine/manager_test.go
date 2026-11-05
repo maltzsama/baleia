@@ -284,6 +284,38 @@ func TestReadOnlyUnsupportedAllowedWithAssertion(t *testing.T) {
 	s.Close()
 }
 
+func TestUserSessionRequiresCatalogScope(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	m, _ := newManager(t, &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)})
+	e, err := m.Get(ctx, engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A user identity without a scope is rejected: a missing call site would
+	// otherwise run with no reach (ADR 0018 §5).
+	if _, err := e.OpenSession(ctx, queryengine.SessionSpec{
+		Identity: queryengine.Identity{UserID: "u_123"},
+	}); queryengine.CodeOf(err) != queryengine.CodeScopeMissing {
+		t.Fatalf("err = %v, want catalog_scope_missing", err)
+	}
+	// A fixed scope satisfies the invariant.
+	s, err := e.OpenSession(ctx, queryengine.SessionSpec{
+		Identity:        queryengine.Identity{UserID: "u_123"},
+		AllowedCatalogs: []string{"lake"},
+	})
+	if err != nil {
+		t.Fatalf("a scoped user session must open: %v", err)
+	}
+	_ = s.Close()
+	// The service identity (no UserID) is exempt.
+	s, err = e.OpenSession(ctx, queryengine.SessionSpec{})
+	if err != nil {
+		t.Fatalf("the service identity must open: %v", err)
+	}
+	_ = s.Close()
+}
+
 func TestManager_Refuses(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

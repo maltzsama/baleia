@@ -14,6 +14,22 @@ import (
 	"time"
 )
 
+// TestEncodeSessionProperties_EscapesSeparators pins the guard scope fix:
+// X-Trino-Session and X-Trino-Extra-Credential split on "," and "=", so a raw
+// "," or "=" (a padded base64 token, or a comma-separated catalog scope) would
+// corrupt the header. Values are percent-encoded and Trino URL-decodes them.
+func TestEncodeSessionProperties_EscapesSeparators(t *testing.T) {
+	t.Parallel()
+	got := encodeSessionProperties(map[string]string{
+		"baleia.catalogs": "lake,raw=prod",
+		"token":           "abc+def/ghi=",
+	})
+	want := "baleia.catalogs=lake%2Craw%3Dprod,token=abc%2Bdef%2Fghi%3D"
+	if got != want {
+		t.Fatalf("encodeSessionProperties = %q, want %q", got, want)
+	}
+}
+
 func TestBuildCreateCatalogDDL_RedactsSecretKeys(t *testing.T) {
 	t.Parallel()
 	spec := CatalogSpec{
