@@ -49,7 +49,17 @@ func (f *fixture) grantedCatalog(t *testing.T, name string) pgtype.UUID {
 	if err := f.pool.QueryRow(ctx, `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1, $2, 'native') RETURNING id`, conn, name).Scan(&cat); err != nil {
 		t.Fatal(err)
 	}
+	// Catalog creation grants the creator's workspace (ADR 0018 §4): the
+	// personal auto-reach rule is gone, so a catalog is only reachable by grant.
+	f.grant(t, f.ws, cat)
 	return cat
+}
+
+func (f *fixture) grant(t *testing.T, ws, catalog pgtype.UUID) {
+	t.Helper()
+	if _, err := f.pool.Exec(context.Background(), `INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, granted_by) VALUES ($1, $2, $3)`, ws, catalog, f.user); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (f *fixture) folder(t *testing.T, space pgtype.UUID, name, slug string, parent pgtype.UUID) db.QueryFolder {
@@ -139,6 +149,7 @@ func TestRoundTripNoChanges(t *testing.T) {
 	f.seed(t, source, catalog)
 
 	ws2 := f.workspace(t, "Other", "other")
+	f.grant(t, ws2, catalog)
 	dest := f.spaceIn(t, ws2, "Finance copy", "finance_copy")
 
 	bundle, err := f.s.Export(context.Background(), f.ws, source, "dev")
@@ -191,6 +202,7 @@ func TestUpdateCreatesImportVersion(t *testing.T) {
 	f.metric(t, source, catalog, "net_revenue", "Net revenue")
 
 	ws2 := f.workspace(t, "Other", "other")
+	f.grant(t, ws2, catalog)
 	dest := f.spaceIn(t, ws2, "Finance copy", "finance_copy")
 
 	bundle, _ := f.s.Export(ctx, f.ws, source, "dev")
@@ -247,6 +259,7 @@ func TestOmittedItemsNotDeleted(t *testing.T) {
 	catalog := f.grantedCatalog(t, "lake")
 	f.seed(t, source, catalog)
 	ws2 := f.workspace(t, "Other", "other")
+	f.grant(t, ws2, catalog)
 	dest := f.spaceIn(t, ws2, "Finance copy", "finance_copy")
 
 	bundle, _ := f.s.Export(ctx, f.ws, source, "dev")
