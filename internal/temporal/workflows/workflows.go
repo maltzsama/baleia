@@ -379,7 +379,9 @@ func scriptTimeout(statements int, statementTimeout, executionTimeout time.Durat
 	if executionTimeout <= 0 {
 		executionTimeout = defaultExecutionTimeout
 	}
-	if statementTimeout <= 0 {
+	// A script with no statements still needs a valid StartToCloseTimeout:
+	// Temporal rejects a 0 timeout, and statements * (...) would be 0.
+	if statementTimeout <= 0 || statements <= 0 {
 		return executionTimeout
 	}
 	t := time.Duration(statements) * (statementTimeout + statementMargin)
