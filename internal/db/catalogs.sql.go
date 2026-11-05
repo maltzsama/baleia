@@ -98,7 +98,7 @@ INSERT INTO catalogs (
     connection_id, name, description, trino_catalog_name,
     cluster_id, warehouse, connector, extra_props, source_ref
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $6)
-RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref
+RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref, discoverable
 `
 
 type CreateCatalogParams struct {
@@ -140,6 +140,7 @@ func (q *Queries) CreateCatalog(ctx context.Context, arg CreateCatalogParams) (C
 		&i.UpdatedAt,
 		&i.Origin,
 		&i.SourceRef,
+		&i.Discoverable,
 	)
 	return i, err
 }
@@ -171,7 +172,7 @@ func (q *Queries) DeleteEphemeralRegistryRow(ctx context.Context, arg DeleteEphe
 }
 
 const getCatalogByID = `-- name: GetCatalogByID :one
-SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE id = $1
+SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref, discoverable FROM catalogs WHERE id = $1
 `
 
 func (q *Queries) GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, error) {
@@ -192,12 +193,13 @@ func (q *Queries) GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, 
 		&i.UpdatedAt,
 		&i.Origin,
 		&i.SourceRef,
+		&i.Discoverable,
 	)
 	return i, err
 }
 
 const getCatalogByTrinoName = `-- name: GetCatalogByTrinoName :one
-SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE cluster_id = $1 AND trino_catalog_name = $2::text
+SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref, discoverable FROM catalogs WHERE cluster_id = $1 AND trino_catalog_name = $2::text
 `
 
 type GetCatalogByTrinoNameParams struct {
@@ -223,6 +225,7 @@ func (q *Queries) GetCatalogByTrinoName(ctx context.Context, arg GetCatalogByTri
 		&i.UpdatedAt,
 		&i.Origin,
 		&i.SourceRef,
+		&i.Discoverable,
 	)
 	return i, err
 }
@@ -368,7 +371,7 @@ func (q *Queries) ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) 
 }
 
 const listCatalogsByConnection = `-- name: ListCatalogsByConnection :many
-SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE connection_id = $1 ORDER BY name
+SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref, discoverable FROM catalogs WHERE connection_id = $1 ORDER BY name
 `
 
 func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error) {
@@ -395,6 +398,7 @@ func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgt
 			&i.UpdatedAt,
 			&i.Origin,
 			&i.SourceRef,
+			&i.Discoverable,
 		); err != nil {
 			return nil, err
 		}
@@ -407,7 +411,7 @@ func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgt
 }
 
 const listEnabledCatalogs = `-- name: ListEnabledCatalogs :many
-SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref FROM catalogs WHERE enabled AND origin = 'source' ORDER BY name
+SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref, discoverable FROM catalogs WHERE enabled AND origin = 'source' ORDER BY name
 `
 
 func (q *Queries) ListEnabledCatalogs(ctx context.Context) ([]Catalog, error) {
@@ -434,6 +438,7 @@ func (q *Queries) ListEnabledCatalogs(ctx context.Context) ([]Catalog, error) {
 			&i.UpdatedAt,
 			&i.Origin,
 			&i.SourceRef,
+			&i.Discoverable,
 		); err != nil {
 			return nil, err
 		}
@@ -518,7 +523,7 @@ func (q *Queries) ListExpiredEphemeralRegistryRows(ctx context.Context) ([]ListE
 }
 
 const listVisibleCatalogs = `-- name: ListVisibleCatalogs :many
-SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref FROM catalogs c
+SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref, c.discoverable FROM catalogs c
 JOIN catalog_connections cc ON cc.id = c.connection_id
 WHERE $1::bool
    OR cc.created_by = $2
@@ -560,6 +565,7 @@ func (q *Queries) ListVisibleCatalogs(ctx context.Context, arg ListVisibleCatalo
 			&i.UpdatedAt,
 			&i.Origin,
 			&i.SourceRef,
+			&i.Discoverable,
 		); err != nil {
 			return nil, err
 		}
@@ -627,7 +633,7 @@ UPDATE catalogs SET
     source_ref = CASE WHEN origin = 'source' THEN $4 ELSE source_ref END,
     updated_at = now()
 WHERE id = $1
-RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref
+RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref, discoverable
 `
 
 type UpdateCatalogParams struct {
@@ -666,6 +672,7 @@ func (q *Queries) UpdateCatalog(ctx context.Context, arg UpdateCatalogParams) (C
 		&i.UpdatedAt,
 		&i.Origin,
 		&i.SourceRef,
+		&i.Discoverable,
 	)
 	return i, err
 }
@@ -674,7 +681,7 @@ const updateCatalogMeta = `-- name: UpdateCatalogMeta :one
 UPDATE catalogs
 SET name = $2, description = $3, updated_at = now()
 WHERE id = $1
-RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref
+RETURNING id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref, discoverable
 `
 
 type UpdateCatalogMetaParams struct {
@@ -701,6 +708,7 @@ func (q *Queries) UpdateCatalogMeta(ctx context.Context, arg UpdateCatalogMetaPa
 		&i.UpdatedAt,
 		&i.Origin,
 		&i.SourceRef,
+		&i.Discoverable,
 	)
 	return i, err
 }

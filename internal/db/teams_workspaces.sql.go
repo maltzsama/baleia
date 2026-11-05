@@ -476,7 +476,7 @@ func (q *Queries) IsWorkspaceStructuralOwner(ctx context.Context, arg IsWorkspac
 }
 
 const listCatalogsGrantedToUser = `-- name: ListCatalogsGrantedToUser :many
-SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref FROM catalogs c
+SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref, c.discoverable FROM catalogs c
 JOIN workspace_catalog_grants g ON g.catalog_id = c.id
 WHERE c.connection_id = $1::uuid
   AND baleia_workspace_member_role(g.workspace_id, $2::uuid) IS NOT NULL
@@ -512,6 +512,7 @@ func (q *Queries) ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalog
 			&i.UpdatedAt,
 			&i.Origin,
 			&i.SourceRef,
+			&i.Discoverable,
 		); err != nil {
 			return nil, err
 		}
@@ -524,7 +525,7 @@ func (q *Queries) ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalog
 }
 
 const listGrantedCatalogsOfWorkspace = `-- name: ListGrantedCatalogsOfWorkspace :many
-SELECT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref, cc.name AS connection_name, cc.type AS connection_type
+SELECT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref, c.discoverable, cc.name AS connection_name, cc.type AS connection_type
 FROM workspace_catalog_grants g
 JOIN catalogs c ON c.id = g.catalog_id
 JOIN catalog_connections cc ON cc.id = c.connection_id
@@ -547,6 +548,7 @@ type ListGrantedCatalogsOfWorkspaceRow struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	Origin           string             `json:"origin"`
 	SourceRef        *string            `json:"source_ref"`
+	Discoverable     bool               `json:"discoverable"`
 	ConnectionName   string             `json:"connection_name"`
 	ConnectionType   string             `json:"connection_type"`
 }
@@ -575,6 +577,7 @@ func (q *Queries) ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceI
 			&i.UpdatedAt,
 			&i.Origin,
 			&i.SourceRef,
+			&i.Discoverable,
 			&i.ConnectionName,
 			&i.ConnectionType,
 		); err != nil {

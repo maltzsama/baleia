@@ -29,13 +29,9 @@ SELECT name FROM catalogs WHERE id = @id::uuid;
 -- name: GetGrantedCatalogByName :one
 -- A catalog the workspace may use, by its logical name.
 WITH visible AS (
-    SELECT c.id, c.name FROM catalogs c
-    JOIN catalog_connections cc ON cc.id = c.connection_id
-    JOIN workspaces w ON w.id = @workspace_id::uuid
-    WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL AND cc.created_by = w.owner_user_id AND c.enabled
-    UNION
-    SELECT c.id, c.name FROM workspace_catalog_grants g JOIN catalogs c ON c.id = g.catalog_id
-    WHERE g.workspace_id = @workspace_id::uuid AND c.enabled
+    SELECT c.id, c.name
+    FROM baleia_workspace_catalog_ids(@workspace_id::uuid) f
+    JOIN catalogs c ON c.id = f
 )
 SELECT id FROM visible WHERE name = @name::text;
 

@@ -577,8 +577,7 @@ type Querier interface {
 	ListWorkspaceMembers(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceMembersRow, error)
 	// Users who are members of the workspace (#113, #653).
 	ListWorkspacePrincipalUsers(ctx context.Context, arg ListWorkspacePrincipalUsersParams) ([]ListWorkspacePrincipalUsersRow, error)
-	// Every binding of a catalog the workspace may use: the catalogs of the owner
-	// of a personal workspace (their own connections) and the granted ones (#16).
+	// Every binding of a catalog the workspace may use: the granted ones (ADR 0018).
 	// A catalog linked to a workspace is reachable by the workspace's members
 	// only; what they may read or write in it is the catalog manager's decision
 	// (#651). Disabled bindings, engines and catalogs are included; callers filter.

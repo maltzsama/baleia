@@ -141,8 +141,9 @@ func TestMetadata_UngrantedCatalog404(t *testing.T) {
 		t.Fatal(err)
 	}
 	list := cats.(ListMetadataCatalogs200JSONResponse)
-	// The owner's own catalog is visible in their personal workspace (#16).
-	if len(list) != 2 || list[1].Id != f.mine || list[1].MetadataSyncStatus != "never" || len(list[1].Bindings) != 0 {
+	// Only the granted catalog is visible: the owner's own, ungranted catalog
+	// no longer auto-reaches (ADR 0018 §4).
+	if len(list) != 1 {
 		t.Fatalf("catalogs = %+v", list)
 	}
 	if list[0].Id != f.lake || list[0].MetadataSyncStatus != "finished" || list[0].MetadataSyncedAt == nil ||

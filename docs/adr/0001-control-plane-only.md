@@ -1,6 +1,7 @@
 # 0001. Baleia is a control plane, never a data plane
 
-- Status: Accepted
+- Status: Accepted; the "external clients talk to the engines directly" clause is amended by
+  [0017](0017-bi-gateway.md)
 - Date: 2026-10-14
 - Issues: #9, #89
 
@@ -34,7 +35,9 @@ and hit payload size limits.
 ## Current compliance
 
 Compliant since #89: statement results are stored as Arrow in object storage
-(`internal/arrowipc`, `internal/storage`) and workflows pass only references.
+(`internal/arrowipc`, `internal/storage`) and workflows pass only references. The BI files of #560
+followed the "external clients talk to the engines directly" clause; they are removed in 0.6.2 and
+BI returns only through the gateway ([0017](0017-bi-gateway.md)).
 
 ## Alternatives considered
 

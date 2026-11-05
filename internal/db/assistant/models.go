@@ -153,6 +153,7 @@ type Catalog struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	Origin           string             `json:"origin"`
 	SourceRef        *string            `json:"source_ref"`
+	Discoverable     bool               `json:"discoverable"`
 }
 
 type CatalogBinding struct {
@@ -188,6 +189,14 @@ type CatalogConnection struct {
 	Config              []byte             `json:"config"`
 	CredentialsReadOnly bool               `json:"credentials_read_only"`
 	SystemOwned         bool               `json:"system_owned"`
+}
+
+type CatalogGrantRequest struct {
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	CatalogID       pgtype.UUID        `json:"catalog_id"`
+	InitiatedBySide string             `json:"initiated_by_side"`
+	RequestedBy     pgtype.UUID        `json:"requested_by"`
+	RequestedAt     pgtype.Timestamptz `json:"requested_at"`
 }
 
 type CatalogReconcileRun struct {

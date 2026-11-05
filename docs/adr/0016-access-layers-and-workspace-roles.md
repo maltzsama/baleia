@@ -1,6 +1,7 @@
 # 0016. Three access layers and workspace roles
 
-- Status: Accepted
+- Status: Accepted; the "workspace → catalog" layer and the grant flow are superseded by
+  [0018](0018-workspace-catalog-scope.md)
 - Date: 2026-11-03
 - Issues: #653
 - Supersedes: the workspace role matrix of #16 (D6), where a workspace member could only read and
