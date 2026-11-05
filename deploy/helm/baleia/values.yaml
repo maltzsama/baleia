@@ -85,7 +85,7 @@ migrate:
 trino:
   enabled: false
   image:
-    repository: trinodb/trino
+    repository: docker.io/trinodb/trino
     tag: "484"
   plugin:
     version: ""           # required when trino.enabled (and plugin.image unset)
