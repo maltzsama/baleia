@@ -515,7 +515,10 @@ func encodeURLPairs(pairs map[string]string) string {
 }
 
 // encodeSessionProperties renders session properties deterministically so the
-// generated request is stable across calls.
+// generated request is stable across calls. Values are percent-encoded: Trino
+// splits both X-Trino-Session and X-Trino-Extra-Credential on "," and "=" and
+// URL-decodes each value, so a raw "," or "=" (a padded base64 token, or the
+// comma-separated catalog scope) would break the header.
 func encodeSessionProperties(props map[string]string) string {
 	keys := make([]string, 0, len(props))
 	for k := range props {
@@ -524,7 +527,7 @@ func encodeSessionProperties(props map[string]string) string {
 	sort.Strings(keys)
 	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
-		parts = append(parts, fmt.Sprintf("%s=%s", k, props[k]))
+		parts = append(parts, fmt.Sprintf("%s=%s", k, url.QueryEscape(props[k])))
 	}
 	return strings.Join(parts, ",")
 }
