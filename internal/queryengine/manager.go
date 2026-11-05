@@ -90,7 +90,15 @@ func (m *Manager) Get(ctx context.Context, engineID pgtype.UUID) (Engine, error)
 	if !row.Engine.Enabled {
 		return nil, NewError(CodeUnavailable, row.Engine.Kind, "", "engine is disabled")
 	}
+	// The engine is built from both rows, so a change to either must retire the
+	// cached engine. Keying only on the engine's updated_at misses a connection
+	// update (the default Trino connection's URL is rewritten by the bootstrap
+	// without touching the engine row): a worker that cached the engine first
+	// would keep serving the stale endpoint until it restarts.
 	version := row.Engine.UpdatedAt.Time
+	if c := row.CatalogConnection.UpdatedAt.Time; c.After(version) {
+		version = c
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -171,6 +171,30 @@ func TestManager_RebuildsOnUpdate(t *testing.T) {
 	}
 }
 
+// TestManager_RebuildsOnConnectionUpdate: a connection change (the default
+// Trino URL is rewritten by the bootstrap without touching the engine row)
+// must retire the cached engine, or a worker that cached the engine first
+// keeps serving the stale endpoint until it restarts.
+func TestManager_RebuildsOnConnectionUpdate(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)}
+	m, _ := newManager(t, s)
+
+	first, err := m.Get(ctx, engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.row.CatalogConnection.UpdatedAt = pgtype.Timestamptz{Time: time.Unix(2, 0), Valid: true}
+	second, err := m.Get(ctx, engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unwrap(t, second) == unwrap(t, first) {
+		t.Fatal("a changed connection reused the old instance")
+	}
+}
+
 func TestReadOnlyUnsupportedRejected(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
