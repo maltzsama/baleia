@@ -92,6 +92,9 @@ trino:
     url: ""               # default: GitHub release URL built from version
     image: ""             # optional small image with /baleia-catalog-store (air-gapped)
     imagePullPolicy: ""
+  # psql image for the wait-for-registry init container, which waits until the
+  # catalog registry is readable.
+  waitImage: docker.io/library/postgres:18
   # Maximum heap of the coordinator (-Xmx), e.g. "4G". Empty keeps the image's
   # default, a percentage of the container's memory limit (80%), or of the
   # node's memory when trino.resources sets no limit. Leave room above the heap
