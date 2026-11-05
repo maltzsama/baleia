@@ -63,15 +63,18 @@ type EngineSource interface {
 
 // Sources is the production Opener.
 type Sources struct {
-	store     SourceStore
-	keyring   *crypto.Keyring
-	providers *connections.Registry
-	engines   EngineSource
+	store            SourceStore
+	keyring          *crypto.Keyring
+	providers        *connections.Registry
+	managedProviders *connections.Registry
+	engines          EngineSource
 }
 
-// NewSources returns the opener of catalog sources.
-func NewSources(store SourceStore, keyring *crypto.Keyring, reg *connections.Registry, engines EngineSource) *Sources {
-	return &Sources{store: store, keyring: keyring, providers: reg, engines: engines}
+// NewSources returns the opener of catalog sources. managedReg dials the
+// operator's own catalog managers on private addresses; user-supplied
+// connections keep the strict reg (#609).
+func NewSources(store SourceStore, keyring *crypto.Keyring, reg, managedReg *connections.Registry, engines EngineSource) *Sources {
+	return &Sources{store: store, keyring: keyring, providers: reg, managedProviders: managedReg, engines: engines}
 }
 
 // Open picks the catalog's source (PathFor) and opens it.
@@ -106,11 +109,21 @@ func (s *Sources) openProvider(ctx context.Context, p connections.Provider, c db
 	if err != nil {
 		return nil, fmt.Errorf("load connection: %w", err)
 	}
+	// The operator's own catalog managers (Polaris, …) live on a private
+	// address: read them through the managed dialer. User-supplied connections
+	// keep the strict one so a connection cannot reach a private host (#609).
+	reg := s.providers
+	if s.managedProviders != nil && !conn.CreatedBy.Valid {
+		reg = s.managedProviders
+		if p, err = reg.Get(p.Kind()); err != nil {
+			return nil, err
+		}
+	}
 	plain, err := catalogs.OpenCredentials(conn, s.keyring)
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := providers.FromStored(s.providers, p.Kind(), conn.ID, conn.Url, conn.Config, plain)
+	cfg, err := providers.FromStored(reg, p.Kind(), conn.ID, conn.Url, conn.Config, plain)
 	if err != nil {
 		return nil, err
 	}
