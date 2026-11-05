@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/galileostudio/baleia/internal/app"
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/catalogs"
@@ -28,6 +29,12 @@ func main() {
 	logger := obs.NewLogger(os.Stdout, level)
 	// Libraries that log through the default logger get the same output.
 	slog.SetDefault(logger)
+	// Cap the Go heap to the container's cgroup limit so the GC runs before
+	// the OOM killer: Go otherwise targets the host's (effectively unlimited)
+	// memory and grows until the kernel SIGKILLs the process.
+	if _, err := memlimit.Set(memlimit.WithLogger(logger)); err != nil {
+		logger.Debug("no cgroup memory limit; GOMEMLIMIT left unset", "err", err)
+	}
 
 	if err := run(cfg, logger); err != nil {
 		logger.ErrorContext(context.Background(), "api", "err", err)

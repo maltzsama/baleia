@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/galileostudio/baleia/internal/app"
 	auditexport "github.com/galileostudio/baleia/internal/audit/export"
 	"github.com/galileostudio/baleia/internal/bindings"
@@ -41,6 +42,12 @@ func main() {
 	// JSON like the api's (#379); the Temporal SDK logs through it too.
 	logger := obs.NewLogger(os.Stdout, level)
 	slog.SetDefault(logger)
+	// Cap the Go heap to the container's cgroup limit so the GC runs before
+	// the OOM killer: Go otherwise targets the host's (effectively unlimited)
+	// memory and grows until the kernel SIGKILLs the process.
+	if _, err := memlimit.Set(memlimit.WithLogger(logger)); err != nil {
+		logger.Debug("no cgroup memory limit; GOMEMLIMIT left unset", "err", err)
+	}
 	if err := run(cfg, logger); err != nil {
 		logger.ErrorContext(context.Background(), "worker", "err", err)
 		os.Exit(1)
