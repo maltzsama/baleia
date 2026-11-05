@@ -378,7 +378,7 @@ func (h *CatalogHandlers) TestCatalogConnection(ctx context.Context, request Tes
 	}
 	// A system-owned connection is the operator's own endpoint, so its direct
 	// check dials through the managed dialer like the rest of the platform.
-	t.managed = !conn.CreatedBy.Valid
+	t.managed = conn.IsSystemOwned()
 	res := t.run(ctx)
 	if res.Success {
 		res.Version = &conn.Type
@@ -398,9 +398,10 @@ func (h *core) connectionConfig(conn db.CatalogConnection) (connections.Provider
 	// The operator's own endpoints (the seeded Trino cluster, Polaris, …) are
 	// system-owned and may live on a private address: reach them through the
 	// managed dialer. User-supplied connections keep the strict one so a
-	// connection cannot reach a private host (#609).
+	// connection cannot reach a private host (#609). An orphan whose creator
+	// was deleted is not system-owned (#694).
 	reg := h.connections
-	if h.managedConnections != nil && !conn.CreatedBy.Valid {
+	if h.managedConnections != nil && conn.IsSystemOwned() {
 		reg = h.managedConnections
 	}
 	provider, err := reg.Get(kind)

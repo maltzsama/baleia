@@ -62,7 +62,7 @@ func NewManager(store Store, keyring *crypto.Keyring, providers *connections.Reg
 // dialerFor picks the permissive dialer for system-owned (operator-configured)
 // engines and the strict one for user-owned connections.
 func (m *Manager) dialerFor(row db.GetEngineWithConnectionRow) *connections.Dialer {
-	if m.managedDialer != nil && !row.CatalogConnection.CreatedBy.Valid {
+	if m.managedDialer != nil && row.CatalogConnection.IsSystemOwned() {
 		return m.managedDialer
 	}
 	return m.dialer

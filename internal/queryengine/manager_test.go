@@ -80,6 +80,7 @@ func TestManagerUsesManagedDialerForSystemOwnedEngines(t *testing.T) {
 	}
 
 	system := engineRow(fake.Kind, time.Unix(1, 0), false)
+	system.CatalogConnection.SystemOwned = true
 	m = queryengine.NewManager(&store{row: system}, nil, nil, strict, managed, kinds)
 	e, err = m.Get(ctx, engineID)
 	if err != nil {
@@ -87,6 +88,18 @@ func TestManagerUsesManagedDialerForSystemOwnedEngines(t *testing.T) {
 	}
 	if got := unwrap(t, e).Dialer(); got != managed {
 		t.Error("system-owned engine did not use the managed dialer")
+	}
+
+	// An orphan (the creator was deleted, so created_by is NULL) is not
+	// system-owned and keeps the strict dialer (#694).
+	orphan := engineRow(fake.Kind, time.Unix(1, 0), false)
+	m = queryengine.NewManager(&store{row: orphan}, nil, nil, strict, managed, kinds)
+	e, err = m.Get(ctx, engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := unwrap(t, e).Dialer(); got != strict {
+		t.Error("orphaned connection did not keep the strict dialer")
 	}
 }
 

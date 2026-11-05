@@ -187,6 +187,7 @@ type CatalogConnection struct {
 	CreatedBy           pgtype.UUID        `json:"created_by"`
 	Config              []byte             `json:"config"`
 	CredentialsReadOnly bool               `json:"credentials_read_only"`
+	SystemOwned         bool               `json:"system_owned"`
 }
 
 type CatalogReconcileRun struct {

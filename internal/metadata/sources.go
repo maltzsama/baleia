@@ -112,8 +112,10 @@ func (s *Sources) openProvider(ctx context.Context, p connections.Provider, c db
 	// The operator's own catalog managers (Polaris, …) live on a private
 	// address: read them through the managed dialer. User-supplied connections
 	// keep the strict one so a connection cannot reach a private host (#609).
+	// Only a connection the platform owns qualifies: an orphan whose creator
+	// was deleted keeps the strict dialer (#694).
 	reg := s.providers
-	if s.managedProviders != nil && !conn.CreatedBy.Valid {
+	if s.managedProviders != nil && conn.IsSystemOwned() {
 		reg = s.managedProviders
 		if p, err = reg.Get(p.Kind()); err != nil {
 			return nil, err

@@ -62,8 +62,12 @@ func (f *fakeEngineStore) LinkTrinoClusterEngine(_ context.Context, p db.LinkTri
 func defaultEngine(url string, owner pgtype.UUID) *db.GetDefaultTrinoEngineRow {
 	cfg, _ := json.Marshal(map[string]string{"url": url})
 	return &db.GetDefaultTrinoEngineRow{
-		Engine:            db.Engine{Name: "default"},
-		CatalogConnection: db.CatalogConnection{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, Url: url, Config: cfg, CreatedBy: owner},
+		Engine: db.Engine{Name: "default"},
+		CatalogConnection: db.CatalogConnection{
+			ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, Url: url, Config: cfg, CreatedBy: owner,
+			// The bootstrap's own connection has no creator; a user-owned one does.
+			SystemOwned: !owner.Valid,
+		},
 	}
 }
 
@@ -78,7 +82,7 @@ func TestEnsureDefaultTrinoEngine(t *testing.T) {
 			t.Fatal(err)
 		}
 		if len(f.createdConn) != 1 || f.createdConn[0].Name != "trino-default-2" || f.createdConn[0].Type != "trino" ||
-			f.createdConn[0].CreatedBy.Valid || string(f.createdConn[0].Config) != `{"url":"http://trino:8080"}` {
+			f.createdConn[0].CreatedBy.Valid || !f.createdConn[0].SystemOwned || string(f.createdConn[0].Config) != `{"url":"http://trino:8080"}` {
 			t.Fatalf("connection = %+v", f.createdConn)
 		}
 		if len(f.engines) != 1 || f.engines[0].Kind != "trino" || f.engines[0].Class != "federated" || f.engines[0].IdentityMode != "impersonation" {

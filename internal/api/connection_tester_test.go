@@ -165,9 +165,9 @@ func TestTransient_DeniedCIDR(t *testing.T) {
 }
 
 // TestConnectionConfig_UsesManagedRegistryForSystemOwned: a system-owned
-// connection (created_by NULL) is the operator's own endpoint and may live on
-// a private address, so its provider dials through the managed registry; a
-// user-owned connection keeps the strict one (#609).
+// connection is the operator's own endpoint and may live on a private address,
+// so its provider dials through the managed registry; a user-owned connection
+// keeps the strict one (#609, #694).
 func TestConnectionConfig_UsesManagedRegistryForSystemOwned(t *testing.T) {
 	t.Parallel()
 	srv := fakeREST(t, false) // loopback: only the permissive managed dialer reaches it
@@ -175,9 +175,12 @@ func TestConnectionConfig_UsesManagedRegistryForSystemOwned(t *testing.T) {
 	h := testAPI(handlerFields{connections: testRegistry(t), managedConnections: managed})
 
 	conn := db.CatalogConnection{
-		ID:   pgtype.UUID{Bytes: [16]byte{0x01}, Valid: true},
-		Name: "lake", Type: "iceberg", Url: srv.URL,
-		Config: []byte(fmt.Sprintf(`{"url":%q}`, srv.URL)),
+		ID:          pgtype.UUID{Bytes: [16]byte{0x01}, Valid: true},
+		Name:        "lake",
+		Type:        "iceberg",
+		Url:         srv.URL,
+		Config:      []byte(fmt.Sprintf(`{"url":%q}`, srv.URL)),
+		SystemOwned: true,
 	}
 	p, cfg, err := h.connectionConfig(conn)
 	if err != nil {
@@ -189,6 +192,7 @@ func TestConnectionConfig_UsesManagedRegistryForSystemOwned(t *testing.T) {
 
 	user := conn
 	user.CreatedBy = pgtype.UUID{Bytes: [16]byte{0x99}, Valid: true}
+	user.SystemOwned = false
 	p, cfg, err = h.connectionConfig(user)
 	if err != nil {
 		t.Fatal(err)
@@ -275,17 +279,20 @@ func TestTestCatalogConnection_RoutesByOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		name   string
-		owner  pgtype.UUID
-		dialed bool // the managed transient
+		name        string
+		owner       pgtype.UUID
+		systemOwned bool
+		dialed      bool // the managed transient
 	}{
-		{"system-owned", pgtype.UUID{}, true},
-		{"user-owned", pgtype.UUID{Bytes: [16]byte{0x99}, Valid: true}, false},
+		{"system-owned", pgtype.UUID{}, true, true},
+		{"user-owned", pgtype.UUID{Bytes: [16]byte{0x99}, Valid: true}, false, false},
+		{"orphaned user-owned", pgtype.UUID{}, false, false},
 	} {
 		k := &routingKinds{}
 		h := testAPI(handlerFields{
 			queries: &fakeConnQuerier{conn: db.CatalogConnection{
-				ID: pgtype.UUID{Bytes: [16]byte{0x01}, Valid: true}, Name: "d", Type: string(kind), CreatedBy: tc.owner,
+				ID: pgtype.UUID{Bytes: [16]byte{0x01}, Valid: true}, Name: "d", Type: string(kind),
+				CreatedBy: tc.owner, SystemOwned: tc.systemOwned,
 			}},
 			connections: strict, managedConnections: managed, kinds: k,
 		})
