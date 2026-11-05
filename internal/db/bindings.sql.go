@@ -287,7 +287,7 @@ func (q *Queries) GetManagedBindingOfCatalog(ctx context.Context, arg GetManaged
 }
 
 const getManagedConnectionOfEngineCatalog = `-- name: GetManagedConnectionOfEngineCatalog :one
-SELECT cc.id, cc.name, cc.type, cc.url, cc.credentials_enc, cc.created_at, cc.updated_at, cc.host, cc.port, cc.created_by, cc.config, cc.credentials_read_only, cc.system_owned
+SELECT cc.id, cc.name, cc.type, cc.url, cc.credentials_enc, cc.default_readonly, cc.created_at, cc.updated_at, cc.host, cc.port, cc.created_by, cc.config, cc.credentials_read_only, cc.system_owned
 FROM catalog_bindings b
 JOIN catalogs c ON c.id = b.catalog_id
 JOIN catalog_connections cc ON cc.id = c.connection_id
@@ -310,6 +310,7 @@ func (q *Queries) GetManagedConnectionOfEngineCatalog(ctx context.Context, arg G
 		&i.Type,
 		&i.Url,
 		&i.CredentialsEnc,
+		&i.DefaultReadonly,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Host,

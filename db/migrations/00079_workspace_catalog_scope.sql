@@ -26,11 +26,10 @@ CREATE TABLE catalog_grant_requests (
 -- Discoverability for the workspace-admin request picker.
 ALTER TABLE catalogs ADD COLUMN discoverable BOOLEAN NOT NULL DEFAULT false;
 
--- #654: drop the grant permission and the connection default_readonly; no 0.6.2
--- code reads either. A 0.6.1 pod still writes a grant's permission, so a grant
--- written during the rolling update fails on that pod and succeeds on retry.
-ALTER TABLE workspace_catalog_grants DROP COLUMN permission;
-ALTER TABLE catalog_connections DROP COLUMN default_readonly;
+-- #654 (`permission`, `default_readonly`) stays for now: a 0.6.1 pod still
+-- names both during the rolling update (`RETURNING *` on a grant read,
+-- `SELECT *` on every connection read), so dropping them here would break
+-- those pods. They are dropped in a later release, once 0.6.1 is gone.
 
 -- Backfill: an explicit grant for every (personal workspace, catalog of the
 -- owner's connections) pair the personal auto-reach rule reached, so nobody
@@ -48,5 +47,3 @@ ON CONFLICT (workspace_id, catalog_id) DO NOTHING;
 DROP FUNCTION IF EXISTS baleia_workspace_catalog_ids(uuid);
 DROP TABLE IF EXISTS catalog_grant_requests;
 ALTER TABLE catalogs DROP COLUMN IF EXISTS discoverable;
-ALTER TABLE workspace_catalog_grants ADD COLUMN permission TEXT NOT NULL DEFAULT 'write' CHECK (permission IN ('read', 'write'));
-ALTER TABLE catalog_connections ADD COLUMN default_readonly BOOLEAN NOT NULL DEFAULT true;
