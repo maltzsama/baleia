@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -32,8 +33,15 @@ func main() {
 	// Cap the Go heap to the container's cgroup limit so the GC runs before
 	// the OOM killer: Go otherwise targets the host's (effectively unlimited)
 	// memory and grows until the kernel SIGKILLs the process.
-	if _, err := memlimit.Set(memlimit.WithLogger(logger)); err != nil {
-		logger.Debug("no cgroup memory limit; GOMEMLIMIT left unset", "err", err)
+	if _, err := memlimit.Set(); err != nil {
+		// Not in a cgroup, or the cgroup has no memory limit: leave GOMEMLIMIT
+		// unset (the pre-automemlimit behavior). Anything else is a real
+		// misconfiguration worth surfacing.
+		if errors.Is(err, memlimit.ErrNoCgroup) || errors.Is(err, memlimit.ErrNoLimit) {
+			logger.Debug("no cgroup memory limit; GOMEMLIMIT left unset", "err", err)
+		} else {
+			logger.Warn("could not set GOMEMLIMIT from the cgroup", "err", err)
+		}
 	}
 
 	if err := run(cfg, logger); err != nil {
