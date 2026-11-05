@@ -308,6 +308,26 @@ func TestUserSessionRequiresCatalogScope(t *testing.T) {
 		t.Fatalf("a scoped user session must open: %v", err)
 	}
 	_ = s.Close()
+	// A source-only scope satisfies the invariant (the script execution path
+	// sends no fixed list, only execscope.For).
+	s, err = e.OpenSession(ctx, queryengine.SessionSpec{
+		Identity:              queryengine.Identity{UserID: "u_123"},
+		AllowedCatalogsSource: func(context.Context) ([]string, error) { return []string{"lake"}, nil },
+	})
+	if err != nil {
+		t.Fatalf("a source-scoped user session must open: %v", err)
+	}
+	_ = s.Close()
+	// A nonnil empty fixed scope satisfies the invariant and is fail-closed
+	// (the guard allows no catalog), so it must not be rejected as missing.
+	s, err = e.OpenSession(ctx, queryengine.SessionSpec{
+		Identity:        queryengine.Identity{UserID: "u_123"},
+		AllowedCatalogs: []string{},
+	})
+	if err != nil {
+		t.Fatalf("an empty-but-set scope must open: %v", err)
+	}
+	_ = s.Close()
 	// The service identity (no UserID) is exempt.
 	s, err = e.OpenSession(ctx, queryengine.SessionSpec{})
 	if err != nil {

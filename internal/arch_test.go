@@ -548,6 +548,12 @@ func isExecscopeFor(e ast.Expr, alias string) bool {
 func TestSessionScopeFromExecscope(t *testing.T) {
 	t.Parallel()
 	const execscopePkg = "github.com/galileostudio/baleia/internal/execscope"
+	// fixedScopeAllowed lists the files that may set a fixed AllowedCatalogs:
+	// the legacy explorer sends the single catalog it authorized (#704 removes
+	// the route). Nothing else may spell a fixed allowlist.
+	fixedScopeAllowed := map[string]bool{
+		"internal/api/handlers_catalog_connections.go": true,
+	}
 	goSources(t, func(rel string, f *ast.File) {
 		if strings.HasPrefix(rel, "internal/queryengine/") {
 			return
@@ -567,21 +573,35 @@ func TestSessionScopeFromExecscope(t *testing.T) {
 						continue
 					}
 					key, ok := kv.Key.(*ast.Ident)
-					if !ok || key.Name != "AllowedCatalogsSource" {
+					if !ok {
 						continue
 					}
-					if !isExecscopeFor(kv.Value, alias) {
-						t.Errorf("%s sets AllowedCatalogsSource outside execscope.For", rel)
+					switch key.Name {
+					case "AllowedCatalogsSource":
+						if !isExecscopeFor(kv.Value, alias) {
+							t.Errorf("%s sets AllowedCatalogsSource outside execscope.For", rel)
+						}
+					case "AllowedCatalogs":
+						if !fixedScopeAllowed[rel] {
+							t.Errorf("%s sets a fixed AllowedCatalogs allowlist; the scope must come from execscope.For", rel)
+						}
 					}
 				}
 			case *ast.AssignStmt:
 				for i, lhs := range n.Lhs {
 					sel, ok := lhs.(*ast.SelectorExpr)
-					if !ok || sel.Sel.Name != "AllowedCatalogsSource" {
+					if !ok {
 						continue
 					}
-					if i >= len(n.Rhs) || !isExecscopeFor(n.Rhs[i], alias) {
-						t.Errorf("%s assigns AllowedCatalogsSource outside execscope.For", rel)
+					switch sel.Sel.Name {
+					case "AllowedCatalogsSource":
+						if i >= len(n.Rhs) || !isExecscopeFor(n.Rhs[i], alias) {
+							t.Errorf("%s assigns AllowedCatalogsSource outside execscope.For", rel)
+						}
+					case "AllowedCatalogs":
+						if !fixedScopeAllowed[rel] {
+							t.Errorf("%s assigns a fixed AllowedCatalogs allowlist; the scope must come from execscope.For", rel)
+						}
 					}
 				}
 			}
