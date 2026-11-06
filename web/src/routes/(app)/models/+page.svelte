@@ -37,12 +37,19 @@
 		})
 	);
 
+	// Reload the spaces once per workspace; changing the space filter only
+	// re-lists the models (#735).
+	let contentLoadedFor = '';
+
 	async function load() {
 		if (!workspaceId) return;
 		loading = true;
 		error = '';
 		try {
-			await savedQueries.reload(workspaceId);
+			if (contentLoadedFor !== workspaceId) {
+				await savedQueries.reload(workspaceId);
+				contentLoadedFor = workspaceId;
+			}
 			models = await listModels(workspaceId, spaceId || undefined);
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
