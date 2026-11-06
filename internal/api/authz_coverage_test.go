@@ -388,9 +388,6 @@ var routeAccess = map[string]access{
 	"GET /api/v1/ws/workspaces/{id}/executions/{execution_id}": {kind: kindChecked, pkg: "../ws", calls: []string{"Consume", "CheckWorkspaceAccess"}},
 
 	"GET /workspaces/{id}/catalogs":                                                                          checked("Workspace"),
-	"GET /connections/{connection_id}/catalogs/{catalog_name}/namespaces":                                    checked("explorerTarget"),
-	"GET /connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables":                 checked("explorerTarget"),
-	"GET /connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables/{table}/columns": checked("explorerTarget"),
 }
 
 // ── source model ─────────────────────────────────────────────────────────────

@@ -263,9 +263,6 @@ func (s *Server) routes() {
 		r.Group(func(r chi.Router) {
 			r.Use(chiAuthMiddleware(s.cfg.JWTSecret, s.queries, s.serviceAccounts))
 			r.Get("/workspaces/{id}/catalogs", s.handlers.ListWorkspaceCatalogs)
-			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces", s.handlers.HandleListNamespaces)
-			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables", s.handlers.HandleListTables)
-			r.Get("/connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables/{table}/columns", s.handlers.HandleListColumns)
 		})
 	})
 

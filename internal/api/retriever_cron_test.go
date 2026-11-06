@@ -2,12 +2,28 @@ package api
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.temporal.io/sdk/client"
 )
+
+// recordingTemporal records the arguments of every started workflow.
+type recordingTemporal struct {
+	client.Client
+	mu    sync.Mutex
+	calls [][]any
+}
+
+func (f *recordingTemporal) ExecuteWorkflow(_ context.Context, _ client.StartWorkflowOptions, _ any, args ...any) (client.WorkflowRun, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, args)
+	return nil, nil
+}
 
 type updateRetrieverFake struct {
 	fakeRetrieverQuerier
