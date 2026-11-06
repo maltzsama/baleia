@@ -237,8 +237,11 @@ type ListEnabledIcebergCatalogsParams struct{}
 type EnabledIcebergCatalog struct {
 	ID                  string
 	CatalogConnectionID string
-	Catalog             string
-	TrinoCatalogName    string
+	// Catalog is the Baleia display name; SourceRef is the catalog's reference
+	// inside its connection (the warehouse), which the metadata reader lists.
+	Catalog          string
+	SourceRef        string
+	TrinoCatalogName string
 }
 
 func ListEnabledIcebergCatalogs(ctx context.Context, params ListEnabledIcebergCatalogsParams) ([]EnabledIcebergCatalog, error) {
@@ -253,10 +256,17 @@ func (a *Activities) listEnabledIcebergCatalogs(ctx context.Context) ([]EnabledI
 
 	out := make([]EnabledIcebergCatalog, 0, len(rows))
 	for _, r := range rows {
+		src := r.Name
+		if r.SourceRef != nil && *r.SourceRef != "" {
+			src = *r.SourceRef
+		} else if r.Warehouse != nil && *r.Warehouse != "" {
+			src = *r.Warehouse
+		}
 		out = append(out, EnabledIcebergCatalog{
 			ID:                  r.ID.String(),
 			CatalogConnectionID: r.ConnectionID.String(),
 			Catalog:             r.Name,
+			SourceRef:           src,
 			TrinoCatalogName:    r.TrinoCatalogName,
 		})
 	}
@@ -398,6 +408,11 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 	// with zero rows (#750).
 	if recorded == 0 && firstErr != nil {
 		return fmt.Errorf("table health pass recorded no tables: %w", firstErr)
+	}
+	// A partial pass (some tables recorded, some failed) is logged so the
+	// skipped tables are not silently dropped.
+	if firstErr != nil {
+		a.logger.WarnContext(ctx, "table health pass had failures", "catalog", params.Catalog, "err", firstErr)
 	}
 	return nil
 }

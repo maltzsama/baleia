@@ -75,7 +75,7 @@ func LensTableHealthWorkflow(ctx workflow.Context) error {
 			if err := workflow.ExecuteActivity(actCtx, activities.LensAnalyzeTableHealth, activities.LensAnalyzeTableHealthParams{
 				CatalogID:           cat.ID,
 				CatalogConnectionID: cat.CatalogConnectionID,
-				Catalog:             cat.Catalog,
+				Catalog:             cat.SourceRef,
 			}).Get(actCtx, nil); err != nil {
 				workflow.GetLogger(ctx).Error("analyze table health failed",
 					"catalog", cat.Catalog, "err", err)
