@@ -1,9 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { authStore } from '$lib/stores/auth.svelte';
 import { http, server } from '../../../test/server';
 import { makeCatalog, makeMe } from '../../../test/factories';
 import CatalogsPage from './+page.svelte';
+
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/state', () => ({
+	page: { url: new URL('http://localhost/catalogs'), params: {} }
+}));
 
 const summary = (overrides: Parameters<typeof makeCatalog>[0]) => ({
 	...makeCatalog(overrides),

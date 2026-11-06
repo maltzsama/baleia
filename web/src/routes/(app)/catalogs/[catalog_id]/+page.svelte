@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { applySelection } from '$lib/stores/selectionUrl';
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import { toasts } from '$lib/ui/toast.svelte';
 	import type { components } from '$lib/api/schema';
@@ -169,7 +170,15 @@
 
 	function selectTab(next: Tab) {
 		tab = next;
-		window.history.replaceState(null, '', `${page.url.pathname}?tab=${next}`);
+		// Preserve the other query params (e.g. ws) instead of rebuilding the
+		// URL from scratch (#731). The pathname is dynamic, so resolve() cannot
+		// type it (#29).
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(applySelection(page.url, { tab: next }), {
+			replaceState: true,
+			keepFocus: true,
+			noScroll: true
+		});
 	}
 
 	function normalizeName(name: string): string {
