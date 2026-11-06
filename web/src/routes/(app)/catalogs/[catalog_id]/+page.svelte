@@ -2,6 +2,8 @@
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import { toasts } from '$lib/ui/toast.svelte';
 	import type { components } from '$lib/api/schema';
@@ -383,7 +385,13 @@
 
 	async function confirmDelete() {
 		await deleteCatalog(catalogId);
-		window.location.href = '/catalogs';
+		void goto(resolve('/catalogs'));
+	}
+
+	function openInExplorer() {
+		// The path is resolved then extended with the catalog query (#730).
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(`${resolve('/data')}?catalog=${encodeURIComponent(catalogId)}`);
 	}
 
 	async function submitGrant() {
@@ -561,7 +569,7 @@
 						<button
 							type="button"
 							class="text-[12px] text-primary hover:underline"
-							onclick={() => (window.location.href = `/data?catalog=${catalogId}`)}
+							onclick={openInExplorer}
 						>
 							{m.catalogs_detail_open_in_explorer()}
 						</button>
