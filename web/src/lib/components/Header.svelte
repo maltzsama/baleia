@@ -12,6 +12,7 @@
 	import { canGlobal } from '$lib/authz/can';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
+	import { selection } from '$lib/stores/selection.svelte';
 	import type { Workspace } from '$lib/stores/workspace.svelte';
 
 	// The section the page belongs to (#465), from the shared nav map. An area
@@ -93,11 +94,9 @@
 
 	function selectWs(ws: Workspace) {
 		workspaceStore.select(ws);
-		if (typeof window !== 'undefined') {
-			const url = new URL(window.location.href);
-			url.searchParams.set('ws', ws.id);
-			window.history.replaceState(null, '', url);
-		}
+		// Keep the URL (and the selection store, which derives from page.url) in
+		// step with the switch, so both read the same source (#732).
+		selection.set({ ws: ws.id });
 		wsOpen = false;
 	}
 

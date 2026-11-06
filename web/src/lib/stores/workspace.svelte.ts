@@ -1,3 +1,4 @@
+import { page } from '$app/state';
 import { client } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
 import { authStore } from '$lib/stores/auth.svelte';
@@ -33,10 +34,9 @@ function createWorkspaceStore() {
 		try {
 			const { data } = await client.GET('/workspaces');
 			workspaces = (data as Workspace[] | undefined) ?? [];
-			const urlWs =
-				typeof window !== 'undefined'
-					? new URLSearchParams(window.location.search).get('ws')
-					: null;
+			// The URL is the single source of truth for the selected workspace
+			// (#732); localStorage is only the fallback when it is absent.
+			const urlWs = page.url.searchParams.get('ws');
 			const saved =
 				typeof localStorage !== 'undefined' ? localStorage.getItem(selectedKey()) : null;
 			const personal = workspaces.find((w) => w.id === authStore.user?.personal_workspace_id);
