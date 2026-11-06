@@ -19,9 +19,14 @@ import (
 
 // session is client-side state: what the next request must send.
 type session struct {
-	engine     *Engine
-	spec       queryengine.SessionSpec
-	mu         sync.Mutex
+	engine *Engine
+	spec   queryengine.SessionSpec
+	mu     sync.Mutex
+	// execMu serializes the credential/scope refresh with the request build.
+	// The Session contract runs statements one at a time; this is defense in
+	// depth so a concurrent Execute during a revocation cannot build a request
+	// from a stale scope.
+	execMu     sync.Mutex
 	catalog    string
 	schema     string
 	properties map[string]string
@@ -172,18 +177,13 @@ func unescape(v string) string {
 	return strings.TrimSpace(v)
 }
 
-// Execute runs one statement and streams it to sink as Arrow batches.
-func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callbacks, sink queryengine.RecordSink) error {
-	start := time.Now()
-	var (
-		batcher *arrowipc.Batcher
-		began   bool
-		sinkErr error
-	)
+// render refreshes the credentials and scope and renders the request. The
+// caller holds execMu so the refresh and the build are one critical section.
+func (s *session) render(ctx context.Context, cb queryengine.Callbacks) (trinoclient.ExecuteOptions, error) {
 	if src := s.spec.CatalogTokenSource; src != nil {
 		tok, err := src(ctx)
 		if err != nil {
-			return err
+			return trinoclient.ExecuteOptions{}, err
 		}
 		s.spec.CatalogToken = tok
 	}
@@ -195,12 +195,32 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 		if src := s.spec.AllowedCatalogsSource; src != nil {
 			scope, err := src(ctx)
 			if err != nil {
-				return err
+				return trinoclient.ExecuteOptions{}, err
 			}
 			s.spec.AllowedCatalogs = scope
 		}
 	}
-	opts := s.options(cb, s.applyHeaders)
+	return s.options(cb, s.applyHeaders), nil
+}
+
+// Execute runs one statement and streams it to sink as Arrow batches.
+func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callbacks, sink queryengine.RecordSink) error {
+	start := time.Now()
+	var (
+		batcher *arrowipc.Batcher
+		began   bool
+		sinkErr error
+	)
+	// Serialize the credential/scope refresh with the request build: a
+	// concurrent Execute during a revocation must not build a request from a
+	// stale scope (the Session contract runs statements one at a time; this is
+	// defense in depth).
+	s.execMu.Lock()
+	opts, err := s.render(ctx, cb)
+	s.execMu.Unlock()
+	if err != nil {
+		return err
+	}
 	opts.OnQueryID = func(id string) {
 		if cb.OnStart != nil {
 			cb.OnStart(queryengine.QueryHandle{EngineID: s.engine.id, QueryID: id})
@@ -219,7 +239,7 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 		return nil
 	}
 
-	_, err := s.engine.client.ExecuteStream(ctx, sql, opts, func(cols []trinoclient.Column, rows [][]any) error {
+	_, err = s.engine.client.ExecuteStream(ctx, sql, opts, func(cols []trinoclient.Column, rows [][]any) error {
 		if batcher == nil && len(cols) > 0 {
 			infos := make([]arrowipc.ColumnInfo, len(cols))
 			for i, c := range cols {

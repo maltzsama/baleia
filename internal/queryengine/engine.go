@@ -54,6 +54,13 @@ type SessionSpec struct {
 	// fixed at open. A user-identity spec must carry either it or
 	// AllowedCatalogsSource (OpenSession fails with catalog_scope_missing
 	// otherwise). Never serialized.
+	//
+	// A federated engine (Trino) enforces it via the guard (baleia.catalogs).
+	// A direct engine (PostgreSQL, MySQL, SQL Server, …) connects to one
+	// database and has no cross-catalog reach, so the scope is carried but
+	// meaningless there: the connection's credentials are the boundary
+	// (DESIGN-catalog-scope.md §6), and a direct-engine connection must be
+	// restricted to its single database.
 	AllowedCatalogs []string `json:"-"`
 	// AllowedCatalogsSource renews AllowedCatalogs before each statement, so a
 	// revocation stops the next statement instead of the next run; nil keeps
