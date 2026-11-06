@@ -210,9 +210,10 @@ function createEditorStore() {
 		tab.schema = schema;
 		if (userChanged) {
 			tab.dirty = isDirty(tab);
-		} else if (tab.savedRef === null) {
-			// The automatic default becomes the tab's baseline, so a fresh tab
-			// is not "dirty" merely from the workspace's default target.
+		} else if (tab.savedRef === null && tab.savedBindingId === '') {
+			// The first automatic default becomes the tab's baseline, so a fresh
+			// tab is not "dirty" merely from the workspace's default target. A
+			// later fallback (a workspace switch) must not reset that baseline.
 			tab.savedBindingId = bindingId;
 			tab.savedSchema = schema;
 		}
@@ -237,7 +238,9 @@ function createEditorStore() {
 			name: query.name ?? 'History',
 			sql: query.sql,
 			bindingId: query.bindingId,
-			schema: query.schema
+			schema: query.schema,
+			savedBindingId: query.bindingId,
+			savedSchema: query.schema
 		});
 		pendingRun = { tabId: tab.id, seq: ++runSeq };
 		return tab;

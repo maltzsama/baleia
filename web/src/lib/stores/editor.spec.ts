@@ -107,6 +107,24 @@ describe('editor store', () => {
 		expect(tab.dirty).toBe(false);
 	});
 
+	it('marks a tab dirty when only the schema changes', () => {
+		const tab = editor.openSavedQuery({
+			...query,
+			target: { binding_id: 'b1', schema: 's1' }
+		});
+		editor.setTarget(tab.id, 'b1', 's2', true);
+		expect(tab.dirty).toBe(true);
+	});
+
+	it('opens a history rerun tab with its target as the baseline', () => {
+		const tab = editor.openExecution({ sql: 'SELECT 1', bindingId: 'b1', schema: 's1' });
+		expect(tab.dirty).toBe(false);
+		editor.updateSql(tab.id, 'SELECT 2');
+		expect(tab.dirty).toBe(true);
+		editor.updateSql(tab.id, 'SELECT 1');
+		expect(tab.dirty).toBe(false);
+	});
+
 	it('hydrates the drafts of a user and workspace', async () => {
 		vi.mocked(loadDrafts).mockResolvedValueOnce([
 			{
