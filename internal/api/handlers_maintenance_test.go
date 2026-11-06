@@ -125,6 +125,7 @@ func newMaintenanceFixture(t *testing.T, bindingMode string) *maintenanceFixture
 		engines:  maintEngines{},
 		audit:    f.audit,
 		settings: SettingsFromConfig(&config.Config{IcebergMaintenanceMinRetention: time.Hour}),
+		temporalClient: &fakeTemporalClient{},
 	})
 	return f
 }

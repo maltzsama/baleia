@@ -408,7 +408,7 @@ func (h *OpsHandlers) startAnalysis(ctx context.Context, t maintenanceTarget, na
 			continue
 		}
 		if h.temporalClient == nil {
-			return true, nil
+			return false, errors.New("table health analysis is unavailable: no Temporal client is configured")
 		}
 		params := activities.LensAnalyzeTableHealthParams{
 			CatalogID: c.ID.String(), CatalogConnectionID: c.ConnectionID.String(), Catalog: c.Name,
