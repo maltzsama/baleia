@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.6.4](https://github.com/maltzsama/baleia/compare/v0.6.3...v0.6.4) (2026-11-06)
+
+
+### Bug Fixes
+
+* **api,worker,web:** make the table-health analyze actually run and report ([010a5f0](https://github.com/maltzsama/baleia/commit/010a5f0d9b81c603ef6d443f4b7b8f0da9b96db6))
+* **api:** error when the table-health analyze has no worker ([3b5a338](https://github.com/maltzsama/baleia/commit/3b5a338f19e8c6a555ffbed7fe1d3011496a951c)), closes [#750](https://github.com/maltzsama/baleia/issues/750)
+* **api:** flag a never-run table-health schedule as stale ([7a400f2](https://github.com/maltzsama/baleia/commit/7a400f201f5d0397ad3b94b8f006e237ebeb27a1)), closes [#750](https://github.com/maltzsama/baleia/issues/750)
+* **api:** report a stale table-health schedule in attention ([a03960a](https://github.com/maltzsama/baleia/commit/a03960a31625499ae18187f94cd0c2bb349a6b6a)), closes [#750](https://github.com/maltzsama/baleia/issues/750)
+* **api:** return the analysis workflow id from the table-health 202 ([671c59a](https://github.com/maltzsama/baleia/commit/671c59a26db027ca6a204f7b6c23733f10a0197c)), closes [#750](https://github.com/maltzsama/baleia/issues/750)
+* **web,api,worker:** address the monitoring push review findings ([cd61001](https://github.com/maltzsama/baleia/commit/cd6100173e04b52934db69c48dcd250c77c7809d)), closes [#733](https://github.com/maltzsama/baleia/issues/733)
+* **web,api,worker:** push monitoring changes over SSE via LISTEN/NOTIFY ([41b2580](https://github.com/maltzsama/baleia/commit/41b25802d71cdf3498d6d6ee99f3748a6395af7b))
+* **web,api,worker:** push monitoring changes over SSE via LISTEN/NOTIFY ([ad430fd](https://github.com/maltzsama/baleia/commit/ad430fd8e1f6613d4111a4d8b15db3e3ac47c263)), closes [#733](https://github.com/maltzsama/baleia/issues/733)
+* **web:** clear the pending SQL sync timer when the editor unmounts ([e67e632](https://github.com/maltzsama/baleia/commit/e67e6327c92c873513886015f4abb23e2f5616db)), closes [#729](https://github.com/maltzsama/baleia/issues/729)
+* **web:** establish the editor target baseline for history rerun tabs ([f91df96](https://github.com/maltzsama/baleia/commit/f91df966d079b967ceb0f43f79f66890434a1d78)), closes [#725](https://github.com/maltzsama/baleia/issues/725)
+* **web:** flush the outgoing tab before the mirror effect replaces it ([d28301b](https://github.com/maltzsama/baleia/commit/d28301b4eee9d50bc70e1749423a0a4e85193df4)), closes [#729](https://github.com/maltzsama/baleia/issues/729)
+* **web:** flush the pending SQL sync before the palette quick-open ([152ec4e](https://github.com/maltzsama/baleia/commit/152ec4e9117495c0c91347dae9abb883c0cf6cdb))
+* **web:** flush the pending SQL sync before the palette quick-open ([f567746](https://github.com/maltzsama/baleia/commit/f5677464aa70029a38dbe48efaa039413365c2cb)), closes [#729](https://github.com/maltzsama/baleia/issues/729)
+* **web:** keep Analyze now in-flight until rows appear and report a timeout ([d025d71](https://github.com/maltzsama/baleia/commit/d025d713ee92974db44c01db0ddaa5139e4962ea)), closes [#750](https://github.com/maltzsama/baleia/issues/750)
+* **web:** keep catalog tabs and filters in the URL ([4ffb6fa](https://github.com/maltzsama/baleia/commit/4ffb6faf6f368ca4ac1af2e0c890e009b50d0ccf))
+* **web:** keep catalog tabs and filters in the URL ([533f104](https://github.com/maltzsama/baleia/commit/533f1045a3031e8f41b4f8f95ea511e7a80a78ff)), closes [#731](https://github.com/maltzsama/baleia/issues/731)
+* **web:** keep the workspace switch and creation in step with the URL ([28db742](https://github.com/maltzsama/baleia/commit/28db742f921775a1fc34dc540459bb0917c1a6dc)), closes [#732](https://github.com/maltzsama/baleia/issues/732)
+* **web:** observe table-health results after Analyze now and on the tables tab ([f2a71d5](https://github.com/maltzsama/baleia/commit/f2a71d5deaeab79ef3f4924eda5ab96bde73e904)), closes [#750](https://github.com/maltzsama/baleia/issues/750)
+* **web:** raise login branding contrast and enlarge the wordmark ([1fae642](https://github.com/maltzsama/baleia/commit/1fae64278c526ce9464c5b08eb254ccdb79f2a1a))
+* **web:** raise login branding contrast and enlarge the wordmark ([a500d16](https://github.com/maltzsama/baleia/commit/a500d16110e5ecc811a97b3efde37cc2a33d5ef4)), closes [#736](https://github.com/maltzsama/baleia/issues/736)
+* **web:** read the selected workspace from page.url and keep it in sync ([ad8a2d8](https://github.com/maltzsama/baleia/commit/ad8a2d867fe3e9565061bb3fbfe72974d4f6108e))
+* **web:** read the selected workspace from page.url and keep it in sync ([43f1ffc](https://github.com/maltzsama/baleia/commit/43f1ffcef272f9247ae37747bc8de85814f7af03)), closes [#732](https://github.com/maltzsama/baleia/issues/732)
+* **web:** reload detail pages when the URL id changes ([66f3361](https://github.com/maltzsama/baleia/commit/66f3361e0178bf6c751a69196cd4a64026ece879))
+* **web:** reload detail pages when the URL id changes ([49d75c2](https://github.com/maltzsama/baleia/commit/49d75c22f8fda26c578327565edf200664a8efc2)), closes [#728](https://github.com/maltzsama/baleia/issues/728)
+* **web:** reload remaining detail pages when the URL id changes ([67fb5f8](https://github.com/maltzsama/baleia/commit/67fb5f8ae2b76aefae577b2d13ca2f54f4b8d15c))
+* **web:** reload remaining detail pages when the URL id changes ([d7350ed](https://github.com/maltzsama/baleia/commit/d7350eda176f812e52f46a15f1aa828a83f0e16c)), closes [#739](https://github.com/maltzsama/baleia/issues/739)
+* **web:** remove the no-op Run in background button ([9f11cd9](https://github.com/maltzsama/baleia/commit/9f11cd916f0d6d906eaf665eb02a573cdf92b1dc))
+* **web:** render EXPLAIN output as a document ([d0904e5](https://github.com/maltzsama/baleia/commit/d0904e5a7e20ccd848ad2b26226928b53752877e))
+* **web:** scale the login wordmark with the viewport ([933033b](https://github.com/maltzsama/baleia/commit/933033ba71ce472093fb0a2bcb88fb20bc04250a))
+* **web:** three UI fixes — no-op run button, split gutters, EXPLAIN as a document ([99f773a](https://github.com/maltzsama/baleia/commit/99f773a556cefe25b3ce40c3da63faa804acf6df))
+* **web:** tighten the split-panel gutters and centralise the layout ([3f4bcab](https://github.com/maltzsama/baleia/commit/3f4bcab11c3988080bb226f70efb0c995ff755ff))
+* **web:** track target and schema changes in the editor dirty flag ([960a411](https://github.com/maltzsama/baleia/commit/960a411c9516949741a9f50923a8e1a8d99d29bc))
+* **web:** track target and schema changes in the editor dirty flag ([1a8ef16](https://github.com/maltzsama/baleia/commit/1a8ef1621c3199852bcff8af839471f36390fa11)), closes [#725](https://github.com/maltzsama/baleia/issues/725)
+* **web:** use goto for connections and catalogs navigation ([8d857a3](https://github.com/maltzsama/baleia/commit/8d857a3a2a5e37b8a99dd8232b9a900ab4c365a3))
+* **worker:** fail the table-health pass instead of silently skipping ([e8b1620](https://github.com/maltzsama/baleia/commit/e8b16207dec3464fdab4289cefbc042284406d13)), closes [#750](https://github.com/maltzsama/baleia/issues/750)
+* **worker:** match the scheduled table-health pass by source ref and log its failures ([45aaf04](https://github.com/maltzsama/baleia/commit/45aaf04a1c2c70cde733b9f82b2900a7968a1c66)), closes [#750](https://github.com/maltzsama/baleia/issues/750)
+* **worker:** match the table-health pass by the catalog source ref ([5b718f4](https://github.com/maltzsama/baleia/commit/5b718f44cc736a1c9a476feeaee1d6fa3326de63)), closes [#750](https://github.com/maltzsama/baleia/issues/750)
+
+
+### Miscellaneous
+
+* **api:** cover the monitoring events stream in the authz map ([e7bdf7c](https://github.com/maltzsama/baleia/commit/e7bdf7c0ab1fc2bc52d2a3c7f89447693d1d8830))
+* **web:** add catalogs/models page options and refresh models spaces once ([b426e2b](https://github.com/maltzsama/baleia/commit/b426e2b2fa5613af2eb0135374dc619864986f34))
+* **web:** add catalogs/models page options and refresh models spaces once ([5e0f64d](https://github.com/maltzsama/baleia/commit/5e0f64d0744339b1c115a8be560a8dc9af18d267)), closes [#734](https://github.com/maltzsama/baleia/issues/734) [#735](https://github.com/maltzsama/baleia/issues/735)
+* **web:** back off the monitoring queries poll when idle ([5a4feeb](https://github.com/maltzsama/baleia/commit/5a4feebf0d01cb1eff94dc348f2d81b164892ff7))
+* **web:** back off the monitoring queries poll when idle ([d6ebc64](https://github.com/maltzsama/baleia/commit/d6ebc64c4e7089492ca39c1218034b5565147b0d)), closes [#733](https://github.com/maltzsama/baleia/issues/733)
+
 ## [0.6.3](https://github.com/maltzsama/baleia/compare/v0.6.2...v0.6.3) (2026-11-06)
 
 
