@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import {
@@ -186,7 +185,15 @@
 		];
 	}
 
-	onMount(load);
+	// Reload when the URL id changes: SPA navigation between two connections of
+	// the same route reuses this component, so onMount alone would keep stale
+	// data under the new URL (#728).
+	$effect(() => {
+		const id = connectionId;
+		if (!id) return;
+		conn = null;
+		void load();
+	});
 </script>
 
 <div class="flex-1 overflow-y-auto p-7">
