@@ -317,6 +317,7 @@ func TestScheduleStaleItem(t *testing.T) {
 		{"fresh table-health", schedules.LensTableHealth, &client.ScheduleDescription{Info: client.ScheduleInfo{RecentActions: []client.ScheduleActionResult{{ActualTime: recent}}}}, false},
 		{"unknown cadence", "other-schedule", &client.ScheduleDescription{Info: client.ScheduleInfo{RecentActions: []client.ScheduleActionResult{{ActualTime: old}}}}, false},
 		{"no actions", schedules.LensTableHealth, &client.ScheduleDescription{}, false},
+		{"no actions, old schedule", schedules.LensTableHealth, &client.ScheduleDescription{Info: client.ScheduleInfo{CreatedAt: old}}, true},
 	}
 	for _, c := range cases {
 		c := c

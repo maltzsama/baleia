@@ -315,11 +315,20 @@ func (h *core) attentionSchedules(ctx context.Context) []AttentionItem {
 // cadence or has acted recently.
 func scheduleStaleItem(id string, desc *client.ScheduleDescription) *AttentionItem {
 	cadence, ok := scheduleCadence(id)
-	if !ok || len(desc.Info.RecentActions) == 0 {
+	if !ok {
 		return nil
 	}
-	last := desc.Info.RecentActions[len(desc.Info.RecentActions)-1]
-	if time.Since(last.ActualTime) < attentionStaleMultiplier*cadence {
+	// Reference the most recent action start; when none has run yet, fall back
+	// to the schedule's creation time so a never-run schedule is still stale.
+	var last time.Time
+	if n := len(desc.Info.RecentActions); n > 0 {
+		last = desc.Info.RecentActions[n-1].ActualTime
+	} else if !desc.Info.CreatedAt.IsZero() {
+		last = desc.Info.CreatedAt
+	} else {
+		return nil
+	}
+	if time.Since(last) < attentionStaleMultiplier*cadence {
 		return nil
 	}
 	item := attentionScheduleItem(id, "stale")
