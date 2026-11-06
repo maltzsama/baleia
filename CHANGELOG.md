@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.3](https://github.com/maltzsama/baleia/compare/v0.6.2...v0.6.3) (2026-11-06)
+
+
+### Bug Fixes
+
+* **security:** harden the two-party grant screens ([d23e0b3](https://github.com/maltzsama/baleia/commit/d23e0b3d1c4d01304bcb58e35476191063745b90))
+* **security:** harden the two-party grant screens ([50003ef](https://github.com/maltzsama/baleia/commit/50003efc88f146128bbc7fc9bd532bb9ac5dfb40)), closes [#704](https://github.com/maltzsama/baleia/issues/704)
+* **security:** reset grant-action flags in finally ([4e4212f](https://github.com/maltzsama/baleia/commit/4e4212f3fc03dc16db6a1a125e4a9d5005fd7ad4))
+* **security:** serialize the scope refresh with the request build ([2947669](https://github.com/maltzsama/baleia/commit/2947669289a880cb64445aabbe9d8dd36f353bd2))
+* **security:** serialize the scope refresh with the request build ([39cbe0d](https://github.com/maltzsama/baleia/commit/39cbe0d1261b8c2ccf1f07e92c10ac689dc05ff5)), closes [#703](https://github.com/maltzsama/baleia/issues/703)
+* **seed:** drop the permission column from the smoke target seed ([36fc830](https://github.com/maltzsama/baleia/commit/36fc83075e103b27717c6af7d8cab60def6b0bcf)), closes [#654](https://github.com/maltzsama/baleia/issues/654)
+
+
+### Miscellaneous
+
+* **db:** drop the unused grant permission and default_readonly columns ([65f2cf9](https://github.com/maltzsama/baleia/commit/65f2cf91416ed1f200cd199bc72c25efdc058317))
+* **db:** drop the unused grant permission and default_readonly columns ([da85b68](https://github.com/maltzsama/baleia/commit/da85b68e3d16a06ba951f84e40c3a49f5fd8d2cd)), closes [#654](https://github.com/maltzsama/baleia/issues/654)
+
 ## [0.6.2](https://github.com/maltzsama/baleia/compare/v0.6.1...v0.6.2) (2026-11-06)
 
 
