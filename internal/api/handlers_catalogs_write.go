@@ -163,6 +163,18 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	// lifecycle applies it (#38).
 	var cat db.Catalog
 	var binding db.CatalogBinding
+	// Share with: an active grant to the chosen workspace, so the new catalog is
+	// reachable without the removed personal auto-reach (ADR 0018 §3).
+	var shareWith pgtype.UUID
+	if body.ShareWithWorkspaceId != nil {
+		if err := requireWorkspaceAccess(ctx, h.access, *body.ShareWithWorkspaceId); err != nil {
+			if errors.Is(err, ErrWorkspaceNotFound) {
+				return CreateCatalog404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+			}
+			return nil, err
+		}
+		shareWith = pgtype.UUID{Bytes: *body.ShareWithWorkspaceId, Valid: true}
+	}
 	txErr := h.inTx(ctx, func(q db.Querier) error {
 		c, err := q.CreateCatalog(ctx, db.CreateCatalogParams{
 			ConnectionID:     connID,
@@ -179,6 +191,16 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		}
 		cat = c
 		binding, err = upsertPrimaryBinding(ctx, q, cluster, c, bindings.StateProvisioning, proj.Version)
+		if err != nil {
+			return err
+		}
+		if shareWith.Valid {
+			_, err = q.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{
+				WorkspaceID: shareWith,
+				CatalogID:   c.ID,
+				GrantedBy:   p.UserID,
+			})
+		}
 		return err
 	})
 	if txErr != nil {

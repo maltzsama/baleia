@@ -1664,6 +1664,14 @@ components:
           additionalProperties: { type: string }
           description: Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties.
         enabled:            { type: boolean, default: true }
+        share_with_workspace_id:
+          type: string
+          format: uuid
+          description: >-
+            Workspace to grant the new catalog to as an active grant (the
+            connection wizard's "Share with", preselected to the current
+            workspace). Omitted, the catalog is created unshared; the owner
+            shares it later from the catalog's Access screen.
 
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:

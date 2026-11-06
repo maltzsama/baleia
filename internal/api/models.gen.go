@@ -2145,10 +2145,13 @@ type CreateCatalogRequest struct {
 	Enabled     *bool   `json:"enabled,omitempty"`
 
 	// ExtraProps Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties.
-	ExtraProps       *map[string]string `json:"extra_props,omitempty"`
-	Name             string             `json:"name"`
-	TrinoCatalogName string             `json:"trino_catalog_name"`
-	Warehouse        string             `json:"warehouse"`
+	ExtraProps *map[string]string `json:"extra_props,omitempty"`
+	Name       string             `json:"name"`
+
+	// ShareWithWorkspaceId Workspace to grant the new catalog to as an active grant (the connection wizard's "Share with", preselected to the current workspace). Omitted, the catalog is created unshared; the owner shares it later from the catalog's Access screen.
+	ShareWithWorkspaceId *openapi_types.UUID `json:"share_with_workspace_id,omitempty"`
+	TrinoCatalogName     string              `json:"trino_catalog_name"`
+	Warehouse            string              `json:"warehouse"`
 }
 
 // CreateEngineRequest defines model for CreateEngineRequest.
