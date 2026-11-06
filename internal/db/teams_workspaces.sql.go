@@ -76,27 +76,6 @@ func (q *Queries) CatalogGrantedToAgent(ctx context.Context, arg CatalogGrantedT
 	return granted, err
 }
 
-const catalogGrantedToUser = `-- name: CatalogGrantedToUser :one
-SELECT EXISTS (
-    SELECT 1 FROM workspace_catalog_grants g
-    WHERE g.catalog_id = $1::uuid
-      AND baleia_workspace_member_role(g.workspace_id, $2::uuid) IS NOT NULL
-) AS granted
-`
-
-type CatalogGrantedToUserParams struct {
-	CatalogID pgtype.UUID `json:"catalog_id"`
-	UserID    pgtype.UUID `json:"user_id"`
-}
-
-// True when the user is a member of a workspace that has been granted the catalog.
-func (q *Queries) CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error) {
-	row := q.db.QueryRow(ctx, catalogGrantedToUser, arg.CatalogID, arg.UserID)
-	var granted bool
-	err := row.Scan(&granted)
-	return granted, err
-}
-
 const checkWorkspaceAccess = `-- name: CheckWorkspaceAccess :one
 SELECT (baleia_workspace_member_role($1::uuid, $2::uuid) IS NOT NULL)::bool AS has_access
 `
@@ -473,55 +452,6 @@ func (q *Queries) IsWorkspaceStructuralOwner(ctx context.Context, arg IsWorkspac
 	var is_owner bool
 	err := row.Scan(&is_owner)
 	return is_owner, err
-}
-
-const listCatalogsGrantedToUser = `-- name: ListCatalogsGrantedToUser :many
-SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_name, c.cluster_id, c.warehouse, c.connector, c.extra_props, c.enabled, c.created_at, c.updated_at, c.origin, c.source_ref, c.discoverable FROM catalogs c
-JOIN workspace_catalog_grants g ON g.catalog_id = c.id
-WHERE c.connection_id = $1::uuid
-  AND baleia_workspace_member_role(g.workspace_id, $2::uuid) IS NOT NULL
-`
-
-type ListCatalogsGrantedToUserParams struct {
-	ConnectionID pgtype.UUID `json:"connection_id"`
-	UserID       pgtype.UUID `json:"user_id"`
-}
-
-// The catalogs of one connection that a user reaches through workspace grants.
-func (q *Queries) ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalogsGrantedToUserParams) ([]Catalog, error) {
-	rows, err := q.db.Query(ctx, listCatalogsGrantedToUser, arg.ConnectionID, arg.UserID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Catalog
-	for rows.Next() {
-		var i Catalog
-		if err := rows.Scan(
-			&i.ID,
-			&i.ConnectionID,
-			&i.Name,
-			&i.Description,
-			&i.TrinoCatalogName,
-			&i.ClusterID,
-			&i.Warehouse,
-			&i.Connector,
-			&i.ExtraProps,
-			&i.Enabled,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Origin,
-			&i.SourceRef,
-			&i.Discoverable,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listGrantedCatalogsOfWorkspace = `-- name: ListGrantedCatalogsOfWorkspace :many

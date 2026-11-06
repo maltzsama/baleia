@@ -88,8 +88,6 @@ func PrincipalFromContext(ctx context.Context) (Principal, error) {
 type Store interface {
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
-	CatalogGrantedToUser(ctx context.Context, arg db.CatalogGrantedToUserParams) (bool, error)
-	CatalogGrantedToAgent(ctx context.Context, arg db.CatalogGrantedToAgentParams) (bool, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (db.Workspace, error)
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
 	IsWorkspaceOwner(ctx context.Context, arg db.IsWorkspaceOwnerParams) (bool, error)
@@ -97,8 +95,6 @@ type Store interface {
 	GetTeamByID(ctx context.Context, id pgtype.UUID) (db.Team, error)
 	GetTeamMemberRole(ctx context.Context, arg db.GetTeamMemberRoleParams) (string, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
-	EngineHostsCatalogGrantedToUser(ctx context.Context, arg db.EngineHostsCatalogGrantedToUserParams) (bool, error)
-	EngineHostsCatalogGrantedToAgent(ctx context.Context, arg db.EngineHostsCatalogGrantedToAgentParams) (bool, error)
 	GetEffectiveSpaceRole(ctx context.Context, arg db.GetEffectiveSpaceRoleParams) (string, error)
 	AgentWorkspaceBound(ctx context.Context, arg db.AgentWorkspaceBoundParams) (bool, error)
 }
@@ -183,13 +179,16 @@ func (c *Checker) Connection(ctx context.Context, p Principal, connID pgtype.UUI
 // Catalog loads the catalog and checks the caller on its connection. It also
 // returns the connection so handlers do not fetch it twice.
 //
-// The connection owner and a global admin may do anything. A member of a
-// workspace the catalog is granted to may read it (ErrForbidden for anything
-// else, since they can already see it). Everyone else gets ErrNotFound.
+// This is the admin plane (ADR 0018 §7.1): only the connection owner and a
+// global admin may act on a catalog. Members and agents reach catalogs only
+// through their workspace's scope (the data plane), never here, so anyone else
+// gets ErrNotFound.
 func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUID, act Action) (_ db.Catalog, _ db.CatalogConnection, err error) {
 	defer c.observe(ctx, "catalog", catalogID, &err)
-	if p.IsAgent() && act != ActRead {
-		return db.Catalog{}, db.CatalogConnection{}, ErrForbidden
+	// Agents are not on the admin plane: their data path is gated by the agent
+	// policy, so their owner's connection ownership must not widen this.
+	if p.IsAgent() {
+		return db.Catalog{}, db.CatalogConnection{}, ErrNotFound
 	}
 	cat, err := c.q.GetCatalogByID(ctx, catalogID)
 	if err != nil {
@@ -205,46 +204,21 @@ func (c *Checker) Catalog(ctx context.Context, p Principal, catalogID pgtype.UUI
 		}
 		return db.Catalog{}, db.CatalogConnection{}, err
 	}
-	// An agent reaches a catalog only through a workspace it is bound to; the
-	// owner's connection ownership does not widen that scope (#59).
-	if p.IsAgent() {
-		granted, err := c.q.CatalogGrantedToAgent(ctx, db.CatalogGrantedToAgentParams{
-			CatalogID: cat.ID,
-			AgentID:   p.AgentID,
-			UserID:    p.UserID,
-		})
-		if err != nil {
-			return db.Catalog{}, db.CatalogConnection{}, err
-		}
-		if !granted {
-			return db.Catalog{}, db.CatalogConnection{}, ErrNotFound
-		}
-		return cat, conn, nil
-	}
 	if p.IsAdmin() || isOwner(p, conn.CreatedBy) {
 		return cat, conn, nil
 	}
-	granted, err := c.q.CatalogGrantedToUser(ctx, db.CatalogGrantedToUserParams{CatalogID: cat.ID, UserID: p.UserID})
-	if err != nil {
-		return db.Catalog{}, db.CatalogConnection{}, err
-	}
-	if !granted {
-		return db.Catalog{}, db.CatalogConnection{}, ErrNotFound
-	}
-	if act != ActRead {
-		return db.Catalog{}, db.CatalogConnection{}, ErrForbidden
-	}
-	return cat, conn, nil
+	return db.Catalog{}, db.CatalogConnection{}, ErrNotFound
 }
 
-// Engine loads the engine and checks the caller on it, with the catalog rule:
-// the owner of the engine's connection and a global admin may do anything; a
-// member of a workspace granted a catalog the engine hosts may read it
-// (ErrForbidden for anything else); everyone else gets ErrNotFound.
+// Engine loads the engine and checks the caller on it. It is the admin plane:
+// only the owner of the engine's connection and a global admin may act; anyone
+// else gets ErrNotFound (members reach engines through their workspace scope).
 func (c *Checker) Engine(ctx context.Context, p Principal, engineID pgtype.UUID, act Action) (_ db.Engine, _ db.CatalogConnection, err error) {
 	defer c.observe(ctx, "engine", engineID, &err)
-	if p.IsAgent() && act != ActRead {
-		return db.Engine{}, db.CatalogConnection{}, ErrForbidden
+	// Agents are not on the admin plane: their data path is gated by the agent
+	// policy, so their owner's connection ownership must not widen this.
+	if p.IsAgent() {
+		return db.Engine{}, db.CatalogConnection{}, ErrNotFound
 	}
 	eng, err := c.q.GetEngineByID(ctx, engineID)
 	if err != nil {
@@ -260,36 +234,10 @@ func (c *Checker) Engine(ctx context.Context, p Principal, engineID pgtype.UUID,
 		}
 		return db.Engine{}, db.CatalogConnection{}, err
 	}
-	// An agent reaches an engine only through a workspace it is bound to; the
-	// owner's connection ownership does not widen that scope (#59).
-	if p.IsAgent() {
-		granted, err := c.q.EngineHostsCatalogGrantedToAgent(ctx, db.EngineHostsCatalogGrantedToAgentParams{
-			EngineID: eng.ID,
-			AgentID:  p.AgentID,
-			OwnerID:  p.UserID,
-		})
-		if err != nil {
-			return db.Engine{}, db.CatalogConnection{}, err
-		}
-		if !granted {
-			return db.Engine{}, db.CatalogConnection{}, ErrNotFound
-		}
-		return eng, conn, nil
-	}
 	if p.IsAdmin() || isOwner(p, conn.CreatedBy) {
 		return eng, conn, nil
 	}
-	granted, err := c.q.EngineHostsCatalogGrantedToUser(ctx, db.EngineHostsCatalogGrantedToUserParams{UserID: p.UserID, EngineID: eng.ID})
-	if err != nil {
-		return db.Engine{}, db.CatalogConnection{}, err
-	}
-	if !granted {
-		return db.Engine{}, db.CatalogConnection{}, ErrNotFound
-	}
-	if act != ActRead {
-		return db.Engine{}, db.CatalogConnection{}, ErrForbidden
-	}
-	return eng, conn, nil
+	return db.Engine{}, db.CatalogConnection{}, ErrNotFound
 }
 
 // CatalogOfConnection is Catalog for routes addressed as

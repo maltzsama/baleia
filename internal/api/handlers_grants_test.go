@@ -47,28 +47,6 @@ func (q *authzFake) isWsMember(ws db.Workspace, user pgtype.UUID) bool {
 	return false
 }
 
-func (q *authzFake) CatalogGrantedToUser(_ context.Context, a db.CatalogGrantedToUserParams) (bool, error) {
-	q.g.mu.Lock()
-	defer q.g.mu.Unlock()
-	for _, g := range q.g.grants {
-		if g.CatalogID.Bytes == a.CatalogID.Bytes && q.isWsMember(q.g.wss[g.WorkspaceID.Bytes], a.UserID) {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (q *authzFake) ListCatalogsGrantedToUser(ctx context.Context, a db.ListCatalogsGrantedToUserParams) ([]db.Catalog, error) {
-	if a.ConnectionID.Bytes != q.cat.ConnectionID.Bytes {
-		return nil, nil
-	}
-	ok, _ := q.CatalogGrantedToUser(ctx, db.CatalogGrantedToUserParams{CatalogID: q.cat.ID, UserID: a.UserID})
-	if !ok {
-		return nil, nil
-	}
-	return []db.Catalog{q.cat}, nil
-}
-
 func (q *authzFake) GetWorkspaceByID(_ context.Context, id pgtype.UUID) (db.Workspace, error) {
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()
@@ -415,8 +393,10 @@ func TestListWorkspaceCatalogAccess_Authz(t *testing.T) {
 	}
 }
 
-// TestGrantMemberCatalogAccess: a workspace member reaches a granted catalog
-// read-only; when the grant is revoked the catalog is a 404 again.
+// TestGrantMemberCatalogAccess: the admin plane is connection-owner / global
+// admin only (ADR 0018 §7.1). A workspace member never reaches a catalog
+// through GetCatalog/ListCatalogs, granted or not; they see it only through
+// the workspace's data plane.
 func TestGrantMemberCatalogAccess(t *testing.T) {
 	t.Parallel()
 	h, q := newGrantsHandlers(t)
@@ -441,19 +421,19 @@ func TestGrantMemberCatalogAccess(t *testing.T) {
 		t.Fatal("member must not reach the catalog before it is granted")
 	}
 	_ = grant(t, h, q, ctxAs(ownerID, "member"))
-	if got := get(); got != 200 {
-		t.Errorf("granted get: %d, want 200", got)
+	if got := get(); got != 404 {
+		t.Errorf("granted get: %d, want 404 (admin plane is owner/admin only)", got)
 	}
-	if got := list(); got != 200 {
-		t.Errorf("granted list: %d, want 200", got)
+	if got := list(); got != 404 {
+		t.Errorf("granted list: %d, want 404 (admin plane is owner/admin only)", got)
 	}
-	// Read access is not write access: the member can see the catalog, so 403.
+	// The member cannot write either, and sees a 404 (no existence oracle).
 	upd, err := h.UpdateCatalog(member, UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &UpdateCatalogJSONRequestBody{}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := visitCode(t, upd); got != 403 {
-		t.Errorf("granted update: %d, want 403", got)
+	if got := visitCode(t, upd); got != 404 {
+		t.Errorf("granted update: %d, want 404", got)
 	}
 	// The connection itself stays private.
 	cr, err := h.GetCatalogConnection(member, GetCatalogConnectionRequestObject{Id: conn})
@@ -462,10 +442,6 @@ func TestGrantMemberCatalogAccess(t *testing.T) {
 	}
 	if got := visitConnCode(t, cr); got != 404 {
 		t.Errorf("granted member on the connection: %d, want 404", got)
-	}
-	_, _ = h.RevokeCatalogAccess(ctxAs(ownerID, "member"), RevokeCatalogAccessRequestObject{Id: wsID.Bytes, CatalogId: cat})
-	if get() != 404 {
-		t.Error("member still reaches the catalog after revoke")
 	}
 }
 

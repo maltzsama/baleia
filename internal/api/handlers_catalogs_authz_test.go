@@ -115,10 +115,6 @@ func (q *authzFake) ListBindingsByCatalog(_ context.Context, id pgtype.UUID) ([]
 	return out, nil
 }
 
-func (q *authzFake) EngineHostsCatalogGrantedToUser(context.Context, db.EngineHostsCatalogGrantedToUserParams) (bool, error) {
-	return false, nil
-}
-
 func (q *authzFake) GetTrinoClusterByEngine(_ context.Context, id pgtype.UUID) (db.TrinoCluster, error) {
 	return db.TrinoCluster{ID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Name: "default", EngineID: id}, nil
 }

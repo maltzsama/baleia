@@ -39,8 +39,6 @@ type Querier interface {
 	// True when the catalog is granted to a workspace the agent is bound to and the
 	// agent's owner is still a member of that workspace (#59).
 	CatalogGrantedToAgent(ctx context.Context, arg CatalogGrantedToAgentParams) (bool, error)
-	// True when the user is a member of a workspace that has been granted the catalog.
-	CatalogGrantedToUser(ctx context.Context, arg CatalogGrantedToUserParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
 	ClearAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) error
 	ClearWorkspaceDefaultForCatalog(ctx context.Context, arg ClearWorkspaceDefaultForCatalogParams) error
@@ -181,12 +179,6 @@ type Querier interface {
 	// Native catalogs an engine no longer reports are disabled, never deleted
 	// (#17): their metadata and history stay.
 	DisableMissingNativeBindings(ctx context.Context, arg DisableMissingNativeBindingsParams) (int64, error)
-	// True when the engine hosts a catalog granted to a workspace the agent is
-	// bound to and the owner is still a member of that workspace (#59).
-	EngineHostsCatalogGrantedToAgent(ctx context.Context, arg EngineHostsCatalogGrantedToAgentParams) (bool, error)
-	// True when the engine has a binding of a catalog granted to a workspace the
-	// user belongs to.
-	EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error)
 	// Creates the monthly partitions of this month and the next months ahead.
 	EnsureAuditPartitions(ctx context.Context, monthsAhead int32) error
 	// A run that failed before any statement ran (the admission queue) records its
@@ -410,8 +402,6 @@ type Querier interface {
 	ListCatalogRunningMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogRunningMaintenanceRow, error)
 	ListCatalogTableHealth(ctx context.Context, catalogID pgtype.UUID) ([]TableHealthSnapshot, error)
 	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error)
-	// The catalogs of one connection that a user reaches through workspace grants.
-	ListCatalogsGrantedToUser(ctx context.Context, arg ListCatalogsGrantedToUserParams) ([]Catalog, error)
 	// The namespaces one level below parent ('{}' = the top level).
 	ListChildNamespaces(ctx context.Context, arg ListChildNamespacesParams) ([][]string, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
@@ -434,8 +424,9 @@ type Querier interface {
 	// Per-class capacities configured for one engine (#399).
 	ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]EngineQueueCapacity, error)
 	ListEngines(ctx context.Context) ([]Engine, error)
-	// The engines a non-admin may see: those on connections they own and those
-	// hosting a catalog granted to one of their workspaces.
+	// The engines a non-admin may see on the admin plane: those on connections
+	// they own. Members reach engines through their workspace's data plane (ADR
+	// 0018 §7.1), not here.
 	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]Engine, error)
 	// Newest first, keyset-paginated on (started_at, id): the cursor is the last
 	// row of the previous page. Every filter is optional; the handler narrows
@@ -551,8 +542,9 @@ type Querier interface {
 	// (as authz.Connection and ListVisibleCatalogs), including the bootstrap
 	// connection that has no owner.
 	ListVisibleCatalogConnections(ctx context.Context, arg ListVisibleCatalogConnectionsParams) ([]CatalogConnection, error)
-	// Every logical catalog the caller may view: all for an admin, the caller's
-	// connections, and catalogs granted to a workspace the caller belongs to (#109).
+	// Every catalog the caller may view on the admin plane (ADR 0018 §7.1): all
+	// for an admin, and the caller's own connections' catalogs for an owner.
+	// Workspace members see catalogs through the data plane, not here.
 	ListVisibleCatalogs(ctx context.Context, arg ListVisibleCatalogsParams) ([]Catalog, error)
 	// Only folders of spaces the caller can see; #16 says to filter in SQL, not in
 	// a Go loop. space_id/folder_id narrow the listing when present.

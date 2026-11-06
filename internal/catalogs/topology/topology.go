@@ -36,7 +36,6 @@ type Bindings interface {
 type Catalogs interface {
 	ListVisibleCatalogs(ctx context.Context, arg db.ListVisibleCatalogsParams) ([]db.Catalog, error)
 	ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogGrantsRow, error)
-	ListCatalogsGrantedToUser(ctx context.Context, arg db.ListCatalogsGrantedToUserParams) ([]db.Catalog, error)
 	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]db.Catalog, error)
 	ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]db.CatalogConnection, error)
 	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListGrantedCatalogsOfWorkspaceRow, error)
@@ -133,12 +132,6 @@ func (s *Service) VisibleCatalogs(ctx context.Context, userID pgtype.UUID, admin
 // Grants lists the workspaces a catalog is granted to.
 func (s *Service) Grants(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogGrantsRow, error) {
 	return s.store.ListCatalogGrants(ctx, catalogID)
-}
-
-// GrantedToUser lists a connection's catalogs granted to a user through a
-// workspace.
-func (s *Service) GrantedToUser(ctx context.Context, connID, userID pgtype.UUID) ([]db.Catalog, error) {
-	return s.store.ListCatalogsGrantedToUser(ctx, db.ListCatalogsGrantedToUserParams{ConnectionID: connID, UserID: userID})
 }
 
 // CatalogsOfConnection lists a connection's catalogs.

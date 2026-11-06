@@ -71,19 +71,11 @@ func (q *bindingQuerier) GetCatalogConnectionByID(_ context.Context, id pgtype.U
 	return db.CatalogConnection{}, pgx.ErrNoRows
 }
 
-func (q *bindingQuerier) CatalogGrantedToUser(context.Context, db.CatalogGrantedToUserParams) (bool, error) {
-	return false, nil
-}
-
 func (q *bindingQuerier) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
 	if id != bEngine {
 		return db.Engine{}, pgx.ErrNoRows
 	}
 	return db.Engine{ID: id, Name: "default", Kind: q.engineKind, Class: "federated", ConnectionID: bEngineConn, Enabled: true}, nil
-}
-
-func (q *bindingQuerier) EngineHostsCatalogGrantedToUser(context.Context, db.EngineHostsCatalogGrantedToUserParams) (bool, error) {
-	return false, nil
 }
 
 func (q *bindingQuerier) GetTrinoClusterByEngine(_ context.Context, id pgtype.UUID) (db.TrinoCluster, error) {

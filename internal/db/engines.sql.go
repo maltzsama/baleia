@@ -136,54 +136,6 @@ func (q *Queries) DeleteEngineQueueCapacities(ctx context.Context, engineID pgty
 	return err
 }
 
-const engineHostsCatalogGrantedToAgent = `-- name: EngineHostsCatalogGrantedToAgent :one
-SELECT EXISTS (
-    SELECT 1 FROM catalog_bindings b
-    JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-    JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = $1
-    WHERE b.engine_id = $2
-      AND baleia_workspace_member_role(g.workspace_id, $3::uuid) IS NOT NULL
-) AS granted
-`
-
-type EngineHostsCatalogGrantedToAgentParams struct {
-	AgentID  pgtype.UUID `json:"agent_id"`
-	EngineID pgtype.UUID `json:"engine_id"`
-	OwnerID  pgtype.UUID `json:"owner_id"`
-}
-
-// True when the engine hosts a catalog granted to a workspace the agent is
-// bound to and the owner is still a member of that workspace (#59).
-func (q *Queries) EngineHostsCatalogGrantedToAgent(ctx context.Context, arg EngineHostsCatalogGrantedToAgentParams) (bool, error) {
-	row := q.db.QueryRow(ctx, engineHostsCatalogGrantedToAgent, arg.AgentID, arg.EngineID, arg.OwnerID)
-	var granted bool
-	err := row.Scan(&granted)
-	return granted, err
-}
-
-const engineHostsCatalogGrantedToUser = `-- name: EngineHostsCatalogGrantedToUser :one
-SELECT EXISTS (
-    SELECT 1 FROM catalog_bindings b
-    JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-    WHERE b.engine_id = $1
-      AND baleia_workspace_member_role(g.workspace_id, $2::uuid) IS NOT NULL
-) AS granted
-`
-
-type EngineHostsCatalogGrantedToUserParams struct {
-	EngineID pgtype.UUID `json:"engine_id"`
-	UserID   pgtype.UUID `json:"user_id"`
-}
-
-// True when the engine has a binding of a catalog granted to a workspace the
-// user belongs to.
-func (q *Queries) EngineHostsCatalogGrantedToUser(ctx context.Context, arg EngineHostsCatalogGrantedToUserParams) (bool, error) {
-	row := q.db.QueryRow(ctx, engineHostsCatalogGrantedToUser, arg.EngineID, arg.UserID)
-	var granted bool
-	err := row.Scan(&granted)
-	return granted, err
-}
-
 const getDefaultTrinoEngine = `-- name: GetDefaultTrinoEngine :one
 SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, e.external_url, e.trino_resource_groups_enabled, c.id, c.name, c.type, c.url, c.credentials_enc, c.default_readonly, c.created_at, c.updated_at, c.host, c.port, c.created_by, c.config, c.credentials_read_only, c.system_owned
 FROM engines e
@@ -509,16 +461,12 @@ const listEnginesVisibleToUser = `-- name: ListEnginesVisibleToUser :many
 SELECT e.id, e.name, e.kind, e.class, e.connection_id, e.identity_mode, e.enabled, e.created_by, e.created_at, e.updated_at, e.max_running_total, e.cost_routing_enabled, e.cost_threshold_bytes, e.external_url, e.trino_resource_groups_enabled FROM engines e
 JOIN catalog_connections c ON c.id = e.connection_id
 WHERE c.created_by = $1
-   OR EXISTS (
-        SELECT 1 FROM catalog_bindings b
-        JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-        WHERE b.engine_id = e.id
-          AND baleia_workspace_member_role(g.workspace_id, $1::uuid) IS NOT NULL)
 ORDER BY e.name
 `
 
-// The engines a non-admin may see: those on connections they own and those
-// hosting a catalog granted to one of their workspaces.
+// The engines a non-admin may see on the admin plane: those on connections
+// they own. Members reach engines through their workspace's data plane (ADR
+// 0018 §7.1), not here.
 func (q *Queries) ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]Engine, error) {
 	rows, err := q.db.Query(ctx, listEnginesVisibleToUser, userID)
 	if err != nil {

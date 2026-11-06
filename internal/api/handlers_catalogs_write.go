@@ -54,23 +54,10 @@ func (h *CatalogHandlers) ListCatalogs(ctx context.Context, request ListCatalogs
 	}
 	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
 	if _, err := h.authz().Connection(ctx, p, connID, authz.ActRead); err != nil {
-		if !errors.Is(err, authz.ErrNotFound) {
-			return nil, err
-		}
-		// Not the connection's owner: a member of a workspace it was granted to sees
-		// only the granted catalogs of this connection, never their siblings.
-		granted, gerr := h.topology.GrantedToUser(ctx, connID, p.UserID)
-		if gerr != nil {
-			return nil, gerr
-		}
-		if len(granted) == 0 {
+		if errors.Is(err, authz.ErrNotFound) {
 			return ListCatalogs404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
 		}
-		out := make([]Catalog, 0, len(granted))
-		for _, r := range granted {
-			out = append(out, h.catalogWithStatus(ctx, r))
-		}
-		return ListCatalogs200JSONResponse(out), nil
+		return nil, err
 	}
 	rows, err := h.topology.CatalogsOfConnection(ctx, connID)
 	if err != nil {

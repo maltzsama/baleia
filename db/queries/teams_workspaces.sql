@@ -133,14 +133,6 @@ ORDER BY 4;
 -- name: DeleteWorkspaceCatalogGrant :execrows
 DELETE FROM workspace_catalog_grants WHERE workspace_id = $1 AND catalog_id = $2;
 
--- name: CatalogGrantedToUser :one
--- True when the user is a member of a workspace that has been granted the catalog.
-SELECT EXISTS (
-    SELECT 1 FROM workspace_catalog_grants g
-    WHERE g.catalog_id = @catalog_id::uuid
-      AND baleia_workspace_member_role(g.workspace_id, @user_id::uuid) IS NOT NULL
-) AS granted;
-
 -- name: CatalogGrantedToAgent :one
 -- True when the catalog is granted to a workspace the agent is bound to and the
 -- agent's owner is still a member of that workspace (#59).
@@ -150,13 +142,6 @@ SELECT EXISTS (
     WHERE g.catalog_id = @catalog_id::uuid
       AND baleia_workspace_member_role(g.workspace_id, @user_id::uuid) IS NOT NULL
 ) AS granted;
-
--- name: ListCatalogsGrantedToUser :many
--- The catalogs of one connection that a user reaches through workspace grants.
-SELECT DISTINCT c.* FROM catalogs c
-JOIN workspace_catalog_grants g ON g.catalog_id = c.id
-WHERE c.connection_id = @connection_id::uuid
-  AND baleia_workspace_member_role(g.workspace_id, @user_id::uuid) IS NOT NULL;
 
 -- name: ListGrantedCatalogsOfWorkspace :many
 SELECT c.*, cc.name AS connection_name, cc.type AS connection_type

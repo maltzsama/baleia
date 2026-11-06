@@ -527,10 +527,6 @@ SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_na
 JOIN catalog_connections cc ON cc.id = c.connection_id
 WHERE $1::bool
    OR cc.created_by = $2
-   OR EXISTS (
-        SELECT 1 FROM workspace_catalog_grants g
-        WHERE g.catalog_id = c.id
-          AND baleia_workspace_member_role(g.workspace_id, $2::uuid) IS NOT NULL)
 ORDER BY c.name
 `
 
@@ -539,8 +535,9 @@ type ListVisibleCatalogsParams struct {
 	UserID  pgtype.UUID `json:"user_id"`
 }
 
-// Every logical catalog the caller may view: all for an admin, the caller's
-// connections, and catalogs granted to a workspace the caller belongs to (#109).
+// Every catalog the caller may view on the admin plane (ADR 0018 §7.1): all
+// for an admin, and the caller's own connections' catalogs for an owner.
+// Workspace members see catalogs through the data plane, not here.
 func (q *Queries) ListVisibleCatalogs(ctx context.Context, arg ListVisibleCatalogsParams) ([]Catalog, error) {
 	rows, err := q.db.Query(ctx, listVisibleCatalogs, arg.IsAdmin, arg.UserID)
 	if err != nil {

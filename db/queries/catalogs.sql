@@ -95,16 +95,13 @@ SELECT cluster_id, catalog_name FROM trino_catalog_registry
 WHERE expires_at IS NOT NULL AND expires_at < now();
 
 -- name: ListVisibleCatalogs :many
--- Every logical catalog the caller may view: all for an admin, the caller's
--- connections, and catalogs granted to a workspace the caller belongs to (#109).
+-- Every catalog the caller may view on the admin plane (ADR 0018 §7.1): all
+-- for an admin, and the caller's own connections' catalogs for an owner.
+-- Workspace members see catalogs through the data plane, not here.
 SELECT DISTINCT c.* FROM catalogs c
 JOIN catalog_connections cc ON cc.id = c.connection_id
 WHERE sqlc.arg(is_admin)::bool
    OR cc.created_by = sqlc.arg(user_id)
-   OR EXISTS (
-        SELECT 1 FROM workspace_catalog_grants g
-        WHERE g.catalog_id = c.id
-          AND baleia_workspace_member_role(g.workspace_id, sqlc.arg(user_id)::uuid) IS NOT NULL)
 ORDER BY c.name;
 
 -- name: CountNamespacesByCatalog :one
