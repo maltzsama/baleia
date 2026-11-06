@@ -407,14 +407,17 @@
 		try {
 			await analyzeCatalogTableHealth(catalogId);
 			toasts.success(m.maintenance_analysis_started());
-			// The pass writes rows asynchronously; watch until they appear (#750).
-			polls.push(
-				poll(loadHealth, {
-					until: () => health.length > 0,
-					intervals: [3000, 5000, 10000],
-					maxDurationMs: 5 * 60_000
-				})
-			);
+			// The pass writes rows asynchronously; watch until they appear and
+			// keep the button in-flight so it cannot start a duplicate run (#750).
+			const controller = poll(loadHealth, {
+				until: () => health.length > 0,
+				intervals: [3000, 5000, 10000],
+				maxDurationMs: 5 * 60_000
+			});
+			polls.push(controller);
+			if ((await controller.done) === 'timeout') {
+				toasts.error(m.maintenance_analysis_timeout());
+			}
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : String(e));
 		} finally {

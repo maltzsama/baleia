@@ -2365,6 +2365,7 @@
 	"maintenance_fix_fields": "Corrija os campos destacados.",
 	"maintenance_run_started": "Manutenção iniciada: {operation}",
 	"maintenance_analysis_started": "Análise iniciada; os resultados aparecem em alguns minutos.",
+	"maintenance_analysis_timeout": "A análise ainda está pendente após alguns minutos e nenhuma linha apareceu.",
 	"maintenance_revision": "Revisão {revision}",
 	"maintenance_not_maintained": "Esta tabela não tem parâmetros de manutenção. As rodadas só informam o que ela precisa; defina parâmetros para que elas executem.",
 	"maintenance_mode": "Modo",
