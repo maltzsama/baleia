@@ -343,8 +343,9 @@ var operationAccess = map[string]access{
 	// Engine-aware monitoring (#117).
 	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
 	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),
-	"ListMonitoringQueries": checked("PrincipalFromContext", "engineForMonitoring"),
-	"GetMonitoringQuery":    checked("PrincipalFromContext", "engineForMonitoring"),
+	"ListMonitoringQueries":  checked("PrincipalFromContext", "engineForMonitoring"),
+	"GetMonitoringQuery":     checked("PrincipalFromContext", "engineForMonitoring"),
+	"StreamMonitoringEvents": checked("PrincipalFromContext", "engineForMonitoring"),
 	"KillMonitoringQuery":   checked("PrincipalFromContext", "engineForMonitoring"),
 	"ListTableHealth":       checked("PrincipalFromContext", "catalogForMonitoring"),
 	"CreateMaintenanceRun":  checked("PrincipalFromContext", "catalogForMonitoring"),

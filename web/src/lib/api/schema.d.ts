@@ -3373,6 +3373,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engines/{id}/monitoring/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Stream a signal when an engine's monitoring data changes (SSE) */
+        get: operations["streamMonitoringEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/engines/{id}/monitoring/queries/{query_id}": {
         parameters: {
             query?: never;
@@ -13127,6 +13146,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonitoringQueryPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    streamMonitoringEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE stream (changed events; re-fetch the filtered list) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
             401: components["responses"]["Unauthorized"];

@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/identity/idptoken"
 	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
+	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/storage"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/galileostudio/baleia/internal/workspaces/spaces"
@@ -58,6 +59,8 @@ type core struct {
 	// dialects describe each engine kind's SQL (built once, injected).
 	dialects *dialect.Registry
 	metrics  apiMetrics
+	// monitoringHub fans monitoring changes out to the SSE endpoint (#733).
+	monitoringHub *events.Hub
 	// audit records security and data operations (#45; call sites #43).
 	audit audit.Recorder
 	// content is the only writer of saved content and its versions (#34).

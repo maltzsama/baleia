@@ -14,6 +14,7 @@
 	} from '$lib/maintenance/client';
 	import { operationLabel, triggerLabel } from '$lib/maintenance/labels';
 	import { poll, type PollController } from '$lib/util/poll';
+	import { streamEvents } from '$lib/assistant/sse';
 	import { formatDuration } from '$lib/util/time';
 	import { formatBytes } from '$lib/util/size';
 	import Badge from '$lib/ui/Badge.svelte';
@@ -96,10 +97,63 @@
 	let maintainError = $state('');
 
 	let polls: PollController<unknown>[] = [];
+	// The live SSE subscription (#733): the server pushes a "changed" signal
+	// instead of the client polling on a timer.
+	let eventsAbort: AbortController | null = null;
 
 	function stopPolls() {
 		for (const controller of polls) controller.stop();
 		polls = [];
+	}
+
+	function stopEvents() {
+		eventsAbort?.abort();
+		eventsAbort = null;
+	}
+
+	function startEvents() {
+		stopEvents();
+		if (!engineId || (tab !== 'cluster' && tab !== 'queries')) return;
+		const controller = new AbortController();
+		eventsAbort = controller;
+		const url = `/engines/${encodeURIComponent(engineId)}/monitoring/events`;
+		const refresh = () => {
+			if (tab === 'queries') void loadQueries();
+			else if (tab === 'cluster') void loadCluster();
+		};
+		void (async () => {
+			let attempts = 0;
+			while (!controller.signal.aborted) {
+				try {
+					await streamEvents(url, {
+						signal: controller.signal,
+						onOpen: () => {
+							attempts = 0;
+						},
+						onEvent: (frame) => {
+							if (frame.event !== 'changed') return;
+							let kind: string;
+							try {
+								kind = (JSON.parse(frame.data) as { kind?: string }).kind ?? '';
+							} catch {
+								return;
+							}
+							if (kind === 'queries' && tab === 'queries') void loadQueries();
+							else if (kind === 'cluster' && tab === 'cluster') void loadCluster();
+						}
+					});
+				} catch {
+					// A rejected connection is retried below.
+				}
+				if (controller.signal.aborted) return;
+				attempts += 1;
+				const delay = Math.min(30_000, 500 * 2 ** Math.min(attempts, 6));
+				await new Promise((resolve) => setTimeout(resolve, delay));
+				if (controller.signal.aborted) return;
+				// Catch up on what changed while the stream was down.
+				refresh();
+			}
+		})();
 	}
 
 	async function loadEngines() {
@@ -191,27 +245,30 @@
 
 	async function loadActive() {
 		stopPolls();
+		stopEvents();
 		if (!engineId && tab !== 'tables') return;
 		if (tab === 'cluster') {
 			await loadCluster();
+			// Push is the primary path (#733); this slow poll is the safety net.
 			polls.push(
-				poll(loadCluster, { until: () => false, intervals: [30_000], maxDurationMs: 3_600_000 })
+				poll(loadCluster, { until: () => false, intervals: [60_000], maxDurationMs: 3_600_000 })
 			);
+			startEvents();
 		} else if (tab === 'queries') {
 			await loadQueries();
 			polls.push(
 				poll(loadQueries, {
 					until: () => false,
-					// Fast while queries are running, slower when the list is idle
-					// (#733). This only lowers the request rate; the payload is the
-					// same (a real fix needs a server push/event stream).
+					// Fallback only: live updates arrive over SSE. Stay responsive
+					// while queries run, back off when the list is idle.
 					intervalFor: (page) =>
 						page?.items.some((query) => query.state === 'running' || query.state === 'queued')
-							? 10_000
-							: 30_000,
+							? 20_000
+							: 60_000,
 					maxDurationMs: 3_600_000
 				})
 			);
+			startEvents();
 		} else {
 			await loadCatalogList();
 			await loadHealth();
@@ -385,7 +442,10 @@
 		if (engines.length > 0) await loadActive();
 	});
 
-	onDestroy(stopPolls);
+	onDestroy(() => {
+		stopPolls();
+		stopEvents();
+	});
 
 	// What a query used (#407): the list's figures plus what the engine
 	// reported when the detail was opened. Unknown figures are left out.

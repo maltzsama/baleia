@@ -357,6 +357,9 @@ type ServerInterface interface {
 	// Cluster snapshots of an engine
 	// (GET /engines/{id}/monitoring/cluster)
 	GetEngineCluster(w http.ResponseWriter, r *http.Request, id PathId, params GetEngineClusterParams)
+	// Stream a signal when an engine's monitoring data changes (SSE)
+	// (GET /engines/{id}/monitoring/events)
+	StreamMonitoringEvents(w http.ResponseWriter, r *http.Request, id PathId)
 	// Query snapshots of an engine — own queries or, for admins, everyone's
 	// (GET /engines/{id}/monitoring/queries)
 	ListMonitoringQueries(w http.ResponseWriter, r *http.Request, id PathId, params ListMonitoringQueriesParams)
@@ -1470,6 +1473,12 @@ func (_ Unimplemented) GetEngineImpact(w http.ResponseWriter, r *http.Request, i
 // Cluster snapshots of an engine
 // (GET /engines/{id}/monitoring/cluster)
 func (_ Unimplemented) GetEngineCluster(w http.ResponseWriter, r *http.Request, id PathId, params GetEngineClusterParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stream a signal when an engine's monitoring data changes (SSE)
+// (GET /engines/{id}/monitoring/events)
+func (_ Unimplemented) StreamMonitoringEvents(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6332,6 +6341,39 @@ func (siw *ServerInterfaceWrapper) GetEngineCluster(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetEngineCluster(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StreamMonitoringEvents operation middleware
+func (siw *ServerInterfaceWrapper) StreamMonitoringEvents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StreamMonitoringEvents(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12921,6 +12963,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/engines/{id}/monitoring/cluster", wrapper.GetEngineCluster)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engines/{id}/monitoring/events", wrapper.StreamMonitoringEvents)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engines/{id}/monitoring/queries", wrapper.ListMonitoringQueries)
 	})
 	r.Group(func(r chi.Router) {
@@ -18224,6 +18269,60 @@ func (response GetEngineCluster401JSONResponse) VisitGetEngineClusterResponse(w 
 type GetEngineCluster404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetEngineCluster404JSONResponse) VisitGetEngineClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type StreamMonitoringEventsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type StreamMonitoringEventsResponseObject interface {
+	VisitStreamMonitoringEventsResponse(w http.ResponseWriter) error
+}
+
+type StreamMonitoringEvents200TexteventStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response StreamMonitoringEvents200TexteventStreamResponse) VisitStreamMonitoringEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/event-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type StreamMonitoringEvents401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response StreamMonitoringEvents401JSONResponse) VisitStreamMonitoringEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type StreamMonitoringEvents403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response StreamMonitoringEvents403JSONResponse) VisitStreamMonitoringEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type StreamMonitoringEvents404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response StreamMonitoringEvents404JSONResponse) VisitStreamMonitoringEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
 
@@ -25042,6 +25141,9 @@ type StrictServerInterface interface {
 	// Cluster snapshots of an engine
 	// (GET /engines/{id}/monitoring/cluster)
 	GetEngineCluster(ctx context.Context, request GetEngineClusterRequestObject) (GetEngineClusterResponseObject, error)
+	// Stream a signal when an engine's monitoring data changes (SSE)
+	// (GET /engines/{id}/monitoring/events)
+	StreamMonitoringEvents(ctx context.Context, request StreamMonitoringEventsRequestObject) (StreamMonitoringEventsResponseObject, error)
 	// Query snapshots of an engine — own queries or, for admins, everyone's
 	// (GET /engines/{id}/monitoring/queries)
 	ListMonitoringQueries(ctx context.Context, request ListMonitoringQueriesRequestObject) (ListMonitoringQueriesResponseObject, error)
@@ -28654,6 +28756,32 @@ func (sh *strictHandler) GetEngineCluster(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetEngineClusterResponseObject); ok {
 		if err := validResponse.VisitGetEngineClusterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StreamMonitoringEvents operation middleware
+func (sh *strictHandler) StreamMonitoringEvents(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request StreamMonitoringEventsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StreamMonitoringEvents(ctx, request.(StreamMonitoringEventsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StreamMonitoringEvents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StreamMonitoringEventsResponseObject); ok {
+		if err := validResponse.VisitStreamMonitoringEventsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

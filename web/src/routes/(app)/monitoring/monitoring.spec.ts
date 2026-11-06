@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { HttpResponse, http as mswHttp } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { http, server } from '../../../test/server';
 import { makeMe, makeMetadataCatalog, makeWorkspace } from '../../../test/factories';
@@ -46,6 +47,15 @@ describe('monitoring page', () => {
 						}
 					]
 				})
+			),
+			// The live push stream (#733): stays open until the page aborts it.
+			mswHttp.get(
+				'/api/v1/engines/:id/monitoring/events',
+				() =>
+					new HttpResponse(new ReadableStream({ start() {} }), {
+						status: 200,
+						headers: { 'Content-Type': 'text/event-stream' }
+					})
 			)
 		);
 	});
@@ -57,6 +67,51 @@ describe('monitoring page', () => {
 		expect(screen.getByText('Running')).toBeTruthy();
 		await waitFor(() => expect(screen.getByText('3')).toBeTruthy());
 		expect(screen.queryByLabelText('Engine')).toBeNull();
+	});
+
+	// #733: the server pushes a "changed" signal; the page re-fetches the data
+	// instead of polling on a fixed timer.
+	it('re-fetches the cluster when the push stream reports a change', async () => {
+		let clusterCalls = 0;
+		let push: ((chunk: string) => void) | undefined;
+		server.use(
+			http.get('/engines/{id}/monitoring/cluster', ({ response }) => {
+				clusterCalls++;
+				return response(200).json({
+					latest: {
+						captured_at: new Date().toISOString(),
+						active_workers: 3,
+						running_queries: 2,
+						queued_queries: 0,
+						blocked_queries: 0,
+						total_memory_bytes: 100,
+						free_memory_bytes: 40
+					},
+					series: []
+				});
+			}),
+			mswHttp.get('/api/v1/engines/:id/monitoring/events', () => {
+				const body = new ReadableStream({
+					start(controller) {
+						const enc = new TextEncoder();
+						push = (chunk) => controller.enqueue(enc.encode(chunk));
+					}
+				});
+				return new HttpResponse(body, {
+					status: 200,
+					headers: { 'Content-Type': 'text/event-stream' }
+				});
+			})
+		);
+		render(MonitoringPage);
+
+		// The initial fetch completes and the stream opens...
+		await waitFor(() => expect(clusterCalls).toBe(1));
+		await waitFor(() => expect(push).toBeDefined());
+		const before = clusterCalls;
+		// ...then a pushed change re-fetches.
+		push!('event: changed\ndata: {"kind":"cluster"}\n\n');
+		await waitFor(() => expect(clusterCalls).toBeGreaterThan(before));
 	});
 
 	// #407: the query detail shows what the query used, from the list's
