@@ -396,6 +396,19 @@ func (h *OpsHandlers) AnalyzeTableHealth(ctx context.Context, request AnalyzeTab
 
 const notIcebergCatalog = "table health covers enabled Iceberg catalogs only"
 
+// icebergCatalogRef is the catalog's name inside its connection (the warehouse
+// it lives on), matching what the metadata reader's ListCatalogs returns — not
+// Baleia's display name (#750).
+func icebergCatalogRef(c db.ListEnabledIcebergCatalogsRow) string {
+	if c.SourceRef != nil && *c.SourceRef != "" {
+		return *c.SourceRef
+	}
+	if c.Warehouse != nil && *c.Warehouse != "" {
+		return *c.Warehouse
+	}
+	return c.Name
+}
+
 // startAnalysis starts the pass and the round after it; false when the
 // catalog is not an enabled Iceberg catalog.
 func (h *OpsHandlers) startAnalysis(ctx context.Context, t maintenanceTarget, namespace, table string) (bool, error) {
@@ -411,7 +424,7 @@ func (h *OpsHandlers) startAnalysis(ctx context.Context, t maintenanceTarget, na
 			return false, errors.New("table health analysis is unavailable: no Temporal client is configured")
 		}
 		params := activities.LensAnalyzeTableHealthParams{
-			CatalogID: c.ID.String(), CatalogConnectionID: c.ConnectionID.String(), Catalog: c.Name,
+			CatalogID: c.ID.String(), CatalogConnectionID: c.ConnectionID.String(), Catalog: icebergCatalogRef(c),
 			Namespace: namespace, Table: table,
 		}
 		_, err := h.temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{

@@ -267,6 +267,21 @@ func LensAnalyzeTableHealth(ctx context.Context, params LensAnalyzeTableHealthPa
 	return defaultActivities.lensAnalyzeTableHealth(ctx, params)
 }
 
+// resolveCatalogRef maps a catalog source ref to the reader's catalog name; a
+// single-catalog reader serves its one catalog regardless of the name (like the
+// metadata sync's resolveCatalog).
+func resolveCatalogRef(catalogs []connections.CatalogRef, want string) (string, error) {
+	for _, c := range catalogs {
+		if c.Name == want {
+			return c.Name, nil
+		}
+	}
+	if len(catalogs) == 1 {
+		return catalogs[0].Name, nil
+	}
+	return "", fmt.Errorf("%w: catalog %q", connections.ErrNotFound, want)
+}
+
 func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnalyzeTableHealthParams) error {
 	var connID pgtype.UUID
 	if err := connID.Scan(params.CatalogConnectionID); err != nil {
@@ -321,8 +336,19 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 
 	h := healthPass{a: a, catalogID: catalogID, connID: connID, now: time.Now()}
 	h.prepare(ctx)
+
+	// Resolve the requested catalog to the reader's catalog name; a mismatch
+	// must not silently visit nothing (#750).
+	target := params.Catalog
+	if target != "" {
+		resolved, err := resolveCatalogRef(catalogs, target)
+		if err != nil {
+			return err
+		}
+		target = resolved
+	}
 	for _, cat := range catalogs {
-		if params.Catalog != "" && cat.Name != params.Catalog {
+		if target != "" && cat.Name != target {
 			continue
 		}
 
