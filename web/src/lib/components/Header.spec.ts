@@ -6,6 +6,7 @@ import { http, server } from '../../test/server';
 import { makeMe, makeWorkspace } from '../../test/factories';
 
 const nav = vi.hoisted(() => ({ url: new URL('http://localhost/sql') }));
+const gotoMock = vi.hoisted(() => vi.fn());
 vi.mock('$app/state', () => ({
 	page: {
 		get url() {
@@ -14,6 +15,7 @@ vi.mock('$app/state', () => ({
 		params: {}
 	}
 }));
+vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 
 import Header from './Header.svelte';
 
@@ -26,6 +28,7 @@ function renderAt(path: string, retrievers = true) {
 
 describe('Header', () => {
 	beforeEach(() => {
+		gotoMock.mockClear();
 		server.use(
 			http.get('/workspaces', ({ response }) => response(200).json([makeWorkspace()])),
 			http.get('/attention', ({ response }) => response(200).json([]))
@@ -136,6 +139,17 @@ describe('Header', () => {
 
 			expect(await within(dialog).findByRole('alert')).toBeTruthy();
 			expect(name.value).toBe('Ops');
+		});
+
+		it('switches workspace and clears the previous workspace selection', async () => {
+			const trigger = await openSwitcher();
+			nav.url = new URL('http://localhost/sql?catalog=c1&ns=sales&table=orders');
+			const panel = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+			await fireEvent.click(within(panel).getByRole('button', { name: 'Finance' }));
+			expect(gotoMock).toHaveBeenCalledWith(
+				'/sql?ws=w2',
+				expect.objectContaining({ replaceState: true })
+			);
 		});
 	});
 });

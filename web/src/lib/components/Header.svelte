@@ -92,12 +92,19 @@
 		};
 	});
 
-	function selectWs(ws: Workspace) {
-		workspaceStore.select(ws);
-		// Keep the URL (and the selection store, which derives from page.url) in
-		// step with the switch, so both read the same source (#732).
-		selection.set({ ws: ws.id });
+	async function selectWs(ws: Workspace) {
+		const previous = workspaceStore.current;
 		wsOpen = false;
+		workspaceStore.select(ws);
+		try {
+			// Clear the catalog/table selection: it belongs to the previous
+			// workspace, and keeping it makes the next page look it up under the
+			// new one. Await so current is only kept once the URL matches (#732).
+			await selection.set({ ws: ws.id, catalog: '', ns: [], table: '', column: '' });
+		} catch {
+			// The navigation was cancelled: keep the previous workspace.
+			if (previous) workspaceStore.select(previous);
+		}
 	}
 
 	async function openCreate(e: Event) {
@@ -138,8 +145,10 @@
 			ownerTeamId: createTeamId || undefined
 		});
 		creating = false;
-		if (ws) closeCreate();
-		else createError = m.components_header_could_not_create_the_workspace();
+		if (ws) {
+			await selection.set({ ws: ws.id, catalog: '', ns: [], table: '', column: '' });
+			closeCreate();
+		} else createError = m.components_header_could_not_create_the_workspace();
 	}
 
 	function openSettings() {

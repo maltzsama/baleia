@@ -84,7 +84,7 @@
 			table.tableName === selection.table &&
 			table.namespace.join('.') === selection.ns.join('.');
 		const column = sameTable ? selection.column : '';
-		selection.set({
+		void selection.set({
 			catalog: table?.catalogId ?? '',
 			ns: table?.namespace ?? [],
 			table: table?.tableName ?? '',
