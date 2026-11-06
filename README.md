@@ -86,7 +86,7 @@ Open http://localhost:8080. On the first visit, a setup wizard creates your admi
 Each release publishes multi-arch container images and a Helm chart:
 
 ```bash
-helm install baleia oci://ghcr.io/maltzsama/charts/baleia --version 0.6.1 # x-release-please-version
+helm install baleia oci://ghcr.io/maltzsama/charts/baleia --version 0.6.2 # x-release-please-version
 ```
 
 [Install](docs/install.md) covers the chart's values, [configuration](docs/configuration.md) lists every setting, and [operations](docs/operations.md) covers upgrades, metrics, alerts and runbooks. Read the upgrade notes there before moving between minor versions.

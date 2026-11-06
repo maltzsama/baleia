@@ -74,7 +74,7 @@ The in-chart Trino requires authentication (#647): it serves clients over HTTPS 
 ```bash title="Install the chart"
 helm install baleia oci://ghcr.io/maltzsama/charts/baleia \
   -n baleia -f values.yaml \
-  --version 0.6.1 # x-release-please-version
+  --version 0.6.2 # x-release-please-version
 ```
 
 The migration job runs first. Open `PUBLIC_URL`: on the first visit, a setup wizard creates the admin account.
