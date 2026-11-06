@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -608,4 +609,62 @@ func TestSessionScopeFromExecscope(t *testing.T) {
 			return true
 		})
 	})
+}
+
+// catalogScopeGrants lists the db/queries queries that may name
+// workspace_catalog_grants directly: grant CRUD, the agent's workspace-scoped
+// check, the workspace target/listing reads, and the impact counts. Everything
+// else must go through baleia_workspace_catalog_ids (ADR 0018 §4.2).
+var catalogScopeGrants = map[string]bool{
+	"UpsertWorkspaceCatalogGrant":    true,
+	"ListWorkspaceCatalogGrants":     true,
+	"DeleteWorkspaceCatalogGrant":    true,
+	"ListCatalogGrants":              true,
+	"CatalogGrantedToAgent":          true,
+	"ListWorkspaceTargets":           true,
+	"ListGrantedCatalogsOfWorkspace": true,
+	"CountCatalogImpact":             true,
+	"CountEngineImpact":              true,
+}
+
+// TestCatalogScopeSingleSource: the workspace catalog scope is read in one SQL
+// function (baleia_workspace_catalog_ids); a query that names
+// workspace_catalog_grants directly would let a caller filter differently (the
+// old per-user / personal auto-reach bug). Only grant CRUD and the workspace/
+// agent scope reads may name the table.
+func TestCatalogScopeSingleSource(t *testing.T) {
+	t.Parallel()
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "db", "queries")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queryRe := regexp.MustCompile(`-- name: (\w+)`)
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(string(data), "\n")
+		current := ""
+		for _, line := range lines {
+			if m := queryRe.FindStringSubmatch(line); m != nil {
+				current = m[1]
+				continue
+			}
+			if !strings.Contains(line, "workspace_catalog_grants") {
+				continue
+			}
+			if !catalogScopeGrants[current] {
+				t.Errorf("%s: query %q names workspace_catalog_grants; read the scope through baleia_workspace_catalog_ids", e.Name(), current)
+			}
+		}
+	}
 }

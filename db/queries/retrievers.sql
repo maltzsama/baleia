@@ -21,8 +21,8 @@ SELECT b.id AS binding_id,
 FROM catalog_bindings b
 JOIN catalogs c ON c.id = b.catalog_id
 JOIN engines e ON e.id = b.engine_id
-JOIN workspace_catalog_grants g ON g.catalog_id = c.id AND g.workspace_id = @workspace_id::uuid
-WHERE b.connector = 'iceberg'
+WHERE b.catalog_id IN (SELECT baleia_workspace_catalog_ids(@workspace_id::uuid))
+  AND b.connector = 'iceberg'
   AND b.lifecycle_state = 'active'
   AND b.enabled
   AND e.enabled
