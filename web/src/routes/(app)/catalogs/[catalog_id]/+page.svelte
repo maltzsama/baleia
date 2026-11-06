@@ -409,37 +409,43 @@
 	async function toggleDiscoverable() {
 		discoverableSaving = true;
 		const next = !discoverable;
-		const { error: err } = await client.PATCH('/catalogs/{catalog_id}/discoverable', {
-			params: { path: { catalog_id: catalogId } },
-			body: { discoverable: next }
-		});
-		discoverableSaving = false;
-		if (err) {
-			toasts.error(apiErrorMessage(err));
-			return;
+		try {
+			const { error: err } = await client.PATCH('/catalogs/{catalog_id}/discoverable', {
+				params: { path: { catalog_id: catalogId } },
+				body: { discoverable: next }
+			});
+			if (err) {
+				toasts.error(apiErrorMessage(err));
+				return;
+			}
+			discoverable = next;
+		} finally {
+			discoverableSaving = false;
 		}
-		discoverable = next;
 	}
 
 	async function actOnPending(item: components['schemas']['CatalogGrantItem'], approve: boolean) {
 		acting = true;
-		const { error: err } = approve
-			? await client.POST('/catalog-grants/{workspace_id}/{catalog_id}/approve', {
-					params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
-				})
-			: await client.DELETE('/catalog-grants/{workspace_id}/{catalog_id}', {
-					params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
-				});
-		acting = false;
-		if (err) {
-			toasts.error(apiErrorMessage(err));
-			return;
+		try {
+			const { error: err } = approve
+				? await client.POST('/catalog-grants/{workspace_id}/{catalog_id}/approve', {
+						params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+					})
+				: await client.DELETE('/catalog-grants/{workspace_id}/{catalog_id}', {
+						params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+					});
+			if (err) {
+				toasts.error(apiErrorMessage(err));
+				return;
+			}
+			const pendingRes = await client.GET('/catalog-grants', {
+				params: { query: { catalog_id: catalogId } }
+			});
+			pending = (pendingRes.data ?? []).filter((item) => item.state === 'pending');
+			grants = await catalogGrants(catalogId);
+		} finally {
+			acting = false;
 		}
-		const pendingRes = await client.GET('/catalog-grants', {
-			params: { query: { catalog_id: catalogId } }
-		});
-		pending = (pendingRes.data ?? []).filter((item) => item.state === 'pending');
-		grants = await catalogGrants(catalogId);
 	}
 
 	function consequences(): string[] {

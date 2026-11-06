@@ -265,19 +265,22 @@
 
 	async function actOnPending(item: components['schemas']['CatalogGrantItem'], approve: boolean) {
 		acting = true;
-		const { error: err } = approve
-			? await client.POST('/catalog-grants/{workspace_id}/{catalog_id}/approve', {
-					params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
-				})
-			: await client.DELETE('/catalog-grants/{workspace_id}/{catalog_id}', {
-					params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
-				});
-		acting = false;
-		if (err) {
-			toasts.error(apiErrorMessage(err));
-			return;
+		try {
+			const { error: err } = approve
+				? await client.POST('/catalog-grants/{workspace_id}/{catalog_id}/approve', {
+						params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+					})
+				: await client.DELETE('/catalog-grants/{workspace_id}/{catalog_id}', {
+						params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+					});
+			if (err) {
+				toasts.error(apiErrorMessage(err));
+				return;
+			}
+			await load();
+		} finally {
+			acting = false;
 		}
-		await load();
 	}
 
 	async function confirmDelete() {
