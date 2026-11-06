@@ -470,8 +470,17 @@
 		) {
 			tab = requested as Tab;
 		}
-		void load();
 		return stopPolls;
+	});
+
+	// Reload when the URL id changes: SPA navigation between two catalogs of
+	// the same route reuses this component, so onMount alone would keep stale
+	// data under the new URL (#728).
+	$effect(() => {
+		const id = catalogId;
+		if (!id) return;
+		catalog = null;
+		void load();
 	});
 </script>
 

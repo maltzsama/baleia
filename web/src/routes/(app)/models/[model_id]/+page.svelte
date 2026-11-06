@@ -70,9 +70,19 @@
 		await goto(resolve('/models'));
 	}
 
-	onMount(async () => {
-		await workspaceStore.load();
-		await load();
+	onMount(() => {
+		void workspaceStore.load();
+	});
+
+	// Reload when the URL id changes: SPA navigation between two models of the
+	// same route reuses this component, so onMount alone would keep stale data
+	// under the new URL (#728). Reset first so the old model is not shown while
+	// the next one loads; a save calls load() directly and keeps it on screen.
+	$effect(() => {
+		const id = modelId;
+		if (!workspaceId || !id) return;
+		model = null;
+		void load();
 	});
 </script>
 
