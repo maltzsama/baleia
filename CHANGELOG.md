@@ -1,5 +1,68 @@
 # Changelog
 
+## [0.6.2](https://github.com/maltzsama/baleia/compare/v0.6.1...v0.6.2) (2026-11-06)
+
+
+### Bug Fixes
+
+* **api:** mark system-owned connections instead of inferring it ([6a5c932](https://github.com/maltzsama/baleia/commit/6a5c9325b358131544918e82dba3697ce766addd))
+* **api:** mark system-owned connections instead of inferring it ([09a49d1](https://github.com/maltzsama/baleia/commit/09a49d11a1d2b274f2d7770bce5f97a65bd28846)), closes [#694](https://github.com/maltzsama/baleia/issues/694)
+* **api:** test system-owned connections through the managed dialer ([4cab5af](https://github.com/maltzsama/baleia/commit/4cab5af0b1f0dd7e0e174a247bc826c719ff54b2))
+* **api:** test system-owned connections through the managed dialer ([da5c276](https://github.com/maltzsama/baleia/commit/da5c276ed870d9bfe8292a3c577ec691ed272df1)), closes [#692](https://github.com/maltzsama/baleia/issues/692)
+* **helm:** make the wait-for-registry image configurable ([641a61c](https://github.com/maltzsama/baleia/commit/641a61cdc49982d6d3e7f0898d0f8bd558ee0798)), closes [#683](https://github.com/maltzsama/baleia/issues/683)
+* **helm:** qualify the Trino images for CRI-O short-name mode ([8ca70e6](https://github.com/maltzsama/baleia/commit/8ca70e647527015bda1be38c59b58680c8de2d1e)), closes [#683](https://github.com/maltzsama/baleia/issues/683)
+* **security:** add the two-party catalog grant flow ([147b069](https://github.com/maltzsama/baleia/commit/147b06931e93b7a9f03f032d1be38758e4cadec0)), closes [#704](https://github.com/maltzsama/baleia/issues/704)
+* **security:** add the two-party grant screens and the discoverable flag ([aea8384](https://github.com/maltzsama/baleia/commit/aea8384f9337930355691a0a8f1776a81c90a89a)), closes [#704](https://github.com/maltzsama/baleia/issues/704)
+* **security:** bump klauspost/compress past GO-2026-6865 ([01d6efa](https://github.com/maltzsama/baleia/commit/01d6efa9161ac39f64b06fe1b23944a86baf514e)), closes [#717](https://github.com/maltzsama/baleia/issues/717)
+* **security:** carry the workspace catalog scope to the engine ([582e6a8](https://github.com/maltzsama/baleia/commit/582e6a8d66bf6cbd778302bb13d54933b7d373ce))
+* **security:** carry the workspace catalog scope to the engine ([b2cf827](https://github.com/maltzsama/baleia/commit/b2cf827eaf6ee8d38704e034a2b3884026e421ba)), closes [#703](https://github.com/maltzsama/baleia/issues/703)
+* **security:** close the admin-plane catalog/engine read hole ([48f73ec](https://github.com/maltzsama/baleia/commit/48f73ecf9ca477877a960adbe3ef195eed1e2184)), closes [#704](https://github.com/maltzsama/baleia/issues/704)
+* **security:** define the workspace catalog scope in one SQL function ([3c24b77](https://github.com/maltzsama/baleia/commit/3c24b77f0ec8ea1961b460dbacd3f12a7e7fae65))
+* **security:** define the workspace catalog scope in one SQL function ([1b3cbf1](https://github.com/maltzsama/baleia/commit/1b3cbf10afc116f06bc1a018729f2680aa75e93e)), closes [#702](https://github.com/maltzsama/baleia/issues/702)
+* **security:** fail closed on ambiguous names and scope only user sessions ([02d32a0](https://github.com/maltzsama/baleia/commit/02d32a0b05f8db5cbbcdb4ce5c5e541cf0db5a72)), closes [#703](https://github.com/maltzsama/baleia/issues/703)
+* **security:** grant a created catalog to the chosen workspace ([92b94ac](https://github.com/maltzsama/baleia/commit/92b94acd6f8a11137050eb17028c70f7db7cd799)), closes [#704](https://github.com/maltzsama/baleia/issues/704)
+* **security:** keep the [#654](https://github.com/maltzsama/baleia/issues/654) columns through the rolling update ([116529f](https://github.com/maltzsama/baleia/commit/116529f5c652846691dbdfb7e412ee5e86c4fb6b)), closes [#702](https://github.com/maltzsama/baleia/issues/702)
+* **security:** pin the dev cluster to the scope-enforcing guard 0.10.2 ([ef8828f](https://github.com/maltzsama/baleia/commit/ef8828f5300edaf3581d95a59560480b6a4483bb))
+* **security:** pin the dev cluster to the scope-enforcing guard 0.10.2 ([7439eee](https://github.com/maltzsama/baleia/commit/7439eee650f29831b92b6e3ca7ddcd521f363c1e)), closes [#701](https://github.com/maltzsama/baleia/issues/701)
+* **security:** read the catalog scope through the one SQL function ([7a42000](https://github.com/maltzsama/baleia/commit/7a420001dfe16ebbd1984f055b856c2f26cf2692)), closes [#704](https://github.com/maltzsama/baleia/issues/704)
+* **security:** record retriever engine-lookup failures in the history ([0eeb9c8](https://github.com/maltzsama/baleia/commit/0eeb9c817597624740a1a21fa80815401d137c36)), closes [#703](https://github.com/maltzsama/baleia/issues/703)
+* **security:** remove the BI file bypass ([50f20bd](https://github.com/maltzsama/baleia/commit/50f20bdf1174890309bc777edd6fb19654836e98)), closes [#704](https://github.com/maltzsama/baleia/issues/704)
+* **security:** remove the legacy per-connection catalog explorer ([b87fe4f](https://github.com/maltzsama/baleia/commit/b87fe4fdc3991eb646cedc0e2f8f0b2685f56d47)), closes [#704](https://github.com/maltzsama/baleia/issues/704)
+* **security:** restrict fixed catalog scopes to the legacy explorer ([f3e297c](https://github.com/maltzsama/baleia/commit/f3e297cfc99b4c45ec2b8677c505031d38b22d70)), closes [#703](https://github.com/maltzsama/baleia/issues/703)
+* **security:** scope the cost-routing EXPLAIN session ([f4fb214](https://github.com/maltzsama/baleia/commit/f4fb21406e4024704cea4fd5b33cbb5b9be69252)), closes [#703](https://github.com/maltzsama/baleia/issues/703)
+* **security:** scope the retriever, semantic and explorer sessions ([a9cab84](https://github.com/maltzsama/baleia/commit/a9cab841212602cba7da8e68eae0452e650e5223)), closes [#703](https://github.com/maltzsama/baleia/issues/703)
+* **security:** scope the script execution session from its workspace ([189234b](https://github.com/maltzsama/baleia/commit/189234b2d4647b9bbe6f90b228cb4d0012f29f39)), closes [#703](https://github.com/maltzsama/baleia/issues/703)
+* **security:** ship the 0.10.2 guard and fail closed when it is absent ([7df48f2](https://github.com/maltzsama/baleia/commit/7df48f2a90980fbea9bf81964daa98ed4202cd8d)), closes [#703](https://github.com/maltzsama/baleia/issues/703)
+* **security:** trust Baleia's service identity in the catalog guard ([e9da206](https://github.com/maltzsama/baleia/commit/e9da206deea3a1520c5562d0a0334fcd6f5ba3ab)), closes [#719](https://github.com/maltzsama/baleia/issues/719)
+* **security:** workspace-scoped catalog access — API + UI ([760fa2f](https://github.com/maltzsama/baleia/commit/760fa2f322d8b52644fffb79240040ed3ed59c92))
+* **temporal:** never schedule ExecuteScript with a zero timeout ([8440afb](https://github.com/maltzsama/baleia/commit/8440afb78e64b2b831e73b925212a10c212784a9))
+* **temporal:** never schedule ExecuteScript with a zero timeout ([4d3d4da](https://github.com/maltzsama/baleia/commit/4d3d4dacd2a237fb87e765365dfe9eaab24e5a50)), closes [#687](https://github.com/maltzsama/baleia/issues/687)
+* **web:** keep the light brand marks legible in the light theme ([7bffb3e](https://github.com/maltzsama/baleia/commit/7bffb3ef27ca291072e196115eb9fe7ef0ffa20a))
+* **web:** keep the light brand marks legible in the light theme ([939e8d5](https://github.com/maltzsama/baleia/commit/939e8d5274af9c504ecd598eae394bd39ea24b49)), closes [#698](https://github.com/maltzsama/baleia/issues/698)
+* **web:** keep the system status "Checked" stamp live ([5f023b7](https://github.com/maltzsama/baleia/commit/5f023b7c959f88fed5bcdd9e08d5b543ba36f37c))
+* **web:** keep the system status "Checked" stamp live ([5c8ae74](https://github.com/maltzsama/baleia/commit/5c8ae74d2ded3791bc1d9430f990b0152dbbe091)), closes [#695](https://github.com/maltzsama/baleia/issues/695)
+* **worker,api:** cap the Go heap to the container's cgroup limit ([721c2cc](https://github.com/maltzsama/baleia/commit/721c2cc54d794824c2e3f1fa5324d80eeacbc885)), closes [#685](https://github.com/maltzsama/baleia/issues/685)
+* **worker,api:** handle automemlimit errors explicitly ([5018130](https://github.com/maltzsama/baleia/commit/50181303bb22926c7327f1e5b39b9dea977ac8b4)), closes [#685](https://github.com/maltzsama/baleia/issues/685)
+* **worker:** reach the operator's catalog manager through the managed dialer ([397c192](https://github.com/maltzsama/baleia/commit/397c19244fa081c1c84ab5e4383c4c65c44f4bc7))
+* **worker:** reach the operator's catalog manager through the managed dialer ([bc26b6b](https://github.com/maltzsama/baleia/commit/bc26b6b836112d0ed57741d594c845daf1dbb891)), closes [#689](https://github.com/maltzsama/baleia/issues/689)
+
+
+### Miscellaneous
+
+* **api:** cover ownership routing through the stored-connection test ([1c2a606](https://github.com/maltzsama/baleia/commit/1c2a6069993c26735112a4dabedd0a60e10c0ea6)), closes [#692](https://github.com/maltzsama/baleia/issues/692)
+* **content:** grant the fixture catalog like catalog creation does ([6e36c51](https://github.com/maltzsama/baleia/commit/6e36c51e94a282769bddeb41f0278e02e09dec3d))
+* **scope:** cover the auto-reach backfill across the migration ([d8b1e04](https://github.com/maltzsama/baleia/commit/d8b1e04e53a0f4ac2c2e614b2012bb67289d1f8e))
+* **scope:** drop the personal auto-reach assertion ([aa41cb8](https://github.com/maltzsama/baleia/commit/aa41cb8e7f03cc681066df9c5be414baec2e34f3)), closes [#702](https://github.com/maltzsama/baleia/issues/702)
+* **scope:** pin baleia_workspace_catalog_ids to grants-only, enabled ([61884a2](https://github.com/maltzsama/baleia/commit/61884a20f5e6058fb0b5fc2eed8e3b10c0939f4b)), closes [#702](https://github.com/maltzsama/baleia/issues/702)
+* **scope:** pin the catalog scope invariant, encoding and sources ([1940c19](https://github.com/maltzsama/baleia/commit/1940c195579d54cee61479cd5c53b1b9979bbdcf)), closes [#703](https://github.com/maltzsama/baleia/issues/703)
+* **temporal:** cover the zero-statement, zero-cap timeout ([5e8bbb6](https://github.com/maltzsama/baleia/commit/5e8bbb68c4e1af7a2c211b87abf2273064fc4a32)), closes [#687](https://github.com/maltzsama/baleia/issues/687)
+* **web:** format the workspace settings page ([886325d](https://github.com/maltzsama/baleia/commit/886325dde9cc580ba353e52f37330fe9b6b963c4))
+
+
+### Documentation
+
+* **adr:** record the workspace catalog scope and the BI gateway ([dd17fd0](https://github.com/maltzsama/baleia/commit/dd17fd0ec0da14b2d82a61f401ed3d335036beb9))
+
 ## [0.6.1](https://github.com/maltzsama/baleia/compare/v0.6.0...v0.6.1) (2026-11-05)
 
 
