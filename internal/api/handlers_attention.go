@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/api/serviceerror"
+	"go.temporal.io/sdk/client"
 )
 
 // Attention endpoint (#261).
@@ -298,9 +299,42 @@ func (h *core) attentionSchedules(ctx context.Context) []AttentionItem {
 		}
 		if desc.Schedule.State.Paused {
 			out = append(out, attentionScheduleItem(id, "paused"))
+			continue
+		}
+		// A schedule that has not acted in a while is stale: the worker that
+		// would run its workflows is down, or the pass stopped working (#750).
+		if item := scheduleStaleItem(id, desc); item != nil {
+			out = append(out, *item)
 		}
 	}
 	return out
+}
+
+// scheduleStaleItem returns an attention item when a schedule's most recent
+// action is older than 3 × its cadence; nil when the schedule has no known
+// cadence or has acted recently.
+func scheduleStaleItem(id string, desc *client.ScheduleDescription) *AttentionItem {
+	cadence, ok := scheduleCadence(id)
+	if !ok || len(desc.Info.RecentActions) == 0 {
+		return nil
+	}
+	last := desc.Info.RecentActions[len(desc.Info.RecentActions)-1]
+	if time.Since(last.ActualTime) < attentionStaleMultiplier*cadence {
+		return nil
+	}
+	item := attentionScheduleItem(id, "stale")
+	return &item
+}
+
+// scheduleCadence is the cadence of schedules the attention loop reports
+// staleness for; false when the schedule's cadence is not known here.
+func scheduleCadence(id string) (time.Duration, bool) {
+	switch id {
+	case schedules.LensTableHealth:
+		return time.Hour, true
+	default:
+		return 0, false
+	}
 }
 
 func attentionScheduleItem(id, state string) AttentionItem {
