@@ -2507,7 +2507,6 @@
 	"errors_catalog_try_again_later_or_raise_the_capacity": "Try again later, or raise the class capacity.",
 	"run_runpanel_queued": "Queued · position {position} · ~{wait} · {class}",
 	"statusbadge_queued": "Queued",
-	"components_queryeditor_run_in_background": "Run in background",
 	"workload_class_interactive": "Interactive",
 	"workload_class_heavy": "Heavy",
 	"workload_class_background": "Background",

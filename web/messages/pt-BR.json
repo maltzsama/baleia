@@ -2507,7 +2507,6 @@
 	"errors_catalog_try_again_later_or_raise_the_capacity": "Tente novamente mais tarde ou aumente a capacidade.",
 	"run_runpanel_queued": "Na fila · posição {position} · ~{wait} · {class}",
 	"statusbadge_queued": "Na fila",
-	"components_queryeditor_run_in_background": "Executar em segundo plano",
 	"workload_class_interactive": "Interativa",
 	"workload_class_heavy": "Pesada",
 	"workload_class_background": "Segundo plano",
