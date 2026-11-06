@@ -2,7 +2,8 @@
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { client } from '$lib/api/client';
+	import { apiErrorMessage, client } from '$lib/api/client';
+	import { toasts } from '$lib/ui/toast.svelte';
 	import type { components } from '$lib/api/schema';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import CatalogMaintenancePlan from '$lib/maintenance/CatalogMaintenancePlan.svelte';
@@ -112,9 +113,11 @@
 	let pending = $state<components['schemas']['CatalogGrantItem'][]>([]);
 	let discoverable = $state(false);
 	let discoverableSaving = $state(false);
+	let acting = $state(false);
 
 	let polls: PollController<unknown>[] = [];
 
+	const canManageGrants = $derived(!!catalog?.allowed_actions?.includes('grant'));
 	const providerKind = $derived(catalog?.provider_kind ?? '');
 	const federated = $derived(engines.filter((engine) => engine.class === 'federated'));
 	const support = $derived(supports[addEngineId] ?? {});
@@ -406,28 +409,31 @@
 	async function toggleDiscoverable() {
 		discoverableSaving = true;
 		const next = !discoverable;
-		try {
-			await client.PATCH('/catalogs/{catalog_id}/discoverable', {
-				params: { path: { catalog_id: catalogId } },
-				body: { discoverable: next }
-			});
-			discoverable = next;
-		} catch {
-			// Keep the previous state; the toggle simply did not change.
-		} finally {
-			discoverableSaving = false;
+		const { error: err } = await client.PATCH('/catalogs/{catalog_id}/discoverable', {
+			params: { path: { catalog_id: catalogId } },
+			body: { discoverable: next }
+		});
+		discoverableSaving = false;
+		if (err) {
+			toasts.error(apiErrorMessage(err));
+			return;
 		}
+		discoverable = next;
 	}
 
 	async function actOnPending(item: components['schemas']['CatalogGrantItem'], approve: boolean) {
-		if (approve) {
-			await client.POST('/catalog-grants/{workspace_id}/{catalog_id}/approve', {
-				params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
-			});
-		} else {
-			await client.DELETE('/catalog-grants/{workspace_id}/{catalog_id}', {
-				params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
-			});
+		acting = true;
+		const { error: err } = approve
+			? await client.POST('/catalog-grants/{workspace_id}/{catalog_id}/approve', {
+					params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+				})
+			: await client.DELETE('/catalog-grants/{workspace_id}/{catalog_id}', {
+					params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+				});
+		acting = false;
+		if (err) {
+			toasts.error(apiErrorMessage(err));
+			return;
 		}
 		const pendingRes = await client.GET('/catalog-grants', {
 			params: { query: { catalog_id: catalogId } }
@@ -741,21 +747,25 @@
 				<p class="text-[12px] text-slate-600 dark:text-slate-300">
 					{m.catalogs_detail_workspaces_granted_this_catalog_owners_and()}
 				</p>
-				<Button variant="primary" onclick={() => (grantOpen = true)}
-					>{m.catalogs_detail_grant_access()}</Button
-				>
+				{#if canManageGrants}
+					<Button variant="primary" onclick={() => (grantOpen = true)}
+						>{m.catalogs_detail_grant_access()}</Button
+					>
+				{/if}
 			</div>
-			<div class="mb-3 flex items-center gap-2 text-[12px]">
-				<input
-					id="discoverable"
-					type="checkbox"
-					checked={discoverable}
-					disabled={discoverableSaving}
-					onchange={toggleDiscoverable}
-					class="h-4 w-4"
-				/>
-				<label for="discoverable">{m.catalogs_detail_discoverable()}</label>
-			</div>
+			{#if canManageGrants}
+				<div class="mb-3 flex items-center gap-2 text-[12px]">
+					<input
+						id="discoverable"
+						type="checkbox"
+						checked={discoverable}
+						disabled={discoverableSaving}
+						onchange={toggleDiscoverable}
+						class="h-4 w-4"
+					/>
+					<label for="discoverable">{m.catalogs_detail_discoverable()}</label>
+				</div>
+			{/if}
 			{#if pending.length > 0}
 				<h2 class="mb-2 text-[12px] font-semibold">{m.settings_workspaces_detail_pending()}</h2>
 				<div class="mb-3 overflow-x-auto rounded-lg border border-border bg-bg-panel">
@@ -767,13 +777,15 @@
 									<td class="px-3 py-1.5 text-right">
 										<button
 											type="button"
-											class="mr-3 hover:underline"
+											class="mr-3 hover:underline disabled:opacity-50"
+											disabled={acting}
 											onclick={() => actOnPending(item, true)}
 											>{m.settings_workspaces_detail_approve()}</button
 										>
 										<button
 											type="button"
-											class="text-danger hover:underline"
+											class="text-danger hover:underline disabled:opacity-50"
+											disabled={acting}
 											onclick={() => actOnPending(item, false)}
 											>{m.settings_workspaces_detail_decline()}</button
 										>

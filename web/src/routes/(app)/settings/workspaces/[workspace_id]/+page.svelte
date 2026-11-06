@@ -2,7 +2,8 @@
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { client } from '$lib/api/client';
+	import { apiErrorMessage, client } from '$lib/api/client';
+	import { toasts } from '$lib/ui/toast.svelte';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import WorkspaceMembers from '$lib/workspaces/WorkspaceMembers.svelte';
 	import { workspaceStore, type Workspace } from '$lib/stores/workspace.svelte';
@@ -57,6 +58,7 @@
 	let requestCatalogId = $state('');
 	let requesting = $state(false);
 	let requestError = $state('');
+	let acting = $state(false);
 
 	let refreshError = $state('');
 	let deleteOpen = $state(false);
@@ -66,6 +68,7 @@
 
 	const canEdit = $derived(!!ws?.allowed_actions?.includes('update'));
 	const canDelete = $derived(!!ws?.allowed_actions?.includes('delete'));
+	const canManageGrants = $derived(!!ws?.allowed_actions?.includes('manage_grants'));
 	const currentTarget = $derived(targets.find((target) => target.is_default));
 
 	async function load() {
@@ -231,9 +234,14 @@
 		requestError = '';
 		requestCatalogId = '';
 		requestOpen = true;
-		const { data } = await client.GET('/workspaces/{id}/requestable-catalogs', {
+		const { data, error: err } = await client.GET('/workspaces/{id}/requestable-catalogs', {
 			params: { path: { id: workspaceId } }
 		});
+		if (err) {
+			requestOpen = false;
+			toasts.error(apiErrorMessage(err));
+			return;
+		}
 		requestableCatalogs = data ?? [];
 	}
 
@@ -256,14 +264,18 @@
 	}
 
 	async function actOnPending(item: components['schemas']['CatalogGrantItem'], approve: boolean) {
-		if (approve) {
-			await client.POST('/catalog-grants/{workspace_id}/{catalog_id}/approve', {
-				params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
-			});
-		} else {
-			await client.DELETE('/catalog-grants/{workspace_id}/{catalog_id}', {
-				params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
-			});
+		acting = true;
+		const { error: err } = approve
+			? await client.POST('/catalog-grants/{workspace_id}/{catalog_id}/approve', {
+					params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+				})
+			: await client.DELETE('/catalog-grants/{workspace_id}/{catalog_id}', {
+					params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+				});
+		acting = false;
+		if (err) {
+			toasts.error(apiErrorMessage(err));
+			return;
 		}
 		await load();
 	}
@@ -438,14 +450,16 @@
 				<p class="text-[12px] text-slate-600 dark:text-slate-300">
 					{m.settings_workspaces_detail_catalogs_granted_to_this_workspace_revoking()}
 				</p>
-				<div class="flex items-center gap-2">
-					<Button variant="secondary" onclick={openRequest}
-						>{m.settings_workspaces_detail_request_catalog()}</Button
-					>
-					<Button variant="primary" onclick={openGrant}
-						>{m.settings_workspaces_detail_grant_access()}</Button
-					>
-				</div>
+				{#if canManageGrants}
+					<div class="flex items-center gap-2">
+						<Button variant="secondary" onclick={openRequest}
+							>{m.settings_workspaces_detail_request_catalog()}</Button
+						>
+						<Button variant="primary" onclick={openGrant}
+							>{m.settings_workspaces_detail_grant_access()}</Button
+						>
+					</div>
+				{/if}
 			</div>
 			{#if pending.length > 0}
 				<h2 class="mb-2 text-[12px] font-semibold">{m.settings_workspaces_detail_pending()}</h2>
@@ -458,13 +472,15 @@
 									<td class="px-3 py-1.5 text-right">
 										<button
 											type="button"
-											class="mr-3 hover:underline"
+											class="mr-3 hover:underline disabled:opacity-50"
+											disabled={acting}
 											onclick={() => actOnPending(item, true)}
 											>{m.settings_workspaces_detail_approve()}</button
 										>
 										<button
 											type="button"
-											class="text-danger hover:underline"
+											class="text-danger hover:underline disabled:opacity-50"
+											disabled={acting}
 											onclick={() => actOnPending(item, false)}
 											>{m.settings_workspaces_detail_decline()}</button
 										>
