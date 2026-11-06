@@ -6,6 +6,8 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import Badge from '$lib/ui/Badge.svelte';
 	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -22,10 +24,12 @@
 	let engines = $state<Engine[]>([]);
 	let loading = $state(true);
 	let error = $state('');
-	let q = $state('');
-	let origin = $state('');
-	let engineId = $state('');
-	let attention = $state(false);
+	// The filters live in the query string so a filtered list can be shared and
+	// restored on reload (#731).
+	let q = $state(page.url.searchParams.get('q') ?? '');
+	let origin = $state(page.url.searchParams.get('origin') ?? '');
+	let engineId = $state(page.url.searchParams.get('engine_id') ?? '');
+	let attention = $state(page.url.searchParams.get('attention') === '1');
 
 	async function load() {
 		loading = true;
@@ -50,12 +54,34 @@
 	// The list is filtered server-side; these say whether it was.
 	const filtering = $derived(!!(q.trim() || origin || engineId || attention));
 
+	function filtersUrl(): string {
+		const params = new SvelteURLSearchParams(page.url.searchParams);
+		if (q.trim()) params.set('q', q.trim());
+		else params.delete('q');
+		if (origin) params.set('origin', origin);
+		else params.delete('origin');
+		if (engineId) params.set('engine_id', engineId);
+		else params.delete('engine_id');
+		if (attention) params.set('attention', '1');
+		else params.delete('attention');
+		const query = params.toString();
+		return `${page.url.pathname}${query ? `?${query}` : ''}`;
+	}
+
+	// Applies the current filters and keeps them in the URL (#731). The
+	// pathname is dynamic, so resolve() cannot type it.
+	function applyFilters() {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(filtersUrl(), { replaceState: true, keepFocus: true, noScroll: true });
+		void load();
+	}
+
 	function clearFilters() {
 		q = '';
 		origin = '';
 		engineId = '';
 		attention = false;
-		void load();
+		applyFilters();
 	}
 
 	function open(catalog: CatalogSummary) {
@@ -100,12 +126,12 @@
 			]}
 		/>
 		<label class="flex items-end gap-2 pb-1 text-[12px]">
-			<input type="checkbox" bind:checked={attention} onchange={() => load()} />
+			<input type="checkbox" bind:checked={attention} onchange={applyFilters} />
 			{m.catalogs_needs_attention_only()}
 		</label>
 	</div>
 	<div class="mb-3 flex justify-end">
-		<button type="button" class="text-[12px] text-primary hover:underline" onclick={() => load()}>
+		<button type="button" class="text-[12px] text-primary hover:underline" onclick={applyFilters}>
 			{m.catalogs_apply_filters()}
 		</button>
 	</div>
