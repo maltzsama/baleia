@@ -236,12 +236,12 @@
 			<Logo class="h-[96px] w-[96px]" />
 			<!-- Wordmark: Monoton has one weight (400), so no font-bold or
 			     Plex-calibrated tracking here. -->
-			<div class="font-display text-[32px] text-slate-100">{m.common_baleia()}</div>
-			<div class="text-[13px] text-slate-500 leading-[1.6] max-w-[260px]">
+			<div class="font-display text-[52px] text-slate-100">{m.common_baleia()}</div>
+			<div class="text-[13px] text-slate-400 leading-[1.6] max-w-[260px]">
 				{m.login_a_powerful_sql_client_for_your_self_hosted()}
 			</div>
 			<div
-				class="font-mono text-[11px] text-slate-700 bg-white/[.04] border border-slate-800 py-1 px-3 rounded-[20px]"
+				class="font-mono text-[11px] text-slate-400 bg-white/[.04] border border-slate-700 py-1 px-3 rounded-[20px]"
 			>
 				{m.login_version({ version: __APP_VERSION__ })}
 			</div>
