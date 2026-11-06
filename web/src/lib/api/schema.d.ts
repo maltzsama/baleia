@@ -2087,6 +2087,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/catalog-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active grants and pending requests the caller manages */
+        get: operations["listCatalogGrantItems"];
+        put?: never;
+        /** Offer, request or directly grant a catalog to a workspace, decided by the caller's rights on each side */
+        post: operations["createCatalogGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog-grants/{workspace_id}/{catalog_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Decline a pending request or unlink an active grant */
+        delete: operations["deleteCatalogGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog-grants/{workspace_id}/{catalog_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a pending offer or request as the other party */
+        post: operations["approveCatalogGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/grantable-workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        /** Workspaces a catalog owner may offer the catalog to */
+        get: operations["listGrantableWorkspaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/requestable-catalogs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Discoverable catalogs a workspace admin may request */
+        get: operations["listRequestableCatalogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/connection-providers": {
         parameters: {
             query?: never;
@@ -2408,6 +2504,25 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/discoverable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark the catalog discoverable so workspace admins can find and request it */
+        patch: operations["setCatalogDiscoverable"];
         trace?: never;
     };
     "/catalog-connections/{id}/impact": {
@@ -2824,33 +2939,6 @@ export interface paths {
          * @description Admins and engine owners. Applies without restarting the admission workflow. Closing a class with queued runs is allowed but must be confirmed by the caller (FD4).
          */
         put: operations["putEngineQueues"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/engines/{id}/bi/{tool}": {
-        parameters: {
-            query: {
-                catalog: string;
-                schema?: string;
-                table: string;
-            };
-            header?: never;
-            path: {
-                id: components["parameters"]["PathId"];
-                tool: "tableau" | "powerbi";
-            };
-            cookie?: never;
-        };
-        /**
-         * Download a Tableau (.tds) or Power BI (.pbids) data source
-         * @description Points the BI tool at the engine, catalog, schema and table (#560). The file carries no credentials: the user signs in from the tool, which connects directly to the engine (ADR 0001). An engine without an external_url cannot produce the file.
-         */
-        get: operations["getEngineBIFile"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -4705,6 +4793,11 @@ export interface components {
             /** @default true */
             enabled: boolean;
             /**
+             * @description The owner marked the catalog discoverable so workspace admins can find and request it (default off: a catalog name is itself information).
+             * @default false
+             */
+            discoverable: boolean;
+            /**
              * @description The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
              * @enum {string}
              */
@@ -4788,6 +4881,49 @@ export interface components {
             /** Format: date-time */
             granted_at: string;
         };
+        CatalogGrantItem: {
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            catalog_id: string;
+            /** @enum {string} */
+            state: "active" | "pending";
+            /** @enum {string|null} */
+            initiated_by_side?: "catalog" | "workspace" | null;
+            /** Format: uuid */
+            requested_by?: string | null;
+            /** Format: uuid */
+            granted_by?: string | null;
+            /** Format: date-time */
+            granted_at?: string | null;
+            /** Format: date-time */
+            requested_at?: string | null;
+            catalog_name?: string;
+            engine_catalog_name?: string | null;
+            connection_name?: string | null;
+            workspace_name?: string | null;
+            allowed_actions?: string[];
+        };
+        CatalogGrantRequest: {
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            catalog_id: string;
+        };
+        GrantableWorkspace: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            type: string;
+            team_name?: string | null;
+        };
+        RequestableCatalog: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description?: string | null;
+            connection_name: string;
+        };
         BindingProjection: {
             connector: string;
             version?: string | null;
@@ -4813,6 +4949,11 @@ export interface components {
             };
             /** @default true */
             enabled: boolean;
+            /**
+             * Format: uuid
+             * @description Workspace to grant the new catalog to as an active grant (the connection wizard's "Share with", preselected to the current workspace). Omitted, the catalog is created unshared; the owner shares it later from the catalog's Access screen.
+             */
+            share_with_workspace_id?: string;
         };
         CatalogConnection: {
             readonly allowed_actions: components["schemas"]["CatalogConnectionAllowedAction"][];
@@ -4933,11 +5074,6 @@ export interface components {
              * @description Estimated bytes above which a Trino SELECT is heavy; cost routing does nothing while this is null (#550)
              */
             cost_threshold_bytes?: number | null;
-            /**
-             * Format: uri
-             * @description Address BI clients reach, which may differ from the in-cluster URL (#533). Null when not set.
-             */
-            external_url?: string | null;
             /** @description Server version reported by the engine (cached 5 minutes); null when unknown or unreachable */
             version?: string | null;
             /** @description What the engine can do; null when the engine is disabled or no adapter for its kind is available yet */
@@ -5070,8 +5206,6 @@ export interface components {
             cost_threshold_bytes?: number | null;
             /** @description Set cost_threshold_bytes to null; cannot be combined with cost_threshold_bytes */
             clear_cost_threshold?: boolean;
-            /** @description Address BI clients reach; an empty string clears it (#533) */
-            external_url?: string | null;
         };
         AuditEvent: {
             /** Format: int64 */
@@ -10718,6 +10852,150 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listCatalogGrantItems: {
+        parameters: {
+            query?: {
+                workspace_id?: string;
+                catalog_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grants and pending requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGrantItem"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createCatalogGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description The grant (active) or request (pending) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGrantItem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteCatalogGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    approveCatalogGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The now-active grant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGrantItem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listGrantableWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspaces (name and team only) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantableWorkspace"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listRequestableCatalogs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Discoverable catalogs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestableCatalog"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listConnectionProviders: {
         parameters: {
             query?: never;
@@ -11352,6 +11630,37 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setCatalogDiscoverable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    discoverable: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Catalog"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -12082,37 +12391,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EngineQueues"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    getEngineBIFile: {
-        parameters: {
-            query: {
-                catalog: string;
-                schema?: string;
-                table: string;
-            };
-            header?: never;
-            path: {
-                id: components["parameters"]["PathId"];
-                tool: "tableau" | "powerbi";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The data source file */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/plain": string;
                 };
             };
             401: components["responses"]["Unauthorized"];

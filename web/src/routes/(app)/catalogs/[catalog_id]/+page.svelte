@@ -2,6 +2,8 @@
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { client } from '$lib/api/client';
+	import type { components } from '$lib/api/schema';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import CatalogMaintenancePlan from '$lib/maintenance/CatalogMaintenancePlan.svelte';
 	import { hasTableHealth } from '$lib/ui/patterns/kindIcon';
@@ -106,6 +108,11 @@
 	let revokeOpen = $state(false);
 	let revokeWorkspace = $state<CatalogGrant['workspace'] | null>(null);
 
+	// Two-party flow: pending requests for this catalog and the discoverable flag.
+	let pending = $state<components['schemas']['CatalogGrantItem'][]>([]);
+	let discoverable = $state(false);
+	let discoverableSaving = $state(false);
+
 	let polls: PollController<unknown>[] = [];
 
 	const providerKind = $derived(catalog?.provider_kind ?? '');
@@ -139,6 +146,11 @@
 				catalogGrants(catalogId),
 				catalogImpact(catalogId)
 			]);
+			discoverable = catalog?.discoverable ?? false;
+			const pendingRes = await client.GET('/catalog-grants', {
+				params: { query: { catalog_id: catalogId } }
+			});
+			pending = (pendingRes.data ?? []).filter((item) => item.state === 'pending');
 			workspaces = (await listGrantableWorkspaces()).map((workspace) => ({
 				id: workspace.id,
 				name: workspace.name
@@ -388,6 +400,39 @@
 
 	async function revoke(workspaceId: string) {
 		await revokeCatalog(workspaceId, catalogId);
+		grants = await catalogGrants(catalogId);
+	}
+
+	async function toggleDiscoverable() {
+		discoverableSaving = true;
+		const next = !discoverable;
+		try {
+			await client.PATCH('/catalogs/{catalog_id}/discoverable', {
+				params: { path: { catalog_id: catalogId } },
+				body: { discoverable: next }
+			});
+			discoverable = next;
+		} catch {
+			// Keep the previous state; the toggle simply did not change.
+		} finally {
+			discoverableSaving = false;
+		}
+	}
+
+	async function actOnPending(item: components['schemas']['CatalogGrantItem'], approve: boolean) {
+		if (approve) {
+			await client.POST('/catalog-grants/{workspace_id}/{catalog_id}/approve', {
+				params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+			});
+		} else {
+			await client.DELETE('/catalog-grants/{workspace_id}/{catalog_id}', {
+				params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+			});
+		}
+		const pendingRes = await client.GET('/catalog-grants', {
+			params: { query: { catalog_id: catalogId } }
+		});
+		pending = (pendingRes.data ?? []).filter((item) => item.state === 'pending');
 		grants = await catalogGrants(catalogId);
 	}
 
@@ -700,7 +745,46 @@
 					>{m.catalogs_detail_grant_access()}</Button
 				>
 			</div>
-			{#if grants.length === 0}
+			<div class="mb-3 flex items-center gap-2 text-[12px]">
+				<input
+					id="discoverable"
+					type="checkbox"
+					checked={discoverable}
+					disabled={discoverableSaving}
+					onchange={toggleDiscoverable}
+					class="h-4 w-4"
+				/>
+				<label for="discoverable">{m.catalogs_detail_discoverable()}</label>
+			</div>
+			{#if pending.length > 0}
+				<h2 class="mb-2 text-[12px] font-semibold">{m.settings_workspaces_detail_pending()}</h2>
+				<div class="mb-3 overflow-x-auto rounded-lg border border-border bg-bg-panel">
+					<table class="w-full text-left text-[11px]">
+						<tbody>
+							{#each pending as item (item.workspace_id)}
+								<tr class="border-b border-border/60 last:border-b-0">
+									<td class="px-3 py-1.5">{item.workspace_name ?? item.workspace_id}</td>
+									<td class="px-3 py-1.5 text-right">
+										<button
+											type="button"
+											class="mr-3 hover:underline"
+											onclick={() => actOnPending(item, true)}
+											>{m.settings_workspaces_detail_approve()}</button
+										>
+										<button
+											type="button"
+											class="text-danger hover:underline"
+											onclick={() => actOnPending(item, false)}
+											>{m.settings_workspaces_detail_decline()}</button
+										>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+			{#if grants.length === 0 && pending.length === 0}
 				<EmptyState
 					title={m.catalogs_detail_no_grants()}
 					description={m.catalogs_detail_no_workspace_has_access_to_this()}

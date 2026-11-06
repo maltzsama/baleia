@@ -196,6 +196,13 @@ var operationAccess = map[string]access{
 	"ListWorkspaceCatalogAccess": checked("Workspace"),
 	"GrantCatalogAccess":         checked("Workspace", "Catalog"),
 	"RevokeCatalogAccess":        checked("Workspace", "Catalog"),
+	"ListCatalogGrantItems":      checked("PrincipalFromContext", "Workspace", "catalogOwner"),
+	"CreateCatalogGrant":         checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner"),
+	"ApproveCatalogGrant":        checked("PrincipalFromContext", "GetCatalogGrantRequest", "workspaceAdmin", "catalogOwner"),
+	"DeleteCatalogGrant":         checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner"),
+	"ListGrantableWorkspaces":    checked("PrincipalFromContext", "catalogOwner"),
+	"ListRequestableCatalogs":    checked("PrincipalFromContext", "workspaceAdmin"),
+	"SetCatalogDiscoverable":     checked("PrincipalFromContext", "catalogOwner"),
 
 	// ── workspace members (query editor, retrievers)
 	"ListExecutions":            {kind: kindChecked, calls: wsMember},
@@ -293,7 +300,6 @@ var operationAccess = map[string]access{
 	"TestEngine":             checked("PrincipalFromContext", "Engine"),
 	"ListEngineObservations": checked("PrincipalFromContext", "Engine"),
 	"GetEngineImpact":        checked("PrincipalFromContext", "Engine"),
-	"GetEngineBIFile":        checked("PrincipalFromContext", "Engine"),
 	"DiscoverEngineCatalogs": checked("PrincipalFromContext", "Engine"),
 	"GetEngineQueues":        checked("PrincipalFromContext", "Engine"),
 	"PutEngineQueues":        checked("PrincipalFromContext", "Engine"),
@@ -389,9 +395,6 @@ var routeAccess = map[string]access{
 	"GET /api/v1/ws/workspaces/{id}/executions/{execution_id}": {kind: kindChecked, pkg: "../ws", calls: []string{"Consume", "CheckWorkspaceAccess"}},
 
 	"GET /workspaces/{id}/catalogs":                                                                          checked("Workspace"),
-	"GET /connections/{connection_id}/catalogs/{catalog_name}/namespaces":                                    checked("explorerTarget"),
-	"GET /connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables":                 checked("explorerTarget"),
-	"GET /connections/{connection_id}/catalogs/{catalog_name}/namespaces/{namespace}/tables/{table}/columns": checked("explorerTarget"),
 }
 
 // ── source model ─────────────────────────────────────────────────────────────

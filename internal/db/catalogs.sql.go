@@ -410,6 +410,53 @@ func (q *Queries) ListCatalogsByConnection(ctx context.Context, connectionID pgt
 	return items, nil
 }
 
+const listDiscoverableCatalogs = `-- name: ListDiscoverableCatalogs :many
+SELECT c.id, c.name, COALESCE(c.trino_catalog_name, c.name) AS engine_catalog_name,
+       c.description, cc.name AS connection_name, cc.created_by
+FROM catalogs c
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE c.discoverable AND c.enabled
+ORDER BY c.name
+`
+
+type ListDiscoverableCatalogsRow struct {
+	ID                pgtype.UUID `json:"id"`
+	Name              string      `json:"name"`
+	EngineCatalogName string      `json:"engine_catalog_name"`
+	Description       *string     `json:"description"`
+	ConnectionName    string      `json:"connection_name"`
+	CreatedBy         pgtype.UUID `json:"created_by"`
+}
+
+// Catalogs a workspace admin may find to request: the owner marked them
+// discoverable (default off: a catalog name is itself information).
+func (q *Queries) ListDiscoverableCatalogs(ctx context.Context) ([]ListDiscoverableCatalogsRow, error) {
+	rows, err := q.db.Query(ctx, listDiscoverableCatalogs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDiscoverableCatalogsRow
+	for rows.Next() {
+		var i ListDiscoverableCatalogsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.EngineCatalogName,
+			&i.Description,
+			&i.ConnectionName,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEnabledCatalogs = `-- name: ListEnabledCatalogs :many
 SELECT id, connection_id, name, description, trino_catalog_name, cluster_id, warehouse, connector, extra_props, enabled, created_at, updated_at, origin, source_ref, discoverable FROM catalogs WHERE enabled AND origin = 'source' ORDER BY name
 `
@@ -527,10 +574,6 @@ SELECT DISTINCT c.id, c.connection_id, c.name, c.description, c.trino_catalog_na
 JOIN catalog_connections cc ON cc.id = c.connection_id
 WHERE $1::bool
    OR cc.created_by = $2
-   OR EXISTS (
-        SELECT 1 FROM workspace_catalog_grants g
-        WHERE g.catalog_id = c.id
-          AND baleia_workspace_member_role(g.workspace_id, $2::uuid) IS NOT NULL)
 ORDER BY c.name
 `
 
@@ -539,8 +582,9 @@ type ListVisibleCatalogsParams struct {
 	UserID  pgtype.UUID `json:"user_id"`
 }
 
-// Every logical catalog the caller may view: all for an admin, the caller's
-// connections, and catalogs granted to a workspace the caller belongs to (#109).
+// Every catalog the caller may view on the admin plane (ADR 0018 §7.1): all
+// for an admin, and the caller's own connections' catalogs for an owner.
+// Workspace members see catalogs through the data plane, not here.
 func (q *Queries) ListVisibleCatalogs(ctx context.Context, arg ListVisibleCatalogsParams) ([]Catalog, error) {
 	rows, err := q.db.Query(ctx, listVisibleCatalogs, arg.IsAdmin, arg.UserID)
 	if err != nil {
@@ -590,6 +634,20 @@ func (q *Queries) PluginLastConfirmation(ctx context.Context, updatedBy string) 
 	var column_1 pgtype.Timestamptz
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const setCatalogDiscoverable = `-- name: SetCatalogDiscoverable :exec
+UPDATE catalogs SET discoverable = $2 WHERE id = $1
+`
+
+type SetCatalogDiscoverableParams struct {
+	ID           pgtype.UUID `json:"id"`
+	Discoverable bool        `json:"discoverable"`
+}
+
+func (q *Queries) SetCatalogDiscoverable(ctx context.Context, arg SetCatalogDiscoverableParams) error {
+	_, err := q.db.Exec(ctx, setCatalogDiscoverable, arg.ID, arg.Discoverable)
+	return err
 }
 
 const setCatalogEnabled = `-- name: SetCatalogEnabled :exec

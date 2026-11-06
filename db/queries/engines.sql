@@ -64,38 +64,13 @@ SELECT
     (SELECT count(*) FROM catalog_bindings b WHERE b.engine_id = $1 AND b.mode = 'managed')::bigint AS managed_bindings,
     (SELECT count(*) FROM query_executions q WHERE q.engine_id = $1 AND q.status = 'running')::bigint AS running_executions;
 
--- name: EngineHostsCatalogGrantedToUser :one
--- True when the engine has a binding of a catalog granted to a workspace the
--- user belongs to.
-SELECT EXISTS (
-    SELECT 1 FROM catalog_bindings b
-    JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-    WHERE b.engine_id = sqlc.arg('engine_id')
-      AND baleia_workspace_member_role(g.workspace_id, sqlc.arg('user_id')::uuid) IS NOT NULL
-) AS granted;
-
--- name: EngineHostsCatalogGrantedToAgent :one
--- True when the engine hosts a catalog granted to a workspace the agent is
--- bound to and the owner is still a member of that workspace (#59).
-SELECT EXISTS (
-    SELECT 1 FROM catalog_bindings b
-    JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-    JOIN agent_workspaces aw ON aw.workspace_id = g.workspace_id AND aw.agent_id = sqlc.arg('agent_id')
-    WHERE b.engine_id = sqlc.arg('engine_id')
-      AND baleia_workspace_member_role(g.workspace_id, sqlc.arg('owner_id')::uuid) IS NOT NULL
-) AS granted;
-
 -- name: ListEnginesVisibleToUser :many
--- The engines a non-admin may see: those on connections they own and those
--- hosting a catalog granted to one of their workspaces.
+-- The engines a non-admin may see on the admin plane: those on connections
+-- they own. Members reach engines through their workspace's data plane (ADR
+-- 0018 §7.1), not here.
 SELECT e.* FROM engines e
 JOIN catalog_connections c ON c.id = e.connection_id
 WHERE c.created_by = sqlc.arg('user_id')
-   OR EXISTS (
-        SELECT 1 FROM catalog_bindings b
-        JOIN workspace_catalog_grants g ON g.catalog_id = b.catalog_id
-        WHERE b.engine_id = e.id
-          AND baleia_workspace_member_role(g.workspace_id, sqlc.arg('user_id')::uuid) IS NOT NULL)
 ORDER BY e.name;
 
 -- name: ListEngineObservations :many

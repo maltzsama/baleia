@@ -73,7 +73,6 @@ type engineQuerier struct {
 	db.Querier
 	conn       db.CatalogConnection
 	engine     db.Engine
-	granted    bool
 	blockers   db.CountEngineBlockersRow
 	created    []db.CreateEngineParams
 	natives    []db.UpsertNativeCatalogParams
@@ -91,9 +90,6 @@ func (q *engineQuerier) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Eng
 		return db.Engine{}, pgx.ErrNoRows
 	}
 	return q.engine, nil
-}
-func (q *engineQuerier) EngineHostsCatalogGrantedToUser(context.Context, db.EngineHostsCatalogGrantedToUserParams) (bool, error) {
-	return q.granted, nil
 }
 func (q *engineQuerier) CreateEngine(_ context.Context, p db.CreateEngineParams) (db.Engine, error) {
 	q.created = append(q.created, p)
@@ -302,23 +298,22 @@ func TestEngineAccess(t *testing.T) {
 		}
 	})
 
-	t.Run("a grantee reads but may not write", func(t *testing.T) {
+	t.Run("a member is not on the admin plane", func(t *testing.T) {
 		t.Parallel()
 		q := engineFixture(t, stranger)
-		q.granted = true
 		h := engineHandlers(t, q)
 		resp, err := h.GetEngine(testContext(), GetEngineRequestObject{Id: [16]byte{0xE1}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := resp.(GetEngine200JSONResponse); !ok {
-			t.Fatalf("get = %T", resp)
+		if _, ok := resp.(GetEngine404JSONResponse); !ok {
+			t.Fatalf("get = %T, want 404", resp)
 		}
-		if rec := deleteEngine(t, h); rec.Code != 403 {
-			t.Fatalf("delete = %d %s", rec.Code, rec.Body)
+		if rec := deleteEngine(t, h); rec.Code != 404 {
+			t.Fatalf("delete = %d %s, want 404", rec.Code, rec.Body)
 		}
 		if q.deletedEng != 0 {
-			t.Fatal("a grantee deleted the engine")
+			t.Fatal("a non-owner deleted the engine")
 		}
 	})
 }
@@ -436,39 +431,5 @@ func TestUpdateEngine_CostRouting(t *testing.T) {
 	}
 	if rec := updateEngine(t, h, &UpdateEngineRequest{CostThresholdBytes: ptr(int64(1)), ClearCostThreshold: ptr(true)}); rec.Code != 422 {
 		t.Fatalf("ambiguous = %d %s", rec.Code, rec.Body)
-	}
-}
-
-// TestUpdateEngine_ExternalURL: a valid http(s) URL is stored, an invalid one
-// is refused before the write, and an empty string clears it (#533).
-func TestUpdateEngine_ExternalURL(t *testing.T) {
-	t.Parallel()
-	q := engineFixture(t, testUserID)
-	h := engineHandlers(t, q)
-
-	valid := "https://trino.example.com:8443"
-	if rec := updateEngine(t, h, &UpdateEngineRequest{ExternalUrl: &valid}); rec.Code != 200 {
-		t.Fatalf("valid = %d %s", rec.Code, rec.Body)
-	}
-	if len(q.updated) != 1 || q.updated[0].ExternalUrl == nil || *q.updated[0].ExternalUrl != valid {
-		t.Fatalf("params = %+v", q.updated)
-	}
-
-	q.updated = nil
-	bad := "ftp://trino.example.com"
-	if rec := updateEngine(t, h, &UpdateEngineRequest{ExternalUrl: &bad}); rec.Code != 422 {
-		t.Fatalf("invalid = %d %s", rec.Code, rec.Body)
-	}
-	if len(q.updated) != 0 {
-		t.Fatal("a refused URL wrote to the engine")
-	}
-
-	q.updated = nil
-	empty := "   "
-	if rec := updateEngine(t, h, &UpdateEngineRequest{ExternalUrl: &empty}); rec.Code != 200 {
-		t.Fatalf("clear = %d %s", rec.Code, rec.Body)
-	}
-	if len(q.updated) != 1 || q.updated[0].ClearExternalUrl == nil || !*q.updated[0].ClearExternalUrl {
-		t.Fatalf("clear params = %+v", q.updated)
 	}
 }

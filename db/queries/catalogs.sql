@@ -95,16 +95,13 @@ SELECT cluster_id, catalog_name FROM trino_catalog_registry
 WHERE expires_at IS NOT NULL AND expires_at < now();
 
 -- name: ListVisibleCatalogs :many
--- Every logical catalog the caller may view: all for an admin, the caller's
--- connections, and catalogs granted to a workspace the caller belongs to (#109).
+-- Every catalog the caller may view on the admin plane (ADR 0018 §7.1): all
+-- for an admin, and the caller's own connections' catalogs for an owner.
+-- Workspace members see catalogs through the data plane, not here.
 SELECT DISTINCT c.* FROM catalogs c
 JOIN catalog_connections cc ON cc.id = c.connection_id
 WHERE sqlc.arg(is_admin)::bool
    OR cc.created_by = sqlc.arg(user_id)
-   OR EXISTS (
-        SELECT 1 FROM workspace_catalog_grants g
-        WHERE g.catalog_id = c.id
-          AND baleia_workspace_member_role(g.workspace_id, sqlc.arg(user_id)::uuid) IS NOT NULL)
 ORDER BY c.name;
 
 -- name: CountNamespacesByCatalog :one
@@ -142,6 +139,19 @@ FROM workspace_catalog_grants g
 JOIN workspaces w ON w.id = g.workspace_id
 WHERE g.catalog_id = $1
 ORDER BY w.name;
+
+-- name: SetCatalogDiscoverable :exec
+UPDATE catalogs SET discoverable = $2 WHERE id = $1;
+
+-- name: ListDiscoverableCatalogs :many
+-- Catalogs a workspace admin may find to request: the owner marked them
+-- discoverable (default off: a catalog name is itself information).
+SELECT c.id, c.name, COALESCE(c.trino_catalog_name, c.name) AS engine_catalog_name,
+       c.description, cc.name AS connection_name, cc.created_by
+FROM catalogs c
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE c.discoverable AND c.enabled
+ORDER BY c.name;
 
 -- name: UpdateCatalogMeta :one
 UPDATE catalogs

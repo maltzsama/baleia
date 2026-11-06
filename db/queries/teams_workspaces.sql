@@ -68,6 +68,13 @@ FROM workspaces w
 WHERE baleia_workspace_member_role(w.id, @user_id::uuid) IS NOT NULL
 ORDER BY w.name;
 
+-- name: ListGrantableWorkspaces :many
+-- The workspaces a catalog owner may offer a catalog to (the offer picker).
+SELECT w.id, w.name, w.type, t.name AS team_name
+FROM workspaces w
+LEFT JOIN teams t ON t.id = w.owner_team_id
+ORDER BY w.name;
+
 -- name: UpdateWorkspace :one
 UPDATE workspaces
 SET name = $2, description = $3, updated_at = now()
@@ -133,14 +140,6 @@ ORDER BY 4;
 -- name: DeleteWorkspaceCatalogGrant :execrows
 DELETE FROM workspace_catalog_grants WHERE workspace_id = $1 AND catalog_id = $2;
 
--- name: CatalogGrantedToUser :one
--- True when the user is a member of a workspace that has been granted the catalog.
-SELECT EXISTS (
-    SELECT 1 FROM workspace_catalog_grants g
-    WHERE g.catalog_id = @catalog_id::uuid
-      AND baleia_workspace_member_role(g.workspace_id, @user_id::uuid) IS NOT NULL
-) AS granted;
-
 -- name: CatalogGrantedToAgent :one
 -- True when the catalog is granted to a workspace the agent is bound to and the
 -- agent's owner is still a member of that workspace (#59).
@@ -151,13 +150,6 @@ SELECT EXISTS (
       AND baleia_workspace_member_role(g.workspace_id, @user_id::uuid) IS NOT NULL
 ) AS granted;
 
--- name: ListCatalogsGrantedToUser :many
--- The catalogs of one connection that a user reaches through workspace grants.
-SELECT DISTINCT c.* FROM catalogs c
-JOIN workspace_catalog_grants g ON g.catalog_id = c.id
-WHERE c.connection_id = @connection_id::uuid
-  AND baleia_workspace_member_role(g.workspace_id, @user_id::uuid) IS NOT NULL;
-
 -- name: ListGrantedCatalogsOfWorkspace :many
 SELECT c.*, cc.name AS connection_name, cc.type AS connection_type
 FROM workspace_catalog_grants g
@@ -165,6 +157,41 @@ JOIN catalogs c ON c.id = g.catalog_id
 JOIN catalog_connections cc ON cc.id = c.connection_id
 WHERE g.workspace_id = $1 AND c.enabled
 ORDER BY c.trino_catalog_name;
+
+-- name: CreateCatalogGrantRequest :one
+-- A pending offer (initiated_by_side 'catalog') or request ('workspace'). The
+-- pair is unique: a new initiation from the other side flips the side.
+INSERT INTO catalog_grant_requests (workspace_id, catalog_id, initiated_by_side, requested_by)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (workspace_id, catalog_id) DO UPDATE
+SET initiated_by_side = EXCLUDED.initiated_by_side,
+    requested_by = EXCLUDED.requested_by,
+    requested_at = now()
+RETURNING *;
+
+-- name: GetCatalogGrantRequest :one
+SELECT * FROM catalog_grant_requests WHERE workspace_id = $1 AND catalog_id = $2;
+
+-- name: DeleteCatalogGrantRequest :execrows
+DELETE FROM catalog_grant_requests WHERE workspace_id = $1 AND catalog_id = $2;
+
+-- name: ListCatalogGrantRequestsForWorkspace :many
+SELECT r.workspace_id, r.catalog_id, r.initiated_by_side, r.requested_by, r.requested_at,
+       c.name AS catalog_name, COALESCE(c.trino_catalog_name, c.name) AS engine_catalog_name,
+       cc.name AS connection_name
+FROM catalog_grant_requests r
+JOIN catalogs c ON c.id = r.catalog_id
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE r.workspace_id = $1
+ORDER BY r.requested_at;
+
+-- name: ListCatalogGrantRequestsForCatalog :many
+SELECT r.workspace_id, r.catalog_id, r.initiated_by_side, r.requested_by, r.requested_at,
+       w.name AS workspace_name, w.type AS workspace_type
+FROM catalog_grant_requests r
+JOIN workspaces w ON w.id = r.workspace_id
+WHERE r.catalog_id = $1
+ORDER BY r.requested_at;
 
 -- name: PersonalWorkspaceID :one
 SELECT id FROM workspaces WHERE type = 'personal' AND owner_user_id = $1 ORDER BY created_at LIMIT 1;

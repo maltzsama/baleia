@@ -29,10 +29,8 @@
 	import Drawer from '$lib/ui/Drawer.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
-	import Input from '$lib/ui/Input.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
-	import { toasts } from '$lib/ui/toast.svelte';
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
 	import EngineBadge from '$lib/ui/patterns/EngineBadge.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
@@ -51,10 +49,6 @@
 	let runs = $state<ReconcileRun[]>([]);
 	let loading = $state(true);
 	let error = $state('');
-
-	let externalUrl = $state('');
-	let savingUrl = $state(false);
-	let urlError = $state('');
 
 	let testOpen = $state(false);
 	let testing = $state(false);
@@ -93,7 +87,6 @@
 		error = '';
 		try {
 			engine = await getEngine(engineId);
-			externalUrl = engine.external_url ?? '';
 			impact = await engineImpact(engineId);
 			bindings = await engineBindings(engineId);
 			if (engine.class === 'federated') {
@@ -110,26 +103,8 @@
 	async function refresh() {
 		if (!engineId) return;
 		engine = await getEngine(engineId);
-		externalUrl = engine.external_url ?? '';
 		impact = await engineImpact(engineId);
 		bindings = await engineBindings(engineId);
-	}
-
-	// saveExternalUrl stores the address BI clients reach (#533). An empty
-	// value clears it.
-	async function saveExternalUrl() {
-		if (!engineId) return;
-		savingUrl = true;
-		urlError = '';
-		try {
-			engine = await updateEngine(engineId, { external_url: externalUrl.trim() });
-			externalUrl = engine.external_url ?? '';
-			toasts.success(m.engines_external_url_saved());
-		} catch (e) {
-			urlError = e instanceof Error ? e.message : String(e);
-		} finally {
-			savingUrl = false;
-		}
 	}
 
 	function selectTab(next: Tab) {
@@ -358,20 +333,6 @@
 							<dd class="font-mono text-danger">{engine.health.error_code}</dd>
 						{/if}
 					</dl>
-					<form
-						class="mt-4 flex flex-col gap-2 border-t border-border pt-3"
-						onsubmit={(e) => {
-							e.preventDefault();
-							void saveExternalUrl();
-						}}
-					>
-						<Input label={m.engines_external_url()} bind:value={externalUrl} />
-						<p class="text-[11px] text-text-muted">{m.engines_external_url_description()}</p>
-						<div class="flex items-center gap-2">
-							<Button type="submit" size="sm" loading={savingUrl}>{m.common_save()}</Button>
-							{#if urlError}<span class="text-xs text-red-600">{urlError}</span>{/if}
-						</div>
-					</form>
 				</div>
 				<div class="rounded-lg border border-border bg-bg-panel p-4">
 					<h2 class="text-[13px] font-semibold">{m.engines_detail_guarantees()}</h2>

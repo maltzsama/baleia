@@ -1523,6 +1523,10 @@ components:
           default: iceberg
           pattern: '^[a-z][a-z0-9_]{0,62}$'
         enabled:             { type: boolean, default: true }
+        discoverable:
+          type: boolean
+          default: false
+          description: "The owner marked the catalog discoverable so workspace admins can find and request it (default off: a catalog name is itself information)."
         sync_status:
           type: string
           enum: [pending, synced, error, draining, disabled]
@@ -1628,6 +1632,51 @@ components:
         granted_by: { type: string, format: uuid, nullable: true }
         granted_at: { type: string, format: date-time }
 
+    CatalogGrantItem:
+      type: object
+      required: [workspace_id, catalog_id, state]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        state: { type: string, enum: [active, pending] }
+        initiated_by_side: { type: string, enum: [catalog, workspace], nullable: true }
+        requested_by: { type: string, format: uuid, nullable: true }
+        granted_by: { type: string, format: uuid, nullable: true }
+        granted_at: { type: string, format: date-time, nullable: true }
+        requested_at: { type: string, format: date-time, nullable: true }
+        catalog_name: { type: string }
+        engine_catalog_name: { type: string, nullable: true }
+        connection_name: { type: string, nullable: true }
+        workspace_name: { type: string, nullable: true }
+        allowed_actions:
+          type: array
+          items: { type: string }
+
+    CatalogGrantRequest:
+      type: object
+      required: [workspace_id, catalog_id]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+
+    GrantableWorkspace:
+      type: object
+      required: [id, name, type]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        team_name: { type: string, nullable: true }
+
+    RequestableCatalog:
+      type: object
+      required: [id, name, connection_name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        connection_name: { type: string }
+
     BindingProjection:
       type: object
       required: [connector, properties]
@@ -1664,6 +1713,14 @@ components:
           additionalProperties: { type: string }
           description: Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties.
         enabled:            { type: boolean, default: true }
+        share_with_workspace_id:
+          type: string
+          format: uuid
+          description: >-
+            Workspace to grant the new catalog to as an active grant (the
+            connection wizard's "Share with", preselected to the current
+            workspace). Omitted, the catalog is created unshared; the owner
+            shares it later from the catalog's Access screen.
 
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
@@ -1811,11 +1868,6 @@ components:
           format: int64
           nullable: true
           description: "Estimated bytes above which a Trino SELECT is heavy; cost routing does nothing while this is null (#550)"
-        external_url:
-          type: string
-          format: uri
-          nullable: true
-          description: "Address BI clients reach, which may differ from the in-cluster URL (#533). Null when not set."
         version:
           type: string
           nullable: true
@@ -1993,10 +2045,6 @@ components:
         cost_routing_enabled: { type: boolean }
         cost_threshold_bytes: { type: integer, format: int64, nullable: true, minimum: 1 }
         clear_cost_threshold: { type: boolean, description: "Set cost_threshold_bytes to null; cannot be combined with cost_threshold_bytes" }
-        external_url:
-          type: string
-          nullable: true
-          description: "Address BI clients reach; an empty string clears it (#533)"
 
     AuditEvent:
       type: object
@@ -6927,6 +6975,130 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /catalog-grants:
+    get:
+      tags: [CatalogGrants]
+      operationId: listCatalogGrantItems
+      summary: "Active grants and pending requests the caller manages"
+      parameters:
+        - name: workspace_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: catalog_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: "Grants and pending requests"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogGrantItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [CatalogGrants]
+      operationId: createCatalogGrant
+      summary: "Offer, request or directly grant a catalog to a workspace, decided by the caller's rights on each side"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogGrantRequest" }
+      responses:
+        "200":
+          description: "The grant (active) or request (pending)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogGrantItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalog-grants/{workspace_id}/{catalog_id}:
+    parameters:
+      - name: workspace_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [CatalogGrants]
+      operationId: deleteCatalogGrant
+      summary: "Decline a pending request or unlink an active grant"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalog-grants/{workspace_id}/{catalog_id}/approve:
+    parameters:
+      - name: workspace_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [CatalogGrants]
+      operationId: approveCatalogGrant
+      summary: "Approve a pending offer or request as the other party"
+      responses:
+        "200":
+          description: "The now-active grant"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogGrantItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{catalog_id}/grantable-workspaces:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [CatalogGrants]
+      operationId: listGrantableWorkspaces
+      summary: "Workspaces a catalog owner may offer the catalog to"
+      responses:
+        "200":
+          description: "Workspaces (name and team only)"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/GrantableWorkspace" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/requestable-catalogs:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [CatalogGrants]
+      operationId: listRequestableCatalogs
+      summary: "Discoverable catalogs a workspace admin may request"
+      responses:
+        "200":
+          description: "Discoverable catalogs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RequestableCatalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ── Catalog Connections ───────────────────────────────────────
   /connection-providers:
     get:
@@ -7450,6 +7622,35 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/CatalogGrant" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{catalog_id}/discoverable:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Catalogs]
+      operationId: setCatalogDiscoverable
+      summary: "Mark the catalog discoverable so workspace admins can find and request it"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [discoverable]
+              properties:
+                discoverable: { type: boolean }
+      responses:
+        "200":
+          description: "The catalog"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Catalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /catalog-connections/{id}/impact:
@@ -8018,44 +8219,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/EngineQueues" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
-
-  /engines/{id}/bi/{tool}:
-    parameters:
-      - $ref: "#/components/parameters/PathId"
-      - name: tool
-        in: path
-        required: true
-        schema: { type: string, enum: [tableau, powerbi] }
-      - name: catalog
-        in: query
-        required: true
-        schema: { type: string }
-      - name: schema
-        in: query
-        schema: { type: string }
-      - name: table
-        in: query
-        required: true
-        schema: { type: string }
-    get:
-      tags: [Engines]
-      operationId: getEngineBIFile
-      summary: "Download a Tableau (.tds) or Power BI (.pbids) data source"
-      description: >
-        Points the BI tool at the engine, catalog, schema and table (#560). The
-        file carries no credentials: the user signs in from the tool, which
-        connects directly to the engine (ADR 0001). An engine without an
-        external_url cannot produce the file.
-      responses:
-        "200":
-          description: "The data source file"
-          content:
-            text/plain:
-              schema: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }

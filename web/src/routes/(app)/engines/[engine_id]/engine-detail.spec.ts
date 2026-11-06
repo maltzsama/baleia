@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/svelte';
+import { screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { http, server } from '../../../../test/server';
 import { makeEngine, makeMe } from '../../../../test/factories';
@@ -19,8 +19,7 @@ describe('engine detail', () => {
 		localStorage.clear();
 	});
 
-	it('saves the external URL', async () => {
-		let patched: Record<string, unknown> | null = null;
+	it('renders the engine detail', async () => {
 		server.use(
 			http.get('/engines/{id}', ({ response }) =>
 				response(200).json(makeEngine({ id: ENGINE, class: 'direct' }))
@@ -36,26 +35,10 @@ describe('engine detail', () => {
 					running_executions: 0
 				})
 			),
-			http.get('/engines/{id}/bindings', ({ response }) => response(200).json([])),
-			http.patch('/engines/{id}', async ({ request, response }) => {
-				patched = (await request.json()) as Record<string, unknown>;
-				return response(200).json(
-					makeEngine({
-						id: ENGINE,
-						class: 'direct',
-						external_url: 'https://trino.example.com:8443'
-					})
-				);
-			})
+			http.get('/engines/{id}/bindings', ({ response }) => response(200).json([]))
 		);
 		renderPage(EngineDetailPage, { me: makeMe(), url: `/engines/${ENGINE}` });
 
-		const input = await screen.findByLabelText('External URL');
-		await fireEvent.input(input, { target: { value: 'https://trino.example.com:8443' } });
-		await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-		await waitFor(() =>
-			expect(patched).toMatchObject({ external_url: 'https://trino.example.com:8443' })
-		);
+		expect(await screen.findByText('Guarantees')).toBeTruthy();
 	});
 });

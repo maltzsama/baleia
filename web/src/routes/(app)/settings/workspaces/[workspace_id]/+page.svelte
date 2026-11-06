@@ -49,6 +49,15 @@
 	let granting = $state(false);
 	let grantError = $state('');
 
+	// Two-party flow: pending offers/requests for this workspace, and the
+	// discoverable catalogs a workspace admin may request.
+	let pending = $state<components['schemas']['CatalogGrantItem'][]>([]);
+	let requestOpen = $state(false);
+	let requestableCatalogs = $state<components['schemas']['RequestableCatalog'][]>([]);
+	let requestCatalogId = $state('');
+	let requesting = $state(false);
+	let requestError = $state('');
+
 	let refreshError = $state('');
 	let deleteOpen = $state(false);
 	let revokeOpen = $state(false);
@@ -78,14 +87,16 @@
 			}
 			name = ws.name;
 			description = ws.description ?? '';
-			const [targetRes, grantRes, impactRes] = await Promise.all([
+			const [targetRes, grantRes, impactRes, pendingRes] = await Promise.all([
 				client.GET('/workspaces/{id}/targets', { params: { path: { id: workspaceId } } }),
 				client.GET('/workspaces/{id}/catalog-access', { params: { path: { id: workspaceId } } }),
-				client.GET('/workspaces/{id}/impact', { params: { path: { id: workspaceId } } })
+				client.GET('/workspaces/{id}/impact', { params: { path: { id: workspaceId } } }),
+				client.GET('/catalog-grants', { params: { query: { workspace_id: workspaceId } } })
 			]);
 			targets = targetRes.data ?? [];
 			grants = grantRes.data ?? [];
 			impact = impactRes.data ?? null;
+			pending = (pendingRes.data ?? []).filter((item) => item.state === 'pending');
 			targetBindingId = currentTarget?.binding_id ?? '';
 			targetSchema = currentTarget ? '' : (ws.default_schema ?? '');
 		} catch (e) {
@@ -213,6 +224,47 @@
 			params: { path: { id: ws.id, catalog_id: revokeCatalog.catalog_id } }
 		});
 		if (err) throw new Error('Could not revoke access');
+		await load();
+	}
+
+	async function openRequest() {
+		requestError = '';
+		requestCatalogId = '';
+		requestOpen = true;
+		const { data } = await client.GET('/workspaces/{id}/requestable-catalogs', {
+			params: { path: { id: workspaceId } }
+		});
+		requestableCatalogs = data ?? [];
+	}
+
+	async function submitRequest() {
+		if (!ws || !requestCatalogId) return;
+		requesting = true;
+		requestError = '';
+		try {
+			const { error: err } = await client.POST('/catalog-grants', {
+				body: { workspace_id: ws.id, catalog_id: requestCatalogId }
+			});
+			if (err) throw new Error('Could not request the catalog');
+			requestOpen = false;
+			await load();
+		} catch (e) {
+			requestError = e instanceof Error ? e.message : String(e);
+		} finally {
+			requesting = false;
+		}
+	}
+
+	async function actOnPending(item: components['schemas']['CatalogGrantItem'], approve: boolean) {
+		if (approve) {
+			await client.POST('/catalog-grants/{workspace_id}/{catalog_id}/approve', {
+				params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+			});
+		} else {
+			await client.DELETE('/catalog-grants/{workspace_id}/{catalog_id}', {
+				params: { path: { workspace_id: item.workspace_id, catalog_id: item.catalog_id } }
+			});
+		}
 		await load();
 	}
 
@@ -386,11 +438,44 @@
 				<p class="text-[12px] text-slate-600 dark:text-slate-300">
 					{m.settings_workspaces_detail_catalogs_granted_to_this_workspace_revoking()}
 				</p>
-				<Button variant="primary" onclick={openGrant}
-					>{m.settings_workspaces_detail_grant_access()}</Button
-				>
+				<div class="flex items-center gap-2">
+					<Button variant="secondary" onclick={openRequest}
+						>{m.settings_workspaces_detail_request_catalog()}</Button
+					>
+					<Button variant="primary" onclick={openGrant}
+						>{m.settings_workspaces_detail_grant_access()}</Button
+					>
+				</div>
 			</div>
-			{#if grants.length === 0}
+			{#if pending.length > 0}
+				<h2 class="mb-2 text-[12px] font-semibold">{m.settings_workspaces_detail_pending()}</h2>
+				<div class="mb-3 overflow-x-auto rounded-lg border border-border bg-bg-panel">
+					<table class="w-full text-left text-[11px]">
+						<tbody>
+							{#each pending as item (item.catalog_id)}
+								<tr class="border-b border-border/60 last:border-b-0">
+									<td class="px-3 py-1.5">{item.catalog_name ?? item.catalog_id}</td>
+									<td class="px-3 py-1.5 text-right">
+										<button
+											type="button"
+											class="mr-3 hover:underline"
+											onclick={() => actOnPending(item, true)}
+											>{m.settings_workspaces_detail_approve()}</button
+										>
+										<button
+											type="button"
+											class="text-danger hover:underline"
+											onclick={() => actOnPending(item, false)}
+											>{m.settings_workspaces_detail_decline()}</button
+										>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+			{#if grants.length === 0 && pending.length === 0}
 				<EmptyState
 					title={m.settings_workspaces_detail_no_catalog_grants()}
 					description={m.settings_workspaces_detail_grant_a_catalog_so_the_workspace()}
@@ -466,6 +551,33 @@
 			<Button onclick={() => (grantOpen = false)} disabled={granting}>{m.common_cancel()}</Button>
 			<Button variant="primary" loading={granting} disabled={granting} onclick={submitGrant}
 				>{m.common_grant()}</Button
+			>
+		</div>
+	{/snippet}
+</Modal>
+
+<Modal bind:open={requestOpen} title={m.settings_workspaces_detail_request_catalog()}>
+	<div class="flex flex-col gap-3 text-[12px]">
+		<Select
+			label={m.common_catalog()}
+			bind:value={requestCatalogId}
+			options={requestableCatalogs.map((catalog) => ({ value: catalog.id, label: catalog.name }))}
+		/>
+		{#if requestableCatalogs.length === 0}
+			<p class="text-text-muted">{m.settings_workspaces_detail_no_requestable_catalogs()}</p>
+		{/if}
+		{#if requestError}<p class="text-danger" role="alert">{requestError}</p>{/if}
+	</div>
+	{#snippet footer()}
+		<div class="flex justify-end gap-2">
+			<Button onclick={() => (requestOpen = false)} disabled={requesting}
+				>{m.common_cancel()}</Button
+			>
+			<Button
+				variant="primary"
+				loading={requesting}
+				disabled={requesting || !requestCatalogId}
+				onclick={submitRequest}>{m.settings_workspaces_detail_request_catalog()}</Button
 			>
 		</div>
 	{/snippet}

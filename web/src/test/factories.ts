@@ -276,6 +276,7 @@ export function makeCatalog(overrides: Partial<Catalog> = {}): Catalog {
 		warehouse: 'analytics',
 		connector: 'testdb',
 		enabled: true,
+		discoverable: false,
 		metadata_sync_status: 'finished',
 		metadata_synced_at: '2026-01-01T00:00:00Z',
 		allowed_actions: ['view', 'update', 'delete'],
