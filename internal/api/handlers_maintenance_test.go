@@ -125,6 +125,7 @@ func newMaintenanceFixture(t *testing.T, bindingMode string) *maintenanceFixture
 		engines:  maintEngines{},
 		audit:    f.audit,
 		settings: SettingsFromConfig(&config.Config{IcebergMaintenanceMinRetention: time.Hour}),
+		temporalClient: &fakeTemporalClient{},
 	})
 	return f
 }
@@ -388,7 +389,7 @@ func TestTableMaintenance_Analyze(t *testing.T) {
 	t.Parallel()
 	f := newMaintenanceFixture(t, "managed")
 	resp, err := f.h.AnalyzeTableHealth(f.admin, AnalyzeTableHealthRequestObject{CatalogId: f.catalog(), Namespace: "cdc", Table: "orders"})
-	if err != nil || !isType[AnalyzeTableHealth202Response](resp) {
+	if err != nil || !isType[AnalyzeTableHealth202JSONResponse](resp) {
 		t.Fatalf("analyze table = %T, %v", resp, err)
 	}
 	if _, err := f.pool.Exec(context.Background(), `UPDATE catalogs SET enabled = false WHERE id = $1`, f.catalogID); err != nil {

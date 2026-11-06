@@ -498,7 +498,8 @@ func (q *Queries) ListEnabledCatalogs(ctx context.Context) ([]Catalog, error) {
 }
 
 const listEnabledIcebergCatalogs = `-- name: ListEnabledIcebergCatalogs :many
-SELECT c.id, c.connection_id, c.name, COALESCE(c.trino_catalog_name, '')::text AS trino_catalog_name
+SELECT c.id, c.connection_id, c.name, COALESCE(c.trino_catalog_name, '')::text AS trino_catalog_name,
+       c.source_ref, c.warehouse
 FROM catalogs c
 JOIN catalog_connections cc ON cc.id = c.connection_id
 WHERE c.enabled AND c.origin = 'source' AND cc.type IN ('polaris', 'iceberg', 'nessie')
@@ -510,6 +511,8 @@ type ListEnabledIcebergCatalogsRow struct {
 	ConnectionID     pgtype.UUID `json:"connection_id"`
 	Name             string      `json:"name"`
 	TrinoCatalogName string      `json:"trino_catalog_name"`
+	SourceRef        *string     `json:"source_ref"`
+	Warehouse        *string     `json:"warehouse"`
 }
 
 // Enabled catalogs backed by an Iceberg-family catalog manager (Polaris,
@@ -528,6 +531,8 @@ func (q *Queries) ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabled
 			&i.ConnectionID,
 			&i.Name,
 			&i.TrinoCatalogName,
+			&i.SourceRef,
+			&i.Warehouse,
 		); err != nil {
 			return nil, err
 		}

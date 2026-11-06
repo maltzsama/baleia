@@ -63,11 +63,12 @@ func TestLensTableHealth_FanOut(t *testing.T) {
 
 	env.OnActivity(activities.ListEnabledIcebergCatalogs, mock.Anything, mock.Anything).
 		Return([]activities.EnabledIcebergCatalog{
-			// cat1 and cat3 share a name on two connections: their rounds
-			// still get distinct child workflow IDs.
-			{ID: "id-1", CatalogConnectionID: "conn-1", Catalog: "lake"},
-			{ID: "id-2", CatalogConnectionID: "conn-2", Catalog: "cat2"},
-			{ID: "id-3", CatalogConnectionID: "conn-3", Catalog: "lake"},
+			// cat1 and cat3 share a display name on two connections: their
+			// rounds still get distinct child workflow IDs. SourceRef is the
+			// warehouse the reader lists; the pass matches on it.
+			{ID: "id-1", CatalogConnectionID: "conn-1", Catalog: "lake", SourceRef: "lake-a"},
+			{ID: "id-2", CatalogConnectionID: "conn-2", Catalog: "cat2", SourceRef: "cat2"},
+			{ID: "id-3", CatalogConnectionID: "conn-3", Catalog: "lake", SourceRef: "lake-b"},
 		}, nil)
 
 	var analyzed []activities.LensAnalyzeTableHealthParams

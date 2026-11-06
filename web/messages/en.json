@@ -2365,6 +2365,7 @@
 	"maintenance_fix_fields": "Fix the highlighted fields.",
 	"maintenance_run_started": "Maintenance started: {operation}",
 	"maintenance_analysis_started": "Analysis started; results show up in a few minutes.",
+	"maintenance_analysis_timeout": "Analysis is still pending after several minutes and no rows appeared.",
 	"maintenance_revision": "Revision {revision}",
 	"maintenance_not_maintained": "This table has no maintenance parameters. Rounds only report what it needs; set parameters to have them run.",
 	"maintenance_mode": "Mode",

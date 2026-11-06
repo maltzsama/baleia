@@ -7,10 +7,12 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.temporal.io/sdk/client"
 )
 
 type attentionFixture struct {
@@ -298,5 +300,32 @@ func TestAttention_LineageBroken(t *testing.T) {
 
 	if hasKind(f.list(t, f.stranger), LineageBroken) {
 		t.Fatal("stranger sees another workspace's lineage_broken")
+	}
+}
+
+func TestScheduleStaleItem(t *testing.T) {
+	t.Parallel()
+	old := time.Now().Add(-4 * time.Hour)
+	recent := time.Now()
+	cases := []struct {
+		name string
+		id   string
+		desc *client.ScheduleDescription
+		want bool
+	}{
+		{"stale table-health", schedules.LensTableHealth, &client.ScheduleDescription{Info: client.ScheduleInfo{RecentActions: []client.ScheduleActionResult{{ActualTime: old}}}}, true},
+		{"fresh table-health", schedules.LensTableHealth, &client.ScheduleDescription{Info: client.ScheduleInfo{RecentActions: []client.ScheduleActionResult{{ActualTime: recent}}}}, false},
+		{"unknown cadence", "other-schedule", &client.ScheduleDescription{Info: client.ScheduleInfo{RecentActions: []client.ScheduleActionResult{{ActualTime: old}}}}, false},
+		{"no actions", schedules.LensTableHealth, &client.ScheduleDescription{}, false},
+		{"no actions, old schedule", schedules.LensTableHealth, &client.ScheduleDescription{Info: client.ScheduleInfo{CreatedAt: old}}, true},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			if got := scheduleStaleItem(c.id, c.desc); c.want != (got != nil) {
+				t.Fatalf("scheduleStaleItem(%q) = %v, want nil=%v", c.id, got, !c.want)
+			}
+		})
 	}
 }

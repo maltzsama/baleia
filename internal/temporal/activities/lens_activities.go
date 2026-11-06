@@ -237,8 +237,11 @@ type ListEnabledIcebergCatalogsParams struct{}
 type EnabledIcebergCatalog struct {
 	ID                  string
 	CatalogConnectionID string
-	Catalog             string
-	TrinoCatalogName    string
+	// Catalog is the Baleia display name; SourceRef is the catalog's reference
+	// inside its connection (the warehouse), which the metadata reader lists.
+	Catalog          string
+	SourceRef        string
+	TrinoCatalogName string
 }
 
 func ListEnabledIcebergCatalogs(ctx context.Context, params ListEnabledIcebergCatalogsParams) ([]EnabledIcebergCatalog, error) {
@@ -253,10 +256,17 @@ func (a *Activities) listEnabledIcebergCatalogs(ctx context.Context) ([]EnabledI
 
 	out := make([]EnabledIcebergCatalog, 0, len(rows))
 	for _, r := range rows {
+		src := r.Name
+		if r.SourceRef != nil && *r.SourceRef != "" {
+			src = *r.SourceRef
+		} else if r.Warehouse != nil && *r.Warehouse != "" {
+			src = *r.Warehouse
+		}
 		out = append(out, EnabledIcebergCatalog{
 			ID:                  r.ID.String(),
 			CatalogConnectionID: r.ConnectionID.String(),
 			Catalog:             r.Name,
+			SourceRef:           src,
 			TrinoCatalogName:    r.TrinoCatalogName,
 		})
 	}
@@ -265,6 +275,21 @@ func (a *Activities) listEnabledIcebergCatalogs(ctx context.Context) ([]EnabledI
 
 func LensAnalyzeTableHealth(ctx context.Context, params LensAnalyzeTableHealthParams) error {
 	return defaultActivities.lensAnalyzeTableHealth(ctx, params)
+}
+
+// resolveCatalogRef maps a catalog source ref to the reader's catalog name; a
+// single-catalog reader serves its one catalog regardless of the name (like the
+// metadata sync's resolveCatalog).
+func resolveCatalogRef(catalogs []connections.CatalogRef, want string) (string, error) {
+	for _, c := range catalogs {
+		if c.Name == want {
+			return c.Name, nil
+		}
+	}
+	if len(catalogs) == 1 {
+		return catalogs[0].Name, nil
+	}
+	return "", fmt.Errorf("%w: catalog %q", connections.ErrNotFound, want)
 }
 
 func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnalyzeTableHealthParams) error {
@@ -321,13 +346,33 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 
 	h := healthPass{a: a, catalogID: catalogID, connID: connID, now: time.Now()}
 	h.prepare(ctx)
+
+	// Resolve the requested catalog to the reader's catalog name; a mismatch
+	// must not silently visit nothing (#750).
+	target := params.Catalog
+	if target != "" {
+		resolved, err := resolveCatalogRef(catalogs, target)
+		if err != nil {
+			return err
+		}
+		target = resolved
+	}
+	var recorded int
+	var firstErr error
+	recordErr := func(err error) {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+
 	for _, cat := range catalogs {
-		if params.Catalog != "" && cat.Name != params.Catalog {
+		if target != "" && cat.Name != target {
 			continue
 		}
 
 		namespaces, err := allNamespaces(ctx, reader, cat.Name)
 		if err != nil {
+			recordErr(fmt.Errorf("namespaces of catalog %s: %w", cat.Name, err))
 			continue
 		}
 
@@ -338,6 +383,7 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 			}
 			tables, err := allTables(ctx, reader, cat.Name, ns)
 			if err != nil {
+				recordErr(fmt.Errorf("tables of %s.%s: %w", cat.Name, nsName, err))
 				continue
 			}
 
@@ -347,15 +393,27 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 				}
 				meta, err := reader.LoadTable(ctx, tbl)
 				if err != nil {
+					recordErr(fmt.Errorf("table %s.%s.%s: %w", cat.Name, nsName, tbl.Name, err))
 					continue
 				}
 				if err := h.record(ctx, cat.Name, nsName, tbl.Name, meta); err != nil {
 					return err
 				}
+				recorded++
 			}
 		}
 	}
 
+	// A pass that errored its way through every enumeration must not end green
+	// with zero rows (#750).
+	if recorded == 0 && firstErr != nil {
+		return fmt.Errorf("table health pass recorded no tables: %w", firstErr)
+	}
+	// A partial pass (some tables recorded, some failed) is logged so the
+	// skipped tables are not silently dropped.
+	if firstErr != nil {
+		a.logger.WarnContext(ctx, "table health pass had failures", "catalog", params.Catalog, "err", firstErr)
+	}
 	return nil
 }
 

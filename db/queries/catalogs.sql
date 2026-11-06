@@ -27,7 +27,8 @@ SELECT * FROM catalogs WHERE enabled AND origin = 'source' ORDER BY name;
 -- name: ListEnabledIcebergCatalogs :many
 -- Enabled catalogs backed by an Iceberg-family catalog manager (Polaris,
 -- Iceberg REST, Nessie), used by the Lens table-health fan-out.
-SELECT c.id, c.connection_id, c.name, COALESCE(c.trino_catalog_name, '')::text AS trino_catalog_name
+SELECT c.id, c.connection_id, c.name, COALESCE(c.trino_catalog_name, '')::text AS trino_catalog_name,
+       c.source_ref, c.warehouse
 FROM catalogs c
 JOIN catalog_connections cc ON cc.id = c.connection_id
 WHERE c.enabled AND c.origin = 'source' AND cc.type IN ('polaris', 'iceberg', 'nessie')

@@ -9066,7 +9066,16 @@ paths:
       operationId: analyzeCatalogTableHealth
       summary: "Analyze the health of every table of an Iceberg catalog now"
       responses:
-        "202": { description: "Analysis started" }
+        "202":
+          description: "Analysis started"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [analysis_id]
+                properties:
+                  analysis_id:
+                    type: string
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -9082,7 +9091,16 @@ paths:
       operationId: analyzeTableHealth
       summary: "Analyze the health of one Iceberg table now"
       responses:
-        "202": { description: "Analysis started" }
+        "202":
+          description: "Analysis started"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [analysis_id]
+                properties:
+                  analysis_id:
+                    type: string
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
