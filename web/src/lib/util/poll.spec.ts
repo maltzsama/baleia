@@ -35,4 +35,18 @@ describe('poll', () => {
 		});
 		await expect(done).resolves.toBe('timeout');
 	});
+
+	it('chooses the delay from the last value with intervalFor', async () => {
+		const seen: number[] = [];
+		const { done } = poll(async () => seen.length + 1, {
+			until: (value) => value >= 3,
+			intervalFor: (value) => {
+				seen.push(value ?? 0);
+				return 1;
+			},
+			maxDurationMs: 1000
+		});
+		await expect(done).resolves.toBe(3);
+		expect(seen).toEqual([1, 2]);
+	});
 });

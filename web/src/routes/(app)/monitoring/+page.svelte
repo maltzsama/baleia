@@ -128,8 +128,8 @@
 		}
 	}
 
-	async function loadQueries() {
-		if (!engineId) return;
+	async function loadQueries(): Promise<MonitoringQueryPage> {
+		if (!engineId) return queryPage;
 		queriesLoading = true;
 		queriesError = '';
 		try {
@@ -144,6 +144,7 @@
 		} finally {
 			queriesLoading = false;
 		}
+		return queryPage;
 	}
 
 	async function loadCatalogList() {
@@ -199,7 +200,17 @@
 		} else if (tab === 'queries') {
 			await loadQueries();
 			polls.push(
-				poll(loadQueries, { until: () => false, intervals: [10_000], maxDurationMs: 3_600_000 })
+				poll(loadQueries, {
+					until: () => false,
+					// Fast while queries are running, slower when the list is idle
+					// (#733). This only lowers the request rate; the payload is the
+					// same (a real fix needs a server push/event stream).
+					intervalFor: (page) =>
+						page?.items.some((query) => query.state === 'running' || query.state === 'queued')
+							? 10_000
+							: 30_000,
+					maxDurationMs: 3_600_000
+				})
 			);
 		} else {
 			await loadCatalogList();

@@ -5,6 +5,8 @@ export type PollStatus = 'timeout' | 'stopped';
 export type PollOptions<T> = {
 	until: (value: T) => boolean;
 	intervals?: number[];
+	/** Overrides `intervals`; receives the last successful value. */
+	intervalFor?: (value: T | undefined) => number;
 	maxDurationMs?: number;
 	onValue?: (value: T) => void;
 };
@@ -25,6 +27,7 @@ export function poll<T>(
 	let finished = false;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let controller: AbortController | undefined;
+	let lastValue: T | undefined;
 	let resolveDone!: (value: T | PollStatus) => void;
 
 	const done = new Promise<T | PollStatus>((resolve) => {
@@ -48,7 +51,9 @@ export function poll<T>(
 
 	function schedule(attempt: number) {
 		if (finished) return;
-		const delay = intervals[Math.min(attempt, intervals.length - 1)];
+		const delay = opts.intervalFor
+			? opts.intervalFor(lastValue)
+			: intervals[Math.min(attempt, intervals.length - 1)];
 		timer = setTimeout(() => void tick(attempt + 1), delay);
 	}
 
@@ -65,6 +70,7 @@ export function poll<T>(
 		controller = new AbortController();
 		try {
 			const value = await fn(controller.signal);
+			lastValue = value;
 			opts.onValue?.(value);
 			if (opts.until(value)) {
 				finish(value);
