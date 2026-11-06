@@ -49,12 +49,19 @@
 		})}`;
 	});
 
+	// Reload the spaces once per workspace; a save or a model switch only needs
+	// the model itself (#735).
+	let contentLoadedFor = '';
+
 	async function load() {
 		if (!workspaceId || !modelId) return;
 		loading = true;
 		error = '';
 		try {
-			await savedQueries.reload(workspaceId);
+			if (contentLoadedFor !== workspaceId) {
+				await savedQueries.reload(workspaceId);
+				contentLoadedFor = workspaceId;
+			}
 			model = await getModel(workspaceId, modelId);
 			editorKey++;
 		} catch (e) {
