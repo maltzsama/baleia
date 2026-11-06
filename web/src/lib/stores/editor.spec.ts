@@ -76,6 +76,37 @@ describe('editor store', () => {
 		expect(tab.savedSql).toBe('SELECT 2');
 	});
 
+	it('marks a tab dirty when the target changes', () => {
+		const tab = editor.openSavedQuery(query);
+		editor.setTarget(tab.id, 'b1', 's1', true);
+		expect(tab.dirty).toBe(true);
+	});
+
+	it('keeps a tab dirty when the target changed and the SQL is reverted', () => {
+		const tab = editor.openSavedQuery(query);
+		editor.setTarget(tab.id, 'b1', 's1', true);
+		editor.updateSql(tab.id, 'SELECT 2');
+		editor.updateSql(tab.id, query.sql);
+		expect(tab.dirty).toBe(true);
+	});
+
+	it('clears dirty when the target is set back to the saved value', () => {
+		const tab = editor.openSavedQuery(query);
+		editor.setTarget(tab.id, 'b1', 's1', true);
+		expect(tab.dirty).toBe(true);
+		editor.setTarget(tab.id, '', '', true);
+		expect(tab.dirty).toBe(false);
+	});
+
+	it('does not mark a fresh tab dirty from the automatic default target', () => {
+		const tab = editor.addTab();
+		editor.setTarget(tab.id, 'b1', 's1');
+		expect(tab.dirty).toBe(false);
+		editor.updateSql(tab.id, 'SELECT 1');
+		editor.updateSql(tab.id, '');
+		expect(tab.dirty).toBe(false);
+	});
+
 	it('hydrates the drafts of a user and workspace', async () => {
 		vi.mocked(loadDrafts).mockResolvedValueOnce([
 			{

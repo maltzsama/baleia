@@ -175,11 +175,22 @@ function createEditorStore() {
 		tab.readOnly = false;
 	}
 
+	// A tab is dirty when it differs from its saved snapshot in SQL, target or
+	// schema. Every mutation recomputes this so a target change is never lost
+	// when the SQL is reverted (and vice-versa).
+	function isDirty(tab: EditorTab): boolean {
+		return (
+			tab.sql !== tab.savedSql ||
+			tab.bindingId !== tab.savedBindingId ||
+			tab.schema !== tab.savedSchema
+		);
+	}
+
 	function updateSql(id: string, sql: string) {
 		const tab = tabs.find((item) => item.id === id);
 		if (!tab) return;
 		tab.sql = sql;
-		tab.dirty = sql !== tab.savedSql;
+		tab.dirty = isDirty(tab);
 	}
 
 	/** Asks the active tab's editor to insert text at the cursor. */
@@ -197,7 +208,14 @@ function createEditorStore() {
 		if (!tab) return;
 		tab.bindingId = bindingId;
 		tab.schema = schema;
-		if (userChanged) tab.dirty = true;
+		if (userChanged) {
+			tab.dirty = isDirty(tab);
+		} else if (tab.savedRef === null) {
+			// The automatic default becomes the tab's baseline, so a fresh tab
+			// is not "dirty" merely from the workspace's default target.
+			tab.savedBindingId = bindingId;
+			tab.savedSchema = schema;
+		}
 	}
 
 	function setExecution(id: string, executionId: string) {
