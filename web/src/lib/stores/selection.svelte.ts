@@ -25,7 +25,7 @@ function createSelectionStore() {
 	function set(patch: SelectionPatch) {
 		// The pathname is dynamic, so resolve() cannot type it (#29).
 		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		void goto(applySelection(page.url, patch), {
+		return goto(applySelection(page.url, patch), {
 			replaceState: true,
 			keepFocus: true,
 			noScroll: true
