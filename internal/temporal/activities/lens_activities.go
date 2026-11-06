@@ -63,6 +63,7 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 		return err
 	}
 
+	anyActive := false
 	for _, listed := range queries {
 		// Catalog DDL and the cluster poller's own statement are not user
 		// activity (monitor.Observable, I4/CR-017).
@@ -104,6 +105,9 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 		rawPayload, _ := json.Marshal(q)
 
 		state := monitor.SnapshotState(q.State)
+		if state == "running" {
+			anyActive = true
+		}
 		origin := "trino_direct"
 
 		_, err := a.queries.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
@@ -135,9 +139,13 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 		}
 	}
 
-	// Tell the monitoring SSE subscribers this engine's query list changed (#733).
-	if err := events.Notify(ctx, a.pool, uuid.UUID(engineID.Bytes).String(), events.KindQueries); err != nil {
-		logger.Warn("monitoring notify failed", "err", err)
+	// Only notify while queries are active: an idle list does not change, so the
+	// poller must not re-trigger clients every 30 s (#733). A query finishing
+	// without the event ingester is caught by the client's fallback poll.
+	if anyActive {
+		if err := events.Notify(ctx, a.pool, uuid.UUID(engineID.Bytes).String(), events.KindQueries); err != nil {
+			logger.Warn("monitoring notify failed", "err", err)
+		}
 	}
 	return nil
 }

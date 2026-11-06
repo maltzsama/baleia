@@ -12,11 +12,14 @@ import (
 
 func TestMonitoringSSEStreamsChangedEvents(t *testing.T) {
 	t.Parallel()
-	ch := make(chan events.Event, 1)
-	ch <- events.Event{EngineID: "e1", Kind: events.KindQueries}
-	close(ch)
+	hub := events.NewHub()
+	sub, unsub := hub.Subscribe("e1")
+	defer unsub()
+	hub.Publish("e1", events.KindQueries)
 
-	stream := &monitoringSSE{ctx: context.Background(), events: ch, ping: time.NewTicker(time.Hour)}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // flush the pending kind, then return on ctx.Done
+	stream := &monitoringSSE{ctx: ctx, sub: sub, ping: time.NewTicker(time.Hour)}
 	defer func() { _ = stream.Close() }()
 
 	var buf bytes.Buffer

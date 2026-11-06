@@ -27,25 +27,54 @@ func TestParsePayload(t *testing.T) {
 func TestHubSubscribePublish(t *testing.T) {
 	t.Parallel()
 	h := NewHub()
-	ch, unsub := h.Subscribe("engine-1")
+	sub, unsub := h.Subscribe("engine-1")
 	defer unsub()
 
-	h.Publish(Event{EngineID: "engine-1", Kind: KindQueries})
-	select {
-	case ev := <-ch:
-		if ev.EngineID != "engine-1" || ev.Kind != KindQueries {
-			t.Fatalf("got %+v", ev)
-		}
-	default:
-		t.Fatal("no event delivered")
+	h.Publish("engine-1", KindQueries)
+	if got := sub.Take(); len(got) != 1 || got[0] != KindQueries {
+		t.Fatalf("Take = %v", got)
 	}
 
 	// Another engine's change does not reach this subscriber.
-	h.Publish(Event{EngineID: "engine-2", Kind: KindCluster})
-	select {
-	case ev := <-ch:
-		t.Fatalf("unexpected event %+v", ev)
-	default:
+	h.Publish("engine-2", KindCluster)
+	if got := sub.Take(); len(got) != 0 {
+		t.Fatalf("unexpected pending kinds: %v", got)
+	}
+}
+
+func TestSubscriptionCoalesces(t *testing.T) {
+	t.Parallel()
+	h := NewHub()
+	sub, unsub := h.Subscribe("e")
+	defer unsub()
+
+	h.Publish("e", KindQueries)
+	h.Publish("e", KindQueries)
+	h.Publish("e", KindQueries)
+	h.Publish("e", KindCluster)
+
+	kinds := sub.Take()
+	if len(kinds) != 2 {
+		t.Fatalf("Take = %v, want both kinds once", kinds)
+	}
+	seen := map[Kind]bool{}
+	for _, k := range kinds {
+		seen[k] = true
+	}
+	if !seen[KindQueries] || !seen[KindCluster] {
+		t.Fatalf("Take = %v", kinds)
+	}
+}
+
+func TestHubResync(t *testing.T) {
+	t.Parallel()
+	h := NewHub()
+	sub, unsub := h.Subscribe("e")
+	defer unsub()
+
+	h.Resync()
+	if got := sub.Take(); len(got) != 2 {
+		t.Fatalf("Resync Take = %v", got)
 	}
 }
 
@@ -55,5 +84,5 @@ func TestHubUnsubscribe(t *testing.T) {
 	_, unsub := h.Subscribe("e")
 	unsub()
 	// Publishing after unsubscribe must not panic.
-	h.Publish(Event{EngineID: "e", Kind: KindQueries})
+	h.Publish("e", KindQueries)
 }

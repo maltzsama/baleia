@@ -48,11 +48,11 @@ describe('monitoring page', () => {
 					]
 				})
 			),
-			// The live push stream (#733): open, send nothing, close.
+			// The live push stream (#733): stays open until the page aborts it.
 			mswHttp.get(
 				'/api/v1/engines/:id/monitoring/events',
 				() =>
-					new HttpResponse(': connected\n\n', {
+					new HttpResponse(new ReadableStream({ start() {} }), {
 						status: 200,
 						headers: { 'Content-Type': 'text/event-stream' }
 					})
@@ -73,6 +73,7 @@ describe('monitoring page', () => {
 	// instead of polling on a fixed timer.
 	it('re-fetches the cluster when the push stream reports a change', async () => {
 		let clusterCalls = 0;
+		let push: ((chunk: string) => void) | undefined;
 		server.use(
 			http.get('/engines/{id}/monitoring/cluster', ({ response }) => {
 				clusterCalls++;
@@ -89,18 +90,28 @@ describe('monitoring page', () => {
 					series: []
 				});
 			}),
-			mswHttp.get(
-				'/api/v1/engines/:id/monitoring/events',
-				() =>
-					new HttpResponse('event: changed\ndata: {"kind":"cluster"}\n\n', {
-						status: 200,
-						headers: { 'Content-Type': 'text/event-stream' }
-					})
-			)
+			mswHttp.get('/api/v1/engines/:id/monitoring/events', () => {
+				const body = new ReadableStream({
+					start(controller) {
+						const enc = new TextEncoder();
+						push = (chunk) => controller.enqueue(enc.encode(chunk));
+					}
+				});
+				return new HttpResponse(body, {
+					status: 200,
+					headers: { 'Content-Type': 'text/event-stream' }
+				});
+			})
 		);
 		render(MonitoringPage);
-		// One fetch on mount, one triggered by the pushed change.
-		await waitFor(() => expect(clusterCalls).toBeGreaterThanOrEqual(2));
+
+		// The initial fetch completes and the stream opens...
+		await waitFor(() => expect(clusterCalls).toBe(1));
+		await waitFor(() => expect(push).toBeDefined());
+		const before = clusterCalls;
+		// ...then a pushed change re-fetches.
+		push!('event: changed\ndata: {"kind":"cluster"}\n\n');
+		await waitFor(() => expect(clusterCalls).toBeGreaterThan(before));
 	});
 
 	// #407: the query detail shows what the query used, from the list's

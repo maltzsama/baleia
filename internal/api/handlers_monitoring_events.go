@@ -29,7 +29,13 @@ func (h *OpsHandlers) StreamMonitoringEvents(ctx context.Context, request Stream
 	}
 	stream := &monitoringSSE{ctx: ctx, ping: time.NewTicker(15 * time.Second)}
 	if h.monitoringHub != nil {
-		stream.events, stream.unsubscribe = h.monitoringHub.Subscribe(uuid.UUID(engineID.Bytes).String())
+		stream.sub, stream.unsubscribe = h.monitoringHub.Subscribe(uuid.UUID(engineID.Bytes).String())
+	}
+	// Revalidate access on the long-lived stream: a revoked grant closes it
+	// instead of keeping the signal flowing (#733).
+	stream.valid = func() bool {
+		_, ok := h.engineForMonitoring(ctx, p, engineID, authz.ActRead)
+		return ok
 	}
 	return StreamMonitoringEvents200TexteventStreamResponse{Body: stream}, nil
 }
@@ -38,8 +44,9 @@ func (h *OpsHandlers) StreamMonitoringEvents(ctx context.Context, request Stream
 // flushes each frame through http.Flusher instead of buffering it.
 type monitoringSSE struct {
 	ctx         context.Context
-	events      <-chan events.Event
+	sub         *events.Subscription
 	unsubscribe func()
+	valid       func() bool
 	ping        *time.Ticker
 }
 
@@ -53,6 +60,10 @@ func (s *monitoringSSE) Close() error {
 		s.ping.Stop()
 	}
 	return nil
+}
+
+func (s *monitoringSSE) allowed() bool {
+	return s.valid == nil || s.valid()
 }
 
 func (s *monitoringSSE) WriteTo(w io.Writer) (int64, error) {
@@ -70,22 +81,36 @@ func (s *monitoringSSE) WriteTo(w io.Writer) (int64, error) {
 	if err := write(": connected\n\n"); err != nil {
 		return written, err
 	}
+	var wake <-chan struct{}
+	if s.sub != nil {
+		wake = s.sub.Wake()
+	}
 	for {
+		// Flush pending kinds first so a wake is never lost.
+		if s.sub != nil {
+			for _, kind := range s.sub.Take() {
+				if !s.allowed() {
+					return written, nil
+				}
+				payload, _ := json.Marshal(map[string]string{"engine_id": s.sub.EngineID(), "kind": string(kind)})
+				if err := write("event: changed\ndata: " + string(payload) + "\n\n"); err != nil {
+					return written, err
+				}
+			}
+		}
 		select {
 		case <-s.ctx.Done():
 			return written, nil
 		case <-s.ping.C:
+			// Revalidate even when no change arrives, so a revoked grant does
+			// not keep an idle stream open.
+			if !s.allowed() {
+				return written, nil
+			}
 			if err := write(": ping\n\n"); err != nil {
 				return written, err
 			}
-		case ev, ok := <-s.events:
-			if !ok {
-				return written, nil
-			}
-			payload, _ := json.Marshal(map[string]string{"engine_id": ev.EngineID, "kind": string(ev.Kind)})
-			if err := write("event: changed\ndata: " + string(payload) + "\n\n"); err != nil {
-				return written, err
-			}
+		case <-wake:
 		}
 	}
 }

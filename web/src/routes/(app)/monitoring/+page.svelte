@@ -116,22 +116,44 @@
 		if (!engineId || (tab !== 'cluster' && tab !== 'queries')) return;
 		const controller = new AbortController();
 		eventsAbort = controller;
-		void streamEvents(`/engines/${encodeURIComponent(engineId)}/monitoring/events`, {
-			signal: controller.signal,
-			onEvent: (frame) => {
-				if (frame.event !== 'changed') return;
-				let kind: string;
+		const url = `/engines/${encodeURIComponent(engineId)}/monitoring/events`;
+		const refresh = () => {
+			if (tab === 'queries') void loadQueries();
+			else if (tab === 'cluster') void loadCluster();
+		};
+		void (async () => {
+			let attempts = 0;
+			while (!controller.signal.aborted) {
 				try {
-					kind = (JSON.parse(frame.data) as { kind?: string }).kind ?? '';
+					await streamEvents(url, {
+						signal: controller.signal,
+						onOpen: () => {
+							attempts = 0;
+						},
+						onEvent: (frame) => {
+							if (frame.event !== 'changed') return;
+							let kind: string;
+							try {
+								kind = (JSON.parse(frame.data) as { kind?: string }).kind ?? '';
+							} catch {
+								return;
+							}
+							if (kind === 'queries' && tab === 'queries') void loadQueries();
+							else if (kind === 'cluster' && tab === 'cluster') void loadCluster();
+						}
+					});
 				} catch {
-					return;
+					// A rejected connection is retried below.
 				}
-				if (kind === 'queries' && tab === 'queries') void loadQueries();
-				else if (kind === 'cluster' && tab === 'cluster') void loadCluster();
+				if (controller.signal.aborted) return;
+				attempts += 1;
+				const delay = Math.min(30_000, 500 * 2 ** Math.min(attempts, 6));
+				await new Promise((resolve) => setTimeout(resolve, delay));
+				if (controller.signal.aborted) return;
+				// Catch up on what changed while the stream was down.
+				refresh();
 			}
-		}).catch(() => {
-			// The stream dropped; the fallback poll keeps the view fresh.
-		});
+		})();
 	}
 
 	async function loadEngines() {

@@ -28,38 +28,72 @@ const (
 	KindCluster Kind = "cluster"
 )
 
-// Event says that one engine's monitoring data changed.
-type Event struct {
-	EngineID string
-	Kind     Kind
+// Subscription is one SSE client's pending kinds. Publishing marks a kind and
+// wakes the reader; kinds coalesce, so a burst of query events cannot drop the
+// signal for a cluster change, and a slow reader never blocks the publisher.
+type Subscription struct {
+	engineID string
+	mu       sync.Mutex
+	pending  map[Kind]struct{}
+	wake     chan struct{}
 }
 
-// Hub fans events out to this process's SSE handlers. A slow subscriber drops
-// events instead of blocking the publisher; the client re-fetches on the next
-// event and keeps a slow fallback poll.
+func newSubscription(engineID string) *Subscription {
+	return &Subscription{engineID: engineID, pending: make(map[Kind]struct{}), wake: make(chan struct{}, 1)}
+}
+
+// EngineID is the engine this subscription watches.
+func (s *Subscription) EngineID() string { return s.engineID }
+
+// Wake fires when at least one kind is pending. Drain with Take.
+func (s *Subscription) Wake() <-chan struct{} { return s.wake }
+
+// Take returns the pending kinds and clears them.
+func (s *Subscription) Take() []Kind {
+	s.mu.Lock()
+	kinds := make([]Kind, 0, len(s.pending))
+	for k := range s.pending {
+		kinds = append(kinds, k)
+	}
+	s.pending = make(map[Kind]struct{})
+	s.mu.Unlock()
+	return kinds
+}
+
+func (s *Subscription) mark(kind Kind) {
+	s.mu.Lock()
+	s.pending[kind] = struct{}{}
+	s.mu.Unlock()
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
+// Hub fans events out to this process's SSE handlers.
 type Hub struct {
 	mu   sync.Mutex
-	subs map[string]map[chan Event]struct{}
+	subs map[string]map[*Subscription]struct{}
 }
 
 // NewHub returns an empty hub.
 func NewHub() *Hub {
-	return &Hub{subs: make(map[string]map[chan Event]struct{})}
+	return &Hub{subs: make(map[string]map[*Subscription]struct{})}
 }
 
-// Subscribe returns the engine's event stream and an unsubscribe function.
-func (h *Hub) Subscribe(engineID string) (<-chan Event, func()) {
-	ch := make(chan Event, 8)
+// Subscribe returns a subscription for the engine and an unsubscribe function.
+func (h *Hub) Subscribe(engineID string) (*Subscription, func()) {
+	sub := newSubscription(engineID)
 	h.mu.Lock()
 	if h.subs[engineID] == nil {
-		h.subs[engineID] = make(map[chan Event]struct{})
+		h.subs[engineID] = make(map[*Subscription]struct{})
 	}
-	h.subs[engineID][ch] = struct{}{}
+	h.subs[engineID][sub] = struct{}{}
 	h.mu.Unlock()
-	return ch, func() {
+	return sub, func() {
 		h.mu.Lock()
 		if set := h.subs[engineID]; set != nil {
-			delete(set, ch)
+			delete(set, sub)
 			if len(set) == 0 {
 				delete(h.subs, engineID)
 			}
@@ -68,20 +102,30 @@ func (h *Hub) Subscribe(engineID string) (<-chan Event, func()) {
 	}
 }
 
-// Publish notifies this process's subscribers of one engine's change.
-func (h *Hub) Publish(ev Event) {
+// Publish marks one engine's change for every subscriber in this process.
+func (h *Hub) Publish(engineID string, kind Kind) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for ch := range h.subs[ev.EngineID] {
-		select {
-		case ch <- ev:
-		default:
+	for sub := range h.subs[engineID] {
+		sub.mark(kind)
+	}
+}
+
+// Resync marks both kinds for every subscribed engine. The listener calls it
+// after a reconnection so clients re-fetch what they missed while it was down.
+func (h *Hub) Resync() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, set := range h.subs {
+		for sub := range set {
+			sub.mark(KindQueries)
+			sub.mark(KindCluster)
 		}
 	}
 }
 
 // Notify tells every API replica that an engine's monitoring data changed.
-// Callers that write snapshots use it; a nil pool is a no-op (tests).
+// Callers that write snapshots use it; a nil pool or engine is a no-op (tests).
 func Notify(ctx context.Context, pool *pgxpool.Pool, engineID string, kind Kind) error {
 	if pool == nil || engineID == "" {
 		return nil
@@ -91,10 +135,17 @@ func Notify(ctx context.Context, pool *pgxpool.Pool, engineID string, kind Kind)
 }
 
 // Listen relays PostgreSQL notifications into the hub until ctx ends. It
-// reconnects with a short backoff when the listening connection drops.
+// reconnects with a short backoff when the listening connection drops, and
+// resyncs subscribers after a reconnection.
 func Listen(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, hub *Hub) {
+	connectedOnce := false
 	for ctx.Err() == nil {
-		err := listenOnce(ctx, pool, hub)
+		err := listenOnce(ctx, pool, hub, func() {
+			if connectedOnce {
+				hub.Resync()
+			}
+			connectedOnce = true
+		})
 		if ctx.Err() != nil {
 			return
 		}
@@ -109,7 +160,7 @@ func Listen(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, hub *H
 	}
 }
 
-func listenOnce(ctx context.Context, pool *pgxpool.Pool, hub *Hub) error {
+func listenOnce(ctx context.Context, pool *pgxpool.Pool, hub *Hub, onConnected func()) error {
 	conn, err := pool.Acquire(ctx)
 	if err != nil {
 		return err
@@ -118,6 +169,7 @@ func listenOnce(ctx context.Context, pool *pgxpool.Pool, hub *Hub) error {
 	if _, err := conn.Exec(ctx, "LISTEN "+Channel); err != nil {
 		return err
 	}
+	onConnected()
 	for {
 		n, err := conn.Conn().WaitForNotification(ctx)
 		if err != nil {
@@ -125,7 +177,7 @@ func listenOnce(ctx context.Context, pool *pgxpool.Pool, hub *Hub) error {
 		}
 		engineID, kind, ok := ParsePayload(n.Payload)
 		if ok {
-			hub.Publish(Event{EngineID: engineID, Kind: kind})
+			hub.Publish(engineID, kind)
 		}
 	}
 }
