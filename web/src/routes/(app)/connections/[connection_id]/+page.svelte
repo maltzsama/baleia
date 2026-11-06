@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import {
 		createCatalog,
@@ -121,7 +123,7 @@
 		try {
 			const created = await createEngine({ name: engineName, connection_id: connectionId });
 			registerOpen = false;
-			window.location.href = `/engines/${created.id}`;
+			void goto(resolve(`/engines/${created.id}`));
 		} catch (e) {
 			registerError = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -166,7 +168,7 @@
 
 	async function confirmDelete() {
 		await deleteConnection(connectionId);
-		window.location.href = '/connections';
+		void goto(resolve('/connections'));
 	}
 
 	function consequences(): string[] {
@@ -282,7 +284,7 @@
 								<button
 									type="button"
 									class="text-primary hover:underline"
-									onclick={() => (window.location.href = `/catalogs/${catalog.id}`)}
+									onclick={() => goto(resolve(`/catalogs/${catalog.id}`))}
 								>
 									{catalog.name}
 								</button>

@@ -5,6 +5,8 @@
 	import { canGlobal } from '$lib/authz/can';
 	import { eachLimited } from '$lib/util/limit';
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -295,7 +297,7 @@
 				{m.connections_providers_engines_catalogs_and_the_engines()}
 			</p>
 		</div>
-		<Button variant="primary" onclick={() => (window.location.href = '/connections/new')}>
+		<Button variant="primary" onclick={() => goto(resolve('/connections/new'))}>
 			{m.connections_new_connection()}
 		</Button>
 	</div>
@@ -327,7 +329,7 @@
 			description={m.connections_connect_a_catalog_manager_a_metastore_or_a_database()}
 		>
 			{#if canGlobal(authStore.user, 'create_connection')}
-				<Button variant="primary" onclick={() => (window.location.href = '/connections/new')}>
+				<Button variant="primary" onclick={() => goto(resolve('/connections/new'))}>
 					{m.connections_new_connection()}
 				</Button>
 			{/if}
@@ -355,7 +357,7 @@
 							<button
 								type="button"
 								class="truncate text-left text-[13px] font-semibold hover:underline"
-								onclick={() => (window.location.href = `/connections/${connection.id}`)}
+								onclick={() => goto(resolve(`/connections/${connection.id}`))}
 								>{connection.name}</button
 							>
 							<div class="truncate font-mono text-[10px] text-slate-600 dark:text-slate-300">

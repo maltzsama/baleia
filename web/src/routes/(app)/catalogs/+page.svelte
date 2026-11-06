@@ -4,6 +4,8 @@
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { canGlobal } from '$lib/authz/can';
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import Badge from '$lib/ui/Badge.svelte';
 	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -57,7 +59,7 @@
 	}
 
 	function open(catalog: CatalogSummary) {
-		if (catalog.id) window.location.href = `/catalogs/${catalog.id}`;
+		if (catalog.id) void goto(resolve(`/catalogs/${catalog.id}`));
 	}
 
 	onMount(load);
@@ -132,7 +134,7 @@
 			description={m.catalogs_catalogs_come_from_connections()}
 		>
 			{#if canGlobal(authStore.user, 'create_connection')}
-				<Button variant="primary" onclick={() => (window.location.href = '/connections')}>
+				<Button variant="primary" onclick={() => goto(resolve('/connections'))}>
 					{m.catalogs_go_to_connections()}
 				</Button>
 			{/if}
