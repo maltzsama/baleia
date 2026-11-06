@@ -140,6 +140,19 @@ JOIN workspaces w ON w.id = g.workspace_id
 WHERE g.catalog_id = $1
 ORDER BY w.name;
 
+-- name: SetCatalogDiscoverable :exec
+UPDATE catalogs SET discoverable = $2 WHERE id = $1;
+
+-- name: ListDiscoverableCatalogs :many
+-- Catalogs a workspace admin may find to request: the owner marked them
+-- discoverable (default off: a catalog name is itself information).
+SELECT c.id, c.name, COALESCE(c.trino_catalog_name, c.name) AS engine_catalog_name,
+       c.description, cc.name AS connection_name, cc.created_by
+FROM catalogs c
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE c.discoverable AND c.enabled
+ORDER BY c.name;
+
 -- name: UpdateCatalogMeta :one
 UPDATE catalogs
 SET name = $2, description = $3, updated_at = now()

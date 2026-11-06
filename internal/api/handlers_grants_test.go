@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // grantsState is the workspace/team/grant side of the authz fake.
@@ -25,7 +26,9 @@ type grantsState struct {
 	roles  map[[2][16]byte]string // {team, user} -> team role
 	wss    map[[16]byte]db.Workspace
 	grants []db.WorkspaceCatalogGrant
-	writes int // grant upserts and deletes that reached the store
+	// requests are the pending catalog_grant_requests.
+	requests []db.CatalogGrantRequest
+	writes   int // grant upserts and deletes that reached the store
 }
 
 func uuidOf(s string) pgtype.UUID {
@@ -158,6 +161,81 @@ func (q *authzFake) ClearWorkspaceDefaultForCatalog(_ context.Context, _ db.Clea
 	return nil
 }
 
+func (q *authzFake) CreateCatalogGrantRequest(_ context.Context, p db.CreateCatalogGrantRequestParams) (db.CatalogGrantRequest, error) {
+	q.g.mu.Lock()
+	defer q.g.mu.Unlock()
+	r := db.CatalogGrantRequest{WorkspaceID: p.WorkspaceID, CatalogID: p.CatalogID, InitiatedBySide: p.InitiatedBySide, RequestedBy: p.RequestedBy}
+	for i, e := range q.g.requests {
+		if e.WorkspaceID.Bytes == p.WorkspaceID.Bytes && e.CatalogID.Bytes == p.CatalogID.Bytes {
+			q.g.requests[i] = r
+			return r, nil
+		}
+	}
+	q.g.requests = append(q.g.requests, r)
+	return r, nil
+}
+
+func (q *authzFake) GetCatalogGrantRequest(_ context.Context, p db.GetCatalogGrantRequestParams) (db.CatalogGrantRequest, error) {
+	q.g.mu.Lock()
+	defer q.g.mu.Unlock()
+	for _, e := range q.g.requests {
+		if e.WorkspaceID.Bytes == p.WorkspaceID.Bytes && e.CatalogID.Bytes == p.CatalogID.Bytes {
+			return e, nil
+		}
+	}
+	return db.CatalogGrantRequest{}, pgx.ErrNoRows
+}
+
+func (q *authzFake) DeleteCatalogGrantRequest(_ context.Context, p db.DeleteCatalogGrantRequestParams) (int64, error) {
+	q.g.mu.Lock()
+	defer q.g.mu.Unlock()
+	for i, e := range q.g.requests {
+		if e.WorkspaceID.Bytes == p.WorkspaceID.Bytes && e.CatalogID.Bytes == p.CatalogID.Bytes {
+			q.g.requests = append(q.g.requests[:i], q.g.requests[i+1:]...)
+			return 1, nil
+		}
+	}
+	return 0, nil
+}
+
+func (q *authzFake) ListCatalogGrantRequestsForWorkspace(_ context.Context, ws pgtype.UUID) ([]db.ListCatalogGrantRequestsForWorkspaceRow, error) {
+	q.g.mu.Lock()
+	defer q.g.mu.Unlock()
+	out := []db.ListCatalogGrantRequestsForWorkspaceRow{}
+	for _, e := range q.g.requests {
+		if e.WorkspaceID.Bytes == ws.Bytes {
+			out = append(out, db.ListCatalogGrantRequestsForWorkspaceRow{WorkspaceID: e.WorkspaceID, CatalogID: e.CatalogID, InitiatedBySide: e.InitiatedBySide, RequestedBy: e.RequestedBy, CatalogName: q.cat.TrinoName(), EngineCatalogName: q.cat.TrinoName(), ConnectionName: q.conn.Name})
+		}
+	}
+	return out, nil
+}
+
+func (q *authzFake) ListCatalogGrantRequestsForCatalog(_ context.Context, cat pgtype.UUID) ([]db.ListCatalogGrantRequestsForCatalogRow, error) {
+	q.g.mu.Lock()
+	defer q.g.mu.Unlock()
+	out := []db.ListCatalogGrantRequestsForCatalogRow{}
+	for _, e := range q.g.requests {
+		if e.CatalogID.Bytes == cat.Bytes {
+			out = append(out, db.ListCatalogGrantRequestsForCatalogRow{WorkspaceID: e.WorkspaceID, CatalogID: e.CatalogID, InitiatedBySide: e.InitiatedBySide, RequestedBy: e.RequestedBy, WorkspaceName: "shared", WorkspaceType: "shared"})
+		}
+	}
+	return out, nil
+}
+
+func (q *authzFake) ListGrantableWorkspaces(context.Context) ([]db.ListGrantableWorkspacesRow, error) {
+	q.g.mu.Lock()
+	defer q.g.mu.Unlock()
+	out := []db.ListGrantableWorkspacesRow{}
+	for _, w := range q.g.wss {
+		out = append(out, db.ListGrantableWorkspacesRow{ID: w.ID, Name: w.Name, Type: w.Type})
+	}
+	return out, nil
+}
+
+func (q *authzFake) ListDiscoverableCatalogs(context.Context) ([]db.ListDiscoverableCatalogsRow, error) {
+	return nil, nil
+}
+
 func (q *authzFake) DeleteWorkspaceCatalogGrant(_ context.Context, p db.DeleteWorkspaceCatalogGrantParams) (int64, error) {
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()
@@ -216,6 +294,65 @@ func newGrantsHandlers(t *testing.T) (*API, *authzFake) {
 
 func grantBody(q *authzFake) *GrantCatalogAccessJSONRequestBody {
 	return &GrantCatalogAccessJSONRequestBody{CatalogId: q.cat.ID.Bytes}
+}
+
+// TestCatalogGrantTwoParty: a caller with both rights grants directly; a
+// caller with neither is told the pair does not exist; the listing shows the
+// active grant.
+func TestCatalogGrantTwoParty(t *testing.T) {
+	t.Parallel()
+	h, q := newGrantsHandlers(t)
+	owner := ctxAs(ownerID, "member")
+
+	resp, err := h.CreateCatalogGrant(owner, CreateCatalogGrantRequestObject{
+		Body: &CatalogGrantRequest{WorkspaceId: wsID.Bytes, CatalogId: q.cat.ID.Bytes},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, ok := resp.(CreateCatalogGrant200JSONResponse)
+	if !ok || item.State != CatalogGrantItemStateActive {
+		t.Fatalf("direct grant = %#v, want active", resp)
+	}
+	if len(q.g.grants) != 1 {
+		t.Fatalf("grants = %d, want 1", len(q.g.grants))
+	}
+
+	// A member with neither right is told the pair does not exist.
+	mresp, err := h.CreateCatalogGrant(ctxAs(memberID, "member"), CreateCatalogGrantRequestObject{
+		Body: &CatalogGrantRequest{WorkspaceId: wsID.Bytes, CatalogId: q.cat.ID.Bytes},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := mresp.(CreateCatalogGrant404JSONResponse); !ok {
+		t.Fatalf("member grant = %T, want 404", mresp)
+	}
+
+	// List by workspace shows the active grant.
+	wsu := openapi_types.UUID(wsID.Bytes)
+	list, err := h.ListCatalogGrantItems(owner, ListCatalogGrantItemsRequestObject{
+		Params: ListCatalogGrantItemsParams{WorkspaceId: &wsu},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := list.(ListCatalogGrantItems200JSONResponse)
+	if len(items) != 1 || items[0].State != CatalogGrantItemStateActive {
+		t.Fatalf("list = %#v", items)
+	}
+
+	// Unlink removes the grant.
+	del, err := h.DeleteCatalogGrant(owner, DeleteCatalogGrantRequestObject{WorkspaceId: wsID.Bytes, CatalogId: q.cat.ID.Bytes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := del.(DeleteCatalogGrant204Response); !ok {
+		t.Fatalf("delete = %T, want 204", del)
+	}
+	if len(q.g.grants) != 0 {
+		t.Fatalf("grants after unlink = %d, want 0", len(q.g.grants))
+	}
 }
 
 func wsCode(t *testing.T, resp any) int {

@@ -1628,6 +1628,51 @@ components:
         granted_by: { type: string, format: uuid, nullable: true }
         granted_at: { type: string, format: date-time }
 
+    CatalogGrantItem:
+      type: object
+      required: [workspace_id, catalog_id, state]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        state: { type: string, enum: [active, pending] }
+        initiated_by_side: { type: string, enum: [catalog, workspace], nullable: true }
+        requested_by: { type: string, format: uuid, nullable: true }
+        granted_by: { type: string, format: uuid, nullable: true }
+        granted_at: { type: string, format: date-time, nullable: true }
+        requested_at: { type: string, format: date-time, nullable: true }
+        catalog_name: { type: string }
+        engine_catalog_name: { type: string, nullable: true }
+        connection_name: { type: string, nullable: true }
+        workspace_name: { type: string, nullable: true }
+        allowed_actions:
+          type: array
+          items: { type: string }
+
+    CatalogGrantRequest:
+      type: object
+      required: [workspace_id, catalog_id]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+
+    GrantableWorkspace:
+      type: object
+      required: [id, name, type]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        team_name: { type: string, nullable: true }
+
+    RequestableCatalog:
+      type: object
+      required: [id, name, connection_name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        connection_name: { type: string }
+
     BindingProjection:
       type: object
       required: [connector, properties]
@@ -6924,6 +6969,130 @@ paths:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalog-grants:
+    get:
+      tags: [CatalogGrants]
+      operationId: listCatalogGrantItems
+      summary: "Active grants and pending requests the caller manages"
+      parameters:
+        - name: workspace_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: catalog_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: "Grants and pending requests"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogGrantItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [CatalogGrants]
+      operationId: createCatalogGrant
+      summary: "Offer, request or directly grant a catalog to a workspace, decided by the caller's rights on each side"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogGrantRequest" }
+      responses:
+        "200":
+          description: "The grant (active) or request (pending)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogGrantItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalog-grants/{workspace_id}/{catalog_id}:
+    parameters:
+      - name: workspace_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [CatalogGrants]
+      operationId: deleteCatalogGrant
+      summary: "Decline a pending request or unlink an active grant"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalog-grants/{workspace_id}/{catalog_id}/approve:
+    parameters:
+      - name: workspace_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [CatalogGrants]
+      operationId: approveCatalogGrant
+      summary: "Approve a pending offer or request as the other party"
+      responses:
+        "200":
+          description: "The now-active grant"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogGrantItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{catalog_id}/grantable-workspaces:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [CatalogGrants]
+      operationId: listGrantableWorkspaces
+      summary: "Workspaces a catalog owner may offer the catalog to"
+      responses:
+        "200":
+          description: "Workspaces (name and team only)"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/GrantableWorkspace" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/requestable-catalogs:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [CatalogGrants]
+      operationId: listRequestableCatalogs
+      summary: "Discoverable catalogs a workspace admin may request"
+      responses:
+        "200":
+          description: "Discoverable catalogs"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RequestableCatalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ── Catalog Connections ───────────────────────────────────────

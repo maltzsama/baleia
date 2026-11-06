@@ -196,6 +196,12 @@ var operationAccess = map[string]access{
 	"ListWorkspaceCatalogAccess": checked("Workspace"),
 	"GrantCatalogAccess":         checked("Workspace", "Catalog"),
 	"RevokeCatalogAccess":        checked("Workspace", "Catalog"),
+	"ListCatalogGrantItems":      checked("PrincipalFromContext", "Workspace", "catalogOwner"),
+	"CreateCatalogGrant":         checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner"),
+	"ApproveCatalogGrant":        checked("PrincipalFromContext", "GetCatalogGrantRequest", "workspaceAdmin", "catalogOwner"),
+	"DeleteCatalogGrant":         checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner"),
+	"ListGrantableWorkspaces":    checked("PrincipalFromContext", "catalogOwner"),
+	"ListRequestableCatalogs":    checked("PrincipalFromContext", "workspaceAdmin"),
 
 	// ── workspace members (query editor, retrievers)
 	"ListExecutions":            {kind: kindChecked, calls: wsMember},

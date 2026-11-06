@@ -221,6 +221,18 @@ const (
 	CatalogConnectionAllowedActionView           CatalogConnectionAllowedAction = "view"
 )
 
+// Defines values for CatalogGrantItemInitiatedBySide.
+const (
+	CatalogGrantItemInitiatedBySideCatalog   CatalogGrantItemInitiatedBySide = "catalog"
+	CatalogGrantItemInitiatedBySideWorkspace CatalogGrantItemInitiatedBySide = "workspace"
+)
+
+// Defines values for CatalogGrantItemState.
+const (
+	CatalogGrantItemStateActive  CatalogGrantItemState = "active"
+	CatalogGrantItemStatePending CatalogGrantItemState = "pending"
+)
+
 // Defines values for CatalogSummaryMetadataSyncStatus.
 const (
 	CatalogSummaryMetadataSyncStatusFailed   CatalogSummaryMetadataSyncStatus = "failed"
@@ -1117,8 +1129,8 @@ const (
 
 // Defines values for UserPublicStatus.
 const (
-	UserPublicStatusActive    UserPublicStatus = "active"
-	UserPublicStatusSuspended UserPublicStatus = "suspended"
+	Active    UserPublicStatus = "active"
+	Suspended UserPublicStatus = "suspended"
 )
 
 // Defines values for WorkloadRuleClass.
@@ -1864,6 +1876,35 @@ type CatalogGrant struct {
 		Name string             `json:"name"`
 		Type *string            `json:"type,omitempty"`
 	} `json:"workspace"`
+}
+
+// CatalogGrantItem defines model for CatalogGrantItem.
+type CatalogGrantItem struct {
+	AllowedActions    *[]string                        `json:"allowed_actions,omitempty"`
+	CatalogId         openapi_types.UUID               `json:"catalog_id"`
+	CatalogName       *string                          `json:"catalog_name,omitempty"`
+	ConnectionName    *string                          `json:"connection_name"`
+	EngineCatalogName *string                          `json:"engine_catalog_name"`
+	GrantedAt         *time.Time                       `json:"granted_at"`
+	GrantedBy         *openapi_types.UUID              `json:"granted_by"`
+	InitiatedBySide   *CatalogGrantItemInitiatedBySide `json:"initiated_by_side"`
+	RequestedAt       *time.Time                       `json:"requested_at"`
+	RequestedBy       *openapi_types.UUID              `json:"requested_by"`
+	State             CatalogGrantItemState            `json:"state"`
+	WorkspaceId       openapi_types.UUID               `json:"workspace_id"`
+	WorkspaceName     *string                          `json:"workspace_name"`
+}
+
+// CatalogGrantItemInitiatedBySide defines model for CatalogGrantItem.InitiatedBySide.
+type CatalogGrantItemInitiatedBySide string
+
+// CatalogGrantItemState defines model for CatalogGrantItem.State.
+type CatalogGrantItemState string
+
+// CatalogGrantRequest defines model for CatalogGrantRequest.
+type CatalogGrantRequest struct {
+	CatalogId   openapi_types.UUID `json:"catalog_id"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
 }
 
 // CatalogImpact defines model for CatalogImpact.
@@ -2808,6 +2849,14 @@ type GlueCredentials struct {
 // GrantCatalogAccessRequest defines model for GrantCatalogAccessRequest.
 type GrantCatalogAccessRequest struct {
 	CatalogId openapi_types.UUID `json:"catalog_id"`
+}
+
+// GrantableWorkspace defines model for GrantableWorkspace.
+type GrantableWorkspace struct {
+	Id       openapi_types.UUID `json:"id"`
+	Name     string             `json:"name"`
+	TeamName *string            `json:"team_name"`
+	Type     string             `json:"type"`
 }
 
 // HiveCredentials defines model for HiveCredentials.
@@ -3836,6 +3885,14 @@ type RefreshResponse struct {
 	// RefreshToken Only returned to API clients that send `X-Baleia-Client: api`. Browsers receive the rotated refresh token in the HttpOnly `baleia_refresh` cookie.
 	RefreshToken *string `json:"refresh_token,omitempty"`
 	Token        string  `json:"token"`
+}
+
+// RequestableCatalog defines model for RequestableCatalog.
+type RequestableCatalog struct {
+	ConnectionName string             `json:"connection_name"`
+	Description    *string            `json:"description"`
+	Id             openapi_types.UUID `json:"id"`
+	Name           string             `json:"name"`
 }
 
 // RestoreSavedQueryRequest defines model for RestoreSavedQueryRequest.
@@ -5162,6 +5219,12 @@ type ListCatalogConnectionsParams struct {
 	WithoutEngine *bool `form:"without_engine,omitempty" json:"without_engine,omitempty"`
 }
 
+// ListCatalogGrantItemsParams defines parameters for ListCatalogGrantItems.
+type ListCatalogGrantItemsParams struct {
+	WorkspaceId *openapi_types.UUID `form:"workspace_id,omitempty" json:"workspace_id,omitempty"`
+	CatalogId   *openapi_types.UUID `form:"catalog_id,omitempty" json:"catalog_id,omitempty"`
+}
+
 // ListAllCatalogsParams defines parameters for ListAllCatalogs.
 type ListAllCatalogsParams struct {
 	Q            *string             `form:"q,omitempty" json:"q,omitempty"`
@@ -5615,6 +5678,9 @@ type TestConnectionDraftJSONRequestBody = TestConnectionRequest
 
 // UpdateCatalogConnectionJSONRequestBody defines body for UpdateCatalogConnection for application/json ContentType.
 type UpdateCatalogConnectionJSONRequestBody = UpdateCatalogConnectionRequest
+
+// CreateCatalogGrantJSONRequestBody defines body for CreateCatalogGrant for application/json ContentType.
+type CreateCatalogGrantJSONRequestBody = CatalogGrantRequest
 
 // UpdateCatalogDetailJSONRequestBody defines body for UpdateCatalogDetail for application/json ContentType.
 type UpdateCatalogDetailJSONRequestBody = UpdateCatalogDetailRequest

@@ -191,6 +191,43 @@ func (q *Queries) CountWorkspaceRunningExecutions(ctx context.Context, workspace
 	return column_1, err
 }
 
+const createCatalogGrantRequest = `-- name: CreateCatalogGrantRequest :one
+INSERT INTO catalog_grant_requests (workspace_id, catalog_id, initiated_by_side, requested_by)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (workspace_id, catalog_id) DO UPDATE
+SET initiated_by_side = EXCLUDED.initiated_by_side,
+    requested_by = EXCLUDED.requested_by,
+    requested_at = now()
+RETURNING workspace_id, catalog_id, initiated_by_side, requested_by, requested_at
+`
+
+type CreateCatalogGrantRequestParams struct {
+	WorkspaceID     pgtype.UUID `json:"workspace_id"`
+	CatalogID       pgtype.UUID `json:"catalog_id"`
+	InitiatedBySide string      `json:"initiated_by_side"`
+	RequestedBy     pgtype.UUID `json:"requested_by"`
+}
+
+// A pending offer (initiated_by_side 'catalog') or request ('workspace'). The
+// pair is unique: a new initiation from the other side flips the side.
+func (q *Queries) CreateCatalogGrantRequest(ctx context.Context, arg CreateCatalogGrantRequestParams) (CatalogGrantRequest, error) {
+	row := q.db.QueryRow(ctx, createCatalogGrantRequest,
+		arg.WorkspaceID,
+		arg.CatalogID,
+		arg.InitiatedBySide,
+		arg.RequestedBy,
+	)
+	var i CatalogGrantRequest
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.CatalogID,
+		&i.InitiatedBySide,
+		&i.RequestedBy,
+		&i.RequestedAt,
+	)
+	return i, err
+}
+
 const createTeam = `-- name: CreateTeam :one
 INSERT INTO teams (name, description, created_by)
 VALUES ($1, $2, $3)
@@ -258,6 +295,23 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 	return i, err
 }
 
+const deleteCatalogGrantRequest = `-- name: DeleteCatalogGrantRequest :execrows
+DELETE FROM catalog_grant_requests WHERE workspace_id = $1 AND catalog_id = $2
+`
+
+type DeleteCatalogGrantRequestParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	CatalogID   pgtype.UUID `json:"catalog_id"`
+}
+
+func (q *Queries) DeleteCatalogGrantRequest(ctx context.Context, arg DeleteCatalogGrantRequestParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCatalogGrantRequest, arg.WorkspaceID, arg.CatalogID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteTeam = `-- name: DeleteTeam :exec
 DELETE FROM teams WHERE id = $1
 `
@@ -311,6 +365,28 @@ func (q *Queries) DeleteWorkspaceMember(ctx context.Context, arg DeleteWorkspace
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getCatalogGrantRequest = `-- name: GetCatalogGrantRequest :one
+SELECT workspace_id, catalog_id, initiated_by_side, requested_by, requested_at FROM catalog_grant_requests WHERE workspace_id = $1 AND catalog_id = $2
+`
+
+type GetCatalogGrantRequestParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	CatalogID   pgtype.UUID `json:"catalog_id"`
+}
+
+func (q *Queries) GetCatalogGrantRequest(ctx context.Context, arg GetCatalogGrantRequestParams) (CatalogGrantRequest, error) {
+	row := q.db.QueryRow(ctx, getCatalogGrantRequest, arg.WorkspaceID, arg.CatalogID)
+	var i CatalogGrantRequest
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.CatalogID,
+		&i.InitiatedBySide,
+		&i.RequestedBy,
+		&i.RequestedAt,
+	)
+	return i, err
 }
 
 const getTeamByID = `-- name: GetTeamByID :one
@@ -452,6 +528,144 @@ func (q *Queries) IsWorkspaceStructuralOwner(ctx context.Context, arg IsWorkspac
 	var is_owner bool
 	err := row.Scan(&is_owner)
 	return is_owner, err
+}
+
+const listCatalogGrantRequestsForCatalog = `-- name: ListCatalogGrantRequestsForCatalog :many
+SELECT r.workspace_id, r.catalog_id, r.initiated_by_side, r.requested_by, r.requested_at,
+       w.name AS workspace_name, w.type AS workspace_type
+FROM catalog_grant_requests r
+JOIN workspaces w ON w.id = r.workspace_id
+WHERE r.catalog_id = $1
+ORDER BY r.requested_at
+`
+
+type ListCatalogGrantRequestsForCatalogRow struct {
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	CatalogID       pgtype.UUID        `json:"catalog_id"`
+	InitiatedBySide string             `json:"initiated_by_side"`
+	RequestedBy     pgtype.UUID        `json:"requested_by"`
+	RequestedAt     pgtype.Timestamptz `json:"requested_at"`
+	WorkspaceName   string             `json:"workspace_name"`
+	WorkspaceType   string             `json:"workspace_type"`
+}
+
+func (q *Queries) ListCatalogGrantRequestsForCatalog(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogGrantRequestsForCatalogRow, error) {
+	rows, err := q.db.Query(ctx, listCatalogGrantRequestsForCatalog, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCatalogGrantRequestsForCatalogRow
+	for rows.Next() {
+		var i ListCatalogGrantRequestsForCatalogRow
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.CatalogID,
+			&i.InitiatedBySide,
+			&i.RequestedBy,
+			&i.RequestedAt,
+			&i.WorkspaceName,
+			&i.WorkspaceType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCatalogGrantRequestsForWorkspace = `-- name: ListCatalogGrantRequestsForWorkspace :many
+SELECT r.workspace_id, r.catalog_id, r.initiated_by_side, r.requested_by, r.requested_at,
+       c.name AS catalog_name, COALESCE(c.trino_catalog_name, c.name) AS engine_catalog_name,
+       cc.name AS connection_name
+FROM catalog_grant_requests r
+JOIN catalogs c ON c.id = r.catalog_id
+JOIN catalog_connections cc ON cc.id = c.connection_id
+WHERE r.workspace_id = $1
+ORDER BY r.requested_at
+`
+
+type ListCatalogGrantRequestsForWorkspaceRow struct {
+	WorkspaceID       pgtype.UUID        `json:"workspace_id"`
+	CatalogID         pgtype.UUID        `json:"catalog_id"`
+	InitiatedBySide   string             `json:"initiated_by_side"`
+	RequestedBy       pgtype.UUID        `json:"requested_by"`
+	RequestedAt       pgtype.Timestamptz `json:"requested_at"`
+	CatalogName       string             `json:"catalog_name"`
+	EngineCatalogName string             `json:"engine_catalog_name"`
+	ConnectionName    string             `json:"connection_name"`
+}
+
+func (q *Queries) ListCatalogGrantRequestsForWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListCatalogGrantRequestsForWorkspaceRow, error) {
+	rows, err := q.db.Query(ctx, listCatalogGrantRequestsForWorkspace, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCatalogGrantRequestsForWorkspaceRow
+	for rows.Next() {
+		var i ListCatalogGrantRequestsForWorkspaceRow
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.CatalogID,
+			&i.InitiatedBySide,
+			&i.RequestedBy,
+			&i.RequestedAt,
+			&i.CatalogName,
+			&i.EngineCatalogName,
+			&i.ConnectionName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGrantableWorkspaces = `-- name: ListGrantableWorkspaces :many
+SELECT w.id, w.name, w.type, t.name AS team_name
+FROM workspaces w
+LEFT JOIN teams t ON t.id = w.owner_team_id
+ORDER BY w.name
+`
+
+type ListGrantableWorkspacesRow struct {
+	ID       pgtype.UUID `json:"id"`
+	Name     string      `json:"name"`
+	Type     string      `json:"type"`
+	TeamName *string     `json:"team_name"`
+}
+
+// The workspaces a catalog owner may offer a catalog to (the offer picker).
+func (q *Queries) ListGrantableWorkspaces(ctx context.Context) ([]ListGrantableWorkspacesRow, error) {
+	rows, err := q.db.Query(ctx, listGrantableWorkspaces)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGrantableWorkspacesRow
+	for rows.Next() {
+		var i ListGrantableWorkspacesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Type,
+			&i.TeamName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listGrantedCatalogsOfWorkspace = `-- name: ListGrantedCatalogsOfWorkspace :many

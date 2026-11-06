@@ -210,6 +210,18 @@ type ServerInterface interface {
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(w http.ResponseWriter, r *http.Request, id PathId)
+	// Active grants and pending requests the caller manages
+	// (GET /catalog-grants)
+	ListCatalogGrantItems(w http.ResponseWriter, r *http.Request, params ListCatalogGrantItemsParams)
+	// Offer, request or directly grant a catalog to a workspace, decided by the caller's rights on each side
+	// (POST /catalog-grants)
+	CreateCatalogGrant(w http.ResponseWriter, r *http.Request)
+	// Decline a pending request or unlink an active grant
+	// (DELETE /catalog-grants/{workspace_id}/{catalog_id})
+	DeleteCatalogGrant(w http.ResponseWriter, r *http.Request, workspaceId openapi_types.UUID, catalogId openapi_types.UUID)
+	// Approve a pending offer or request as the other party
+	// (POST /catalog-grants/{workspace_id}/{catalog_id}/approve)
+	ApproveCatalogGrant(w http.ResponseWriter, r *http.Request, workspaceId openapi_types.UUID, catalogId openapi_types.UUID)
 	// Logical catalogs the caller may view, with their bindings
 	// (GET /catalogs)
 	ListAllCatalogs(w http.ResponseWriter, r *http.Request, params ListAllCatalogsParams)
@@ -222,6 +234,9 @@ type ServerInterface interface {
 	// Rename or re-describe a catalog (bundles and metrics reference it by name)
 	// (PATCH /catalogs/{catalog_id})
 	UpdateCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// Workspaces a catalog owner may offer the catalog to
+	// (GET /catalogs/{catalog_id}/grantable-workspaces)
+	ListGrantableWorkspaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
 	// Workspace grants of this catalog
 	// (GET /catalogs/{catalog_id}/grants)
 	ListCatalogGrants(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
@@ -621,6 +636,9 @@ type ServerInterface interface {
 	// Restore a saved query to a version — editor
 	// (POST /workspaces/{id}/queries/{query_id}/versions/{version}/restore)
 	RestoreSavedQueryVersion(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, version int)
+	// Discoverable catalogs a workspace admin may request
+	// (GET /workspaces/{id}/requestable-catalogs)
+	ListRequestableCatalogs(w http.ResponseWriter, r *http.Request, id PathId)
 	// List workspace Retrievers
 	// (GET /workspaces/{id}/retrievers)
 	ListRetrievers(w http.ResponseWriter, r *http.Request, id PathId)
@@ -1158,6 +1176,30 @@ func (_ Unimplemented) TestCatalogConnection(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Active grants and pending requests the caller manages
+// (GET /catalog-grants)
+func (_ Unimplemented) ListCatalogGrantItems(w http.ResponseWriter, r *http.Request, params ListCatalogGrantItemsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Offer, request or directly grant a catalog to a workspace, decided by the caller's rights on each side
+// (POST /catalog-grants)
+func (_ Unimplemented) CreateCatalogGrant(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Decline a pending request or unlink an active grant
+// (DELETE /catalog-grants/{workspace_id}/{catalog_id})
+func (_ Unimplemented) DeleteCatalogGrant(w http.ResponseWriter, r *http.Request, workspaceId openapi_types.UUID, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Approve a pending offer or request as the other party
+// (POST /catalog-grants/{workspace_id}/{catalog_id}/approve)
+func (_ Unimplemented) ApproveCatalogGrant(w http.ResponseWriter, r *http.Request, workspaceId openapi_types.UUID, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Logical catalogs the caller may view, with their bindings
 // (GET /catalogs)
 func (_ Unimplemented) ListAllCatalogs(w http.ResponseWriter, r *http.Request, params ListAllCatalogsParams) {
@@ -1179,6 +1221,12 @@ func (_ Unimplemented) GetCatalogDetail(w http.ResponseWriter, r *http.Request, 
 // Rename or re-describe a catalog (bundles and metrics reference it by name)
 // (PATCH /catalogs/{catalog_id})
 func (_ Unimplemented) UpdateCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Workspaces a catalog owner may offer the catalog to
+// (GET /catalogs/{catalog_id}/grantable-workspaces)
+func (_ Unimplemented) ListGrantableWorkspaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1977,6 +2025,12 @@ func (_ Unimplemented) GetSavedQueryVersion(w http.ResponseWriter, r *http.Reque
 // Restore a saved query to a version — editor
 // (POST /workspaces/{id}/queries/{query_id}/versions/{version}/restore)
 func (_ Unimplemented) RestoreSavedQueryVersion(w http.ResponseWriter, r *http.Request, id PathId, queryId openapi_types.UUID, version int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Discoverable catalogs a workspace admin may request
+// (GET /workspaces/{id}/requestable-catalogs)
+func (_ Unimplemented) ListRequestableCatalogs(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4291,6 +4345,155 @@ func (siw *ServerInterfaceWrapper) TestCatalogConnection(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListCatalogGrantItems operation middleware
+func (siw *ServerInterfaceWrapper) ListCatalogGrantItems(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCatalogGrantItemsParams
+
+	// ------------- Optional query parameter "workspace_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "workspace_id", r.URL.Query(), &params.WorkspaceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "catalog_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCatalogGrantItems(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCatalogGrant operation middleware
+func (siw *ServerInterfaceWrapper) CreateCatalogGrant(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCatalogGrant(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCatalogGrant operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCatalogGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "workspace_id" -------------
+	var workspaceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace_id", chi.URLParam(r, "workspace_id"), &workspaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCatalogGrant(w, r, workspaceId, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveCatalogGrant operation middleware
+func (siw *ServerInterfaceWrapper) ApproveCatalogGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "workspace_id" -------------
+	var workspaceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace_id", chi.URLParam(r, "workspace_id"), &workspaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveCatalogGrant(w, r, workspaceId, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListAllCatalogs operation middleware
 func (siw *ServerInterfaceWrapper) ListAllCatalogs(w http.ResponseWriter, r *http.Request) {
 
@@ -4480,6 +4683,39 @@ func (siw *ServerInterfaceWrapper) UpdateCatalogDetail(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCatalogDetail(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListGrantableWorkspaces operation middleware
+func (siw *ServerInterfaceWrapper) ListGrantableWorkspaces(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListGrantableWorkspaces(w, r, catalogId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9778,6 +10014,39 @@ func (siw *ServerInterfaceWrapper) RestoreSavedQueryVersion(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// ListRequestableCatalogs operation middleware
+func (siw *ServerInterfaceWrapper) ListRequestableCatalogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRequestableCatalogs(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRetrievers operation middleware
 func (siw *ServerInterfaceWrapper) ListRetrievers(w http.ResponseWriter, r *http.Request) {
 
@@ -12463,6 +12732,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalog-connections/{id}/test", wrapper.TestCatalogConnection)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalog-grants", wrapper.ListCatalogGrantItems)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalog-grants", wrapper.CreateCatalogGrant)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/catalog-grants/{workspace_id}/{catalog_id}", wrapper.DeleteCatalogGrant)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalog-grants/{workspace_id}/{catalog_id}/approve", wrapper.ApproveCatalogGrant)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalogs", wrapper.ListAllCatalogs)
 	})
 	r.Group(func(r chi.Router) {
@@ -12473,6 +12754,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/catalogs/{catalog_id}", wrapper.UpdateCatalogDetail)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{catalog_id}/grantable-workspaces", wrapper.ListGrantableWorkspaces)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalogs/{catalog_id}/grants", wrapper.ListCatalogGrants)
@@ -12872,6 +13156,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/workspaces/{id}/queries/{query_id}/versions/{version}/restore", wrapper.RestoreSavedQueryVersion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/requestable-catalogs", wrapper.ListRequestableCatalogs)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/retrievers", wrapper.ListRetrievers)
@@ -15636,6 +15923,173 @@ func (response TestCatalogConnection404JSONResponse) VisitTestCatalogConnectionR
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListCatalogGrantItemsRequestObject struct {
+	Params ListCatalogGrantItemsParams
+}
+
+type ListCatalogGrantItemsResponseObject interface {
+	VisitListCatalogGrantItemsResponse(w http.ResponseWriter) error
+}
+
+type ListCatalogGrantItems200JSONResponse []CatalogGrantItem
+
+func (response ListCatalogGrantItems200JSONResponse) VisitListCatalogGrantItemsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogGrantItems401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListCatalogGrantItems401JSONResponse) VisitListCatalogGrantItemsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogGrantItems404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListCatalogGrantItems404JSONResponse) VisitListCatalogGrantItemsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogGrantRequestObject struct {
+	Body *CreateCatalogGrantJSONRequestBody
+}
+
+type CreateCatalogGrantResponseObject interface {
+	VisitCreateCatalogGrantResponse(w http.ResponseWriter) error
+}
+
+type CreateCatalogGrant200JSONResponse CatalogGrantItem
+
+func (response CreateCatalogGrant200JSONResponse) VisitCreateCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogGrant401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateCatalogGrant401JSONResponse) VisitCreateCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogGrant403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateCatalogGrant403JSONResponse) VisitCreateCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogGrant404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateCatalogGrant404JSONResponse) VisitCreateCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogGrantRequestObject struct {
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
+	CatalogId   openapi_types.UUID `json:"catalog_id"`
+}
+
+type DeleteCatalogGrantResponseObject interface {
+	VisitDeleteCatalogGrantResponse(w http.ResponseWriter) error
+}
+
+type DeleteCatalogGrant204Response = NoContentResponse
+
+func (response DeleteCatalogGrant204Response) VisitDeleteCatalogGrantResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCatalogGrant401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteCatalogGrant401JSONResponse) VisitDeleteCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogGrant403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteCatalogGrant403JSONResponse) VisitDeleteCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCatalogGrant404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteCatalogGrant404JSONResponse) VisitDeleteCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ApproveCatalogGrantRequestObject struct {
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
+	CatalogId   openapi_types.UUID `json:"catalog_id"`
+}
+
+type ApproveCatalogGrantResponseObject interface {
+	VisitApproveCatalogGrantResponse(w http.ResponseWriter) error
+}
+
+type ApproveCatalogGrant200JSONResponse CatalogGrantItem
+
+func (response ApproveCatalogGrant200JSONResponse) VisitApproveCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ApproveCatalogGrant401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ApproveCatalogGrant401JSONResponse) VisitApproveCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ApproveCatalogGrant403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ApproveCatalogGrant403JSONResponse) VisitApproveCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ApproveCatalogGrant404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ApproveCatalogGrant404JSONResponse) VisitApproveCatalogGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListAllCatalogsRequestObject struct {
 	Params ListAllCatalogsParams
 }
@@ -15811,6 +16265,41 @@ type UpdateCatalogDetail422JSONResponse struct {
 func (response UpdateCatalogDetail422JSONResponse) VisitUpdateCatalogDetailResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListGrantableWorkspacesRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+}
+
+type ListGrantableWorkspacesResponseObject interface {
+	VisitListGrantableWorkspacesResponse(w http.ResponseWriter) error
+}
+
+type ListGrantableWorkspaces200JSONResponse []GrantableWorkspace
+
+func (response ListGrantableWorkspaces200JSONResponse) VisitListGrantableWorkspacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListGrantableWorkspaces401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListGrantableWorkspaces401JSONResponse) VisitListGrantableWorkspacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListGrantableWorkspaces404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListGrantableWorkspaces404JSONResponse) VisitListGrantableWorkspacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -21747,6 +22236,41 @@ func (response RestoreSavedQueryVersion422JSONResponse) VisitRestoreSavedQueryVe
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListRequestableCatalogsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListRequestableCatalogsResponseObject interface {
+	VisitListRequestableCatalogsResponse(w http.ResponseWriter) error
+}
+
+type ListRequestableCatalogs200JSONResponse []RequestableCatalog
+
+func (response ListRequestableCatalogs200JSONResponse) VisitListRequestableCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListRequestableCatalogs401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListRequestableCatalogs401JSONResponse) VisitListRequestableCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListRequestableCatalogs404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListRequestableCatalogs404JSONResponse) VisitListRequestableCatalogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListRetrieversRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -24281,6 +24805,18 @@ type StrictServerInterface interface {
 	// Test catalog connectivity
 	// (POST /catalog-connections/{id}/test)
 	TestCatalogConnection(ctx context.Context, request TestCatalogConnectionRequestObject) (TestCatalogConnectionResponseObject, error)
+	// Active grants and pending requests the caller manages
+	// (GET /catalog-grants)
+	ListCatalogGrantItems(ctx context.Context, request ListCatalogGrantItemsRequestObject) (ListCatalogGrantItemsResponseObject, error)
+	// Offer, request or directly grant a catalog to a workspace, decided by the caller's rights on each side
+	// (POST /catalog-grants)
+	CreateCatalogGrant(ctx context.Context, request CreateCatalogGrantRequestObject) (CreateCatalogGrantResponseObject, error)
+	// Decline a pending request or unlink an active grant
+	// (DELETE /catalog-grants/{workspace_id}/{catalog_id})
+	DeleteCatalogGrant(ctx context.Context, request DeleteCatalogGrantRequestObject) (DeleteCatalogGrantResponseObject, error)
+	// Approve a pending offer or request as the other party
+	// (POST /catalog-grants/{workspace_id}/{catalog_id}/approve)
+	ApproveCatalogGrant(ctx context.Context, request ApproveCatalogGrantRequestObject) (ApproveCatalogGrantResponseObject, error)
 	// Logical catalogs the caller may view, with their bindings
 	// (GET /catalogs)
 	ListAllCatalogs(ctx context.Context, request ListAllCatalogsRequestObject) (ListAllCatalogsResponseObject, error)
@@ -24293,6 +24829,9 @@ type StrictServerInterface interface {
 	// Rename or re-describe a catalog (bundles and metrics reference it by name)
 	// (PATCH /catalogs/{catalog_id})
 	UpdateCatalogDetail(ctx context.Context, request UpdateCatalogDetailRequestObject) (UpdateCatalogDetailResponseObject, error)
+	// Workspaces a catalog owner may offer the catalog to
+	// (GET /catalogs/{catalog_id}/grantable-workspaces)
+	ListGrantableWorkspaces(ctx context.Context, request ListGrantableWorkspacesRequestObject) (ListGrantableWorkspacesResponseObject, error)
 	// Workspace grants of this catalog
 	// (GET /catalogs/{catalog_id}/grants)
 	ListCatalogGrants(ctx context.Context, request ListCatalogGrantsRequestObject) (ListCatalogGrantsResponseObject, error)
@@ -24692,6 +25231,9 @@ type StrictServerInterface interface {
 	// Restore a saved query to a version — editor
 	// (POST /workspaces/{id}/queries/{query_id}/versions/{version}/restore)
 	RestoreSavedQueryVersion(ctx context.Context, request RestoreSavedQueryVersionRequestObject) (RestoreSavedQueryVersionResponseObject, error)
+	// Discoverable catalogs a workspace admin may request
+	// (GET /workspaces/{id}/requestable-catalogs)
+	ListRequestableCatalogs(ctx context.Context, request ListRequestableCatalogsRequestObject) (ListRequestableCatalogsResponseObject, error)
 	// List workspace Retrievers
 	// (GET /workspaces/{id}/retrievers)
 	ListRetrievers(ctx context.Context, request ListRetrieversRequestObject) (ListRetrieversResponseObject, error)
@@ -26640,6 +27182,117 @@ func (sh *strictHandler) TestCatalogConnection(w http.ResponseWriter, r *http.Re
 	}
 }
 
+// ListCatalogGrantItems operation middleware
+func (sh *strictHandler) ListCatalogGrantItems(w http.ResponseWriter, r *http.Request, params ListCatalogGrantItemsParams) {
+	var request ListCatalogGrantItemsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCatalogGrantItems(ctx, request.(ListCatalogGrantItemsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCatalogGrantItems")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCatalogGrantItemsResponseObject); ok {
+		if err := validResponse.VisitListCatalogGrantItemsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCatalogGrant operation middleware
+func (sh *strictHandler) CreateCatalogGrant(w http.ResponseWriter, r *http.Request) {
+	var request CreateCatalogGrantRequestObject
+
+	var body CreateCatalogGrantJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCatalogGrant(ctx, request.(CreateCatalogGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCatalogGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCatalogGrantResponseObject); ok {
+		if err := validResponse.VisitCreateCatalogGrantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCatalogGrant operation middleware
+func (sh *strictHandler) DeleteCatalogGrant(w http.ResponseWriter, r *http.Request, workspaceId openapi_types.UUID, catalogId openapi_types.UUID) {
+	var request DeleteCatalogGrantRequestObject
+
+	request.WorkspaceId = workspaceId
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCatalogGrant(ctx, request.(DeleteCatalogGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCatalogGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCatalogGrantResponseObject); ok {
+		if err := validResponse.VisitDeleteCatalogGrantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApproveCatalogGrant operation middleware
+func (sh *strictHandler) ApproveCatalogGrant(w http.ResponseWriter, r *http.Request, workspaceId openapi_types.UUID, catalogId openapi_types.UUID) {
+	var request ApproveCatalogGrantRequestObject
+
+	request.WorkspaceId = workspaceId
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApproveCatalogGrant(ctx, request.(ApproveCatalogGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApproveCatalogGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApproveCatalogGrantResponseObject); ok {
+		if err := validResponse.VisitApproveCatalogGrantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListAllCatalogs operation middleware
 func (sh *strictHandler) ListAllCatalogs(w http.ResponseWriter, r *http.Request, params ListAllCatalogsParams) {
 	var request ListAllCatalogsRequestObject
@@ -26744,6 +27397,32 @@ func (sh *strictHandler) UpdateCatalogDetail(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCatalogDetailResponseObject); ok {
 		if err := validResponse.VisitUpdateCatalogDetailResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListGrantableWorkspaces operation middleware
+func (sh *strictHandler) ListGrantableWorkspaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request ListGrantableWorkspacesRequestObject
+
+	request.CatalogId = catalogId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListGrantableWorkspaces(ctx, request.(ListGrantableWorkspacesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListGrantableWorkspaces")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListGrantableWorkspacesResponseObject); ok {
+		if err := validResponse.VisitListGrantableWorkspacesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -30501,6 +31180,32 @@ func (sh *strictHandler) RestoreSavedQueryVersion(w http.ResponseWriter, r *http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RestoreSavedQueryVersionResponseObject); ok {
 		if err := validResponse.VisitRestoreSavedQueryVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRequestableCatalogs operation middleware
+func (sh *strictHandler) ListRequestableCatalogs(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListRequestableCatalogsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRequestableCatalogs(ctx, request.(ListRequestableCatalogsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRequestableCatalogs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRequestableCatalogsResponseObject); ok {
+		if err := validResponse.VisitListRequestableCatalogsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
