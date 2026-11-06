@@ -28,6 +28,7 @@ import (
 	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
@@ -167,6 +168,8 @@ type Deps struct {
 	// WSTickets issues the single-use WebSocket tickets (#26); the WebSocket
 	// handler consumes from the same store. Nil builds one.
 	WSTickets *wsticket.Store
+	// Monitoring fans monitoring changes out to the SSE endpoint (#733).
+	Monitoring *events.Hub
 }
 
 // ObservabilityDeps are optional: a nil Audit records nothing, a nil
@@ -249,6 +252,7 @@ func NewAPI(d Deps) (*API, error) {
 		content:            content.New(d.Data.Pool, d.Data.Queries),
 		oidcLogin:          d.Identity.OIDC,
 		idpTokens:          d.Identity.IDPTokens,
+		monitoringHub:      d.Monitoring,
 	}
 	if c.audit == nil {
 		c.audit = audit.Nop{}

@@ -26,6 +26,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mcp"
 	"github.com/galileostudio/baleia/internal/metrics"
+	monitoringevents "github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/monitoring/queryevents"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -76,6 +77,10 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	cfg := core.Config
 	s := &Server{logger: core.Logger, cfg: cfg, mux: chi.NewRouter(), pool: core.Pool, queries: core.Queries, metrics: core.Metrics}
 
+	// Monitoring SSE: changes written by the worker reach this process through
+	// PostgreSQL LISTEN/NOTIFY, then fan out to connected clients (#733).
+	monitoringHub := monitoringevents.NewHub()
+
 	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
 	// that the WebSocket handler consumes; the JWT never appears in the URL.
 	tickets := wsticket.New()
@@ -101,6 +106,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		WSTickets:     tickets,
 		Assistant:     runner,
 		Identity:      api.IdentityDeps{OIDC: core.OIDC, IDPTokens: core.IDPTokens},
+		Monitoring:    monitoringHub,
 	})
 	if err != nil {
 		return nil, err
@@ -108,7 +114,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	s.handlers = h
 	s.background = h
 	if cfg.TrinoEventsToken != "" {
-		s.queryEvents = queryevents.New(s.logger, core.Queries, defaultTrinoID(core.Engines), cfg.TrinoEventsToken)
+		s.queryEvents = queryevents.New(s.logger, core.Queries, defaultTrinoID(core.Engines), cfg.TrinoEventsToken, core.Pool)
 	}
 
 	authMetrics := h.AuthMetrics()
@@ -152,6 +158,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	}
 
 	s.routes()
+	go monitoringevents.Listen(ctx, s.logger, core.Pool, monitoringHub)
 	return s, nil
 }
 

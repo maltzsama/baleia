@@ -27,7 +27,7 @@ func (r *recorder) UpsertTrinoQuerySnapshot(_ context.Context, arg db.UpsertTrin
 var engineID = pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}
 
 func ingester(r *recorder, token string) *Ingester {
-	return New(nil, r, func(context.Context) (pgtype.UUID, error) { return engineID, nil }, token)
+	return New(nil, r, func(context.Context) (pgtype.UUID, error) { return engineID, nil }, token, nil)
 }
 
 // fixture is an event captured from Trino 483's HTTP event listener, with

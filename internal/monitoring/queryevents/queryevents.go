@@ -19,8 +19,11 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Store writes query snapshots; *db.Queries implements it.
@@ -44,17 +47,20 @@ type Ingester struct {
 	// token is what the listener sends as "Authorization: Bearer <token>"
 	// (http-event-listener.connect-http-headers).
 	token string
+	// pool NOTIFYs the monitoring SSE subscribers after a snapshot (#733); nil
+	// skips it (tests).
+	pool *pgxpool.Pool
 }
 
 var _ http.Handler = (*Ingester)(nil)
 
 // New builds the ingester for the listener's token; a nil logger discards.
 // An empty token serves 404: the feature is off.
-func New(logger *slog.Logger, store Store, engine Engine, token string) *Ingester {
+func New(logger *slog.Logger, store Store, engine Engine, token string, pool *pgxpool.Pool) *Ingester {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	return &Ingester{store: store, engine: engine, logger: logger, token: token}
+	return &Ingester{store: store, engine: engine, logger: logger, token: token, pool: pool}
 }
 
 // ErrMalformed: the body is not a Trino query event.
@@ -123,6 +129,9 @@ func (i *Ingester) Ingest(ctx context.Context, body io.Reader) error {
 	snap.EngineID = engineID
 	if _, err := i.store.UpsertTrinoQuerySnapshot(ctx, snap); err != nil {
 		return fmt.Errorf("record query %s: %w", e.Metadata.QueryID, err)
+	}
+	if err := events.Notify(ctx, i.pool, uuid.UUID(engineID.Bytes).String(), events.KindQueries); err != nil {
+		i.logger.WarnContext(ctx, "query event: monitoring notify", "err", err)
 	}
 	return nil
 }

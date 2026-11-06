@@ -8877,6 +8877,23 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /engines/{id}/monitoring/events:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Monitoring]
+      operationId: streamMonitoringEvents
+      summary: "Stream a signal when an engine's monitoring data changes (SSE)"
+      responses:
+        "200":
+          description: "SSE stream (changed events; re-fetch the filtered list)"
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /engines/{id}/monitoring/queries/{query_id}:
     parameters:
       - $ref: "#/components/parameters/PathId"

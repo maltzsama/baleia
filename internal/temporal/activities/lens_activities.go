@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring"
+	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
@@ -134,6 +135,10 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 		}
 	}
 
+	// Tell the monitoring SSE subscribers this engine's query list changed (#733).
+	if err := events.Notify(ctx, a.pool, uuid.UUID(engineID.Bytes).String(), events.KindQueries); err != nil {
+		logger.Warn("monitoring notify failed", "err", err)
+	}
 	return nil
 }
 
@@ -172,6 +177,9 @@ func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
 	})
 	if err != nil {
 		return err
+	}
+	if err := events.Notify(ctx, a.pool, uuid.UUID(engineID.Bytes).String(), events.KindCluster); err != nil {
+		a.logger.WarnContext(ctx, "monitoring notify failed", "err", err)
 	}
 	a.applyAdaptiveGate(ctx, engineID, stats)
 	return nil
