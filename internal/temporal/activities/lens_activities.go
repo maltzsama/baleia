@@ -347,6 +347,14 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 		}
 		target = resolved
 	}
+	var recorded int
+	var firstErr error
+	recordErr := func(err error) {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+
 	for _, cat := range catalogs {
 		if target != "" && cat.Name != target {
 			continue
@@ -354,6 +362,7 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 
 		namespaces, err := allNamespaces(ctx, reader, cat.Name)
 		if err != nil {
+			recordErr(fmt.Errorf("namespaces of catalog %s: %w", cat.Name, err))
 			continue
 		}
 
@@ -364,6 +373,7 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 			}
 			tables, err := allTables(ctx, reader, cat.Name, ns)
 			if err != nil {
+				recordErr(fmt.Errorf("tables of %s.%s: %w", cat.Name, nsName, err))
 				continue
 			}
 
@@ -373,15 +383,22 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 				}
 				meta, err := reader.LoadTable(ctx, tbl)
 				if err != nil {
+					recordErr(fmt.Errorf("table %s.%s.%s: %w", cat.Name, nsName, tbl.Name, err))
 					continue
 				}
 				if err := h.record(ctx, cat.Name, nsName, tbl.Name, meta); err != nil {
 					return err
 				}
+				recorded++
 			}
 		}
 	}
 
+	// A pass that errored its way through every enumeration must not end green
+	// with zero rows (#750).
+	if recorded == 0 && firstErr != nil {
+		return fmt.Errorf("table health pass recorded no tables: %w", firstErr)
+	}
 	return nil
 }
 
