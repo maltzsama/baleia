@@ -271,7 +271,11 @@
 			startEvents();
 		} else {
 			await loadCatalogList();
-			await loadHealth();
+			// The first tick loads the rows and keeps watching for the hourly
+			// pass (#750); don't also await loadHealth or it double-fetches.
+			polls.push(
+				poll(loadHealth, { until: () => false, intervals: [60_000], maxDurationMs: 3_600_000 })
+			);
 		}
 	}
 
@@ -403,6 +407,14 @@
 		try {
 			await analyzeCatalogTableHealth(catalogId);
 			toasts.success(m.maintenance_analysis_started());
+			// The pass writes rows asynchronously; watch until they appear (#750).
+			polls.push(
+				poll(loadHealth, {
+					until: () => health.length > 0,
+					intervals: [3000, 5000, 10000],
+					maxDurationMs: 5 * 60_000
+				})
+			);
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : String(e));
 		} finally {
