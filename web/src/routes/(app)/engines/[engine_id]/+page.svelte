@@ -242,6 +242,15 @@
 		) {
 			tab = requested as Tab;
 		}
+	});
+
+	// Reload when the URL id changes (#739): SPA navigation between two engines
+	// of the same route reuses this component, so onMount alone would keep stale
+	// data under the new URL.
+	$effect(() => {
+		const id = engineId;
+		if (!id) return;
+		engine = null;
 		void load();
 	});
 </script>

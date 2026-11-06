@@ -67,9 +67,18 @@
 		}
 	}
 
-	onMount(async () => {
-		await workspaceStore.load();
-		await load();
+	onMount(() => {
+		void workspaceStore.load();
+	});
+
+	// Reload when the URL id changes (#739): SPA navigation between two
+	// retrievers of the same route reuses this component, so onMount alone
+	// would keep stale data under the new URL.
+	$effect(() => {
+		const id = retrieverId;
+		if (!workspaceId || !id) return;
+		retriever = null;
+		void load();
 	});
 </script>
 

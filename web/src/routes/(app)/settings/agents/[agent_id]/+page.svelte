@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -179,7 +178,15 @@
 		};
 	}
 
-	onMount(load);
+	// Reload when the URL id changes (#739): SPA navigation between two agents
+	// of the same route reuses this component, so onMount alone would keep stale
+	// data under the new URL.
+	$effect(() => {
+		const id = agentId;
+		if (!id) return;
+		agent = null;
+		void load();
+	});
 
 	async function openTab(next: Tab) {
 		tab = next;

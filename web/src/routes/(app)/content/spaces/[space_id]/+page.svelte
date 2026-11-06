@@ -330,6 +330,15 @@
 	}
 
 	onMount(load);
+
+	// Reload the space-scoped metrics/models when the URL space changes (#739).
+	let lastSpace = $state(page.params.space_id ?? '');
+	$effect(() => {
+		if (spaceId === lastSpace) return;
+		lastSpace = spaceId;
+		if (!workspaceId || !spaceId) return;
+		void loadSemantic();
+	});
 </script>
 
 <div class="flex-1 overflow-y-auto p-7">

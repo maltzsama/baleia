@@ -298,6 +298,15 @@
 		if (requested && ['general', 'target', 'catalogs', 'members', 'activity'].includes(requested)) {
 			tab = requested as Tab;
 		}
+	});
+
+	// Reload when the URL id changes (#739): SPA navigation between two
+	// workspaces of the same route reuses this component, so onMount alone
+	// would keep stale data under the new URL.
+	$effect(() => {
+		const id = workspaceId;
+		if (!id) return;
+		ws = null;
 		void load();
 	});
 </script>

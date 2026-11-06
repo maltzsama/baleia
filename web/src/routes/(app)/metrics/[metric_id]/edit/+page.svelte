@@ -14,8 +14,10 @@
 	let loading = $state(true);
 	let error = $state('');
 
-	onMount(async () => {
-		await workspaceStore.load();
+	async function load() {
+		if (!workspaceId || !metricId) return;
+		loading = true;
+		error = '';
 		try {
 			metric = await getMetric(workspaceId, metricId);
 		} catch (e) {
@@ -23,6 +25,20 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	onMount(() => {
+		void workspaceStore.load();
+	});
+
+	// Reload when the URL id changes (#739): SPA navigation between two metrics
+	// of the same route reuses this component, so onMount alone would keep stale
+	// data under the new URL.
+	$effect(() => {
+		const id = metricId;
+		if (!workspaceId || !id) return;
+		metric = null;
+		void load();
 	});
 </script>
 
