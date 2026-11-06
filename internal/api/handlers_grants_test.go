@@ -236,6 +236,11 @@ func (q *authzFake) ListDiscoverableCatalogs(context.Context) ([]db.ListDiscover
 	return nil, nil
 }
 
+func (q *authzFake) SetCatalogDiscoverable(_ context.Context, p db.SetCatalogDiscoverableParams) error {
+	q.cat.Discoverable = p.Discoverable
+	return nil
+}
+
 func (q *authzFake) DeleteWorkspaceCatalogGrant(_ context.Context, p db.DeleteWorkspaceCatalogGrantParams) (int64, error) {
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()

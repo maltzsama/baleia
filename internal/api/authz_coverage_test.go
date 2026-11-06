@@ -202,6 +202,7 @@ var operationAccess = map[string]access{
 	"DeleteCatalogGrant":         checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner"),
 	"ListGrantableWorkspaces":    checked("PrincipalFromContext", "catalogOwner"),
 	"ListRequestableCatalogs":    checked("PrincipalFromContext", "workspaceAdmin"),
+	"SetCatalogDiscoverable":     checked("PrincipalFromContext", "catalogOwner"),
 
 	// ── workspace members (query editor, retrievers)
 	"ListExecutions":            {kind: kindChecked, calls: wsMember},

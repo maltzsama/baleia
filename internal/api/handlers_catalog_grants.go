@@ -323,6 +323,29 @@ func (h *CatalogHandlers) ListGrantableWorkspaces(ctx context.Context, request L
 	return ListGrantableWorkspaces200JSONResponse(out), nil
 }
 
+// SetCatalogDiscoverable — PATCH /catalogs/{catalog_id}/discoverable.
+func (h *CatalogHandlers) SetCatalogDiscoverable(ctx context.Context, request SetCatalogDiscoverableRequestObject) (SetCatalogDiscoverableResponseObject, error) {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return SetCatalogDiscoverable401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
+	}
+	if request.Body == nil {
+		return SetCatalogDiscoverable404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "missing body"}}, nil
+	}
+	catID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	if !h.catalogOwner(ctx, p, catID) {
+		return SetCatalogDiscoverable404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
+	}
+	if err := h.queries.SetCatalogDiscoverable(ctx, db.SetCatalogDiscoverableParams{ID: catID, Discoverable: request.Body.Discoverable}); err != nil {
+		return nil, err
+	}
+	cat, err := h.queries.GetCatalogByID(ctx, catID)
+	if err != nil {
+		return nil, err
+	}
+	return SetCatalogDiscoverable200JSONResponse(h.catalogWithStatus(ctx, cat)), nil
+}
+
 // ListRequestableCatalogs — GET /workspaces/{id}/requestable-catalogs.
 func (h *CatalogHandlers) ListRequestableCatalogs(ctx context.Context, request ListRequestableCatalogsRequestObject) (ListRequestableCatalogsResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)

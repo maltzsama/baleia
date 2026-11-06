@@ -1732,8 +1732,11 @@ type Catalog struct {
 	Connector      *string             `json:"connector,omitempty"`
 	CreatedAt      *time.Time          `json:"created_at,omitempty"`
 	Description    *string             `json:"description"`
-	Enabled        *bool               `json:"enabled,omitempty"`
-	Id             *openapi_types.UUID `json:"id,omitempty"`
+
+	// Discoverable The owner marked the catalog discoverable so workspace admins can find and request it (default off: a catalog name is itself information).
+	Discoverable *bool               `json:"discoverable,omitempty"`
+	Enabled      *bool               `json:"enabled,omitempty"`
+	Id           *openapi_types.UUID `json:"id,omitempty"`
 
 	// MetadataSyncErrorCode The latest pass's error code when it failed (see MetadataSyncRun.error_code).
 	MetadataSyncErrorCode *string `json:"metadata_sync_error_code"`
@@ -1940,8 +1943,11 @@ type CatalogSummary struct {
 	Connector    *string              `json:"connector,omitempty"`
 	CreatedAt    *time.Time           `json:"created_at,omitempty"`
 	Description  *string              `json:"description"`
-	Enabled      *bool                `json:"enabled,omitempty"`
-	Id           *openapi_types.UUID  `json:"id,omitempty"`
+
+	// Discoverable The owner marked the catalog discoverable so workspace admins can find and request it (default off: a catalog name is itself information).
+	Discoverable *bool               `json:"discoverable,omitempty"`
+	Enabled      *bool               `json:"enabled,omitempty"`
+	Id           *openapi_types.UUID `json:"id,omitempty"`
 
 	// MetadataSyncErrorCode The latest pass's error code when it failed (see MetadataSyncRun.error_code).
 	MetadataSyncErrorCode *string `json:"metadata_sync_error_code"`
@@ -5238,6 +5244,11 @@ type ListAllCatalogsParams struct {
 	Offset       *int                `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// SetCatalogDiscoverableJSONBody defines parameters for SetCatalogDiscoverable.
+type SetCatalogDiscoverableJSONBody struct {
+	Discoverable bool `json:"discoverable"`
+}
+
 // ListMaintenanceRunsParams defines parameters for ListMaintenanceRuns.
 type ListMaintenanceRunsParams struct {
 	Trigger   *ListMaintenanceRunsParamsTrigger `form:"trigger,omitempty" json:"trigger,omitempty"`
@@ -5684,6 +5695,9 @@ type CreateCatalogGrantJSONRequestBody = CatalogGrantRequest
 
 // UpdateCatalogDetailJSONRequestBody defines body for UpdateCatalogDetail for application/json ContentType.
 type UpdateCatalogDetailJSONRequestBody = UpdateCatalogDetailRequest
+
+// SetCatalogDiscoverableJSONRequestBody defines body for SetCatalogDiscoverable for application/json ContentType.
+type SetCatalogDiscoverableJSONRequestBody SetCatalogDiscoverableJSONBody
 
 // CreateMaintenanceRunJSONRequestBody defines body for CreateMaintenanceRun for application/json ContentType.
 type CreateMaintenanceRunJSONRequestBody = CreateMaintenanceRequest

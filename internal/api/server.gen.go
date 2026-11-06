@@ -234,6 +234,9 @@ type ServerInterface interface {
 	// Rename or re-describe a catalog (bundles and metrics reference it by name)
 	// (PATCH /catalogs/{catalog_id})
 	UpdateCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
+	// Mark the catalog discoverable so workspace admins can find and request it
+	// (PATCH /catalogs/{catalog_id}/discoverable)
+	SetCatalogDiscoverable(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
 	// Workspaces a catalog owner may offer the catalog to
 	// (GET /catalogs/{catalog_id}/grantable-workspaces)
 	ListGrantableWorkspaces(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID)
@@ -1221,6 +1224,12 @@ func (_ Unimplemented) GetCatalogDetail(w http.ResponseWriter, r *http.Request, 
 // Rename or re-describe a catalog (bundles and metrics reference it by name)
 // (PATCH /catalogs/{catalog_id})
 func (_ Unimplemented) UpdateCatalogDetail(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Mark the catalog discoverable so workspace admins can find and request it
+// (PATCH /catalogs/{catalog_id}/discoverable)
+func (_ Unimplemented) SetCatalogDiscoverable(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4683,6 +4692,39 @@ func (siw *ServerInterfaceWrapper) UpdateCatalogDetail(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCatalogDetail(w, r, catalogId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetCatalogDiscoverable operation middleware
+func (siw *ServerInterfaceWrapper) SetCatalogDiscoverable(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "catalog_id" -------------
+	var catalogId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "catalog_id", chi.URLParam(r, "catalog_id"), &catalogId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetCatalogDiscoverable(w, r, catalogId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12756,6 +12798,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/catalogs/{catalog_id}", wrapper.UpdateCatalogDetail)
 	})
 	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/catalogs/{catalog_id}/discoverable", wrapper.SetCatalogDiscoverable)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalogs/{catalog_id}/grantable-workspaces", wrapper.ListGrantableWorkspaces)
 	})
 	r.Group(func(r chi.Router) {
@@ -16265,6 +16310,51 @@ type UpdateCatalogDetail422JSONResponse struct {
 func (response UpdateCatalogDetail422JSONResponse) VisitUpdateCatalogDetailResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetCatalogDiscoverableRequestObject struct {
+	CatalogId openapi_types.UUID `json:"catalog_id"`
+	Body      *SetCatalogDiscoverableJSONRequestBody
+}
+
+type SetCatalogDiscoverableResponseObject interface {
+	VisitSetCatalogDiscoverableResponse(w http.ResponseWriter) error
+}
+
+type SetCatalogDiscoverable200JSONResponse Catalog
+
+func (response SetCatalogDiscoverable200JSONResponse) VisitSetCatalogDiscoverableResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetCatalogDiscoverable401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SetCatalogDiscoverable401JSONResponse) VisitSetCatalogDiscoverableResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetCatalogDiscoverable403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetCatalogDiscoverable403JSONResponse) VisitSetCatalogDiscoverableResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetCatalogDiscoverable404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetCatalogDiscoverable404JSONResponse) VisitSetCatalogDiscoverableResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -24829,6 +24919,9 @@ type StrictServerInterface interface {
 	// Rename or re-describe a catalog (bundles and metrics reference it by name)
 	// (PATCH /catalogs/{catalog_id})
 	UpdateCatalogDetail(ctx context.Context, request UpdateCatalogDetailRequestObject) (UpdateCatalogDetailResponseObject, error)
+	// Mark the catalog discoverable so workspace admins can find and request it
+	// (PATCH /catalogs/{catalog_id}/discoverable)
+	SetCatalogDiscoverable(ctx context.Context, request SetCatalogDiscoverableRequestObject) (SetCatalogDiscoverableResponseObject, error)
 	// Workspaces a catalog owner may offer the catalog to
 	// (GET /catalogs/{catalog_id}/grantable-workspaces)
 	ListGrantableWorkspaces(ctx context.Context, request ListGrantableWorkspacesRequestObject) (ListGrantableWorkspacesResponseObject, error)
@@ -27397,6 +27490,39 @@ func (sh *strictHandler) UpdateCatalogDetail(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCatalogDetailResponseObject); ok {
 		if err := validResponse.VisitUpdateCatalogDetailResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetCatalogDiscoverable operation middleware
+func (sh *strictHandler) SetCatalogDiscoverable(w http.ResponseWriter, r *http.Request, catalogId openapi_types.UUID) {
+	var request SetCatalogDiscoverableRequestObject
+
+	request.CatalogId = catalogId
+
+	var body SetCatalogDiscoverableJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetCatalogDiscoverable(ctx, request.(SetCatalogDiscoverableRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetCatalogDiscoverable")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetCatalogDiscoverableResponseObject); ok {
+		if err := validResponse.VisitSetCatalogDiscoverableResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

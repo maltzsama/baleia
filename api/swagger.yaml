@@ -1523,6 +1523,10 @@ components:
           default: iceberg
           pattern: '^[a-z][a-z0-9_]{0,62}$'
         enabled:             { type: boolean, default: true }
+        discoverable:
+          type: boolean
+          default: false
+          description: "The owner marked the catalog discoverable so workspace admins can find and request it (default off: a catalog name is itself information)."
         sync_status:
           type: string
           enum: [pending, synced, error, draining, disabled]
@@ -7618,6 +7622,35 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/CatalogGrant" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{catalog_id}/discoverable:
+    parameters:
+      - name: catalog_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Catalogs]
+      operationId: setCatalogDiscoverable
+      summary: "Mark the catalog discoverable so workspace admins can find and request it"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [discoverable]
+              properties:
+                discoverable: { type: boolean }
+      responses:
+        "200":
+          description: "The catalog"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Catalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /catalog-connections/{id}/impact:

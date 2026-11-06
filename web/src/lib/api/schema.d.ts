@@ -2087,6 +2087,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/catalog-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active grants and pending requests the caller manages */
+        get: operations["listCatalogGrantItems"];
+        put?: never;
+        /** Offer, request or directly grant a catalog to a workspace, decided by the caller's rights on each side */
+        post: operations["createCatalogGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog-grants/{workspace_id}/{catalog_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Decline a pending request or unlink an active grant */
+        delete: operations["deleteCatalogGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog-grants/{workspace_id}/{catalog_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a pending offer or request as the other party */
+        post: operations["approveCatalogGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/grantable-workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        /** Workspaces a catalog owner may offer the catalog to */
+        get: operations["listGrantableWorkspaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/requestable-catalogs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Discoverable catalogs a workspace admin may request */
+        get: operations["listRequestableCatalogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/connection-providers": {
         parameters: {
             query?: never;
@@ -2408,6 +2504,25 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{catalog_id}/discoverable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark the catalog discoverable so workspace admins can find and request it */
+        patch: operations["setCatalogDiscoverable"];
         trace?: never;
     };
     "/catalog-connections/{id}/impact": {
@@ -4678,6 +4793,11 @@ export interface components {
             /** @default true */
             enabled: boolean;
             /**
+             * @description The owner marked the catalog discoverable so workspace admins can find and request it (default off: a catalog name is itself information).
+             * @default false
+             */
+            discoverable: boolean;
+            /**
              * @description The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
              * @enum {string}
              */
@@ -4760,6 +4880,49 @@ export interface components {
             granted_by?: string | null;
             /** Format: date-time */
             granted_at: string;
+        };
+        CatalogGrantItem: {
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            catalog_id: string;
+            /** @enum {string} */
+            state: "active" | "pending";
+            /** @enum {string|null} */
+            initiated_by_side?: "catalog" | "workspace" | null;
+            /** Format: uuid */
+            requested_by?: string | null;
+            /** Format: uuid */
+            granted_by?: string | null;
+            /** Format: date-time */
+            granted_at?: string | null;
+            /** Format: date-time */
+            requested_at?: string | null;
+            catalog_name?: string;
+            engine_catalog_name?: string | null;
+            connection_name?: string | null;
+            workspace_name?: string | null;
+            allowed_actions?: string[];
+        };
+        CatalogGrantRequest: {
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            catalog_id: string;
+        };
+        GrantableWorkspace: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            type: string;
+            team_name?: string | null;
+        };
+        RequestableCatalog: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description?: string | null;
+            connection_name: string;
         };
         BindingProjection: {
             connector: string;
@@ -10689,6 +10852,150 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listCatalogGrantItems: {
+        parameters: {
+            query?: {
+                workspace_id?: string;
+                catalog_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grants and pending requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGrantItem"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createCatalogGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description The grant (active) or request (pending) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGrantItem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteCatalogGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    approveCatalogGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The now-active grant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGrantItem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listGrantableWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspaces (name and team only) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantableWorkspace"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listRequestableCatalogs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Discoverable catalogs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestableCatalog"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listConnectionProviders: {
         parameters: {
             query?: never;
@@ -11323,6 +11630,37 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setCatalogDiscoverable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    discoverable: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Catalog"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
