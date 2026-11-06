@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { savedQueries } from '$lib/stores/savedQueries.svelte';
@@ -119,7 +118,15 @@
 		window.location.href = '/metrics';
 	}
 
-	onMount(load);
+	// Reload when the URL id (or workspace) changes (#739): SPA navigation
+	// between two metrics of the same route reuses this component, so onMount
+	// alone would keep stale data under the new URL.
+	$effect(() => {
+		const id = metricId;
+		if (!workspaceId || !id) return;
+		metric = null;
+		void load();
+	});
 </script>
 
 <div class="flex-1 overflow-y-auto p-7">

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { apiErrorMessage, client } from '$lib/api/client';
@@ -47,7 +46,14 @@
 		}
 	}
 
-	onMount(open);
+	// Reload when the URL id changes (#739): SPA navigation between two saved
+	// queries of the same route reuses this component, so onMount alone would
+	// leave the previous query open.
+	$effect(() => {
+		const id = page.params.query_id;
+		if (!id) return;
+		void open();
+	});
 </script>
 
 {#if error}
