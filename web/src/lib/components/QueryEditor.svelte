@@ -465,6 +465,9 @@
 						detail: item.slug,
 						group: m.components_queryeditor_saved_queries(),
 						run: () => {
+							// Switching tabs must flush the pending SQL sync first,
+							// or the last keystrokes land on the wrong tab (#729).
+							flushSql();
 							editor.openSavedQuery(item, !savedQueries.canEdit(item.space_id));
 						}
 					}));
@@ -541,6 +544,11 @@
 		const id = editor.activeId;
 		const generation = editor.generation;
 		if (!editorView || (id === syncedTabId && generation === syncedGeneration)) return;
+		// A genuine tab switch with a pending SQL sync saves the outgoing tab
+		// before the view is replaced, so its last keystrokes are not lost
+		// (#729). A drafts generation change replaces the whole document, so it
+		// must not flush the stale view back over it.
+		if (id !== syncedTabId && generation === syncedGeneration && sqlSyncTimer) flushSql();
 		syncedTabId = id;
 		syncedGeneration = generation;
 		const sql = editor.activeTab?.sql ?? '';
@@ -618,7 +626,9 @@
 		if (sqlSyncTimer) return;
 		sqlSyncTimer = setTimeout(() => {
 			sqlSyncTimer = undefined;
-			if (editorView) editor.updateSql(editor.activeId, editorView.state.doc.toString());
+			// Write to the tab the view is actually mirroring, not the store's
+			// active tab: a switch without flush would otherwise mix them (#729).
+			if (editorView) editor.updateSql(syncedTabId, editorView.state.doc.toString());
 		}, 150);
 	}
 
@@ -688,6 +698,9 @@
 
 		return () => {
 			observer.disconnect();
+			// A pending SQL sync must not fire after this editor is gone and
+			// overwrite a newer edit in the remounted one (#729).
+			if (sqlSyncTimer) clearTimeout(sqlSyncTimer);
 			window.removeEventListener('keydown', onGlobalKeydown, true);
 			window.removeEventListener('beforeunload', onBeforeUnload);
 			document.removeEventListener('visibilitychange', onVisibility);
