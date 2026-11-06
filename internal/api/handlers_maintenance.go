@@ -365,14 +365,14 @@ func (h *OpsHandlers) AnalyzeCatalogTableHealth(ctx context.Context, request Ana
 	if !ok {
 		return AnalyzeCatalogTableHealth404JSONResponse{NotFoundJSONResponse: notFound(catalogNotFound)}, nil
 	}
-	ok, err = h.startAnalysis(ctx, t, "", "")
+	ok, analysisID, err := h.startAnalysis(ctx, t, "", "")
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return AnalyzeCatalogTableHealth422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeNotSupported, notIcebergCatalog)}, nil
 	}
-	return AnalyzeCatalogTableHealth202Response{}, nil
+	return AnalyzeCatalogTableHealth202JSONResponse{AnalysisId: analysisID}, nil
 }
 
 // AnalyzeTableHealth starts a health pass of one table now.
@@ -384,14 +384,14 @@ func (h *OpsHandlers) AnalyzeTableHealth(ctx context.Context, request AnalyzeTab
 	if !ok {
 		return AnalyzeTableHealth404JSONResponse{NotFoundJSONResponse: notFound(catalogNotFound)}, nil
 	}
-	ok, err = h.startAnalysis(ctx, t, request.Namespace, request.Table)
+	ok, analysisID, err := h.startAnalysis(ctx, t, request.Namespace, request.Table)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return AnalyzeTableHealth422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeNotSupported, notIcebergCatalog)}, nil
 	}
-	return AnalyzeTableHealth202Response{}, nil
+	return AnalyzeTableHealth202JSONResponse{AnalysisId: analysisID}, nil
 }
 
 const notIcebergCatalog = "table health covers enabled Iceberg catalogs only"
@@ -409,30 +409,31 @@ func icebergCatalogRef(c db.ListEnabledIcebergCatalogsRow) string {
 	return c.Name
 }
 
-// startAnalysis starts the pass and the round after it; false when the
-// catalog is not an enabled Iceberg catalog.
-func (h *OpsHandlers) startAnalysis(ctx context.Context, t maintenanceTarget, namespace, table string) (bool, error) {
+// startAnalysis starts the pass and returns its workflow id; ok is false when
+// the catalog is not an enabled Iceberg catalog.
+func (h *OpsHandlers) startAnalysis(ctx context.Context, t maintenanceTarget, namespace, table string) (bool, string, error) {
 	catalogs, err := h.queries.ListEnabledIcebergCatalogs(ctx)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	for _, c := range catalogs {
 		if c.ID != t.key.CatalogID {
 			continue
 		}
 		if h.temporalClient == nil {
-			return false, errors.New("table health analysis is unavailable: no Temporal client is configured")
+			return false, "", errors.New("table health analysis is unavailable: no Temporal client is configured")
 		}
 		params := activities.LensAnalyzeTableHealthParams{
 			CatalogID: c.ID.String(), CatalogConnectionID: c.ConnectionID.String(), Catalog: icebergCatalogRef(c),
 			Namespace: namespace, Table: table,
 		}
+		workflowID := "table-health-analyze-" + uuid.NewString()
 		_, err := h.temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-			ID: "table-health-analyze-" + uuid.NewString(), TaskQueue: "baleia-task-queue",
+			ID: workflowID, TaskQueue: "baleia-task-queue",
 		}, workflows.TableHealthAnalyzeWorkflow, params)
-		return err == nil, err
+		return err == nil, workflowID, err
 	}
-	return false, nil
+	return false, "", nil
 }
 
 // GetCatalogMaintenancePlan plans every table of the catalog with parameters.

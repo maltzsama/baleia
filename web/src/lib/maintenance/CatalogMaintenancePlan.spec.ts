@@ -31,7 +31,7 @@ describe('CatalogMaintenancePlan', () => {
 			),
 			http.post('/catalogs/{catalog_id}/table-health/analyze', ({ response }) => {
 				analyzed = true;
-				return response(202).empty();
+				return response(202).json({ analysis_id: 'analysis-1' });
 			})
 		);
 		render(CatalogMaintenancePlan, { props: { catalogId: CATALOG } });

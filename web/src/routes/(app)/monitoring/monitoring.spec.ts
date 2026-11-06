@@ -301,7 +301,7 @@ describe('monitoring page', () => {
 			server.use(
 				http.post('/catalogs/{catalog_id}/table-health/analyze', ({ response }) => {
 					analyzed = true;
-					return response(202).empty();
+					return response(202).json({ analysis_id: 'analysis-1' });
 				})
 			);
 			await openTables();

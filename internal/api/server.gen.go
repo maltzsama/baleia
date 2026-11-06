@@ -16842,12 +16842,15 @@ type AnalyzeCatalogTableHealthResponseObject interface {
 	VisitAnalyzeCatalogTableHealthResponse(w http.ResponseWriter) error
 }
 
-type AnalyzeCatalogTableHealth202Response struct {
+type AnalyzeCatalogTableHealth202JSONResponse struct {
+	AnalysisId string `json:"analysis_id"`
 }
 
-func (response AnalyzeCatalogTableHealth202Response) VisitAnalyzeCatalogTableHealthResponse(w http.ResponseWriter) error {
+func (response AnalyzeCatalogTableHealth202JSONResponse) VisitAnalyzeCatalogTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(202)
-	return nil
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type AnalyzeCatalogTableHealth401JSONResponse struct{ UnauthorizedJSONResponse }
@@ -17170,12 +17173,15 @@ type AnalyzeTableHealthResponseObject interface {
 	VisitAnalyzeTableHealthResponse(w http.ResponseWriter) error
 }
 
-type AnalyzeTableHealth202Response struct {
+type AnalyzeTableHealth202JSONResponse struct {
+	AnalysisId string `json:"analysis_id"`
 }
 
-func (response AnalyzeTableHealth202Response) VisitAnalyzeTableHealthResponse(w http.ResponseWriter) error {
+func (response AnalyzeTableHealth202JSONResponse) VisitAnalyzeTableHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(202)
-	return nil
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type AnalyzeTableHealth401JSONResponse struct{ UnauthorizedJSONResponse }
