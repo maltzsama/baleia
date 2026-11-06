@@ -28,12 +28,11 @@ WITH eng AS (
             updated_at          = now()
     RETURNING catalog_id
 )
-INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, permission, granted_by)
-SELECT w.id, binding.catalog_id, 'read', u.id
+INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, granted_by)
+SELECT w.id, binding.catalog_id, u.id
 FROM binding
 JOIN users u ON u.email = :'email'
 JOIN workspaces w ON w.owner_user_id = u.id AND w.type = 'personal'
 ON CONFLICT (workspace_id, catalog_id) DO UPDATE
-    SET permission = EXCLUDED.permission,
-        granted_by = EXCLUDED.granted_by,
+    SET granted_by = EXCLUDED.granted_by,
         granted_at = now();

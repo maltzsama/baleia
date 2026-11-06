@@ -1203,7 +1203,7 @@ INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, granted_by)
 VALUES ($1, $2, $3)
 ON CONFLICT (workspace_id, catalog_id) DO UPDATE
 SET granted_by = EXCLUDED.granted_by, granted_at = now()
-RETURNING workspace_id, catalog_id, permission, granted_by, granted_at
+RETURNING workspace_id, catalog_id, granted_by, granted_at
 `
 
 type UpsertWorkspaceCatalogGrantParams struct {
@@ -1218,7 +1218,6 @@ func (q *Queries) UpsertWorkspaceCatalogGrant(ctx context.Context, arg UpsertWor
 	err := row.Scan(
 		&i.WorkspaceID,
 		&i.CatalogID,
-		&i.Permission,
 		&i.GrantedBy,
 		&i.GrantedAt,
 	)
