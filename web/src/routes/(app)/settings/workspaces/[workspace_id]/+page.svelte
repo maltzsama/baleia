@@ -570,7 +570,9 @@
 	</div>
 	{#snippet footer()}
 		<div class="flex justify-end gap-2">
-			<Button onclick={() => (requestOpen = false)} disabled={requesting}>{m.common_cancel()}</Button>
+			<Button onclick={() => (requestOpen = false)} disabled={requesting}
+				>{m.common_cancel()}</Button
+			>
 			<Button
 				variant="primary"
 				loading={requesting}
