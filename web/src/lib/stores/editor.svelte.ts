@@ -28,6 +28,9 @@ export type EditorTab = {
 	executionId: string;
 	/** The target the engine resolved for the last run, as reported by the API. */
 	runTarget: ExecutionTarget | null;
+	/** The run behind `executionId` was an EXPLAIN (#745): a 1×1 result is the
+	 *  plan text and renders as a document. Tab-scoped, never persisted. */
+	explain: boolean;
 	results: unknown[][];
 	columns: string[];
 	rowCount: number;
@@ -56,6 +59,7 @@ function emptyTab(id: string, overrides: Partial<EditorTab> = {}): EditorTab {
 		schema: '',
 		executionId: '',
 		runTarget: null,
+		explain: false,
 		results: [],
 		columns: [],
 		rowCount: 0,

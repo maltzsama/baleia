@@ -168,4 +168,61 @@ describe('ResultsPanel', () => {
 		await waitFor(() => expect(exportUrl).toContain('format=tsv'));
 		expect(exportUrl).toContain('result_index=0');
 	});
+
+	// #745: only an EXPLAIN run whose result is one non-null cell is a document.
+	it('renders an explain 1x1 result as a document, without a grid or export bar', async () => {
+		server.use(
+			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>
+				response(200).json([
+					statement([{ result_index: 0, rows: 1, bytes: 100, truncated: false }])
+				])
+			)
+		);
+		mockResult({ 'QUERY PLAN': ['SeqScan on events\n  Filter: x > 1'] });
+
+		render(ResultsPanel, { props: { executionId: EXEC, enabled: true, explain: true } });
+
+		expect(await screen.findByText('QUERY PLAN')).toBeTruthy();
+		const content = await waitFor(() => {
+			const el = document.querySelector('.cm-content');
+			expect(el).not.toBeNull();
+			return el as HTMLElement;
+		});
+		expect(content.textContent).toContain('SeqScan on events');
+		expect(screen.queryByRole('grid')).toBeNull();
+		expect(screen.queryByLabelText('Export format')).toBeNull();
+	});
+
+	it('keeps the grid for an explain whose result has more than one column', async () => {
+		server.use(
+			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>
+				response(200).json([
+					statement([{ result_index: 0, rows: 1, bytes: 100, truncated: false }])
+				])
+			)
+		);
+		mockResult({ id: ['1'], note: ['a'] });
+
+		render(ResultsPanel, { props: { executionId: EXEC, enabled: true, explain: true } });
+
+		expect(await screen.findByRole('grid')).toBeTruthy();
+		expect(document.querySelector('.cm-content')).toBeNull();
+	});
+
+	it('keeps the grid for a plain 1x1 result that was not an explain', async () => {
+		server.use(
+			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>
+				response(200).json([
+					statement([{ result_index: 0, rows: 1, bytes: 100, truncated: false }])
+				])
+			)
+		);
+		mockResult({ answer: ['42'] });
+
+		render(ResultsPanel, { props: { executionId: EXEC, enabled: true } });
+
+		expect(await screen.findByRole('grid')).toBeTruthy();
+		expect(await screen.findByText('42')).toBeTruthy();
+		expect(document.querySelector('.cm-content')).toBeNull();
+	});
 });

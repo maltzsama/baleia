@@ -22,6 +22,7 @@ function tab(id: string, sql = 'SELECT 1'): EditorTab {
 		schema: 's',
 		executionId: '',
 		runTarget: null,
+		explain: false,
 		results: [],
 		columns: [],
 		rowCount: 0,

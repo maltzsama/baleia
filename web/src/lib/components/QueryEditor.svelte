@@ -758,7 +758,9 @@
 		return data;
 	}
 
-	async function submit(sqlText: string) {
+	/** `explain` marks the run as an EXPLAIN (#745): its flag is written only
+	 *  together with the execution id, so the two always describe the same run. */
+	async function submit(sqlText: string, opts?: { explain?: boolean }) {
 		const text = sqlText.trim();
 		if (!text) return;
 		// A run is not a completion choice: drop an open suggestion list.
@@ -795,6 +797,7 @@
 			if (!isOpen(tab.id)) return;
 			tab.runTarget = data.target ?? null;
 			editor.setExecution(tab.id, data.id);
+			tab.explain = opts?.explain ?? false;
 			runs[tab.id] = initialRunState(data.id);
 			connectWS(data.id, tab);
 		} catch (e) {
@@ -993,7 +996,7 @@
 				activeTab.errorMsg = m.components_queryeditor_this_engine_does_not_support_explain();
 				return;
 			}
-			await submit(data.sql);
+			await submit(data.sql, { explain: true });
 		} catch (e) {
 			activeTab.errorMsg = errorMessage(e);
 		}
@@ -1262,7 +1265,11 @@
 			{#if !runEnded || runHasResults}
 				<!-- A flex column, so the grid gets a bounded height and scrolls (#393). -->
 				<div class="flex min-h-0 flex-1 flex-col">
-					<ResultsPanel executionId={activeTab.executionId} enabled={runEnded} />
+					<ResultsPanel
+						executionId={activeTab.executionId}
+						enabled={runEnded}
+						explain={activeTab.explain}
+					/>
 				</div>
 			{/if}
 		</div>

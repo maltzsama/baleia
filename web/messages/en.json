@@ -1241,6 +1241,7 @@
 	"components_resultspanel_the_statement_returned_an_empty_result": "The statement returned an empty result.",
 	"components_resultspanel_loading_results": "Loading results",
 	"components_resultspanel_export_format": "Export format",
+	"components_resultspanel_explain_plan": "Explain plan",
 	"components_resultspanel_json_lines": "JSON Lines",
 	"components_resultspanel_arrow": "Arrow",
 	"components_rightsidebar_right_sidebar": "Right sidebar",

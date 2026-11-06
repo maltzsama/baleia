@@ -1241,6 +1241,7 @@
 	"components_resultspanel_the_statement_returned_an_empty_result": "O statement retornou um resultado vazio.",
 	"components_resultspanel_loading_results": "Carregando resultados",
 	"components_resultspanel_export_format": "Formato de exportação",
+	"components_resultspanel_explain_plan": "Plano de execução",
 	"components_resultspanel_json_lines": "JSON Lines",
 	"components_resultspanel_arrow": "Arrow",
 	"components_rightsidebar_right_sidebar": "Barra lateral direita",
