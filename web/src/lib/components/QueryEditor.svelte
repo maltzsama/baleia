@@ -465,6 +465,9 @@
 						detail: item.slug,
 						group: m.components_queryeditor_saved_queries(),
 						run: () => {
+							// Switching tabs must flush the pending SQL sync first,
+							// or the last keystrokes land on the wrong tab (#729).
+							flushSql();
 							editor.openSavedQuery(item, !savedQueries.canEdit(item.space_id));
 						}
 					}));
@@ -618,7 +621,9 @@
 		if (sqlSyncTimer) return;
 		sqlSyncTimer = setTimeout(() => {
 			sqlSyncTimer = undefined;
-			if (editorView) editor.updateSql(editor.activeId, editorView.state.doc.toString());
+			// Write to the tab the view is actually mirroring, not the store's
+			// active tab: a switch without flush would otherwise mix them (#729).
+			if (editorView) editor.updateSql(syncedTabId, editorView.state.doc.toString());
 		}, 150);
 	}
 
