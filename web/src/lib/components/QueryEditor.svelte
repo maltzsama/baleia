@@ -544,6 +544,11 @@
 		const id = editor.activeId;
 		const generation = editor.generation;
 		if (!editorView || (id === syncedTabId && generation === syncedGeneration)) return;
+		// A genuine tab switch with a pending SQL sync saves the outgoing tab
+		// before the view is replaced, so its last keystrokes are not lost
+		// (#729). A drafts generation change replaces the whole document, so it
+		// must not flush the stale view back over it.
+		if (id !== syncedTabId && generation === syncedGeneration && sqlSyncTimer) flushSql();
 		syncedTabId = id;
 		syncedGeneration = generation;
 		const sql = editor.activeTab?.sql ?? '';
