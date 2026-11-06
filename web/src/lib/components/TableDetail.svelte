@@ -1,12 +1,10 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import { apiErrorMessage, apiFetch, client } from '$lib/api/client';
+	import { apiFetch, client } from '$lib/api/client';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { editor } from '$lib/stores/editor.svelte';
 	import { toasts } from '$lib/ui/toast.svelte';
 	import { poll } from '$lib/util/poll';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { canOpenInBI } from '$lib/ui/patterns/kindIcon';
 	import { loadTable, type MetadataTableDetail, type TableRef } from '$lib/metadata/client';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -122,47 +120,6 @@
 	});
 
 	const hasBindings = $derived((table?.bindings.length ?? 0) > 1);
-	const selectedBinding = $derived(
-		table?.bindings.find((binding) => binding.binding_id === bindingId) ?? table?.bindings[0]
-	);
-	const biSupported = $derived(!!selectedBinding && canOpenInBI(selectedBinding.engine_kind));
-
-	// openInBI downloads a Tableau (.tds) or Power BI (.pbids) data source for
-	// the selected table and binding (#560). The file has no credentials.
-	async function openInBI(tool: 'tableau' | 'powerbi') {
-		const ref = table;
-		const binding = selectedBinding;
-		if (!ref || !binding) return;
-		const params = new SvelteURLSearchParams({
-			catalog: binding.engine_catalog_name,
-			table: ref.tableName
-		});
-		const schema = ref.namespace.join('.');
-		if (schema) params.set('schema', schema);
-		try {
-			const response = await apiFetch(
-				`/engines/${binding.engine_id}/bi/${tool}?${params.toString()}`
-			);
-			if (!response.ok) {
-				const body = await response.json().catch(() => null);
-				throw new Error(
-					apiErrorMessage(body, m.components_tabledetail_set_the_engine_external_url())
-				);
-			}
-			const blob = await response.blob();
-			const href = URL.createObjectURL(blob);
-			const link = document.createElement('a');
-			link.href = href;
-			link.download = `${ref.tableName}.${tool === 'tableau' ? 'tds' : 'pbids'}`;
-			document.body.appendChild(link);
-			link.click();
-			link.remove();
-			URL.revokeObjectURL(href);
-		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
-		}
-	}
-
 	function insertName() {
 		if (!detailCurrent || !detail?.qualified_name) return;
 		editor.insert(detail.qualified_name);
@@ -334,14 +291,6 @@
 					disabled={!detailCurrent || !detail.qualified_name}
 					onclick={insertName}>{m.components_tabledetail_insert_name()}</Button
 				>
-				{#if biSupported}
-					<Button variant="secondary" size="sm" onclick={() => openInBI('tableau')}
-						>{m.components_tabledetail_open_in_tableau()}</Button
-					>
-					<Button variant="secondary" size="sm" onclick={() => openInBI('powerbi')}
-						>{m.components_tabledetail_open_in_powerbi()}</Button
-					>
-				{/if}
 				{#if detail.qualified_name}
 					<span class="inline-flex items-center gap-1 text-[11px] text-text-muted">
 						<code class="font-mono">{detail.qualified_name}</code>

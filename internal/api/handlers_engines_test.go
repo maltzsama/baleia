@@ -433,37 +433,3 @@ func TestUpdateEngine_CostRouting(t *testing.T) {
 		t.Fatalf("ambiguous = %d %s", rec.Code, rec.Body)
 	}
 }
-
-// TestUpdateEngine_ExternalURL: a valid http(s) URL is stored, an invalid one
-// is refused before the write, and an empty string clears it (#533).
-func TestUpdateEngine_ExternalURL(t *testing.T) {
-	t.Parallel()
-	q := engineFixture(t, testUserID)
-	h := engineHandlers(t, q)
-
-	valid := "https://trino.example.com:8443"
-	if rec := updateEngine(t, h, &UpdateEngineRequest{ExternalUrl: &valid}); rec.Code != 200 {
-		t.Fatalf("valid = %d %s", rec.Code, rec.Body)
-	}
-	if len(q.updated) != 1 || q.updated[0].ExternalUrl == nil || *q.updated[0].ExternalUrl != valid {
-		t.Fatalf("params = %+v", q.updated)
-	}
-
-	q.updated = nil
-	bad := "ftp://trino.example.com"
-	if rec := updateEngine(t, h, &UpdateEngineRequest{ExternalUrl: &bad}); rec.Code != 422 {
-		t.Fatalf("invalid = %d %s", rec.Code, rec.Body)
-	}
-	if len(q.updated) != 0 {
-		t.Fatal("a refused URL wrote to the engine")
-	}
-
-	q.updated = nil
-	empty := "   "
-	if rec := updateEngine(t, h, &UpdateEngineRequest{ExternalUrl: &empty}); rec.Code != 200 {
-		t.Fatalf("clear = %d %s", rec.Code, rec.Body)
-	}
-	if len(q.updated) != 1 || q.updated[0].ClearExternalUrl == nil || !*q.updated[0].ClearExternalUrl {
-		t.Fatalf("clear params = %+v", q.updated)
-	}
-}
