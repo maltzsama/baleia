@@ -70,7 +70,11 @@ type Config struct {
 	// PluginVersion is the pinned baleia-trino-catalog-store release reported
 	// by the system status (#291).
 	PluginVersion string
-	JWTSecret     string
+	// RequireCatalogScope fails user queries when the pinned plugin does not
+	// enforce the baleia.catalogs workspace scope (ADR 0018 §5). Off by
+	// default, the API/worker only log a startup error in that case.
+	RequireCatalogScope bool
+	JWTSecret           string
 	// AccessTokenTTL, RefreshTokenTTL and ResetTokenTTL configure token
 	// lifetimes (#51); zero means the default.
 	AccessTokenTTL  time.Duration
@@ -266,7 +270,8 @@ func Load() *Config {
 		TrinoPassword:                     getEnv("BALEIA_TRINO_PASSWORD", ""),
 		TrinoCAFile:                       getEnv("BALEIA_TRINO_CA_FILE", ""),
 		TrinoUserIdentity:                 getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
-		PluginVersion:                     getEnv("BALEIA_PLUGIN_VERSION", "0.10.0"),
+		PluginVersion:                     getEnv("BALEIA_PLUGIN_VERSION", MinScopePluginVersion),
+		RequireCatalogScope:               getEnv("BALEIA_REQUIRE_CATALOG_SCOPE", "false") == "true",
 		JWTSecret:                         getEnv("JWT_SECRET", DefaultJWTSecret),
 		AccessTokenTTL:                    getEnvDuration("BALEIA_ACCESS_TOKEN_TTL", DefaultAccessTokenTTL),
 		RefreshTokenTTL:                   getEnvDuration("BALEIA_REFRESH_TOKEN_TTL", DefaultRefreshTokenTTL),
@@ -615,6 +620,59 @@ func (c *Config) MaintenanceMinRetention() time.Duration {
 		return time.Hour
 	}
 	return c.IcebergMaintenanceMinRetention
+}
+
+// MinScopePluginVersion is the first baleia-trino-catalog-store release whose
+// guard enforces the baleia.catalogs workspace scope (ADR 0018 §5).
+const MinScopePluginVersion = "0.10.2"
+
+// CatalogScopeEnforced reports whether the pinned plugin release enforces the
+// workspace catalog scope, i.e. PluginVersion >= MinScopePluginVersion. A
+// release with no guard, or an external Trino without Baleia's guard, is not
+// enforced.
+func (c *Config) CatalogScopeEnforced() bool {
+	return versionAtLeast(c.PluginVersion, MinScopePluginVersion)
+}
+
+// CatalogScopeWarning returns a non-empty startup warning when the pinned
+// plugin does not enforce the workspace catalog scope. With
+// RequireCatalogScope set, the same condition is a hard refusal instead of a
+// warning.
+func (c *Config) CatalogScopeWarning() string {
+	if c.CatalogScopeEnforced() {
+		return ""
+	}
+	if c.RequireCatalogScope {
+		return fmt.Sprintf("BALEIA_PLUGIN_VERSION %s is below %s and BALEIA_REQUIRE_CATALOG_SCOPE=true: user queries are refused", c.PluginVersion, MinScopePluginVersion)
+	}
+	return fmt.Sprintf("BALEIA_PLUGIN_VERSION %s is below %s: the Trino guard does not enforce the catalog scope (set BALEIA_REQUIRE_CATALOG_SCOPE=true to fail closed)", c.PluginVersion, MinScopePluginVersion)
+}
+
+// versionAtLeast reports whether semver-ish a >= b. A "+build" suffix and
+// non-numeric components are ignored, so "0.10.2" and "0.10.2+trino484" both
+// compare as 0.10.2.
+func versionAtLeast(a, b string) bool {
+	pa := strings.SplitN(a, "+", 2)[0]
+	pb := strings.SplitN(b, "+", 2)[0]
+	aa := strings.Split(pa, ".")
+	bb := strings.Split(pb, ".")
+	for i := 0; i < len(bb); i++ {
+		if i >= len(aa) {
+			return false
+		}
+		na, err := strconv.Atoi(aa[i])
+		if err != nil {
+			return false
+		}
+		nb, err := strconv.Atoi(bb[i])
+		if err != nil {
+			return false
+		}
+		if na != nb {
+			return na > nb
+		}
+	}
+	return true
 }
 
 // validateTrinoAuth checks the default cluster's authentication (#646): Trino

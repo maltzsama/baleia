@@ -88,7 +88,7 @@ func (s *session) options(cb queryengine.Callbacks, onHeaders func(http.Header))
 		info, _ := json.Marshal(map[string]string{"execution_id": s.spec.Tags.ExecutionID})
 		o.ClientInfo = string(info)
 	}
-	if s.spec.ReadOnly || s.spec.CatalogToken != "" {
+	if s.spec.ReadOnly || s.spec.CatalogToken != "" || s.spec.Identity.UserID != "" {
 		o.ExtraCredentials = map[string]string{}
 	}
 	if s.spec.ReadOnly {
@@ -98,6 +98,11 @@ func (s *session) options(cb queryengine.Callbacks, onHeaders func(http.Header))
 	// catalog manager as the user's bearer token (#648).
 	if s.spec.CatalogToken != "" {
 		o.ExtraCredentials[catalogTokenCredential] = s.spec.CatalogToken
+	}
+	// The workspace catalog scope: the guard allows a user identity only the
+	// catalogs listed here (ADR 0018 §5). The service identity sends none.
+	if s.spec.Identity.UserID != "" {
+		o.ExtraCredentials[scopeCredential] = strings.Join(s.spec.AllowedCatalogs, ",")
 	}
 	if cb.OnProgress != nil {
 		o.OnProgress = func() { cb.OnProgress(queryengine.Progress{State: "RUNNING"}) }
@@ -182,6 +187,19 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 		}
 		s.spec.CatalogToken = tok
 	}
+	// Only a user identity carries a scope: the service identity sends no
+	// baleia.catalogs, so refreshing it would be a wasted lookup that can also
+	// abort the statement for nothing (a trusted session runs unscoped by
+	// design). A revoked scope still stops the next statement for a user.
+	if s.spec.Identity.UserID != "" {
+		if src := s.spec.AllowedCatalogsSource; src != nil {
+			scope, err := src(ctx)
+			if err != nil {
+				return err
+			}
+			s.spec.AllowedCatalogs = scope
+		}
+	}
 	opts := s.options(cb, s.applyHeaders)
 	opts.OnQueryID = func(id string) {
 		if cb.OnStart != nil {
@@ -251,3 +269,7 @@ func (s *session) Execute(ctx context.Context, sql string, cb queryengine.Callba
 // catalogTokenCredential is the extra credential the Iceberg REST client in
 // Trino reads as the session's bearer token (iceberg.rest-catalog.session=USER).
 const catalogTokenCredential = "token"
+
+// scopeCredential is the extra credential the Baleia catalog guard reads as
+// the workspace catalog scope (ADR 0018 §5).
+const scopeCredential = "baleia.catalogs"

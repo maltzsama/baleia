@@ -14,6 +14,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/execscope"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/retrievers/schedule"
@@ -42,6 +43,7 @@ type Refreshes interface {
 // Destinations reads where a retriever can write; *db.Queries implements it.
 type Destinations interface {
 	ListRetrieverDestinations(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListRetrieverDestinationsRow, error)
+	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)
 	GetBinding(ctx context.Context, id pgtype.UUID) (db.CatalogBinding, error)
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
@@ -395,6 +397,8 @@ func (s *Service) Validate(ctx context.Context, ws, bindingID pgtype.UUID, defin
 		Catalog:  binding.EngineCatalogName,
 		Identity: identity,
 		Tags:     queryengine.Tags{Source: "retriever-validate"},
+		// The workspace's catalog scope on the destination engine (ADR 0018 §5).
+		AllowedCatalogsSource: execscope.For(s.store, ws, binding.EngineID),
 	}, explained, 1); err != nil {
 		return invalid(err)
 	}

@@ -41,6 +41,14 @@ func (f *retrieverFakeQuerier) GetRetrieverForRefresh(context.Context, pgtype.UU
 	return f.retriever, nil
 }
 
+func (f *retrieverFakeQuerier) GetDefaultTrinoEngine(context.Context) (db.GetDefaultTrinoEngineRow, error) {
+	return db.GetDefaultTrinoEngineRow{Engine: db.Engine{ID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}}}, nil
+}
+
+func (f *retrieverFakeQuerier) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+	return nil, nil
+}
+
 func (f *retrieverFakeQuerier) ListRetrieversDue(context.Context) ([]db.Retriever, error) {
 	return f.due, nil
 }

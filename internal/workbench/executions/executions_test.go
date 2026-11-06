@@ -118,6 +118,10 @@ func (f *fakeStore) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine,
 	return db.Engine{ID: id, Class: "federated"}, nil
 }
 
+func (f *fakeStore) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+	return nil, nil
+}
+
 type fakeWorkflows struct {
 	started   []workflows.QueryExecutionInput
 	ids       []string

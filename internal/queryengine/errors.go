@@ -12,16 +12,17 @@ import (
 type ErrorCode string
 
 const (
-	CodeSyntax      ErrorCode = "syntax"
-	CodeNotFound    ErrorCode = "not_found"
-	CodePermission  ErrorCode = "permission_denied"
-	CodeTimeout     ErrorCode = "timeout"
-	CodeCancelled   ErrorCode = "cancelled"
-	CodeResource    ErrorCode = "resource_exhausted"
-	CodeUnavailable ErrorCode = "engine_unavailable"
-	CodeReadOnly    ErrorCode = "read_only_unsupported"
-	CodeConflict    ErrorCode = "conflict" // serialization/deadlock — never retried automatically
-	CodeInternal    ErrorCode = "internal"
+	CodeSyntax       ErrorCode = "syntax"
+	CodeNotFound     ErrorCode = "not_found"
+	CodePermission   ErrorCode = "permission_denied"
+	CodeTimeout      ErrorCode = "timeout"
+	CodeCancelled    ErrorCode = "cancelled"
+	CodeResource     ErrorCode = "resource_exhausted"
+	CodeUnavailable  ErrorCode = "engine_unavailable"
+	CodeReadOnly     ErrorCode = "read_only_unsupported"
+	CodeConflict     ErrorCode = "conflict" // serialization/deadlock — never retried automatically
+	CodeScopeMissing ErrorCode = "catalog_scope_missing"
+	CodeInternal     ErrorCode = "internal"
 )
 
 // Error is a typed engine failure. Message is safe to log; Native is the

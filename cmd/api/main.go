@@ -55,6 +55,11 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
+	// A Trino guard below 0.10.2 does not enforce baleia.catalogs (ADR 0018);
+	// warn at startup, and let BALEIA_REQUIRE_CATALOG_SCOPE refuse instead.
+	if msg := cfg.CatalogScopeWarning(); msg != "" {
+		logger.ErrorContext(context.Background(), msg)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()

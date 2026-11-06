@@ -269,8 +269,8 @@ services:
     image: alpine:3.20
     container_name: baleia_trino_plugin_init
     environment:
-      PLUGIN_URL: "${BALEIA_PLUGIN_URL:-https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v${BALEIA_PLUGIN_VERSION:-0.10.0}/baleia-catalog-store-${BALEIA_PLUGIN_VERSION:-0.10.0}+trino${TRINO_VERSION:-484}.tar.gz}"
-      WANT: "${BALEIA_PLUGIN_VERSION:-0.10.0}+trino${TRINO_VERSION:-484}"
+      PLUGIN_URL: "${BALEIA_PLUGIN_URL:-https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v${BALEIA_PLUGIN_VERSION:-0.10.2}/baleia-catalog-store-${BALEIA_PLUGIN_VERSION:-0.10.2}+trino${TRINO_VERSION:-484}.tar.gz}"
+      WANT: "${BALEIA_PLUGIN_VERSION:-0.10.2}+trino${TRINO_VERSION:-484}"
     volumes:
       - trino_plugin:/plugin
     command:
@@ -477,7 +477,7 @@ services:
       - TRINO_URL=https://trino:8443
       - BALEIA_TRINO_PASSWORD=${BALEIA_TRINO_PASSWORD:-dev-trino-password-not-for-production}
       - BALEIA_TRINO_CA_FILE=/etc/baleia/trino-ca/ca.crt
-      - BALEIA_PLUGIN_VERSION=${BALEIA_PLUGIN_VERSION:-0.10.0}
+      - BALEIA_PLUGIN_VERSION=${BALEIA_PLUGIN_VERSION:-0.10.2}
       - POLARIS_URL=http://polaris:8181
       - JWT_SECRET=${JWT_SECRET:-dev-secret-not-for-production}
       # Seals stored connection credentials; separate from JWT_SECRET.
@@ -519,7 +519,7 @@ services:
       - TRINO_URL=https://trino:8443
       - BALEIA_TRINO_PASSWORD=${BALEIA_TRINO_PASSWORD:-dev-trino-password-not-for-production}
       - BALEIA_TRINO_CA_FILE=/etc/baleia/trino-ca/ca.crt
-      - BALEIA_PLUGIN_VERSION=${BALEIA_PLUGIN_VERSION:-0.10.0}
+      - BALEIA_PLUGIN_VERSION=${BALEIA_PLUGIN_VERSION:-0.10.2}
       - POLARIS_URL=http://polaris:8181
       - JWT_SECRET=${JWT_SECRET:-dev-secret-not-for-production}
       - BALEIA_ENCRYPTION_KEY=${BALEIA_ENCRYPTION_KEY:-dev-encryption-key-not-for-production-0123}

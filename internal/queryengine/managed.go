@@ -41,6 +41,12 @@ func (m *managed) OpenSession(ctx context.Context, spec SessionSpec) (_ Session,
 		return nil, NewError(CodeReadOnly, m.Kind(), "",
 			"this engine cannot enforce a read-only session and its connection does not assert read-only credentials")
 	}
+	// A user-identity session must carry its workspace catalog scope: without
+	// it a missing call site would run with no reach at all, and the guard
+	// would deny every catalog. The service identity (no UserID) is exempt.
+	if spec.Identity.UserID != "" && spec.AllowedCatalogs == nil && spec.AllowedCatalogsSource == nil {
+		return nil, NewError(CodeScopeMissing, m.Kind(), "", "a user session needs a catalog scope")
+	}
 	m.mu.Lock()
 	if m.retired || m.closed {
 		m.mu.Unlock()

@@ -64,6 +64,10 @@ func (f *fakeStore) ListRetrieverDestinations(context.Context, pgtype.UUID) ([]d
 	return f.dests, nil
 }
 
+func (f *fakeStore) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+	return nil, nil
+}
+
 func (f *fakeStore) GetBinding(context.Context, pgtype.UUID) (db.CatalogBinding, error) {
 	return db.CatalogBinding{}, pgx.ErrNoRows
 }

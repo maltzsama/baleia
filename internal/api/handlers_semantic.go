@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/execscope"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/semantic"
@@ -760,6 +761,9 @@ func (h *SemanticHandlers) validateSemanticMetric(ctx context.Context, ws pgtype
 		Identity: queryengine.Identity{UserID: trinoUser, Principal: idString(userID)},
 		ReadOnly: true,
 		Tags:     queryengine.Tags{Source: "semantic", RequestID: middleware.GetReqID(ctx)},
+		// The caller's workspace catalog scope (ADR 0018 §5), re-resolved per
+		// statement by the engine.
+		AllowedCatalogsSource: execscope.For(h.queries, ws, target.EngineID),
 	}
 	if _, err := queryengine.Collect(ctx, engine, spec, engine.Dialect().Limit(sql, 0), 1); err != nil {
 		return &targetError{code: ErrorCode(queryengine.CodeOf(err)), message: "the engine rejected the metric definition"}

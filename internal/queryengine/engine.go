@@ -50,6 +50,15 @@ type SessionSpec struct {
 	// script keeps a token its catalog accepts; nil keeps CatalogToken. Set by
 	// the Manager, never serialized.
 	CatalogTokenSource func(context.Context) (string, error) `json:"-"`
+	// AllowedCatalogs is the workspace catalog scope this session may reach,
+	// fixed at open. A user-identity spec must carry either it or
+	// AllowedCatalogsSource (OpenSession fails with catalog_scope_missing
+	// otherwise). Never serialized.
+	AllowedCatalogs []string `json:"-"`
+	// AllowedCatalogsSource renews AllowedCatalogs before each statement, so a
+	// revocation stops the next statement instead of the next run; nil keeps
+	// AllowedCatalogs. Set by execscope, never serialized.
+	AllowedCatalogsSource func(context.Context) ([]string, error) `json:"-"`
 }
 
 // CatalogCredentials supplies a session's CatalogToken (#648): the

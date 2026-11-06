@@ -284,6 +284,58 @@ func TestReadOnlyUnsupportedAllowedWithAssertion(t *testing.T) {
 	s.Close()
 }
 
+func TestUserSessionRequiresCatalogScope(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	m, _ := newManager(t, &store{row: engineRow(fake.Kind, time.Unix(1, 0), false)})
+	e, err := m.Get(ctx, engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A user identity without a scope is rejected: a missing call site would
+	// otherwise run with no reach (ADR 0018 §5).
+	if _, err := e.OpenSession(ctx, queryengine.SessionSpec{
+		Identity: queryengine.Identity{UserID: "u_123"},
+	}); queryengine.CodeOf(err) != queryengine.CodeScopeMissing {
+		t.Fatalf("err = %v, want catalog_scope_missing", err)
+	}
+	// A fixed scope satisfies the invariant.
+	s, err := e.OpenSession(ctx, queryengine.SessionSpec{
+		Identity:        queryengine.Identity{UserID: "u_123"},
+		AllowedCatalogs: []string{"lake"},
+	})
+	if err != nil {
+		t.Fatalf("a scoped user session must open: %v", err)
+	}
+	_ = s.Close()
+	// A source-only scope satisfies the invariant (the script execution path
+	// sends no fixed list, only execscope.For).
+	s, err = e.OpenSession(ctx, queryengine.SessionSpec{
+		Identity:              queryengine.Identity{UserID: "u_123"},
+		AllowedCatalogsSource: func(context.Context) ([]string, error) { return []string{"lake"}, nil },
+	})
+	if err != nil {
+		t.Fatalf("a source-scoped user session must open: %v", err)
+	}
+	_ = s.Close()
+	// A nonnil empty fixed scope satisfies the invariant and is fail-closed
+	// (the guard allows no catalog), so it must not be rejected as missing.
+	s, err = e.OpenSession(ctx, queryengine.SessionSpec{
+		Identity:        queryengine.Identity{UserID: "u_123"},
+		AllowedCatalogs: []string{},
+	})
+	if err != nil {
+		t.Fatalf("an empty-but-set scope must open: %v", err)
+	}
+	_ = s.Close()
+	// The service identity (no UserID) is exempt.
+	s, err = e.OpenSession(ctx, queryengine.SessionSpec{})
+	if err != nil {
+		t.Fatalf("the service identity must open: %v", err)
+	}
+	_ = s.Close()
+}
+
 func TestManager_Refuses(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
