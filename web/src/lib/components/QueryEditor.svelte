@@ -698,6 +698,9 @@
 
 		return () => {
 			observer.disconnect();
+			// A pending SQL sync must not fire after this editor is gone and
+			// overwrite a newer edit in the remounted one (#729).
+			if (sqlSyncTimer) clearTimeout(sqlSyncTimer);
 			window.removeEventListener('keydown', onGlobalKeydown, true);
 			window.removeEventListener('beforeunload', onBeforeUnload);
 			document.removeEventListener('visibilitychange', onVisibility);
