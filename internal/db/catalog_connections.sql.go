@@ -37,7 +37,7 @@ func (q *Queries) CountEncryptedConnections(ctx context.Context) (int64, error) 
 const createCatalogConnection = `-- name: CreateCatalogConnection :one
 INSERT INTO catalog_connections (id, name, type, url, config, credentials_enc, credentials_read_only, created_by, system_owned)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by, config, credentials_read_only, system_owned
+RETURNING id, name, type, url, credentials_enc, created_at, updated_at, host, port, created_by, config, credentials_read_only, system_owned
 `
 
 type CreateCatalogConnectionParams struct {
@@ -73,7 +73,6 @@ func (q *Queries) CreateCatalogConnection(ctx context.Context, arg CreateCatalog
 		&i.Type,
 		&i.Url,
 		&i.CredentialsEnc,
-		&i.DefaultReadonly,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Host,
@@ -96,7 +95,7 @@ func (q *Queries) DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) e
 }
 
 const getCatalogConnectionByID = `-- name: GetCatalogConnectionByID :one
-SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by, config, credentials_read_only, system_owned FROM catalog_connections WHERE id = $1
+SELECT id, name, type, url, credentials_enc, created_at, updated_at, host, port, created_by, config, credentials_read_only, system_owned FROM catalog_connections WHERE id = $1
 `
 
 func (q *Queries) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error) {
@@ -108,7 +107,6 @@ func (q *Queries) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) 
 		&i.Type,
 		&i.Url,
 		&i.CredentialsEnc,
-		&i.DefaultReadonly,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Host,
@@ -122,7 +120,7 @@ func (q *Queries) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) 
 }
 
 const listCatalogConnections = `-- name: ListCatalogConnections :many
-SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by, config, credentials_read_only, system_owned FROM catalog_connections WHERE created_by = $1 ORDER BY name
+SELECT id, name, type, url, credentials_enc, created_at, updated_at, host, port, created_by, config, credentials_read_only, system_owned FROM catalog_connections WHERE created_by = $1 ORDER BY name
 `
 
 func (q *Queries) ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]CatalogConnection, error) {
@@ -140,7 +138,6 @@ func (q *Queries) ListCatalogConnections(ctx context.Context, createdBy pgtype.U
 			&i.Type,
 			&i.Url,
 			&i.CredentialsEnc,
-			&i.DefaultReadonly,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Host,
@@ -161,7 +158,7 @@ func (q *Queries) ListCatalogConnections(ctx context.Context, createdBy pgtype.U
 }
 
 const listVisibleCatalogConnections = `-- name: ListVisibleCatalogConnections :many
-SELECT id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by, config, credentials_read_only, system_owned FROM catalog_connections
+SELECT id, name, type, url, credentials_enc, created_at, updated_at, host, port, created_by, config, credentials_read_only, system_owned FROM catalog_connections
 WHERE $1::bool OR created_by = $2
 ORDER BY name
 `
@@ -189,7 +186,6 @@ func (q *Queries) ListVisibleCatalogConnections(ctx context.Context, arg ListVis
 			&i.Type,
 			&i.Url,
 			&i.CredentialsEnc,
-			&i.DefaultReadonly,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Host,
@@ -218,7 +214,7 @@ SET name             = COALESCE($1, name),
     credentials_read_only = COALESCE($5, credentials_read_only),
     updated_at       = now()
 WHERE id = $6
-RETURNING id, name, type, url, credentials_enc, default_readonly, created_at, updated_at, host, port, created_by, config, credentials_read_only, system_owned
+RETURNING id, name, type, url, credentials_enc, created_at, updated_at, host, port, created_by, config, credentials_read_only, system_owned
 `
 
 type UpdateCatalogConnectionParams struct {
@@ -249,7 +245,6 @@ func (q *Queries) UpdateCatalogConnection(ctx context.Context, arg UpdateCatalog
 		&i.Type,
 		&i.Url,
 		&i.CredentialsEnc,
-		&i.DefaultReadonly,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Host,
