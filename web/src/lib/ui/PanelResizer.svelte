@@ -5,6 +5,8 @@
 	// The vertical separator beside a side panel (#468), like the workbench's
 	// results splitter: drag it, use ←/→/Home/End, or double-click to reset.
 	// `value` is the panel's width in px, remembered under `storageKey`.
+	// The gutter this produces belongs to `panel-split` in app.css (#747):
+	// changing the geometry below changes what that utility must define.
 	let {
 		value = $bindable(),
 		bounds,

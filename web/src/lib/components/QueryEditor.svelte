@@ -758,7 +758,9 @@
 		return data;
 	}
 
-	async function submit(sqlText: string, priority?: 'background') {
+	/** `explain` marks the run as an EXPLAIN (#745): its flag is written only
+	 *  together with the execution id, so the two always describe the same run. */
+	async function submit(sqlText: string, opts?: { explain?: boolean }) {
 		const text = sqlText.trim();
 		if (!text) return;
 		// A run is not a completion choice: drop an open suggestion list.
@@ -783,8 +785,7 @@
 					target: {
 						binding_id: tab.bindingId,
 						...(tab.schema ? { schema: tab.schema } : {})
-					},
-					...(priority ? { priority } : {})
+					}
 				}
 			});
 			if (error || !data) {
@@ -796,6 +797,7 @@
 			if (!isOpen(tab.id)) return;
 			tab.runTarget = data.target ?? null;
 			editor.setExecution(tab.id, data.id);
+			tab.explain = opts?.explain ?? false;
 			runs[tab.id] = initialRunState(data.id);
 			connectWS(data.id, tab);
 		} catch (e) {
@@ -806,17 +808,17 @@
 		}
 	}
 
-	async function runAll(priority?: 'background') {
+	async function runAll() {
 		if (!editorView) return;
-		await submit(editorView.state.doc.toString(), priority);
+		await submit(editorView.state.doc.toString());
 	}
 
-	async function runCurrent(priority?: 'background') {
+	async function runCurrent() {
 		if (!editorView) return;
 		const selection = editorView.state.selection.main;
 		const doc = editorView.state.doc;
 		if (!selection.empty) {
-			await submit(doc.sliceString(selection.from, selection.to), priority);
+			await submit(doc.sliceString(selection.from, selection.to));
 			return;
 		}
 		const full = doc.toString();
@@ -838,7 +840,7 @@
 			}
 		}
 		span ??= statementSpanAt(full, head);
-		if (span) await submit(full.slice(span.start, span.end), priority);
+		if (span) await submit(full.slice(span.start, span.end));
 	}
 
 	async function cancelExecution() {
@@ -994,7 +996,7 @@
 				activeTab.errorMsg = m.components_queryeditor_this_engine_does_not_support_explain();
 				return;
 			}
-			await submit(data.sql);
+			await submit(data.sql, { explain: true });
 		} catch (e) {
 			activeTab.errorMsg = errorMessage(e);
 		}
@@ -1079,14 +1081,6 @@
 			>
 			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
 			<span class="text-[10px] font-normal">{formatKeys('Mod-Enter')}</span>
-		</button>
-		<button
-			onclick={() => void runCurrent('background')}
-			disabled={executing}
-			title={m.components_queryeditor_run_in_background()}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-		>
-			{m.components_queryeditor_run_in_background()}
 		</button>
 		{#if executing && canCancel}
 			<button
@@ -1271,7 +1265,11 @@
 			{#if !runEnded || runHasResults}
 				<!-- A flex column, so the grid gets a bounded height and scrolls (#393). -->
 				<div class="flex min-h-0 flex-1 flex-col">
-					<ResultsPanel executionId={activeTab.executionId} enabled={runEnded} />
+					<ResultsPanel
+						executionId={activeTab.executionId}
+						enabled={runEnded}
+						explain={activeTab.explain}
+					/>
 				</div>
 			{/if}
 		</div>

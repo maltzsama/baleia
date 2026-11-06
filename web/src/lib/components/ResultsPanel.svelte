@@ -5,10 +5,12 @@
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import type { components } from '$lib/api/schema';
 	import { ResultsStore } from '$lib/results/store.svelte';
+	import { cellText, UNLOADED } from '$lib/results/format';
 	import { toasts } from '$lib/ui/toast.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
+	import CodeBlock from '$lib/ui/patterns/CodeBlock.svelte';
 	import ResultGrid from './ResultGrid.svelte';
 
 	type QueryStatement = components['schemas']['QueryStatement'];
@@ -16,8 +18,15 @@
 	let {
 		executionId,
 		enabled,
-		initialPosition
-	}: { executionId: string; enabled: boolean; initialPosition?: number } = $props();
+		initialPosition,
+		explain = false
+	}: {
+		executionId: string;
+		enabled: boolean;
+		initialPosition?: number;
+		/** The run is an EXPLAIN (#745): a 1×1 result is read as a document. */
+		explain?: boolean;
+	} = $props();
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 	const store = new ResultsStore();
@@ -93,6 +102,15 @@
 			? `/workspaces/${workspaceId}/executions/${executionId}/statements/${activePosition}/results?result_index=${activeResultIndex}`
 			: ''
 	);
+
+	// An EXPLAIN run whose result is one non-null cell is the plan text (#745).
+	// The rule is `explain` AND this exact shape, so a multi-column plan (MySQL,
+	// SQLite) and a plain 1×1 result both keep the grid untouched.
+	const docCell = $derived(
+		explain && store.columns.length === 1 && store.rowCount === 1 ? store.cell(0, 0) : null
+	);
+	const docMode = $derived(docCell !== null && docCell !== undefined && docCell !== UNLOADED);
+	const planText = $derived(docMode ? cellText(docCell, store.columns[0]) : '');
 
 	$effect(() => {
 		const url = resultUrl;
@@ -246,6 +264,26 @@
 			<div class="space-y-2 p-4" aria-label={m.components_resultspanel_loading_results()}>
 				<Skeleton class="h-4 w-1/3" />
 				<Skeleton class="h-4 w-2/3" />
+			</div>
+		{:else if docMode}
+			<!-- The plan is a document, not a table: no grid, no export bar —
+			     CodeBlock already copies and scrolls (#745). -->
+			<div class="flex min-h-0 flex-1 flex-col p-3">
+				<div class="mb-2 flex shrink-0 items-baseline gap-2">
+					<span class="truncate text-[11px] font-semibold text-text-main"
+						>{store.columns[0].name}</span
+					>
+					<span class="font-mono text-[10px] text-text-muted"
+						>{store.columns[0].nativeType || store.columns[0].type}</span
+					>
+				</div>
+				<CodeBlock
+					code={planText}
+					language="text"
+					label={m.components_resultspanel_explain_plan()}
+					maxHeight="100%"
+					class="flex min-h-0 flex-1 flex-col"
+				/>
 			</div>
 		{:else}
 			<ResultGrid {store}>

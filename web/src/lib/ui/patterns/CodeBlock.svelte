@@ -13,7 +13,8 @@
 		language = 'text',
 		dialect,
 		label,
-		maxHeight = '360px'
+		maxHeight = '360px',
+		class: className = ''
 	}: {
 		code: string;
 		language?: 'sql' | 'json' | 'text';
@@ -22,6 +23,8 @@
 		/** The engine's CodeMirror base (`codemirror_base`), for SQL highlighting. */
 		dialect?: string | null;
 		maxHeight?: string;
+		/** Extra classes for the root, so the block can fill a panel (#745). */
+		class?: string;
 	} = $props();
 
 	const grammar = new Compartment();
@@ -61,7 +64,7 @@
 	});
 </script>
 
-<div class="overflow-hidden rounded-lg border border-border bg-bg-panel">
+<div class="overflow-hidden rounded-lg border border-border bg-bg-panel {className}">
 	<div class="flex items-center justify-between border-b border-border bg-bg-toolbar px-3 py-1.5">
 		<span class="text-[10px] font-bold uppercase tracking-wide text-text-muted">{language}</span>
 		<CopyButton value={code} label={language} />

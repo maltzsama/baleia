@@ -86,6 +86,21 @@
 	--color-type-other-border: #30363d;
 }
 
+/* Dense side-by-side panel row: card panels separated by a PanelResizer
+   (#747). Single definition for every consumer of this layout, so the rhythm
+   changes in one place for all of them.
+   With PanelResizer's `w-[7px] -mx-[5px]` a gap/padding of g = 6px gives a
+   visible gutter of 2g - 3 = 9px (the resizer's box starts at +1px, inside
+   the gutter) and puts its hairline at g - 2 = 4px. The flush family
+   (explore, settings) draws a border-r instead and is deliberately not this. */
+@utility panel-split {
+	display: flex;
+	flex: 1;
+	gap: 6px;
+	overflow: hidden;
+	padding: 6px;
+}
+
 @layer base {
 	*,
 	*::before,

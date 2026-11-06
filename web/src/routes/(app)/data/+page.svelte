@@ -93,7 +93,7 @@
 	}
 </script>
 
-<div class="flex flex-1 gap-2.5 overflow-hidden p-2.5">
+<div class="panel-split">
 	<aside
 		class="flex shrink-0 flex-col overflow-hidden rounded-[var(--radius)] border border-border bg-bg-panel shadow-sm"
 		style:width="{treeWidth}px"
