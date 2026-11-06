@@ -20,7 +20,7 @@
 	let selectedTable = $state<TableRef | null>(null);
 </script>
 
-<div class="flex flex-1 gap-2.5 overflow-hidden p-2.5">
+<div class="panel-split">
 	<LeftSidebar
 		bind:collapsed={leftCollapsed}
 		bind:activeTab={sidebarTab}
