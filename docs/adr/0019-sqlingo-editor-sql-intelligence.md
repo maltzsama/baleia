@@ -1,6 +1,6 @@
 # 0019. sqlingo is the editor's SQL intelligence; the server keeps its own parser
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-07
 - Issues: #756
 
@@ -62,8 +62,9 @@ formatter with no server round-trip.
 
 ## Current compliance
 
-This ADR is proposed alongside the adoption in #756; until that PR lands the
-editor still uses the hand-written lexer and the server split.
+Implemented by #756: the editor tokenizes, splits and formats with sqlingo
+(lazy-loaded per dialect) and no longer calls `POST /dialects/{name}/split`;
+the server keeps `internal/dialect` and that endpoint for the execution path.
 
 ## Alternatives considered
 

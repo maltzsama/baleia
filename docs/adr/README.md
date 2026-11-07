@@ -28,7 +28,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0016](0016-access-layers-and-workspace-roles.md) | Three access layers and workspace roles | Accepted; layer 1 / grant flow superseded by 0018 |
 | [0017](0017-bi-gateway.md) | BI tools reach the engines only through Baleia (the BI gateway) | Proposed; amends 0001 |
 | [0018](0018-workspace-catalog-scope.md) | Workspace-scoped catalog access | Proposed; supersedes 0016 layer 1, extends 0005 |
-| [0019](0019-sqlingo-editor-sql-intelligence.md) | sqlingo is the editor's SQL intelligence; the server keeps its own parser | Proposed |
+| [0019](0019-sqlingo-editor-sql-intelligence.md) | sqlingo is the editor's SQL intelligence; the server keeps its own parser | Accepted |
 
 ## Owner decisions
 
