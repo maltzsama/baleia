@@ -147,6 +147,21 @@ beforeEach(() => {
 				},
 				{ name: 'count_if', kind: 'function', call: true }
 			])
+		),
+		// The runtime catalog the connected engine returns (#788).
+		http.get('/workspaces/{id}/metadata/functions', ({ response }) =>
+			response(200).json([
+				{ name: 'abs', kind: 'function', call: true },
+				{
+					name: 'count',
+					kind: 'function',
+					call: true,
+					signature: 'count(x) → bigint',
+					description: 'Counts rows.'
+				},
+				{ name: 'count_if', kind: 'function', call: true },
+				{ name: 'ST_Area', kind: 'function', call: true }
+			])
 		)
 	);
 });

@@ -603,6 +603,9 @@ type ServerInterface interface {
 	// Tables of a namespace, by name, one page at a time
 	// (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables)
 	ListMetadataTables(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID, params ListMetadataTablesParams)
+	// The connected engine's function catalog (autocomplete)
+	// (GET /workspaces/{id}/metadata/functions)
+	ListMetadataFunctions(w http.ResponseWriter, r *http.Request, id PathId, params ListMetadataFunctionsParams)
 	// Join conditions used between two tables, best first (editor autocomplete)
 	// (GET /workspaces/{id}/metadata/join-suggestions)
 	ListJoinSuggestions(w http.ResponseWriter, r *http.Request, id PathId, params ListJoinSuggestionsParams)
@@ -1965,6 +1968,12 @@ func (_ Unimplemented) ListMetadataNamespaces(w http.ResponseWriter, r *http.Req
 // Tables of a namespace, by name, one page at a time
 // (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables)
 func (_ Unimplemented) ListMetadataTables(w http.ResponseWriter, r *http.Request, id PathId, catalogId openapi_types.UUID, params ListMetadataTablesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The connected engine's function catalog (autocomplete)
+// (GET /workspaces/{id}/metadata/functions)
+func (_ Unimplemented) ListMetadataFunctions(w http.ResponseWriter, r *http.Request, id PathId, params ListMetadataFunctionsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9386,6 +9395,73 @@ func (siw *ServerInterfaceWrapper) ListMetadataTables(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListMetadataFunctions operation middleware
+func (siw *ServerInterfaceWrapper) ListMetadataFunctions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMetadataFunctionsParams
+
+	// ------------- Required query parameter "catalog_id" -------------
+
+	if paramValue := r.URL.Query().Get("catalog_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "catalog_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "binding_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "binding_id", r.URL.Query(), &params.BindingId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "binding_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "engine_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "engine_id", r.URL.Query(), &params.EngineId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engine_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMetadataFunctions(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListJoinSuggestions operation middleware
 func (siw *ServerInterfaceWrapper) ListJoinSuggestions(w http.ResponseWriter, r *http.Request) {
 
@@ -13207,6 +13283,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/metadata/catalogs/{catalog_id}/tables", wrapper.ListMetadataTables)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/metadata/functions", wrapper.ListMetadataFunctions)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/metadata/join-suggestions", wrapper.ListJoinSuggestions)
@@ -21812,6 +21891,53 @@ func (response ListMetadataTables422JSONResponse) VisitListMetadataTablesRespons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListMetadataFunctionsRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ListMetadataFunctionsParams
+}
+
+type ListMetadataFunctionsResponseObject interface {
+	VisitListMetadataFunctionsResponse(w http.ResponseWriter) error
+}
+
+type ListMetadataFunctions200JSONResponse []DialectFunction
+
+func (response ListMetadataFunctions200JSONResponse) VisitListMetadataFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataFunctions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMetadataFunctions401JSONResponse) VisitListMetadataFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataFunctions404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMetadataFunctions404JSONResponse) VisitListMetadataFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMetadataFunctions422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ListMetadataFunctions422JSONResponse) VisitListMetadataFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListJoinSuggestionsRequestObject struct {
 	Id     PathId `json:"id"`
 	Params ListJoinSuggestionsParams
@@ -25393,6 +25519,9 @@ type StrictServerInterface interface {
 	// Tables of a namespace, by name, one page at a time
 	// (GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables)
 	ListMetadataTables(ctx context.Context, request ListMetadataTablesRequestObject) (ListMetadataTablesResponseObject, error)
+	// The connected engine's function catalog (autocomplete)
+	// (GET /workspaces/{id}/metadata/functions)
+	ListMetadataFunctions(ctx context.Context, request ListMetadataFunctionsRequestObject) (ListMetadataFunctionsResponseObject, error)
 	// Join conditions used between two tables, best first (editor autocomplete)
 	// (GET /workspaces/{id}/metadata/join-suggestions)
 	ListJoinSuggestions(ctx context.Context, request ListJoinSuggestionsRequestObject) (ListJoinSuggestionsResponseObject, error)
@@ -31065,6 +31194,33 @@ func (sh *strictHandler) ListMetadataTables(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMetadataTablesResponseObject); ok {
 		if err := validResponse.VisitListMetadataTablesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMetadataFunctions operation middleware
+func (sh *strictHandler) ListMetadataFunctions(w http.ResponseWriter, r *http.Request, id PathId, params ListMetadataFunctionsParams) {
+	var request ListMetadataFunctionsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMetadataFunctions(ctx, request.(ListMetadataFunctionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMetadataFunctions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMetadataFunctionsResponseObject); ok {
+		if err := validResponse.VisitListMetadataFunctionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -13,7 +13,7 @@ import { keywordCompletionSource, type SQLDialect } from '@codemirror/lang-sql';
 import { m } from '$lib/paraglide/messages';
 import { plural } from '$lib/i18n/plural';
 import { formatRelativeTime } from '$lib/util/time';
-import { loadFunctions, type DialectFunction } from '$lib/engines/client';
+import { loadBindingFunctions, loadFunctions, type DialectFunction } from '$lib/engines/client';
 import {
 	joinSuggestions,
 	loadNamespaces,
@@ -268,38 +268,31 @@ function namespaceOption(scope: CompletionScope, path: string[]): Option {
 	};
 }
 
-function functionOptions(scope: CompletionScope): Promise<Option[]> {
-	return functionReference(scope.dialect).then((refs) => {
-		const seen = new Set<string>();
-		const out: Option[] = [];
-		for (const fn of [...scope.functions].sort((a, b) => lower(a).localeCompare(lower(b)))) {
-			if (seen.has(lower(fn))) continue;
-			seen.add(lower(fn));
-			const label = scope.upperCase ? fn.toUpperCase() : fn;
-			const ref = refs.get(lower(fn));
-			out.push({
-				label,
-				type: 'function',
-				detail: functionKind(ref?.kind),
-				apply: applyCall(label, ref?.call ?? true),
-				info: ref ? info(label, ref.signature ?? ref.kind, [ref.description ?? '']) : undefined,
-				group: 'function'
-			});
-		}
-		return out;
-	});
-}
-
-/** Function name -> generated reference, best effort (B2, #531). */
-async function functionReference(name: string): Promise<Map<string, DialectFunction>> {
-	if (!name) return new Map();
-	try {
-		const rows = await loadFunctions(name);
-		return new Map(rows.map((row) => [lower(row.name), row]));
-	} catch {
-		// Without the reference the completion still offers the names.
-		return new Map();
+async function functionOptions(scope: CompletionScope): Promise<Option[]> {
+	// Prefer the connected engine's own catalog (introspected at runtime, #788),
+	// then the static dialect reference, then the dialect's known names (#787).
+	const runtime = await loadBindingFunctions(scope.workspaceId, scope.catalogId, scope.bindingId);
+	const staticRefs: DialectFunction[] | null = await loadFunctions(scope.dialect).catch(() => null);
+	const refs: DialectFunction[] =
+		runtime ??
+		staticRefs ??
+		scope.functions.map((name) => ({ name, kind: 'function', call: true }));
+	const seen = new Set<string>();
+	const out: Option[] = [];
+	for (const ref of [...refs].sort((a, b) => lower(a.name).localeCompare(lower(b.name)))) {
+		if (seen.has(lower(ref.name))) continue;
+		seen.add(lower(ref.name));
+		const label = scope.upperCase ? ref.name.toUpperCase() : ref.name;
+		out.push({
+			label,
+			type: 'function',
+			detail: functionKind(ref.kind),
+			apply: applyCall(label, ref.call ?? true),
+			info: info(label, ref.signature ?? ref.kind, [ref.description ?? '']),
+			group: 'function'
+		});
 	}
+	return out;
 }
 
 /** The API kind as user-facing text; API values stay for comparisons. */

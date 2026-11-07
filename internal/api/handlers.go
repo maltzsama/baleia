@@ -26,6 +26,7 @@ import (
 	"github.com/galileostudio/baleia/internal/identity/idptoken"
 	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/mail"
+	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/monitoring/events"
@@ -235,6 +236,7 @@ func NewAPI(d Deps) (*API, error) {
 		keyring:        d.Keyring,
 		temporalClient: d.Temporal,
 		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
+		functionsCache: NewTTLStore[[]metadata.FunctionReference](time.Hour),
 		connections:    d.Engines.Connections,
 		engines:        d.Engines.Engines,
 		kinds:          d.Engines.Kinds,

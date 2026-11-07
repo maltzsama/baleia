@@ -36,11 +36,19 @@ export class EngineRequestError extends Error {
 const enginesCache = new Map<string, Promise<Engine[]>>();
 const dialectCache = new Map<string, Promise<Dialect>>();
 const functionsCache = new Map<string, Promise<DialectFunction[]>>();
+const bindingFunctionsCache = new Map<
+	string,
+	{ at: number; promise: Promise<DialectFunction[] | null> }
+>();
+// An engine's catalog changes rarely; five minutes keeps the editor from
+// missing functions added after the first lookup without hammering the API.
+const BINDING_FUNCTIONS_TTL = 5 * 60_000;
 
 export function clearEnginesCache(): void {
 	enginesCache.clear();
 	dialectCache.clear();
 	functionsCache.clear();
+	bindingFunctionsCache.clear();
 }
 
 function fail(error: unknown, status: number | undefined, fallback: string): never {
@@ -82,6 +90,43 @@ export function loadFunctions(name: string): Promise<DialectFunction[]> {
 			throw error;
 		});
 	functionsCache.set(name, pending);
+	return pending;
+}
+
+/**
+ * The connected engine's own function catalog for a binding, introspected at
+ * runtime and cached per binding (#788). Resolves to null when it is
+ * unavailable (an engine with no catalog, or the engine is down), so callers
+ * fall back to the static reference from {@link loadFunctions}.
+ */
+export function loadBindingFunctions(
+	workspaceId: string,
+	catalogId: string,
+	bindingId: string
+): Promise<DialectFunction[] | null> {
+	const key = `${workspaceId}:${catalogId}:${bindingId}`;
+	const hit = bindingFunctionsCache.get(key);
+	if (hit && Date.now() - hit.at < BINDING_FUNCTIONS_TTL) return hit.promise;
+	const pending = client
+		.GET('/workspaces/{id}/metadata/functions', {
+			params: {
+				path: { id: workspaceId },
+				query: { catalog_id: catalogId, binding_id: bindingId || undefined }
+			}
+		})
+		.then(({ data, error }) => {
+			if (error || !data) {
+				// Evict a failed lookup so a recovered engine is retried.
+				bindingFunctionsCache.delete(key);
+				return null;
+			}
+			return data;
+		})
+		.catch(() => {
+			bindingFunctionsCache.delete(key);
+			return null;
+		});
+	bindingFunctionsCache.set(key, { at: Date.now(), promise: pending });
 	return pending;
 }
 

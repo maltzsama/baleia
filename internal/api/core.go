@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/identity/idptoken"
 	"github.com/galileostudio/baleia/internal/identity/oidclogin"
+	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -45,6 +46,9 @@ type core struct {
 	// versionCache: engine id@updated_at → version and health, read by the
 	// engine listing, the status page and the attention items.
 	versionCache *TTLStore[engineProbe]
+	// functionsCache: binding id → the engine's function catalog (#788),
+	// introspected on demand and refreshed hourly.
+	functionsCache *TTLStore[[]metadata.FunctionReference]
 	// s3 holds query results and exports (object storage).
 	s3 *storage.S3Client
 	// connections holds every connection provider (docs/adr/0002).

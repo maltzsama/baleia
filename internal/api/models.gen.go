@@ -5427,6 +5427,13 @@ type ListMetadataTablesParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListMetadataFunctionsParams defines parameters for ListMetadataFunctions.
+type ListMetadataFunctionsParams struct {
+	CatalogId openapi_types.UUID  `form:"catalog_id" json:"catalog_id"`
+	BindingId *openapi_types.UUID `form:"binding_id,omitempty" json:"binding_id,omitempty"`
+	EngineId  *openapi_types.UUID `form:"engine_id,omitempty" json:"engine_id,omitempty"`
+}
+
 // ListJoinSuggestionsParams defines parameters for ListJoinSuggestions.
 type ListJoinSuggestionsParams struct {
 	LeftTable  openapi_types.UUID `form:"left_table" json:"left_table"`
