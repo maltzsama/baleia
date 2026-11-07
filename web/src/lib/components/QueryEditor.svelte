@@ -8,7 +8,7 @@
 	import { EditorView, keymap } from '@codemirror/view';
 	import { EditorState, Compartment, Prec } from '@codemirror/state';
 	import { indentWithTab } from '@codemirror/commands';
-	import { sql as sqlLanguage } from '@codemirror/lang-sql';
+	import { sql as sqlLanguage } from '@maltzsama/lang-sql';
 	import { oneDark } from '@codemirror/theme-one-dark';
 	import { autocompletion, closeCompletion } from '@codemirror/autocomplete';
 

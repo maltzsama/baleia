@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CompletionContext, type Completion } from '@codemirror/autocomplete';
 import { EditorState } from '@codemirror/state';
-import { MySQL, StandardSQL, sql } from '@codemirror/lang-sql';
+import { MySQL, StandardSQL, sql } from '@maltzsama/lang-sql';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { http, server } from '../../test/server';
 import { makeSearchResult, makeTableDetail } from '../../test/factories';

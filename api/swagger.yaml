@@ -1983,7 +1983,7 @@ components:
       properties:
         name: { type: string }
         formatter_language: { type: string, description: "sql-formatter language id" }
-        codemirror_base: { type: string, description: "@codemirror/lang-sql base dialect" }
+        codemirror_base: { type: string, description: "@maltzsama/lang-sql base dialect" }
 
     Dialect:
       allOf:

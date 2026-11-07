@@ -5200,7 +5200,7 @@ export interface components {
             name: string;
             /** @description sql-formatter language id */
             formatter_language: string;
-            /** @description @codemirror/lang-sql base dialect */
+            /** @description @maltzsama/lang-sql base dialect */
             codemirror_base: string;
         };
         Dialect: components["schemas"]["EngineDialect"] & {

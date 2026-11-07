@@ -3,7 +3,7 @@
 	import { basicSetup } from 'codemirror';
 	import { EditorView } from '@codemirror/view';
 	import { Compartment, EditorState } from '@codemirror/state';
-	import { sql } from '@codemirror/lang-sql';
+	import { sql } from '@maltzsama/lang-sql';
 	import { codemirrorDialect } from '$lib/engines/client';
 	import CopyButton from './CopyButton.svelte';
 	import { accessibleHighlight } from './codeHighlight';

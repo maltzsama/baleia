@@ -2377,7 +2377,7 @@ type CronPreviewResult struct {
 
 // Dialect defines model for Dialect.
 type Dialect struct {
-	// CodemirrorBase @codemirror/lang-sql base dialect
+	// CodemirrorBase @maltzsama/lang-sql base dialect
 	CodemirrorBase string `json:"codemirror_base"`
 
 	// FormatterLanguage sql-formatter language id
@@ -2534,7 +2534,7 @@ type EngineConnectionRef struct {
 
 // EngineDialect defines model for EngineDialect.
 type EngineDialect struct {
-	// CodemirrorBase @codemirror/lang-sql base dialect
+	// CodemirrorBase @maltzsama/lang-sql base dialect
 	CodemirrorBase string `json:"codemirror_base"`
 
 	// FormatterLanguage sql-formatter language id
