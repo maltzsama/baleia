@@ -50,6 +50,14 @@ describe('Header', () => {
 		expect(screen.queryByText('SQL Editor')).toBeNull();
 	});
 
+	// The released version sits beside the attention bell and the theme switch.
+	it('shows the released version next to the theme switch', () => {
+		renderAt('/sql');
+
+		expect(screen.getByText(`v${__APP_VERSION__}`)).toBeTruthy();
+		expect(screen.getByRole('switch', { name: 'Dark mode' })).toBeTruthy();
+	});
+
 	// #464: an area's pages are tabs next to its name, one of them current.
 	it('shows the area pages as tabs with the current one marked', () => {
 		renderAt('/history');

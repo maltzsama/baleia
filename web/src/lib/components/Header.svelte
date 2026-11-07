@@ -309,6 +309,13 @@
 
 	<AttentionBell />
 
+	<!-- The released version, from the release-please manifest baked in at
+	     build time (#513). The login page shows the same value. Hidden on
+	     narrow screens so the tabs, bell and theme switch always fit. -->
+	<span class="hidden shrink-0 font-mono text-[11px] tabular-nums text-text-muted sm:inline">
+		{m.components_header_version({ version: __APP_VERSION__ })}
+	</span>
+
 	<div class="flex items-center gap-1.5 text-[11px] text-text-muted">
 		<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
 			><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg
