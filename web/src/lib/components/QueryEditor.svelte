@@ -38,6 +38,7 @@
 	} from '$lib/engines/client';
 	import { loadNamespaces, searchMetadata } from '$lib/metadata/client';
 	import { sqlCompletionSource, type CompletionScope } from '$lib/workbench/sqlCompletion';
+	import { signatureHelp } from '$lib/workbench/signatureHelp';
 	import { statementSpanAt } from '$lib/workbench/sqlContext';
 	import { formatSQL as formatSql } from '$lib/workbench/sqlingo';
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
@@ -670,6 +671,7 @@
 			readOnlyCompartment.of(EditorState.readOnly.of(false)),
 			autocompletion({ ...completionConfig, override: [complete] }),
 			completionTheme,
+			signatureHelp(() => completionScope),
 			EditorView.contentAttributes.of({ 'aria-label': m.components_queryeditor_sql_editor() }),
 			themeCompartment.of(dark ? oneDark : []),
 			EditorView.updateListener.of((update) => {

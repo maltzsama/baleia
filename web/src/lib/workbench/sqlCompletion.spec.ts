@@ -297,7 +297,7 @@ describe('sqlCompletionSource', () => {
 
 	it('matches by prefix, never by similarity', async () => {
 		const result = await complete('SELECT cou| FROM nation');
-		expect(labels(result?.options)).toEqual(['COUNT · function', 'COUNT_IF · function']);
+		expect(labels(result?.options)).toEqual(['COUNT · count(x) → bigint', 'COUNT_IF · function']);
 	});
 
 	it('suggests nothing inside a string or a comment', async () => {
