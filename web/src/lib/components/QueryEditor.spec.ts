@@ -92,8 +92,7 @@ function mockWorkbench() {
 			response(200).json({
 				name: 'trino',
 				formatter_language: 'trino',
-				codemirror_base: 'StandardSQL',
-				functions: ['count']
+				codemirror_base: 'StandardSQL'
 			})
 		),
 		http.get('/workspaces/{id}/metadata/catalogs/{catalog_id}/namespaces', ({ response }) =>
@@ -431,7 +430,7 @@ describe('QueryEditor', () => {
 	it('finds date_trunc and inserts it with the cursor inside the parentheses (#556)', async () => {
 		mockWorkbench();
 		server.use(
-			http.get('/dialects/{name}/functions', ({ response }) =>
+			http.get('/workspaces/{id}/metadata/functions', ({ response }) =>
 				response(200).json([
 					{ name: 'date_trunc', kind: 'function', call: true },
 					{ name: 'count', kind: 'function', call: true }

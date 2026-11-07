@@ -13,7 +13,7 @@ import { keywordCompletionSource, type SQLDialect } from '@maltzsama/lang-sql';
 import { m } from '$lib/paraglide/messages';
 import { plural } from '$lib/i18n/plural';
 import { formatRelativeTime } from '$lib/util/time';
-import { loadBindingFunctions, loadFunctions, type DialectFunction } from '$lib/engines/client';
+import { loadBindingFunctions, type DialectFunction } from '$lib/engines/client';
 import {
 	joinSuggestions,
 	loadNamespaces,
@@ -39,7 +39,6 @@ export type CompletionScope = {
 	/** The tab's schema, dot-separated; empty when the engine default applies. */
 	schema: string;
 	dialect: string;
-	functions: string[];
 	cmDialect: SQLDialect;
 	upperCase: boolean;
 };
@@ -269,14 +268,9 @@ function namespaceOption(scope: CompletionScope, path: string[]): Option {
 }
 
 async function functionOptions(scope: CompletionScope): Promise<Option[]> {
-	// Prefer the connected engine's own catalog (introspected at runtime, #788),
-	// then the static dialect reference, then the dialect's known names (#787).
-	const runtime = await loadBindingFunctions(scope.workspaceId, scope.catalogId, scope.bindingId);
-	const staticRefs: DialectFunction[] | null = await loadFunctions(scope.dialect).catch(() => null);
+	// The connected engine's own catalog (introspected at runtime, #788).
 	const refs: DialectFunction[] =
-		runtime ??
-		staticRefs ??
-		scope.functions.map((name) => ({ name, kind: 'function', call: true }));
+		(await loadBindingFunctions(scope.workspaceId, scope.catalogId, scope.bindingId)) ?? [];
 	const seen = new Set<string>();
 	const out: Option[] = [];
 	for (const ref of [...refs].sort((a, b) => lower(a.name).localeCompare(lower(b.name)))) {

@@ -186,9 +186,8 @@ type Dialect interface {
 	SafeDivide(num, den string) string
 
 	// Editor support.
-	Functions() []string
 	FormatterLanguage() string // sql-formatter language id
-	CodeMirrorBase() string    // @codemirror/lang-sql base dialect
+	CodeMirrorBase() string    // @maltzsama/lang-sql base dialect
 }
 
 // kindToName is the single place that translates engine kinds (the API

@@ -15,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate migrate-credentials migrate-oidc-providers migrate-down migrate-status migrate-reset sqlc generate lint lint-all vuln build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down dialect-lists
+.PHONY: dev worker migrate migrate-credentials migrate-oidc-providers migrate-down migrate-status migrate-reset sqlc generate lint lint-all vuln build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_AGENTS_ENABLED=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -231,9 +231,8 @@ k8s-seed-tpch:
 	kubectl -n $(K8S_NS) exec -i statefulset/postgres -- psql -U baleia -d baleia < db/seed/tpch_test.sql
 
 # Start one source (deploy/dev/sources/<NAME>.yaml) for provider, dialect and
-# directory tests; k8s-source-down removes it. scripts/gen-dialect-lists.sh
-# starts and removes them by itself. `NAME=ldap` also (re)creates the seed
-# ConfigMap from deploy/dev/ldap/50-baleia.ldif.
+# directory tests; k8s-source-down removes it. `NAME=ldap` also (re)creates
+# the seed ConfigMap from deploy/dev/ldap/50-baleia.ldif.
 k8s-source:
 	@if [ "$(NAME)" = "ldap" ]; then \
 		kubectl -n $(K8S_NS) create configmap baleia-ldap-seed \
@@ -251,13 +250,6 @@ k8s-source-down:
 # because a non-root kubectl cannot bind 389/636 locally.
 k8s-ldap-forward:
 	kubectl -n $(K8S_NS) port-forward svc/src-ldap 1389:389 1636:636 &
-
-# Regenerate every dialect's keyword and function lists from real servers on
-# the dev cluster, running each dialect's execution test (one source at a time).
-dialect-lists:
-	for d in postgresql trino mysql mariadb tsql oracle clickhouse sqlite flightsql-generic; do \
-		scripts/gen-dialect-lists.sh $$d || exit 1; \
-	done
 
 k8s-down:
 	helm -n $(K8S_NS) uninstall baleia || true
