@@ -145,8 +145,8 @@ func TestApplyAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	if len(applied) != 1 || applied[0] != "store_test_widgets" {
-		t.Fatalf("Apply applied %v, want [store_test_widgets]", applied)
+	if len(applied) != 1 || applied[0] != "0001" {
+		t.Fatalf("Apply applied %v, want [0001]", applied)
 	}
 
 	count, err := db.NewSelect().TableExpr("store_test_widgets").Count(ctx)
@@ -161,7 +161,7 @@ func TestApplyAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Rollback: %v", err)
 	}
-	if len(rolled) != 1 || rolled[0] != "store_test_widgets" {
-		t.Fatalf("Rollback rolled back %v, want [store_test_widgets]", rolled)
+	if len(rolled) != 1 || rolled[0] != "0001" {
+		t.Fatalf("Rollback rolled back %v, want [0001]", rolled)
 	}
 }
