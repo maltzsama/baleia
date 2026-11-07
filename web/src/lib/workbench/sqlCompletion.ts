@@ -295,6 +295,7 @@ async function functionOptions(scope: CompletionScope): Promise<Option[]> {
 function functionKind(kind: string | undefined): string {
 	if (kind === 'aggregate') return m.workbench_completion_kind_aggregate();
 	if (kind === 'window') return m.workbench_completion_kind_window();
+	if (kind === 'operator') return m.workbench_completion_kind_operator();
 	return m.workbench_completion_function();
 }
 

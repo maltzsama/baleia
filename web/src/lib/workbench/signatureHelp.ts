@@ -3,13 +3,27 @@
 // the completion reads; it is loaded on demand and cached.
 import { StateEffect, StateField, type Extension } from '@codemirror/state';
 import { EditorView, showTooltip } from '@codemirror/view';
+import { m } from '$lib/paraglide/messages';
 import { loadBindingFunctions } from '$lib/engines/client';
 import type { CompletionScope } from './sqlCompletion';
 
-/** The Innermost function call around the cursor, and its 0-based argument. */
+/** The innermost function call around the cursor, and its 0-based argument. */
 export type CallContext = { name: string; argIndex: number };
 
 const isWord = (ch: string) => /[\w$]/.test(ch);
+
+// A word before `name (` that opens a table context, not a call: `INSERT INTO
+// count (` names columns, it does not call `count`.
+const TABLE_CONTEXT = new Set(['INTO', 'FROM', 'JOIN', 'TABLE', 'COPY', 'REFERENCES', 'UPDATE']);
+
+/** The word ending at `end` (exclusive), or "" when there is not one. */
+function wordBefore(doc: string, end: number): string {
+	let i = end - 1;
+	while (i >= 0 && /\s/.test(doc[i])) i--;
+	const stop = i + 1;
+	while (i >= 0 && isWord(doc[i])) i--;
+	return doc.slice(i + 1, stop);
+}
 
 /**
  * callAt returns the innermost function call containing `pos` and the argument
@@ -32,7 +46,7 @@ export function callAt(doc: string, pos: number): CallContext | null {
 			const end = j + 1;
 			while (j >= 0 && isWord(doc[j])) j--;
 			const name = doc.slice(j + 1, end);
-			if (!name) return null;
+			if (!name || TABLE_CONTEXT.has(wordBefore(doc, j + 1).toUpperCase())) return null;
 			let argIndex = 0;
 			let inner = 0;
 			for (let k = i + 1; k < pos; k++) {
@@ -71,6 +85,9 @@ export function signatureHelp(scope: () => CompletionScope | null): Extension {
 
 	const listener = EditorView.updateListener.of((update) => {
 		if (!update.docChanged && !update.selectionSet) return;
+		// Bump first: any edit or move invalidates an in-flight lookup, including
+		// one that leaves the call.
+		const ticket = ++seq;
 		const view = update.view;
 		const pos = update.state.selection.main.head;
 		const ctx = callAt(update.state.doc.toString(), pos);
@@ -80,17 +97,15 @@ export function signatureHelp(scope: () => CompletionScope | null): Extension {
 		}
 		const current = scope();
 		if (!current?.workspaceId) return;
-		const ticket = ++seq;
 		void loadBindingFunctions(current.workspaceId, current.catalogId, current.bindingId).then(
 			(refs) => {
-				if (ticket !== seq) return; // a newer cursor position superseded this
+				if (ticket !== seq) return; // a newer edit superseded this
 				const fn = refs?.find((row) => row.name.toLowerCase() === ctx.name.toLowerCase());
-				if (!fn?.signature || view.state.selection.main.head !== pos) {
-					if (!fn?.signature && view.state.field(helpField)) {
-						view.dispatch({ effects: setHelp.of(null) });
-					}
+				if (!fn?.signature) {
+					if (view.state.field(helpField)) view.dispatch({ effects: setHelp.of(null) });
 					return;
 				}
+				if (view.state.selection.main.head !== pos) return;
 				view.dispatch({
 					effects: setHelp.of({
 						name: ctx.name,
@@ -119,7 +134,7 @@ export function signatureHelp(scope: () => CompletionScope | null): Extension {
 					sig.textContent = help.signature;
 					const arg = document.createElement('span');
 					arg.className = 'cm-signature-help-arg';
-					arg.textContent = `arg ${help.argIndex + 1}`;
+					arg.textContent = m.workbench_signature_help_arg({ n: help.argIndex + 1 });
 					dom.append(sig, arg);
 					return { dom };
 				}

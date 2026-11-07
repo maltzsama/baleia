@@ -22,6 +22,11 @@ describe('callAt (#790)', () => {
 		expect(at('SELECT f(g(|')).toEqual({ name: 'g', argIndex: 0 });
 	});
 
+	it('does not mistake a table column list for a call', () => {
+		expect(at('INSERT INTO count (|')).toBeNull();
+		expect(at('INSERT INTO t (a, |')).toBeNull();
+	});
+
 	it('returns null outside a call', () => {
 		expect(at('SELECT count(*) FROM t|')).toBeNull();
 		expect(at('SELECT 1|')).toBeNull();
