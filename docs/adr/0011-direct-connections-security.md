@@ -44,8 +44,9 @@ access.
 ## Consequences
 
 - Loopback and the "this network" addresses (`0.0.0.0/8`, `::/128`) are denied only when the
-  deployment's deny list names them (the chart default does). Connecting to a database on the same
-  host means removing them from `BALEIA_CONNECTIONS_DENY_CIDRS` or allowlisting the host.
+  deployment's deny list names them (the chart default does). To connect to a database on the same
+  host, remove any covering CIDR from `BALEIA_CONNECTIONS_DENY_CIDRS`. If an allow list is set,
+  include the host in `BALEIA_CONNECTIONS_ALLOW_CIDRS`. Deny CIDRs take precedence over allow CIDRs.
 - The CIDR lists apply to every caller, admins included. Creating and editing connections is limited to admins by default (`BALEIA_CONNECTIONS_CREATE=admins`); `everyone` opts a deployment into self-service, where the CIDR lists still bind every caller (#512, #610).
 - api and worker must see the same SQLite path (shared volume).
 - MySQL/MariaDB, Oracle, SQL Server and Flight SQL cannot enforce read-only; agents and semantic

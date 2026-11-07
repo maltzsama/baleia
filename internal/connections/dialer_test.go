@@ -128,6 +128,25 @@ func TestDialerSkipsDeniedAddressesOfAHost(t *testing.T) {
 	conn.Close()
 }
 
+// TestDialerDenyIPv6AndMappedIPv4: IPv6 loopback and an IPv4-mapped IPv6
+// prefix are both covered by the deny list (mapped prefixes are normalized to
+// their IPv4 form when parsed).
+func TestDialerDenyIPv6AndMappedIPv4(t *testing.T) {
+	t.Parallel()
+	d, err := NewDialer(DialerOptions{DenyCIDRs: []string{"::1/128", "::ffff:127.0.0.0/104"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, addr := range []string{"::1", "127.0.0.1", "::ffff:127.0.0.1"} {
+		if d.Permitted(netip.MustParseAddr(addr)) {
+			t.Errorf("%s: permitted despite a deny rule", addr)
+		}
+	}
+	if !d.Permitted(netip.MustParseAddr("8.8.8.8")) {
+		t.Error("unrelated address denied")
+	}
+}
+
 func TestDialerOptions(t *testing.T) {
 	t.Parallel()
 	d, err := NewDialer(DialerOptions{

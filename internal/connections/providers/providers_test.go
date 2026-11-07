@@ -287,10 +287,12 @@ func TestRESTURIs(t *testing.T) {
 
 func TestEveryDriverUsesDialer(t *testing.T) {
 	t.Parallel()
-	// The deny list refuses loopback (and the metadata address the Glue
-	// fixture points at), so every provider must fail with ErrDeniedNetwork
-	// before reaching anything — proving it dials through the shared dialer.
-	reg := registry(t, connections.DialerOptions{DenyCIDRs: []string{"127.0.0.0/8", "169.254.0.0/16"}})
+	// The deny list refuses loopback (IPv4 and IPv6) and the metadata address
+	// the Glue fixture points at, so every provider must fail with
+	// ErrDeniedNetwork before reaching anything — proving it dials through the
+	// shared dialer. Both loopback families are needed: "localhost" resolves to
+	// ::1 as well as 127.0.0.1.
+	reg := registry(t, connections.DialerOptions{DenyCIDRs: []string{"127.0.0.0/8", "::1/128", "169.254.0.0/16"}})
 	configs := map[connections.Kind]connections.Config{
 		connections.KindPolaris:       {Values: map[string]string{"url": "http://localhost:8181", "client_id": "a"}, Secrets: map[string]string{"client_secret": "b"}},
 		connections.KindNessie:        {Values: map[string]string{"url": "http://localhost:19120"}},

@@ -3,6 +3,30 @@
 How to monitor Baleia: what it exposes, how to scrape it, and what to do when an alert fires.
 The metrics catalog and its rules come from #87.
 
+## Upgrading to 0.6.5
+
+Read this before `helm upgrade` from 0.6.x. The connections dialer no longer
+hardcodes its network policy (#782): the built-in denial of loopback,
+link-local/cloud metadata (`169.254.169.254`), `0.0.0.0/8` and the private
+ranges is gone, and the `system_owned`/managed-dialer split (#609/#689/#690/#694)
+is removed. What a connection may or may not reach is now entirely the
+operator's policy, set with `BALEIA_CONNECTIONS_DENY_CIDRS` and
+`BALEIA_CONNECTIONS_ALLOW_CIDRS`.
+
+The Helm chart ships these as **values**, not code:
+
+| Setting | Chart default | Note |
+|---|---|---|
+| `BALEIA_CONNECTIONS_DENY_CIDRS` | `127.0.0.0/8,::1/128,0.0.0.0/8,::/128` | Deny wins over allow |
+| `BALEIA_CONNECTIONS_ALLOW_CIDRS` | _(unset)_ | If set, only these may be dialed |
+
+Cloud-metadata ranges are **not** in the chart default. If your deployment
+relied on the old built-in metadata denial, add your cloud's metadata range to
+`BALEIA_CONNECTIONS_DENY_CIDRS` before upgrading (e.g. `169.254.0.0/16` on
+OKE/AWS). Deployments that reached their own internal databases or catalog
+managers (Polaris, Postgres, …) through the managed dialer no longer need any
+flag: with the defaults those ranges are reachable.
+
 ## Upgrading to 0.6.0
 
 Read this before `helm upgrade` from 0.5.x. Migrations 00062 to 00072 add the

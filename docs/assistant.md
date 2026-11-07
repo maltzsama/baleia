@@ -25,9 +25,9 @@ The API process needs egress to the provider's `base_url`. Air-gapped
 deployments point it at an internal OpenAI-compatible server. Provider calls
 dial through the same SSRF-safe dialer as connections
 ([ADR 0011](adr/0011-direct-connections-security.md)): `BALEIA_CONNECTIONS_DENY_CIDRS`
-and `BALEIA_CONNECTIONS_ALLOW_CIDRS` apply, and a server on loopback (a local
-Ollama, for example) needs `BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true`, for
-development only.
+and `BALEIA_CONNECTIONS_ALLOW_CIDRS` apply, so a server on loopback (a local
+Ollama, for example) needs its loopback range removed from
+`BALEIA_CONNECTIONS_DENY_CIDRS` — for development only.
 
 ## Data leaving the instance
 

@@ -61,6 +61,12 @@ func parsePrefixes(in []string) ([]netip.Prefix, error) {
 		if err != nil {
 			return nil, err
 		}
+		// Normalize an IPv4-mapped IPv6 prefix (e.g. ::ffff:127.0.0.0/104) to
+		// its IPv4 form, so a deny/allow rule covers both the IPv4 address and
+		// its mapped form (Permitted compares against the unmapped address).
+		if p.Addr().Is4In6() && p.Bits() >= 96 {
+			p = netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96)
+		}
 		out = append(out, p.Masked())
 	}
 	return out, nil

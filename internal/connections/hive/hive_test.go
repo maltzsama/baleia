@@ -55,7 +55,7 @@ func TestValidate(t *testing.T) {
 
 func TestPingDeniedByDialer(t *testing.T) {
 	t.Parallel()
-	d, err := connections.NewDialer(connections.DialerOptions{DenyCIDRs: []string{"127.0.0.0/8"}})
+	d, err := connections.NewDialer(connections.DialerOptions{DenyCIDRs: []string{"127.0.0.0/8", "::1/128"}})
 	if err != nil {
 		t.Fatal(err)
 	}
