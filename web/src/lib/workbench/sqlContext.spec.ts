@@ -1,60 +1,67 @@
 import { describe, expect, it } from 'vitest';
 import { sqlContextAt, statementSpanAt } from './sqlContext';
 
-// `|` marks the cursor.
-function at(text: string) {
+// `|` marks the cursor. `name` is the Baleia dialect name (null = generic).
+async function at(text: string, name: string | null = null) {
 	const pos = text.indexOf('|');
-	return sqlContextAt(text.slice(0, pos) + text.slice(pos + 1), pos);
+	return sqlContextAt(name, text.slice(0, pos) + text.slice(pos + 1), pos);
 }
 
 describe('sqlContextAt', () => {
-	it('expects a statement keyword at the start', () => {
-		expect(at('s|')).toMatchObject({ expect: 'statement', prefix: 's', from: 0 });
-		expect(at('SELECT 1; |')).toMatchObject({ expect: 'statement', prefix: '' });
+	it('expects a statement keyword at the start', async () => {
+		expect(await at('s|')).toMatchObject({ expect: 'statement', prefix: 's', from: 0 });
+		expect(await at('SELECT 1; |')).toMatchObject({ expect: 'statement', prefix: '' });
 	});
 
-	it('expects columns in the select list', () => {
-		expect(at('SELECT |')).toMatchObject({ expect: 'column', prefix: '' });
-		expect(at('SELECT a, cou|')).toMatchObject({ expect: 'column', prefix: 'cou' });
+	it('expects columns in the select list', async () => {
+		expect(await at('SELECT |')).toMatchObject({ expect: 'column', prefix: '' });
+		expect(await at('SELECT a, cou|')).toMatchObject({ expect: 'column', prefix: 'cou' });
 	});
 
-	it('expects a table right after FROM, JOIN and a comma', () => {
-		expect(at('SELECT * FROM |')).toMatchObject({ expect: 'table', prefix: '' });
-		expect(at('SELECT * FROM nat|')).toMatchObject({ expect: 'table', prefix: 'nat', from: 14 });
-		expect(at('SELECT * FROM a JOIN |')).toMatchObject({ expect: 'table' });
-		expect(at('SELECT * FROM a x, |')).toMatchObject({ expect: 'table' });
+	it('expects a table right after FROM, JOIN and a comma', async () => {
+		expect(await at('SELECT * FROM |')).toMatchObject({ expect: 'table', prefix: '' });
+		expect(await at('SELECT * FROM nat|')).toMatchObject({
+			expect: 'table',
+			prefix: 'nat',
+			from: 14
+		});
+		expect(await at('SELECT * FROM a JOIN |')).toMatchObject({ expect: 'table' });
+		expect(await at('SELECT * FROM a x, |')).toMatchObject({ expect: 'table' });
 	});
 
-	it('reads the schema before a table', () => {
-		expect(at('SELECT * FROM tiny.|')).toMatchObject({
+	it('reads the schema before a table', async () => {
+		expect(await at('SELECT * FROM tiny.|')).toMatchObject({
 			expect: 'table',
 			qualifier: ['tiny'],
 			prefix: ''
 		});
-		expect(at('SELECT * FROM tpch.tiny.na|')).toMatchObject({
+		expect(await at('SELECT * FROM tpch.tiny.na|')).toMatchObject({
 			expect: 'table',
 			qualifier: ['tpch', 'tiny'],
 			prefix: 'na'
 		});
 	});
 
-	it('expects a clause keyword after a table and its alias', () => {
-		expect(at('SELECT * FROM nation n W|')).toMatchObject({ expect: 'keyword', prefix: 'W' });
-		expect(at('SELECT * FROM nation |')).toMatchObject({ expect: 'keyword' });
+	it('expects a clause keyword after a table and its alias', async () => {
+		expect(await at('SELECT * FROM nation n W|')).toMatchObject({
+			expect: 'keyword',
+			prefix: 'W'
+		});
+		expect(await at('SELECT * FROM nation |')).toMatchObject({ expect: 'keyword' });
 	});
 
-	it('resolves an alias after the dot and while typing a column', () => {
-		const dot = at('SELECT * FROM tiny.nation n WHERE n.|');
+	it('resolves an alias after the dot and while typing a column', async () => {
+		const dot = await at('SELECT * FROM tiny.nation n WHERE n.|');
 		expect(dot).toMatchObject({ expect: 'column', qualifier: ['n'], prefix: '' });
 		expect(dot?.tables).toEqual([{ path: ['tiny', 'nation'], alias: 'n' }]);
-		expect(at('SELECT * FROM tiny.nation n WHERE n.na|')).toMatchObject({
+		expect(await at('SELECT * FROM tiny.nation n WHERE n.na|')).toMatchObject({
 			expect: 'column',
 			qualifier: ['n'],
 			prefix: 'na'
 		});
 	});
 
-	it('expects columns in WHERE, ON, GROUP BY, ORDER BY and HAVING', () => {
+	it('expects columns in WHERE, ON, GROUP BY, ORDER BY and HAVING', async () => {
 		for (const sql of [
 			'SELECT * FROM nation WHERE nam|',
 			'SELECT * FROM a JOIN b ON a.x = |',
@@ -63,12 +70,12 @@ describe('sqlContextAt', () => {
 			'SELECT x FROM a GROUP BY x HAVING |',
 			'SELECT * FROM a WHERE x = 1 AND |'
 		]) {
-			expect(at(sql)?.expect, sql).toBe('column');
+			expect((await at(sql))?.expect, sql).toBe('column');
 		}
 	});
 
-	it('collects the tables of the statement under the cursor only', () => {
-		const ctx = at(
+	it('collects the tables of the statement under the cursor only', async () => {
+		const ctx = await at(
 			'SELECT 1 FROM other;\nSELECT | FROM lake.sales.orders AS o JOIN customers c ON o.id = c.id, tiny.region;\nSELECT 2 FROM later'
 		);
 		expect(ctx?.tables).toEqual([
@@ -78,65 +85,95 @@ describe('sqlContextAt', () => {
 		]);
 	});
 
-	it('reads quoted tables and derived tables', () => {
-		expect(at('SELECT | FROM "My Table" t')?.tables).toEqual([{ path: ['My Table'], alias: 't' }]);
-		expect(at('SELECT | FROM (SELECT * FROM inner_t) d')?.tables).toEqual([
+	it('reads quoted tables and derived tables', async () => {
+		expect((await at('SELECT | FROM "My Table" t'))?.tables).toEqual([
+			{ path: ['My Table'], alias: 't' }
+		]);
+		expect((await at('SELECT | FROM (SELECT * FROM inner_t) d'))?.tables).toEqual([
 			{ path: ['inner_t'], alias: 'inner_t' },
 			{ path: [], alias: 'd' }
 		]);
 	});
 
-	it('tracks the clause per parenthesis depth', () => {
-		expect(at('SELECT * FROM (SELECT |')).toMatchObject({ expect: 'column' });
-		expect(at('SELECT * FROM (|')).toMatchObject({ expect: 'statement' });
-		expect(at('SELECT count(*) FROM t WHERE x IN (SELECT y FROM |')).toMatchObject({
+	it('tracks the clause per parenthesis depth', async () => {
+		expect(await at('SELECT * FROM (SELECT |')).toMatchObject({ expect: 'column' });
+		expect(await at('SELECT * FROM (|')).toMatchObject({ expect: 'statement' });
+		expect(await at('SELECT * FROM t WHERE x IN (SELECT y FROM |')).toMatchObject({
 			expect: 'table'
 		});
-		expect(at('SELECT * FROM t WHERE f(a) = |')).toMatchObject({ expect: 'column' });
+		expect(await at('SELECT * FROM t WHERE f(a) = |')).toMatchObject({ expect: 'column' });
 	});
 
-	it('keeps the column context inside function calls and expressions', () => {
-		expect(at('SELECT count(|')).toMatchObject({ expect: 'column', prefix: '' });
-		expect(at('SELECT coalesce(a, na|')).toMatchObject({ expect: 'column', prefix: 'na' });
-		expect(at('SELECT * FROM t WHERE (a = 1 OR |')).toMatchObject({ expect: 'column' });
-		expect(at('SELECT * FROM t WHERE x IN (SELECT |')).toMatchObject({ expect: 'column' });
-		expect(at('SELECT * FROM t WHERE x IN (|')).toMatchObject({ expect: 'column' });
+	it('keeps the column context inside function calls and expressions', async () => {
+		expect(await at('SELECT count(|')).toMatchObject({ expect: 'column', prefix: '' });
+		expect(await at('SELECT coalesce(a, na|')).toMatchObject({ expect: 'column', prefix: 'na' });
+		expect(await at('SELECT * FROM t WHERE (a = 1 OR |')).toMatchObject({ expect: 'column' });
+		expect(await at('SELECT * FROM t WHERE x IN (SELECT |')).toMatchObject({
+			expect: 'column'
+		});
+		expect(await at('SELECT * FROM t WHERE x IN (|')).toMatchObject({ expect: 'column' });
 	});
 
-	it('reads doubled quotes inside quoted identifiers', () => {
-		expect(at('SELECT | FROM "a""b" t')?.tables).toEqual([{ path: ['a"b'], alias: 't' }]);
-		expect(at('SELECT | FROM `a``b` t')?.tables).toEqual([{ path: ['a`b'], alias: 't' }]);
-		expect(at('SELECT | FROM [a]]b] t')?.tables).toEqual([{ path: ['a]b'], alias: 't' }]);
-		expect(at('SELECT "a""b|')).toBeNull();
-		expect(at('SELECT "a""b" |')).toMatchObject({ expect: 'column' });
+	it('reads doubled quotes inside double-quoted identifiers', async () => {
+		expect((await at('SELECT | FROM "a""b" t'))?.tables).toEqual([{ path: ['a"b'], alias: 't' }]);
 	});
 
-	it('suggests nothing inside strings, comments and quoted identifiers', () => {
-		expect(at("SELECT 'abc|")).toBeNull();
-		expect(at("SELECT 'it''s |'")).toBeNull();
-		expect(at('SELECT 1 -- note|')).toBeNull();
-		expect(at('SELECT 1 /* x | */')).toBeNull();
-		expect(at('SELECT "Col|')).toBeNull();
-		expect(at("SELECT 'a' |")).toMatchObject({ expect: 'column' });
-		expect(at('-- note\nSEL|')).toMatchObject({ expect: 'statement', prefix: 'SEL' });
+	it('reads backtick identifiers in MySQL and bracket identifiers in T-SQL', async () => {
+		expect((await at('SELECT | FROM `a``b` t', 'mysql'))?.tables).toEqual([
+			{ path: ['a`b'], alias: 't' }
+		]);
+		expect((await at('SELECT | FROM [a]]b] t', 'tsql'))?.tables).toEqual([
+			{ path: ['a]b'], alias: 't' }
+		]);
 	});
 
-	it('does not complete inside a number', () => {
-		expect(at('SELECT 12|')).toBeNull();
+	it('suggests nothing inside an unterminated or closed quoted identifier', async () => {
+		expect(await at('SELECT "a""b|')).toBeNull();
+		expect(await at('SELECT "a""b" |')).toMatchObject({ expect: 'column' });
+	});
+
+	it('suggests nothing inside strings, comments and quoted identifiers', async () => {
+		expect(await at("SELECT 'abc|")).toBeNull();
+		expect(await at("SELECT 'it''s |'")).toBeNull();
+		expect(await at('SELECT 1 -- note|')).toBeNull();
+		expect(await at('SELECT 1 /* x | */')).toBeNull();
+		expect(await at('SELECT "Col|')).toBeNull();
+		expect(await at("SELECT 'a' |")).toMatchObject({ expect: 'column' });
+		expect(await at('-- note\nSEL|')).toMatchObject({ expect: 'statement', prefix: 'SEL' });
+	});
+
+	it('does not complete inside a number', async () => {
+		expect(await at('SELECT 12|')).toBeNull();
+	});
+
+	it('does not treat a BY clause as a table alias', async () => {
+		expect((await at('SELECT | FROM nation GROUP BY regionkey'))?.tables).toEqual([
+			{ path: ['nation'], alias: 'nation' }
+		]);
+	});
+
+	it('completes the statement under the cursor when a later one is unterminated', async () => {
+		expect(await at("SELECT | FROM nation WHERE 1 = 1;\nSELECT 'unterminated")).toMatchObject({
+			expect: 'column'
+		});
+	});
+
+	it('suppresses completion inside a MySQL # comment', async () => {
+		expect(await at('SELECT 1 # note|', 'mysql')).toBeNull();
 	});
 });
 
 describe('joinOn (#555)', () => {
-	it('marks the JOIN whose ON the cursor follows', () => {
-		const ctx = at('SELECT * FROM orders o JOIN customers c ON |');
+	it('marks the JOIN whose ON the cursor follows', async () => {
+		const ctx = await at('SELECT * FROM orders o JOIN customers c ON |');
 		expect(ctx?.joinOn).toEqual({
 			joined: { path: ['customers'], alias: 'c' },
 			others: [{ path: ['orders'], alias: 'o' }]
 		});
 	});
 
-	it('marks only the most recent JOIN', () => {
-		const ctx = at('SELECT * FROM a x JOIN b y ON x.id = y.id JOIN c z ON |');
+	it('marks only the most recent JOIN', async () => {
+		const ctx = await at('SELECT * FROM a x JOIN b y ON x.id = y.id JOIN c z ON |');
 		expect(ctx?.joinOn?.joined).toEqual({ path: ['c'], alias: 'z' });
 		expect(ctx?.joinOn?.others).toEqual([
 			{ path: ['a'], alias: 'x' },
@@ -144,33 +181,43 @@ describe('joinOn (#555)', () => {
 		]);
 	});
 
-	it('does not mark a WHERE, a typed column, or a populated condition', () => {
-		expect(at('SELECT * FROM a x WHERE |')?.joinOn).toBeUndefined();
-		expect(at('SELECT * FROM a x JOIN b y ON x.|')?.joinOn).toBeUndefined();
-		expect(at('SELECT * FROM a x JOIN b y ON x.id = |')?.joinOn).toBeUndefined();
+	it('does not mark a WHERE, a typed column, or a populated condition', async () => {
+		expect((await at('SELECT * FROM a x WHERE |'))?.joinOn).toBeUndefined();
+		expect((await at('SELECT * FROM a x JOIN b y ON x.|'))?.joinOn).toBeUndefined();
+		expect((await at('SELECT * FROM a x JOIN b y ON x.id = |'))?.joinOn).toBeUndefined();
 	});
 });
 
-describe('statementSpanAt (#395)', () => {
-	const text = (doc: string, pos: number) => {
-		const span = statementSpanAt(doc, pos);
+describe('statementSpanAt (#395, #756)', () => {
+	const text = async (doc: string, pos: number) => {
+		const span = await statementSpanAt(null, doc, pos);
 		return span ? doc.slice(span.start, span.end).trim() : null;
 	};
 
-	it('picks the statement that holds the cursor', () => {
+	it('picks the statement that holds the cursor', async () => {
 		const doc = 'SELECT 1;\nSELECT 2;\nSELECT 3';
-		expect(text(doc, 3)).toBe('SELECT 1;');
-		expect(text(doc, doc.indexOf('2'))).toBe('SELECT 2;');
-		expect(text(doc, doc.length)).toBe('SELECT 3');
+		expect(await text(doc, 3)).toBe('SELECT 1;');
+		expect(await text(doc, doc.indexOf('2'))).toBe('SELECT 2;');
+		expect(await text(doc, doc.length)).toBe('SELECT 3');
 	});
 
-	it('ignores semicolons in strings, comments and quoted identifiers', () => {
+	it('ignores semicolons in strings, comments and quoted identifiers', async () => {
 		const doc = 'SELECT \';\' AS a, "x;y" -- c;\nFROM t;\nSELECT 2';
-		expect(text(doc, 0)).toBe('SELECT \';\' AS a, "x;y" -- c;\nFROM t;');
+		expect(await text(doc, 0)).toBe('SELECT \';\' AS a, "x;y" -- c;\nFROM t;');
 	});
 
-	it('takes the last statement when the cursor is after it, and null on an empty doc', () => {
-		expect(text('SELECT 1;\n\n', 12)).toBe('SELECT 1;');
-		expect(statementSpanAt('  \n ', 2)).toBeNull();
+	it('takes the last statement when the cursor is after it, and null on an empty doc', async () => {
+		expect(await text('SELECT 1;\n\n', 12)).toBe('SELECT 1;');
+		expect(await statementSpanAt(null, '  \n ', 2)).toBeNull();
+	});
+
+	it('selects the following statement at a shared boundary', async () => {
+		const doc = 'SELECT 1;SELECT 2';
+		expect(await text(doc, doc.indexOf('SELECT 2'))).toBe('SELECT 2');
+	});
+
+	it('skips a trailing comment to the last executable statement', async () => {
+		const doc = 'SELECT 1;\n-- explanation';
+		expect(await text(doc, doc.length)).toBe('SELECT 1;');
 	});
 });

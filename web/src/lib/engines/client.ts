@@ -15,7 +15,6 @@ import {
 	StandardSQL,
 	type SQLDialect
 } from '@codemirror/lang-sql';
-import type { SqlLanguage } from 'sql-formatter';
 
 export type Engine = components['schemas']['Engine'];
 export type EngineDialect = components['schemas']['EngineDialect'];
@@ -119,10 +118,4 @@ const CODEMIRROR_DIALECTS: Record<string, SQLDialect> = {
 export function codemirrorDialect(name: string | undefined | null): SQLDialect {
 	if (!name) return StandardSQL;
 	return CODEMIRROR_DIALECTS[name] ?? StandardSQL;
-}
-
-/** The sql-formatter language id, falling back to its generic `sql`. */
-export function formatterLanguage(name: string | undefined | null): SqlLanguage {
-	if (!name) return 'sql';
-	return name as SqlLanguage;
 }

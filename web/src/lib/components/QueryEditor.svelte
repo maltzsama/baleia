@@ -29,7 +29,6 @@
 	import { SPLIT_DEFAULT, loadSplit } from '$lib/workbench/split';
 	import {
 		codemirrorDialect,
-		formatterLanguage,
 		loadDialect,
 		loadEngines,
 		type Dialect,
@@ -40,6 +39,7 @@
 	import { loadNamespaces, searchMetadata } from '$lib/metadata/client';
 	import { sqlCompletionSource, type CompletionScope } from '$lib/workbench/sqlCompletion';
 	import { statementSpanAt } from '$lib/workbench/sqlContext';
+	import { formatSQL as formatSql } from '$lib/workbench/sqlingo';
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
 	import FunctionsPanel from '$lib/workbench/FunctionsPanel.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -746,18 +746,6 @@
 	});
 
 	// ── Running ──────────────────────────────────────────────────────────
-	async function splitStatements(name: string, sqlText: string) {
-		const { data, error } = await client.POST('/dialects/{name}/split', {
-			params: { path: { name } },
-			body: { sql: sqlText }
-		});
-		if (error || !data)
-			throw new Error(
-				apiErrorMessage(error, m.components_queryeditor_could_not_split_the_script())
-			);
-		return data;
-	}
-
 	/** `explain` marks the run as an EXPLAIN (#745): its flag is written only
 	 *  together with the execution id, so the two always describe the same run. */
 	async function submit(sqlText: string, opts?: { explain?: boolean }) {
@@ -824,22 +812,18 @@
 		const full = doc.toString();
 		const head = selection.head;
 		const name = selectedEngine?.dialect?.name;
-		// Run never falls back to the whole script, which is Run all's job: the
-		// engine's splitter knows its dialect, and the local one stands in when
-		// it is unavailable (#395).
-		let span: { start: number; end: number } | null | undefined;
-		if (name) {
-			try {
-				const spans = await splitStatements(name, full);
-				span =
-					spans.find((s) => s.start <= head && head <= s.end) ??
-					[...spans].reverse().find((s) => s.end <= head) ??
-					spans[0];
-			} catch {
-				span = undefined;
-			}
+		// The statement at the cursor is split on the client with sqlingo (#756).
+		// Run never falls back to the whole script, which is Run all's job: when
+		// the statement cannot be determined (unterminated input, a failed dialect
+		// load) it stops and reports instead of running a different statement.
+		let span: { start: number; end: number } | null;
+		try {
+			span = await statementSpanAt(name, full, head);
+		} catch {
+			const tab = activeTab;
+			if (tab) tab.errorMsg = m.components_queryeditor_could_not_split_the_script();
+			return;
 		}
-		span ??= statementSpanAt(full, head);
 		if (span) await submit(full.slice(span.start, span.end));
 	}
 
@@ -957,17 +941,14 @@
 
 	async function formatSQL() {
 		if (!editorView) return;
+		const sqlText = editorView.state.doc.toString();
 		try {
-			// sql-formatter is heavy and only used on demand (#233): load it lazily.
-			const { format: formatSQLFormatter } = await import('sql-formatter');
-			const sqlText = editorView.state.doc.toString();
-			const formatted = formatSQLFormatter(sqlText, {
-				language: formatterLanguage(selectedEngine?.dialect?.formatter_language),
-				keywordCase: 'upper',
-				indentStyle: 'standard'
-			});
+			const formatted = await formatSql(selectedEngine?.dialect?.name, sqlText);
+			// The tab or document may have changed while sqlingo loaded: never
+			// overwrite a different buffer with a stale result.
+			if (editorView.state.doc.toString() !== sqlText) return;
 			editorView.dispatch({
-				changes: { from: 0, to: editorView.state.doc.length, insert: formatted }
+				changes: { from: 0, to: sqlText.length, insert: formatted }
 			});
 		} catch {
 			/* invalid SQL: leave the editor untouched */

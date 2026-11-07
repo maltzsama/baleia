@@ -216,12 +216,6 @@ describe('QueryEditor', () => {
 	// whole script, as ⌘↵ and ⇧⌘↵.
 	function captureRuns(sent: string[]) {
 		server.use(
-			http.post('/dialects/{name}/split', ({ response }) =>
-				response(200).json([
-					{ start: 0, end: 9 },
-					{ start: 10, end: 18 }
-				])
-			),
 			http.post('/workspaces/{id}/executions', async ({ request, response }) => {
 				const body = (await request.json()) as { sql: string };
 				sent.push(body.sql);
@@ -250,22 +244,17 @@ describe('QueryEditor', () => {
 	});
 
 	// CodeRabbit on #396: Run must not fall back to the whole script.
-	it('runs one statement with Run even when the engine splitter fails', async () => {
+	it('stops and reports when the statement cannot be determined', async () => {
 		mockWorkbench();
 		const sent: string[] = [];
 		captureRuns(sent);
-		server.use(
-			// The splitter refuses the script (unterminated string, …).
-			http.post('/dialects/{name}/split', ({ response }) =>
-				response(422).json({ code: 'validation_error', message: 'cannot split', errors: [] })
-			)
-		);
-		editor.updateSql(editor.activeId, 'SELECT 1;\nSELECT 2');
+		editor.updateSql(editor.activeId, "SELECT 1;\nSELECT 'unterminated");
 		render(QueryEditor);
 		await screen.findByText('trino · trino');
 
 		await fireEvent.click(screen.getByTestId('run-current'));
-		await waitFor(() => expect(sent).toEqual(['SELECT 1;']));
+		await screen.findByText('Could not split the script');
+		expect(sent).toEqual([]);
 	});
 
 	it('runs the whole script with the shortcut, and has no Run all button', async () => {
@@ -405,9 +394,6 @@ describe('QueryEditor', () => {
 		const gate = new Promise<void>((resolve) => (release = resolve));
 		const seen = { started: false, tickets: 0 };
 		server.use(
-			http.post('/dialects/{name}/split', ({ response }) =>
-				response(200).json([{ start: 0, end: 8 }])
-			),
 			http.post('/workspaces/{id}/executions', async ({ response }) => {
 				seen.started = true;
 				await gate;
