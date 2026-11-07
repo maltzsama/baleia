@@ -1371,6 +1371,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/metadata/functions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The connected engine's function catalog (autocomplete)
+         * @description Introspects the target engine's function catalog at runtime (the dialect's FunctionQuery) and caches it per binding. Signature, description and kind are present only where the engine exposes them; nothing is invented for the missing ones.
+         */
+        get: operations["listMetadataFunctions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/lineage": {
         parameters: {
             query?: never;
@@ -9543,6 +9565,35 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listMetadataFunctions: {
+        parameters: {
+            query: {
+                catalog_id: string;
+                binding_id?: string;
+                engine_id?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Functions, sorted by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DialectFunction"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listLineage: {
