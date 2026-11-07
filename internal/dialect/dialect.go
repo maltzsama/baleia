@@ -170,10 +170,10 @@ type Dialect interface {
 	// Placeholder is the n-th (1-based) bind parameter.
 	Placeholder(n int) string
 	MetadataQueries() MetadataQueries
-	// FunctionQuery is the engine's function-catalog query (#788): one row per
-	// function, the name in the first column and signature/description/kind in
-	// further columns where the engine exposes them. Empty when the engine has
-	// no catalog.
+	// FunctionQuery returns the engine's function-catalog SQL (#788) without
+	// executing it. Names are in the first result column; additional columns
+	// and the representation of overloads vary by dialect. An empty string
+	// means no query is configured.
 	FunctionQuery() string
 
 	// SQL-generation primitives. Expressions are SQL the caller built from

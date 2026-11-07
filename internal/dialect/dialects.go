@@ -47,6 +47,7 @@ func wrapped(open, closeBy string) func(string) string {
 
 func xHex(h string) string { return "X'" + h + "'" }
 
+// newTrino builds the Trino dialect with SHOW FUNCTIONS as its function query.
 func newTrino() *spec {
 	return &spec{
 		name:      Trino,
@@ -77,6 +78,9 @@ func newTrino() *spec {
 	}
 }
 
+// newPostgreSQL builds the PostgreSQL dialect with a function query limited to
+// pg_catalog functions, aggregates, and window functions whose names do not
+// start with an underscore or pg_. Overloads are grouped by name.
 func newPostgreSQL() *spec {
 	return &spec{
 		name:      PostgreSQL,
@@ -141,6 +145,9 @@ func mysqlTimeTrunc(e string, g TimeGrain) (string, error) {
 	return "CAST(DATE_FORMAT(" + e + ", '" + format[g] + "') AS DATETIME)", nil
 }
 
+// mysqlFamily builds a MySQL-compatible dialect with the supplied editor
+// language identifiers and function-catalog query. json enables the JSON type
+// and CAST(... AS JSON) literals.
 func mysqlFamily(name, formatter, codemirror string, json bool, functionQuery string) *spec {
 	types := map[LogicalType]string{
 		TypeInt64: "SIGNED", TypeFloat64: "DOUBLE", TypeString: "CHAR",
@@ -184,6 +191,8 @@ FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER 
 	}
 }
 
+// newMySQL builds the MySQL dialect with a function query selecting help topics
+// in categories whose names contain Functions or Operators.
 func newMySQL() *spec {
 	return mysqlFamily(MySQL, "mysql", "MySQL", true, `SELECT t.name FROM mysql.help_topic t
 JOIN mysql.help_category c ON c.help_category_id = t.help_category_id
@@ -242,6 +251,8 @@ FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @p1 AND TABLE_NAME = @p2 OR
 	}
 }
 
+// newOracle builds the Oracle dialect with distinct function names queried
+// from v$sqlfn_metadata.
 func newOracle() *spec {
 	return &spec{
 		name:      Oracle,
@@ -311,6 +322,8 @@ func sqliteTimeTrunc(e string, g TimeGrain) (string, error) {
 	return "datetime(" + e + ", 'start of year')", nil
 }
 
+// newSQLite builds the SQLite dialect with distinct function names queried
+// from pragma_function_list.
 func newSQLite() *spec {
 	return &spec{
 		name:      SQLite,
@@ -350,6 +363,8 @@ FROM pragma_table_info(?2, ?1) ORDER BY cid`,
 	}
 }
 
+// newClickHouse builds the ClickHouse dialect with function names queried
+// from system.functions.
 func newClickHouse() *spec {
 	return &spec{
 		name:      ClickHouse,
