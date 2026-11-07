@@ -8,8 +8,11 @@ import Heading from '@theme/Heading';
 
 import styles from './index.module.css';
 
+const repo = 'https://github.com/maltzsama/baleia';
+
 function HomepageHeader() {
   const { siteConfig } = useDocusaurusContext();
+  const version = String(siteConfig.customFields?.version ?? '');
   return (
     <header className={clsx('hero', styles.heroBanner)}>
       <div className="container">
@@ -24,6 +27,11 @@ function HomepageHeader() {
           {siteConfig.title}
         </Heading>
         <p className="hero__subtitle">{siteConfig.tagline}</p>
+        {version && (
+          <Link className={styles.version} href={`${repo}/releases/tag/v${version}`}>
+            v{version}
+          </Link>
+        )}
         <p className={styles.lede}>
           Write and run SQL against Trino and your databases, browse every catalog in one
           place, and share queries, metrics and models with your team.

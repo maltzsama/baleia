@@ -5,10 +5,12 @@ name: Docs site
 # main publishes it to GitHub Pages.
 on:
   pull_request:
-    paths: ['docs/**', 'website/**', '.github/workflows/docs-site.yml']
+    paths:
+      ['docs/**', 'website/**', '.release-please-manifest.json', '.github/workflows/docs-site.yml']
   push:
     branches: [main]
-    paths: ['docs/**', 'website/**', '.github/workflows/docs-site.yml']
+    paths:
+      ['docs/**', 'website/**', '.release-please-manifest.json', '.github/workflows/docs-site.yml']
   workflow_dispatch:
 
 permissions:

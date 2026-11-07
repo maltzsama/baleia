@@ -54,6 +54,24 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* The released version, under the tagline; it links to its release. */
+.version {
+  display: inline-block;
+  margin-top: 0.85rem;
+  padding: 0.15rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.version:hover {
+  border-color: var(--baleia-yellow);
+  color: var(--baleia-yellow);
+  text-decoration: none;
+}
+
 .buttons {
   display: flex;
   flex-wrap: wrap;

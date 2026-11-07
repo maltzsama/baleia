@@ -1,10 +1,20 @@
 import type * as Preset from '@docusaurus/preset-classic';
 import type { Config } from '@docusaurus/types';
 import { themes as prismThemes } from 'prism-react-renderer';
+import { readFileSync } from 'node:fs';
 import githubLinks from './src/remark/github-links';
 
 const repo = 'https://github.com/maltzsama/baleia';
 const demo = 'https://demo.baleia.galileostd.io';
+
+// The released version, from the release-please manifest that every release
+// bumps (#513). It is the same value the app shows; reading it at build time
+// keeps the site honest across releases.
+const version = (
+  JSON.parse(
+    readFileSync(new URL('../.release-please-manifest.json', import.meta.url), 'utf8')
+  ) as Record<string, string>
+)['.'];
 
 // The site renders the repository's docs/ folder as is, under /docs, so the
 // same Markdown reads well on GitHub and here. Links that leave docs/ go to
@@ -35,6 +45,9 @@ const config: Config = {
 
   i18n: { defaultLocale: 'en', locales: ['en'] },
   themes: ['@docusaurus/theme-mermaid'],
+
+  // The released version, read above; the landing page renders it.
+  customFields: { version },
 
   presets: [
     [
