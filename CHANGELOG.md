@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.5](https://github.com/maltzsama/baleia/compare/v0.6.4...v0.6.5) (2026-11-07)
+
+
+### Bug Fixes
+
+* **connections:** address review findings for the config-driven dialer ([0ec2514](https://github.com/maltzsama/baleia/commit/0ec25149d2fe8dd5b24110855ee6c1d7c56d3764))
+* **connections:** make the SSRF deny/allow policy config-driven ([4654950](https://github.com/maltzsama/baleia/commit/465495098700f04c3f84f0af82bd8511990ca7bb))
+* **connections:** make the SSRF deny/allow policy config-driven ([98b8194](https://github.com/maltzsama/baleia/commit/98b8194c31a1738c0e27e75d1e6c57f8332f0cf8))
+
 ## [0.6.4](https://github.com/maltzsama/baleia/compare/v0.6.3...v0.6.4) (2026-11-06)
 
 
