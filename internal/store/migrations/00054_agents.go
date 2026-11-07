@@ -61,7 +61,6 @@ ALTER TABLE query_executions
 CREATE INDEX idx_query_executions_agent ON query_executions (agent_id);
 `
 
-
 const up00054MySQL = `
 CREATE TABLE agents (
     id          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -106,7 +105,6 @@ ALTER TABLE query_executions
 CREATE INDEX idx_query_executions_agent ON query_executions (agent_id);
 `
 
-
 const down00054Postgres = `
 ALTER TABLE query_executions DROP COLUMN IF EXISTS agent_id;
 DROP TABLE IF EXISTS agent_tokens;
@@ -114,14 +112,12 @@ DROP TABLE IF EXISTS agent_workspaces;
 DROP TABLE IF EXISTS agents;
 `
 
-
 const down00054MySQL = `
 ALTER TABLE query_executions DROP COLUMN agent_id;
 DROP TABLE IF EXISTS agent_tokens;
 DROP TABLE IF EXISTS agent_workspaces;
 DROP TABLE IF EXISTS agents;
 `
-
 
 func up00054(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00054Postgres, up00054MySQL)

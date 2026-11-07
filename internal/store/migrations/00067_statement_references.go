@@ -42,7 +42,6 @@ CREATE TABLE statement_joins (
 CREATE INDEX statement_joins_workspace ON statement_joins (workspace_id);
 `
 
-
 const up00067MySQL = `
 CREATE TABLE statement_references (
     statement_id CHAR(36) NOT NULL REFERENCES query_statements (id) ON DELETE CASCADE,
@@ -73,18 +72,15 @@ CREATE TABLE statement_joins (
 CREATE INDEX statement_joins_workspace ON statement_joins (workspace_id);
 `
 
-
 const down00067Postgres = `
 DROP TABLE IF EXISTS statement_joins;
 DROP TABLE IF EXISTS statement_references;
 `
 
-
 const down00067MySQL = `
 DROP TABLE IF EXISTS statement_joins;
 DROP TABLE IF EXISTS statement_references;
 `
-
 
 func up00067(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00067Postgres, up00067MySQL)

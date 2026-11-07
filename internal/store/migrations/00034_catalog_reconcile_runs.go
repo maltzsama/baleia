@@ -27,7 +27,6 @@ CREATE TABLE catalog_reconcile_runs (
 CREATE INDEX catalog_reconcile_runs_engine ON catalog_reconcile_runs (engine_id, started_at DESC);
 `
 
-
 const up00034MySQL = `
 CREATE TABLE catalog_reconcile_runs (
     id           CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -43,16 +42,13 @@ CREATE TABLE catalog_reconcile_runs (
 CREATE INDEX catalog_reconcile_runs_engine ON catalog_reconcile_runs (engine_id, started_at DESC);
 `
 
-
 const down00034Postgres = `
 DROP TABLE IF EXISTS catalog_reconcile_runs;
 `
 
-
 const down00034MySQL = `
 DROP TABLE IF EXISTS catalog_reconcile_runs;
 `
-
 
 func up00034(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00034Postgres, up00034MySQL)

@@ -72,7 +72,6 @@ SELECT workspace_id, space_id, 'semantic_metric', id, 1, 'create',
 FROM semantic_metrics m;
 `
 
-
 const up00039MySQL = `
 CREATE TABLE content_versions (
     id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -99,18 +98,15 @@ CREATE INDEX content_versions_deleted ON content_versions (workspace_id, entity_
     WHERE change_kind = 'delete';
 `
 
-
 const down00039Postgres = `
 DROP TABLE IF EXISTS content_versions;
 DROP FUNCTION IF EXISTS content_versions_append_only();
 `
 
-
 const down00039MySQL = `
 DROP TABLE IF EXISTS content_versions;
 DROP FUNCTION IF EXISTS content_versions_append_only();
 `
-
 
 func up00039(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00039Postgres, up00039MySQL)

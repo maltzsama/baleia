@@ -25,7 +25,6 @@ CREATE TABLE workspace_catalog_grants (
 CREATE INDEX idx_workspace_catalog_grants_catalog ON workspace_catalog_grants (catalog_id);
 `
 
-
 const up00022MySQL = `
 CREATE TABLE workspace_catalog_grants (
     workspace_id CHAR(36)        NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
@@ -39,16 +38,13 @@ CREATE TABLE workspace_catalog_grants (
 CREATE INDEX idx_workspace_catalog_grants_catalog ON workspace_catalog_grants (catalog_id);
 `
 
-
 const down00022Postgres = `
 DROP TABLE IF EXISTS workspace_catalog_grants;
 `
 
-
 const down00022MySQL = `
 DROP TABLE IF EXISTS workspace_catalog_grants;
 `
-
 
 func up00022(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00022Postgres, up00022MySQL)

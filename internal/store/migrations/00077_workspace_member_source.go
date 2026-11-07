@@ -51,24 +51,20 @@ $$;
 
 `
 
-
 const up00077MySQL = `
 ALTER TABLE workspace_members
     ADD COLUMN source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'idp_group'));
 `
-
 
 const down00077Postgres = `
 DROP FUNCTION baleia_apply_group_workspace_roles(UUID, JSONB);
 ALTER TABLE workspace_members DROP COLUMN source;
 `
 
-
 const down00077MySQL = `
 DROP FUNCTION baleia_apply_group_workspace_roles(CHAR(36), JSON);
 ALTER TABLE workspace_members DROP COLUMN source;
 `
-
 
 func up00077(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00077Postgres, up00077MySQL)

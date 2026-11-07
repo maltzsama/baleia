@@ -23,7 +23,6 @@ CREATE TABLE audit_export_cursor (
 );
 `
 
-
 const up00036MySQL = `
 CREATE TABLE audit_export_cursor (
     sink        TEXT PRIMARY KEY,
@@ -33,16 +32,13 @@ CREATE TABLE audit_export_cursor (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
-
 const down00036Postgres = `
 DROP TABLE IF EXISTS audit_export_cursor;
 `
 
-
 const down00036MySQL = `
 DROP TABLE IF EXISTS audit_export_cursor;
 `
-
 
 func up00036(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00036Postgres, up00036MySQL)

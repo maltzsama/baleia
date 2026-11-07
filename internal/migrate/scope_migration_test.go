@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/pressly/goose/v3"
 )
 
 // TestWorkspaceCatalogScopeBackfill: migrating from 00078 to 00079 turns the
@@ -22,9 +21,7 @@ func TestWorkspaceCatalogScopeBackfill(t *testing.T) {
 	other := scalar[string](t, db, `INSERT INTO users (name, email, password_hash) VALUES ('s', 's@x', 'x') RETURNING id::text`)
 	otherWS := scalar[string](t, db, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ('w2', 'personal', 'p2', $1::uuid) RETURNING id::text`, other)
 
-	if err := goose.UpTo(db, dir, 79); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, dir, 79)
 
 	count := func(workspace, catalog string) int {
 		return scalar[int](t, db, `SELECT count(*) FROM workspace_catalog_grants WHERE workspace_id = $1::uuid AND catalog_id = $2::uuid`, workspace, catalog)

@@ -32,7 +32,6 @@ CREATE INDEX metadata_foreign_keys_catalog ON metadata_foreign_keys (catalog_id)
 CREATE INDEX metadata_foreign_keys_ref ON metadata_foreign_keys (catalog_id, ref_namespace, ref_table);
 `
 
-
 const up00069MySQL = `
 CREATE TABLE metadata_foreign_keys (
     catalog_id    CHAR(36)        NOT NULL REFERENCES catalogs (id) ON DELETE CASCADE,
@@ -49,16 +48,13 @@ CREATE INDEX metadata_foreign_keys_catalog ON metadata_foreign_keys (catalog_id)
 CREATE INDEX metadata_foreign_keys_ref ON metadata_foreign_keys (catalog_id, ref_namespace, ref_table);
 `
 
-
 const down00069Postgres = `
 DROP TABLE IF EXISTS metadata_foreign_keys;
 `
 
-
 const down00069MySQL = `
 DROP TABLE IF EXISTS metadata_foreign_keys;
 `
-
 
 func up00069(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00069Postgres, up00069MySQL)

@@ -17,14 +17,12 @@ ALTER TABLE query_statements
     ADD COLUMN truncated    BOOLEAN NOT NULL DEFAULT false;
 `
 
-
 const up00021MySQL = `
 ALTER TABLE query_statements
     ADD COLUMN result_key   TEXT,
     ADD COLUMN result_bytes BIGINT,
     ADD COLUMN truncated    BOOLEAN NOT NULL DEFAULT false;
 `
-
 
 const down00021Postgres = `
 ALTER TABLE query_statements
@@ -33,14 +31,12 @@ ALTER TABLE query_statements
     DROP COLUMN IF EXISTS result_key;
 `
 
-
 const down00021MySQL = `
 ALTER TABLE query_statements
     DROP COLUMN truncated,
     DROP COLUMN result_bytes,
     DROP COLUMN result_key;
 `
-
 
 func up00021(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00021Postgres, up00021MySQL)

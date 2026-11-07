@@ -58,7 +58,6 @@ CREATE TABLE maintenance_runs (
 CREATE INDEX maintenance_runs_catalog ON maintenance_runs (catalog_id, started_at DESC);
 `
 
-
 const up00043MySQL = `
 ALTER TABLE cluster_snapshots     ADD COLUMN engine_id CHAR(36) REFERENCES engines (id) ON DELETE CASCADE;
 ALTER TABLE trino_query_snapshots ADD COLUMN engine_id CHAR(36) REFERENCES engines (id) ON DELETE CASCADE;
@@ -101,7 +100,6 @@ CREATE TABLE maintenance_runs (
 CREATE INDEX maintenance_runs_catalog ON maintenance_runs (catalog_id, started_at DESC);
 `
 
-
 const down00043Postgres = `
 DROP TABLE IF EXISTS maintenance_runs;
 ALTER TABLE table_health_snapshots DROP CONSTRAINT IF EXISTS table_health_unique_catalog;
@@ -112,7 +110,6 @@ ALTER TABLE trino_query_snapshots DROP COLUMN IF EXISTS engine_id;
 ALTER TABLE cluster_snapshots DROP COLUMN IF EXISTS engine_id;
 `
 
-
 const down00043MySQL = `
 DROP TABLE IF EXISTS maintenance_runs;
 ALTER TABLE table_health_snapshots DROP CONSTRAINT table_health_unique_catalog;
@@ -122,7 +119,6 @@ DROP INDEX IF EXISTS cluster_snapshots_engine_time;
 ALTER TABLE trino_query_snapshots DROP COLUMN engine_id;
 ALTER TABLE cluster_snapshots DROP COLUMN engine_id;
 `
-
 
 func up00043(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00043Postgres, up00043MySQL)

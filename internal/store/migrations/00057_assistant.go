@@ -69,7 +69,6 @@ CREATE INDEX assistant_messages_usage ON assistant_messages (created_at)
     WHERE output_tokens IS NOT NULL;
 `
 
-
 const up00057MySQL = `
 CREATE TABLE assistant_settings (
     id                        BOOLEAN PRIMARY KEY DEFAULT true CHECK (id),
@@ -121,20 +120,17 @@ CREATE INDEX assistant_messages_usage ON assistant_messages (created_at)
     WHERE output_tokens IS NOT NULL;
 `
 
-
 const down00057Postgres = `
 DROP TABLE IF EXISTS assistant_messages;
 DROP TABLE IF EXISTS assistant_conversations;
 DROP TABLE IF EXISTS assistant_settings;
 `
 
-
 const down00057MySQL = `
 DROP TABLE IF EXISTS assistant_messages;
 DROP TABLE IF EXISTS assistant_conversations;
 DROP TABLE IF EXISTS assistant_settings;
 `
-
 
 func up00057(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00057Postgres, up00057MySQL)

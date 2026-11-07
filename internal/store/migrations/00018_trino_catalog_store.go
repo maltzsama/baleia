@@ -96,7 +96,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON trino_catalog_registry TO baleia_trino;
 GRANT SELECT ON trino_clusters TO baleia_trino;
 `
 
-
 const up00018MySQL = `
 CREATE TABLE trino_clusters (
     id              CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -168,7 +167,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON trino_catalog_registry TO baleia_trino;
 GRANT SELECT ON trino_clusters TO baleia_trino;
 `
 
-
 const down00018Postgres = `
 REVOKE SELECT, INSERT, UPDATE, DELETE ON trino_catalog_registry FROM baleia_trino;
 REVOKE SELECT ON trino_clusters FROM baleia_trino;
@@ -180,7 +178,6 @@ DROP TABLE IF EXISTS catalogs;
 DROP TABLE IF EXISTS trino_clusters;
 `
 
-
 const down00018MySQL = `
 REVOKE SELECT, INSERT, UPDATE, DELETE ON trino_catalog_registry FROM baleia_trino;
 REVOKE SELECT ON trino_clusters FROM baleia_trino;
@@ -191,7 +188,6 @@ DROP TABLE IF EXISTS trino_catalog_registry;
 DROP TABLE IF EXISTS catalogs;
 DROP TABLE IF EXISTS trino_clusters;
 `
-
 
 func up00018(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00018Postgres, up00018MySQL)

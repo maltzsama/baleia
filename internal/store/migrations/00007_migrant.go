@@ -48,7 +48,6 @@ CREATE INDEX idx_migration_items_migration  ON migration_items (migration_id);
 CREATE INDEX idx_migration_items_status     ON migration_items (status);
 `
 
-
 const up00007MySQL = `
 CREATE TABLE migrations (
     id                          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -87,18 +86,15 @@ CREATE INDEX idx_migration_items_migration  ON migration_items (migration_id);
 CREATE INDEX idx_migration_items_status     ON migration_items (status);
 `
 
-
 const down00007Postgres = `
 DROP TABLE IF EXISTS migration_items;
 DROP TABLE IF EXISTS migrations;
 `
 
-
 const down00007MySQL = `
 DROP TABLE IF EXISTS migration_items;
 DROP TABLE IF EXISTS migrations;
 `
-
 
 func up00007(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00007Postgres, up00007MySQL)

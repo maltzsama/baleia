@@ -16,9 +16,10 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/server"
+	"github.com/galileostudio/baleia/internal/store"
+	"github.com/galileostudio/baleia/internal/store/migrations"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -64,10 +65,19 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// Migrations run on their own connection, before the pool opens.
-	if err := migrate.Up(ctx, logger, cfg.DatabaseURL); err != nil {
+	// Migrations run on their own Bun connection, before the pool opens.
+	migrator, err := store.Open(ctx, cfg.DatabaseURL, store.Options{MaxOpenConns: 5})
+	if err != nil {
 		return fmt.Errorf("migration: %w", err)
 	}
+	if _, err := store.Apply(ctx, migrator, migrations.Migrations); err != nil {
+		_ = migrator.Close()
+		return fmt.Errorf("migration: %w", err)
+	}
+	if err := migrator.Close(); err != nil {
+		return fmt.Errorf("migration: close: %w", err)
+	}
+	logger.InfoContext(ctx, "migrations applied")
 
 	core, err := app.New(ctx, cfg, app.Options{Service: "api", PoolSize: 20, Logger: logger})
 	if err != nil {

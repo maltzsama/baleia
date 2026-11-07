@@ -22,14 +22,12 @@ ALTER TABLE query_statements ADD CONSTRAINT query_statements_status_check
 ALTER TABLE query_statements ADD COLUMN error_code TEXT;
 `
 
-
 const up00031MySQL = `
 ALTER TABLE query_statements DROP CONSTRAINT query_statements_status_check;
 ALTER TABLE query_statements ADD CONSTRAINT query_statements_status_check
     CHECK (status IN ('pending', 'running', 'finished', 'failed', 'cancelled', 'skipped'));
 ALTER TABLE query_statements ADD COLUMN error_code TEXT;
 `
-
 
 const down00031Postgres = `
 UPDATE query_statements SET status = 'cancelled' WHERE status IN ('pending', 'skipped');
@@ -39,14 +37,12 @@ ALTER TABLE query_statements ADD CONSTRAINT query_statements_status_check
     CHECK (status IN ('running', 'finished', 'failed', 'cancelled'));
 `
 
-
 const down00031MySQL = `
 ALTER TABLE query_statements DROP COLUMN error_code;
 ALTER TABLE query_statements DROP CONSTRAINT query_statements_status_check;
 ALTER TABLE query_statements ADD CONSTRAINT query_statements_status_check
     CHECK (status IN ('running', 'finished', 'failed', 'cancelled'));
 `
-
 
 func up00031(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00031Postgres, up00031MySQL)

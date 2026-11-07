@@ -2,8 +2,6 @@ package migrate
 
 import (
 	"testing"
-
-	"github.com/pressly/goose/v3"
 )
 
 const versionContentVersions = 39
@@ -20,15 +18,11 @@ func TestContentVersionsUpDown(t *testing.T) {
 	if !hasTable() {
 		t.Fatal("content_versions missing after up")
 	}
-	if err := goose.DownTo(db, dir, versionContentVersions-1); err != nil {
-		t.Fatalf("down: %v", err)
-	}
+	downTo(t, db, dir, versionContentVersions-1)
 	if hasTable() {
 		t.Fatal("content_versions still present after down")
 	}
-	if err := goose.UpTo(db, dir, versionContentVersions); err != nil {
-		t.Fatalf("up again: %v", err)
-	}
+	upTo(t, db, dir, versionContentVersions)
 	if !hasTable() {
 		t.Fatal("content_versions missing after down/up")
 	}

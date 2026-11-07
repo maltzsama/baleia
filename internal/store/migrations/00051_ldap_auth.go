@@ -27,7 +27,6 @@ ALTER TABLE users ADD CONSTRAINT chk_ldap_auth
     CHECK (auth_provider != 'ldap' OR (auth_provider_id IS NOT NULL AND external_id IS NOT NULL));
 `
 
-
 const up00051MySQL = `
 ALTER TABLE auth_providers DROP CONSTRAINT auth_providers_type_check;
 ALTER TABLE auth_providers ADD CONSTRAINT auth_providers_type_check
@@ -41,7 +40,6 @@ ALTER TABLE users ADD CONSTRAINT chk_ldap_auth
     CHECK (auth_provider != 'ldap' OR (auth_provider_id IS NOT NULL AND external_id IS NOT NULL));
 `
 
-
 const down00051Postgres = `
 ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_ldap_auth;
 
@@ -54,7 +52,6 @@ ALTER TABLE auth_providers ADD CONSTRAINT auth_providers_type_check
     CHECK (type IN ('oidc'));
 `
 
-
 const down00051MySQL = `
 ALTER TABLE users DROP CONSTRAINT chk_ldap_auth;
 
@@ -66,7 +63,6 @@ ALTER TABLE auth_providers DROP CONSTRAINT auth_providers_type_check;
 ALTER TABLE auth_providers ADD CONSTRAINT auth_providers_type_check
     CHECK (type IN ('oidc'));
 `
-
 
 func up00051(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00051Postgres, up00051MySQL)

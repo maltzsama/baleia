@@ -27,7 +27,6 @@ CREATE TABLE oidc_login_attempts (
 CREATE INDEX idx_oidc_login_attempts_expires_at ON oidc_login_attempts(expires_at);
 `
 
-
 const up00048MySQL = `
 CREATE TABLE oidc_login_attempts (
     state         TEXT PRIMARY KEY,
@@ -42,16 +41,13 @@ CREATE TABLE oidc_login_attempts (
 CREATE INDEX idx_oidc_login_attempts_expires_at ON oidc_login_attempts(expires_at);
 `
 
-
 const down00048Postgres = `
 DROP TABLE IF EXISTS oidc_login_attempts;
 `
 
-
 const down00048MySQL = `
 DROP TABLE IF EXISTS oidc_login_attempts;
 `
-
 
 func up00048(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00048Postgres, up00048MySQL)

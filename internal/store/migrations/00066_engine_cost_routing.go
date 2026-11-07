@@ -20,7 +20,6 @@ ALTER TABLE engines
         CHECK (cost_threshold_bytes IS NULL OR cost_threshold_bytes > 0);
 `
 
-
 const up00066MySQL = `
 ALTER TABLE engines
     ADD COLUMN cost_routing_enabled BOOLEAN NOT NULL DEFAULT false,
@@ -28,20 +27,17 @@ ALTER TABLE engines
         CHECK (cost_threshold_bytes IS NULL OR cost_threshold_bytes > 0);
 `
 
-
 const down00066Postgres = `
 ALTER TABLE engines
     DROP COLUMN IF EXISTS cost_threshold_bytes,
     DROP COLUMN IF EXISTS cost_routing_enabled;
 `
 
-
 const down00066MySQL = `
 ALTER TABLE engines
     DROP COLUMN cost_threshold_bytes,
     DROP COLUMN cost_routing_enabled;
 `
-
 
 func up00066(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00066Postgres, up00066MySQL)

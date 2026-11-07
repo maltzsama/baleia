@@ -32,7 +32,6 @@ SET result_sets = jsonb_build_array(jsonb_build_object(
 WHERE result_key IS NOT NULL;
 `
 
-
 const up00026MySQL = `
 ALTER TABLE query_executions RENAME COLUMN trino_query_id TO engine_query_id;
 ALTER TABLE query_statements RENAME COLUMN trino_query_id TO engine_query_id;
@@ -41,7 +40,6 @@ ALTER TABLE query_statements
     ADD COLUMN query_handle JSON,
     ADD COLUMN result_sets JSON NOT NULL DEFAULT '[]';
 `
-
 
 const down00026Postgres = `
 ALTER TABLE query_statements
@@ -52,7 +50,6 @@ ALTER TABLE query_statements RENAME COLUMN engine_query_id TO trino_query_id;
 ALTER TABLE query_executions RENAME COLUMN engine_query_id TO trino_query_id;
 `
 
-
 const down00026MySQL = `
 ALTER TABLE query_statements
     DROP COLUMN result_sets,
@@ -61,7 +58,6 @@ ALTER TABLE query_statements
 ALTER TABLE query_statements RENAME COLUMN engine_query_id TO trino_query_id;
 ALTER TABLE query_executions RENAME COLUMN engine_query_id TO trino_query_id;
 `
-
 
 func up00026(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00026Postgres, up00026MySQL)

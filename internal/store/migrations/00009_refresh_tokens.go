@@ -24,7 +24,6 @@ CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 `
 
-
 const up00009MySQL = `
 CREATE TABLE refresh_tokens (
     id         CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -39,16 +38,13 @@ CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 `
 
-
 const down00009Postgres = `
 DROP TABLE IF EXISTS refresh_tokens;
 `
 
-
 const down00009MySQL = `
 DROP TABLE IF EXISTS refresh_tokens;
 `
-
 
 func up00009(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00009Postgres, up00009MySQL)

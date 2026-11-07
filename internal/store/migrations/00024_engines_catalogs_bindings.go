@@ -189,7 +189,6 @@ SET target_snapshot = jsonb_build_object('engine_kind', 'trino', 'engine_catalog
 WHERE target_snapshot IS NULL AND trino_catalog IS NOT NULL;
 `
 
-
 const up00024MySQL = `
 CREATE TABLE engines (
     id             CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -319,7 +318,6 @@ JOIN catalogs c ON c.id = b.catalog_id
 WHERE tc.name = 'default' AND b.engine_catalog_name = qe.trino_catalog;
 `
 
-
 const down00024Postgres = `
 ALTER TABLE query_executions
     DROP COLUMN IF EXISTS target_snapshot,
@@ -357,7 +355,6 @@ WHERE type = 'trino' AND created_by IS NULL
   AND id IN (SELECT connection_id FROM baleia_engine_connections);
 `
 
-
 const down00024MySQL = `
 ALTER TABLE query_executions
     DROP COLUMN target_snapshot,
@@ -388,7 +385,6 @@ CREATE TEMP TABLE baleia_engine_connections ON COMMIT DROP AS
 
 DROP TABLE IF EXISTS engines;
 `
-
 
 func up00024(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00024Postgres, up00024MySQL)

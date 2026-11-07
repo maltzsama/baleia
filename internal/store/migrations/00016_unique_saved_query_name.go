@@ -19,21 +19,17 @@ WHERE sq1.created_at < sq2.created_at
 CREATE UNIQUE INDEX idx_saved_queries_unique_name ON saved_queries (workspace_id, name);
 `
 
-
 const up00016MySQL = `
 CREATE UNIQUE INDEX idx_saved_queries_unique_name ON saved_queries (workspace_id, name);
 `
-
 
 const down00016Postgres = `
 DROP INDEX IF EXISTS idx_saved_queries_unique_name;
 `
 
-
 const down00016MySQL = `
 DROP INDEX IF EXISTS idx_saved_queries_unique_name;
 `
-
 
 func up00016(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00016Postgres, up00016MySQL)

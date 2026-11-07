@@ -36,7 +36,6 @@ CREATE INDEX idx_workspace_catalog_access_workspace ON workspace_catalog_access 
 CREATE INDEX idx_workspace_catalog_access_catalog   ON workspace_catalog_access (catalog_connection_id);
 `
 
-
 const up00003MySQL = `
 CREATE TABLE catalog_connections (
     id               CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -63,18 +62,15 @@ CREATE INDEX idx_workspace_catalog_access_workspace ON workspace_catalog_access 
 CREATE INDEX idx_workspace_catalog_access_catalog   ON workspace_catalog_access (catalog_connection_id);
 `
 
-
 const down00003Postgres = `
 DROP TABLE IF EXISTS workspace_catalog_access;
 DROP TABLE IF EXISTS catalog_connections;
 `
 
-
 const down00003MySQL = `
 DROP TABLE IF EXISTS workspace_catalog_access;
 DROP TABLE IF EXISTS catalog_connections;
 `
-
 
 func up00003(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00003Postgres, up00003MySQL)

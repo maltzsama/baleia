@@ -131,13 +131,13 @@ type schemaVersioner interface {
 	SchemaVersion(ctx context.Context) (int64, error)
 }
 
-// poolSchema reads the version from goose's table on Baleia's pool.
+// poolSchema reads the version from Bun's migration table on Baleia's pool.
 type poolSchema struct{ pool *pgxpool.Pool }
 
 func (p poolSchema) SchemaVersion(ctx context.Context) (int64, error) {
 	var v int64
-	// Raw SQL on purpose: goose_db_version is goose's own table, not part of
-	// the migrations sqlc reads.
-	err := p.pool.QueryRow(ctx, `SELECT COALESCE(MAX(version_id), 0) FROM goose_db_version WHERE is_applied`).Scan(&v)
+	// Raw SQL on purpose: bun_migrations is the migrator's own table, not part
+	// of the migrations sqlc reads.
+	err := p.pool.QueryRow(ctx, `SELECT COALESCE(MAX(name::int), 0) FROM bun_migrations`).Scan(&v)
 	return v, err
 }

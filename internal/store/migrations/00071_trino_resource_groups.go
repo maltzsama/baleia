@@ -75,7 +75,6 @@ GRANT SELECT ON selectors TO baleia_trino;
 GRANT SELECT ON resource_groups_global_properties TO baleia_trino;
 `
 
-
 const up00071MySQL = `
 CREATE TABLE resource_groups (
     resource_group_id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -127,7 +126,6 @@ GRANT SELECT ON selectors TO baleia_trino;
 GRANT SELECT ON resource_groups_global_properties TO baleia_trino;
 `
 
-
 const down00071Postgres = `
 REVOKE SELECT ON resource_groups_global_properties FROM baleia_trino;
 REVOKE SELECT ON selectors FROM baleia_trino;
@@ -138,7 +136,6 @@ DROP TABLE IF EXISTS selectors;
 DROP TABLE IF EXISTS resource_groups;
 `
 
-
 const down00071MySQL = `
 REVOKE SELECT ON resource_groups_global_properties FROM baleia_trino;
 REVOKE SELECT ON selectors FROM baleia_trino;
@@ -148,7 +145,6 @@ DROP TABLE IF EXISTS resource_groups_global_properties;
 DROP TABLE IF EXISTS selectors;
 DROP TABLE IF EXISTS resource_groups;
 `
-
 
 func up00071(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00071Postgres, up00071MySQL)

@@ -46,3 +46,28 @@ func names(group *migrate.MigrationGroup) []string {
 	}
 	return out
 }
+
+// Status returns every known migration with its applied state.
+func Status(ctx context.Context, db *bun.DB, migrations *migrate.Migrations) (migrate.MigrationSlice, error) {
+	migrator := migrate.NewMigrator(db, migrations)
+	if err := migrator.Init(ctx); err != nil {
+		return nil, fmt.Errorf("store: migration init: %w", err)
+	}
+	ms, err := migrator.MigrationsWithStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store: migration status: %w", err)
+	}
+	return ms, nil
+}
+
+// Reset rolls back every applied migration.
+func Reset(ctx context.Context, db *bun.DB, migrations *migrate.Migrations) error {
+	migrator := migrate.NewMigrator(db, migrations)
+	if err := migrator.Init(ctx); err != nil {
+		return fmt.Errorf("store: migration init: %w", err)
+	}
+	if err := migrator.Reset(ctx); err != nil {
+		return fmt.Errorf("store: reset: %w", err)
+	}
+	return nil
+}

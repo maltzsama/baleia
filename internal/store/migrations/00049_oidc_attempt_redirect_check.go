@@ -27,7 +27,6 @@ ALTER TABLE oidc_login_attempts
     );
 `
 
-
 const up00049MySQL = `
 ALTER TABLE oidc_login_attempts
     ADD CONSTRAINT oidc_login_attempts_redirect_check
@@ -42,18 +41,15 @@ ALTER TABLE oidc_login_attempts
     );
 `
 
-
 const down00049Postgres = `
 ALTER TABLE oidc_login_attempts
     DROP CONSTRAINT IF EXISTS oidc_login_attempts_redirect_check;
 `
 
-
 const down00049MySQL = `
 ALTER TABLE oidc_login_attempts
     DROP CONSTRAINT oidc_login_attempts_redirect_check;
 `
-
 
 func up00049(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00049Postgres, up00049MySQL)

@@ -22,7 +22,6 @@ ALTER TABLE refresh_tokens ALTER COLUMN family_id SET NOT NULL;
 CREATE INDEX idx_refresh_tokens_family_id ON refresh_tokens(family_id);
 `
 
-
 const up00046MySQL = `
 ALTER TABLE refresh_tokens ADD COLUMN family_id CHAR(36);
 
@@ -31,18 +30,15 @@ ALTER TABLE refresh_tokens ALTER COLUMN family_id SET NOT NULL;
 CREATE INDEX idx_refresh_tokens_family_id ON refresh_tokens(family_id);
 `
 
-
 const down00046Postgres = `
 DROP INDEX IF EXISTS idx_refresh_tokens_family_id;
 ALTER TABLE refresh_tokens DROP COLUMN IF EXISTS family_id;
 `
 
-
 const down00046MySQL = `
 DROP INDEX IF EXISTS idx_refresh_tokens_family_id;
 ALTER TABLE refresh_tokens DROP COLUMN family_id;
 `
-
 
 func up00046(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00046Postgres, up00046MySQL)

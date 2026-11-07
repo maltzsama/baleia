@@ -78,7 +78,6 @@ CREATE TABLE metadata_sync_runs (
 CREATE INDEX metadata_sync_runs_catalog ON metadata_sync_runs (catalog_id, started_at DESC);
 `
 
-
 const up00032MySQL = `
 CREATE TABLE metadata_namespaces (
     catalog_id    CHAR(36)        NOT NULL REFERENCES catalogs (id) ON DELETE CASCADE,
@@ -136,7 +135,6 @@ CREATE TABLE metadata_sync_runs (
 CREATE INDEX metadata_sync_runs_catalog ON metadata_sync_runs (catalog_id, started_at DESC);
 `
 
-
 const down00032Postgres = `
 DROP TABLE IF EXISTS metadata_sync_runs;
 DROP TABLE IF EXISTS metadata_columns;
@@ -144,14 +142,12 @@ DROP TABLE IF EXISTS metadata_tables;
 DROP TABLE IF EXISTS metadata_namespaces;
 `
 
-
 const down00032MySQL = `
 DROP TABLE IF EXISTS metadata_sync_runs;
 DROP TABLE IF EXISTS metadata_columns;
 DROP TABLE IF EXISTS metadata_tables;
 DROP TABLE IF EXISTS metadata_namespaces;
 `
-
 
 func up00032(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00032Postgres, up00032MySQL)

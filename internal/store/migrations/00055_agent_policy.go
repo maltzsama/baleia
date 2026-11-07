@@ -23,7 +23,6 @@ CREATE INDEX idx_query_executions_agent_started
     ON query_executions (agent_id, started_at DESC);
 `
 
-
 const up00055MySQL = `
 ALTER TABLE agents
     ADD COLUMN policy            JSON       NOT NULL DEFAULT '{}',
@@ -34,7 +33,6 @@ CREATE INDEX idx_query_executions_agent_started
     ON query_executions (agent_id, started_at DESC);
 `
 
-
 const down00055Postgres = `
 DROP INDEX IF EXISTS idx_query_executions_agent_started;
 ALTER TABLE agents
@@ -43,7 +41,6 @@ ALTER TABLE agents
     DROP COLUMN IF EXISTS policy;
 `
 
-
 const down00055MySQL = `
 DROP INDEX IF EXISTS idx_query_executions_agent_started;
 ALTER TABLE agents
@@ -51,7 +48,6 @@ ALTER TABLE agents
     DROP COLUMN policy_updated_at,
     DROP COLUMN policy;
 `
-
 
 func up00055(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00055Postgres, up00055MySQL)

@@ -67,7 +67,6 @@ CREATE TRIGGER audit_events_no_update BEFORE UPDATE OR DELETE ON audit_events
     FOR EACH ROW EXECUTE FUNCTION audit_events_append_only();
 `
 
-
 const up00033MySQL = `
 CREATE TABLE audit_events (
     id            BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -98,20 +97,17 @@ CREATE INDEX audit_events_ws       ON audit_events (workspace_id, occurred_at DE
 SELECT audit_ensure_partitions(2);
 `
 
-
 const down00033Postgres = `
 DROP TABLE IF EXISTS audit_events;
 DROP FUNCTION IF EXISTS audit_ensure_partitions(int);
 DROP FUNCTION IF EXISTS audit_events_append_only();
 `
 
-
 const down00033MySQL = `
 DROP TABLE IF EXISTS audit_events;
 DROP FUNCTION IF EXISTS audit_ensure_partitions(int);
 DROP FUNCTION IF EXISTS audit_events_append_only();
 `
-
 
 func up00033(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00033Postgres, up00033MySQL)

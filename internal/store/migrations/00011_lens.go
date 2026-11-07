@@ -75,7 +75,6 @@ CREATE INDEX idx_table_health_conn     ON table_health_snapshots(catalog_connect
 CREATE INDEX idx_table_health_captured ON table_health_snapshots(captured_at);
 `
 
-
 const up00011MySQL = `
 CREATE TABLE trino_query_snapshots (
     id                   CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -141,20 +140,17 @@ CREATE INDEX idx_table_health_conn     ON table_health_snapshots(catalog_connect
 CREATE INDEX idx_table_health_captured ON table_health_snapshots(captured_at);
 `
 
-
 const down00011Postgres = `
 DROP TABLE IF EXISTS table_health_snapshots;
 DROP TABLE IF EXISTS cluster_snapshots;
 DROP TABLE IF EXISTS trino_query_snapshots;
 `
 
-
 const down00011MySQL = `
 DROP TABLE IF EXISTS table_health_snapshots;
 DROP TABLE IF EXISTS cluster_snapshots;
 DROP TABLE IF EXISTS trino_query_snapshots;
 `
-
 
 func up00011(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00011Postgres, up00011MySQL)

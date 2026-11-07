@@ -11,15 +11,16 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/store/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
-	_ "github.com/jackc/pgx/v5/stdlib" // goose opens the database with database/sql
-	"github.com/pressly/goose/v3"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
+	bunmigrate "github.com/uptrace/bun/migrate"
 )
 
 // Parallel tests share one server (#374). At most maxTests top-level tests
@@ -133,10 +134,10 @@ func create(t *testing.T, applyMigrations bool) *pgxpool.Pool {
 // server, across the processes of a `go test ./...` run.
 const migrationLock = 0x6261_6c65_6961 // "baleia"
 
-// migrate runs every migration through a goose Provider, which keeps no
-// package state. One migration runs at a time on the server: the migrations
-// create cluster-wide roles (00018 creates baleia_trino), and two databases
-// migrating at once raced to create the same role.
+// migrate runs every migration through the Bun migrator (docs/adr/0020), which
+// keeps no package state. One migration runs at a time on the server: the
+// migrations create cluster-wide roles (00018 creates baleia_trino), and two
+// databases migrating at once raced to create the same role.
 func migrate(ctx context.Context, admin *pgxpool.Pool, dsn string) error {
 	conn, err := admin.Acquire(ctx)
 	if err != nil {
@@ -151,19 +152,21 @@ func migrate(ctx context.Context, admin *pgxpool.Pool, dsn string) error {
 		_, _ = conn.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", migrationLock)
 	}()
 
-	// sql.Open, not goose.OpenDBWithDriver: that one sets goose's global
-	// dialect, which raced between parallel tests.
 	sqlDB, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = sqlDB.Close() }()
-	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, os.DirFS(migrationsDir()))
-	if err != nil {
-		return err
+
+	db := bun.NewDB(sqlDB, pgdialect.New())
+	migrator := bunmigrate.NewMigrator(db, migrations.Migrations)
+	if err := migrator.Init(ctx); err != nil {
+		return fmt.Errorf("init migrator: %w", err)
 	}
-	_, err = p.Up(ctx)
-	return err
+	if _, err := migrator.Migrate(ctx); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	return nil
 }
 
 // newPool opens a pool of at most maxConns connections.
@@ -174,11 +177,4 @@ func newPool(ctx context.Context, dsn string, maxConns int32) (*pgxpool.Pool, er
 	}
 	cfg.MaxConns = maxConns
 	return pgxpool.NewWithConfig(ctx, cfg)
-}
-
-// migrationsDir is db/migrations, found from this file so any package's
-// tests can use it.
-func migrationsDir() string {
-	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(file), "..", "..", "db", "migrations")
 }

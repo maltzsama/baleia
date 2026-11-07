@@ -35,7 +35,6 @@ WHERE dest_binding_id IS NULL;
 CREATE INDEX idx_retrievers_dest_binding ON retrievers (dest_binding_id);
 `
 
-
 const up00041MySQL = `
 ALTER TABLE retrievers
     ADD COLUMN dest_binding_id CHAR(36) REFERENCES catalog_bindings (id) ON DELETE SET NULL,
@@ -52,7 +51,6 @@ WHERE t.name = 'default' AND b.engine_catalog_name = r.dest_catalog;
 CREATE INDEX idx_retrievers_dest_binding ON retrievers (dest_binding_id);
 `
 
-
 const down00041Postgres = `
 DROP INDEX IF EXISTS idx_retrievers_dest_binding;
 ALTER TABLE retriever_refresh_history DROP COLUMN IF EXISTS error_code;
@@ -61,7 +59,6 @@ ALTER TABLE retrievers
     DROP COLUMN IF EXISTS dest_binding_id;
 `
 
-
 const down00041MySQL = `
 DROP INDEX IF EXISTS idx_retrievers_dest_binding;
 ALTER TABLE retriever_refresh_history DROP COLUMN error_code;
@@ -69,7 +66,6 @@ ALTER TABLE retrievers
     DROP COLUMN error_code,
     DROP COLUMN dest_binding_id;
 `
-
 
 func up00041(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00041Postgres, up00041MySQL)

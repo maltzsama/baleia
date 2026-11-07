@@ -34,7 +34,6 @@ CREATE TABLE workload_rules (
 CREATE INDEX workload_rules_position_idx ON workload_rules (position);
 `
 
-
 const up00065MySQL = `
 CREATE TABLE workload_rules (
     id         CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -56,16 +55,13 @@ CREATE TABLE workload_rules (
 CREATE INDEX workload_rules_position_idx ON workload_rules (position);
 `
 
-
 const down00065Postgres = `
 DROP TABLE IF EXISTS workload_rules;
 `
 
-
 const down00065MySQL = `
 DROP TABLE IF EXISTS workload_rules;
 `
-
 
 func up00065(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00065Postgres, up00065MySQL)

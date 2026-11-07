@@ -66,7 +66,6 @@ CREATE TABLE semantic_metrics (
 CREATE INDEX semantic_metrics_table ON semantic_metrics (workspace_id, catalog_id, namespace, table_name);
 `
 
-
 const up00037MySQL = `
 CREATE TABLE semantic_docs (
     id            CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -111,18 +110,15 @@ CREATE TABLE semantic_metrics (
 CREATE INDEX semantic_metrics_table ON semantic_metrics (workspace_id, catalog_id, namespace, table_name);
 `
 
-
 const down00037Postgres = `
 DROP TABLE IF EXISTS semantic_metrics;
 DROP TABLE IF EXISTS semantic_docs;
 `
 
-
 const down00037MySQL = `
 DROP TABLE IF EXISTS semantic_metrics;
 DROP TABLE IF EXISTS semantic_docs;
 `
-
 
 func up00037(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00037Postgres, up00037MySQL)

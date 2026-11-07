@@ -56,7 +56,6 @@ WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL
 ON CONFLICT (workspace_id, catalog_id) DO NOTHING;
 `
 
-
 const up00079MySQL = `
 CREATE TABLE catalog_grant_requests (
     workspace_id      CHAR(36)        NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -70,20 +69,17 @@ CREATE TABLE catalog_grant_requests (
 ALTER TABLE catalogs ADD COLUMN discoverable BOOLEAN NOT NULL DEFAULT false;
 `
 
-
 const down00079Postgres = `
 DROP FUNCTION IF EXISTS baleia_workspace_catalog_ids(uuid);
 DROP TABLE IF EXISTS catalog_grant_requests;
 ALTER TABLE catalogs DROP COLUMN IF EXISTS discoverable;
 `
 
-
 const down00079MySQL = `
 DROP FUNCTION IF EXISTS baleia_workspace_catalog_ids(CHAR(36));
 DROP TABLE IF EXISTS catalog_grant_requests;
 ALTER TABLE catalogs DROP COLUMN discoverable;
 `
-
 
 func up00079(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00079Postgres, up00079MySQL)

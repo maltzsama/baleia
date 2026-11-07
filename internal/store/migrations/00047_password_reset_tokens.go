@@ -32,7 +32,6 @@ ALTER TABLE users
     DROP COLUMN IF EXISTS password_reset_expires_at;
 `
 
-
 const up00047MySQL = `
 CREATE TABLE password_reset_tokens (
     token_hash TEXT PRIMARY KEY,
@@ -50,7 +49,6 @@ ALTER TABLE users
     DROP COLUMN password_reset_expires_at;
 `
 
-
 const down00047Postgres = `
 ALTER TABLE users
     ADD COLUMN password_reset_token TEXT,
@@ -59,7 +57,6 @@ ALTER TABLE users
 DROP TABLE IF EXISTS password_reset_tokens;
 `
 
-
 const down00047MySQL = `
 ALTER TABLE users
     ADD COLUMN password_reset_token TEXT,
@@ -67,7 +64,6 @@ ALTER TABLE users
 
 DROP TABLE IF EXISTS password_reset_tokens;
 `
-
 
 func up00047(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00047Postgres, up00047MySQL)

@@ -14,13 +14,14 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
+	"github.com/galileostudio/baleia/internal/store"
+	"github.com/galileostudio/baleia/internal/store/migrations"
+	"github.com/uptrace/bun"
 )
 
 func main() {
 	var command, before string
-	flag.StringVar(&command, "cmd", "up", "command: up, down, status, reset, version (goose), credentials (re-seal legacy credentials), oidc-providers (seal provider configs) or audit-prune (drop audit partitions before -before)")
+	flag.StringVar(&command, "cmd", "up", "command: up, down, status, reset, version (Bun migrator), credentials (re-seal legacy credentials), oidc-providers (seal provider configs) or audit-prune (drop audit partitions before -before)")
 	flag.StringVar(&before, "before", "", "audit-prune: drop the audit partitions of the months before this one (YYYY-MM)")
 	flag.Parse()
 
@@ -30,36 +31,35 @@ func main() {
 	slog.SetDefault(logger)
 	ctx := context.Background()
 
-	db, err := sql.Open("pgx", cfg.DatabaseURL)
+	db, err := store.Open(ctx, cfg.DatabaseURL, store.Options{MaxOpenConns: 5})
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to open database", "err", err)
 		os.Exit(1)
 	}
-	defer db.Close()
-
-	if err := goose.SetDialect("postgres"); err != nil {
-		logger.ErrorContext(ctx, "failed to set dialect", "err", err)
-		os.Exit(1)
-	}
+	defer func() { _ = db.Close() }()
 
 	switch command {
 	case "up":
-		err = goose.UpContext(ctx, db, "db/migrations")
+		var applied []string
+		applied, err = store.Apply(ctx, db, migrations.Migrations)
+		logger.InfoContext(ctx, "migrations applied", "count", len(applied))
 	case "down":
-		err = goose.DownContext(ctx, db, "db/migrations")
+		var rolled []string
+		rolled, err = store.Rollback(ctx, db, migrations.Migrations)
+		logger.InfoContext(ctx, "migrations rolled back", "count", len(rolled))
 	case "status":
-		err = goose.StatusContext(ctx, db, "db/migrations")
+		err = printStatus(ctx, db)
 	case "reset":
-		err = goose.ResetContext(ctx, db, "db/migrations")
+		err = store.Reset(ctx, db, migrations.Migrations)
 	case "version":
-		err = goose.VersionContext(ctx, db, "db/migrations")
+		err = printVersion(ctx, db)
 	case "credentials":
-		err = migrateCredentials(ctx, logger, db, cfg)
+		err = migrateCredentials(ctx, logger, db.DB, cfg)
 	case "oidc-providers":
-		err = migrateOIDCProviders(ctx, logger, db, cfg)
+		err = migrateOIDCProviders(ctx, logger, db.DB, cfg)
 	case "audit-prune":
 		var dropped []string
-		dropped, err = audit.Prune(ctx, db, before, time.Now().UTC())
+		dropped, err = audit.Prune(ctx, db.DB, before, time.Now().UTC())
 		for _, name := range dropped {
 			logger.InfoContext(ctx, "audit partition dropped", "partition", name)
 		}
@@ -72,6 +72,38 @@ func main() {
 		logger.ErrorContext(ctx, "migration error", "cmd", command, "err", err)
 		os.Exit(1)
 	}
+}
+
+// printStatus reports every known migration and whether it is applied.
+func printStatus(ctx context.Context, db *bun.DB) error {
+	ms, err := store.Status(ctx, db, migrations.Migrations)
+	if err != nil {
+		return err
+	}
+	for _, m := range ms {
+		state := "pending"
+		if !m.MigratedAt.IsZero() {
+			state = "applied"
+		}
+		fmt.Printf("%-8s %-48s %s\n", m.Name, m.Comment, state)
+	}
+	return nil
+}
+
+// printVersion prints the highest applied migration id.
+func printVersion(ctx context.Context, db *bun.DB) error {
+	ms, err := store.Status(ctx, db, migrations.Migrations)
+	if err != nil {
+		return err
+	}
+	version := "0"
+	for _, m := range ms {
+		if !m.MigratedAt.IsZero() {
+			version = m.Name
+		}
+	}
+	fmt.Println(version)
+	return nil
 }
 
 // migrateCredentials re-seals legacy connection credentials (encrypted under

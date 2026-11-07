@@ -3,8 +3,6 @@ package migrate
 import (
 	"database/sql"
 	"testing"
-
-	"github.com/pressly/goose/v3"
 )
 
 const (
@@ -29,18 +27,14 @@ func TestSpacesUpDown(t *testing.T) {
 		}
 	}
 
-	if err := goose.DownTo(db, dir, versionBeforeSpaces); err != nil {
-		t.Fatalf("down: %v", err)
-	}
+	downTo(t, db, dir, versionBeforeSpaces)
 	for _, table := range []string{"spaces", "space_members"} {
 		if hasTable(table) {
 			t.Fatalf("%s still present after down", table)
 		}
 	}
 
-	if err := goose.UpTo(db, dir, versionSpaces); err != nil {
-		t.Fatalf("up again: %v", err)
-	}
+	upTo(t, db, dir, versionSpaces)
 	for _, table := range []string{"spaces", "space_members"} {
 		if !hasTable(table) {
 			t.Fatalf("%s missing after down/up", table)
@@ -71,9 +65,7 @@ func TestSpacesBackfill(t *testing.T) {
 	q1 := id(`INSERT INTO saved_queries (workspace_id, folder_id, created_by, name, sql) VALUES ($1, $2, $3, 'Revenue', 'select 1') RETURNING id::text`, ws1, f2, user)
 	q2 := id(`INSERT INTO saved_queries (workspace_id, created_by, name, sql) VALUES ($1, $2, 'revenue!', 'select 2') RETURNING id::text`, ws1, user)
 
-	if err := goose.UpTo(db, dir, versionSpaces); err != nil {
-		t.Fatalf("up: %v", err)
-	}
+	upTo(t, db, dir, versionSpaces)
 
 	defaultSpace := func(ws string) string {
 		t.Helper()

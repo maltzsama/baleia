@@ -18,11 +18,9 @@ const up00081Postgres = `
 ALTER TABLE catalog_connections DROP COLUMN system_owned;
 `
 
-
 const up00081MySQL = `
 ALTER TABLE catalog_connections DROP COLUMN system_owned;
 `
-
 
 const down00081Postgres = `
 ALTER TABLE catalog_connections ADD COLUMN system_owned BOOLEAN NOT NULL DEFAULT false;
@@ -32,11 +30,9 @@ ALTER TABLE catalog_connections ADD COLUMN system_owned BOOLEAN NOT NULL DEFAULT
 UPDATE catalog_connections SET system_owned = true WHERE created_by IS NULL;
 `
 
-
 const down00081MySQL = `
 ALTER TABLE catalog_connections ADD COLUMN system_owned BOOLEAN NOT NULL DEFAULT false;
 `
-
 
 func up00081(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00081Postgres, up00081MySQL)

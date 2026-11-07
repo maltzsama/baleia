@@ -31,7 +31,6 @@ CREATE TABLE table_popularity (
 CREATE INDEX table_popularity_workspace ON table_popularity (workspace_id, score DESC);
 `
 
-
 const up00070MySQL = `
 CREATE TABLE table_popularity (
     workspace_id CHAR(36)             NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
@@ -49,16 +48,13 @@ CREATE TABLE table_popularity (
 CREATE INDEX table_popularity_workspace ON table_popularity (workspace_id, score DESC);
 `
 
-
 const down00070Postgres = `
 DROP TABLE IF EXISTS table_popularity;
 `
 
-
 const down00070MySQL = `
 DROP TABLE IF EXISTS table_popularity;
 `
-
 
 func up00070(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00070Postgres, up00070MySQL)

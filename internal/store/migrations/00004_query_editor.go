@@ -69,7 +69,6 @@ CREATE INDEX idx_query_executions_status    ON query_executions (status);
 CREATE INDEX idx_query_statements_execution ON query_statements (execution_id);
 `
 
-
 const up00004MySQL = `
 CREATE TABLE query_folders (
     id           CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -129,7 +128,6 @@ CREATE INDEX idx_query_executions_status    ON query_executions (status);
 CREATE INDEX idx_query_statements_execution ON query_statements (execution_id);
 `
 
-
 const down00004Postgres = `
 DROP TABLE IF EXISTS query_statements;
 DROP TABLE IF EXISTS query_executions;
@@ -137,14 +135,12 @@ DROP TABLE IF EXISTS saved_queries;
 DROP TABLE IF EXISTS query_folders;
 `
 
-
 const down00004MySQL = `
 DROP TABLE IF EXISTS query_statements;
 DROP TABLE IF EXISTS query_executions;
 DROP TABLE IF EXISTS saved_queries;
 DROP TABLE IF EXISTS query_folders;
 `
-
 
 func up00004(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00004Postgres, up00004MySQL)

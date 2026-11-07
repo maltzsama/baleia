@@ -88,7 +88,6 @@ $$;
 
 `
 
-
 const up00075MySQL = `
 CREATE TABLE workspace_members (
     workspace_id CHAR(36)        NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
@@ -100,7 +99,6 @@ CREATE TABLE workspace_members (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE INDEX workspace_members_user ON workspace_members (user_id);
 `
-
 
 const down00075Postgres = `
 CREATE OR REPLACE FUNCTION baleia_effective_space_role(ws_id UUID, sp_id UUID, usr_id UUID)
@@ -149,12 +147,10 @@ DROP FUNCTION baleia_workspace_member_role(UUID, UUID);
 DROP TABLE workspace_members;
 `
 
-
 const down00075MySQL = `
 DROP FUNCTION baleia_workspace_member_role(CHAR(36), CHAR(36));
 DROP TABLE workspace_members;
 `
-
 
 func up00075(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00075Postgres, up00075MySQL)

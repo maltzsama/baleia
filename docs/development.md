@@ -67,7 +67,7 @@ and `go.temporal.io/sdk` together, in one change (#525).
 |---|---|
 | `api/swagger.yaml` | The OpenAPI contract, source of truth for the API |
 | `cmd/` | Entry points: `api`, `worker`, `migrate`, and `e2e-seed` (test data, build tag `e2e`) |
-| `db/migrations`, `db/queries` | Goose migrations and the named queries sqlc compiles |
+| `internal/store/migrations`, `db/queries` | Bun Go migrations (docs/adr/0020) and the named queries sqlc compiles |
 | `internal/api`, `internal/server` | Handlers (and the generated server), HTTP bootstrap and middleware |
 | `internal/auth`, `authz`, `identity`, `policy` | Sign-in, authorization, directory mapping, what users may do |
 | `internal/connections`, `catalogs`, `bindings`, `metadata` | Connection providers and the network dialer, catalogs, engine bindings, metadata snapshots |

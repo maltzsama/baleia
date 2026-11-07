@@ -158,6 +158,9 @@ func mysqlDSN(dsn string) (string, error) {
 	cfg.Addr = addr
 	cfg.DBName = strings.TrimPrefix(u.Path, "/")
 	cfg.ParseTime = true
+	// Migrations send a whole schema block in one Exec; the driver needs this
+	// to accept multiple statements. Bun still parameterizes every app query.
+	cfg.MultiStatements = true
 
 	for key, values := range u.Query() {
 		if len(values) == 0 {

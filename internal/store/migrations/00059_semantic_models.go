@@ -49,7 +49,6 @@ ALTER TABLE content_versions ADD CONSTRAINT content_versions_entity_type_check
     CHECK (entity_type IN ('saved_query', 'semantic_metric', 'semantic_model'));
 `
 
-
 const up00059MySQL = `
 CREATE TABLE semantic_models (
     id             CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -85,7 +84,6 @@ ALTER TABLE content_versions ADD CONSTRAINT content_versions_entity_type_check
     CHECK (entity_type IN ('saved_query', 'semantic_metric', 'semantic_model'));
 `
 
-
 const down00059Postgres = `
 ALTER TABLE content_versions DROP CONSTRAINT IF EXISTS content_versions_entity_type_check;
 ALTER TABLE content_versions ADD CONSTRAINT content_versions_entity_type_check
@@ -94,7 +92,6 @@ ALTER TABLE content_versions ADD CONSTRAINT content_versions_entity_type_check
 DROP TABLE IF EXISTS semantic_models;
 `
 
-
 const down00059MySQL = `
 ALTER TABLE content_versions DROP CONSTRAINT content_versions_entity_type_check;
 ALTER TABLE content_versions ADD CONSTRAINT content_versions_entity_type_check
@@ -102,7 +99,6 @@ ALTER TABLE content_versions ADD CONSTRAINT content_versions_entity_type_check
 
 DROP TABLE IF EXISTS semantic_models;
 `
-
 
 func up00059(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00059Postgres, up00059MySQL)

@@ -25,7 +25,6 @@ ALTER TABLE catalogs
             AND warehouse IS NOT NULL AND connector IS NOT NULL));
 `
 
-
 const up00025MySQL = `
 ALTER TABLE catalogs
     ALTER COLUMN trino_catalog_name DROP NOT NULL,
@@ -37,7 +36,6 @@ ALTER TABLE catalogs
         OR (trino_catalog_name IS NOT NULL AND cluster_id IS NOT NULL
             AND warehouse IS NOT NULL AND connector IS NOT NULL));
 `
-
 
 const down00025Postgres = `
 -- Native catalogs cannot exist without the Trino columns; their bindings go
@@ -52,7 +50,6 @@ ALTER TABLE catalogs
     ALTER COLUMN connector SET NOT NULL;
 `
 
-
 const down00025MySQL = `
 ALTER TABLE catalogs
     DROP CONSTRAINT catalogs_source_has_trino_columns,
@@ -61,7 +58,6 @@ ALTER TABLE catalogs
     ALTER COLUMN warehouse SET NOT NULL,
     ALTER COLUMN connector SET NOT NULL;
 `
-
 
 func up00025(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00025Postgres, up00025MySQL)

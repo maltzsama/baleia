@@ -246,7 +246,6 @@ CREATE TRIGGER workspaces_default_space AFTER INSERT ON workspaces
     FOR EACH ROW EXECUTE FUNCTION workspaces_create_default_space();
 `
 
-
 const up00038MySQL = `
 CREATE TABLE spaces (
     id            CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -406,7 +405,6 @@ ALTER TABLE semantic_metrics
 CREATE INDEX semantic_metrics_space ON semantic_metrics (space_id);
 `
 
-
 const down00038Postgres = `
 DROP TRIGGER IF EXISTS workspaces_default_space ON workspaces;
 DROP FUNCTION IF EXISTS workspaces_create_default_space();
@@ -445,7 +443,6 @@ DROP TABLE IF EXISTS space_members;
 DROP TABLE IF EXISTS spaces;
 `
 
-
 const down00038MySQL = `
 DROP TRIGGER IF EXISTS workspaces_default_space ON workspaces;
 DROP FUNCTION IF EXISTS workspaces_create_default_space();
@@ -483,7 +480,6 @@ ALTER TABLE query_folders
 DROP TABLE IF EXISTS space_members;
 DROP TABLE IF EXISTS spaces;
 `
-
 
 func up00038(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00038Postgres, up00038MySQL)

@@ -73,7 +73,6 @@ CREATE INDEX maintenance_runs_table
     ON maintenance_runs (catalog_id, namespace, table_name, started_at DESC);
 `
 
-
 const up00060MySQL = `
 CREATE TABLE table_maintenance_policies (
     id                             CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -128,7 +127,6 @@ CREATE INDEX maintenance_runs_table
     ON maintenance_runs (catalog_id, namespace, table_name, started_at DESC);
 `
 
-
 const down00060Postgres = `
 DROP INDEX IF EXISTS maintenance_runs_table;
 DROP INDEX IF EXISTS maintenance_runs_one_running;
@@ -151,7 +149,6 @@ ALTER TABLE maintenance_runs
 DROP TABLE IF EXISTS table_maintenance_policies;
 `
 
-
 const down00060MySQL = `
 DROP INDEX IF EXISTS maintenance_runs_table;
 DROP INDEX IF EXISTS maintenance_runs_one_running;
@@ -170,7 +167,6 @@ ALTER TABLE maintenance_runs
     DROP COLUMN trigger;
 DROP TABLE IF EXISTS table_maintenance_policies;
 `
-
 
 func up00060(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00060Postgres, up00060MySQL)

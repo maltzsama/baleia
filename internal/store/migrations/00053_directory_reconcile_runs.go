@@ -30,7 +30,6 @@ CREATE INDEX idx_directory_reconcile_runs_provider
     ON directory_reconcile_runs (provider_id, started_at DESC);
 `
 
-
 const up00053MySQL = `
 CREATE TABLE directory_reconcile_runs (
     id           CHAR(36)        PRIMARY KEY DEFAULT (UUID()),
@@ -49,16 +48,13 @@ CREATE INDEX idx_directory_reconcile_runs_provider
     ON directory_reconcile_runs (provider_id, started_at DESC);
 `
 
-
 const down00053Postgres = `
 DROP TABLE IF EXISTS directory_reconcile_runs;
 `
 
-
 const down00053MySQL = `
 DROP TABLE IF EXISTS directory_reconcile_runs;
 `
-
 
 func up00053(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00053Postgres, up00053MySQL)

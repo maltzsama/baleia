@@ -2,8 +2,6 @@ package migrate
 
 import (
 	"testing"
-
-	"github.com/pressly/goose/v3"
 )
 
 const (
@@ -31,18 +29,14 @@ func TestSemanticLayerUpDown(t *testing.T) {
 		}
 	}
 
-	if err := goose.DownTo(db, dir, versionBeforeSemantic); err != nil {
-		t.Fatalf("down: %v", err)
-	}
+	downTo(t, db, dir, versionBeforeSemantic)
 	for _, table := range []string{"semantic_docs", "semantic_metrics"} {
 		if hasTable(table) {
 			t.Fatalf("%s still present after down", table)
 		}
 	}
 
-	if err := goose.UpTo(db, dir, versionSemantic); err != nil {
-		t.Fatalf("up again: %v", err)
-	}
+	upTo(t, db, dir, versionSemantic)
 	for _, table := range []string{"semantic_docs", "semantic_metrics"} {
 		if !hasTable(table) {
 			t.Fatalf("%s missing after down/up", table)

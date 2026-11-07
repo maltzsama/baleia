@@ -52,7 +52,6 @@ $$;
 
 `
 
-
 const up00076MySQL = `
 ALTER TABLE users
     ADD COLUMN kind TEXT NOT NULL DEFAULT 'human' CHECK (kind IN ('human', 'service_account')),
@@ -67,7 +66,6 @@ ALTER TABLE users ADD CONSTRAINT chk_service_auth
 ALTER TABLE users ADD CONSTRAINT chk_service_account
     CHECK (kind <> 'service_account' OR (role = 'member' AND password_hash IS NULL AND auth_provider IN ('service', 'oidc')));
 `
-
 
 const down00076Postgres = `
 CREATE OR REPLACE FUNCTION baleia_workspace_member_role(ws_id UUID, usr_id UUID)
@@ -92,7 +90,6 @@ ALTER TABLE users ADD CONSTRAINT users_auth_provider_check
 ALTER TABLE users DROP COLUMN description, DROP COLUMN home_workspace_id, DROP COLUMN kind;
 `
 
-
 const down00076MySQL = `
 ALTER TABLE users DROP CONSTRAINT chk_service_account;
 ALTER TABLE users DROP CONSTRAINT chk_service_auth;
@@ -101,7 +98,6 @@ ALTER TABLE users ADD CONSTRAINT users_auth_provider_check
     CHECK (auth_provider IN ('local', 'oidc', 'ldap'));
 ALTER TABLE users DROP COLUMN description, DROP COLUMN home_workspace_id, DROP COLUMN kind;
 `
-
 
 func up00076(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00076Postgres, up00076MySQL)

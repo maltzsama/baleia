@@ -6,12 +6,9 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/pressly/goose/v3"
 )
 
 const (
@@ -52,24 +49,9 @@ func testDB(t *testing.T, version int64) (*sql.DB, string) {
 	}
 	t.Cleanup(func() { db.Close() })
 
-	dir := migrationsDir(t)
-	if err := goose.SetDialect("postgres"); err != nil {
-		t.Fatal(err)
-	}
-	goose.SetLogger(goose.NopLogger())
-	if err := goose.UpTo(db, dir, version); err != nil {
-		t.Fatal(err)
-	}
+	dir := ""
+	upTo(t, db, dir, version)
 	return db, dir
-}
-
-func migrationsDir(t *testing.T) string {
-	t.Helper()
-	dir, err := filepath.Abs("../../db/migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return dir
 }
 
 func mustExec(t *testing.T, db *sql.DB, q string, args ...any) {
@@ -116,9 +98,7 @@ func TestEnginesBackfill(t *testing.T) {
 	db, _ := testDB(t, versionBeforeEngines)
 	seedLegacy(t, db)
 	registryRows := scalar[int](t, db, `SELECT count(*) FROM trino_catalog_registry`)
-	if err := goose.UpTo(db, migrationsDir(t), versionEngines); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, "", versionEngines)
 
 	// The default cluster has a system-owned trino connection and a federated
 	// engine; the user's "trino-default" connection forced a suffix.
@@ -222,12 +202,8 @@ func TestManagedBindingFollowsCatalogWrites(t *testing.T) {
 func TestEnginesDownUp(t *testing.T) {
 	db, dir := testDB(t, versionBeforeEngines)
 	seedLegacy(t, db)
-	if err := goose.UpTo(db, dir, versionEngines); err != nil {
-		t.Fatal(err)
-	}
-	if err := goose.DownTo(db, dir, versionBeforeEngines); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, dir, versionEngines)
+	downTo(t, db, dir, versionBeforeEngines)
 	for _, tbl := range []string{"engines", "catalog_bindings"} {
 		if scalar[bool](t, db, `SELECT to_regclass($1) IS NOT NULL`, tbl) {
 			t.Errorf("%s survived down", tbl)
@@ -242,9 +218,7 @@ func TestEnginesDownUp(t *testing.T) {
 	if n := scalar[int](t, db, `SELECT count(*) FROM catalogs`); n != 2 {
 		t.Errorf("catalogs after down = %d, want 2", n)
 	}
-	if err := goose.UpTo(db, dir, versionEngines); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, dir, versionEngines)
 	if n := scalar[int](t, db, `SELECT count(*) FROM catalog_bindings`); n != 2 {
 		t.Errorf("bindings after down/up = %d, want 2", n)
 	}
@@ -291,18 +265,14 @@ func TestNativeCatalogs(t *testing.T) {
 		t.Errorf("the transitional trigger bound a native catalog (%d bindings)", n)
 	}
 
-	if err := goose.DownTo(db, dir, versionEngines); err != nil {
-		t.Fatal(err)
-	}
+	downTo(t, db, dir, versionEngines)
 	if n := scalar[int](t, db, `SELECT count(*) FROM catalogs WHERE origin = 'native'`); n != 0 {
 		t.Errorf("%d native catalogs survived down", n)
 	}
 	if n := scalar[int](t, db, `SELECT count(*) FROM catalogs`); n != 2 {
 		t.Errorf("source catalogs after down = %d, want 2", n)
 	}
-	if err := goose.UpTo(db, dir, versionNativeCatalogs); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, dir, versionNativeCatalogs)
 }
 
 const versionVocabulary = 26
@@ -313,9 +283,7 @@ func TestEngineVocabulary(t *testing.T) {
 	mustExec(t, db, `INSERT INTO query_statements (execution_id, position, sql, status, trino_query_id, rows_returned, result_key, result_bytes, truncated)
 		VALUES ('00000000-0000-0000-0000-0000000000e1', 1, 'SELECT 1', 'finished', 'q1', 3, 'query-results/x/1/0.arrow', 99, true),
 		       ('00000000-0000-0000-0000-0000000000e1', 2, 'CREATE TABLE t (a int)', 'finished', 'q2', 0, NULL, NULL, false)`)
-	if err := goose.UpTo(db, dir, versionVocabulary); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, dir, versionVocabulary)
 	got := scalar[string](t, db, `SELECT result_sets::text FROM query_statements WHERE position = 1`)
 	if !strings.Contains(got, `"result_key": "query-results/x/1/0.arrow"`) || !strings.Contains(got, `"rows": 3`) || !strings.Contains(got, `"truncated": true`) {
 		t.Errorf("backfilled result_sets = %s", got)
@@ -326,15 +294,11 @@ func TestEngineVocabulary(t *testing.T) {
 	if got := scalar[string](t, db, `SELECT engine_query_id FROM query_statements WHERE position = 1`); got != "q1" {
 		t.Errorf("engine_query_id = %q", got)
 	}
-	if err := goose.DownTo(db, dir, versionNativeCatalogs); err != nil {
-		t.Fatal(err)
-	}
+	downTo(t, db, dir, versionNativeCatalogs)
 	if got := scalar[string](t, db, `SELECT trino_query_id FROM query_statements WHERE position = 1`); got != "q1" {
 		t.Errorf("trino_query_id after down = %q", got)
 	}
-	if err := goose.UpTo(db, dir, versionVocabulary); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, dir, versionVocabulary)
 }
 
 const versionNoTransitionalTriggers = 27
@@ -345,9 +309,7 @@ const versionNoTransitionalTriggers = 27
 func TestTransitionalTriggersDropped(t *testing.T) {
 	db, dir := testDB(t, versionVocabulary)
 	seed(t, db, "pg")
-	if err := goose.UpTo(db, dir, versionNoTransitionalTriggers); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, dir, versionNoTransitionalTriggers)
 	if n := scalar[int](t, db, `SELECT count(*) FROM pg_trigger WHERE tgname IN ('catalogs_upsert_managed_binding', 'catalogs_set_source_ref')`); n != 0 {
 		t.Fatalf("%d transitional triggers left", n)
 	}
@@ -363,9 +325,7 @@ func TestTransitionalTriggersDropped(t *testing.T) {
 		t.Errorf("bindings %d -> %d", before, after)
 	}
 
-	if err := goose.DownTo(db, dir, versionVocabulary); err != nil {
-		t.Fatal(err)
-	}
+	downTo(t, db, dir, versionVocabulary)
 	mustExec(t, db, `UPDATE catalogs SET trino_catalog_name = 'lake3' WHERE id = '00000000-0000-0000-0000-0000000000d1'`)
 	if name := scalar[string](t, db, `SELECT engine_catalog_name FROM catalog_bindings WHERE catalog_id = '00000000-0000-0000-0000-0000000000d1'`); name != "lake3" {
 		t.Errorf("after down the trigger must keep the binding in step, got %q", name)
@@ -380,16 +340,12 @@ const versionBindingLifecycle = 28
 func TestBindingLifecycleMigration(t *testing.T) {
 	db, dir := testDB(t, versionBeforeEngines)
 	seedLegacy(t, db)
-	if err := goose.UpTo(db, dir, versionNoTransitionalTriggers); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, dir, versionNoTransitionalTriggers)
 	// The plugin confirmed lake (v1); pg is disabled.
 	mustExec(t, db, `INSERT INTO trino_catalog_registry (cluster_id, catalog_name, connector_name, properties, catalog_version, updated_by)
 		SELECT id, 'lake', 'iceberg', '{}'::jsonb, 'v1', 'trino' FROM trino_clusters WHERE name = 'default'
 		ON CONFLICT (cluster_id, catalog_name) DO UPDATE SET catalog_version = 'v1', updated_by = 'trino', enabled = true`)
-	if err := goose.UpTo(db, dir, versionBindingLifecycle); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, dir, versionBindingLifecycle)
 	status := func(name string) (string, string) {
 		var lifecycle, sync string
 		if err := db.QueryRow(`SELECT s.lifecycle_state, s.sync_status FROM binding_status_v s JOIN catalog_bindings b ON b.id = s.binding_id
@@ -424,12 +380,8 @@ func TestBindingLifecycleMigration(t *testing.T) {
 		t.Errorf("error state: %s", s)
 	}
 
-	if err := goose.DownTo(db, dir, versionNoTransitionalTriggers); err != nil {
-		t.Fatal(err)
-	}
-	if err := goose.UpTo(db, dir, versionBindingLifecycle); err != nil {
-		t.Fatal(err)
-	}
+	downTo(t, db, dir, versionNoTransitionalTriggers)
+	upTo(t, db, dir, versionBindingLifecycle)
 }
 
 const versionBindingStatusEngineError = 30
@@ -440,9 +392,7 @@ const versionBindingStatusEngineError = 30
 func TestBindingStatusEngineError(t *testing.T) {
 	db, dir := testDB(t, versionBeforeEngines)
 	seedLegacy(t, db)
-	if err := goose.UpTo(db, dir, versionBindingStatusEngineError); err != nil {
-		t.Fatal(err)
-	}
+	upTo(t, db, dir, versionBindingStatusEngineError)
 	mustExec(t, db, `INSERT INTO trino_catalog_registry (cluster_id, catalog_name, connector_name, properties, catalog_version, updated_by)
 		SELECT id, 'lake', 'iceberg', '{}'::jsonb, 'v1', 'trino' FROM trino_clusters WHERE name = 'default'
 		ON CONFLICT (cluster_id, catalog_name) DO UPDATE SET catalog_version = 'v1', updated_by = 'trino', enabled = true, sync_status = 'synced', sync_error = NULL`)
@@ -473,10 +423,6 @@ func TestBindingStatusEngineError(t *testing.T) {
 		t.Errorf("updating: %s/%q, want pending", s, e)
 	}
 
-	if err := goose.DownTo(db, dir, versionBindingLifecycle); err != nil {
-		t.Fatal(err)
-	}
-	if err := goose.UpTo(db, dir, versionBindingStatusEngineError); err != nil {
-		t.Fatal(err)
-	}
+	downTo(t, db, dir, versionBindingLifecycle)
+	upTo(t, db, dir, versionBindingStatusEngineError)
 }

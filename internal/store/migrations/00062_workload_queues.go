@@ -49,7 +49,6 @@ ALTER TABLE engines
     ADD COLUMN max_running_total INTEGER CHECK (max_running_total IS NULL OR max_running_total >= 0);
 `
 
-
 const up00062MySQL = `
 ALTER TABLE query_executions DROP CONSTRAINT query_executions_status_check;
 ALTER TABLE query_executions
@@ -79,7 +78,6 @@ ALTER TABLE engines
     ADD COLUMN max_running_total INTEGER CHECK (max_running_total IS NULL OR max_running_total >= 0);
 `
 
-
 const down00062Postgres = `
 UPDATE query_executions SET status = 'cancelled' WHERE status = 'queued';
 
@@ -100,7 +98,6 @@ ALTER TABLE query_executions
     CHECK (status IN ('running', 'finished', 'failed', 'cancelled'));
 `
 
-
 const down00062MySQL = `
 ALTER TABLE engines DROP COLUMN max_running_total;
 DROP TABLE IF EXISTS engine_queue_capacity;
@@ -118,7 +115,6 @@ ALTER TABLE query_executions
     ADD CONSTRAINT query_executions_status_check
     CHECK (status IN ('running', 'finished', 'failed', 'cancelled'));
 `
-
 
 func up00062(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00062Postgres, up00062MySQL)

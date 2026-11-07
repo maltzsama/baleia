@@ -46,7 +46,7 @@ The Trino binder is one implementation of `bindings.Binder` ([0002](0002-connect
 
 Partially compliant.
 
-- Registry, placeholders and the version algorithm exist (`db/migrations/00018_trino_catalog_store.sql`,
+- Registry, placeholders and the version algorithm exist (`internal/store/migrations/00018_trino_catalog_store.go`,
   `internal/trino/secret.go`, `internal/bindings/trino/version.go`); the Trino binder
   (`internal/bindings/trino`, #80) is the only code that writes the registry and catalog DDL.
 - The shared fixtures (version vectors, reserved names, placeholder cases, the plugin's registry

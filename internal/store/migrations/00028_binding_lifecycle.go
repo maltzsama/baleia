@@ -68,7 +68,6 @@ LEFT JOIN trino_catalog_registry r ON r.cluster_id = tc.id AND r.catalog_name = 
 LEFT JOIN engine_catalog_observations o ON o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name;
 `
 
-
 const up00028MySQL = `
 ALTER TABLE catalog_bindings
     ADD COLUMN lifecycle_state    TEXT NOT NULL DEFAULT 'active'
@@ -113,7 +112,6 @@ LEFT JOIN trino_catalog_registry r ON r.cluster_id = tc.id AND r.catalog_name = 
 LEFT JOIN engine_catalog_observations o ON o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name;
 `
 
-
 const down00028Postgres = `
 DROP VIEW binding_status_v;
 DROP TABLE engine_catalog_observations;
@@ -125,7 +123,6 @@ ALTER TABLE catalog_bindings
     DROP COLUMN lifecycle_state;
 `
 
-
 const down00028MySQL = `
 DROP VIEW binding_status_v;
 DROP TABLE engine_catalog_observations;
@@ -136,7 +133,6 @@ ALTER TABLE catalog_bindings
     DROP COLUMN desired_version,
     DROP COLUMN lifecycle_state;
 `
-
 
 func up00028(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00028Postgres, up00028MySQL)

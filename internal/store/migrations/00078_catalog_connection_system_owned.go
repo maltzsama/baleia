@@ -24,21 +24,17 @@ ALTER TABLE catalog_connections ADD COLUMN system_owned BOOLEAN NOT NULL DEFAULT
 UPDATE catalog_connections SET system_owned = true WHERE created_by IS NULL;
 `
 
-
 const up00078MySQL = `
 ALTER TABLE catalog_connections ADD COLUMN system_owned BOOLEAN NOT NULL DEFAULT false;
 `
-
 
 const down00078Postgres = `
 ALTER TABLE catalog_connections DROP COLUMN system_owned;
 `
 
-
 const down00078MySQL = `
 ALTER TABLE catalog_connections DROP COLUMN system_owned;
 `
-
 
 func up00078(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00078Postgres, up00078MySQL)

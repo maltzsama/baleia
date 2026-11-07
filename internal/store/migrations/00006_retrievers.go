@@ -50,7 +50,6 @@ CREATE INDEX idx_retriever_refresh_retriever  ON retriever_refresh_history (retr
 CREATE INDEX idx_retriever_refresh_status     ON retriever_refresh_history (status);
 `
 
-
 const up00006MySQL = `
 CREATE TABLE retrievers (
     id               CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -91,18 +90,15 @@ CREATE INDEX idx_retriever_refresh_retriever  ON retriever_refresh_history (retr
 CREATE INDEX idx_retriever_refresh_status     ON retriever_refresh_history (status);
 `
 
-
 const down00006Postgres = `
 DROP TABLE IF EXISTS retriever_refresh_history;
 DROP TABLE IF EXISTS retrievers;
 `
 
-
 const down00006MySQL = `
 DROP TABLE IF EXISTS retriever_refresh_history;
 DROP TABLE IF EXISTS retrievers;
 `
-
 
 func up00006(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00006Postgres, up00006MySQL)

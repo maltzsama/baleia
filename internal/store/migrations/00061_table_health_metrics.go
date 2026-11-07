@@ -31,7 +31,6 @@ ALTER TABLE table_health_snapshots
 ALTER TABLE table_health_snapshots DROP COLUMN needs_orphan_cleanup;
 `
 
-
 const up00061MySQL = `
 ALTER TABLE table_health_snapshots
     ADD COLUMN delete_file_count     BIGINT,
@@ -48,7 +47,6 @@ ALTER TABLE table_health_snapshots
     ADD COLUMN policy_revision       BIGINT;
 ALTER TABLE table_health_snapshots DROP COLUMN needs_orphan_cleanup;
 `
-
 
 const down00061Postgres = `
 ALTER TABLE table_health_snapshots ADD COLUMN needs_orphan_cleanup BOOLEAN NOT NULL DEFAULT false;
@@ -67,7 +65,6 @@ ALTER TABLE table_health_snapshots
     DROP COLUMN IF EXISTS delete_file_count;
 `
 
-
 const down00061MySQL = `
 ALTER TABLE table_health_snapshots ADD COLUMN needs_orphan_cleanup BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE table_health_snapshots
@@ -84,7 +81,6 @@ ALTER TABLE table_health_snapshots
     DROP COLUMN equality_delete_count,
     DROP COLUMN delete_file_count;
 `
-
 
 func up00061(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00061Postgres, up00061MySQL)

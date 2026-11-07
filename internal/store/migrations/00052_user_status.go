@@ -23,7 +23,6 @@ ALTER TABLE users ADD CONSTRAINT users_status_check
     CHECK (status IN ('active', 'suspended'));
 `
 
-
 const up00052MySQL = `
 ALTER TABLE users
     ADD COLUMN status              TEXT        NOT NULL DEFAULT 'active',
@@ -35,7 +34,6 @@ ALTER TABLE users ADD CONSTRAINT users_status_check
     CHECK (status IN ('active', 'suspended'));
 `
 
-
 const down00052Postgres = `
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_status_check;
 
@@ -46,7 +44,6 @@ ALTER TABLE users
     DROP COLUMN IF EXISTS status;
 `
 
-
 const down00052MySQL = `
 ALTER TABLE users DROP CONSTRAINT users_status_check;
 
@@ -56,7 +53,6 @@ ALTER TABLE users
     DROP COLUMN suspended_at,
     DROP COLUMN status;
 `
-
 
 func up00052(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00052Postgres, up00052MySQL)

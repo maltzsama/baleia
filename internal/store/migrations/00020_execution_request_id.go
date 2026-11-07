@@ -16,21 +16,17 @@ const up00020Postgres = `
 ALTER TABLE query_executions ADD COLUMN request_id TEXT;
 `
 
-
 const up00020MySQL = `
 ALTER TABLE query_executions ADD COLUMN request_id TEXT;
 `
-
 
 const down00020Postgres = `
 ALTER TABLE query_executions DROP COLUMN request_id;
 `
 
-
 const down00020MySQL = `
 ALTER TABLE query_executions DROP COLUMN request_id;
 `
-
 
 func up00020(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00020Postgres, up00020MySQL)

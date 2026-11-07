@@ -7,6 +7,7 @@
 package contract
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -22,10 +23,13 @@ import (
 	"time"
 
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
+	"github.com/galileostudio/baleia/internal/store/migrations"
 	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
+	bunmigrate "github.com/uptrace/bun/migrate"
 )
 
 func fixture(t *testing.T, name string, v any) {
@@ -118,11 +122,12 @@ func migratedDB(t *testing.T) (*sql.DB, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	goose.SetLogger(goose.NopLogger())
-	if err := goose.SetDialect("postgres"); err != nil {
+	bdb := bun.NewDB(db, pgdialect.New())
+	migrator := bunmigrate.NewMigrator(bdb, migrations.Migrations)
+	if err := migrator.Init(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if err := goose.Up(db, filepath.Join("..", "..", "db", "migrations")); err != nil {
+	if _, err := migrator.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	return db, u.String()

@@ -39,7 +39,6 @@ LEFT JOIN trino_catalog_registry r ON r.cluster_id = tc.id AND r.catalog_name = 
 LEFT JOIN engine_catalog_observations o ON o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name;
 `
 
-
 const up00030MySQL = `
 CREATE OR REPLACE VIEW binding_status_v AS
 SELECT b.id AS binding_id,
@@ -64,7 +63,6 @@ LEFT JOIN trino_catalog_registry r ON r.cluster_id = tc.id AND r.catalog_name = 
 LEFT JOIN engine_catalog_observations o ON o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name;
 `
 
-
 const down00030Postgres = `
 DROP VIEW binding_status_v;
 CREATE VIEW binding_status_v AS
@@ -85,7 +83,6 @@ LEFT JOIN trino_catalog_registry r ON r.cluster_id = tc.id AND r.catalog_name = 
 LEFT JOIN engine_catalog_observations o ON o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name;
 `
 
-
 const down00030MySQL = `
 DROP VIEW binding_status_v;
 CREATE VIEW binding_status_v AS
@@ -105,7 +102,6 @@ LEFT JOIN trino_clusters tc ON tc.engine_id = b.engine_id
 LEFT JOIN trino_catalog_registry r ON r.cluster_id = tc.id AND r.catalog_name = b.engine_catalog_name
 LEFT JOIN engine_catalog_observations o ON o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name;
 `
-
 
 func up00030(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00030Postgres, up00030MySQL)

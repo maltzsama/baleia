@@ -15,12 +15,10 @@ DROP TABLE IF EXISTS workspace_catalog_access;
 DROP TABLE IF EXISTS catalogs;
 `
 
-
 const up00017MySQL = `
 DROP TABLE IF EXISTS workspace_catalog_access;
 DROP TABLE IF EXISTS catalogs;
 `
-
 
 const down00017Postgres = `
 CREATE TABLE catalogs (
@@ -45,7 +43,6 @@ CREATE TABLE workspace_catalog_access (
 );
 `
 
-
 const down00017MySQL = `
 CREATE TABLE catalogs (
     id                 CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -68,7 +65,6 @@ CREATE TABLE workspace_catalog_access (
     UNIQUE (workspace_id, catalog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
-
 
 func up00017(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00017Postgres, up00017MySQL)

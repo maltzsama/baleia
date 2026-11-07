@@ -19,12 +19,10 @@ ALTER TABLE workspace_catalog_grants DROP COLUMN permission;
 ALTER TABLE catalog_connections DROP COLUMN default_readonly;
 `
 
-
 const up00080MySQL = `
 ALTER TABLE workspace_catalog_grants DROP COLUMN permission;
 ALTER TABLE catalog_connections DROP COLUMN default_readonly;
 `
-
 
 const down00080Postgres = `
 ALTER TABLE workspace_catalog_grants
@@ -33,14 +31,12 @@ ALTER TABLE catalog_connections
     ADD COLUMN default_readonly BOOLEAN NOT NULL DEFAULT true;
 `
 
-
 const down00080MySQL = `
 ALTER TABLE workspace_catalog_grants
     ADD COLUMN permission TEXT NOT NULL DEFAULT 'write' CHECK (permission IN ('read', 'write'));
 ALTER TABLE catalog_connections
     ADD COLUMN default_readonly BOOLEAN NOT NULL DEFAULT true;
 `
-
 
 func up00080(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00080Postgres, up00080MySQL)

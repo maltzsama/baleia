@@ -28,21 +28,17 @@ const up00073Postgres = `
 ALTER TABLE workspace_catalog_grants ALTER COLUMN permission SET DEFAULT 'write';
 `
 
-
 const up00073MySQL = `
 ALTER TABLE workspace_catalog_grants ALTER COLUMN permission SET DEFAULT 'write';
 `
-
 
 const down00073Postgres = `
 ALTER TABLE workspace_catalog_grants ALTER COLUMN permission DROP DEFAULT;
 `
 
-
 const down00073MySQL = `
 ALTER TABLE workspace_catalog_grants ALTER COLUMN permission DROP DEFAULT;
 `
-
 
 func up00073(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00073Postgres, up00073MySQL)

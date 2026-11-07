@@ -2,7 +2,7 @@ version: "2"
 sql:
   - engine: "postgresql"
     queries: "db/queries"
-    schema: "db/migrations"
+    schema: "db/schema.sql"
     gen:
       go:
         package: "db"
@@ -16,7 +16,7 @@ sql:
   # provisions) generate here.
   - engine: "postgresql"
     queries: "db/assistant_queries"
-    schema: "db/migrations"
+    schema: "db/schema.sql"
     gen:
       go:
         package: "assistant"

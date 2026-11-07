@@ -58,7 +58,6 @@ CREATE INDEX idx_workspaces_owner_user  ON workspaces (owner_user_id);
 CREATE INDEX idx_workspaces_owner_team  ON workspaces (owner_team_id);
 `
 
-
 const up00002MySQL = `
 CREATE TABLE teams (
     id          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -107,7 +106,6 @@ CREATE INDEX idx_workspaces_owner_user  ON workspaces (owner_user_id);
 CREATE INDEX idx_workspaces_owner_team  ON workspaces (owner_team_id);
 `
 
-
 const down00002Postgres = `
 ALTER TABLE users DROP CONSTRAINT IF EXISTS fk_personal_workspace;
 DROP TABLE IF EXISTS workspaces;
@@ -115,14 +113,12 @@ DROP TABLE IF EXISTS team_members;
 DROP TABLE IF EXISTS teams;
 `
 
-
 const down00002MySQL = `
 ALTER TABLE users DROP CONSTRAINT fk_personal_workspace;
 DROP TABLE IF EXISTS workspaces;
 DROP TABLE IF EXISTS team_members;
 DROP TABLE IF EXISTS teams;
 `
-
 
 func up00002(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00002Postgres, up00002MySQL)
