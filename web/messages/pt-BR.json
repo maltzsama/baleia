@@ -1146,6 +1146,7 @@
 	"components_header_workspace_type": "Tipo",
 	"components_header_owning_team": "Time dono",
 	"components_header_create": "Criar",
+	"components_header_version": "v{version}",
 	"ui_panelresizer_hint": "Arraste para redimensionar; clique duas vezes para restaurar",
 	"ui_panelresizer_resize_sidebar": "Redimensionar a barra lateral",
 	"ui_panelresizer_resize_inspector": "Redimensionar o inspetor",

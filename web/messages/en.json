@@ -1146,6 +1146,7 @@
 	"components_header_workspace_type": "Type",
 	"components_header_owning_team": "Owning team",
 	"components_header_create": "Create",
+	"components_header_version": "v{version}",
 	"ui_panelresizer_hint": "Drag to resize; double-click to reset",
 	"ui_panelresizer_resize_sidebar": "Resize the sidebar",
 	"ui_panelresizer_resize_inspector": "Resize the inspector",
