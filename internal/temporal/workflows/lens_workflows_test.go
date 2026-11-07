@@ -161,7 +161,12 @@ func TestLensTableHealth_RecordsPassLast(t *testing.T) {
 	env := ts.NewTestWorkflowEnvironment()
 
 	env.OnActivity(activities.ListEnabledIcebergCatalogs, mock.Anything, mock.Anything).
-		Return([]activities.EnabledIcebergCatalog{{Catalog: "cat1"}, {Catalog: "cat2"}}, nil)
+		Return([]activities.EnabledIcebergCatalog{
+			// Distinct IDs give each round its own child workflow; SourceRef is
+			// what the pass matches on (the second catalog fails its analysis).
+			{ID: "id-1", Catalog: "cat1", SourceRef: "cat1"},
+			{ID: "id-2", Catalog: "cat2", SourceRef: "cat2"},
+		}, nil)
 	var mu sync.Mutex
 	var events []string
 	record := func(e string) { mu.Lock(); defer mu.Unlock(); events = append(events, e) }
