@@ -93,7 +93,6 @@ function mockWorkbench() {
 				name: 'trino',
 				formatter_language: 'trino',
 				codemirror_base: 'StandardSQL',
-				keywords: ['SELECT', 'FROM'],
 				functions: ['count']
 			})
 		),

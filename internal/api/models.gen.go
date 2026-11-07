@@ -2383,7 +2383,6 @@ type Dialect struct {
 	// FormatterLanguage sql-formatter language id
 	FormatterLanguage string   `json:"formatter_language"`
 	Functions         []string `json:"functions"`
-	Keywords          []string `json:"keywords"`
 	Name              string   `json:"name"`
 }
 

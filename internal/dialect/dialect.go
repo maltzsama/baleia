@@ -181,7 +181,6 @@ type Dialect interface {
 	SafeDivide(num, den string) string
 
 	// Editor support.
-	Keywords() []string
 	Functions() []string
 	FormatterLanguage() string // sql-formatter language id
 	CodeMirrorBase() string    // @codemirror/lang-sql base dialect

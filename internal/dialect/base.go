@@ -372,7 +372,6 @@ func (d *spec) SafeDivide(num, den string) string {
 	return "(" + num + ") / NULLIF(" + den + ", 0)"
 }
 
-func (d *spec) Keywords() []string        { return lists[d.name].keywords }
 func (d *spec) Functions() []string       { return lists[d.name].functions }
 func (d *spec) FormatterLanguage() string { return d.formatter }
 func (d *spec) CodeMirrorBase() string    { return d.codemirror }
