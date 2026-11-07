@@ -36,7 +36,7 @@ func TestConformance(t *testing.T) {
 	pass, _ := u.User.Password()
 	setup(t, raw)
 
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

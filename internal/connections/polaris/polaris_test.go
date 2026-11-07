@@ -21,7 +21,7 @@ func TestMetadataReader_polaris(t *testing.T) {
 	id, secret, _ := cut(creds)
 	ctx := context.Background()
 
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

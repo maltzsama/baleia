@@ -34,7 +34,7 @@ func oracleEngine(t *testing.T, raw string, o Options) queryengine.Engine {
 		port = "1521"
 	}
 	pass, _ := u.User.Password()
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

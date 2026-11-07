@@ -21,7 +21,7 @@ func TestLLMProvider_GoesThroughTheDialer(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { reached = true }))
 	defer srv.Close()
 
-	d, err := connections.NewDialer(connections.DialerOptions{})
+	d, err := connections.NewDialer(connections.DialerOptions{DenyCIDRs: []string{"127.0.0.0/8"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -307,14 +307,7 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 		return fmt.Errorf("get catalog connection: %w", err)
 	}
 
-	// The operator's own catalog managers (Polaris, …) live on a private
-	// address: read them through the managed dialer. User-supplied connections
-	// keep the strict one (#609); an orphan whose creator was deleted keeps it
-	// too (#694).
 	reg := a.connections
-	if a.managedConnections != nil && conn.IsSystemOwned() {
-		reg = a.managedConnections
-	}
 
 	// Open the stored envelope; the raw column value is ciphertext and must
 	// never reach the catalog client.

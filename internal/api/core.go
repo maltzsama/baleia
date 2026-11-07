@@ -49,10 +49,6 @@ type core struct {
 	s3 *storage.S3Client
 	// connections holds every connection provider (docs/adr/0002).
 	connections *connections.Registry
-	// managedConnections dials the operator's own endpoints on private
-	// addresses, for system-owned connections; user-supplied connections keep
-	// the strict connections (#609).
-	managedConnections *connections.Registry
 	// engines runs SQL (docs/adr/0002), built at the wiring site.
 	engines engineSource
 	kinds   engineKinds

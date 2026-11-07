@@ -71,8 +71,8 @@ The workspace metadata routes (`/workspaces/{id}/metadata/…`) are already work
 
 `POST /workspaces/{id}/catalog-access` requires `Workspace(ActAdmin)` **and**
 `Catalog(ActAdmin)` from the same caller. "Catalog admin" is the connection's `created_by` or a
-global admin; system-owned connections (bundled Trino, `system_owned`) have no owner, so only a
-global admin can grant their catalogs. In practice: platform team owns connections, product teams
+global admin; the bundled Trino connection has no `created_by`, so only a
+global admin can grant its catalogs. In practice: platform team owns connections, product teams
 own workspaces, nobody holds both keys except the global admin.
 
 The same relationship has two screens: workspace settings → Catalogs and catalog → Access.
@@ -93,7 +93,7 @@ The workspace screen shows Grant/Revoke without checking `allowed_actions`.
 - In Trino 484 `canAccessCatalog` is the gate for reads: `AccessControlManager` calls it before
   `checkCanSelectFromColumns` (L1133) and `checkCanExecuteProcedure` (L1278).
 - `e2e_tpch` **is** in the model: `cmd/e2e-seed` (`ensureTarget`) creates it as a native catalog on
-  the default engine's (system-owned) connection, with a binding, and grants it to the member's and
+  the default engine's connection (no `created_by`), with a binding, and grants it to the member's and
   the admin's first personal workspaces. v1's "no `catalogs` row, no grant" was wrong. Catalogs
   that exist in Trino without the seed are adopted by reconciliation (`bindings.Lifecycle.adopt`)
   when the engine has a connection, and become grantable by a global admin the same way.
@@ -364,8 +364,8 @@ takes effect at the next statement.
 
 ### 7.4 Catalog ownership
 
-"Catalog admin" = `catalog_connections.created_by`: one person, and nobody for system-owned
-connections. Out of scope here, but the grant endpoints should call a single
+"Catalog admin" = `catalog_connections.created_by`: one person, and nobody for a connection
+without an owner. Out of scope here, but the grant endpoints should call a single
 `authz.CatalogOwner` so that adding team ownership of connections later changes one function.
 
 ## 8. Screens

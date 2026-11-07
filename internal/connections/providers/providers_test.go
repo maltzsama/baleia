@@ -166,7 +166,7 @@ func TestIcebergRESTReaders(t *testing.T) {
 	t.Parallel()
 	srv := fakeIcebergREST(t)
 	t.Cleanup(srv.Close)
-	reg := registry(t, connections.DialerOptions{AllowLoopback: true})
+	reg := registry(t, connections.DialerOptions{})
 
 	cases := []struct {
 		kind    connections.Kind
@@ -252,7 +252,7 @@ func TestPolarisRejectsBadCredentials(t *testing.T) {
 	t.Parallel()
 	srv := fakeIcebergREST(t)
 	defer srv.Close()
-	reg := registry(t, connections.DialerOptions{AllowLoopback: true})
+	reg := registry(t, connections.DialerOptions{})
 	p, _ := reg.Get(connections.KindPolaris)
 	cfg, err := p.Validate(connections.Config{Values: map[string]string{"url": srv.URL, "client_id": "id"}, Secrets: map[string]string{"client_secret": "wrong"}})
 	if err != nil {
@@ -287,9 +287,12 @@ func TestRESTURIs(t *testing.T) {
 
 func TestEveryDriverUsesDialer(t *testing.T) {
 	t.Parallel()
-	// Default dialer: loopback is denied, so every provider must fail with
-	// ErrDeniedNetwork before reaching anything.
-	reg := registry(t, connections.DialerOptions{})
+	// The deny list refuses loopback (IPv4 and IPv6) and the metadata address
+	// the Glue fixture points at, so every provider must fail with
+	// ErrDeniedNetwork before reaching anything — proving it dials through the
+	// shared dialer. Both loopback families are needed: "localhost" resolves to
+	// ::1 as well as 127.0.0.1.
+	reg := registry(t, connections.DialerOptions{DenyCIDRs: []string{"127.0.0.0/8", "::1/128", "169.254.0.0/16"}})
 	configs := map[connections.Kind]connections.Config{
 		connections.KindPolaris:       {Values: map[string]string{"url": "http://localhost:8181", "client_id": "a"}, Secrets: map[string]string{"client_secret": "b"}},
 		connections.KindNessie:        {Values: map[string]string{"url": "http://localhost:19120"}},

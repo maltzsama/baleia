@@ -64,7 +64,7 @@ func server(t *testing.T, auth bool) (host, port string) {
 }
 
 func provider(t *testing.T) *Provider {
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

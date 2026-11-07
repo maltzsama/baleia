@@ -55,7 +55,7 @@ func runConformance(t *testing.T, extra map[string]string) {
 	service := strings.TrimPrefix(u.Path, "/")
 	setup(t, host, port, service, user, pass)
 
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

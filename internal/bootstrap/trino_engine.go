@@ -112,7 +112,7 @@ func EnsureDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q Defaul
 	}
 
 	conn := row.CatalogConnection
-	if !conn.IsSystemOwned() {
+	if conn.CreatedBy.Valid {
 		logger.InfoContext(ctx, "default trino engine is managed by a user; TRINO_URL is not applied", "engine", row.Engine.Name)
 		return nil
 	}
@@ -203,7 +203,6 @@ func createDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q Defaul
 		Url:            trinoURL,
 		Config:         raw,
 		CredentialsEnc: creds,
-		SystemOwned:    true,
 	})
 	if err != nil {
 		return fmt.Errorf("create default trino connection: %w", err)

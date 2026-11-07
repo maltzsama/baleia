@@ -58,7 +58,7 @@ func TestUnityIntegration(t *testing.T) {
 	if base == "" {
 		t.Skip("BALEIA_TEST_UNITY_URL not set")
 	}
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

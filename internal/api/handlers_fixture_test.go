@@ -34,7 +34,6 @@ type handlerFields struct {
 	versionCache       *TTLStore[engineProbe]
 	attentionCache     *TTLStore[[]AttentionItem]
 	connections        *connections.Registry
-	managedConnections *connections.Registry
 	engines            engineSource
 	kinds              engineKinds
 	dialects           *dialect.Registry
@@ -56,7 +55,6 @@ func testAPI(f handlerFields) *API {
 		temporalClient:     f.temporalClient,
 		catalogCache:       f.catalogCache,
 		connections:        f.connections,
-		managedConnections: f.managedConnections,
 		engines:            f.engines,
 		kinds:              f.kinds,
 		dialects:           f.dialects,

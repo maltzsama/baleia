@@ -48,7 +48,7 @@ func TestMetadataReader_sqlserver(t *testing.T) {
 		_, _ = admin.Exec(`ALTER DATABASE baleia_fixture SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE baleia_fixture`)
 	})
 
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
