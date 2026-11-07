@@ -30,31 +30,26 @@ CREATE INDEX idx_directory_reconcile_runs_provider
     ON directory_reconcile_runs (provider_id, started_at DESC);
 `
 
-const up00053MySQL = `
-CREATE TABLE directory_reconcile_runs (
-    id           CHAR(36)        PRIMARY KEY DEFAULT (UUID()),
-    provider_id  CHAR(36)        NOT NULL REFERENCES auth_providers (id) ON DELETE CASCADE,
+const up00053MySQL = `CREATE TABLE directory_reconcile_runs (id           CHAR(36)        PRIMARY KEY DEFAULT (UUID()),
+    provider_id  CHAR(36)        NOT NULL,
     started_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     finished_at  DATETIME(6),
-    outcome      TEXT        CHECK (outcome IN ('success', 'error', 'aborted_safety')),
+    outcome      TEXT,
     seen         INTEGER     NOT NULL DEFAULT 0,
     suspended    INTEGER     NOT NULL DEFAULT 0,
     reinstated   INTEGER     NOT NULL DEFAULT 0,
     error        TEXT,
-    actions      JSON       NOT NULL DEFAULT '[]'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX idx_directory_reconcile_runs_provider
-    ON directory_reconcile_runs (provider_id, started_at DESC);
-`
+    actions      JSON       NOT NULL DEFAULT ('[]'),
+    CONSTRAINT directory_reconcile_runs_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES auth_providers (id) ON DELETE CASCADE,
+    CONSTRAINT directory_reconcile_runs_outcome_check CHECK (outcome IN ('success', 'error', 'aborted_safety'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS idx_directory_reconcile_runs_provider
+    ON directory_reconcile_runs (provider_id, started_at DESC);`
 
 const down00053Postgres = `
 DROP TABLE IF EXISTS directory_reconcile_runs;
 `
 
-const down00053MySQL = `
-DROP TABLE IF EXISTS directory_reconcile_runs;
-`
+const down00053MySQL = `DROP TABLE IF EXISTS directory_reconcile_runs;`
 
 func up00053(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00053Postgres, up00053MySQL)

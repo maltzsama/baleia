@@ -67,35 +67,29 @@ CREATE TRIGGER audit_events_no_update BEFORE UPDATE OR DELETE ON audit_events
     FOR EACH ROW EXECUTE FUNCTION audit_events_append_only();
 `
 
-const up00033MySQL = `
-CREATE TABLE audit_events (
-    id            BIGINT GENERATED ALWAYS AS IDENTITY,
+const up00033MySQL = `CREATE TABLE audit_events (id            BIGINT AUTO_INCREMENT,
     occurred_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    actor_kind    TEXT        NOT NULL CHECK (actor_kind IN ('user', 'service', 'agent', 'anonymous')),
+    actor_kind    TEXT        NOT NULL,
     actor_id      TEXT,
     auth_method   TEXT,
-    
-    action        TEXT        NOT NULL CHECK (action ~ '^[a-z_]+\.[a-z_]+$'),
+    action        TEXT        NOT NULL,
     resource_type TEXT        NOT NULL,
     resource_id   TEXT,
     workspace_id  CHAR(36),
-    outcome       TEXT        NOT NULL CHECK (outcome IN ('allowed', 'denied', 'error')),
+    outcome       TEXT        NOT NULL,
     reason        TEXT,
     request_id    TEXT,
     trace_id      TEXT,
-    client_ip     INET,
+    client_ip     VARCHAR(64),
     user_agent    TEXT,
-    
     changes       JSON,
-    PRIMARY KEY (occurred_at, id)
-) PARTITION BY RANGE (occurred_at) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX audit_events_resource ON audit_events (resource_type, resource_id, occurred_at DESC);
-CREATE INDEX audit_events_actor    ON audit_events (actor_id, occurred_at DESC);
-CREATE INDEX audit_events_ws       ON audit_events (workspace_id, occurred_at DESC);
-
-SELECT audit_ensure_partitions(2);
-`
+    PRIMARY KEY (id),
+    CONSTRAINT audit_events_actor_kind_check CHECK (actor_kind IN ('user', 'service', 'agent', 'anonymous')),
+    CONSTRAINT audit_events_action_check CHECK (action REGEXP '^[a-z_]+\.[a-z_]+$'),
+    CONSTRAINT audit_events_outcome_check CHECK (outcome IN ('allowed', 'denied', 'error'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS audit_events_resource ON audit_events (resource_type(255), resource_id(255), occurred_at DESC);
+CREATE INDEX IF NOT EXISTS audit_events_actor    ON audit_events (actor_id(255), occurred_at DESC);
+CREATE INDEX IF NOT EXISTS audit_events_ws       ON audit_events (workspace_id, occurred_at DESC);`
 
 const down00033Postgres = `
 DROP TABLE IF EXISTS audit_events;
@@ -103,11 +97,7 @@ DROP FUNCTION IF EXISTS audit_ensure_partitions(int);
 DROP FUNCTION IF EXISTS audit_events_append_only();
 `
 
-const down00033MySQL = `
-DROP TABLE IF EXISTS audit_events;
-DROP FUNCTION IF EXISTS audit_ensure_partitions(int);
-DROP FUNCTION IF EXISTS audit_events_append_only();
-`
+const down00033MySQL = `DROP TABLE IF EXISTS audit_events;`
 
 func up00033(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00033Postgres, up00033MySQL)

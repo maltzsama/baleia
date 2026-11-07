@@ -58,53 +58,48 @@ CREATE INDEX idx_workspaces_owner_user  ON workspaces (owner_user_id);
 CREATE INDEX idx_workspaces_owner_team  ON workspaces (owner_team_id);
 `
 
-const up00002MySQL = `
-CREATE TABLE teams (
-    id          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+const up00002MySQL = `CREATE TABLE teams (id          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     name        TEXT        NOT NULL,
     description TEXT,
-    created_by  CHAR(36)          NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+    created_by  CHAR(36)          NOT NULL,
     created_at  DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at  DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE team_members (
-    id          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    team_id     CHAR(36)          NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
-    user_id     CHAR(36)          NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    role        TEXT        NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'member')),
+    updated_at  DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT teams_created_by_fkey FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE RESTRICT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE team_members (id          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    team_id     CHAR(36)          NOT NULL,
+    user_id     CHAR(36)          NOT NULL,
+    role        TEXT        NOT NULL DEFAULT ('member'),
     joined_at   DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    UNIQUE (team_id, user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE workspaces (
-    id                   CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    UNIQUE (team_id, user_id),
+    CONSTRAINT team_members_team_id_fkey FOREIGN KEY (team_id) REFERENCES teams (id) ON DELETE CASCADE,
+    CONSTRAINT team_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT team_members_role_check CHECK (role IN ('owner', 'member'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE workspaces (id                   CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     name                 TEXT        NOT NULL,
     description          TEXT,
-    type                 TEXT        NOT NULL CHECK (type IN ('personal', 'shared')),
-    polaris_catalog_name TEXT        NOT NULL UNIQUE,
-    owner_user_id        CHAR(36)          REFERENCES users (id) ON DELETE RESTRICT,
-    owner_team_id        CHAR(36)          REFERENCES teams (id) ON DELETE RESTRICT,
+    type                 TEXT        NOT NULL,
+    polaris_catalog_name TEXT        NOT NULL,
+    owner_user_id        CHAR(36),
+    owner_team_id        CHAR(36),
     created_at           DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at           DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     CONSTRAINT chk_workspace_owner CHECK (
         (type = 'personal' AND owner_user_id IS NOT NULL AND owner_team_id IS NULL) OR
         (type = 'shared'   AND owner_team_id IS NOT NULL AND owner_user_id IS NULL)
-    )
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-ALTER TABLE users
-    ADD CONSTRAINT fk_personal_workspace
+    ),
+    CONSTRAINT workspaces_type_check CHECK (type IN ('personal', 'shared')),
+    CONSTRAINT workspaces_polaris_catalog_name_key UNIQUE (polaris_catalog_name(255)),
+    CONSTRAINT workspaces_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+    CONSTRAINT workspaces_owner_team_id_fkey FOREIGN KEY (owner_team_id) REFERENCES teams (id) ON DELETE RESTRICT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE users ADD CONSTRAINT fk_personal_workspace
     FOREIGN KEY (personal_workspace_id)
     REFERENCES workspaces (id)
     ON DELETE SET NULL;
-
-CREATE INDEX idx_teams_created_by       ON teams (created_by);
-CREATE INDEX idx_team_members_team_id   ON team_members (team_id);
-CREATE INDEX idx_team_members_user_id   ON team_members (user_id);
-CREATE INDEX idx_workspaces_owner_user  ON workspaces (owner_user_id);
-CREATE INDEX idx_workspaces_owner_team  ON workspaces (owner_team_id);
-`
+CREATE INDEX IF NOT EXISTS idx_teams_created_by       ON teams (created_by);
+CREATE INDEX IF NOT EXISTS idx_team_members_team_id   ON team_members (team_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_user_id   ON team_members (user_id);
+CREATE INDEX IF NOT EXISTS idx_workspaces_owner_user  ON workspaces (owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_workspaces_owner_team  ON workspaces (owner_team_id);`
 
 const down00002Postgres = `
 ALTER TABLE users DROP CONSTRAINT IF EXISTS fk_personal_workspace;
@@ -113,12 +108,10 @@ DROP TABLE IF EXISTS team_members;
 DROP TABLE IF EXISTS teams;
 `
 
-const down00002MySQL = `
-ALTER TABLE users DROP CONSTRAINT fk_personal_workspace;
+const down00002MySQL = `ALTER TABLE users DROP CONSTRAINT IF EXISTS fk_personal_workspace;
 DROP TABLE IF EXISTS workspaces;
 DROP TABLE IF EXISTS team_members;
-DROP TABLE IF EXISTS teams;
-`
+DROP TABLE IF EXISTS teams;`
 
 func up00002(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00002Postgres, up00002MySQL)

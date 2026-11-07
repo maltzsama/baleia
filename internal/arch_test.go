@@ -60,8 +60,9 @@ var constructionRules = []constructionRule{
 			{"github.com/jackc/pgx/v5/pgxpool", "NewWithConfig"},
 		},
 		// internal/dbpool is the binaries' helper for Baleia's own pool (#87);
-		// internal/testdb opens throwaway databases for tests only.
-		allowed: []string{"cmd/", "internal/migrate/", "internal/dbpool/", "internal/testdb/", "internal/queryengine/", "internal/connections/"},
+		// internal/testdb opens throwaway databases for tests only; internal/store
+		// owns the Bun handle for Baleia's own database (docs/adr/0020).
+		allowed: []string{"cmd/", "internal/migrate/", "internal/dbpool/", "internal/testdb/", "internal/store/", "internal/queryengine/", "internal/connections/"},
 	},
 }
 
@@ -249,6 +250,10 @@ func TestNoDriversOutsideAdapters(t *testing.T) {
 		"github.com/apache/arrow-go/v18/arrow/flight",
 	}
 	adapter := func(file string) bool {
+		// The metadata store owns Baleia's own database connection (ADR 0020).
+		if strings.HasPrefix(file, "internal/store/") {
+			return true
+		}
 		for _, root := range []string{"internal/queryengine/", "internal/connections/"} {
 			rest, ok := strings.CutPrefix(file, root)
 			if ok && strings.Contains(rest, "/") { // a kind's own package, not the contract

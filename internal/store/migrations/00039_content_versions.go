@@ -72,41 +72,33 @@ SELECT workspace_id, space_id, 'semantic_metric', id, 1, 'create',
 FROM semantic_metrics m;
 `
 
-const up00039MySQL = `
-CREATE TABLE content_versions (
-    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    workspace_id  CHAR(36) NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
-    
-    
+const up00039MySQL = `CREATE TABLE content_versions (id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id  CHAR(36) NOT NULL,
     space_id      CHAR(36) NOT NULL,
-    entity_type   TEXT NOT NULL CHECK (entity_type IN ('saved_query', 'semantic_metric')),
-    
-    
+    entity_type   TEXT NOT NULL,
     entity_id     CHAR(36) NOT NULL,
-    version       INTEGER NOT NULL CHECK (version >= 1),
-    change_kind   TEXT NOT NULL CHECK (change_kind IN ('create', 'update', 'delete', 'restore', 'import')),
-    
+    version       INTEGER NOT NULL,
+    change_kind   TEXT NOT NULL,
     snapshot      JSON NOT NULL,
-    author_id     CHAR(36) REFERENCES users (id) ON DELETE SET NULL,
+    author_id     CHAR(36),
     restored_from INTEGER,
     created_at    DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    UNIQUE (entity_type, entity_id, version)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE INDEX content_versions_ws_time ON content_versions (workspace_id, created_at DESC);
-CREATE INDEX content_versions_entity ON content_versions (entity_type, entity_id, version DESC);
-CREATE INDEX content_versions_deleted ON content_versions (workspace_id, entity_type, created_at DESC)
-    WHERE change_kind = 'delete';
-`
+    UNIQUE (entity_type(255), entity_id, version),
+    CONSTRAINT content_versions_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
+    CONSTRAINT content_versions_entity_type_check CHECK (entity_type IN ('saved_query', 'semantic_metric')),
+    CONSTRAINT content_versions_version_check CHECK (version >= 1),
+    CONSTRAINT content_versions_change_kind_check CHECK (change_kind IN ('create', 'update', 'delete', 'restore', 'import')),
+    CONSTRAINT content_versions_author_id_fkey FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS content_versions_ws_time ON content_versions (workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS content_versions_entity ON content_versions (entity_type(255), entity_id, version DESC);
+CREATE INDEX IF NOT EXISTS content_versions_deleted ON content_versions (workspace_id, entity_type(255), created_at DESC);`
 
 const down00039Postgres = `
 DROP TABLE IF EXISTS content_versions;
 DROP FUNCTION IF EXISTS content_versions_append_only();
 `
 
-const down00039MySQL = `
-DROP TABLE IF EXISTS content_versions;
-DROP FUNCTION IF EXISTS content_versions_append_only();
-`
+const down00039MySQL = `DROP TABLE IF EXISTS content_versions;`
 
 func up00039(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00039Postgres, up00039MySQL)

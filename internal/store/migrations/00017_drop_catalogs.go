@@ -15,10 +15,8 @@ DROP TABLE IF EXISTS workspace_catalog_access;
 DROP TABLE IF EXISTS catalogs;
 `
 
-const up00017MySQL = `
-DROP TABLE IF EXISTS workspace_catalog_access;
-DROP TABLE IF EXISTS catalogs;
-`
+const up00017MySQL = `DROP TABLE IF EXISTS workspace_catalog_access;
+DROP TABLE IF EXISTS catalogs;`
 
 const down00017Postgres = `
 CREATE TABLE catalogs (
@@ -43,28 +41,25 @@ CREATE TABLE workspace_catalog_access (
 );
 `
 
-const down00017MySQL = `
-CREATE TABLE catalogs (
-    id                 CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    connection_id      CHAR(36) NOT NULL REFERENCES catalog_connections(id) ON DELETE CASCADE,
+const down00017MySQL = `CREATE TABLE catalogs (id                 CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    connection_id      CHAR(36) NOT NULL,
     name               TEXT NOT NULL,
     description        TEXT,
-    trino_catalog_name TEXT NOT NULL DEFAULT '',
+    trino_catalog_name TEXT NOT NULL DEFAULT (''),
     created_at         DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at         DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    UNIQUE (connection_id, name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE workspace_catalog_access (
-    id          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    workspace_id CHAR(36) NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    catalog_id   CHAR(36) NOT NULL REFERENCES catalogs(id) ON DELETE CASCADE,
-    permission   TEXT NOT NULL DEFAULT 'read',
-    granted_by   CHAR(36) NOT NULL REFERENCES users(id),
+    UNIQUE (connection_id, name(255)),
+    CONSTRAINT catalogs_connection_id_fkey FOREIGN KEY (connection_id) REFERENCES catalog_connections(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE workspace_catalog_access (id          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    workspace_id CHAR(36) NOT NULL,
+    catalog_id   CHAR(36) NOT NULL,
+    permission   TEXT NOT NULL DEFAULT ('read'),
+    granted_by   CHAR(36) NOT NULL,
     granted_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    UNIQUE (workspace_id, catalog_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-`
+    UNIQUE (workspace_id, catalog_id),
+    CONSTRAINT workspace_catalog_access_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    CONSTRAINT workspace_catalog_access_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES catalogs(id) ON DELETE CASCADE,
+    CONSTRAINT workspace_catalog_access_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES users(id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
 func up00017(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00017Postgres, up00017MySQL)

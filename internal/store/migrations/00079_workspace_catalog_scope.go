@@ -56,18 +56,17 @@ WHERE w.type = 'personal' AND w.owner_user_id IS NOT NULL
 ON CONFLICT (workspace_id, catalog_id) DO NOTHING;
 `
 
-const up00079MySQL = `
-CREATE TABLE catalog_grant_requests (
-    workspace_id      CHAR(36)        NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    catalog_id        CHAR(36)        NOT NULL REFERENCES catalogs(id)   ON DELETE CASCADE,
-    initiated_by_side TEXT        NOT NULL CHECK (initiated_by_side IN ('catalog', 'workspace')),
-    requested_by      CHAR(36)        REFERENCES users(id) ON DELETE SET NULL,
+const up00079MySQL = `CREATE TABLE catalog_grant_requests (workspace_id      CHAR(36)        NOT NULL,
+    catalog_id        CHAR(36)        NOT NULL,
+    initiated_by_side TEXT        NOT NULL,
+    requested_by      CHAR(36),
     requested_at      DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    PRIMARY KEY (workspace_id, catalog_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-ALTER TABLE catalogs ADD COLUMN discoverable BOOLEAN NOT NULL DEFAULT false;
-`
+    PRIMARY KEY (workspace_id, catalog_id),
+    CONSTRAINT catalog_grant_requests_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    CONSTRAINT catalog_grant_requests_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES catalogs(id)   ON DELETE CASCADE,
+    CONSTRAINT catalog_grant_requests_initiated_by_side_check CHECK (initiated_by_side IN ('catalog', 'workspace')),
+    CONSTRAINT catalog_grant_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS discoverable BOOLEAN NOT NULL DEFAULT false;`
 
 const down00079Postgres = `
 DROP FUNCTION IF EXISTS baleia_workspace_catalog_ids(uuid);
@@ -75,11 +74,8 @@ DROP TABLE IF EXISTS catalog_grant_requests;
 ALTER TABLE catalogs DROP COLUMN IF EXISTS discoverable;
 `
 
-const down00079MySQL = `
-DROP FUNCTION IF EXISTS baleia_workspace_catalog_ids(CHAR(36));
-DROP TABLE IF EXISTS catalog_grant_requests;
-ALTER TABLE catalogs DROP COLUMN discoverable;
-`
+const down00079MySQL = `DROP TABLE IF EXISTS catalog_grant_requests;
+ALTER TABLE catalogs DROP COLUMN IF EXISTS discoverable;`
 
 func up00079(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00079Postgres, up00079MySQL)

@@ -38,21 +38,14 @@ UPDATE catalog_connections
 SET config = jsonb_strip_nulls(jsonb_build_object('url', url, 'host', host, 'port', port));
 `
 
-const up00023MySQL = `
-ALTER TABLE catalog_connections
-    DROP CONSTRAINT catalog_connections_type_check;
-
-ALTER TABLE catalog_connections
-    ADD CONSTRAINT catalog_connections_type_check
+const up00023MySQL = `ALTER TABLE catalog_connections DROP CONSTRAINT IF EXISTS catalog_connections_type_check;
+ALTER TABLE catalog_connections ADD CONSTRAINT catalog_connections_type_check
     CHECK (type IN (
         'polaris', 'nessie', 'iceberg', 'lakekeeper', 'unity', 'hive', 'glue',
         'postgresql', 'mysql', 'mariadb', 'sqlserver', 'oracle', 'sqlite', 'clickhouse',
         'flightsql', 'trino', 'doris', 'starrocks'));
-
-ALTER TABLE catalog_connections
-    ADD COLUMN config JSON NOT NULL DEFAULT '{}',
-    ADD COLUMN credentials_read_only BOOLEAN NOT NULL DEFAULT false;
-`
+ALTER TABLE catalog_connections ADD COLUMN IF NOT EXISTS config JSON NOT NULL DEFAULT ('[]'),
+    ADD COLUMN IF NOT EXISTS credentials_read_only BOOLEAN NOT NULL DEFAULT false;`
 
 const down00023Postgres = `
 ALTER TABLE catalog_connections
@@ -67,18 +60,11 @@ ALTER TABLE catalog_connections
     CHECK (type IN ('polaris', 'nessie', 'glue', 'hive', 'iceberg', 'postgresql', 'mysql'));
 `
 
-const down00023MySQL = `
-ALTER TABLE catalog_connections
-    DROP COLUMN credentials_read_only,
-    DROP COLUMN config;
-
-ALTER TABLE catalog_connections
-    DROP CONSTRAINT catalog_connections_type_check;
-
-ALTER TABLE catalog_connections
-    ADD CONSTRAINT catalog_connections_type_check
-    CHECK (type IN ('polaris', 'nessie', 'glue', 'hive', 'iceberg', 'postgresql', 'mysql'));
-`
+const down00023MySQL = `ALTER TABLE catalog_connections DROP COLUMN IF EXISTS credentials_read_only,
+    DROP COLUMN IF EXISTS config;
+ALTER TABLE catalog_connections DROP CONSTRAINT IF EXISTS catalog_connections_type_check;
+ALTER TABLE catalog_connections ADD CONSTRAINT catalog_connections_type_check
+    CHECK (type IN ('polaris', 'nessie', 'glue', 'hive', 'iceberg', 'postgresql', 'mysql'));`
 
 func up00023(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00023Postgres, up00023MySQL)

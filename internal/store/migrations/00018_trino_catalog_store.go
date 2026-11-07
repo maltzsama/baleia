@@ -96,76 +96,57 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON trino_catalog_registry TO baleia_trino;
 GRANT SELECT ON trino_clusters TO baleia_trino;
 `
 
-const up00018MySQL = `
-CREATE TABLE trino_clusters (
-    id              CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    name            TEXT NOT NULL UNIQUE,
+const up00018MySQL = `CREATE TABLE trino_clusters (id              CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    name            TEXT NOT NULL,
     coordinator_url TEXT NOT NULL,
     node_version    TEXT,
     created_at      DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at      DATETIME(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE catalogs (
-    id                  CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    connection_id       CHAR(36) NOT NULL REFERENCES catalog_connections(id) ON DELETE CASCADE,
+    updated_at      DATETIME(6),
+    CONSTRAINT trino_clusters_name_key UNIQUE (name(255))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE catalogs (id                  CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    connection_id       CHAR(36) NOT NULL,
     name                TEXT NOT NULL,
     description         TEXT,
     trino_catalog_name  TEXT NOT NULL,
-    cluster_id          CHAR(36) NOT NULL REFERENCES trino_clusters(id),
+    cluster_id          CHAR(36) NOT NULL,
     warehouse           TEXT NOT NULL,
-    connector           TEXT NOT NULL DEFAULT 'iceberg',
-    extra_props         JSON NOT NULL DEFAULT '{}',
+    connector           TEXT NOT NULL DEFAULT ('iceberg'),
+    extra_props         JSON NOT NULL DEFAULT ('[]'),
     enabled             BOOLEAN NOT NULL DEFAULT TRUE,
     created_at          DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at          DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    UNIQUE (connection_id, name),
-    UNIQUE (cluster_id, trino_catalog_name),
+    UNIQUE (connection_id, name(255)),
+    UNIQUE (cluster_id, trino_catalog_name(255)),
     CONSTRAINT catalogs_trino_name_format
-        CHECK (trino_catalog_name ~ '^[a-z][a-z0-9_]{0,62}$'),
+        CHECK (trino_catalog_name REGEXP '^[a-z][a-z0-9_]{0,62}$'),
     CONSTRAINT catalogs_trino_name_not_reserved
         CHECK (trino_catalog_name NOT IN ('system', 'jmx', 'tpch', 'tpcds', 'memory')),
     CONSTRAINT catalogs_connector_format
-        CHECK (connector ~ '^[a-z][a-z0-9_]{0,62}$')
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE trino_catalog_registry (
-    cluster_id      CHAR(36) NOT NULL REFERENCES trino_clusters(id) ON DELETE CASCADE,
+        CHECK (connector REGEXP '^[a-z][a-z0-9_]{0,62}$'),
+    CONSTRAINT catalogs_connection_id_fkey FOREIGN KEY (connection_id) REFERENCES catalog_connections(id) ON DELETE CASCADE,
+    CONSTRAINT catalogs_cluster_id_fkey FOREIGN KEY (cluster_id) REFERENCES trino_clusters(id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE trino_catalog_registry (cluster_id      CHAR(36) NOT NULL,
     catalog_name    TEXT NOT NULL,
     connector_name  TEXT NOT NULL,
     properties      JSON NOT NULL,
     catalog_version TEXT,
     enabled         BOOLEAN NOT NULL DEFAULT TRUE,
-    sync_status     TEXT NOT NULL DEFAULT 'pending',
+    sync_status     TEXT NOT NULL DEFAULT ('pending'),
     sync_error      TEXT,
-    updated_by      TEXT NOT NULL DEFAULT 'baleia',
+    updated_by      TEXT NOT NULL DEFAULT ('baleia'),
     updated_at      DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    PRIMARY KEY (cluster_id, catalog_name),
+    PRIMARY KEY (cluster_id, catalog_name(255)),
     CONSTRAINT registry_catalog_name_format
-        CHECK (catalog_name ~ '^[a-z][a-z0-9_]{0,62}$'),
+        CHECK (catalog_name REGEXP '^[a-z][a-z0-9_]{0,62}$'),
     CONSTRAINT registry_connector_name_format
-        CHECK (connector_name ~ '^[a-z][a-z0-9_]{0,62}$'),
+        CHECK (connector_name REGEXP '^[a-z][a-z0-9_]{0,62}$'),
     CONSTRAINT registry_sync_status_valid
         CHECK (sync_status IN ('pending', 'synced', 'error')),
     CONSTRAINT registry_updated_by_valid
-        CHECK (updated_by IN ('baleia', 'trino'))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX trino_catalog_registry_enabled_idx
-    ON trino_catalog_registry (cluster_id) WHERE enabled;
-
-DO $baleia$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'baleia_trino') THEN
-        CREATE ROLE baleia_trino LOGIN;
-    END IF;
-END
-$baleia$;
-
-GRANT USAGE ON SCHEMA public TO baleia_trino;
-GRANT SELECT, INSERT, UPDATE, DELETE ON trino_catalog_registry TO baleia_trino;
-GRANT SELECT ON trino_clusters TO baleia_trino;
-`
+        CHECK (updated_by IN ('baleia', 'trino')),
+    CONSTRAINT trino_catalog_registry_cluster_id_fkey FOREIGN KEY (cluster_id) REFERENCES trino_clusters(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS trino_catalog_registry_enabled_idx
+    ON trino_catalog_registry (cluster_id);`
 
 const down00018Postgres = `
 REVOKE SELECT, INSERT, UPDATE, DELETE ON trino_catalog_registry FROM baleia_trino;
@@ -178,16 +159,9 @@ DROP TABLE IF EXISTS catalogs;
 DROP TABLE IF EXISTS trino_clusters;
 `
 
-const down00018MySQL = `
-REVOKE SELECT, INSERT, UPDATE, DELETE ON trino_catalog_registry FROM baleia_trino;
-REVOKE SELECT ON trino_clusters FROM baleia_trino;
-REVOKE USAGE ON SCHEMA public FROM baleia_trino;
-DROP ROLE IF EXISTS baleia_trino;
-
-DROP TABLE IF EXISTS trino_catalog_registry;
+const down00018MySQL = `DROP TABLE IF EXISTS trino_catalog_registry;
 DROP TABLE IF EXISTS catalogs;
-DROP TABLE IF EXISTS trino_clusters;
-`
+DROP TABLE IF EXISTS trino_clusters;`
 
 func up00018(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00018Postgres, up00018MySQL)

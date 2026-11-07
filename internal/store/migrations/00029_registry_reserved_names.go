@@ -24,21 +24,16 @@ ALTER TABLE trino_catalog_registry
 ALTER TABLE trino_catalog_registry VALIDATE CONSTRAINT registry_catalog_name_not_reserved;
 `
 
-const up00029MySQL = `
-ALTER TABLE trino_catalog_registry DROP CONSTRAINT registry_catalog_name_not_reserved;
-ALTER TABLE trino_catalog_registry
-    ADD CONSTRAINT registry_catalog_name_not_reserved
-        CHECK (catalog_name NOT IN ('system', 'jmx', 'tpch', 'tpcds', 'memory', 'env', 'file')) NOT VALID;
-ALTER TABLE trino_catalog_registry VALIDATE CONSTRAINT registry_catalog_name_not_reserved;
-`
+const up00029MySQL = `ALTER TABLE trino_catalog_registry DROP CONSTRAINT IF EXISTS registry_catalog_name_not_reserved;
+ALTER TABLE trino_catalog_registry ADD CONSTRAINT registry_catalog_name_not_reserved
+        CHECK (catalog_name NOT IN ('system', 'jmx', 'tpch', 'tpcds', 'memory', 'env', 'file'));
+ALTER TABLE trino_catalog_registry;`
 
 const down00029Postgres = `
 ALTER TABLE trino_catalog_registry DROP CONSTRAINT IF EXISTS registry_catalog_name_not_reserved;
 `
 
-const down00029MySQL = `
-ALTER TABLE trino_catalog_registry DROP CONSTRAINT registry_catalog_name_not_reserved;
-`
+const down00029MySQL = `ALTER TABLE trino_catalog_registry DROP CONSTRAINT IF EXISTS registry_catalog_name_not_reserved;`
 
 func up00029(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00029Postgres, up00029MySQL)

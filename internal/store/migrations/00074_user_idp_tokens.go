@@ -27,24 +27,20 @@ CREATE TABLE user_idp_tokens (
 );
 `
 
-const up00074MySQL = `
-CREATE TABLE user_idp_tokens (
-    user_id           CHAR(36)        PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
-    auth_provider_id  CHAR(36)        NOT NULL REFERENCES auth_providers (id) ON DELETE CASCADE,
+const up00074MySQL = `CREATE TABLE user_idp_tokens (user_id           CHAR(36)        PRIMARY KEY,
+    auth_provider_id  CHAR(36)        NOT NULL,
     access_token_enc  TEXT        NOT NULL,
     refresh_token_enc TEXT,
     expires_at        DATETIME(6) NOT NULL,
-    updated_at        DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-`
+    updated_at        DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT user_idp_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT user_idp_tokens_auth_provider_id_fkey FOREIGN KEY (auth_provider_id) REFERENCES auth_providers (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
 const down00074Postgres = `
 DROP TABLE user_idp_tokens;
 `
 
-const down00074MySQL = `
-DROP TABLE user_idp_tokens;
-`
+const down00074MySQL = `DROP TABLE user_idp_tokens;`
 
 func up00074(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00074Postgres, up00074MySQL)

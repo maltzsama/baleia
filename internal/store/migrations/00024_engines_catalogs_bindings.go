@@ -189,134 +189,55 @@ SET target_snapshot = jsonb_build_object('engine_kind', 'trino', 'engine_catalog
 WHERE target_snapshot IS NULL AND trino_catalog IS NOT NULL;
 `
 
-const up00024MySQL = `
-CREATE TABLE engines (
-    id             CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    name           TEXT NOT NULL UNIQUE CHECK (name ~ '^[a-z][a-z0-9_-]{0,62}$'),
+const up00024MySQL = `CREATE TABLE engines (id             CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    name           TEXT NOT NULL,
     kind           TEXT NOT NULL,
-    class          TEXT NOT NULL CHECK (class IN ('federated', 'direct')),
-    connection_id  CHAR(36) NOT NULL UNIQUE REFERENCES catalog_connections (id) ON DELETE RESTRICT,
-    identity_mode  TEXT NOT NULL DEFAULT 'connection'
-                   CHECK (identity_mode IN ('impersonation', 'connection', 'per_user')),
+    class          TEXT NOT NULL,
+    connection_id  CHAR(36) NOT NULL,
+    identity_mode  TEXT NOT NULL DEFAULT ('connection'),
     enabled        BOOLEAN NOT NULL DEFAULT true,
-    created_by     CHAR(36) REFERENCES users (id) ON DELETE SET NULL,
+    created_by     CHAR(36),
     created_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-ALTER TABLE trino_clusters
-    ADD COLUMN engine_id CHAR(36) UNIQUE REFERENCES engines (id) ON DELETE RESTRICT;
-
-ALTER TABLE catalogs
-    ADD COLUMN origin     TEXT NOT NULL DEFAULT 'source' CHECK (origin IN ('source', 'native')),
-    ADD COLUMN source_ref TEXT;
-
-CREATE TABLE catalog_bindings (
-    id                  CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    catalog_id          CHAR(36) NOT NULL REFERENCES catalogs (id) ON DELETE CASCADE,
-    engine_id           CHAR(36) NOT NULL REFERENCES engines (id) ON DELETE CASCADE,
+    updated_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT engines_name_check CHECK (name REGEXP '^[a-z][a-z0-9_-]{0,62}$'),
+    CONSTRAINT engines_name_key UNIQUE (name(255)),
+    CONSTRAINT engines_class_check CHECK (class IN ('federated', 'direct')),
+    CONSTRAINT engines_connection_id_fkey FOREIGN KEY (connection_id) REFERENCES catalog_connections (id) ON DELETE RESTRICT,
+    CONSTRAINT engines_connection_id_key UNIQUE (connection_id),
+    CONSTRAINT engines_identity_mode_check CHECK (identity_mode IN ('impersonation', 'connection', 'per_user')),
+    CONSTRAINT engines_created_by_fkey FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE trino_clusters ADD COLUMN IF NOT EXISTS engine_id CHAR(36) UNIQUE,
+    ADD CONSTRAINT trino_clusters_engine_id_fkey FOREIGN KEY (engine_id) REFERENCES engines (id) ON DELETE RESTRICT;
+ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT ('source'),
+    ADD COLUMN IF NOT EXISTS source_ref TEXT,
+    ADD CONSTRAINT catalogs_origin_check CHECK (origin IN ('source', 'native'));
+CREATE TABLE catalog_bindings (id                  CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    catalog_id          CHAR(36) NOT NULL,
+    engine_id           CHAR(36) NOT NULL,
     engine_catalog_name TEXT NOT NULL,
     connector           TEXT,
-    extra_props         JSON NOT NULL DEFAULT '{}',
-    mode                TEXT NOT NULL CHECK (mode IN ('managed', 'adopted', 'native')),
+    extra_props         JSON NOT NULL DEFAULT ('[]'),
+    mode                TEXT NOT NULL,
     enabled             BOOLEAN NOT NULL DEFAULT true,
     created_at          DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at          DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    UNIQUE (engine_id, engine_catalog_name),
-    UNIQUE (catalog_id, engine_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX catalog_bindings_catalog_idx ON catalog_bindings (catalog_id);
-
-DO $baleia$
-DECLARE
-    tc        RECORD;
-    conn_name TEXT;
-    eng_name  TEXT;
-    n         INT;
-    conn_id   CHAR(36);
-    eng_id    CHAR(36);
-BEGIN
-    FOR tc IN SELECT * FROM trino_clusters WHERE engine_id IS NULL ORDER BY created_at LOOP
-        conn_name := 'trino-' || tc.name;
-        n := 1;
-        WHILE EXISTS (SELECT 1 FROM catalog_connections WHERE name = conn_name) LOOP
-            n := n + 1;
-            conn_name := 'trino-' || tc.name || '-' || n;
-        END LOOP;
-
-        eng_name := lower(regexp_replace(tc.name, '[^a-zA-Z0-9_-]', '_', 'g'));
-        IF eng_name !~ '^[a-z]' THEN
-            eng_name := 'trino_' || eng_name;
-        END IF;
-        eng_name := left(eng_name, 60);
-        n := 1;
-        WHILE EXISTS (SELECT 1 FROM engines WHERE name = eng_name) LOOP
-            n := n + 1;
-            eng_name := left(eng_name, 56) || '-' || n;
-        END LOOP;
-
-        
-
-        
-
-        
-    END LOOP;
-END
-$baleia$;
-
-CREATE FUNCTION catalogs_set_source_ref() RETURNS trigger
-LANGUAGE plpgsql AS $baleia$
-BEGIN
-    IF NEW.origin = 'source' THEN
-        NEW.source_ref := NEW.warehouse;
-    END IF;
-    RETURN NEW;
-END
-$baleia$;
-CREATE FUNCTION catalogs_upsert_managed_binding() RETURNS trigger
-LANGUAGE plpgsql AS $baleia$
-DECLARE
-    eng CHAR(36);
-BEGIN
-    IF NEW.origin <> 'source' THEN
-        RETURN NULL;
-    END IF;
-    SELECT engine_id INTO eng FROM trino_clusters WHERE id = NEW.cluster_id;
-    IF eng IS NULL THEN
-        RETURN NULL;
-    END IF;
-    
-    
-    
-    RETURN NULL;
-END
-$baleia$;
-
-ALTER TABLE workspaces
-    ADD COLUMN default_binding_id CHAR(36) REFERENCES catalog_bindings (id) ON DELETE SET NULL,
-    ADD COLUMN default_schema     TEXT;
-
-ALTER TABLE query_executions
-    ADD COLUMN engine_id         CHAR(36) REFERENCES engines (id) ON DELETE SET NULL,
-    ADD COLUMN target_binding_id CHAR(36) REFERENCES catalog_bindings (id) ON DELETE SET NULL,
-    ADD COLUMN target_catalog_id CHAR(36) REFERENCES catalogs (id) ON DELETE SET NULL,
-    ADD COLUMN target_schema     TEXT,
-    ADD COLUMN target_snapshot   JSON;
-
-UPDATE query_executions qe
-SET target_binding_id = b.id,
-    target_catalog_id = b.catalog_id,
-    engine_id         = b.engine_id,
-    target_snapshot   = jsonb_build_object(
-        'engine_kind', 'trino', 'engine_name', e.name,
-        'catalog_name', c.name, 'engine_catalog', qe.trino_catalog, 'schema', NULL)
-FROM catalog_bindings b
-JOIN engines e ON e.id = b.engine_id
-JOIN trino_clusters tc ON tc.engine_id = e.id
-JOIN catalogs c ON c.id = b.catalog_id
-WHERE tc.name = 'default' AND b.engine_catalog_name = qe.trino_catalog;
-`
+    UNIQUE (engine_id, engine_catalog_name(255)),
+    UNIQUE (catalog_id, engine_id),
+    CONSTRAINT catalog_bindings_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES catalogs (id) ON DELETE CASCADE,
+    CONSTRAINT catalog_bindings_engine_id_fkey FOREIGN KEY (engine_id) REFERENCES engines (id) ON DELETE CASCADE,
+    CONSTRAINT catalog_bindings_mode_check CHECK (mode IN ('managed', 'adopted', 'native'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS catalog_bindings_catalog_idx ON catalog_bindings (catalog_id);
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS default_binding_id CHAR(36),
+    ADD COLUMN IF NOT EXISTS default_schema TEXT,
+    ADD CONSTRAINT workspaces_default_binding_id_fkey FOREIGN KEY (default_binding_id) REFERENCES catalog_bindings (id) ON DELETE SET NULL;
+ALTER TABLE query_executions ADD COLUMN IF NOT EXISTS engine_id CHAR(36),
+    ADD COLUMN IF NOT EXISTS target_binding_id CHAR(36),
+    ADD COLUMN IF NOT EXISTS target_catalog_id CHAR(36),
+    ADD COLUMN IF NOT EXISTS target_schema TEXT,
+    ADD COLUMN IF NOT EXISTS target_snapshot JSON,
+    ADD CONSTRAINT query_executions_engine_id_fkey FOREIGN KEY (engine_id) REFERENCES engines (id) ON DELETE SET NULL,
+    ADD CONSTRAINT query_executions_target_binding_id_fkey FOREIGN KEY (target_binding_id) REFERENCES catalog_bindings (id) ON DELETE SET NULL,
+    ADD CONSTRAINT query_executions_target_catalog_id_fkey FOREIGN KEY (target_catalog_id) REFERENCES catalogs (id) ON DELETE SET NULL;`
 
 const down00024Postgres = `
 ALTER TABLE query_executions
@@ -355,36 +276,18 @@ WHERE type = 'trino' AND created_by IS NULL
   AND id IN (SELECT connection_id FROM baleia_engine_connections);
 `
 
-const down00024MySQL = `
-ALTER TABLE query_executions
-    DROP COLUMN target_snapshot,
-    DROP COLUMN target_schema,
-    DROP COLUMN target_catalog_id,
-    DROP COLUMN target_binding_id,
-    DROP COLUMN engine_id;
-
-ALTER TABLE workspaces
-    DROP COLUMN default_schema,
-    DROP COLUMN default_binding_id;
-
-DROP TRIGGER IF EXISTS catalogs_upsert_managed_binding ON catalogs;
-DROP TRIGGER IF EXISTS catalogs_set_source_ref ON catalogs;
-DROP FUNCTION IF EXISTS catalogs_upsert_managed_binding();
-DROP FUNCTION IF EXISTS catalogs_set_source_ref();
-
+const down00024MySQL = `ALTER TABLE query_executions DROP COLUMN IF EXISTS target_snapshot,
+    DROP COLUMN IF EXISTS target_schema,
+    DROP COLUMN IF EXISTS target_catalog_id,
+    DROP COLUMN IF EXISTS target_binding_id,
+    DROP COLUMN IF EXISTS engine_id;
+ALTER TABLE workspaces DROP COLUMN IF EXISTS default_schema,
+    DROP COLUMN IF EXISTS default_binding_id;
 DROP TABLE IF EXISTS catalog_bindings;
-
-ALTER TABLE catalogs
-    DROP COLUMN source_ref,
-    DROP COLUMN origin;
-
-ALTER TABLE trino_clusters DROP COLUMN engine_id;
-
-CREATE TEMP TABLE baleia_engine_connections ON COMMIT DROP AS
-    SELECT connection_id FROM engines WHERE kind = 'trino';
-
-DROP TABLE IF EXISTS engines;
-`
+ALTER TABLE catalogs DROP COLUMN IF EXISTS source_ref,
+    DROP COLUMN IF EXISTS origin;
+ALTER TABLE trino_clusters DROP COLUMN IF EXISTS engine_id;
+DROP TABLE IF EXISTS engines;`
 
 func up00024(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00024Postgres, up00024MySQL)

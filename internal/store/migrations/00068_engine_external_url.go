@@ -16,17 +16,13 @@ const up00068Postgres = `
 ALTER TABLE engines ADD COLUMN external_url TEXT;
 `
 
-const up00068MySQL = `
-ALTER TABLE engines ADD COLUMN external_url TEXT;
-`
+const up00068MySQL = `ALTER TABLE engines ADD COLUMN IF NOT EXISTS external_url TEXT;`
 
 const down00068Postgres = `
 ALTER TABLE engines DROP COLUMN IF EXISTS external_url;
 `
 
-const down00068MySQL = `
-ALTER TABLE engines DROP COLUMN external_url;
-`
+const down00068MySQL = `ALTER TABLE engines DROP COLUMN IF EXISTS external_url;`
 
 func up00068(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00068Postgres, up00068MySQL)

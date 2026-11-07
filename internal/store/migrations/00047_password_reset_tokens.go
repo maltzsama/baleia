@@ -32,22 +32,16 @@ ALTER TABLE users
     DROP COLUMN IF EXISTS password_reset_expires_at;
 `
 
-const up00047MySQL = `
-CREATE TABLE password_reset_tokens (
-    token_hash TEXT PRIMARY KEY,
-    user_id    CHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+const up00047MySQL = `CREATE TABLE password_reset_tokens (token_hash VARCHAR(255) PRIMARY KEY,
+    user_id    CHAR(36) NOT NULL,
     expires_at DATETIME(6) NOT NULL,
     used_at    DATETIME(6),
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
-CREATE INDEX idx_password_reset_tokens_expires_at ON password_reset_tokens(expires_at);
-
-ALTER TABLE users
-    DROP COLUMN password_reset_token,
-    DROP COLUMN password_reset_expires_at;
-`
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT password_reset_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at ON password_reset_tokens(expires_at);
+ALTER TABLE users DROP COLUMN IF EXISTS password_reset_token,
+    DROP COLUMN IF EXISTS password_reset_expires_at;`
 
 const down00047Postgres = `
 ALTER TABLE users
@@ -57,13 +51,9 @@ ALTER TABLE users
 DROP TABLE IF EXISTS password_reset_tokens;
 `
 
-const down00047MySQL = `
-ALTER TABLE users
-    ADD COLUMN password_reset_token TEXT,
-    ADD COLUMN password_reset_expires_at DATETIME(6);
-
-DROP TABLE IF EXISTS password_reset_tokens;
-`
+const down00047MySQL = `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT,
+    ADD COLUMN IF NOT EXISTS password_reset_expires_at DATETIME(6);
+DROP TABLE IF EXISTS password_reset_tokens;`
 
 func up00047(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00047Postgres, up00047MySQL)

@@ -42,45 +42,39 @@ CREATE TABLE statement_joins (
 CREATE INDEX statement_joins_workspace ON statement_joins (workspace_id);
 `
 
-const up00067MySQL = `
-CREATE TABLE statement_references (
-    statement_id CHAR(36) NOT NULL REFERENCES query_statements (id) ON DELETE CASCADE,
-    workspace_id CHAR(36) NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
-    
-    catalog_id   CHAR(36) REFERENCES catalogs (id) ON DELETE SET NULL,
-    namespace    TEXT NOT NULL DEFAULT '',
+const up00067MySQL = `CREATE TABLE statement_references (statement_id CHAR(36) NOT NULL,
+    workspace_id CHAR(36) NOT NULL,
+    catalog_id   CHAR(36),
+    namespace    TEXT NOT NULL DEFAULT (''),
     table_name   TEXT NOT NULL,
-    alias        TEXT NOT NULL DEFAULT '',
-    kind         TEXT NOT NULL DEFAULT 'read' CHECK (kind IN ('read', 'write')),
-    PRIMARY KEY (statement_id, namespace, table_name, alias)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX statement_references_workspace_table
-    ON statement_references (workspace_id, namespace, table_name);
-CREATE INDEX statement_references_statement ON statement_references (statement_id);
-
-CREATE TABLE statement_joins (
-    statement_id CHAR(36) NOT NULL REFERENCES query_statements (id) ON DELETE CASCADE,
-    workspace_id CHAR(36) NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+    alias        TEXT NOT NULL DEFAULT (''),
+    kind         TEXT NOT NULL DEFAULT ('read'),
+    PRIMARY KEY (statement_id, namespace(244), table_name(244), alias(244)),
+    CONSTRAINT statement_references_statement_id_fkey FOREIGN KEY (statement_id) REFERENCES query_statements (id) ON DELETE CASCADE,
+    CONSTRAINT statement_references_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
+    CONSTRAINT statement_references_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES catalogs (id) ON DELETE SET NULL,
+    CONSTRAINT statement_references_kind_check CHECK (kind IN ('read', 'write'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS statement_references_workspace_table
+    ON statement_references (workspace_id, namespace(255), table_name(255));
+CREATE INDEX IF NOT EXISTS statement_references_statement ON statement_references (statement_id);
+CREATE TABLE statement_joins (statement_id CHAR(36) NOT NULL,
+    workspace_id CHAR(36) NOT NULL,
     left_alias   TEXT NOT NULL,
     left_column  TEXT NOT NULL,
     right_alias  TEXT NOT NULL,
     right_column TEXT NOT NULL,
-    PRIMARY KEY (statement_id, left_alias, left_column, right_alias, right_column)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX statement_joins_workspace ON statement_joins (workspace_id);
-`
+    PRIMARY KEY (statement_id, left_alias(183), left_column(183), right_alias(183), right_column(183)),
+    CONSTRAINT statement_joins_statement_id_fkey FOREIGN KEY (statement_id) REFERENCES query_statements (id) ON DELETE CASCADE,
+    CONSTRAINT statement_joins_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS statement_joins_workspace ON statement_joins (workspace_id);`
 
 const down00067Postgres = `
 DROP TABLE IF EXISTS statement_joins;
 DROP TABLE IF EXISTS statement_references;
 `
 
-const down00067MySQL = `
-DROP TABLE IF EXISTS statement_joins;
-DROP TABLE IF EXISTS statement_references;
-`
+const down00067MySQL = `DROP TABLE IF EXISTS statement_joins;
+DROP TABLE IF EXISTS statement_references;`
 
 func up00067(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00067Postgres, up00067MySQL)

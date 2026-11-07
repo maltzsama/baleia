@@ -88,17 +88,17 @@ $$;
 
 `
 
-const up00075MySQL = `
-CREATE TABLE workspace_members (
-    workspace_id CHAR(36)        NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
-    user_id      CHAR(36)        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    role         TEXT        NOT NULL CHECK (role IN ('admin', 'editor', 'viewer')),
-    granted_by   CHAR(36)        REFERENCES users (id) ON DELETE SET NULL,
+const up00075MySQL = `CREATE TABLE workspace_members (workspace_id CHAR(36)        NOT NULL,
+    user_id      CHAR(36)        NOT NULL,
+    role         TEXT        NOT NULL,
+    granted_by   CHAR(36),
     granted_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    PRIMARY KEY (workspace_id, user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE INDEX workspace_members_user ON workspace_members (user_id);
-`
+    PRIMARY KEY (workspace_id, user_id),
+    CONSTRAINT workspace_members_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
+    CONSTRAINT workspace_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT workspace_members_role_check CHECK (role IN ('admin', 'editor', 'viewer')),
+    CONSTRAINT workspace_members_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES users (id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS workspace_members_user ON workspace_members (user_id);`
 
 const down00075Postgres = `
 CREATE OR REPLACE FUNCTION baleia_effective_space_role(ws_id UUID, sp_id UUID, usr_id UUID)
@@ -147,10 +147,7 @@ DROP FUNCTION baleia_workspace_member_role(UUID, UUID);
 DROP TABLE workspace_members;
 `
 
-const down00075MySQL = `
-DROP FUNCTION baleia_workspace_member_role(CHAR(36), CHAR(36));
-DROP TABLE workspace_members;
-`
+const down00075MySQL = `DROP TABLE workspace_members;`
 
 func up00075(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00075Postgres, up00075MySQL)

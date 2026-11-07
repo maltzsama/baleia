@@ -20,20 +20,16 @@ CREATE INDEX IF NOT EXISTS query_executions_ws_started
     ON query_executions (workspace_id, started_at DESC, id DESC);
 `
 
-const up00040MySQL = `
-CREATE INDEX query_executions_ws_started
-    ON query_executions (workspace_id, started_at DESC, id DESC);
-`
+const up00040MySQL = `CREATE INDEX IF NOT EXISTS query_executions_ws_started
+    ON query_executions (workspace_id, started_at DESC, id DESC);`
 
 const down00040Postgres = `
 DROP INDEX IF EXISTS query_executions_ws_started;
 DROP INDEX IF EXISTS query_executions_sql_trgm;
 `
 
-const down00040MySQL = `
-DROP INDEX IF EXISTS query_executions_ws_started;
-DROP INDEX IF EXISTS query_executions_sql_trgm;
-`
+const down00040MySQL = `DROP INDEX IF EXISTS query_executions_ws_started;
+DROP INDEX IF EXISTS query_executions_sql_trgm;`
 
 func up00040(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00040Postgres, up00040MySQL)

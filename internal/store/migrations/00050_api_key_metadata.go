@@ -24,12 +24,9 @@ ALTER TABLE api_keys
 UPDATE api_keys SET prefix = LEFT(key_hash, 8) WHERE prefix = '';
 `
 
-const up00050MySQL = `
-ALTER TABLE api_keys
-    ADD COLUMN prefix       TEXT        NOT NULL DEFAULT '',
-    ADD COLUMN scopes       JSON      NOT NULL DEFAULT ARRAY['*'],
-    ADD COLUMN last_used_at DATETIME(6);
-`
+const up00050MySQL = `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS prefix TEXT        NOT NULL DEFAULT (''),
+    ADD COLUMN IF NOT EXISTS scopes JSON      NOT NULL DEFAULT ('["*"]'),
+    ADD COLUMN IF NOT EXISTS last_used_at DATETIME(6);`
 
 const down00050Postgres = `
 ALTER TABLE api_keys
@@ -38,12 +35,9 @@ ALTER TABLE api_keys
     DROP COLUMN IF EXISTS prefix;
 `
 
-const down00050MySQL = `
-ALTER TABLE api_keys
-    DROP COLUMN last_used_at,
-    DROP COLUMN scopes,
-    DROP COLUMN prefix;
-`
+const down00050MySQL = `ALTER TABLE api_keys DROP COLUMN IF EXISTS last_used_at,
+    DROP COLUMN IF EXISTS scopes,
+    DROP COLUMN IF EXISTS prefix;`
 
 func up00050(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00050Postgres, up00050MySQL)

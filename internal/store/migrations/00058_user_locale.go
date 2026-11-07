@@ -20,13 +20,9 @@ ALTER TABLE users ADD CONSTRAINT users_locale_check
     CHECK (locale IN ('en', 'pt-BR'));
 `
 
-const up00058MySQL = `
-ALTER TABLE users
-    ADD COLUMN locale TEXT;
-
+const up00058MySQL = `ALTER TABLE users ADD COLUMN IF NOT EXISTS locale TEXT;
 ALTER TABLE users ADD CONSTRAINT users_locale_check
-    CHECK (locale IN ('en', 'pt-BR'));
-`
+    CHECK (locale IN ('en', 'pt-BR'));`
 
 const down00058Postgres = `
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_locale_check;
@@ -34,11 +30,8 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_locale_check;
 ALTER TABLE users DROP COLUMN IF EXISTS locale;
 `
 
-const down00058MySQL = `
-ALTER TABLE users DROP CONSTRAINT users_locale_check;
-
-ALTER TABLE users DROP COLUMN locale;
-`
+const down00058MySQL = `ALTER TABLE users DROP CONSTRAINT IF EXISTS users_locale_check;
+ALTER TABLE users DROP COLUMN IF EXISTS locale;`
 
 func up00058(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00058Postgres, up00058MySQL)

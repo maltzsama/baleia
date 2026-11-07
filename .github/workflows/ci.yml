@@ -32,6 +32,49 @@ jobs:
         # Tests are independent and parallel (#374): a random order keeps them so.
         run: go test -race -shuffle=on ./...
 
+  # The metadata store must apply and roll back on every supported backend
+  # (ADR 0020, #759). PostgreSQL is covered by the Test job.
+  store-mysql:
+    name: Store (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: mysql
+            image: mysql:8.4
+            env:
+              MYSQL_ROOT_PASSWORD: baleia_dev
+              MYSQL_DATABASE: baleia
+            url: mysql://root:baleia_dev@127.0.0.1:3306/baleia
+          - name: mariadb
+            image: mariadb:11.4
+            env:
+              MARIADB_ROOT_PASSWORD: baleia_dev
+              MARIADB_DATABASE: baleia
+            url: mariadb://root:baleia_dev@127.0.0.1:3306/baleia
+    services:
+      db:
+        image: ${{ matrix.image }}
+        env: ${{ matrix.env }}
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pbaleia_dev"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply and roll back the migrations
+        env:
+          DATABASE_URL: ${{ matrix.url }}
+        run: |
+          go run ./cmd/migrate -cmd=up
+          go run ./cmd/migrate -cmd=status
+          go run ./cmd/migrate -cmd=down
+
   # Existing findings are a baseline: only new issues fail the job (#369). A
   # pull request is compared with its merge base on main; a push with the
   # commit before it (a branch's first push has none and falls back).

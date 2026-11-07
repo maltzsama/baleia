@@ -50,55 +50,52 @@ CREATE INDEX idx_retriever_refresh_retriever  ON retriever_refresh_history (retr
 CREATE INDEX idx_retriever_refresh_status     ON retriever_refresh_history (status);
 `
 
-const up00006MySQL = `
-CREATE TABLE retrievers (
-    id               CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    workspace_id     CHAR(36)          NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
-    created_by       CHAR(36)          NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+const up00006MySQL = `CREATE TABLE retrievers (id               CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    workspace_id     CHAR(36)          NOT NULL,
+    created_by       CHAR(36)          NOT NULL,
     name             TEXT        NOT NULL,
     definition_sql   TEXT          NOT NULL,
     dest_catalog     TEXT        NOT NULL,
     dest_namespace   TEXT        NOT NULL,
     dest_table       TEXT        NOT NULL,
     cron_schedule    TEXT        NOT NULL,
-    refresh_type     TEXT        NOT NULL DEFAULT 'incremental' CHECK (refresh_type IN ('incremental', 'full')),
-    status           TEXT        NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'error')),
+    refresh_type     TEXT        NOT NULL DEFAULT ('incremental'),
+    status           TEXT        NOT NULL DEFAULT ('active'),
     last_refresh_at  DATETIME(6),
     next_refresh_at  DATETIME(6),
     created_at       DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at       DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    UNIQUE (workspace_id, name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE retriever_refresh_history (
-    id                   CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    retriever_id         CHAR(36)          NOT NULL REFERENCES retrievers (id) ON DELETE CASCADE,
+    UNIQUE (workspace_id, name(255)),
+    CONSTRAINT retrievers_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
+    CONSTRAINT retrievers_created_by_fkey FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE RESTRICT,
+    CONSTRAINT retrievers_refresh_type_check CHECK (refresh_type IN ('incremental', 'full')),
+    CONSTRAINT retrievers_status_check CHECK (status IN ('active', 'paused', 'error'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE retriever_refresh_history (id                   CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    retriever_id         CHAR(36)          NOT NULL,
     temporal_workflow_id TEXT        NOT NULL,
-    refresh_type         TEXT        NOT NULL CHECK (refresh_type IN ('incremental', 'full')),
-    status               TEXT        NOT NULL CHECK (status IN ('running', 'finished', 'failed')),
+    refresh_type         TEXT        NOT NULL,
+    status               TEXT        NOT NULL,
     rows_processed       BIGINT,
     duration_ms          BIGINT,
     error_message        TEXT,
     started_at           DATETIME(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    finished_at          DATETIME(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX idx_retrievers_workspace         ON retrievers (workspace_id);
-CREATE INDEX idx_retrievers_status            ON retrievers (status);
-CREATE INDEX idx_retrievers_next_refresh_at   ON retrievers (next_refresh_at);
-CREATE INDEX idx_retriever_refresh_retriever  ON retriever_refresh_history (retriever_id);
-CREATE INDEX idx_retriever_refresh_status     ON retriever_refresh_history (status);
-`
+    finished_at          DATETIME(6),
+    CONSTRAINT retriever_refresh_history_retriever_id_fkey FOREIGN KEY (retriever_id) REFERENCES retrievers (id) ON DELETE CASCADE,
+    CONSTRAINT retriever_refresh_history_refresh_type_check CHECK (refresh_type IN ('incremental', 'full')),
+    CONSTRAINT retriever_refresh_history_status_check CHECK (status IN ('running', 'finished', 'failed'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS idx_retrievers_workspace         ON retrievers (workspace_id);
+CREATE INDEX IF NOT EXISTS idx_retrievers_status            ON retrievers (status(255));
+CREATE INDEX IF NOT EXISTS idx_retrievers_next_refresh_at   ON retrievers (next_refresh_at);
+CREATE INDEX IF NOT EXISTS idx_retriever_refresh_retriever  ON retriever_refresh_history (retriever_id);
+CREATE INDEX IF NOT EXISTS idx_retriever_refresh_status     ON retriever_refresh_history (status(255));`
 
 const down00006Postgres = `
 DROP TABLE IF EXISTS retriever_refresh_history;
 DROP TABLE IF EXISTS retrievers;
 `
 
-const down00006MySQL = `
-DROP TABLE IF EXISTS retriever_refresh_history;
-DROP TABLE IF EXISTS retrievers;
-`
+const down00006MySQL = `DROP TABLE IF EXISTS retriever_refresh_history;
+DROP TABLE IF EXISTS retrievers;`
 
 func up00006(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00006Postgres, up00006MySQL)

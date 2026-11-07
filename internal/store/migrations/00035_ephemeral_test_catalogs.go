@@ -24,20 +24,16 @@ CREATE INDEX trino_catalog_registry_expires ON trino_catalog_registry (expires_a
 UPDATE trino_catalog_registry SET expires_at = now() WHERE catalog_name LIKE 'baleia\_test\_%';
 `
 
-const up00035MySQL = `
-ALTER TABLE trino_catalog_registry ADD COLUMN expires_at DATETIME(6);
-CREATE INDEX trino_catalog_registry_expires ON trino_catalog_registry (expires_at) WHERE expires_at IS NOT NULL;
-`
+const up00035MySQL = `ALTER TABLE trino_catalog_registry ADD COLUMN IF NOT EXISTS expires_at DATETIME(6);
+CREATE INDEX IF NOT EXISTS trino_catalog_registry_expires ON trino_catalog_registry (expires_at);`
 
 const down00035Postgres = `
 DROP INDEX IF EXISTS trino_catalog_registry_expires;
 ALTER TABLE trino_catalog_registry DROP COLUMN IF EXISTS expires_at;
 `
 
-const down00035MySQL = `
-DROP INDEX IF EXISTS trino_catalog_registry_expires;
-ALTER TABLE trino_catalog_registry DROP COLUMN expires_at;
-`
+const down00035MySQL = `DROP INDEX IF EXISTS trino_catalog_registry_expires;
+ALTER TABLE trino_catalog_registry DROP COLUMN IF EXISTS expires_at;`
 
 func up00035(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00035Postgres, up00035MySQL)

@@ -32,29 +32,24 @@ CREATE INDEX metadata_foreign_keys_catalog ON metadata_foreign_keys (catalog_id)
 CREATE INDEX metadata_foreign_keys_ref ON metadata_foreign_keys (catalog_id, ref_namespace, ref_table);
 `
 
-const up00069MySQL = `
-CREATE TABLE metadata_foreign_keys (
-    catalog_id    CHAR(36)        NOT NULL REFERENCES catalogs (id) ON DELETE CASCADE,
-    table_id      CHAR(36)        NOT NULL REFERENCES metadata_tables (id) ON DELETE CASCADE,
+const up00069MySQL = `CREATE TABLE metadata_foreign_keys (catalog_id    CHAR(36)        NOT NULL,
+    table_id      CHAR(36)        NOT NULL,
     column_name   TEXT        NOT NULL,
-    ref_namespace JSON      NOT NULL,
+    ref_namespace VARCHAR(255)      NOT NULL,
     ref_table     TEXT        NOT NULL,
     ref_column    TEXT        NOT NULL,
     last_seen_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    PRIMARY KEY (table_id, column_name, ref_namespace, ref_table, ref_column)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX metadata_foreign_keys_catalog ON metadata_foreign_keys (catalog_id);
-CREATE INDEX metadata_foreign_keys_ref ON metadata_foreign_keys (catalog_id, ref_namespace, ref_table);
-`
+    PRIMARY KEY (table_id, column_name(159), ref_namespace, ref_table(159), ref_column(159)),
+    CONSTRAINT metadata_foreign_keys_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES catalogs (id) ON DELETE CASCADE,
+    CONSTRAINT metadata_foreign_keys_table_id_fkey FOREIGN KEY (table_id) REFERENCES metadata_tables (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS metadata_foreign_keys_catalog ON metadata_foreign_keys (catalog_id);
+CREATE INDEX IF NOT EXISTS metadata_foreign_keys_ref ON metadata_foreign_keys (catalog_id, ref_namespace(255), ref_table(255));`
 
 const down00069Postgres = `
 DROP TABLE IF EXISTS metadata_foreign_keys;
 `
 
-const down00069MySQL = `
-DROP TABLE IF EXISTS metadata_foreign_keys;
-`
+const down00069MySQL = `DROP TABLE IF EXISTS metadata_foreign_keys;`
 
 func up00069(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00069Postgres, up00069MySQL)

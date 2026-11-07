@@ -78,62 +78,50 @@ CREATE TABLE metadata_sync_runs (
 CREATE INDEX metadata_sync_runs_catalog ON metadata_sync_runs (catalog_id, started_at DESC);
 `
 
-const up00032MySQL = `
-CREATE TABLE metadata_namespaces (
-    catalog_id    CHAR(36)        NOT NULL REFERENCES catalogs (id) ON DELETE CASCADE,
-    namespace     JSON      NOT NULL,
+const up00032MySQL = `CREATE TABLE metadata_namespaces (catalog_id    CHAR(36)        NOT NULL,
+    namespace     VARCHAR(255)      NOT NULL,
     last_seen_at  DATETIME(6) NOT NULL,
     removed_at    DATETIME(6),
-    PRIMARY KEY (catalog_id, namespace)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE metadata_tables (
-    id               CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    catalog_id       CHAR(36)        NOT NULL REFERENCES catalogs (id) ON DELETE CASCADE,
-    namespace        JSON      NOT NULL,
+    PRIMARY KEY (catalog_id, namespace),
+    CONSTRAINT metadata_namespaces_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES catalogs (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE metadata_tables (id               CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    catalog_id       CHAR(36)        NOT NULL,
+    namespace        VARCHAR(255)      NOT NULL,
     name             TEXT        NOT NULL,
-    kind             TEXT        NOT NULL CHECK (kind IN ('table', 'view', 'materialized_view')),
-    
-    
+    kind             TEXT        NOT NULL,
     fingerprint      TEXT        NOT NULL,
-    
-    properties       JSON       NOT NULL DEFAULT '{}',
+    properties       JSON       NOT NULL DEFAULT ('[]'),
     comment          TEXT,
     last_seen_at     DATETIME(6) NOT NULL,
     last_changed_at  DATETIME(6) NOT NULL,
     removed_at       DATETIME(6),
-    UNIQUE (catalog_id, namespace, name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE metadata_columns (
-    table_id     CHAR(36)    NOT NULL REFERENCES metadata_tables (id) ON DELETE CASCADE,
+    UNIQUE (catalog_id, namespace, name(255)),
+    CONSTRAINT metadata_tables_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES catalogs (id) ON DELETE CASCADE,
+    CONSTRAINT metadata_tables_kind_check CHECK (kind IN ('table', 'view', 'materialized_view'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE metadata_columns (table_id     CHAR(36)    NOT NULL,
     ordinal      INT     NOT NULL,
     name         TEXT    NOT NULL,
-    
     native_type  TEXT    NOT NULL,
     type_system  TEXT    NOT NULL,
     nullable     BOOLEAN,
     comment      TEXT,
-    PRIMARY KEY (table_id, ordinal)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE metadata_sync_runs (
-    id              CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    catalog_id      CHAR(36)        NOT NULL REFERENCES catalogs (id) ON DELETE CASCADE,
+    PRIMARY KEY (table_id, ordinal),
+    CONSTRAINT metadata_columns_table_id_fkey FOREIGN KEY (table_id) REFERENCES metadata_tables (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE metadata_sync_runs (id              CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    catalog_id      CHAR(36)        NOT NULL,
     started_at      DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     finished_at     DATETIME(6),
-    status          TEXT        NOT NULL CHECK (status IN ('running', 'finished', 'failed')),
+    status          TEXT        NOT NULL,
     tables_seen     INT,
     tables_changed  INT,
     tables_removed  INT,
     error_code      TEXT,
     error_message   TEXT,
-    
-    
-    source_path     TEXT        NOT NULL CHECK (source_path IN ('provider', 'engine'))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE INDEX metadata_sync_runs_catalog ON metadata_sync_runs (catalog_id, started_at DESC);
-`
+    source_path     TEXT        NOT NULL,
+    CONSTRAINT metadata_sync_runs_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES catalogs (id) ON DELETE CASCADE,
+    CONSTRAINT metadata_sync_runs_status_check CHECK (status IN ('running', 'finished', 'failed')),
+    CONSTRAINT metadata_sync_runs_source_path_check CHECK (source_path IN ('provider', 'engine'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS metadata_sync_runs_catalog ON metadata_sync_runs (catalog_id, started_at DESC);`
 
 const down00032Postgres = `
 DROP TABLE IF EXISTS metadata_sync_runs;
@@ -142,12 +130,10 @@ DROP TABLE IF EXISTS metadata_tables;
 DROP TABLE IF EXISTS metadata_namespaces;
 `
 
-const down00032MySQL = `
-DROP TABLE IF EXISTS metadata_sync_runs;
+const down00032MySQL = `DROP TABLE IF EXISTS metadata_sync_runs;
 DROP TABLE IF EXISTS metadata_columns;
 DROP TABLE IF EXISTS metadata_tables;
-DROP TABLE IF EXISTS metadata_namespaces;
-`
+DROP TABLE IF EXISTS metadata_namespaces;`
 
 func up00032(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00032Postgres, up00032MySQL)

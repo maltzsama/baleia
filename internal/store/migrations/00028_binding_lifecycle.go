@@ -68,32 +68,22 @@ LEFT JOIN trino_catalog_registry r ON r.cluster_id = tc.id AND r.catalog_name = 
 LEFT JOIN engine_catalog_observations o ON o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name;
 `
 
-const up00028MySQL = `
-ALTER TABLE catalog_bindings
-    ADD COLUMN lifecycle_state    TEXT NOT NULL DEFAULT 'active'
-        CHECK (lifecycle_state IN ('provisioning', 'active', 'updating', 'error', 'deprovisioning', 'disabled')),
-    ADD COLUMN desired_version    TEXT,
-    ADD COLUMN last_error_code    TEXT,
-    ADD COLUMN last_error_message TEXT,
-    ADD COLUMN state_changed_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6);
-
-UPDATE catalog_bindings b
-   SET desired_version = r.catalog_version
-  FROM trino_clusters tc, trino_catalog_registry r
- WHERE b.mode = 'managed' AND tc.engine_id = b.engine_id
-   AND r.cluster_id = tc.id AND r.catalog_name = b.engine_catalog_name;
-
-CREATE TABLE engine_catalog_observations (
-    engine_id     CHAR(36) NOT NULL REFERENCES engines (id) ON DELETE CASCADE,
+const up00028MySQL = `ALTER TABLE catalog_bindings ADD COLUMN IF NOT EXISTS lifecycle_state TEXT NOT NULL DEFAULT ('active'),
+    ADD COLUMN IF NOT EXISTS desired_version TEXT,
+    ADD COLUMN IF NOT EXISTS last_error_code TEXT,
+    ADD COLUMN IF NOT EXISTS last_error_message TEXT,
+    ADD COLUMN IF NOT EXISTS state_changed_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    ADD CONSTRAINT catalog_bindings_lifecycle_state_check CHECK (lifecycle_state IN ('provisioning', 'active', 'updating', 'error', 'deprovisioning', 'disabled'));
+CREATE TABLE engine_catalog_observations (engine_id     CHAR(36) NOT NULL,
     catalog_name  TEXT NOT NULL,
     present       BOOLEAN NOT NULL,
-    mode          TEXT NOT NULL CHECK (mode IN ('managed', 'adopted', 'native')),
+    mode          TEXT NOT NULL,
     connector     TEXT,
     first_seen_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     observed_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    PRIMARY KEY (engine_id, catalog_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+    PRIMARY KEY (engine_id, catalog_name(255)),
+    CONSTRAINT engine_catalog_observations_engine_id_fkey FOREIGN KEY (engine_id) REFERENCES engines (id) ON DELETE CASCADE,
+    CONSTRAINT engine_catalog_observations_mode_check CHECK (mode IN ('managed', 'adopted', 'native'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE VIEW binding_status_v AS
 SELECT b.id AS binding_id,
        b.lifecycle_state,
@@ -109,8 +99,7 @@ SELECT b.id AS binding_id,
 FROM catalog_bindings b
 LEFT JOIN trino_clusters tc ON tc.engine_id = b.engine_id
 LEFT JOIN trino_catalog_registry r ON r.cluster_id = tc.id AND r.catalog_name = b.engine_catalog_name
-LEFT JOIN engine_catalog_observations o ON o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name;
-`
+LEFT JOIN engine_catalog_observations o ON o.engine_id = b.engine_id AND o.catalog_name = b.engine_catalog_name;`
 
 const down00028Postgres = `
 DROP VIEW binding_status_v;
@@ -123,16 +112,13 @@ ALTER TABLE catalog_bindings
     DROP COLUMN lifecycle_state;
 `
 
-const down00028MySQL = `
-DROP VIEW binding_status_v;
+const down00028MySQL = `DROP VIEW binding_status_v;
 DROP TABLE engine_catalog_observations;
-ALTER TABLE catalog_bindings
-    DROP COLUMN state_changed_at,
-    DROP COLUMN last_error_message,
-    DROP COLUMN last_error_code,
-    DROP COLUMN desired_version,
-    DROP COLUMN lifecycle_state;
-`
+ALTER TABLE catalog_bindings DROP COLUMN IF EXISTS state_changed_at,
+    DROP COLUMN IF EXISTS last_error_message,
+    DROP COLUMN IF EXISTS last_error_code,
+    DROP COLUMN IF EXISTS desired_version,
+    DROP COLUMN IF EXISTS lifecycle_state;`
 
 func up00028(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00028Postgres, up00028MySQL)

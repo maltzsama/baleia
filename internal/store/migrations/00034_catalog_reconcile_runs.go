@@ -27,28 +27,22 @@ CREATE TABLE catalog_reconcile_runs (
 CREATE INDEX catalog_reconcile_runs_engine ON catalog_reconcile_runs (engine_id, started_at DESC);
 `
 
-const up00034MySQL = `
-CREATE TABLE catalog_reconcile_runs (
-    id           CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    engine_id    CHAR(36)        NOT NULL REFERENCES engines (id) ON DELETE CASCADE,
+const up00034MySQL = `CREATE TABLE catalog_reconcile_runs (id           CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    engine_id    CHAR(36)        NOT NULL,
     started_at   DATETIME(6) NOT NULL,
     finished_at  DATETIME(6) NOT NULL,
     dry_run      BOOLEAN     NOT NULL,
-    
-    actions      JSON       NOT NULL DEFAULT '[]',
-    adopted      JSON      NOT NULL DEFAULT '{}',
-    error        TEXT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE INDEX catalog_reconcile_runs_engine ON catalog_reconcile_runs (engine_id, started_at DESC);
-`
+    actions      JSON       NOT NULL DEFAULT ('[]'),
+    adopted      JSON      NOT NULL DEFAULT ('[]'),
+    error        TEXT,
+    CONSTRAINT catalog_reconcile_runs_engine_id_fkey FOREIGN KEY (engine_id) REFERENCES engines (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS catalog_reconcile_runs_engine ON catalog_reconcile_runs (engine_id, started_at DESC);`
 
 const down00034Postgres = `
 DROP TABLE IF EXISTS catalog_reconcile_runs;
 `
 
-const down00034MySQL = `
-DROP TABLE IF EXISTS catalog_reconcile_runs;
-`
+const down00034MySQL = `DROP TABLE IF EXISTS catalog_reconcile_runs;`
 
 func up00034(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00034Postgres, up00034MySQL)

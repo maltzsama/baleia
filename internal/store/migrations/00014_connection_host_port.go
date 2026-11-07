@@ -19,14 +19,9 @@ ALTER TABLE catalogs
     DROP COLUMN trino_catalog_name;
 `
 
-const up00014MySQL = `
-ALTER TABLE catalog_connections
-    ADD COLUMN host TEXT,
-    ADD COLUMN port TEXT;
-
-ALTER TABLE catalogs
-    DROP COLUMN trino_catalog_name;
-`
+const up00014MySQL = `ALTER TABLE catalog_connections ADD COLUMN IF NOT EXISTS host TEXT,
+    ADD COLUMN IF NOT EXISTS port TEXT;
+ALTER TABLE catalogs DROP COLUMN IF EXISTS trino_catalog_name;`
 
 const down00014Postgres = `
 ALTER TABLE catalog_connections
@@ -37,14 +32,9 @@ ALTER TABLE catalogs
     ADD COLUMN trino_catalog_name TEXT NOT NULL DEFAULT '';
 `
 
-const down00014MySQL = `
-ALTER TABLE catalog_connections
-    DROP COLUMN host,
-    DROP COLUMN port;
-
-ALTER TABLE catalogs
-    ADD COLUMN trino_catalog_name TEXT NOT NULL DEFAULT '';
-`
+const down00014MySQL = `ALTER TABLE catalog_connections DROP COLUMN IF EXISTS host,
+    DROP COLUMN IF EXISTS port;
+ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS trino_catalog_name TEXT NOT NULL DEFAULT ('');`
 
 func up00014(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00014Postgres, up00014MySQL)

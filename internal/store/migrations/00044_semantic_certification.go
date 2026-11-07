@@ -18,11 +18,9 @@ ALTER TABLE semantic_metrics
 UPDATE semantic_metrics SET certified_at = updated_at WHERE certified;
 `
 
-const up00044MySQL = `
-ALTER TABLE semantic_metrics
-    ADD COLUMN certified_by CHAR(36) REFERENCES users (id) ON DELETE SET NULL,
-    ADD COLUMN certified_at DATETIME(6);
-`
+const up00044MySQL = `ALTER TABLE semantic_metrics ADD COLUMN IF NOT EXISTS certified_by CHAR(36),
+    ADD COLUMN IF NOT EXISTS certified_at DATETIME(6),
+    ADD CONSTRAINT semantic_metrics_certified_by_fkey FOREIGN KEY (certified_by) REFERENCES users (id) ON DELETE SET NULL;`
 
 const down00044Postgres = `
 ALTER TABLE semantic_metrics
@@ -30,11 +28,8 @@ ALTER TABLE semantic_metrics
     DROP COLUMN IF EXISTS certified_by;
 `
 
-const down00044MySQL = `
-ALTER TABLE semantic_metrics
-    DROP COLUMN certified_at,
-    DROP COLUMN certified_by;
-`
+const down00044MySQL = `ALTER TABLE semantic_metrics DROP COLUMN IF EXISTS certified_at,
+    DROP COLUMN IF EXISTS certified_by;`
 
 func up00044(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00044Postgres, up00044MySQL)

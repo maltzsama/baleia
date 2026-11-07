@@ -61,49 +61,42 @@ ALTER TABLE query_executions
 CREATE INDEX idx_query_executions_agent ON query_executions (agent_id);
 `
 
-const up00054MySQL = `
-CREATE TABLE agents (
-    id          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    owner_id    CHAR(36)        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    kind        TEXT        NOT NULL DEFAULT 'external' CHECK (kind IN ('external', 'assistant')),
+const up00054MySQL = `CREATE TABLE agents (id          CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    owner_id    CHAR(36)        NOT NULL,
+    kind        TEXT        NOT NULL DEFAULT ('external'),
     name        TEXT        NOT NULL,
-    description TEXT        NOT NULL DEFAULT '',
-    status      TEXT        NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+    description TEXT        NOT NULL DEFAULT (''),
+    status      TEXT        NOT NULL DEFAULT ('active'),
     created_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX idx_agents_owner ON agents (owner_id);
-CREATE INDEX idx_agents_kind  ON agents (kind);
-
-CREATE TABLE agent_workspaces (
-    agent_id     CHAR(36) NOT NULL REFERENCES agents (id) ON DELETE CASCADE,
-    workspace_id CHAR(36) NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
-    PRIMARY KEY (agent_id, workspace_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX idx_agent_workspaces_workspace ON agent_workspaces (workspace_id);
-
-CREATE TABLE agent_tokens (
-    id           CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    agent_id     CHAR(36)        NOT NULL REFERENCES agents (id) ON DELETE CASCADE,
+    updated_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT agents_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT agents_kind_check CHECK (kind IN ('external', 'assistant')),
+    CONSTRAINT agents_status_check CHECK (status IN ('active', 'disabled'))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS idx_agents_owner ON agents (owner_id);
+CREATE INDEX IF NOT EXISTS idx_agents_kind  ON agents (kind(255));
+CREATE TABLE agent_workspaces (agent_id     CHAR(36) NOT NULL,
+    workspace_id CHAR(36) NOT NULL,
+    PRIMARY KEY (agent_id, workspace_id),
+    CONSTRAINT agent_workspaces_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES agents (id) ON DELETE CASCADE,
+    CONSTRAINT agent_workspaces_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS idx_agent_workspaces_workspace ON agent_workspaces (workspace_id);
+CREATE TABLE agent_tokens (id           CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    agent_id     CHAR(36)        NOT NULL,
     name         TEXT        NOT NULL,
-    token_hash   TEXT        NOT NULL UNIQUE,
+    token_hash   TEXT        NOT NULL,
     prefix       TEXT        NOT NULL,
     expires_at   DATETIME(6) NOT NULL,
     last_used_at DATETIME(6),
-    created_by   CHAR(36)        NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+    created_by   CHAR(36)        NOT NULL,
     created_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    revoked_at   DATETIME(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX idx_agent_tokens_agent ON agent_tokens (agent_id);
-
-ALTER TABLE query_executions
-    ADD COLUMN agent_id CHAR(36) REFERENCES agents (id) ON DELETE SET NULL;
-
-CREATE INDEX idx_query_executions_agent ON query_executions (agent_id);
-`
+    revoked_at   DATETIME(6),
+    CONSTRAINT agent_tokens_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES agents (id) ON DELETE CASCADE,
+    CONSTRAINT agent_tokens_token_hash_key UNIQUE (token_hash(255)),
+    CONSTRAINT agent_tokens_created_by_fkey FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE RESTRICT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS idx_agent_tokens_agent ON agent_tokens (agent_id);
+ALTER TABLE query_executions ADD COLUMN IF NOT EXISTS agent_id CHAR(36),
+    ADD CONSTRAINT query_executions_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES agents (id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_query_executions_agent ON query_executions (agent_id);`
 
 const down00054Postgres = `
 ALTER TABLE query_executions DROP COLUMN IF EXISTS agent_id;
@@ -112,12 +105,10 @@ DROP TABLE IF EXISTS agent_workspaces;
 DROP TABLE IF EXISTS agents;
 `
 
-const down00054MySQL = `
-ALTER TABLE query_executions DROP COLUMN agent_id;
+const down00054MySQL = `ALTER TABLE query_executions DROP COLUMN IF EXISTS agent_id;
 DROP TABLE IF EXISTS agent_tokens;
 DROP TABLE IF EXISTS agent_workspaces;
-DROP TABLE IF EXISTS agents;
-`
+DROP TABLE IF EXISTS agents;`
 
 func up00054(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00054Postgres, up00054MySQL)

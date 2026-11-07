@@ -52,20 +52,18 @@ $$;
 
 `
 
-const up00076MySQL = `
-ALTER TABLE users
-    ADD COLUMN kind TEXT NOT NULL DEFAULT 'human' CHECK (kind IN ('human', 'service_account')),
-    ADD COLUMN home_workspace_id CHAR(36) REFERENCES workspaces (id) ON DELETE SET NULL,
-    ADD COLUMN description TEXT;
-
-ALTER TABLE users DROP CONSTRAINT users_auth_provider_check;
+const up00076MySQL = `ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT ('human'),
+    ADD COLUMN IF NOT EXISTS home_workspace_id CHAR(36),
+    ADD COLUMN IF NOT EXISTS description TEXT,
+    ADD CONSTRAINT users_kind_check CHECK (kind IN ('human', 'service_account')),
+    ADD CONSTRAINT users_home_workspace_id_fkey FOREIGN KEY (home_workspace_id) REFERENCES workspaces (id) ON DELETE SET NULL;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_auth_provider_check;
 ALTER TABLE users ADD CONSTRAINT users_auth_provider_check
     CHECK (auth_provider IN ('local', 'oidc', 'ldap', 'service'));
 ALTER TABLE users ADD CONSTRAINT chk_service_auth
     CHECK (auth_provider <> 'service' OR kind = 'service_account');
 ALTER TABLE users ADD CONSTRAINT chk_service_account
-    CHECK (kind <> 'service_account' OR (role = 'member' AND password_hash IS NULL AND auth_provider IN ('service', 'oidc')));
-`
+    CHECK (kind <> 'service_account' OR (role = 'member' AND password_hash IS NULL AND auth_provider IN ('service', 'oidc')));`
 
 const down00076Postgres = `
 CREATE OR REPLACE FUNCTION baleia_workspace_member_role(ws_id UUID, usr_id UUID)
@@ -90,14 +88,14 @@ ALTER TABLE users ADD CONSTRAINT users_auth_provider_check
 ALTER TABLE users DROP COLUMN description, DROP COLUMN home_workspace_id, DROP COLUMN kind;
 `
 
-const down00076MySQL = `
-ALTER TABLE users DROP CONSTRAINT chk_service_account;
-ALTER TABLE users DROP CONSTRAINT chk_service_auth;
-ALTER TABLE users DROP CONSTRAINT users_auth_provider_check;
+const down00076MySQL = `ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_service_account;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_service_auth;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_auth_provider_check;
 ALTER TABLE users ADD CONSTRAINT users_auth_provider_check
     CHECK (auth_provider IN ('local', 'oidc', 'ldap'));
-ALTER TABLE users DROP COLUMN description, DROP COLUMN home_workspace_id, DROP COLUMN kind;
-`
+ALTER TABLE users DROP COLUMN IF EXISTS description,
+    DROP COLUMN IF EXISTS home_workspace_id,
+    DROP COLUMN IF EXISTS kind;`
 
 func up00076(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00076Postgres, up00076MySQL)

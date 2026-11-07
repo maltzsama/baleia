@@ -20,12 +20,7 @@ DROP FUNCTION IF EXISTS catalogs_upsert_managed_binding();
 DROP FUNCTION IF EXISTS catalogs_set_source_ref();
 `
 
-const up00027MySQL = `
-DROP TRIGGER IF EXISTS catalogs_upsert_managed_binding ON catalogs;
-DROP TRIGGER IF EXISTS catalogs_set_source_ref ON catalogs;
-DROP FUNCTION IF EXISTS catalogs_upsert_managed_binding();
-DROP FUNCTION IF EXISTS catalogs_set_source_ref();
-`
+const up00027MySQL = ``
 
 const down00027Postgres = `
 CREATE FUNCTION catalogs_set_source_ref() RETURNS trigger
@@ -73,35 +68,7 @@ CREATE TRIGGER catalogs_upsert_managed_binding
     FOR EACH ROW EXECUTE FUNCTION catalogs_upsert_managed_binding();
 `
 
-const down00027MySQL = `
-CREATE FUNCTION catalogs_set_source_ref() RETURNS trigger
-LANGUAGE plpgsql AS $baleia$
-BEGIN
-    IF NEW.origin = 'source' THEN
-        NEW.source_ref := NEW.warehouse;
-    END IF;
-    RETURN NEW;
-END
-$baleia$;
-CREATE FUNCTION catalogs_upsert_managed_binding() RETURNS trigger
-LANGUAGE plpgsql AS $baleia$
-DECLARE
-    eng CHAR(36);
-BEGIN
-    IF NEW.origin <> 'source' THEN
-        RETURN NULL;
-    END IF;
-    SELECT engine_id INTO eng FROM trino_clusters WHERE id = NEW.cluster_id;
-    IF eng IS NULL THEN
-        RETURN NULL;
-    END IF;
-    
-    
-    
-    RETURN NULL;
-END
-$baleia$;
-`
+const down00027MySQL = ``
 
 func up00027(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00027Postgres, up00027MySQL)

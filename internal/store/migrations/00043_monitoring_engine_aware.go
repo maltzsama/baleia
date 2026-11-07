@@ -58,47 +58,38 @@ CREATE TABLE maintenance_runs (
 CREATE INDEX maintenance_runs_catalog ON maintenance_runs (catalog_id, started_at DESC);
 `
 
-const up00043MySQL = `
-ALTER TABLE cluster_snapshots     ADD COLUMN engine_id CHAR(36) REFERENCES engines (id) ON DELETE CASCADE;
-ALTER TABLE trino_query_snapshots ADD COLUMN engine_id CHAR(36) REFERENCES engines (id) ON DELETE CASCADE;
-
-ALTER TABLE cluster_snapshots     ALTER COLUMN engine_id SET NOT NULL;
-ALTER TABLE trino_query_snapshots ALTER COLUMN engine_id SET NOT NULL;
-
-CREATE INDEX cluster_snapshots_engine_time     ON cluster_snapshots (engine_id, captured_at DESC);
-CREATE INDEX trino_query_snapshots_engine_time ON trino_query_snapshots (engine_id, created_at DESC);
-
-ALTER TABLE table_health_snapshots ADD COLUMN catalog_id CHAR(36) REFERENCES catalogs (id) ON DELETE CASCADE;
-UPDATE table_health_snapshots h
-SET catalog_id = b.catalog_id
-FROM catalog_bindings b
-JOIN catalogs c ON c.id = b.catalog_id
-WHERE c.connection_id = h.catalog_connection_id AND b.engine_catalog_name = h.catalog;
-
-ALTER TABLE table_health_snapshots ALTER COLUMN catalog_id SET NOT NULL;
-ALTER TABLE table_health_snapshots
-    DROP CONSTRAINT table_health_snapshots_catalog_connection_id_catalog_namespace_table_name_key;
-ALTER TABLE table_health_snapshots
-    ADD CONSTRAINT table_health_unique_catalog UNIQUE (catalog_id, namespace, table_name);
-
-CREATE TABLE maintenance_runs (
-    id            CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    catalog_id    CHAR(36) NOT NULL REFERENCES catalogs (id) ON DELETE CASCADE,
-    binding_id    CHAR(36) REFERENCES catalog_bindings (id) ON DELETE SET NULL,
+const up00043MySQL = `ALTER TABLE cluster_snapshots ADD COLUMN IF NOT EXISTS engine_id CHAR(36),
+    ADD CONSTRAINT cluster_snapshots_engine_id_fkey FOREIGN KEY (engine_id) REFERENCES engines (id) ON DELETE CASCADE;
+ALTER TABLE trino_query_snapshots ADD COLUMN IF NOT EXISTS engine_id CHAR(36),
+    ADD CONSTRAINT trino_query_snapshots_engine_id_fkey FOREIGN KEY (engine_id) REFERENCES engines (id) ON DELETE CASCADE;
+ALTER TABLE cluster_snapshots MODIFY COLUMN engine_id CHAR(36) NOT NULL;
+ALTER TABLE trino_query_snapshots MODIFY COLUMN engine_id CHAR(36) NOT NULL;
+CREATE INDEX IF NOT EXISTS cluster_snapshots_engine_time     ON cluster_snapshots (engine_id, captured_at DESC);
+CREATE INDEX IF NOT EXISTS trino_query_snapshots_engine_time ON trino_query_snapshots (engine_id, created_at DESC);
+ALTER TABLE table_health_snapshots ADD COLUMN IF NOT EXISTS catalog_id CHAR(36),
+    ADD CONSTRAINT table_health_snapshots_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES catalogs (id) ON DELETE CASCADE;
+ALTER TABLE table_health_snapshots MODIFY COLUMN catalog_id CHAR(36) NOT NULL;
+ALTER TABLE table_health_snapshots DROP CONSTRAINT IF EXISTS table_health_snapshots_catalog_connection_id_catalog_namespace_table_name_key;
+ALTER TABLE table_health_snapshots ADD CONSTRAINT table_health_unique_catalog UNIQUE (catalog_id, namespace(255), table_name(255));
+CREATE TABLE maintenance_runs (id            CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    catalog_id    CHAR(36) NOT NULL,
+    binding_id    CHAR(36),
     namespace     TEXT NOT NULL,
     table_name    TEXT NOT NULL,
-    operations    JSON NOT NULL CHECK (operations <@ ARRAY['optimize','expire_snapshots','remove_orphan_files']),
+    operations    JSON NOT NULL,
     retention     TEXT,
-    status        TEXT NOT NULL CHECK (status IN ('running','finished','failed')),
+    status        TEXT NOT NULL,
     error_code    TEXT,
     error_message TEXT,
-    started_by    CHAR(36) REFERENCES users (id) ON DELETE SET NULL,
+    started_by    CHAR(36),
     started_at    DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     finished_at   DATETIME(6),
-    workflow_id   TEXT NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE INDEX maintenance_runs_catalog ON maintenance_runs (catalog_id, started_at DESC);
-`
+    workflow_id   TEXT NOT NULL,
+    CONSTRAINT maintenance_runs_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES catalogs (id) ON DELETE CASCADE,
+    CONSTRAINT maintenance_runs_binding_id_fkey FOREIGN KEY (binding_id) REFERENCES catalog_bindings (id) ON DELETE SET NULL,
+    CONSTRAINT maintenance_runs_status_check CHECK (status IN ('running','finished','failed')),
+    CONSTRAINT maintenance_runs_started_by_fkey FOREIGN KEY (started_by) REFERENCES users (id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS maintenance_runs_catalog ON maintenance_runs (catalog_id, started_at DESC);`
 
 const down00043Postgres = `
 DROP TABLE IF EXISTS maintenance_runs;
@@ -110,15 +101,13 @@ ALTER TABLE trino_query_snapshots DROP COLUMN IF EXISTS engine_id;
 ALTER TABLE cluster_snapshots DROP COLUMN IF EXISTS engine_id;
 `
 
-const down00043MySQL = `
-DROP TABLE IF EXISTS maintenance_runs;
-ALTER TABLE table_health_snapshots DROP CONSTRAINT table_health_unique_catalog;
-ALTER TABLE table_health_snapshots DROP COLUMN catalog_id;
+const down00043MySQL = `DROP TABLE IF EXISTS maintenance_runs;
+ALTER TABLE table_health_snapshots DROP CONSTRAINT IF EXISTS table_health_unique_catalog;
+ALTER TABLE table_health_snapshots DROP COLUMN IF EXISTS catalog_id;
 DROP INDEX IF EXISTS trino_query_snapshots_engine_time;
 DROP INDEX IF EXISTS cluster_snapshots_engine_time;
-ALTER TABLE trino_query_snapshots DROP COLUMN engine_id;
-ALTER TABLE cluster_snapshots DROP COLUMN engine_id;
-`
+ALTER TABLE trino_query_snapshots DROP COLUMN IF EXISTS engine_id;
+ALTER TABLE cluster_snapshots DROP COLUMN IF EXISTS engine_id;`
 
 func up00043(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00043Postgres, up00043MySQL)

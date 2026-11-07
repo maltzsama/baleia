@@ -16,11 +16,8 @@ ALTER TABLE users
     ADD COLUMN password_reset_expires_at TIMESTAMPTZ;
 `
 
-const up00008MySQL = `
-ALTER TABLE users
-    ADD COLUMN password_reset_token      TEXT,
-    ADD COLUMN password_reset_expires_at DATETIME(6);
-`
+const up00008MySQL = `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT,
+    ADD COLUMN IF NOT EXISTS password_reset_expires_at DATETIME(6);`
 
 const down00008Postgres = `
 ALTER TABLE users
@@ -28,11 +25,8 @@ ALTER TABLE users
     DROP COLUMN IF EXISTS password_reset_expires_at;
 `
 
-const down00008MySQL = `
-ALTER TABLE users
-    DROP COLUMN password_reset_token,
-    DROP COLUMN password_reset_expires_at;
-`
+const down00008MySQL = `ALTER TABLE users DROP COLUMN IF EXISTS password_reset_token,
+    DROP COLUMN IF EXISTS password_reset_expires_at;`
 
 func up00008(ctx context.Context, db *bun.DB) error {
 	return dialectDDL(ctx, db, up00008Postgres, up00008MySQL)
