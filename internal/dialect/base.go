@@ -43,17 +43,18 @@ type spec struct {
 	decimalTyp func(p, s int) string
 	castFn     func(expr string, t LogicalType, target string) string // nil: CAST(expr AS target)
 
-	boolLit     func(b bool) string
-	dateLit     func(s string) string
-	tsLit       func(s string) string // s: YYYY-MM-DD HH:MM:SS[.ffffff]
-	tsTZLit     func(s string) string // s in UTC; nil: unsupported
-	binaryLit   func(hex string) string
-	jsonLit     func(quoted string) string // nil: the quoted string
-	decimalLit  func(digits, target string) string
-	timeTrunc   func(expr string, g TimeGrain) (string, error)
-	approxCount func(expr string) string // nil: exact COUNT(DISTINCT expr)
-	floatCast   string                   // SafeDivide numerator cast target; "" when / is already non-integer
-	metadata    MetadataQueries
+	boolLit       func(b bool) string
+	dateLit       func(s string) string
+	tsLit         func(s string) string // s: YYYY-MM-DD HH:MM:SS[.ffffff]
+	tsTZLit       func(s string) string // s in UTC; nil: unsupported
+	binaryLit     func(hex string) string
+	jsonLit       func(quoted string) string // nil: the quoted string
+	decimalLit    func(digits, target string) string
+	timeTrunc     func(expr string, g TimeGrain) (string, error)
+	approxCount   func(expr string) string // nil: exact COUNT(DISTINCT expr)
+	floatCast     string                   // SafeDivide numerator cast target; "" when / is already non-integer
+	metadata      MetadataQueries
+	functionQuery string // function-catalog query (#788); "" when the engine has none
 
 	formatter, codemirror string
 }
@@ -304,6 +305,7 @@ func (d *spec) ExplainSQL(sql string) (string, bool) {
 func (d *spec) Placeholder(n int) string { return d.placeholder(n) }
 
 func (d *spec) MetadataQueries() MetadataQueries { return d.metadata }
+func (d *spec) FunctionQuery() string            { return d.functionQuery }
 
 func (d *spec) Aggregate(fn AggFunc, expr string, distinct bool) (string, error) {
 	if strings.TrimSpace(expr) == "" {

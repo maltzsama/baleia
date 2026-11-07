@@ -61,18 +61,19 @@ func newTrino() *spec {
 			TypeDate: "DATE", TypeTimestamp: "TIMESTAMP(6)", TypeTimestampTZ: "TIMESTAMP(6) WITH TIME ZONE",
 			TypeBinary: "VARBINARY", TypeJSON: "JSON",
 		},
-		decimalTyp:  func(p, s int) string { return fmt.Sprintf("DECIMAL(%d,%d)", p, s) },
-		boolLit:     trueFalse,
-		dateLit:     prefixed("DATE "),
-		tsLit:       prefixed("TIMESTAMP "),
-		tsTZLit:     func(s string) string { return "TIMESTAMP '" + s + " UTC'" },
-		binaryLit:   xHex,
-		jsonLit:     func(q string) string { return "JSON " + q },
-		timeTrunc:   dateTrunc,
-		approxCount: func(e string) string { return "approx_distinct(" + e + ")" },
-		floatCast:   "DOUBLE",
-		metadata:    ansiInformationSchema,
-		formatter:   "trino", codemirror: "StandardSQL",
+		decimalTyp:    func(p, s int) string { return fmt.Sprintf("DECIMAL(%d,%d)", p, s) },
+		boolLit:       trueFalse,
+		dateLit:       prefixed("DATE "),
+		tsLit:         prefixed("TIMESTAMP "),
+		tsTZLit:       func(s string) string { return "TIMESTAMP '" + s + " UTC'" },
+		binaryLit:     xHex,
+		jsonLit:       func(q string) string { return "JSON " + q },
+		timeTrunc:     dateTrunc,
+		approxCount:   func(e string) string { return "approx_distinct(" + e + ")" },
+		floatCast:     "DOUBLE",
+		metadata:      ansiInformationSchema,
+		functionQuery: "SHOW FUNCTIONS",
+		formatter:     "trino", codemirror: "StandardSQL",
 	}
 }
 
@@ -108,6 +109,16 @@ FROM information_schema.tables WHERE table_schema = $1 ORDER BY table_name`,
 			Columns: `SELECT column_name, data_type, is_nullable, ordinal_position
 FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position`,
 		},
+		// name, signature (overloads joined), description, kind — all from pg_proc.
+		functionQuery: `SELECT p.proname,
+       string_agg(p.proname || '(' || pg_get_function_arguments(p.oid) || ') → ' ||
+                  pg_get_function_result(p.oid), '; '),
+       max(coalesce(obj_description(p.oid, 'pg_proc'), '')),
+       CASE WHEN bool_or(p.prokind = 'a') THEN 'aggregate'
+            WHEN bool_or(p.prokind = 'w') THEN 'window' ELSE 'function' END
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pg_catalog' AND p.prokind IN ('f', 'a', 'w') AND p.proname !~ '^(_|pg_)'
+GROUP BY p.proname`,
 		formatter: "postgresql", codemirror: "PostgreSQL",
 	}
 }
@@ -130,7 +141,7 @@ func mysqlTimeTrunc(e string, g TimeGrain) (string, error) {
 	return "CAST(DATE_FORMAT(" + e + ", '" + format[g] + "') AS DATETIME)", nil
 }
 
-func mysqlFamily(name, formatter, codemirror string, json bool) *spec {
+func mysqlFamily(name, formatter, codemirror string, json bool, functionQuery string) *spec {
 	types := map[LogicalType]string{
 		TypeInt64: "SIGNED", TypeFloat64: "DOUBLE", TypeString: "CHAR",
 		TypeDate: "DATE", TypeTimestamp: "DATETIME(6)", TypeBinary: "BINARY",
@@ -168,14 +179,21 @@ FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name`,
 			Columns: `SELECT column_name, column_type, is_nullable, ordinal_position
 FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position`,
 		},
-		formatter: formatter, codemirror: codemirror,
+		functionQuery: functionQuery,
+		formatter:     formatter, codemirror: codemirror,
 	}
 }
 
-func newMySQL() *spec { return mysqlFamily(MySQL, "mysql", "MySQL", true) }
+func newMySQL() *spec {
+	return mysqlFamily(MySQL, "mysql", "MySQL", true, `SELECT t.name FROM mysql.help_topic t
+JOIN mysql.help_category c ON c.help_category_id = t.help_category_id
+WHERE c.name LIKE '%Functions%' OR c.name LIKE '%Operators%'`)
+}
 
 // newMariaDB: MariaDB has no CAST(... AS JSON); JSON is a LONGTEXT alias there.
-func newMariaDB() *spec { return mysqlFamily(MariaDB, "mariadb", "MariaSQL", false) }
+func newMariaDB() *spec {
+	return mysqlFamily(MariaDB, "mariadb", "MariaSQL", false, `SELECT FUNCTION FROM information_schema.SQL_FUNCTIONS`)
+}
 
 func newTSQL() *spec {
 	return &spec{
@@ -267,7 +285,8 @@ WHERE owner = :1 AND object_type IN ('TABLE', 'VIEW') ORDER BY object_name`,
 			Columns: `SELECT column_name, data_type, CASE nullable WHEN 'Y' THEN 'YES' ELSE 'NO' END, column_id
 FROM all_tab_columns WHERE owner = :1 AND table_name = :2 ORDER BY column_id`,
 		},
-		formatter: "plsql", codemirror: "PLSQL",
+		functionQuery: `SELECT DISTINCT name FROM v$sqlfn_metadata`,
+		formatter:     "plsql", codemirror: "PLSQL",
 	}
 }
 
@@ -326,7 +345,8 @@ WHERE schema = ?1 AND type IN ('table', 'view') AND name NOT LIKE 'sqlite\_%' ES
 			Columns: `SELECT name, type, CASE "notnull" WHEN 0 THEN 'YES' ELSE 'NO' END, cid + 1
 FROM pragma_table_info(?2, ?1) ORDER BY cid`,
 		},
-		formatter: "sqlite", codemirror: "SQLite",
+		functionQuery: `SELECT DISTINCT name FROM pragma_function_list`,
+		formatter:     "sqlite", codemirror: "SQLite",
 	}
 }
 
@@ -360,7 +380,8 @@ WHERE database = {p1:String} AND NOT is_temporary ORDER BY name`,
 			Columns: `SELECT name, type, if(startsWith(type, 'Nullable('), 'YES', 'NO'), position FROM system.columns
 WHERE database = {p1:String} AND table = {p2:String} ORDER BY position`,
 		},
-		formatter: "sql", codemirror: "MySQL", // backtick identifiers
+		functionQuery: `SELECT name FROM system.functions`,
+		formatter:     "sql", codemirror: "MySQL", // backtick identifiers
 	}
 }
 
