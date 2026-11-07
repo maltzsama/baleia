@@ -125,5 +125,33 @@ export const completionTheme = EditorView.theme({
 	[`${popup} .cm-baleia-info p`]: {
 		margin: '4px 0 0',
 		color: 'var(--color-text-muted)'
+	},
+	// Signature help (#790): the engine's signature while inside a call.
+	'.cm-tooltip:has(.cm-signature-help)': {
+		background: 'var(--color-bg-panel)',
+		border: '1px solid var(--color-border)',
+		borderRadius: '8px',
+		boxShadow: '0 10px 30px -8px rgb(15 23 42 / 0.25)'
+	},
+	'.cm-signature-help': {
+		display: 'flex',
+		alignItems: 'baseline',
+		gap: '10px',
+		maxWidth: 'min(560px, 90vw)',
+		padding: '6px 10px',
+		fontFamily: 'var(--font-editor, var(--font-mono))',
+		fontSize: '12px',
+		color: 'var(--color-text-main)'
+	},
+	'.cm-signature-help-text': {
+		overflow: 'hidden',
+		textOverflow: 'ellipsis',
+		whiteSpace: 'nowrap'
+	},
+	'.cm-signature-help-arg': {
+		flexShrink: '0',
+		fontFamily: 'var(--font-ui)',
+		fontSize: '11px',
+		color: 'var(--color-text-muted)'
 	}
 });

@@ -1044,6 +1044,8 @@
 	"workbench_completion_function": "function",
 	"workbench_completion_kind_aggregate": "aggregate",
 	"workbench_completion_kind_window": "window",
+	"workbench_completion_kind_operator": "operator",
+	"workbench_signature_help_arg": "arg {n}",
 	"workbench_completion_join_condition": "Join condition",
 	"workbench_completion_join_history": "From query history",
 	"workbench_completion_join_foreign_key": "Foreign key",

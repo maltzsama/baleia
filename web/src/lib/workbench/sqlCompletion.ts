@@ -280,9 +280,11 @@ async function functionOptions(scope: CompletionScope): Promise<Option[]> {
 		out.push({
 			label,
 			type: 'function',
-			detail: functionKind(ref.kind),
+			// The signature is the inline detail (#790); the kind is the fallback
+			// when the engine exposes no signature.
+			detail: ref.signature || functionKind(ref.kind),
 			apply: applyCall(label, ref.call ?? true),
-			info: info(label, ref.signature ?? ref.kind, [ref.description ?? '']),
+			info: info(label, ref.signature ?? functionKind(ref.kind), [ref.description ?? '']),
 			group: 'function'
 		});
 	}
@@ -293,6 +295,7 @@ async function functionOptions(scope: CompletionScope): Promise<Option[]> {
 function functionKind(kind: string | undefined): string {
 	if (kind === 'aggregate') return m.workbench_completion_kind_aggregate();
 	if (kind === 'window') return m.workbench_completion_kind_window();
+	if (kind === 'operator') return m.workbench_completion_kind_operator();
 	return m.workbench_completion_function();
 }
 
