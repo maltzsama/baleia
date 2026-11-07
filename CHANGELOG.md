@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.7.0](https://github.com/maltzsama/baleia/compare/v0.6.5...v0.7.0) (2026-11-07)
+
+
+### Features
+
+* **api:** serve each engine's function catalog from runtime introspection ([#788](https://github.com/maltzsama/baleia/issues/788)) ([a0f1718](https://github.com/maltzsama/baleia/commit/a0f17185f45202d4ee8610d16564cecf5aacd03e))
+* complete keywords from CodeMirror, drop the dialect keyword lists ([63a9da4](https://github.com/maltzsama/baleia/commit/63a9da4e4b6c2b0dd93e7ee80fec03f035832f12))
+* complete keywords from CodeMirror, drop the dialect keyword lists ([#787](https://github.com/maltzsama/baleia/issues/787)) ([c29bc79](https://github.com/maltzsama/baleia/commit/c29bc79daea3d21ee83be521445d10e75afe2d4b))
+* **dialect:** define per-engine function introspection queries and a coverage gate ([#788](https://github.com/maltzsama/baleia/issues/788)) ([7bb0ed5](https://github.com/maltzsama/baleia/commit/7bb0ed5970924f0395cd6053ab81ab22713cbdd0))
+* **dialect:** function introspection queries + coverage gate ([60e8f69](https://github.com/maltzsama/baleia/commit/60e8f69acd8f6164a772e96b9d4843d46370726d))
+* serve the engine's function catalog from runtime introspection ([5183482](https://github.com/maltzsama/baleia/commit/51834821bab3e20d97a8afe7d143edb8e1391519))
+* **web:** adopt sqlingo for editor SQL intelligence ([#756](https://github.com/maltzsama/baleia/issues/756)) ([af775df](https://github.com/maltzsama/baleia/commit/af775df7804f125cd74a721a50a38b12d63a6248))
+* **web:** adopt sqlingo for the editor's SQL intelligence ([9b388e0](https://github.com/maltzsama/baleia/commit/9b388e0667f39ae3a8d6987f9e3ac04c3840fa34))
+* **web:** complete functions from the connected engine's catalog ([#788](https://github.com/maltzsama/baleia/issues/788)) ([b184f81](https://github.com/maltzsama/baleia/commit/b184f81e01c3f22bbbcc314addeb81b77cf2c78f))
+* **web:** wrap sqlingo with lazy dialect loading ([#756](https://github.com/maltzsama/baleia/issues/756)) ([ed48c2e](https://github.com/maltzsama/baleia/commit/ed48c2e3e82cc2526730be1255b6855731e68643))
+
+
+### Bug Fixes
+
+* address the function-catalog review findings ([#788](https://github.com/maltzsama/baleia/issues/788)) ([396ff4c](https://github.com/maltzsama/baleia/commit/396ff4c6c86c821dc20e1fa89f8215e4a4f16cc5))
+* drop the keyword assertion and generation after the list removal ([#787](https://github.com/maltzsama/baleia/issues/787)) ([d6dbe0a](https://github.com/maltzsama/baleia/commit/d6dbe0a80f44de006d9bcf930688c9334079667a))
+* **web:** address sqlingo review findings ([#756](https://github.com/maltzsama/baleia/issues/756)) ([b3eb0dc](https://github.com/maltzsama/baleia/commit/b3eb0dc57e3a51636b3fafa61a0288da6aa0da68))
+
+
+### Miscellaneous
+
+* give the table-health pass test source refs and distinct catalog ids ([58d8efe](https://github.com/maltzsama/baleia/commit/58d8efe96e40a4ac21d79a200c6f8abbb8af26ba))
+* **web:** drop the unused split-script message ([#756](https://github.com/maltzsama/baleia/issues/756)) ([e9df59c](https://github.com/maltzsama/baleia/commit/e9df59c3bf43980825c811d85fba44d03c684e68))
+* **web:** format SQL with sqlingo, drop sql-formatter ([#756](https://github.com/maltzsama/baleia/issues/756)) ([b68cb4a](https://github.com/maltzsama/baleia/commit/b68cb4a654c45bdc2991d0e340e65766e8ebe671))
+
+
+### Documentation
+
+* **adr:** mark the sqlingo boundary accepted and implemented ([#756](https://github.com/maltzsama/baleia/issues/756)) ([e18c5c8](https://github.com/maltzsama/baleia/commit/e18c5c83003efd7e60279ba70aa7ec9ca954ebf6))
+* **adr:** record the client/server SQL-intelligence boundary ([#756](https://github.com/maltzsama/baleia/issues/756)) ([0a89f09](https://github.com/maltzsama/baleia/commit/0a89f09569028014358be15f902d8504ea18d296))
+* **audit:** record the SQL dialect knowledge ownership analysis ([5505052](https://github.com/maltzsama/baleia/commit/5505052072a2ea2db3990210879708950b153ff4))
+* **dialect:** clarify function catalog queries and dialect constructors ([9450b82](https://github.com/maltzsama/baleia/commit/9450b82d3adb99aa50ddb52178289c4d78a355fc))
+
 ## [0.6.5](https://github.com/maltzsama/baleia/compare/v0.6.4...v0.6.5) (2026-11-07)
 
 
