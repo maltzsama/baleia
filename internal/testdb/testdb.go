@@ -72,6 +72,18 @@ func acquire(t *testing.T) {
 // Parallel tests wait for a free slot; see acquire.
 func New(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	return create(t, true)
+}
+
+// NewEmpty creates an empty database (no schema) and drops it when the test
+// ends. It is for tests of the migrations themselves.
+func NewEmpty(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	return create(t, false)
+}
+
+func create(t *testing.T, applyMigrations bool) *pgxpool.Pool {
+	t.Helper()
 	admin := os.Getenv("BALEIA_TEST_DATABASE_URL")
 	if admin == "" {
 		if os.Getenv("CI") == "true" {
@@ -104,8 +116,10 @@ func New(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	u.Path = "/" + name
-	if err := migrate(ctx, adminPool, u.String()); err != nil {
-		t.Fatal(err)
+	if applyMigrations {
+		if err := migrate(ctx, adminPool, u.String()); err != nil {
+			t.Fatal(err)
+		}
 	}
 	pool, err := newPool(ctx, u.String(), poolConns)
 	if err != nil {
