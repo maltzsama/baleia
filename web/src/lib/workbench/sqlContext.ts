@@ -1,7 +1,9 @@
-// Statement context for the workbench autocomplete (#383). A small lexer reads
-// the statement under the cursor and says what fits there: a statement keyword,
-// a table, a column or a clause keyword. It never parses SQL fully; it only
-// tracks clauses per parenthesis depth and the tables named in FROM/JOIN.
+// Statement context for the workbench autocomplete (#383). sqlingo (see
+// ./sqlingo.ts) tokenizes with the engine's dialect; what remains here is the
+// editor glue that maps tokens to what fits at the cursor: a statement keyword,
+// a table, a column or a clause keyword. It never parses SQL fully.
+
+import { statementSpans, tokenize, type Token } from './sqlingo';
 
 export type Expect = 'statement' | 'table' | 'column' | 'keyword';
 
@@ -27,77 +29,6 @@ export type SqlContext = {
 	/** Set when the cursor is right after the ON of a JOIN (#555). */
 	joinOn?: JoinOnContext;
 };
-
-type Token = {
-	kind: 'word' | 'quoted' | 'string' | 'comment' | 'number' | 'punct';
-	/** Identifier value (unquoted for quoted identifiers) or the punctuation. */
-	value: string;
-	start: number;
-	end: number;
-	/** A string, comment or quoted identifier that runs to the end of input. */
-	open?: boolean;
-};
-
-const QUOTE_CLOSE: Record<string, string> = { '"': '"', '`': '`', '[': ']' };
-
-function tokenize(text: string): Token[] {
-	const tokens: Token[] = [];
-	let i = 0;
-	while (i < text.length) {
-		const ch = text[i];
-		const start = i;
-		if (/\s/.test(ch)) {
-			i++;
-		} else if (ch === '-' && text[i + 1] === '-') {
-			const end = text.indexOf('\n', i);
-			i = end < 0 ? text.length : end;
-			tokens.push({ kind: 'comment', value: 'line', start, end: i, open: end < 0 });
-		} else if (ch === '/' && text[i + 1] === '*') {
-			const end = text.indexOf('*/', i + 2);
-			i = end < 0 ? text.length : end + 2;
-			tokens.push({ kind: 'comment', value: '', start, end: i, open: end < 0 });
-		} else if (ch === "'") {
-			i++;
-			let closed = false;
-			while (i < text.length) {
-				if (text[i] === "'" && text[i + 1] === "'") i += 2;
-				else if (text[i] === "'") {
-					i++;
-					closed = true;
-					break;
-				} else i++;
-			}
-			tokens.push({ kind: 'string', value: '', start, end: i, open: !closed });
-		} else if (ch in QUOTE_CLOSE) {
-			// A doubled closer is an escaped one: "a""b", `a``b`, [a]]b].
-			const close = QUOTE_CLOSE[ch];
-			let value = '';
-			let closed = false;
-			i++;
-			while (i < text.length) {
-				if (text[i] === close && text[i + 1] === close) {
-					value += close;
-					i += 2;
-				} else if (text[i] === close) {
-					i++;
-					closed = true;
-					break;
-				} else value += text[i++];
-			}
-			tokens.push({ kind: 'quoted', value, start, end: i, open: !closed });
-		} else if (/[A-Za-z_]/.test(ch)) {
-			while (i < text.length && /[\w$]/.test(text[i])) i++;
-			tokens.push({ kind: 'word', value: text.slice(start, i), start, end: i });
-		} else if (/\d/.test(ch)) {
-			while (i < text.length && /[\w.]/.test(text[i])) i++;
-			tokens.push({ kind: 'number', value: text.slice(start, i), start, end: i });
-		} else {
-			i++;
-			tokens.push({ kind: 'punct', value: ch, start, end: i });
-		}
-	}
-	return tokens;
-}
 
 type Clause = 'none' | 'select' | 'from' | 'column' | 'keyword';
 
@@ -244,23 +175,33 @@ function readAlias(tokens: Token[], i: number): { alias: string; next: number } 
 }
 
 /**
- * What fits at `pos` in `doc`. Returns null inside a string, a comment or a
- * quoted identifier, where nothing is suggested.
+ * What fits at `pos` in `doc`, for the engine's dialect. Returns null inside a
+ * string, a comment or a quoted identifier, and on unterminated input, where
+ * nothing is suggested.
  */
-export function sqlContextAt(doc: string, pos: number): SqlContext | null {
-	const tokens = tokenize(doc);
-	for (const token of tokens) {
-		if (token.start >= pos) break;
-		if (token.kind !== 'string' && token.kind !== 'comment' && token.kind !== 'quoted') continue;
-		// A line comment runs up to its newline, so its end is still inside it.
-		const lineComment = token.kind === 'comment' && token.value === 'line';
-		if (pos < token.end || (pos === token.end && (token.open || lineComment))) return null;
+export async function sqlContextAt(
+	name: string | null | undefined,
+	doc: string,
+	pos: number
+): Promise<SqlContext | null> {
+	let tokens: Token[];
+	try {
+		tokens = await tokenize(name, doc);
+	} catch {
+		// Unterminated string, comment or quoted identifier: nothing to suggest.
+		return null;
 	}
 
-	const statement = statementAt(
-		tokens.filter((token) => token.kind !== 'comment'),
-		pos
-	);
+	for (const token of tokens) {
+		if (token.start >= pos) break;
+		if (token.kind !== 'string' && token.kind !== 'quoted') continue;
+		if (pos < token.end) return null;
+	}
+	// sqlingo attaches comments to tokens without their spans, so the editor
+	// finds comment boundaries itself (see commentSpanAt).
+	if (commentSpanAt(tokens, doc, pos)) return null;
+
+	const statement = statementAt(tokens, pos);
 	const before = statement.filter((token) => token.end <= pos);
 	let last = before.length - 1;
 
@@ -293,6 +234,36 @@ export function sqlContextAt(doc: string, pos: number): SqlContext | null {
 			? joinOnAt(head, tables)
 			: undefined;
 	return { expect, qualifier, prefix, from, tables, joinOn };
+}
+
+/** Whether `pos` is inside a `--` line comment or a block comment, outside any
+ *  string or quoted identifier. sqlingo attaches comments to tokens without
+ *  their spans, so this scans the text, skipping the spans sqlingo located. */
+function commentSpanAt(tokens: Token[], doc: string, pos: number): boolean {
+	const protectedSpans = tokens
+		.filter((token) => token.kind === 'string' || token.kind === 'quoted')
+		.sort((a, b) => a.start - b.start);
+	let i = 0;
+	while (i < pos) {
+		const skip = protectedSpans.find((span) => span.start === i);
+		if (skip) {
+			i = skip.end;
+			continue;
+		}
+		if (doc[i] === '-' && doc[i + 1] === '-') {
+			const end = doc.indexOf('\n', i);
+			if (pos <= (end < 0 ? doc.length : end)) return true;
+			i = end < 0 ? doc.length : end;
+		} else if (doc[i] === '/' && doc[i + 1] === '*') {
+			const end = doc.indexOf('*/', i + 2);
+			const stop = end < 0 ? doc.length : end + 2;
+			if (pos <= stop) return true;
+			i = stop;
+		} else {
+			i++;
+		}
+	}
+	return false;
 }
 
 /** The JOIN being completed when `head` ends with its ON, else undefined. */
@@ -340,28 +311,20 @@ function expectAt(head: Token[], qualifier: string[]): Expect {
 }
 
 /**
- * The statement at `pos` as [start, end) offsets, split at `;` outside strings,
- * comments and quoted identifiers. The workbench uses it when the engine's
- * splitter is unavailable, so Run still executes one statement (#395). A
- * cursor after the last statement picks that statement; null on an empty doc.
+ * The statement at `pos` as [start, end) offsets, split at `;` with the engine's
+ * dialect rules (#395, #756). A cursor after the last statement picks that
+ * statement; null when no statement is non-empty.
  */
-export function statementSpanAt(doc: string, pos: number): { start: number; end: number } | null {
-	const spans: { start: number; end: number }[] = [];
-	let start = 0;
-	for (const token of tokenize(doc)) {
-		if (token.kind === 'punct' && token.value === ';') {
-			spans.push({ start, end: token.end });
-			start = token.end;
-		}
-	}
-	spans.push({ start, end: doc.length });
-	const nonEmpty = spans.filter((span) =>
-		doc.slice(span.start, span.end).replace(/;\s*$/, '').trim()
-	);
-	if (nonEmpty.length === 0) return null;
+export async function statementSpanAt(
+	name: string | null | undefined,
+	doc: string,
+	pos: number
+): Promise<{ start: number; end: number } | null> {
+	const spans = await statementSpans(name, doc);
+	if (spans.length === 0) return null;
 	return (
-		nonEmpty.find((span) => span.start <= pos && pos <= span.end) ??
-		[...nonEmpty].reverse().find((span) => span.end <= pos) ??
-		nonEmpty[0]
+		spans.find((span) => span.start <= pos && pos <= span.end) ??
+		[...spans].reverse().find((span) => span.end <= pos) ??
+		spans[0]
 	);
 }
