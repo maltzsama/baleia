@@ -3,7 +3,7 @@
 // editor glue that maps tokens to what fits at the cursor: a statement keyword,
 // a table, a column or a clause keyword. It never parses SQL fully.
 
-import { statementSpans, tokenize, type Token } from './sqlingo';
+import { statementSpans, tokenize, usesHashComments, type Token } from './sqlingo';
 
 export type Expect = 'statement' | 'table' | 'column' | 'keyword';
 
@@ -75,6 +75,7 @@ const NOT_ALIAS = new Set([
 	'NATURAL',
 	'LATERAL',
 	'GROUP',
+	'BY',
 	'ORDER',
 	'HAVING',
 	'LIMIT',
@@ -188,8 +189,16 @@ export async function sqlContextAt(
 	try {
 		tokens = await tokenize(name, doc);
 	} catch {
-		// Unterminated string, comment or quoted identifier: nothing to suggest.
-		return null;
+		// An unterminated string/comment/quoted identifier anywhere breaks
+		// sqlingo's whole-text tokenizer. Only the statement under the cursor
+		// matters: retry with the prefix up to the cursor. If that is also
+		// unterminated, the open construct is at or before the cursor and there
+		// is nothing to suggest.
+		try {
+			tokens = await tokenize(name, doc.slice(0, pos));
+		} catch {
+			return null;
+		}
 	}
 
 	for (const token of tokens) {
@@ -199,7 +208,7 @@ export async function sqlContextAt(
 	}
 	// sqlingo attaches comments to tokens without their spans, so the editor
 	// finds comment boundaries itself (see commentSpanAt).
-	if (commentSpanAt(tokens, doc, pos)) return null;
+	if (commentSpanAt(name, tokens, doc, pos)) return null;
 
 	const statement = statementAt(tokens, pos);
 	const before = statement.filter((token) => token.end <= pos);
@@ -236,18 +245,30 @@ export async function sqlContextAt(
 	return { expect, qualifier, prefix, from, tables, joinOn };
 }
 
-/** Whether `pos` is inside a `--` line comment or a block comment, outside any
- *  string or quoted identifier. sqlingo attaches comments to tokens without
- *  their spans, so this scans the text, skipping the spans sqlingo located. */
-function commentSpanAt(tokens: Token[], doc: string, pos: number): boolean {
+/** Whether `pos` is inside a `--` line comment, a block comment, or (for MySQL
+ *  and MariaDB) a `#` line comment, outside any string or quoted identifier.
+ *  sqlingo attaches comments to tokens without their spans, so this scans the
+ *  text, skipping the spans sqlingo located. Block comments do not nest — the
+ *  same rule sqlingo's own tokenizer applies. */
+function commentSpanAt(
+	name: string | null | undefined,
+	tokens: Token[],
+	doc: string,
+	pos: number
+): boolean {
 	const protectedSpans = tokens
 		.filter((token) => token.kind === 'string' || token.kind === 'quoted')
 		.sort((a, b) => a.start - b.start);
+	const hashComment = usesHashComments(name);
 	let i = 0;
+	let spanIdx = 0;
 	while (i < pos) {
-		const skip = protectedSpans.find((span) => span.start === i);
-		if (skip) {
-			i = skip.end;
+		// Skip over the next string/quoted span, advancing the cursor through the
+		// sorted spans instead of re-scanning them for every character.
+		const span = protectedSpans[spanIdx];
+		if (span && i >= span.start) {
+			i = Math.max(i, span.end);
+			spanIdx++;
 			continue;
 		}
 		if (doc[i] === '-' && doc[i + 1] === '-') {
@@ -259,6 +280,10 @@ function commentSpanAt(tokens: Token[], doc: string, pos: number): boolean {
 			const stop = end < 0 ? doc.length : end + 2;
 			if (pos <= stop) return true;
 			i = stop;
+		} else if (hashComment && doc[i] === '#') {
+			const end = doc.indexOf('\n', i);
+			if (pos <= (end < 0 ? doc.length : end)) return true;
+			i = end < 0 ? doc.length : end;
 		} else {
 			i++;
 		}
@@ -323,7 +348,7 @@ export async function statementSpanAt(
 	const spans = await statementSpans(name, doc);
 	if (spans.length === 0) return null;
 	return (
-		spans.find((span) => span.start <= pos && pos <= span.end) ??
+		spans.find((span) => span.start <= pos && pos < span.end) ??
 		[...spans].reverse().find((span) => span.end <= pos) ??
 		spans[0]
 	);

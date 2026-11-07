@@ -145,6 +145,22 @@ describe('sqlContextAt', () => {
 	it('does not complete inside a number', async () => {
 		expect(await at('SELECT 12|')).toBeNull();
 	});
+
+	it('does not treat a BY clause as a table alias', async () => {
+		expect((await at('SELECT | FROM nation GROUP BY regionkey'))?.tables).toEqual([
+			{ path: ['nation'], alias: 'nation' }
+		]);
+	});
+
+	it('completes the statement under the cursor when a later one is unterminated', async () => {
+		expect(await at("SELECT | FROM nation WHERE 1 = 1;\nSELECT 'unterminated")).toMatchObject({
+			expect: 'column'
+		});
+	});
+
+	it('suppresses completion inside a MySQL # comment', async () => {
+		expect(await at('SELECT 1 # note|', 'mysql')).toBeNull();
+	});
 });
 
 describe('joinOn (#555)', () => {
@@ -193,5 +209,15 @@ describe('statementSpanAt (#395, #756)', () => {
 	it('takes the last statement when the cursor is after it, and null on an empty doc', async () => {
 		expect(await text('SELECT 1;\n\n', 12)).toBe('SELECT 1;');
 		expect(await statementSpanAt(null, '  \n ', 2)).toBeNull();
+	});
+
+	it('selects the following statement at a shared boundary', async () => {
+		const doc = 'SELECT 1;SELECT 2';
+		expect(await text(doc, doc.indexOf('SELECT 2'))).toBe('SELECT 2');
+	});
+
+	it('skips a trailing comment to the last executable statement', async () => {
+		const doc = 'SELECT 1;\n-- explanation';
+		expect(await text(doc, doc.length)).toBe('SELECT 1;');
 	});
 });

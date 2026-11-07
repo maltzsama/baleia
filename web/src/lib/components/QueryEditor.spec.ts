@@ -243,18 +243,18 @@ describe('QueryEditor', () => {
 		await waitFor(() => expect(sent).toEqual(['SELECT 1;']));
 	});
 
-	// CodeRabbit on #396: Run must not fall back to the whole script. The only
-	// case where it does is an unsplittable script (unterminated input, #756).
-	it('runs the whole script when it cannot be split', async () => {
+	// CodeRabbit on #396: Run must not fall back to the whole script.
+	it('stops and reports when the statement cannot be determined', async () => {
 		mockWorkbench();
 		const sent: string[] = [];
 		captureRuns(sent);
-		editor.updateSql(editor.activeId, "SELECT 'unterminated");
+		editor.updateSql(editor.activeId, "SELECT 1;\nSELECT 'unterminated");
 		render(QueryEditor);
 		await screen.findByText('trino · trino');
 
 		await fireEvent.click(screen.getByTestId('run-current'));
-		await waitFor(() => expect(sent).toEqual(["SELECT 'unterminated"]));
+		await screen.findByText('Could not split the script');
+		expect(sent).toEqual([]);
 	});
 
 	it('runs the whole script with the shortcut, and has no Run all button', async () => {

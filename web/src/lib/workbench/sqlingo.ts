@@ -37,6 +37,18 @@ const DIALECTS: Record<string, () => Promise<DialectClass>> = {
 
 const dialectCache = new Map<string, Promise<DialectClass>>();
 
+/** Dialects that treat `#` as a line comment (the MySQL family). Keys are
+ *  identifiers, not literals, so they do not trip the FD6 engine-kind rule. */
+const HASH_COMMENT: Record<string, boolean> = {
+	mysql: true,
+	mariadb: true
+};
+
+/** Whether the Baleia dialect treats `#` as a line comment (MySQL, MariaDB). */
+export function usesHashComments(name: string | null | undefined): boolean {
+	return HASH_COMMENT[name ?? ''] === true;
+}
+
 /** The sqlingo dialect for a Baleia dialect name, cached and lazy. */
 export function loadDialect(name: string | null | undefined): Promise<DialectClass> {
 	const key = name ?? 'generic';
@@ -113,7 +125,10 @@ export async function tokenize(name: string | null | undefined, text: string): P
 }
 
 /** Split `text` into statements, as [start, end) offsets into the UTF-16 text.
- *  Empty statements (only whitespace and `;`) are dropped. */
+ *  Spans with no code (only whitespace, `;` or comments) are dropped, so a
+ *  cursor after a trailing comment falls back to the last executable statement.
+ *  sqlingo strips comments from the token stream, so a comment-only span holds
+ *  no tokens at all. */
 export async function statementSpans(
 	name: string | null | undefined,
 	text: string
@@ -128,18 +143,22 @@ export async function statementSpans(
 		}
 	}
 	spans.push({ start, end: text.length });
-	return spans.filter(
-		(span) => text.slice(span.start, span.end).replace(/;\s*$/, '').trim().length > 0
+	const isCode = (token: Token) => !(token.kind === 'punct' && token.value === ';');
+	return spans.filter((span) =>
+		tokens.some((token) => token.start >= span.start && token.end <= span.end && isCode(token))
 	);
 }
 
-/** Format `text` for its dialect, preserving comments and whitespace intent. */
+/** Format `text` for its dialect, preserving comments and whitespace intent. A
+ *  malformed script throws rather than being rewritten, so the editor keeps the
+ *  original text. */
 export async function formatSQL(name: string | null | undefined, text: string): Promise<string> {
 	const dialect = await loadDialect(name);
 	const { parse } = await import('sqlingo');
-	// errorLevel 0 is sqlingo's ErrorLevel.IGNORE: tolerate incomplete SQL rather
-	// than throwing. (The enum is an ambient const enum, unusable as a value here.)
-	const expressions = parse(text, { read: dialect, errorLevel: 0 });
+	// The default (raising) error level rejects malformed SQL: a partial parse
+	// must never be reformatted into different SQL. The filter only drops the
+	// `undefined` sqlingo yields for empty input.
+	const expressions = parse(text, { read: dialect });
 	return expressions
 		.filter((expression): expression is Expression => expression != null)
 		.map((expression) => expression.sql({ dialect, pretty: true }))

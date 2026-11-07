@@ -557,13 +557,13 @@ export function sqlCompletionSource(scope: () => CompletionScope | null): Comple
 	return async (context: CompletionContext): Promise<CompletionResult | null> => {
 		const current = scope();
 		if (!current?.workspaceId) return null;
-		const ctx = await sqlContextAt(current.dialect, context.state.doc.toString(), context.pos);
-		if (!ctx) return null;
-		const typing = ctx.prefix.length > 0 || ctx.qualifier.length > 0;
-		if (!typing && !context.explicit && !ctx.joinOn) return null;
-
 		const controller = new AbortController();
 		context.addEventListener('abort', () => controller.abort(), { onDocChange: true });
+
+		const ctx = await sqlContextAt(current.dialect, context.state.doc.toString(), context.pos);
+		if (!ctx || context.aborted) return null;
+		const typing = ctx.prefix.length > 0 || ctx.qualifier.length > 0;
+		if (!typing && !context.explicit && !ctx.joinOn) return null;
 
 		let options: Option[] = [];
 		try {

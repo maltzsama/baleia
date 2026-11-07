@@ -813,15 +813,17 @@
 		const head = selection.head;
 		const name = selectedEngine?.dialect?.name;
 		// The statement at the cursor is split on the client with sqlingo (#756).
-		// Run never falls back to the whole script, which is Run all's job; when
-		// the script cannot be split (unterminated input) it runs as one statement.
-		let span: { start: number; end: number } | null | undefined;
+		// Run never falls back to the whole script, which is Run all's job: when
+		// the statement cannot be determined (unterminated input, a failed dialect
+		// load) it stops and reports instead of running a different statement.
+		let span: { start: number; end: number } | null;
 		try {
 			span = await statementSpanAt(name, full, head);
 		} catch {
-			span = null;
+			const tab = activeTab;
+			if (tab) tab.errorMsg = m.components_queryeditor_could_not_split_the_script();
+			return;
 		}
-		span ??= { start: 0, end: full.length };
 		if (span) await submit(full.slice(span.start, span.end));
 	}
 
@@ -939,11 +941,14 @@
 
 	async function formatSQL() {
 		if (!editorView) return;
+		const sqlText = editorView.state.doc.toString();
 		try {
-			const sqlText = editorView.state.doc.toString();
 			const formatted = await formatSql(selectedEngine?.dialect?.name, sqlText);
+			// The tab or document may have changed while sqlingo loaded: never
+			// overwrite a different buffer with a stale result.
+			if (editorView.state.doc.toString() !== sqlText) return;
 			editorView.dispatch({
-				changes: { from: 0, to: editorView.state.doc.length, insert: formatted }
+				changes: { from: 0, to: sqlText.length, insert: formatted }
 			});
 		} catch {
 			/* invalid SQL: leave the editor untouched */
