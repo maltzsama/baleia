@@ -66,7 +66,6 @@ const scope = (overrides: Partial<CompletionScope> = {}): CompletionScope => ({
 	namespaceDepth: 1,
 	schema: 'tiny',
 	dialect: 'trino',
-	keywords: [],
 	functions: ['count', 'count_if', 'ST_Area', 'abs'],
 	cmDialect: StandardSQL,
 	upperCase: true,
@@ -302,14 +301,6 @@ describe('sqlCompletionSource', () => {
 	it('suggests nothing inside a string or a comment', async () => {
 		expect(await complete("SELECT * FROM nation WHERE name = 'na|")).toBeNull();
 		expect(await complete('SELECT 1 -- na|')).toBeNull();
-	});
-
-	it('uses the dialect keyword list when there is one', async () => {
-		const result = await complete('SELECT * FROM nation |', {
-			explicit: true,
-			scope: scope({ keywords: ['where', 'window'] })
-		});
-		expect(labels(result?.options)).toEqual(['WHERE', 'WINDOW']);
 	});
 });
 

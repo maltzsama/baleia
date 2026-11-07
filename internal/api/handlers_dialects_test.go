@@ -28,7 +28,7 @@ func TestGetDialect(t *testing.T) {
 	}
 	ok, isOK := resp.(GetDialect200JSONResponse)
 	if !isOK || ok.Body.Name != "tsql" || ok.Body.FormatterLanguage != "transactsql" || ok.Body.CodemirrorBase != "MSSQL" ||
-		ok.Body.Keywords == nil || ok.Headers.ETag == "" || ok.Headers.CacheControl == "" {
+		ok.Body.Functions == nil || ok.Headers.ETag == "" || ok.Headers.CacheControl == "" {
 		t.Fatalf("response = %#v", resp)
 	}
 	for _, inm := range []string{ok.Headers.ETag, "W/" + ok.Headers.ETag, `"other", ` + ok.Headers.ETag, "*"} {

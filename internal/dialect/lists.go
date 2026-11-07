@@ -5,18 +5,18 @@ import (
 	"strings"
 )
 
-// Keyword and function lists per dialect, generated against real servers by
+// Function word lists per dialect, generated against real servers by
 // scripts/gen-dialect-lists.sh and committed (never fetched at runtime).
 // Lines starting with # are the header recording the server version.
 //
 //go:embed lists/*.txt
 var listFiles embed.FS
 
-type wordLists struct{ keywords, functions []string }
+type wordLists struct{ functions []string }
 
 // allDialects is the list of dialects that ship word lists: it must match the
 // registry (see TestAllDialectsMatchRegistry). Adding a dialect here requires
-// regenerating lists/<name>.keywords.txt and lists/<name>.functions.txt.
+// regenerating lists/<name>.functions.txt.
 var allDialects = []string{
 	Trino, PostgreSQL, MySQL, MariaDB, TSQL, Oracle, SQLite, ClickHouse, FlightSQL,
 }
@@ -27,7 +27,6 @@ func loadLists() map[string]wordLists {
 	out := make(map[string]wordLists, len(allDialects))
 	for _, name := range allDialects {
 		out[name] = wordLists{
-			keywords:  readWordList(name + ".keywords.txt"),
 			functions: readWordList(name + ".functions.txt"),
 		}
 	}

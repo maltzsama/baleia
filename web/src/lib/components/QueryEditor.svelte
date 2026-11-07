@@ -225,7 +225,7 @@
 		editor.setTarget(tab.id, pick.binding_id, tab.schema || ws?.default_schema || '');
 	});
 
-	// The dialect (keywords and functions) follows the selected engine.
+	// The dialect's function list follows the selected engine.
 	$effect(() => {
 		const name = selectedEngine?.dialect?.name;
 		const wid = workspaceId;
@@ -582,7 +582,6 @@
 					namespaceDepth: selectedEngine?.capabilities?.namespace_depth ?? 0,
 					schema: activeTab.schema || workspaceStore.current?.default_schema || '',
 					dialect: dialect?.name ?? '',
-					keywords: dialect?.keywords ?? [],
 					functions: dialect?.functions ?? [],
 					cmDialect: codemirrorDialect(selectedEngine?.dialect?.codemirror_base),
 					upperCase: true

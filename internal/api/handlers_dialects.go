@@ -199,7 +199,7 @@ func (h *CatalogHandlers) GetDialect(ctx context.Context, request GetDialectRequ
 	}
 	body := Dialect{
 		Name: d.Name(), FormatterLanguage: d.FormatterLanguage(), CodemirrorBase: d.CodeMirrorBase(),
-		Keywords: d.Keywords(), Functions: d.Functions(),
+		Functions: d.Functions(),
 	}
 	etag := dialectETag(body)
 	if request.Params.IfNoneMatch != nil && etagMatches(*request.Params.IfNoneMatch, etag) {

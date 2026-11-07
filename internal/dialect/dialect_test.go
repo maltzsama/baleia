@@ -30,7 +30,7 @@ func TestRegistry(t *testing.T) {
 		if d.Name() != n || d.FormatterLanguage() == "" || d.CodeMirrorBase() == "" {
 			t.Errorf("%s: incomplete", n)
 		}
-		if d.Keywords() == nil || d.Functions() == nil {
+		if d.Functions() == nil {
 			t.Errorf("%s: lists must be non-nil", n)
 		}
 		m := d.MetadataQueries()

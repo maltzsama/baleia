@@ -5182,7 +5182,6 @@ export interface components {
             codemirror_base: string;
         };
         Dialect: components["schemas"]["EngineDialect"] & {
-            keywords: string[];
             functions: string[];
         };
         DialectFunction: {

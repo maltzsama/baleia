@@ -38,9 +38,7 @@ export type CompletionScope = {
 	namespaceDepth: number;
 	/** The tab's schema, dot-separated; empty when the engine default applies. */
 	schema: string;
-	/** The engine dialect's lists; an empty keyword list uses `cmDialect`'s. */
 	dialect: string;
-	keywords: string[];
 	functions: string[];
 	cmDialect: SQLDialect;
 	upperCase: boolean;
@@ -337,16 +335,10 @@ async function keywordOptions(
 	context: CompletionContext,
 	statementStart: boolean
 ): Promise<Option[]> {
-	let words: Completion[];
-	if (scope.keywords.length > 0) {
-		words = scope.keywords.map((keyword) => ({
-			label: scope.upperCase ? keyword.toUpperCase() : keyword,
-			type: 'keyword'
-		}));
-	} else {
-		const result = await keywordCompletionSource(scope.cmDialect, scope.upperCase)(context);
-		words = result?.options ? [...result.options] : [];
-	}
+	// Keywords come from the CodeMirror dialect (the language mode owns them,
+	// not the API): no per-engine keyword list is shipped anymore.
+	const result = await keywordCompletionSource(scope.cmDialect, scope.upperCase)(context);
+	const words: Completion[] = result?.options ? [...result.options] : [];
 	if (statementStart) {
 		// Every statement keyword, also those the dialect's list lacks (SHOW on StandardSQL).
 		const have = new Set(words.map((word) => word.label.toUpperCase()));

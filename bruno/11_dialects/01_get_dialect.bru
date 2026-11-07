@@ -17,7 +17,6 @@ auth:bearer {
 assert {
   res.status: eq 200
   res.body.name: eq trino
-  res.body.keywords: isArray
   res.body.functions: isArray
 }
 
@@ -33,6 +32,6 @@ tests {
 
 docs {
   Editor support for a SQL dialect: the sql-formatter language, the
-  CodeMirror base dialect and the keyword and function lists, generated from
-  real servers. Cacheable: send If-None-Match with the ETag.
+  CodeMirror base dialect and the function list, generated from real servers.
+  Cacheable: send If-None-Match with the ETag.
 }
