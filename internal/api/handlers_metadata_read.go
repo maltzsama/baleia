@@ -196,6 +196,11 @@ func (h *CatalogHandlers) ListMetadataFunctions(ctx context.Context, request Lis
 	if err != nil {
 		return nil, err
 	}
+	// A binding_id from another catalog must not answer for the requested one:
+	// ResolveTarget ignores catalog_id when binding_id is set.
+	if target.CatalogID.Bytes != catalog {
+		return ListMetadataFunctions404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
+	}
 	if h.engines == nil {
 		return ListMetadataFunctions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeEngineUnavailable, "no engine is available")}, nil
 	}
@@ -210,9 +215,11 @@ func (h *CatalogHandlers) ListMetadataFunctions(ctx context.Context, request Lis
 		if err != nil {
 			return ListMetadataFunctions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeEngineUnavailable, "the function catalog is unavailable")}, nil
 		}
+		// Sort before caching: a shared slice must not be sorted concurrently by
+		// overlapping requests reading it from the cache.
+		sort.Slice(refs, func(i, j int) bool { return strings.ToLower(refs[i].Name) < strings.ToLower(refs[j].Name) })
 		h.functionsCache.Set(key, refs)
 	}
-	sort.Slice(refs, func(i, j int) bool { return strings.ToLower(refs[i].Name) < strings.ToLower(refs[j].Name) })
 	out := make(ListMetadataFunctions200JSONResponse, 0, len(refs))
 	for _, r := range refs {
 		kind := r.Kind

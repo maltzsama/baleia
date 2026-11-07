@@ -36,7 +36,13 @@ export class EngineRequestError extends Error {
 const enginesCache = new Map<string, Promise<Engine[]>>();
 const dialectCache = new Map<string, Promise<Dialect>>();
 const functionsCache = new Map<string, Promise<DialectFunction[]>>();
-const bindingFunctionsCache = new Map<string, Promise<DialectFunction[] | null>>();
+const bindingFunctionsCache = new Map<
+	string,
+	{ at: number; promise: Promise<DialectFunction[] | null> }
+>();
+// An engine's catalog changes rarely; five minutes keeps the editor from
+// missing functions added after the first lookup without hammering the API.
+const BINDING_FUNCTIONS_TTL = 5 * 60_000;
 
 export function clearEnginesCache(): void {
 	enginesCache.clear();
@@ -100,7 +106,7 @@ export function loadBindingFunctions(
 ): Promise<DialectFunction[] | null> {
 	const key = `${workspaceId}:${catalogId}:${bindingId}`;
 	const hit = bindingFunctionsCache.get(key);
-	if (hit) return hit;
+	if (hit && Date.now() - hit.at < BINDING_FUNCTIONS_TTL) return hit.promise;
 	const pending = client
 		.GET('/workspaces/{id}/metadata/functions', {
 			params: {
@@ -108,12 +114,19 @@ export function loadBindingFunctions(
 				query: { catalog_id: catalogId, binding_id: bindingId || undefined }
 			}
 		})
-		.then(({ data, error }) => (error || !data ? null : data))
+		.then(({ data, error }) => {
+			if (error || !data) {
+				// Evict a failed lookup so a recovered engine is retried.
+				bindingFunctionsCache.delete(key);
+				return null;
+			}
+			return data;
+		})
 		.catch(() => {
 			bindingFunctionsCache.delete(key);
 			return null;
 		});
-	bindingFunctionsCache.set(key, pending);
+	bindingFunctionsCache.set(key, { at: Date.now(), promise: pending });
 	return pending;
 }
 
