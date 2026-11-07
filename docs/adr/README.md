@@ -29,7 +29,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0017](0017-bi-gateway.md) | BI tools reach the engines only through Baleia (the BI gateway) | Proposed; amends 0001 |
 | [0018](0018-workspace-catalog-scope.md) | Workspace-scoped catalog access | Proposed; supersedes 0016 layer 1, extends 0005 |
 | [0019](0019-sqlingo-editor-sql-intelligence.md) | sqlingo is the editor's SQL intelligence; the server keeps its own parser | Accepted |
-| [0020](0020-portable-metadata-store.md) | The metadata store runs on Bun, portably (PostgreSQL, MySQL, MariaDB) | Accepted |
+| [0020](0020-bun-store-orm.md) | Bun is the store ORM; no SQL survives in the data layer | Accepted |
 
 ## Owner decisions
 
