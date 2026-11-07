@@ -2200,7 +2200,6 @@
 	"audit_client_could_not_load_the_actions": "Não foi possível carregar as ações",
 	"audit_client_could_not_resolve_names": "Não foi possível resolver os nomes",
 	"components_queryeditor_failed_to_load_targets": "Não foi possível carregar os destinos",
-	"components_queryeditor_could_not_split_the_script": "Não foi possível dividir o script",
 	"components_queryeditor_could_not_cancel": "Não foi possível cancelar",
 	"components_queryeditor_could_not_re_run": "Não foi possível executar de novo",
 	"components_queryeditor_quick_open": "Abrir rapidamente",
