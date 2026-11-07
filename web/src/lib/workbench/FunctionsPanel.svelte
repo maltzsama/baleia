@@ -1,11 +1,21 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import { loadFunctions, type DialectFunction } from '$lib/engines/client';
+	import { loadBindingFunctions, type DialectFunction } from '$lib/engines/client';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
 
-	let { name, oninsert }: { name: string; oninsert: (fn: DialectFunction) => void } = $props();
+	let {
+		workspaceId,
+		catalogId,
+		bindingId,
+		oninsert
+	}: {
+		workspaceId: string;
+		catalogId: string;
+		bindingId: string;
+		oninsert: (fn: DialectFunction) => void;
+	} = $props();
 
 	let functions = $state<DialectFunction[]>([]);
 	let loading = $state(true);
@@ -14,8 +24,10 @@
 	let kind = $state('all');
 
 	$effect(() => {
-		const dialect = name;
-		if (!dialect) {
+		const ws = workspaceId;
+		const cat = catalogId;
+		const bind = bindingId;
+		if (!ws || !cat || !bind) {
 			functions = [];
 			loading = false;
 			error = '';
@@ -24,9 +36,9 @@
 		let cancelled = false;
 		loading = true;
 		error = '';
-		void loadFunctions(dialect)
+		void loadBindingFunctions(ws, cat, bind)
 			.then((data) => {
-				if (!cancelled) functions = data;
+				if (!cancelled) functions = data ?? [];
 			})
 			.catch((e) => {
 				if (!cancelled) error = e instanceof Error ? e.message : String(e);

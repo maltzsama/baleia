@@ -582,7 +582,6 @@
 					namespaceDepth: selectedEngine?.capabilities?.namespace_depth ?? 0,
 					schema: activeTab.schema || workspaceStore.current?.default_schema || '',
 					dialect: dialect?.name ?? '',
-					functions: dialect?.functions ?? [],
 					cmDialect: codemirrorDialect(selectedEngine?.dialect?.codemirror_base),
 					upperCase: true
 				}
@@ -1267,7 +1266,12 @@
 		title={m.functions_panel_title()}
 		onclose={() => editorView?.focus()}
 	>
-		<FunctionsPanel name={dialect?.name ?? ''} oninsert={insertFunction} />
+		<FunctionsPanel
+			workspaceId={completionScope?.workspaceId ?? ''}
+			catalogId={completionScope?.catalogId ?? ''}
+			bindingId={completionScope?.bindingId ?? ''}
+			oninsert={insertFunction}
+		/>
 	</Drawer>
 
 	<SaveQueryDialog

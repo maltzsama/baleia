@@ -28,7 +28,7 @@ func TestGetDialect(t *testing.T) {
 	}
 	ok, isOK := resp.(GetDialect200JSONResponse)
 	if !isOK || ok.Body.Name != "tsql" || ok.Body.FormatterLanguage != "transactsql" || ok.Body.CodemirrorBase != "MSSQL" ||
-		ok.Body.Functions == nil || ok.Headers.ETag == "" || ok.Headers.CacheControl == "" {
+		ok.Headers.ETag == "" || ok.Headers.CacheControl == "" {
 		t.Fatalf("response = %#v", resp)
 	}
 	for _, inm := range []string{ok.Headers.ETag, "W/" + ok.Headers.ETag, `"other", ` + ok.Headers.ETag, "*"} {
@@ -46,64 +46,6 @@ func TestGetDialect(t *testing.T) {
 	}
 	if resp, _ := h.GetDialect(context.Background(), GetDialectRequestObject{Name: "tsql"}); func() bool { _, ok := resp.(GetDialect401JSONResponse); return !ok }() {
 		t.Error("anonymous must be 401")
-	}
-}
-
-func TestListDialectFunctions(t *testing.T) {
-	t.Parallel()
-	h := testAPI(handlerFields{dialects: dialect.NewRegistry()})
-	resp, err := h.ListDialectFunctions(testContext(), ListDialectFunctionsRequestObject{Name: "trino"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ok, isOK := resp.(ListDialectFunctions200JSONResponse)
-	if !isOK || len(ok.Body) == 0 || ok.Headers.ETag == "" || ok.Headers.CacheControl == "" {
-		t.Fatalf("response = %#v", resp)
-	}
-	found := false
-	for _, f := range ok.Body {
-		if f.Name == "date_trunc" {
-			found = true
-			if !f.Call {
-				t.Fatalf("date_trunc = %+v", f)
-			}
-		}
-	}
-	if !found {
-		t.Fatal("trino's reference lacks date_trunc")
-	}
-	// A dialect with a generated reference returns its signature (#531).
-	pg, err := h.ListDialectFunctions(testContext(), ListDialectFunctionsRequestObject{Name: "postgresql"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	pgOK, isPG := pg.(ListDialectFunctions200JSONResponse)
-	if !isPG {
-		t.Fatalf("postgresql response = %T", pg)
-	}
-	found = false
-	for _, f := range pgOK.Body {
-		if f.Name == "date_trunc" {
-			found = true
-			if f.Signature == nil || *f.Signature == "" || f.Description == nil || *f.Description == "" {
-				t.Fatalf("postgresql date_trunc = %+v", f)
-			}
-		}
-	}
-	if !found {
-		t.Fatal("postgresql's reference lacks date_trunc")
-	}
-	for _, inm := range []string{ok.Headers.ETag, "W/" + ok.Headers.ETag, "*"} {
-		r, _ := h.ListDialectFunctions(testContext(), ListDialectFunctionsRequestObject{Name: "trino", Params: ListDialectFunctionsParams{IfNoneMatch: &inm}})
-		if nm, is304 := r.(ListDialectFunctions304Response); !is304 || nm.Headers.ETag != ok.Headers.ETag {
-			t.Errorf("If-None-Match %s: %T", inm, r)
-		}
-	}
-	if r, _ := h.ListDialectFunctions(testContext(), ListDialectFunctionsRequestObject{Name: "cobol"}); func() bool {
-		_, ok := r.(ListDialectFunctions404JSONResponse)
-		return !ok
-	}() {
-		t.Error("unknown dialect must be 404")
 	}
 }
 

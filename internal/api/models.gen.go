@@ -2376,15 +2376,7 @@ type CronPreviewResult struct {
 }
 
 // Dialect defines model for Dialect.
-type Dialect struct {
-	// CodemirrorBase @maltzsama/lang-sql base dialect
-	CodemirrorBase string `json:"codemirror_base"`
-
-	// FormatterLanguage sql-formatter language id
-	FormatterLanguage string   `json:"formatter_language"`
-	Functions         []string `json:"functions"`
-	Name              string   `json:"name"`
-}
+type Dialect = EngineDialect
 
 // DialectFunction defines model for DialectFunction.
 type DialectFunction struct {
@@ -5287,11 +5279,6 @@ type PutTableMaintenanceParams struct {
 
 // GetDialectParams defines parameters for GetDialect.
 type GetDialectParams struct {
-	IfNoneMatch *string `json:"If-None-Match,omitempty"`
-}
-
-// ListDialectFunctionsParams defines parameters for ListDialectFunctions.
-type ListDialectFunctionsParams struct {
 	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 

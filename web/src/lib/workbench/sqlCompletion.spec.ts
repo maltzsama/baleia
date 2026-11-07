@@ -66,7 +66,6 @@ const scope = (overrides: Partial<CompletionScope> = {}): CompletionScope => ({
 	namespaceDepth: 1,
 	schema: 'tiny',
 	dialect: 'trino',
-	functions: ['count', 'count_if', 'ST_Area', 'abs'],
 	cmDialect: StandardSQL,
 	upperCase: true,
 	...overrides
@@ -136,18 +135,6 @@ beforeEach(() => {
 			]);
 		}),
 		http.get('/workspaces/{id}/metadata/popular-tables', ({ response }) => response(200).json([])),
-		http.get('/dialects/{name}/functions', ({ response }) =>
-			response(200).json([
-				{
-					name: 'count',
-					kind: 'function',
-					call: true,
-					signature: 'count(x) → bigint',
-					description: 'Counts rows.'
-				},
-				{ name: 'count_if', kind: 'function', call: true }
-			])
-		),
 		// The runtime catalog the connected engine returns (#788).
 		http.get('/workspaces/{id}/metadata/functions', ({ response }) =>
 			response(200).json([

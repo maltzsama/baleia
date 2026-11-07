@@ -2,7 +2,6 @@
 // engine name: the dialect, formatter language and CodeMirror base all come
 // from the API.
 import { apiErrorMessage, client } from '$lib/api/client';
-import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import {
 	Cassandra,
@@ -42,7 +41,6 @@ export class EngineRequestError extends Error {
 
 const enginesCache = new Map<string, Promise<Engine[]>>();
 const dialectCache = new Map<string, Promise<Dialect>>();
-const functionsCache = new Map<string, Promise<DialectFunction[]>>();
 const bindingFunctionsCache = new Map<
 	string,
 	{ at: number; promise: Promise<DialectFunction[] | null> }
@@ -54,7 +52,6 @@ const BINDING_FUNCTIONS_TTL = 5 * 60_000;
 export function clearEnginesCache(): void {
 	enginesCache.clear();
 	dialectCache.clear();
-	functionsCache.clear();
 	bindingFunctionsCache.clear();
 }
 
@@ -81,30 +78,10 @@ export function loadEngines(): Promise<Engine[]> {
 	return pending;
 }
 
-/** A dialect with its keyword and function lists, cached per name. */
-/** The dialect's function reference, with signatures where committed (B2, #531). */
-export function loadFunctions(name: string): Promise<DialectFunction[]> {
-	const hit = functionsCache.get(name);
-	if (hit) return hit;
-	const pending = client
-		.GET('/dialects/{name}/functions', { params: { path: { name } } })
-		.then(({ data, error, response }) => {
-			if (error || !data) fail(error, response?.status, m.functions_panel_failed());
-			return data;
-		})
-		.catch((error) => {
-			functionsCache.delete(name);
-			throw error;
-		});
-	functionsCache.set(name, pending);
-	return pending;
-}
-
 /**
  * The connected engine's own function catalog for a binding, introspected at
  * runtime and cached per binding (#788). Resolves to null when it is
- * unavailable (an engine with no catalog, or the engine is down), so callers
- * fall back to the static reference from {@link loadFunctions}.
+ * unavailable (an engine with no catalog, or the engine is down).
  */
 export function loadBindingFunctions(
 	workspaceId: string,
