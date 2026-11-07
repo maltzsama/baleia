@@ -60,7 +60,7 @@ func runMetadataReader(t *testing.T, env string, newProvider func(*connections.D
 	}
 	t.Cleanup(func() { _, _ = admin.Exec(`DROP DATABASE IF EXISTS baleia_fixture`) })
 
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -117,7 +117,7 @@ func newEngineForTest(t *testing.T, multi bool) queryengine.Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

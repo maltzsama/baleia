@@ -31,11 +31,7 @@ type Manager struct {
 	keyring   *crypto.Keyring
 	providers *connections.Registry
 	dialer    *connections.Dialer
-	// managedDialer opens the internal ranges for system-owned engines (the
-	// default Trino cluster seeded from TRINO_URL). User-owned connections
-	// keep the strict dialer (#609). Nil falls back to dialer.
-	managedDialer *connections.Dialer
-	kinds         *Registry
+	kinds     *Registry
 
 	// creds fills each session's CatalogToken (#648); nil leaves it empty.
 	creds CatalogCredentials
@@ -53,19 +49,9 @@ func (m *Manager) SetCatalogCredentials(c CatalogCredentials) {
 }
 
 // NewManager returns a manager that builds engines of the kinds in kinds; the
-// keyring may be nil when no stored connection has credentials. managedDialer
-// may be nil, in which case every engine uses dialer.
-func NewManager(store Store, keyring *crypto.Keyring, providers *connections.Registry, dialer, managedDialer *connections.Dialer, kinds *Registry) *Manager {
-	return &Manager{store: store, keyring: keyring, providers: providers, dialer: dialer, managedDialer: managedDialer, kinds: kinds, cache: map[[16]byte]*managed{}}
-}
-
-// dialerFor picks the permissive dialer for system-owned (operator-configured)
-// engines and the strict one for user-owned connections.
-func (m *Manager) dialerFor(row db.GetEngineWithConnectionRow) *connections.Dialer {
-	if m.managedDialer != nil && row.CatalogConnection.IsSystemOwned() {
-		return m.managedDialer
-	}
-	return m.dialer
+// keyring may be nil when no stored connection has credentials.
+func NewManager(store Store, keyring *crypto.Keyring, providers *connections.Registry, dialer *connections.Dialer, kinds *Registry) *Manager {
+	return &Manager{store: store, keyring: keyring, providers: providers, dialer: dialer, kinds: kinds, cache: map[[16]byte]*managed{}}
 }
 
 // HasKind reports whether the manager can build engines of kind.
@@ -76,18 +62,6 @@ func (m *Manager) HasKind(kind string) bool { return m.kinds.Has(kind) }
 // The caller closes it.
 func (m *Manager) Transient(ctx context.Context, kind string, cfg connections.Config) (Engine, error) {
 	return m.kinds.Transient(ctx, kind, cfg, m.dialer)
-}
-
-// ManagedTransient is Transient dialing through the managed dialer, for a
-// system-owned connection to the operator's own endpoint that may live on a
-// private address (docs/adr/0011, #609). Without a managed dialer it falls
-// back to the strict one.
-func (m *Manager) ManagedTransient(ctx context.Context, kind string, cfg connections.Config) (Engine, error) {
-	d := m.managedDialer
-	if d == nil {
-		d = m.dialer
-	}
-	return m.kinds.Transient(ctx, kind, cfg, d)
 }
 
 // Get returns the engine of an `engines` row.
@@ -138,7 +112,7 @@ func (m *Manager) Get(ctx context.Context, engineID pgtype.UUID) (Engine, error)
 		IdentityMode:        row.Engine.IdentityMode,
 		CredentialsReadOnly: row.CatalogConnection.CredentialsReadOnly,
 	}
-	eng, err := entry.factory(ctx, er, cfg, m.dialerFor(row))
+	eng, err := entry.factory(ctx, er, cfg, m.dialer)
 	if err != nil {
 		return nil, err
 	}

@@ -121,7 +121,7 @@ func testEngine(t *testing.T, f *fakeCoordinator) *Engine {
 	t.Helper()
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

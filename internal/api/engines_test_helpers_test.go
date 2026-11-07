@@ -25,7 +25,7 @@ func (f fixedEngines) DefaultTrino(context.Context) (queryengine.Engine, error) 
 // trinoBackends points the default engine and the catalog DDL at a (fake)
 // coordinator, as the wiring site does with the real one.
 func trinoBackends(url string) (engineSource, *bindtrino.Binder) {
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -44,23 +44,12 @@ func testEngines() engineSource {
 type registryKinds struct {
 	r *queryengine.Registry
 	d *connections.Dialer
-	// managedD is the permissive dialer ManagedTransient uses; nil falls back
-	// to d, like the manager without a managed dialer.
-	managedD *connections.Dialer
 }
 
 func (k registryKinds) HasKind(kind string) bool { return k.r.Has(kind) }
 
 func (k registryKinds) Transient(ctx context.Context, kind string, cfg connections.Config) (queryengine.Engine, error) {
 	return k.r.Transient(ctx, kind, cfg, k.d)
-}
-
-func (k registryKinds) ManagedTransient(ctx context.Context, kind string, cfg connections.Config) (queryengine.Engine, error) {
-	d := k.managedD
-	if d == nil {
-		d = k.d
-	}
-	return k.r.Transient(ctx, kind, cfg, d)
 }
 
 // testKinds knows the fake and Trino kinds, the adapters the api tests link

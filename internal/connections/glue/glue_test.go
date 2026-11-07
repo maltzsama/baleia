@@ -102,7 +102,7 @@ func TestMetadataReader_Moto(t *testing.T) {
 		t.Skip("BALEIA_TEST_MOTO_URL not set")
 	}
 	ctx := context.Background()
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

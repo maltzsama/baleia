@@ -31,7 +31,7 @@ func testEngine(t *testing.T) queryengine.Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

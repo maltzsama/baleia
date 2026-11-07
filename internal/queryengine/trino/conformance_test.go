@@ -18,7 +18,7 @@ func TestConformance(t *testing.T) {
 	if url == "" {
 		t.Skip("BALEIA_TEST_TRINO_URL not set")
 	}
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

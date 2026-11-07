@@ -16,9 +16,13 @@ access.
 ## Decision
 
 - **One dialer for every provider and engine** (`connections.Dialer`). It resolves the host, rejects
-  denied addresses and dials the **resolved IP** (no second lookup, no DNS-rebinding window).
-  Defaults deny loopback, link-local (including cloud metadata) and `0.0.0.0/8`; operators configure
-  extra deny or allow CIDRs. A driver without a dial hook is not shipped.
+  denied addresses and dials the **resolved IP** (no second lookup, no DNS-rebinding window). The
+  dialer hardcodes no ranges: what is denied or allowed is the operator's policy, set with
+  `BALEIA_CONNECTIONS_DENY_CIDRS` and `BALEIA_CONNECTIONS_ALLOW_CIDRS`. The Helm chart ships safe
+  defaults (loopback and `0.0.0.0/8`/`::/128`) as values, not code, so a deployment that reaches its
+  own internal networks (databases, catalog managers) leaves them reachable or allowlists their
+  ranges; cloud-metadata ranges are left out of the chart for each deployment to opt into. A driver
+  without a dial hook is not shipped.
 - **SQLite** files must resolve (after cleaning and resolving symlinks) inside `BALEIA_SQLITE_ROOT`,
   and are opened read-only unless both the connection and the server allow writes. Without
   `BALEIA_SQLITE_ROOT` the provider is unavailable. Confinement is path-based, so its threat model
@@ -39,7 +43,9 @@ access.
 
 ## Consequences
 
-- Local databases in development need an explicit allow (`BALEIA_CONNECTIONS_ALLOW_LOOPBACK=true`).
+- Loopback and the "this network" addresses (`0.0.0.0/8`, `::/128`) are denied only when the
+  deployment's deny list names them (the chart default does). Connecting to a database on the same
+  host means removing them from `BALEIA_CONNECTIONS_DENY_CIDRS` or allowlisting the host.
 - The CIDR lists apply to every caller, admins included. Creating and editing connections is limited to admins by default (`BALEIA_CONNECTIONS_CREATE=admins`); `everyone` opts a deployment into self-service, where the CIDR lists still bind every caller (#512, #610).
 - api and worker must see the same SQLite path (shared volume).
 - MySQL/MariaDB, Oracle, SQL Server and Flight SQL cannot enforce read-only; agents and semantic

@@ -15,55 +15,19 @@ import (
 // dialer refuses. The error never carries the resolved address.
 var ErrDeniedNetwork = errors.New("connection_denied_network")
 
-// DefaultDeny is refused by default. Loopback, link-local (cloud metadata
-// lives at 169.254.169.254 and fd00:ec2::254) and "this network" are always
-// refused; the private/internal ranges (RFC1918, CGNAT and IPv6 ULA) are
-// refused unless the operator's allow list names them (#609).
-var DefaultDeny = []netip.Prefix{
-	netip.MustParsePrefix("127.0.0.0/8"),
-	netip.MustParsePrefix("::1/128"),
-	netip.MustParsePrefix("169.254.0.0/16"),
-	netip.MustParsePrefix("fe80::/10"),
-	netip.MustParsePrefix("fd00:ec2::254/128"),
-	netip.MustParsePrefix("0.0.0.0/8"),
-	netip.MustParsePrefix("::/128"),
-	// Internal networks a user must not reach without an explicit allow.
-	netip.MustParsePrefix("10.0.0.0/8"),
-	netip.MustParsePrefix("172.16.0.0/12"),
-	netip.MustParsePrefix("192.168.0.0/16"),
-	netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("fc00::/7"),
-}
-
-// alwaysDeny is the part of DefaultDeny that an allow list can never open:
-// loopback, link-local (cloud metadata) and "this network". Loopback is the
-// sole exception, and only through AllowLoopback for local development.
-var alwaysDeny = []netip.Prefix{
-	netip.MustParsePrefix("127.0.0.0/8"),
-	netip.MustParsePrefix("::1/128"),
-	netip.MustParsePrefix("169.254.0.0/16"),
-	netip.MustParsePrefix("fe80::/10"),
-	netip.MustParsePrefix("fd00:ec2::254/128"),
-	netip.MustParsePrefix("0.0.0.0/8"),
-	netip.MustParsePrefix("::/128"),
-}
-
-var loopback = []netip.Prefix{
-	netip.MustParsePrefix("127.0.0.0/8"),
-	netip.MustParsePrefix("::1/128"),
-}
-
 // Dialer is the only way providers and engines reach user-supplied hosts
 // (docs/adr/0011). It resolves the host, drops denied addresses and dials a
 // resolved IP, so there is no second lookup and no DNS-rebinding window.
+//
+// The dialer carries no network policy of its own: what is denied or allowed
+// is decided by the operator through BALEIA_CONNECTIONS_DENY_CIDRS and
+// BALEIA_CONNECTIONS_ALLOW_CIDRS (DialerOptions). The Helm chart ships safe
+// defaults as values, never as code, so a deployment can reach its own
+// internal networks.
 type Dialer struct {
 	// Deny is always refused; it wins over Allow.
 	Deny []netip.Prefix
-	// defaultDeny is refused unless Allow names it: the internal ranges
-	// (RFC1918, CGNAT, ULA) that a deployment may opt into (#609).
-	defaultDeny []netip.Prefix
-	// Allow, when non-empty, is the only space that may be dialed. It opens
-	// defaultDeny but never Deny.
+	// Allow, when non-empty, is the only space that may be dialed.
 	Allow []netip.Prefix
 	// Timeout bounds each connection attempt.
 	Timeout time.Duration
@@ -73,35 +37,17 @@ type Dialer struct {
 
 // DialerOptions is the operator configuration of the dialer.
 type DialerOptions struct {
-	DenyCIDRs     []string // always refused, in addition to DefaultDeny
-	AllowCIDRs    []string // if set, only these; opens the internal ranges in DefaultDeny
-	AllowLoopback bool     // development: reach databases on localhost
-	// AllowPrivate opens the internal ranges (RFC1918, CGNAT, ULA) by default.
-	// It is for operator-configured endpoints (the default Trino cluster, the
-	// catalog binder), never for user-supplied connection hosts (#609).
-	AllowPrivate bool
+	DenyCIDRs  []string // always refused, in addition to nothing else
+	AllowCIDRs []string // if set, only these may be dialed
 }
 
 // NewDialer builds the dialer from operator options.
 func NewDialer(o DialerOptions) (*Dialer, error) {
 	d := &Dialer{Timeout: 10 * time.Second}
-	for _, p := range DefaultDeny {
-		if containsPrefix(alwaysDeny, p) {
-			if o.AllowLoopback && containsPrefix(loopback, p) {
-				continue
-			}
-			d.Deny = append(d.Deny, p)
-			continue
-		}
-		if !o.AllowPrivate {
-			d.defaultDeny = append(d.defaultDeny, p)
-		}
-	}
-	extra, err := parsePrefixes(o.DenyCIDRs)
-	if err != nil {
+	var err error
+	if d.Deny, err = parsePrefixes(o.DenyCIDRs); err != nil {
 		return nil, fmt.Errorf("deny cidrs: %w", err)
 	}
-	d.Deny = append(d.Deny, extra...)
 	if d.Allow, err = parsePrefixes(o.AllowCIDRs); err != nil {
 		return nil, fmt.Errorf("allow cidrs: %w", err)
 	}
@@ -120,15 +66,6 @@ func parsePrefixes(in []string) ([]netip.Prefix, error) {
 	return out, nil
 }
 
-func containsPrefix(list []netip.Prefix, p netip.Prefix) bool {
-	for _, q := range list {
-		if q == p {
-			return true
-		}
-	}
-	return false
-}
-
 // Permitted reports whether the dialer may connect to addr.
 func (d *Dialer) Permitted(addr netip.Addr) bool {
 	// Prefix.Contains never matches an address with an IPv6 zone, so "::1%lo"
@@ -140,16 +77,9 @@ func (d *Dialer) Permitted(addr netip.Addr) bool {
 		}
 	}
 	if len(d.Allow) == 0 {
-		// No allow list: only the built-in internal ranges stay denied.
-		for _, p := range d.defaultDeny {
-			if p.Contains(addr) {
-				return false
-			}
-		}
 		return true
 	}
-	// An explicit allow list is the only space that may be dialed; it also
-	// opens the default-denied internal ranges, but never d.Deny.
+	// An explicit allow list is the only space that may be dialed.
 	for _, p := range d.Allow {
 		if p.Contains(addr) {
 			return true

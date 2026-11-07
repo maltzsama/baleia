@@ -55,9 +55,6 @@ type Activities struct {
 	keyring *crypto.Keyring
 	// connections reads metadata from catalog managers (table health).
 	connections *connections.Registry
-	// managedConnections is connections dialing through the managed dialer, for
-	// the operator's own catalog managers on private addresses (#609).
-	managedConnections *connections.Registry
 	// metadata stores catalog metadata snapshots (#15).
 	metadata metadataSyncer
 	// observeEngine observes a federated engine's catalogs (#17).
@@ -90,20 +87,19 @@ type s3Client interface {
 	PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error)
 }
 
-func New(logger *slog.Logger, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns, managedConns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client, dialects *dialect.Registry) *Activities {
+func New(logger *slog.Logger, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client, dialects *dialect.Registry) *Activities {
 	a := &Activities{
-		logger:             cmp.Or(logger, slog.New(slog.DiscardHandler)),
-		dialects:           dialects,
-		queries:            db.New(pool),
-		pool:               pool,
-		engines:            engines,
-		monitor:            mon,
-		s3:                 s3,
-		cfg:                cfg,
-		keyring:            keyring,
-		connections:        conns,
-		managedConnections: managedConns,
-		audit:              audit.Nop{},
+		logger:      cmp.Or(logger, slog.New(slog.DiscardHandler)),
+		dialects:    dialects,
+		queries:     db.New(pool),
+		pool:        pool,
+		engines:     engines,
+		monitor:     mon,
+		s3:          s3,
+		cfg:         cfg,
+		keyring:     keyring,
+		connections: conns,
+		audit:       audit.Nop{},
 	}
 	defaultActivities = a
 	return a

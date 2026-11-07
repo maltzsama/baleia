@@ -154,12 +154,11 @@ type Config struct {
 	RateLimitRPS     int
 	RateLimitBurst   int
 	// Connections* configure the dialer every connection provider uses to
-	// reach user-supplied hosts (docs/adr/0011). Loopback, link-local and
-	// cloud metadata addresses are always denied unless loopback is allowed
-	// for local development.
-	ConnectionsDenyCIDRs     []string
-	ConnectionsAllowCIDRs    []string
-	ConnectionsAllowLoopback bool
+	// reach user-supplied hosts (docs/adr/0011). The dialer hardcodes nothing:
+	// what is denied or allowed is decided by these lists, with safe defaults
+	// shipped as Helm chart values rather than code.
+	ConnectionsDenyCIDRs  []string
+	ConnectionsAllowCIDRs []string
 	// ConnectionsCreate is who may create and edit connections: "admins"
 	// (the default) or "everyone" (#512, #610). The dialer lists apply to
 	// admins too, so this is what keeps self-service users off internal
@@ -174,6 +173,10 @@ type Config struct {
 	// or role use the host's default AWS credential chain (#86). Off by
 	// default: any connection owner could otherwise use the platform's IAM role.
 	AllowAmbientAWSCredentials bool
+	// GlueAllowInsecureEndpoint lets a Glue connection use an http:// endpoint
+	// override (a local emulator such as moto). Off in production: an external
+	// AWS Glue catalog is always https and never needs it.
+	GlueAllowInsecureEndpoint bool
 	// Metrics (#87): /metrics on the API (MetricsEnabled, optional bearer
 	// MetricsToken) and the worker's own listener (WorkerMetricsAddr).
 	MetricsEnabled    bool
@@ -314,11 +317,11 @@ func Load() *Config {
 
 		ConnectionsDenyCIDRs:        splitList(getEnv("BALEIA_CONNECTIONS_DENY_CIDRS", "")),
 		ConnectionsAllowCIDRs:       splitList(getEnv("BALEIA_CONNECTIONS_ALLOW_CIDRS", "")),
-		ConnectionsAllowLoopback:    getEnv("BALEIA_CONNECTIONS_ALLOW_LOOPBACK", "false") == "true",
 		ConnectionsCreate:           getEnv("BALEIA_CONNECTIONS_CREATE", "admins"),
 		SQLiteRoot:                  getEnv("BALEIA_SQLITE_ROOT", ""),
 		SQLiteAllowWrite:            getEnv("BALEIA_SQLITE_ALLOW_WRITE", "false") == "true",
 		AllowAmbientAWSCredentials:  getEnv("BALEIA_ALLOW_AMBIENT_AWS_CREDENTIALS", "false") == "true",
+		GlueAllowInsecureEndpoint:   getEnv("BALEIA_GLUE_ALLOW_INSECURE_ENDPOINT", "false") == "true",
 		MetricsEnabled:              getEnv("BALEIA_METRICS_ENABLED", "true") == "true",
 		MetricsToken:                getEnv("BALEIA_METRICS_TOKEN", ""),
 		WorkerMetricsAddr:           getEnv("BALEIA_WORKER_METRICS_ADDR", ":9090"),

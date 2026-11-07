@@ -48,12 +48,18 @@ config:
   # Trino identity that may manage catalogs. One value: Baleia's DDL emitter
   # runs as it and the chart's catalog guard lists it as the only admin user.
   BALEIA_TRINO_ADMIN_USER: baleia_admin
-  # Network safety for connections (docs/adr/0011). Loopback, link-local,
-  # cloud metadata and the private ranges (RFC1918, 100.64.0.0/10, IPv6 ULA)
-  # are refused by default; ALLOW_CIDRS opens the private ranges on purpose.
-  BALEIA_CONNECTIONS_DENY_CIDRS: ""
-  BALEIA_CONNECTIONS_ALLOW_CIDRS: ""   # if set, only these; opens the private ranges
+  # Network safety for connections (docs/adr/0011). The dialer hardcodes no
+  # ranges: what is denied or allowed is the deployer's policy. The defaults
+  # below refuse only loopback and the "this network" addresses; cloud-metadata
+  # ranges (e.g. 169.254.0.0/16 on OKE/AWS) are deliberately left out so each
+  # deployment opts in per environment. ALLOW_CIDRS, when set, is the only
+  # space that may be dialed.
+  BALEIA_CONNECTIONS_DENY_CIDRS: "127.0.0.0/8,::1/128,0.0.0.0/8,::/128"
+  BALEIA_CONNECTIONS_ALLOW_CIDRS: ""   # if set, only these may be dialed
   BALEIA_CONNECTIONS_CREATE: admins     # or everyone: any member creates and edits connections
+  # Let a Glue connection use an http:// endpoint override (a local emulator).
+  # External AWS Glue is always https and never needs it.
+  BALEIA_GLUE_ALLOW_INSECURE_ENDPOINT: "false"
 
 # Extra volumes and mounts for the API and worker pods, e.g. the Secret or
 # ConfigMap holding the PEM bundle that config.BALEIA_TRINO_CA_FILE points at:

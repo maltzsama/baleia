@@ -69,16 +69,8 @@ type Core struct {
 	Temporal        client.Client
 	// Dialer is the SSRF-safe dialer every outbound connection goes through
 	// (docs/adr/0011).
-	Dialer *connections.Dialer
-	// ManagedDialer is Dialer with the internal ranges open for
-	// operator-configured endpoints (the default Trino cluster, the catalog
-	// binder); user-supplied connections keep the strict Dialer (#609).
-	ManagedDialer *connections.Dialer
-	Connections   *connections.Registry
-	// ManagedConnections is Connections dialing through ManagedDialer, for the
-	// operator's own catalog managers (Polaris, …) that live on a private
-	// address; user-supplied connections keep the strict Connections (#609).
-	ManagedConnections *connections.Registry
+	Dialer      *connections.Dialer
+	Connections *connections.Registry
 	// Dialects describe the SQL of every engine kind; built once and injected.
 	Dialects *dialect.Registry
 	// Engines run SQL (docs/adr/0002).
@@ -91,7 +83,7 @@ type Core struct {
 	OIDC      *oidclogin.Service
 	IDPTokens *idptoken.Tokens
 	// TrinoHTTP is the HTTP client of the default cluster (TRINO_URL): the
-	// managed dialer, the coordinator's CA bundle and Baleia's password login
+	// dialer, the coordinator's CA bundle and Baleia's password login
 	// (#646). The worker's Lens monitor uses it too.
 	TrinoHTTP *http.Client
 	// TrinoCA is the PEM bundle of BALEIA_TRINO_CA_FILE, empty when unset.
@@ -163,38 +155,22 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.onClose(c.Temporal.Close)
 
 	c.Dialer, err = connections.NewDialer(connections.DialerOptions{
-		DenyCIDRs:     cfg.ConnectionsDenyCIDRs,
-		AllowCIDRs:    cfg.ConnectionsAllowCIDRs,
-		AllowLoopback: cfg.ConnectionsAllowLoopback,
+		DenyCIDRs:  cfg.ConnectionsDenyCIDRs,
+		AllowCIDRs: cfg.ConnectionsAllowCIDRs,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("invalid connection network settings: %w", err)
-	}
-	// The operator's own endpoints (TRINO_URL, the catalog binder) may live on
-	// a private address. They get a dialer with the internal ranges open; the
-	// deny list still wins and user connections keep the strict dialer (#609).
-	c.ManagedDialer, err = connections.NewDialer(connections.DialerOptions{
-		DenyCIDRs:     cfg.ConnectionsDenyCIDRs,
-		AllowLoopback: cfg.ConnectionsAllowLoopback,
-		AllowPrivate:  true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("invalid managed connection network settings: %w", err)
 	}
 	c.Dialects = dialect.NewRegistry()
 	pOpts := providers.Options{
 		Dialects: c.Dialects,
 		Secrets:  connections.SecretResolver{FileBaseDir: cfg.SecretFileBaseDir},
 		SQLite:   sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite, Logger: c.Logger},
-		Glue:     glue.Options{AllowAmbientCredentials: cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: cfg.ConnectionsAllowLoopback},
+		Glue:     glue.Options{AllowAmbientCredentials: cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: cfg.GlueAllowInsecureEndpoint},
 	}
 	c.Connections, err = providers.New(c.Dialer, pOpts)
 	if err != nil {
 		return nil, fmt.Errorf("connection providers: %w", err)
-	}
-	c.ManagedConnections, err = providers.New(c.ManagedDialer, pOpts)
-	if err != nil {
-		return nil, fmt.Errorf("managed connection providers: %w", err)
 	}
 	// The SQLite engine confines files to the same root the provider uses
 	// (docs/adr/0011).
@@ -207,7 +183,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	if err != nil {
 		return nil, fmt.Errorf("engine kinds: %w", err)
 	}
-	c.Engines = queryengine.NewManager(c.Queries, c.Keyring, c.Connections, c.Dialer, c.ManagedDialer, kinds)
+	c.Engines = queryengine.NewManager(c.Queries, c.Keyring, c.Connections, c.Dialer, kinds)
 	// Catalog managers set to per-user identity authorize each user with
 	// their identity-provider token, carried by every query session (#648).
 	c.OIDC = oidclogin.New(c.Queries, c.Queries, c.Keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
@@ -241,7 +217,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		}
 		c.TrinoCA = string(ca)
 	}
-	hc, err := trino.Authenticated(c.ManagedDialer.HTTPClient(60*time.Second), cfg.TrinoAdminUser, cfg.TrinoPassword, c.TrinoCA)
+	hc, err := trino.Authenticated(c.Dialer.HTTPClient(60*time.Second), cfg.TrinoAdminUser, cfg.TrinoPassword, c.TrinoCA)
 	if err != nil {
 		return nil, fmt.Errorf("default trino client: %w", err)
 	}

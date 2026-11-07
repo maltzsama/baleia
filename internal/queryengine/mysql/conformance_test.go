@@ -47,7 +47,7 @@ func runConformance(t *testing.T, env string, mariadb bool) {
 	pass, _ := u.User.Password()
 	setup(t, u)
 
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

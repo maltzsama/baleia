@@ -30,7 +30,7 @@ func TestConformance(t *testing.T) {
 	database := cfg.Value("database")
 	setup(t, raw)
 
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

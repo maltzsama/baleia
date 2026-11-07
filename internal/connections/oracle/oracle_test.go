@@ -59,7 +59,7 @@ func TestMetadataReader_oracle(t *testing.T) {
 	}
 	t.Cleanup(drop)
 
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestListTables_pagination(t *testing.T) {
 	host, port, _ := net.SplitHostPort(u.Host)
 	pass, _ := u.User.Password()
 	service := strings.TrimPrefix(u.Path, "/")
-	d, _ := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, _ := connections.NewDialer(connections.DialerOptions{})
 	p := New(d)
 	cfg, _ := p.Validate(connections.Config{
 		Values:  map[string]string{"host": host, "port": port, "service_name": service, "username": u.User.Username()},

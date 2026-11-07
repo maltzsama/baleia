@@ -71,8 +71,8 @@ The workspace metadata routes (`/workspaces/{id}/metadata/…`) are already work
 
 `POST /workspaces/{id}/catalog-access` requires `Workspace(ActAdmin)` **and**
 `Catalog(ActAdmin)` from the same caller. "Catalog admin" is the connection's `created_by` or a
-global admin; system-owned connections (bundled Trino, `system_owned`) have no owner, so only a
-global admin can grant their catalogs. In practice: platform team owns connections, product teams
+global admin; the bundled Trino connection has no `created_by`, so only a
+global admin can grant its catalogs. In practice: platform team owns connections, product teams
 own workspaces, nobody holds both keys except the global admin.
 
 The same relationship has two screens: workspace settings → Catalogs and catalog → Access.

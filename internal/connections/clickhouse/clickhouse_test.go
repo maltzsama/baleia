@@ -46,7 +46,7 @@ func TestMetadataReader_clickhouse(t *testing.T) {
 	exec(`CREATE VIEW baleia_fixture.big_orders AS SELECT * FROM baleia_fixture.orders WHERE amount > 100`)
 	t.Cleanup(func() { exec(`DROP DATABASE IF EXISTS baleia_fixture`) })
 
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

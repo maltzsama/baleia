@@ -163,7 +163,7 @@ func testClient(t *testing.T) *client {
 		},
 		Secrets: map[string]string{"password": pass},
 	}
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

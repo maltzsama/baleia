@@ -55,7 +55,7 @@ func TestValidate(t *testing.T) {
 
 func TestPingDeniedByDialer(t *testing.T) {
 	t.Parallel()
-	d, err := connections.NewDialer(connections.DialerOptions{})
+	d, err := connections.NewDialer(connections.DialerOptions{DenyCIDRs: []string{"127.0.0.0/8"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestPingReachable(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ln.Close()
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestPingHMS(t *testing.T) {
 	if uri == "" {
 		t.Skip("BALEIA_TEST_HIVE_METASTORE_URI not set")
 	}
-	d, err := connections.NewDialer(connections.DialerOptions{AllowLoopback: true})
+	d, err := connections.NewDialer(connections.DialerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
