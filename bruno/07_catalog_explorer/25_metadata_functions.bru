@@ -1,0 +1,27 @@
+meta {
+  name: Metadata Functions
+  type: http
+  seq: 25
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/functions?catalog_id={{explorer_catalog_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+docs {
+  The connected engine's function catalog for autocomplete, introspected at
+  runtime and cached per binding. Signature, description and kind are present
+  only where the engine exposes them. Pass binding_id (or engine_id) when the
+  catalog is bound to several engines.
+}

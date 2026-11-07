@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/metadata/typemap"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -159,6 +162,73 @@ func (h *CatalogHandlers) ListMetadataTables(ctx context.Context, request ListMe
 			Id: openapi_types.UUID(r.ID.Bytes), Name: r.Name, Kind: MetadataTableSummaryKind(r.Kind),
 			Comment: r.Comment, LastChangedAt: timePtr(r.LastChangedAt),
 		})
+	}
+	return out, nil
+}
+
+// ListMetadataFunctions — GET /workspaces/{id}/metadata/functions
+//
+// Unlike the other metadata reads it calls the engine: the function catalog is
+// engine metadata the snapshot does not carry. It is introspected on demand and
+// cached per binding (#788).
+func (h *CatalogHandlers) ListMetadataFunctions(ctx context.Context, request ListMetadataFunctionsRequestObject) (ListMetadataFunctionsResponseObject, error) {
+	ws, nf, err := h.metadataWorkspace(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	if nf {
+		return ListMetadataFunctions404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
+	}
+	workspace, err := h.access.Workspace(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	catalog := request.Params.CatalogId
+	target, err := h.ResolveTarget(ctx, workspace, &TargetRequest{
+		CatalogId: &catalog, BindingId: request.Params.BindingId, EngineId: request.Params.EngineId,
+	})
+	if te, ok := asTargetError(err); ok {
+		if te.notFound {
+			return ListMetadataFunctions404JSONResponse{NotFoundJSONResponse: metadataNotFound(te.message)}, nil
+		}
+		return ListMetadataFunctions422JSONResponse{UnprocessableEntityJSONResponse: te.unprocessable()}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if h.engines == nil {
+		return ListMetadataFunctions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeEngineUnavailable, "no engine is available")}, nil
+	}
+	key := idString(target.BindingID)
+	refs, ok := h.functionsCache.Get(key)
+	if !ok {
+		eng, err := h.engines.Get(ctx, target.EngineID)
+		if err != nil {
+			return ListMetadataFunctions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeEngineUnavailable, "the engine is not available")}, nil
+		}
+		refs, err = metadata.Functions(ctx, eng, target.EngineCatalog)
+		if err != nil {
+			return ListMetadataFunctions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeEngineUnavailable, "the function catalog is unavailable")}, nil
+		}
+		h.functionsCache.Set(key, refs)
+	}
+	sort.Slice(refs, func(i, j int) bool { return strings.ToLower(refs[i].Name) < strings.ToLower(refs[j].Name) })
+	out := make(ListMetadataFunctions200JSONResponse, 0, len(refs))
+	for _, r := range refs {
+		kind := r.Kind
+		if kind == "" {
+			kind = "function"
+		}
+		fn := DialectFunction{Name: r.Name, Kind: kind, Call: dialect.Callable(target.EngineKind, r.Name)}
+		if r.Signature != "" {
+			sig := r.Signature
+			fn.Signature = &sig
+		}
+		if r.Description != "" {
+			desc := r.Description
+			fn.Description = &desc
+		}
+		out = append(out, fn)
 	}
 	return out, nil
 }
