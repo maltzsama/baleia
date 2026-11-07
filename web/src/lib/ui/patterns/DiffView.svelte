@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { MergeView } from '@codemirror/merge';
-	import { sql } from '@codemirror/lang-sql';
+	import { sql } from '@maltzsama/lang-sql';
 
 	let {
 		before,

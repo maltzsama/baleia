@@ -74,7 +74,7 @@ func newTrino() *spec {
 		floatCast:     "DOUBLE",
 		metadata:      ansiInformationSchema,
 		functionQuery: "SHOW FUNCTIONS",
-		formatter:     "trino", codemirror: "StandardSQL",
+		formatter:     "trino", codemirror: "Trino",
 	}
 }
 
@@ -297,7 +297,7 @@ WHERE owner = :1 AND object_type IN ('TABLE', 'VIEW') ORDER BY object_name`,
 FROM all_tab_columns WHERE owner = :1 AND table_name = :2 ORDER BY column_id`,
 		},
 		functionQuery: `SELECT DISTINCT name FROM v$sqlfn_metadata`,
-		formatter:     "plsql", codemirror: "PLSQL",
+		formatter:     "plsql", codemirror: "Oracle",
 	}
 }
 
@@ -396,7 +396,7 @@ WHERE database = {p1:String} AND NOT is_temporary ORDER BY name`,
 WHERE database = {p1:String} AND table = {p2:String} ORDER BY position`,
 		},
 		functionQuery: `SELECT name FROM system.functions`,
-		formatter:     "sql", codemirror: "MySQL", // backtick identifiers
+		formatter:     "sql", codemirror: "ClickHouse", // backtick identifiers
 	}
 }
 

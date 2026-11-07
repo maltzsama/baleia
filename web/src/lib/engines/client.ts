@@ -6,15 +6,22 @@ import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import {
 	Cassandra,
+	ClickHouse,
+	Doris,
+	Dremio,
 	MariaSQL,
 	MSSQL,
 	MySQL,
+	Oracle,
 	PLSQL,
 	PostgreSQL,
+	Presto,
 	SQLite,
+	StarRocks,
 	StandardSQL,
+	Trino,
 	type SQLDialect
-} from '@codemirror/lang-sql';
+} from '@maltzsama/lang-sql';
 
 export type Engine = components['schemas']['Engine'];
 export type EngineDialect = components['schemas']['EngineDialect'];
@@ -147,7 +154,7 @@ export function loadDialect(name: string): Promise<Dialect> {
 	return pending;
 }
 
-// `codemirror_base` is the @codemirror/lang-sql dialect name reported by the
+// `codemirror_base` is the @maltzsama/lang-sql dialect name reported by the
 // engine adapter. Unknown values fall back to StandardSQL.
 const CODEMIRROR_DIALECTS: Record<string, SQLDialect> = {
 	StandardSQL,
@@ -157,7 +164,14 @@ const CODEMIRROR_DIALECTS: Record<string, SQLDialect> = {
 	MSSQL,
 	PLSQL,
 	SQLite,
-	Cassandra
+	Cassandra,
+	Trino,
+	ClickHouse,
+	Oracle,
+	Presto,
+	StarRocks,
+	Doris,
+	Dremio
 };
 
 export function codemirrorDialect(name: string | undefined | null): SQLDialect {

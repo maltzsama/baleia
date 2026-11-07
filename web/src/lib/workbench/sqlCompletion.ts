@@ -9,7 +9,7 @@ import type {
 	CompletionSource
 } from '@codemirror/autocomplete';
 import type { EditorView } from '@codemirror/view';
-import { keywordCompletionSource, type SQLDialect } from '@codemirror/lang-sql';
+import { keywordCompletionSource, type SQLDialect } from '@maltzsama/lang-sql';
 import { m } from '$lib/paraglide/messages';
 import { plural } from '$lib/i18n/plural';
 import { formatRelativeTime } from '$lib/util/time';

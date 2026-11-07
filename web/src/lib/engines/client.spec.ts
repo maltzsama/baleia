@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PostgreSQL, StandardSQL } from '@codemirror/lang-sql';
+import { PostgreSQL, StandardSQL } from '@maltzsama/lang-sql';
 import { codemirrorDialect } from './client';
 
 describe('codemirrorDialect', () => {
