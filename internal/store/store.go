@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,12 +78,24 @@ type Options struct {
 	Logger *slog.Logger
 	// LogLevel overrides GORM's default (warn) when non-zero.
 	LogLevel gormlogger.LogLevel
+	// StatementTimeout, IdleInTxTimeout and LockTimeout are applied to every
+	// PostgreSQL session, as dbpool.Open does for the pgx pool.
+	StatementTimeout time.Duration
+	IdleInTxTimeout  time.Duration
+	LockTimeout      time.Duration
 }
 
 // Open connects to the store with the dialector selected by backend. The DSN
 // is never used to pick the dialector by itself: ADR 0020 requires an explicit
 // backend, and ResolveBackend is the supported inference fallback.
 func Open(ctx context.Context, dsn string, backend Backend, opts Options) (*gorm.DB, error) {
+	if backend == Postgres {
+		var err error
+		dsn, err = postgresDSN(dsn, opts)
+		if err != nil {
+			return nil, err
+		}
+	}
 	dialector, err := dialectorFor(dsn, backend)
 	if err != nil {
 		return nil, err
@@ -143,6 +157,54 @@ func Close(db *gorm.DB) error {
 		return err
 	}
 	return sqlDB.Close()
+}
+
+// pgxPoolParams are accepted by pgxpool.ParseConfig but are not PostgreSQL
+// parameters: forwarding them makes the server reject the startup.
+var pgxPoolParams = []string{
+	"pool_max_conns",
+	"pool_min_conns",
+	"pool_max_conn_lifetime",
+	"pool_max_conn_idle_time",
+	"pool_health_check_period",
+	"pool_max_conn_lifetime_jitter",
+}
+
+// postgresDSN strips pgxpool-only parameters and applies the session timeouts
+// through PostgreSQL's options parameter.
+func postgresDSN(dsn string, opts Options) (string, error) {
+	if !strings.Contains(dsn, "://") {
+		return dsn, nil
+	}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return "", fmt.Errorf("parse postgres store DSN: %w", err)
+	}
+	q := u.Query()
+	for _, key := range pgxPoolParams {
+		q.Del(key)
+	}
+	var settings []string
+	for _, s := range []struct {
+		name string
+		d    time.Duration
+	}{
+		{"statement_timeout", opts.StatementTimeout},
+		{"idle_in_transaction_session_timeout", opts.IdleInTxTimeout},
+		{"lock_timeout", opts.LockTimeout},
+	} {
+		if s.d > 0 {
+			settings = append(settings, "-c "+s.name+"="+strconv.FormatInt(s.d.Milliseconds(), 10))
+		}
+	}
+	if len(settings) > 0 {
+		if existing := strings.TrimSpace(q.Get("options")); existing != "" {
+			settings = append([]string{existing}, settings...)
+		}
+		q.Set("options", strings.Join(settings, " "))
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
 }
 
 func dialectorFor(dsn string, backend Backend) (gorm.Dialector, error) {

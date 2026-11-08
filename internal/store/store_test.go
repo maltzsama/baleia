@@ -1,7 +1,10 @@
 package store
 
 import (
+	"net/url"
+	"strings"
 	"testing"
+	"time"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -123,6 +126,32 @@ func TestDialectorForSelectsDriver(t *testing.T) {
 	}
 	if _, err := dialectorFor("postgres://u:p@localhost/db", ""); err == nil {
 		t.Fatal("dialectorFor(unknown backend) = nil error, want error")
+	}
+}
+
+func TestPostgresDSN(t *testing.T) {
+	t.Parallel()
+	got, err := postgresDSN(
+		"postgres://u:p@localhost/db?sslmode=disable&pool_max_conns=10&application_name=baleia",
+		Options{StatementTimeout: 5 * time.Second, LockTimeout: 2 * time.Second},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	if q.Has("pool_max_conns") {
+		t.Fatal("postgresDSN kept pool_max_conns")
+	}
+	if q.Get("sslmode") != "disable" || q.Get("application_name") != "baleia" {
+		t.Fatalf("postgresDSN dropped valid parameters: %s", u.RawQuery)
+	}
+	options := q.Get("options")
+	if !strings.Contains(options, "statement_timeout=5000") || !strings.Contains(options, "lock_timeout=2000") {
+		t.Fatalf("options = %q", options)
 	}
 }
 

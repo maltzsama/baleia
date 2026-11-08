@@ -16,6 +16,7 @@ import (
 	"github.com/galileostudio/baleia/internal/identity/setup"
 	"github.com/galileostudio/baleia/internal/identity/users"
 	"github.com/galileostudio/baleia/internal/mail"
+	"github.com/galileostudio/baleia/internal/store/repo"
 )
 
 // AuthHandlers serves sign-in, sessions, users, API keys and identity providers (#365).
@@ -73,7 +74,11 @@ func newAuthHandlers(c *core) *AuthHandlers {
 		}, c.settings.Auth.PasswordCost),
 	}
 	a.logins = newLogins(c, login.LDAP{})
-	a.apiKeys = apikeys.New(c.queries)
+	if c.store != nil {
+		a.apiKeys = apikeys.New(repo.NewAPIKeys(c.store))
+	} else {
+		a.apiKeys = apikeys.New(c.queries)
+	}
 	a.providers = providers.New(c.queries, func(ctx context.Context, fn func(providers.TxStore) error) error {
 		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
 	})
@@ -89,26 +94,53 @@ func newAuthHandlers(c *core) *AuthHandlers {
 			Logger:    c.logger,
 		})
 	}
-	a.users = users.New(c.queries, func(ctx context.Context, fn func(users.TxStore) error) error {
-		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
-	}, groupMailer{a}, a.sessions, users.Config{
+	var userStore users.Store
+	var userTx users.Tx
+	if c.store != nil {
+		ur := repo.NewUsers(c.store)
+		userStore, userTx = ur, ur.Tx
+	} else {
+		userStore = c.queries
+		userTx = func(ctx context.Context, fn func(users.TxStore) error) error {
+			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+		}
+	}
+	a.users = users.New(userStore, userTx, groupMailer{a}, a.sessions, users.Config{
 		PublicURL:     c.settings.Mail.PublicURL,
 		DefaultLocale: c.settings.Mail.DefaultLocale,
 		PasswordCost:  c.settings.Auth.PasswordCost,
 		Logger:        c.logger,
 	})
-	a.resets = passwordreset.New(c.queries, groupMailer{a}, a.sessions, passwordreset.Config{
-		PublicURL:     c.settings.Mail.PublicURL,
-		DefaultLocale: c.settings.Mail.DefaultLocale,
-		TokenTTL:      c.settings.Auth.ResetTTL,
-		PasswordCost:  c.settings.Auth.PasswordCost,
-		Logger:        c.logger,
-	})
+	if c.store != nil {
+		a.resets = passwordreset.New(repo.NewUsers(c.store), groupMailer{a}, a.sessions, passwordreset.Config{
+			PublicURL:     c.settings.Mail.PublicURL,
+			DefaultLocale: c.settings.Mail.DefaultLocale,
+			TokenTTL:      c.settings.Auth.ResetTTL,
+			PasswordCost:  c.settings.Auth.PasswordCost,
+			Logger:        c.logger,
+		})
+	} else {
+		a.resets = passwordreset.New(c.queries, groupMailer{a}, a.sessions, passwordreset.Config{
+			PublicURL:     c.settings.Mail.PublicURL,
+			DefaultLocale: c.settings.Mail.DefaultLocale,
+			TokenTTL:      c.settings.Auth.ResetTTL,
+			PasswordCost:  c.settings.Auth.PasswordCost,
+			Logger:        c.logger,
+		})
+	}
 	return a
 }
 
 // newSessions builds the session service over the core's database and settings.
 func newSessions(c *core) *session.Service {
+	if c.store != nil {
+		return session.New(repo.NewSessions(c.store), repo.NewUsers(c.store), session.Config{
+			JWTSecret:  c.settings.Auth.JWTSecret,
+			AccessTTL:  c.settings.Auth.AccessTTL,
+			RefreshTTL: c.settings.Auth.RefreshTTL,
+			Logger:     c.logger,
+		})
+	}
 	return session.New(c.queries, c.queries, session.Config{
 		JWTSecret:  c.settings.Auth.JWTSecret,
 		AccessTTL:  c.settings.Auth.AccessTTL,
