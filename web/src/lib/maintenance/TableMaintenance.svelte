@@ -213,6 +213,11 @@
 	function stepTone(step: MaintenancePlanStep): 'success' | 'info' | 'neutral' {
 		return step.would_run ? 'success' : step.due ? 'info' : 'neutral';
 	}
+
+	/** The newest run that included op, for the per-operation last-run line. */
+	function lastRunFor(op: MaintenanceOperation): MaintenanceRun | undefined {
+		return data?.runs.find((run) => run.operations.includes(op));
+	}
 </script>
 
 {#snippet field(op: MaintenanceOperation, key: TextKey, label: string, placeholder = '')}
@@ -282,9 +287,27 @@
 				<div class="mt-3 flex flex-col gap-3">
 					{#each OPERATIONS as op (op)}
 						{@const f = form.operations[op]}
+						{@const last = lastRunFor(op)}
 						<fieldset class="rounded-lg border border-border p-3">
 							<legend class="px-1 text-[12px] font-semibold">{operationLabel(op)}</legend>
 							<Checkbox bind:checked={f.enabled} label={m.maintenance_enabled()} />
+							{#if last}
+								<p class="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-text-muted">
+									{m.maintenance_col_last_run()}:
+									<StatusBadge kind="maintenance" status={last.status} />
+									<RelativeTime at={last.finished_at ?? last.started_at} />
+									<!-- eslint-disable svelte/no-navigation-without-resolve -- external Temporal UI URL -->
+									{#if last.workflow_url}
+										<a
+											class="font-semibold text-primary hover:underline"
+											href={last.workflow_url}
+											target="_blank"
+											rel="noopener noreferrer">{m.maintenance_open_temporal()}</a
+										>
+									{/if}
+									<!-- eslint-enable svelte/no-navigation-without-resolve -->
+								</p>
+							{/if}
 							<p class="mt-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
 								{m.maintenance_triggers()}
 							</p>
@@ -465,6 +488,16 @@
 							<span>{run.operations.map(operationLabel).join(', ') || '—'}</span>
 							<Badge tone="neutral">{triggerLabel(run.trigger)}</Badge>
 							<RelativeTime at={run.started_at} />
+							<!-- eslint-disable svelte/no-navigation-without-resolve -- external Temporal UI URL -->
+							{#if run.workflow_url}
+								<a
+									class="font-semibold text-primary hover:underline"
+									href={run.workflow_url}
+									target="_blank"
+									rel="noopener noreferrer">{m.maintenance_open_temporal()}</a
+								>
+							{/if}
+							<!-- eslint-enable svelte/no-navigation-without-resolve -->
 							{#if run.attempts > 1}
 								<span class="text-text-muted"
 									>{m.maintenance_attempts({ count: run.attempts })}</span

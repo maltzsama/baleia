@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -151,6 +153,24 @@ func (h *OpsHandlers) ListMonitoringQueries(ctx context.Context, request ListMon
 	if err != nil {
 		return nil, err
 	}
+	// The workload class lives on the execution, not the engine snapshot; a
+	// best-effort batch keeps the list readable when it is missing.
+	classes := map[string]string{}
+	ids := make([]pgtype.UUID, 0, len(rows))
+	for _, row := range rows {
+		if row.ExecutionID.Valid {
+			ids = append(ids, row.ExecutionID)
+		}
+	}
+	if len(ids) > 0 {
+		if found, err := h.queries.ListQueryClassesByExecutionIDs(ctx, ids); err == nil {
+			for _, class := range found {
+				if class.QueueClass != nil {
+					classes[uuid.UUID(class.ID.Bytes).String()] = *class.QueueClass
+				}
+			}
+		}
+	}
 	limit, offset := monitoring.DefaultQueries, 0
 	if request.Params.Limit != nil {
 		limit = *request.Params.Limit
@@ -160,7 +180,11 @@ func (h *OpsHandlers) ListMonitoringQueries(ctx context.Context, request ListMon
 	}
 	page := MonitoringQueryPage{Items: make([]MonitoringQuery, 0, len(rows))}
 	for _, row := range rows {
-		page.Items = append(page.Items, monitoringQuery(row))
+		item := monitoringQuery(row)
+		if class, ok := classes[uuid.UUID(row.ExecutionID.Bytes).String()]; ok {
+			item.QueueClass = &class
+		}
+		page.Items = append(page.Items, item)
 	}
 	if len(rows) == limit {
 		next := offset + limit
@@ -515,7 +539,7 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 	}
 	h.audited(ctx, audit.Event{Action: audit.MaintenanceTrigger, ResourceType: "catalog",
 		ResourceID: uuid.UUID(catalogID.Bytes).String(), WorkspaceID: ""}.Allowed())
-	return CreateMaintenanceRun202JSONResponse(maintenanceRun(run)), nil
+	return CreateMaintenanceRun202JSONResponse(h.maintenanceRun(run)), nil
 }
 
 // ListMaintenanceRuns lists the runs of one catalog, newest first.
@@ -549,12 +573,12 @@ func (h *OpsHandlers) ListMaintenanceRuns(ctx context.Context, request ListMaint
 	}
 	out := make([]MaintenanceRun, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, maintenanceRun(row))
+		out = append(out, h.maintenanceRun(row))
 	}
 	return ListMaintenanceRuns200JSONResponse(out), nil
 }
 
-func maintenanceRun(r db.MaintenanceRun) MaintenanceRun {
+func (h *core) maintenanceRun(r db.MaintenanceRun) MaintenanceRun {
 	out := MaintenanceRun{
 		Id:             openapi_types.UUID(r.ID.Bytes),
 		CatalogId:      openapi_types.UUID(r.CatalogID.Bytes),
@@ -572,6 +596,14 @@ func maintenanceRun(r db.MaintenanceRun) MaintenanceRun {
 		PolicyRevision: r.PolicyRevision,
 	}
 	_ = json.Unmarshal(r.Reason, &out.Reason)
+	if base := strings.TrimRight(h.settings.Ops.TemporalUIURL, "/"); base != "" && r.WorkflowID != "" {
+		namespace := h.settings.Ops.TemporalNamespace
+		if namespace == "" {
+			namespace = "default"
+		}
+		link := fmt.Sprintf("%s/namespaces/%s/workflows/%s", base, url.PathEscape(namespace), url.PathEscape(r.WorkflowID))
+		out.WorkflowUrl = &link
+	}
 	if len(r.Parameters) > 0 && string(r.Parameters) != "{}" {
 		var params map[string]interface{}
 		if json.Unmarshal(r.Parameters, &params) == nil {

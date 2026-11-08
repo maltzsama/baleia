@@ -34,6 +34,22 @@ func (q snapshotFake) GetTrinoQuerySnapshotByEngine(context.Context, db.GetTrino
 
 // TestMonitoringQuery_LookupErrors: an unknown query is a 404, and a failed
 // lookup is a server error, not "query not found".
+func TestMaintenanceRun_WorkflowURL(t *testing.T) {
+	t.Parallel()
+	h := &core{settings: Settings{Ops: OpsSettings{
+		TemporalUIURL:     "https://temporal.example/",
+		TemporalNamespace: "baleia",
+	}}}
+	got := h.maintenanceRun(db.MaintenanceRun{WorkflowID: "wf-1"})
+	if got.WorkflowUrl == nil || *got.WorkflowUrl != "https://temporal.example/namespaces/baleia/workflows/wf-1" {
+		t.Errorf("workflow url = %v", got.WorkflowUrl)
+	}
+	h.settings.Ops.TemporalUIURL = ""
+	if got := h.maintenanceRun(db.MaintenanceRun{WorkflowID: "wf-1"}); got.WorkflowUrl != nil {
+		t.Errorf("workflow url without a UI base = %v, want nil", got.WorkflowUrl)
+	}
+}
+
 func TestMonitoringQuery_PeakMemory(t *testing.T) {
 	t.Parallel()
 	q := monitoringQuery(db.TrinoQuerySnapshot{

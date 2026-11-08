@@ -3513,6 +3513,7 @@ components:
         physical_input_bytes: { type: integer, nullable: true }
         output_rows: { type: integer, nullable: true }
         peak_memory_bytes: { type: integer, format: int64, nullable: true, description: "Peak user memory the engine reported; null when unknown" }
+        queue_class: { type: string, nullable: true, description: "Workload class the run was queued in (interactive, heavy, background); null for engine-direct queries" }
         origin: { type: string }
 
     MonitoringQueryDetail:
@@ -3772,6 +3773,7 @@ components:
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
         workflow_id: { type: string }
+        workflow_url: { type: string, nullable: true, description: "Link to the workflow in the Temporal UI; null when no UI URL is configured" }
         trigger: { type: string, enum: [manual, automatic, dry_run] }
         reason: { $ref: "#/components/schemas/MaintenanceReason" }
         parameters:

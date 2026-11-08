@@ -3251,6 +3251,9 @@ type MaintenanceRun struct {
 	TableName      string                  `json:"table_name"`
 	Trigger        MaintenanceRunTrigger   `json:"trigger"`
 	WorkflowId     string                  `json:"workflow_id"`
+
+	// WorkflowUrl Link to the workflow in the Temporal UI; null when no UI URL is configured
+	WorkflowUrl *string `json:"workflow_url"`
 }
 
 // MaintenanceRunTrigger defines model for MaintenanceRun.Trigger.
@@ -3623,13 +3626,16 @@ type MonitoringQuery struct {
 	OutputRows  *int                `json:"output_rows"`
 
 	// PeakMemoryBytes Peak user memory the engine reported; null when unknown
-	PeakMemoryBytes    *int64  `json:"peak_memory_bytes"`
-	PhysicalInputBytes *int    `json:"physical_input_bytes"`
-	Schema             *string `json:"schema"`
-	SqlFirstLine       *string `json:"sql_first_line,omitempty"`
-	State              string  `json:"state"`
-	TrinoQueryId       string  `json:"trino_query_id"`
-	User               string  `json:"user"`
+	PeakMemoryBytes    *int64 `json:"peak_memory_bytes"`
+	PhysicalInputBytes *int   `json:"physical_input_bytes"`
+
+	// QueueClass Workload class the run was queued in (interactive, heavy, background); null for engine-direct queries
+	QueueClass   *string `json:"queue_class"`
+	Schema       *string `json:"schema"`
+	SqlFirstLine *string `json:"sql_first_line,omitempty"`
+	State        string  `json:"state"`
+	TrinoQueryId string  `json:"trino_query_id"`
+	User         string  `json:"user"`
 }
 
 // MonitoringQueryDetail defines model for MonitoringQueryDetail.
@@ -3646,6 +3652,9 @@ type MonitoringQueryDetail struct {
 	// PeakMemoryBytes Peak user memory the engine reported; null when unknown
 	PeakMemoryBytes    *int64 `json:"peak_memory_bytes"`
 	PhysicalInputBytes *int   `json:"physical_input_bytes"`
+
+	// QueueClass Workload class the run was queued in (interactive, heavy, background); null for engine-direct queries
+	QueueClass *string `json:"queue_class"`
 
 	// Resources What the query used, read from the coordinator when the detail is opened (#407). Absent when the engine does not report it or no longer knows the query; a field is null when the engine leaves it out.
 	Resources    *MonitoringQueryResources `json:"resources"`

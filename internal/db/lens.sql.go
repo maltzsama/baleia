@@ -508,6 +508,35 @@ func (q *Queries) ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRu
 	return items, nil
 }
 
+const listQueryClassesByExecutionIDs = `-- name: ListQueryClassesByExecutionIDs :many
+SELECT id, queue_class FROM query_executions WHERE id = ANY($1::uuid[])
+`
+
+type ListQueryClassesByExecutionIDsRow struct {
+	ID         pgtype.UUID `json:"id"`
+	QueueClass *string     `json:"queue_class"`
+}
+
+func (q *Queries) ListQueryClassesByExecutionIDs(ctx context.Context, ids []pgtype.UUID) ([]ListQueryClassesByExecutionIDsRow, error) {
+	rows, err := q.db.Query(ctx, listQueryClassesByExecutionIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListQueryClassesByExecutionIDsRow
+	for rows.Next() {
+		var i ListQueryClassesByExecutionIDsRow
+		if err := rows.Scan(&i.ID, &i.QueueClass); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTableHealthByCatalog = `-- name: ListTableHealthByCatalog :many
 SELECT id, catalog_connection_id, catalog, namespace, table_name, captured_at, snapshot_count, file_count, total_size_bytes, oldest_snapshot_age_hours, last_maintenance_at, health_score, needs_compaction, needs_snapshot_expiry, catalog_id, delete_file_count, equality_delete_count, position_delete_count, small_file_count, commits_last_hour, commits_last_day, avg_file_size_bytes, manifest_count, format_version, table_properties, due_operations, policy_revision FROM table_health_snapshots
 WHERE catalog_id = $1::uuid

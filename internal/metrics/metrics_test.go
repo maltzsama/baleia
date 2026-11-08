@@ -45,6 +45,8 @@ func registry(t *testing.T) *Registry {
 	workload.State("e1", "interactive", 1, 2)
 	workload.Admitted("e1", "interactive", time.Second)
 	workload.Timeout("e1", "interactive")
+	memory := 0.5
+	r.Monitoring().Cluster("trino", 3, 2, 1, 0, &memory)
 	return r
 }
 
@@ -112,6 +114,24 @@ func TestWorkloadMetrics(t *testing.T) {
 		`baleia_execution_admissions_total{class="interactive",engine="e1"} 1`,
 		`baleia_execution_queue_timeouts_total{class="interactive",engine="e1"} 1`,
 		`baleia_execution_queue_wait_seconds_count{class="interactive",engine="e1"} 1`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("scrape lacks %q", want)
+		}
+	}
+}
+
+// TestMonitoringMetrics: the cluster gauges are exported under the names the
+// dashboard and the alert rules use, labelled only by engine kind.
+func TestMonitoringMetrics(t *testing.T) {
+	t.Parallel()
+	_, body := scrape(t, registry(t).Handler(""), "")
+	for _, want := range []string{
+		`baleia_cluster_active_workers{engine="trino"} 3`,
+		`baleia_cluster_running_queries{engine="trino"} 2`,
+		`baleia_cluster_queued_queries{engine="trino"} 1`,
+		`baleia_cluster_blocked_queries{engine="trino"} 0`,
+		`baleia_cluster_memory_used_ratio{engine="trino"} 0.5`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("scrape lacks %q", want)

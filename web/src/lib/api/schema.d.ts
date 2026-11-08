@@ -6647,6 +6647,8 @@ export interface components {
              * @description Peak user memory the engine reported; null when unknown
              */
             peak_memory_bytes?: number | null;
+            /** @description Workload class the run was queued in (interactive, heavy, background); null for engine-direct queries */
+            queue_class?: string | null;
             origin?: string;
         };
         MonitoringQueryDetail: components["schemas"]["MonitoringQuery"] & {
@@ -6901,6 +6903,8 @@ export interface components {
             /** Format: date-time */
             finished_at?: string | null;
             workflow_id: string;
+            /** @description Link to the workflow in the Temporal UI; null when no UI URL is configured */
+            workflow_url?: string | null;
             /** @enum {string} */
             trigger: "manual" | "automatic" | "dry_run";
             reason: components["schemas"]["MaintenanceReason"];

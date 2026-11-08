@@ -321,6 +321,7 @@ describe('monitoring page', () => {
 							...base,
 							trino_query_id: 'big',
 							sql_first_line: 'SELECT big',
+							queue_class: 'heavy',
 							peak_memory_bytes: 5 * 1024 * 1024
 						}
 					]
@@ -336,6 +337,7 @@ describe('monitoring page', () => {
 		const rows = screen.getAllByRole('row');
 		expect(within(rows[1]).getByText('SELECT big')).toBeTruthy();
 		expect(within(rows[1]).getByText('5.0 MiB')).toBeTruthy();
+		expect(within(rows[1]).getByText('Heavy')).toBeTruthy();
 	});
 
 	// #733: the server pushes a "changed" signal; the page re-fetches the data

@@ -483,6 +483,7 @@ type Querier interface {
 	ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	// The workspace's most used tables, live and granted only, best first.
 	ListPopularTables(ctx context.Context, arg ListPopularTablesParams) ([]ListPopularTablesRow, error)
+	ListQueryClassesByExecutionIDs(ctx context.Context, ids []pgtype.UUID) ([]ListQueryClassesByExecutionIDsRow, error)
 	ListQueryExecutionsByWorkspace(ctx context.Context, arg ListQueryExecutionsByWorkspaceParams) ([]QueryExecution, error)
 	ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]QueryStatement, error)
 	// Only returns statements of an execution that belongs to the given workspace.
