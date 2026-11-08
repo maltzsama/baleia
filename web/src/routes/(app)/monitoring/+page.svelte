@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import QueriesChart from '$lib/monitoring/QueriesChart.svelte';
+	import TimeSeriesChart from '$lib/monitoring/TimeSeriesChart.svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -64,6 +64,23 @@
 	let cluster = $state<ClusterSeries | null>(null);
 	let clusterLoading = $state(false);
 	let clusterError = $state('');
+
+	// The chart takes series of `{ t, v }`; the cluster snapshot keeps the
+	// capture in `captured_at` (#820).
+	const runningSeries = $derived(
+		cluster
+			? [
+					{
+						key: 'running',
+						label: m.monitoring_running(),
+						points: cluster.series.map((point) => ({
+							t: point.captured_at,
+							v: point.running_queries
+						}))
+					}
+				]
+			: []
+	);
 
 	let queryPage = $state<MonitoringQueryPage>({ items: [] });
 	let queriesLoading = $state(false);
@@ -605,7 +622,12 @@
 					</div>
 				</div>
 				{#if cluster.series.length > 1}
-					<QueriesChart series={cluster.series} />
+					<TimeSeriesChart
+						series={runningSeries}
+						title={m.monitoring_running_queries()}
+						yLabel={m.monitoring_running()}
+						unit={m.monitoring_running()}
+					/>
 				{/if}
 			{/if}
 		{:else if tab === 'queries'}
