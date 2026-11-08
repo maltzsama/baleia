@@ -21,7 +21,7 @@ func (s *APIKeys) ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]
 	var rows []model.APIKey
 	if err := s.db.WithContext(ctx).
 		Where("user_id = ?", UUIDString(userID)).
-		Order("created_at").
+		Order("created_at DESC").
 		Find(&rows).Error; err != nil {
 		return nil, err
 	}
