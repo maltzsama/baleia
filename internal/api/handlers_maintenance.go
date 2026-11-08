@@ -61,7 +61,7 @@ func (h *OpsHandlers) capableEngine(ctx context.Context, engineID pgtype.UUID) b
 
 // maintenanceBinding is the binding runs use and its retention floor.
 func (h *OpsHandlers) maintenanceBinding(ctx context.Context, catalogID pgtype.UUID) (db.CatalogBinding, time.Duration, bool, error) {
-	bindings, err := h.queries.ListBindingsByCatalog(ctx, catalogID)
+	bindings, err := h.opsStore().ListBindingsByCatalog(ctx, catalogID)
 	if err != nil {
 		return db.CatalogBinding{}, 0, false, err
 	}
@@ -105,7 +105,7 @@ func (h *OpsHandlers) GetTableMaintenance(ctx context.Context, request GetTableM
 	}
 	actions := h.tableMaintenanceActions(ctx, t.catalog.ConnectionID, t.key.CatalogID)
 	out.AllowedActions = &actions
-	health, err := h.queries.GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{
+	health, err := h.opsStore().GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{
 		CatalogID: t.key.CatalogID, Namespace: t.key.Namespace, TableName: t.key.Table,
 	})
 	switch {
@@ -205,7 +205,7 @@ func (h *OpsHandlers) PutTableMaintenance(ctx context.Context, request PutTableM
 		return nil, err
 	}
 	table := maintenance.Table{RetentionFloor: floor}
-	if health, err := h.queries.GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{
+	if health, err := h.opsStore().GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{
 		CatalogID: t.key.CatalogID, Namespace: t.key.Namespace, TableName: t.key.Table,
 	}); err == nil && health.FormatVersion != nil {
 		v := int(*health.FormatVersion)
@@ -356,7 +356,7 @@ func (h *OpsHandlers) RunTableMaintenance(ctx context.Context, request RunTableM
 	if !ok {
 		return RunTableMaintenance422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeNotSupported, monitoring.ErrNoCapableBinding.Error())}, nil
 	}
-	run, err := activities.RecordMaintenanceRun(ctx, h.queries, t.key, binding, row, step, settings, string(maintenance.Manual), t.actor)
+	run, err := activities.RecordMaintenanceRun(ctx, h.opsStore(), t.key, binding, row, step, settings, string(maintenance.Manual), t.actor)
 	if isUniqueViolation(err) {
 		return RunTableMaintenance409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
 			Code: ErrorCodeConflict, Message: "a maintenance run is already in progress on this table"}}, nil
@@ -432,7 +432,7 @@ func icebergCatalogRef(c db.ListEnabledIcebergCatalogsRow) string {
 // startAnalysis starts the pass and returns its workflow id; ok is false when
 // the catalog is not an enabled Iceberg catalog.
 func (h *OpsHandlers) startAnalysis(ctx context.Context, t maintenanceTarget, namespace, table string) (bool, string, error) {
-	catalogs, err := h.queries.ListEnabledIcebergCatalogs(ctx)
+	catalogs, err := h.opsStore().ListEnabledIcebergCatalogs(ctx)
 	if err != nil {
 		return false, "", err
 	}
@@ -465,7 +465,7 @@ func (h *OpsHandlers) GetCatalogMaintenancePlan(ctx context.Context, request Get
 	if !ok {
 		return GetCatalogMaintenancePlan404JSONResponse{NotFoundJSONResponse: notFound(catalogNotFound)}, nil
 	}
-	rows, err := h.queries.ListTableMaintenancePolicies(ctx, t.key.CatalogID)
+	rows, err := h.opsStore().ListTableMaintenancePolicies(ctx, t.key.CatalogID)
 	if err != nil {
 		return nil, err
 	}

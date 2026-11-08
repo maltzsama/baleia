@@ -15,8 +15,14 @@ import (
 	"github.com/galileostudio/baleia/internal/monitoring"
 	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 func i64(v int64) *int64 { return &v }
@@ -222,5 +228,112 @@ func TestReserveRuns_GlobalLimit(t *testing.T) {
 	}
 	if running != limit {
 		t.Fatalf("running runs = %d, want the limit %d", running, limit)
+	}
+
+	// The same round over the GORM store: row locks on the engines serialize
+	// it and a savepoint absorbs the table that is already running (#773).
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger: gormlogger.Discard, TranslateError: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gdb.Where("id IS NOT NULL").Delete(&model.MaintenanceRun{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	a.store = repo.New(gdb)
+	if _, err := RecordMaintenanceRun(ctx, a.store, first.key, rounds[0].binding, first.row, first.step, first.settings, "manual", pgtype.UUID{}); err != nil {
+		t.Fatal(err)
+	}
+	errs = make(chan error, catalogs)
+	for _, r := range rounds {
+		wg.Go(func() {
+			if _, err := a.reserveRuns(ctx, r.binding, r.candidates); err != nil {
+				errs <- err
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+	var runningStore int64
+	if err := gdb.Model(&model.MaintenanceRun{}).Where("status = ?", "running").Count(&runningStore).Error; err != nil {
+		t.Fatal(err)
+	}
+	if runningStore != limit {
+		t.Fatalf("GORM running runs = %d, want the limit %d", runningStore, limit)
+	}
+}
+
+// TestReserveRunsStore_DuplicateRecovery is the deterministic GORM reservation
+// case: a duplicate candidate must not abort the transaction, and the next
+// candidate still commits (#773).
+func TestReserveRunsStore_DuplicateRecovery(t *testing.T) {
+	t.Parallel()
+	pool := testdb.New(t)
+	ctx := context.Background()
+	var user, conn, engConn, engine, catalog, binding pgtype.UUID
+	if err := pool.QueryRow(ctx, `INSERT INTO users (name, email, role, password_hash) VALUES ('dup', 'dup@maint.test', 'admin', 'x') RETURNING id`).Scan(&user); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name string
+		dst  *pgtype.UUID
+	}{{"src", &conn}, {"eng", &engConn}} {
+		if err := pool.QueryRow(ctx, `INSERT INTO catalog_connections (name, type, url, created_by) VALUES ($1, 'polaris', 'http://p.test', $2) RETURNING id`, c.name, user).Scan(c.dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO engines (name, kind, class, connection_id, identity_mode, created_by)
+		VALUES ('dup-e', 'trino', 'federated', $1, 'connection', $2) RETURNING id`, engConn, user).Scan(&engine); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO catalogs (connection_id, name, trino_catalog_name, cluster_id, warehouse, connector)
+		VALUES ($1, 'dup_lake', 'dup_lake', (SELECT id FROM trino_clusters LIMIT 1), 'wh', 'iceberg') RETURNING id`, conn).Scan(&catalog); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode, enabled, lifecycle_state)
+		VALUES ($1, $2, 'dup_lake', 'managed', true, 'active') RETURNING id`, catalog, engine).Scan(&binding); err != nil {
+		t.Fatal(err)
+	}
+
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger: gormlogger.Discard, TranslateError: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := repo.New(gdb)
+	a := &Activities{queries: db.New(pool), store: store, pool: pool, cfg: &config.Config{MaintenanceMaxConcurrentRuns: 10}}
+
+	existing := monitoring.TableKey{CatalogID: catalog, Namespace: "cdc", Table: "t0"}
+	step := maintenance.Step{Operation: maintenance.OpExpireSnapshots, Due: true, WouldRun: true}
+	b := db.CatalogBinding{ID: binding}
+	if _, err := RecordMaintenanceRun(ctx, store, existing, b, db.TableMaintenancePolicy{}, step, maintenance.Settings{}, "manual", pgtype.UUID{}); err != nil {
+		t.Fatal(err)
+	}
+	candidates := []roundCandidate{
+		{key: existing, step: step},
+		{key: monitoring.TableKey{CatalogID: catalog, Namespace: "cdc", Table: "t1"}, step: step},
+	}
+	out, err := a.reserveRuns(ctx, b, candidates)
+	if err != nil {
+		t.Fatalf("reserveRuns: %v", err)
+	}
+	if len(out) != 1 || out[0].WorkflowID == "" {
+		t.Fatalf("reserved = %+v; want the new table only", out)
+	}
+	var running int64
+	if err := gdb.Model(&model.MaintenanceRun{}).Where("status = ?", "running").Count(&running).Error; err != nil {
+		t.Fatal(err)
+	}
+	if running != 2 {
+		t.Fatalf("running runs = %d; want the existing plus the new one", running)
 	}
 }
