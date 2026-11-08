@@ -3614,32 +3614,38 @@ type MonitoringEngine struct {
 
 // MonitoringQuery defines model for MonitoringQuery.
 type MonitoringQuery struct {
-	Catalog            string              `json:"catalog"`
-	CpuMs              *int                `json:"cpu_ms"`
-	CreatedAt          time.Time           `json:"created_at"`
-	ElapsedMs          *int                `json:"elapsed_ms"`
-	ExecutionId        *openapi_types.UUID `json:"execution_id"`
-	Origin             *string             `json:"origin,omitempty"`
-	OutputRows         *int                `json:"output_rows"`
-	PhysicalInputBytes *int                `json:"physical_input_bytes"`
-	Schema             *string             `json:"schema"`
-	SqlFirstLine       *string             `json:"sql_first_line,omitempty"`
-	State              string              `json:"state"`
-	TrinoQueryId       string              `json:"trino_query_id"`
-	User               string              `json:"user"`
+	Catalog     string              `json:"catalog"`
+	CpuMs       *int                `json:"cpu_ms"`
+	CreatedAt   time.Time           `json:"created_at"`
+	ElapsedMs   *int                `json:"elapsed_ms"`
+	ExecutionId *openapi_types.UUID `json:"execution_id"`
+	Origin      *string             `json:"origin,omitempty"`
+	OutputRows  *int                `json:"output_rows"`
+
+	// PeakMemoryBytes Peak user memory the engine reported; null when unknown
+	PeakMemoryBytes    *int64  `json:"peak_memory_bytes"`
+	PhysicalInputBytes *int    `json:"physical_input_bytes"`
+	Schema             *string `json:"schema"`
+	SqlFirstLine       *string `json:"sql_first_line,omitempty"`
+	State              string  `json:"state"`
+	TrinoQueryId       string  `json:"trino_query_id"`
+	User               string  `json:"user"`
 }
 
 // MonitoringQueryDetail defines model for MonitoringQueryDetail.
 type MonitoringQueryDetail struct {
-	Catalog            string              `json:"catalog"`
-	CpuMs              *int                `json:"cpu_ms"`
-	CreatedAt          time.Time           `json:"created_at"`
-	ElapsedMs          *int                `json:"elapsed_ms"`
-	ErrorMessage       *string             `json:"error_message"`
-	ExecutionId        *openapi_types.UUID `json:"execution_id"`
-	Origin             *string             `json:"origin,omitempty"`
-	OutputRows         *int                `json:"output_rows"`
-	PhysicalInputBytes *int                `json:"physical_input_bytes"`
+	Catalog      string              `json:"catalog"`
+	CpuMs        *int                `json:"cpu_ms"`
+	CreatedAt    time.Time           `json:"created_at"`
+	ElapsedMs    *int                `json:"elapsed_ms"`
+	ErrorMessage *string             `json:"error_message"`
+	ExecutionId  *openapi_types.UUID `json:"execution_id"`
+	Origin       *string             `json:"origin,omitempty"`
+	OutputRows   *int                `json:"output_rows"`
+
+	// PeakMemoryBytes Peak user memory the engine reported; null when unknown
+	PeakMemoryBytes    *int64 `json:"peak_memory_bytes"`
+	PhysicalInputBytes *int   `json:"physical_input_bytes"`
 
 	// Resources What the query used, read from the coordinator when the detail is opened (#407). Absent when the engine does not report it or no longer knows the query; a field is null when the engine leaves it out.
 	Resources    *MonitoringQueryResources `json:"resources"`

@@ -6642,6 +6642,11 @@ export interface components {
             cpu_ms?: number | null;
             physical_input_bytes?: number | null;
             output_rows?: number | null;
+            /**
+             * Format: int64
+             * @description Peak user memory the engine reported; null when unknown
+             */
+            peak_memory_bytes?: number | null;
             origin?: string;
         };
         MonitoringQueryDetail: components["schemas"]["MonitoringQuery"] & {

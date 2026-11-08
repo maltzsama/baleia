@@ -201,6 +201,14 @@ func monitoringQuery(s db.TrinoQuerySnapshot) MonitoringQuery {
 		v := int(*s.OutputRows)
 		out.OutputRows = &v
 	}
+	if s.RawTrinoPayload != nil {
+		var profile struct {
+			PeakMemoryBytes int64 `json:"peakMemoryBytes"`
+		}
+		if json.Unmarshal(s.RawTrinoPayload, &profile) == nil && profile.PeakMemoryBytes > 0 {
+			out.PeakMemoryBytes = &profile.PeakMemoryBytes
+		}
+	}
 	return out
 }
 

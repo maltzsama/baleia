@@ -64,7 +64,13 @@
 	let loading = $state(true);
 	let error = $state('');
 
-	let clusterWindow = $state('1h');
+	let windowPreset = $state('1h');
+	let customWindow = $state('90m');
+	// The API accepts a Go duration (90m, 36h) or whole days (7d); the presets
+	// are shortcuts over the same value.
+	const clusterWindow = $derived(
+		windowPreset === 'custom' ? customWindow.trim() || '1h' : windowPreset
+	);
 	let cluster = $state<ClusterSeries | null>(null);
 	let clusterLoading = $state(false);
 	let clusterError = $state('');
@@ -185,11 +191,12 @@
 	let scope = $state('mine');
 	let queryState = $state('');
 	let queryText = $state('');
-	let querySort = $state<'created' | 'elapsed' | 'cpu'>('created');
-	// Top-N by duration or CPU is a sort of the page the API already returned.
+	let querySort = $state<'created' | 'elapsed' | 'cpu' | 'memory'>('created');
+	// Top-N by duration, CPU or memory is a sort of the page the API returned.
 	const compareQueries = (a: MonitoringQuery, b: MonitoringQuery) => {
 		if (querySort === 'elapsed') return (b.elapsed_ms ?? -1) - (a.elapsed_ms ?? -1);
 		if (querySort === 'cpu') return (b.cpu_ms ?? -1) - (a.cpu_ms ?? -1);
+		if (querySort === 'memory') return (b.peak_memory_bytes ?? -1) - (a.peak_memory_bytes ?? -1);
 		return b.created_at.localeCompare(a.created_at);
 	};
 	const sortedQueries = $derived([...queryPage.items].sort(compareQueries));
@@ -430,8 +437,12 @@
 	}
 
 	function refreshActive() {
-		if (tab === 'cluster') void loadCluster();
-		else if (tab === 'queries') void loadQueries();
+		if (tab === 'cluster') {
+			void loadOverview();
+			void loadCluster();
+		} else if (tab === 'queries') {
+			void loadQueries();
+		}
 	}
 
 	function exportHealth() {
@@ -506,6 +517,7 @@
 						m.monitoring_started(),
 						m.monitoring_elapsed_ms(),
 						m.monitoring_cpu_ms(),
+						m.monitoring_peak_memory(),
 						m.common_sql()
 					],
 					rows
@@ -519,6 +531,7 @@
 							query.created_at,
 							query.elapsed_ms,
 							query.cpu_ms,
+							query.peak_memory_bytes,
 							query.sql_first_line
 						])
 				)
@@ -822,12 +835,13 @@
 				<div class="w-40">
 					<Select
 						label={m.monitoring_window()}
-						bind:value={clusterWindow}
+						bind:value={windowPreset}
 						options={[
 							{ value: '5m', label: m.monitoring_last_5_minutes() },
 							{ value: '1h', label: m.monitoring_last_hour() },
 							{ value: '6h', label: m.monitoring_last_6_hours() },
-							{ value: '24h', label: m.monitoring_last_24_hours() }
+							{ value: '24h', label: m.monitoring_last_24_hours() },
+							{ value: 'custom', label: m.monitoring_custom_window() }
 						]}
 						onchange={() => {
 							void loadOverview();
@@ -835,6 +849,20 @@
 						}}
 					/>
 				</div>
+				{#if windowPreset === 'custom'}
+					<div class="w-44">
+						<Input
+							label={m.monitoring_window_duration()}
+							bind:value={customWindow}
+							placeholder="90m"
+							onkeydown={(event) => {
+								if (event.key !== 'Enter') return;
+								void loadOverview();
+								void loadCluster();
+							}}
+						/>
+					</div>
+				{/if}
 				{#if cluster?.latest}
 					<span class="text-[11px] text-slate-600 dark:text-slate-300">
 						{m.monitoring_updated()}
@@ -1020,7 +1048,8 @@
 					options={[
 						{ value: 'created', label: m.monitoring_sort_created() },
 						{ value: 'elapsed', label: m.monitoring_sort_elapsed() },
-						{ value: 'cpu', label: m.monitoring_sort_cpu() }
+						{ value: 'cpu', label: m.monitoring_sort_cpu() },
+						{ value: 'memory', label: m.monitoring_peak_memory() }
 					]}
 				/>
 				<div class="flex items-end gap-2">
@@ -1059,6 +1088,7 @@
 								<th class="px-3 py-2">{m.monitoring_catalog()}</th>
 								<th class="px-3 py-2">{m.monitoring_elapsed()}</th>
 								<th class="px-3 py-2">{m.monitoring_cpu()}</th>
+								<th class="px-3 py-2">{m.monitoring_peak_memory()}</th>
 								<th class="px-3 py-2">{m.monitoring_started()}</th>
 								<th class="px-3 py-2 text-right">{m.monitoring_actions()}</th>
 							</tr>
@@ -1096,6 +1126,9 @@
 									</td>
 									<td class="px-3 py-1.5">
 										{query.cpu_ms != null ? formatDuration(query.cpu_ms) : '—'}
+									</td>
+									<td class="px-3 py-1.5">
+										{query.peak_memory_bytes != null ? formatBytes(query.peak_memory_bytes) : '—'}
 									</td>
 									<td class="px-3 py-1.5"><RelativeTime at={query.created_at} /></td>
 									<td class="px-3 py-1.5 text-right">

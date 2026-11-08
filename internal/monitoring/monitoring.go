@@ -11,6 +11,7 @@ import (
 	"math"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -95,17 +96,9 @@ type Cluster struct {
 }
 
 // Cluster returns an engine's cluster snapshots over window: 5m, 1h (the
-// default), 6h or 24h.
+// default), 6h, 24h, or any duration between 1m and 30d (for example 90m).
 func (s *Service) Cluster(ctx context.Context, engineID pgtype.UUID, window string) (Cluster, error) {
-	duration := time.Hour
-	switch window {
-	case "5m":
-		duration = 5 * time.Minute
-	case "6h":
-		duration = 6 * time.Hour
-	case "24h":
-		duration = 24 * time.Hour
-	}
+	duration := clusterWindowDuration(window)
 	var out Cluster
 	if latest, err := s.store.GetLatestClusterSnapshotByEngine(ctx, engineID); err == nil {
 		out.Latest = &latest
@@ -120,6 +113,37 @@ func (s *Service) Cluster(ctx context.Context, engineID pgtype.UUID, window stri
 	}
 	out.Series = rows
 	return out, nil
+}
+
+// The window bounds a custom duration: shorter than a minute is noise and
+// longer than 30 days is larger than the retention of the snapshots.
+const (
+	clusterMinWindow = time.Minute
+	clusterMaxWindow = 30 * 24 * time.Hour
+)
+
+// clusterWindowDuration maps a window value to a duration; an unknown or
+// out-of-range value falls back to the 1h default. It accepts a Go duration
+// (90m, 36h) or a whole number of days (7d).
+func clusterWindowDuration(window string) time.Duration {
+	var d time.Duration
+	if days, ok := strings.CutSuffix(window, "d"); ok {
+		n, err := strconv.Atoi(days)
+		if err != nil {
+			return time.Hour
+		}
+		d = time.Duration(n) * 24 * time.Hour
+	} else {
+		parsed, err := time.ParseDuration(window)
+		if err != nil {
+			return time.Hour
+		}
+		d = parsed
+	}
+	if d < clusterMinWindow || d > clusterMaxWindow {
+		return time.Hour
+	}
+	return d
 }
 
 // QueryFilter narrows a query list. A nil UserName lists every user's

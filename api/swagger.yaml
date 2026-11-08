@@ -3512,6 +3512,7 @@ components:
         cpu_ms: { type: integer, nullable: true }
         physical_input_bytes: { type: integer, nullable: true }
         output_rows: { type: integer, nullable: true }
+        peak_memory_bytes: { type: integer, format: int64, nullable: true, description: "Peak user memory the engine reported; null when unknown" }
         origin: { type: string }
 
     MonitoringQueryDetail:

@@ -270,6 +270,74 @@ describe('monitoring page', () => {
 		expect(exported[0]?.get('limit')).toBe('100');
 	});
 
+	it('loads a custom cluster window', async () => {
+		const windows: string[] = [];
+		server.use(
+			http.get('/engines/{id}/monitoring/cluster', ({ request, response }) => {
+				windows.push(new URL(request.url).searchParams.get('window') ?? '');
+				return response(200).json({
+					latest: {
+						captured_at: new Date().toISOString(),
+						active_workers: 1,
+						running_queries: 1,
+						queued_queries: 0,
+						blocked_queries: 0,
+						total_memory_bytes: 100,
+						free_memory_bytes: 50
+					},
+					series: []
+				});
+			})
+		);
+		render(MonitoringPage);
+		await screen.findByText('Workers');
+
+		await fireEvent.change(screen.getByLabelText('Window'), { target: { value: 'custom' } });
+		const input = screen.getByLabelText('Window (e.g. 90m)');
+		await fireEvent.input(input, { target: { value: '90m' } });
+		await fireEvent.keyDown(input, { key: 'Enter' });
+
+		await waitFor(() => expect(windows).toContain('90m'));
+	});
+
+	it('shows and sorts queries by peak memory', async () => {
+		const base = {
+			state: 'finished',
+			user: 'ada',
+			catalog: 'lake',
+			created_at: '2026-10-01T12:00:00Z'
+		};
+		server.use(
+			http.get('/engines/{id}/monitoring/queries', ({ response }) =>
+				response(200).json({
+					items: [
+						{
+							...base,
+							trino_query_id: 'small',
+							sql_first_line: 'SELECT small',
+							peak_memory_bytes: 1024
+						},
+						{
+							...base,
+							trino_query_id: 'big',
+							sql_first_line: 'SELECT big',
+							peak_memory_bytes: 5 * 1024 * 1024
+						}
+					]
+				})
+			)
+		);
+		render(MonitoringPage);
+
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Queries' }));
+		await screen.findByText('SELECT small');
+		await fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'memory' } });
+
+		const rows = screen.getAllByRole('row');
+		expect(within(rows[1]).getByText('SELECT big')).toBeTruthy();
+		expect(within(rows[1]).getByText('5.0 MiB')).toBeTruthy();
+	});
+
 	// #733: the server pushes a "changed" signal; the page re-fetches the data
 	// instead of polling on a fixed timer.
 	it('re-fetches the cluster when the push stream reports a change', async () => {
