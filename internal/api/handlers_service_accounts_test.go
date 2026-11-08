@@ -16,13 +16,29 @@ import (
 // their workspace membership and tokens, their identity-provider link, the
 // global admin role they never get, and agents linked to them.
 func TestServiceAccounts(t *testing.T) {
-	t.Parallel()
+	for _, mode := range []struct {
+		name      string
+		withStore bool
+	}{{"sqlc", false}, {"gorm", true}} {
+		t.Run(mode.name, func(t *testing.T) {
+			t.Parallel()
+			runServiceAccounts(t, mode.withStore)
+		})
+	}
+}
+
+func runServiceAccounts(t *testing.T, withStore bool) {
+	t.Helper()
 	pool := testdb.New(t)
 	q := db.New(pool)
 	ctx := context.Background()
-	h := testAPI(handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool},
+	fields := handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool},
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
-		settings:     SettingsFromConfig(&config.Config{AgentsEnabled: true})})
+		settings:     SettingsFromConfig(&config.Config{AgentsEnabled: true})}
+	if withStore {
+		fields.store = openTestStore(t, pool)
+	}
+	h := testAPI(fields)
 
 	user := func(email, role string) db.User {
 		pw := "x"

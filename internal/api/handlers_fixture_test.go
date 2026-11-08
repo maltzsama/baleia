@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"log/slog"
+	"testing"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
@@ -16,49 +17,55 @@ import (
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"go.temporal.io/sdk/client"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // handlerFields are the dependencies a test sets. Tests build handlers only
 // through testAPI, so splitting the handlers by domain (#365) changes
 // this file, not every fixture.
 type handlerFields struct {
-	queries            db.Querier
-	pool               *pgxpool.Pool
-	tx                 txRunner
-	schema             schemaVersioner
-	settings           Settings
-	keyring            *crypto.Keyring
-	temporalClient     client.Client
-	catalogCache       *TTLStore[[]workspaceCatalogEntry]
-	versionCache       *TTLStore[engineProbe]
-	attentionCache     *TTLStore[[]AttentionItem]
-	connections        *connections.Registry
-	engines            engineSource
-	kinds              engineKinds
-	dialects           *dialect.Registry
-	binder             *bindtrino.Binder
-	audit              audit.Recorder
-	dialer             *connections.Dialer
+	queries        db.Querier
+	store          *gorm.DB
+	pool           *pgxpool.Pool
+	tx             txRunner
+	schema         schemaVersioner
+	settings       Settings
+	keyring        *crypto.Keyring
+	temporalClient client.Client
+	catalogCache   *TTLStore[[]workspaceCatalogEntry]
+	versionCache   *TTLStore[engineProbe]
+	attentionCache *TTLStore[[]AttentionItem]
+	connections    *connections.Registry
+	engines        engineSource
+	kinds          engineKinds
+	dialects       *dialect.Registry
+	binder         *bindtrino.Binder
+	audit          audit.Recorder
+	dialer         *connections.Dialer
 }
 
 // testAPI builds handlers from the fields a test sets; the rest stay zero.
 func testAPI(f handlerFields) *API {
 	c := &core{
-		logger:             discardLogger,
-		versionCache:       f.versionCache,
-		queries:            f.queries,
-		pool:               f.pool,
-		tx:                 f.tx,
-		settings:           f.settings,
-		keyring:            f.keyring,
-		temporalClient:     f.temporalClient,
-		catalogCache:       f.catalogCache,
-		connections:        f.connections,
-		engines:            f.engines,
-		kinds:              f.kinds,
-		dialects:           f.dialects,
-		audit:              f.audit,
+		logger:         discardLogger,
+		versionCache:   f.versionCache,
+		queries:        f.queries,
+		store:          f.store,
+		pool:           f.pool,
+		tx:             f.tx,
+		settings:       f.settings,
+		keyring:        f.keyring,
+		temporalClient: f.temporalClient,
+		catalogCache:   f.catalogCache,
+		connections:    f.connections,
+		engines:        f.engines,
+		kinds:          f.kinds,
+		dialects:       f.dialects,
+		audit:          f.audit,
 	}
 	c.history = history.New(c.queries)
 	c.browse = browse.New(c.queries)
@@ -77,6 +84,23 @@ func testAPI(f handlerFields) *API {
 	}
 	h.attentionCache = f.attentionCache
 	return h
+}
+
+// openTestStore opens GORM over a test pool, as the application does when the
+// GORM store is configured. Handler tests pass it through handlerFields.store
+// to exercise the migrated path (#769).
+func openTestStore(t *testing.T, pool *pgxpool.Pool) *gorm.DB {
+	t.Helper()
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger:         gormlogger.Discard,
+		TranslateError: true,
+	})
+	if err != nil {
+		t.Fatalf("open gorm: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	return gdb
 }
 
 // directoryFunc and proberFunc adapt a test function to the auth seams.

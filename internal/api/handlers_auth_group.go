@@ -142,6 +142,11 @@ func newAuthHandlers(c *core) *AuthHandlers {
 			Logger:        c.logger,
 		})
 	}
+	if c.store != nil {
+		c.serviceAccounts = repo.NewServiceAccounts(c.store)
+	} else {
+		c.serviceAccounts = c.queries
+	}
 	return a
 }
 

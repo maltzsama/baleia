@@ -35,7 +35,10 @@ type core struct {
 	// store is the GORM connection for domains migrated off sqlc (#769–#774);
 	// nil in tests, which keep using queries.
 	store *gorm.DB
-	pool  *pgxpool.Pool
+	// serviceAccounts persists service accounts (#653): GORM when store is
+	// configured, sqlc otherwise (#769).
+	serviceAccounts serviceAccountStore
+	pool            *pgxpool.Pool
 	// tx runs dependent writes in one transaction (poolTx outside tests).
 	tx txRunner
 	// settings is the resolved configuration the handlers read (#363).
