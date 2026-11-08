@@ -38,7 +38,7 @@ The query-execution path (Trino and the direct engines) runs user SQL against ex
 
 - **Database integrity remains important.** Primary keys, foreign keys, unique constraints, NOT NULL constraints, defaults, indexes and CHECK constraints are retained where supported by GORM's models and migration APIs. Application-level validation does not replace database-level integrity guarantees.
 
-- **Supported backends: PostgreSQL, MySQL and MariaDB.** GORM's PostgreSQL dialector handles PostgreSQL. Its MySQL dialector handles MySQL and MariaDB. The configured backend selects the appropriate dialector and driver; connection strings alone do not automatically select the GORM dialector.
+- **In-scope backends: PostgreSQL, MySQL and MariaDB.** These are the backends Baleia commits to testing and supporting, not the limit of the ORM: GORM also ships dialectors for SQLite, SQL Server, TiDB, ClickHouse, Oracle and GaussDB, which stay out of scope for this decision. GORM's PostgreSQL dialector handles PostgreSQL. Its MySQL dialector handles MySQL and MariaDB. The configured backend selects the appropriate dialector and driver; connection strings alone do not automatically select the GORM dialector.
 
 - **Database-specific behavior is isolated.** Differences in type mapping and supported schema operations are handled by GORM's dialectors and drivers. Custom GORM data types may be introduced when necessary, provided they do not require handwritten SQL or create a second schema definition.
 

@@ -14,13 +14,15 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
+	"github.com/galileostudio/baleia/internal/store"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"gorm.io/gorm"
 )
 
 func main() {
 	var command, before string
-	flag.StringVar(&command, "cmd", "up", "command: up, down, status, reset, version (goose), credentials (re-seal legacy credentials), oidc-providers (seal provider configs) or audit-prune (drop audit partitions before -before)")
+	flag.StringVar(&command, "cmd", "up", "command: up, down, status, reset, version (goose); store-up, store-down, store-status (GORM, ADR 0020); credentials (re-seal legacy credentials), oidc-providers (seal provider configs) or audit-prune (drop audit partitions before -before)")
 	flag.StringVar(&before, "before", "", "audit-prune: drop the audit partitions of the months before this one (YYYY-MM)")
 	flag.Parse()
 
@@ -53,6 +55,12 @@ func main() {
 		err = goose.ResetContext(ctx, db, "db/migrations")
 	case "version":
 		err = goose.VersionContext(ctx, db, "db/migrations")
+	case "store-up":
+		err = runStoreUp(ctx, logger, cfg)
+	case "store-down":
+		err = runStoreDown(ctx, logger, cfg)
+	case "store-status":
+		err = runStoreStatus(ctx, logger, cfg)
 	case "credentials":
 		err = migrateCredentials(ctx, logger, db, cfg)
 	case "oidc-providers":
@@ -185,4 +193,84 @@ func (s sqlCredentialStore) ListCredentials(ctx context.Context) ([]migrate.Cred
 func (s sqlCredentialStore) UpdateCredentials(ctx context.Context, id, enc string) error {
 	_, err := s.tx.ExecContext(ctx, "UPDATE catalog_connections SET credentials_enc = $1 WHERE id = $2::uuid", enc, id)
 	return err
+}
+
+// openStore opens Baleia's own store through GORM (ADR 0020). The dialector is
+// selected by the configured backend, never by the DSN alone.
+func openStore(ctx context.Context, logger *slog.Logger, cfg *config.Config) (*gorm.DB, error) {
+	backend, err := store.ResolveBackend(cfg.StoreBackend, cfg.DatabaseURL)
+	if err != nil {
+		return nil, err
+	}
+	return store.Open(ctx, cfg.DatabaseURL, backend, store.Options{
+		MaxOpenConns: int(cfg.PoolSize(4)),
+		Logger:       logger,
+	})
+}
+
+func runStoreUp(ctx context.Context, logger *slog.Logger, cfg *config.Config) error {
+	db, err := openStore(ctx, logger, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = store.Close(db) }()
+
+	reg, err := store.AllMigrations()
+	if err != nil {
+		return err
+	}
+	applied, err := store.NewRunner(db, reg, logger).Up(ctx)
+	if err != nil {
+		return err
+	}
+	logger.InfoContext(ctx, "store migrations applied", "applied", len(applied))
+	return nil
+}
+
+func runStoreDown(ctx context.Context, logger *slog.Logger, cfg *config.Config) error {
+	db, err := openStore(ctx, logger, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = store.Close(db) }()
+
+	reg, err := store.AllMigrations()
+	if err != nil {
+		return err
+	}
+	m, err := store.NewRunner(db, reg, logger).Down(ctx)
+	if err != nil {
+		return err
+	}
+	if m == nil {
+		logger.InfoContext(ctx, "no reversible store migration to roll back")
+		return nil
+	}
+	logger.InfoContext(ctx, "store migration rolled back", "version", m.Version, "name", m.Name)
+	return nil
+}
+
+func runStoreStatus(ctx context.Context, logger *slog.Logger, cfg *config.Config) error {
+	db, err := openStore(ctx, logger, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = store.Close(db) }()
+
+	reg, err := store.AllMigrations()
+	if err != nil {
+		return err
+	}
+	statuses, err := store.NewRunner(db, reg, logger).Status(ctx)
+	if err != nil {
+		return err
+	}
+	for _, st := range statuses {
+		state := "pending"
+		if st.Applied {
+			state = "applied"
+		}
+		logger.InfoContext(ctx, "store migration", "version", st.Version, "name", st.Name, "state", state, "dirty", st.Dirty, "applied_at", st.AppliedAt)
+	}
+	return nil
 }

@@ -38,8 +38,12 @@ const (
 )
 
 type Config struct {
-	Port         string
-	DatabaseURL  string
+	Port        string
+	DatabaseURL string
+	// StoreBackend selects the GORM dialector for Baleia's own store
+	// (postgres or mysql). Empty infers it from DatabaseURL; ADR 0020 prefers
+	// the explicit setting (BALEIA_STORE_BACKEND).
+	StoreBackend string
 	TemporalHost string
 	PolarisURL   string
 	// PolarisClientID/Secret seed the credentials of a polaris connection
@@ -256,6 +260,7 @@ func Load() *Config {
 	return &Config{
 		Port:                              getEnv("PORT", "8080"),
 		DatabaseURL:                       getEnv("DATABASE_URL", "postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable"),
+		StoreBackend:                      getEnv("BALEIA_STORE_BACKEND", ""),
 		TemporalHost:                      getEnv("TEMPORAL_HOST", "localhost:7233"),
 		PolarisURL:                        getEnv("POLARIS_URL", "http://localhost:8181"),
 		PolarisClientID:                   getEnv("POLARIS_CLIENT_ID", ""),
