@@ -124,13 +124,6 @@ func (r *Repo) GetEffectiveSpaceRole(ctx context.Context, arg db.GetEffectiveSpa
 		if err != nil {
 			return err
 		}
-		if user.Role == "admin" {
-			wsRole = "admin"
-		}
-		if wsRole == "" {
-			return nil
-		}
-		capRank := roleRank(wsRole)
 
 		var space model.Space
 		if err := tx.Where("id = ? AND workspace_id = ?", UUIDString(arg.SpaceID), UUIDString(arg.WorkspaceID)).
@@ -141,56 +134,71 @@ func (r *Repo) GetEffectiveSpaceRole(ctx context.Context, arg db.GetEffectiveSpa
 			return err
 		}
 
-		maxRank := 0
-		if wsRole == "admin" {
-			maxRank = 3
-		}
-		if space.Visibility == "workspace" {
-			r := 1
-			if space.DefaultRole == "editor" {
-				r = 2
-			}
-			if r > maxRank {
-				maxRank = r
-			}
-		}
-		var member model.SpaceMember
-		err = tx.Where("space_id = ? AND principal_type = ? AND principal_id = ?", string(space.ID), "user", UUIDString(arg.UserID)).
-			First(&member).Error
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
-		if err == nil && roleRank(member.Role) > maxRank {
-			maxRank = roleRank(member.Role)
-		}
-		teams := tx.Model(&model.TeamMember{}).Select("team_id").Where("user_id = ?", UUIDString(arg.UserID))
-		var teamMembers []model.SpaceMember
-		if err := tx.Where("space_id = ? AND principal_type = ? AND principal_id IN (?)", string(space.ID), "team", teams).
-			Find(&teamMembers).Error; err != nil {
-			return err
-		}
-		for _, tm := range teamMembers {
-			if roleRank(tm.Role) > maxRank {
-				maxRank = roleRank(tm.Role)
-			}
-		}
-		if maxRank == 0 {
-			return nil
-		}
-		if maxRank > capRank {
-			maxRank = capRank
-		}
-		switch maxRank {
-		case 3:
-			role = "manager"
-		case 2:
-			role = "editor"
-		case 1:
-			role = "viewer"
-		}
-		return nil
+		role, err = spaceRoleFor(tx, user, wsRole, space, UUIDString(arg.UserID))
+		return err
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	return role, err
+}
+
+// spaceRoleFor computes the effective role over already-loaded user, workspace
+// role and space, so a listing does not re-read them per space.
+func spaceRoleFor(tx *gorm.DB, user model.User, wsRole string, space model.Space, userID string) (string, error) {
+	if user.Role == "admin" {
+		wsRole = "admin"
+	}
+	if wsRole == "" {
+		return "", nil
+	}
+	capRank := roleRank(wsRole)
+
+	maxRank := 0
+	if wsRole == "admin" {
+		maxRank = 3
+	}
+	if space.Visibility == "workspace" {
+		r := 1
+		if space.DefaultRole == "editor" {
+			r = 2
+		}
+		if r > maxRank {
+			maxRank = r
+		}
+	}
+	var member model.SpaceMember
+	err := tx.Where("space_id = ? AND principal_type = ? AND principal_id = ?", string(space.ID), "user", userID).
+		First(&member).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", err
+	}
+	if err == nil && roleRank(member.Role) > maxRank {
+		maxRank = roleRank(member.Role)
+	}
+	teams := tx.Model(&model.TeamMember{}).Select("team_id").Where("user_id = ?", userID)
+	var teamMembers []model.SpaceMember
+	if err := tx.Where("space_id = ? AND principal_type = ? AND principal_id IN (?)", string(space.ID), "team", teams).
+		Find(&teamMembers).Error; err != nil {
+		return "", err
+	}
+	for _, tm := range teamMembers {
+		if roleRank(tm.Role) > maxRank {
+			maxRank = roleRank(tm.Role)
+		}
+	}
+	if maxRank == 0 {
+		return "", nil
+	}
+	if maxRank > capRank {
+		maxRank = capRank
+	}
+	switch maxRank {
+	case 3:
+		return "manager", nil
+	case 2:
+		return "editor", nil
+	case 1:
+		return "viewer", nil
+	}
+	return "", nil
 }
 
 func roleRank(role string) int {

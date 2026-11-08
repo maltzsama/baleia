@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/galileostudio/baleia/internal/workspaces/spaces"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -91,6 +92,10 @@ type core struct {
 // spacesOver builds the spaces service over store, creating a space and its
 // first manager in one transaction of c.
 func spacesOver(c *core, store spaces.Store) *spaces.Service {
+	if c.store != nil {
+		r := repo.New(c.store)
+		return spaces.New(r, r.TxSpaces)
+	}
 	return spaces.New(store, func(ctx context.Context, fn func(spaces.TxStore) error) error {
 		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
 	})
