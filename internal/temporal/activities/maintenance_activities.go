@@ -488,11 +488,15 @@ func (a *Activities) runMaintenanceOperation(ctx context.Context, params RunMain
 		}
 		_, err = queryengine.CollectStringsWith(ctx, eng, spec, sql, maintenanceMaxResultRows, cb)
 		if err == nil {
-			recordMaintenanceSnapshot(ctx, a.monitoring(), binding.EngineID, params.RunID, sql, "finished", 0, 0, "")
+			if snapErr := recordMaintenanceSnapshot(ctx, a.monitoring(), binding.EngineID, "", params.RunID, sql, "finished", 0, 0, ""); snapErr != nil {
+				a.logger.ErrorContext(ctx, "record maintenance snapshot", "run", params.RunID, "err", snapErr)
+			}
 			finishMaintenanceRun(ctx, a.monitoring(), params.RunID, "finished", "", "")
 			return nil
 		}
-		recordMaintenanceSnapshot(ctx, a.monitoring(), binding.EngineID, params.RunID, sql, "failed", 0, 0, err.Error())
+		if snapErr := recordMaintenanceSnapshot(ctx, a.monitoring(), binding.EngineID, "", params.RunID, sql, "failed", 0, 0, err.Error()); snapErr != nil {
+			a.logger.ErrorContext(ctx, "record maintenance snapshot", "run", params.RunID, "err", snapErr)
+		}
 		if ctx.Err() != nil {
 			return fail("cancelled", ctx.Err())
 		}

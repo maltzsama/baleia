@@ -3,7 +3,7 @@ package repo
 import (
 	"context"
 	"errors"
-	"sort"
+	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
@@ -83,78 +83,100 @@ func (r *Repo) ListClusterSnapshotsByEngine(ctx context.Context, arg db.ListClus
 func (r *Repo) UpsertTrinoQuerySnapshot(ctx context.Context, arg db.UpsertTrinoQuerySnapshotParams) (db.TrinoQuerySnapshot, error) {
 	var out db.TrinoQuerySnapshot
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var current model.TrinoQuerySnapshot
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("trino_query_id = ?", arg.TrinoQueryID).
-			First(&current).Error
 		now := time.Now().UTC()
 		createdAt := now
 		if arg.CreatedAt.Valid {
 			createdAt = arg.CreatedAt.Time
 		}
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			row := model.TrinoQuerySnapshot{
-				ID:                 model.UUID(NewUUID()),
-				TrinoQueryID:       model.Text(arg.TrinoQueryID),
-				ExecutionID:        modelUUIDPtr(arg.ExecutionID),
-				Origin:             model.Text(arg.Origin),
-				User:               model.Text(arg.User),
-				State:              model.Text(arg.State),
-				SQL:                arg.Sql,
-				Catalog:            arg.Catalog,
-				Schema:             arg.Schema,
-				CreatedAt:          createdAt,
-				ElapsedMs:          arg.ElapsedMs,
-				CPUMs:              arg.CpuMs,
-				PhysicalInputBytes: arg.PhysicalInputBytes,
-				OutputRows:         arg.OutputRows,
-				ErrorMessage:       arg.ErrorMessage,
-				RawTrinoPayload:    modelJSONPtr(arg.RawTrinoPayload),
-				FirstSeenAt:        now,
-				LastSeenAt:         now,
-				EngineID:           model.UUID(UUIDString(arg.EngineID)),
-			}
-			if err := tx.Create(&row).Error; err != nil {
-				return err
-			}
+		row := model.TrinoQuerySnapshot{
+			ID:                 model.UUID(NewUUID()),
+			TrinoQueryID:       model.Text(arg.TrinoQueryID),
+			ExecutionID:        modelUUIDPtr(arg.ExecutionID),
+			Origin:             model.Text(arg.Origin),
+			User:               model.Text(arg.User),
+			State:              model.Text(arg.State),
+			SQL:                arg.Sql,
+			Catalog:            arg.Catalog,
+			Schema:             arg.Schema,
+			CreatedAt:          createdAt,
+			ElapsedMs:          arg.ElapsedMs,
+			CPUMs:              arg.CpuMs,
+			PhysicalInputBytes: arg.PhysicalInputBytes,
+			OutputRows:         arg.OutputRows,
+			ErrorMessage:       arg.ErrorMessage,
+			RawTrinoPayload:    modelJSONPtr(arg.RawTrinoPayload),
+			FirstSeenAt:        now,
+			LastSeenAt:         now,
+			EngineID:           model.UUID(UUIDString(arg.EngineID)),
+		}
+		// A concurrent first write by the other writer must merge, not fail
+		// the poller: DO NOTHING keeps the transaction usable, and the row is
+		// re-read under a lock for the merge below.
+		res := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected > 0 {
 			out = toDBTrinoQuerySnapshot(row)
 			return nil
 		}
+		var current model.TrinoQuerySnapshot
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("trino_query_id = ?", arg.TrinoQueryID).
+			First(&current).Error; err != nil {
+			return err
+		}
+		merged, err := mergeTrinoQuerySnapshot(tx, current, arg, now)
 		if err != nil {
 			return err
 		}
-
-		stale := (current.State == "finished" || current.State == "failed") && arg.State == "running"
-		state := arg.State
-		elapsed := firstNonNil(arg.ElapsedMs, current.ElapsedMs)
-		cpu := firstNonNil(arg.CpuMs, current.CPUMs)
-		physical := firstNonNil(arg.PhysicalInputBytes, current.PhysicalInputBytes)
-		if stale {
-			state = string(current.State)
-			elapsed = firstNonNil(current.ElapsedMs, arg.ElapsedMs)
-			cpu = firstNonNil(current.CPUMs, arg.CpuMs)
-			physical = firstNonNil(current.PhysicalInputBytes, arg.PhysicalInputBytes)
-		}
-		updates := map[string]any{
-			"state":                state,
-			"elapsed_ms":           elapsed,
-			"cpu_ms":               cpu,
-			"physical_input_bytes": physical,
-			"output_rows":          firstNonNil(arg.OutputRows, current.OutputRows),
-			"error_message":        firstNonNil(arg.ErrorMessage, current.ErrorMessage),
-			"last_seen_at":         now,
-		}
-		if err := tx.Model(&model.TrinoQuerySnapshot{}).
-			Where("id = ?", string(current.ID)).Updates(updates).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("id = ?", string(current.ID)).First(&current).Error; err != nil {
-			return err
-		}
-		out = toDBTrinoQuerySnapshot(current)
+		out = toDBTrinoQuerySnapshot(merged)
 		return nil
 	})
 	return out, err
+}
+
+// terminalSnapshotState reports a state a late running poll must not undo.
+func terminalSnapshotState(state string) bool {
+	return state == "finished" || state == "failed" || state == "cancelled"
+}
+
+// mergeTrinoQuerySnapshot applies the ON CONFLICT merge rules to the row a
+// concurrent writer created and returns the stored row.
+func mergeTrinoQuerySnapshot(tx *gorm.DB, current model.TrinoQuerySnapshot, arg db.UpsertTrinoQuerySnapshotParams, now time.Time) (model.TrinoQuerySnapshot, error) {
+	stale := terminalSnapshotState(string(current.State)) && arg.State == "running"
+	state := arg.State
+	elapsed := firstNonNil(arg.ElapsedMs, current.ElapsedMs)
+	cpu := firstNonNil(arg.CpuMs, current.CPUMs)
+	physical := firstNonNil(arg.PhysicalInputBytes, current.PhysicalInputBytes)
+	outputRows := firstNonNil(arg.OutputRows, current.OutputRows)
+	errorMessage := firstNonNil(arg.ErrorMessage, current.ErrorMessage)
+	if stale {
+		state = string(current.State)
+		elapsed = firstNonNil(current.ElapsedMs, arg.ElapsedMs)
+		cpu = firstNonNil(current.CPUMs, arg.CpuMs)
+		physical = firstNonNil(current.PhysicalInputBytes, arg.PhysicalInputBytes)
+		// The final figures belong to the terminal row, not the late poll.
+		outputRows = current.OutputRows
+		errorMessage = current.ErrorMessage
+	}
+	updates := map[string]any{
+		"state":                state,
+		"elapsed_ms":           elapsed,
+		"cpu_ms":               cpu,
+		"physical_input_bytes": physical,
+		"output_rows":          outputRows,
+		"error_message":        errorMessage,
+		"last_seen_at":         now,
+	}
+	if err := tx.Model(&model.TrinoQuerySnapshot{}).
+		Where("id = ?", string(current.ID)).Updates(updates).Error; err != nil {
+		return model.TrinoQuerySnapshot{}, err
+	}
+	if err := tx.Where("id = ?", string(current.ID)).First(&current).Error; err != nil {
+		return model.TrinoQuerySnapshot{}, err
+	}
+	return current, nil
 }
 
 // GetTrinoQuerySnapshotByEngine returns one query snapshot of an engine.
@@ -182,9 +204,9 @@ func (r *Repo) ListTrinoQuerySnapshotsByEngine(ctx context.Context, arg db.ListT
 		q = q.Where(map[string]any{"user": *arg.UserName})
 	}
 	if arg.Q != nil && *arg.Q != "" {
-		// A case-insensitive substring, produced portably by the database's
-		// LIKE with lower-cased operands (no ILIKE, no dialect fragment).
-		pattern := "%" + lowerASCII(*arg.Q) + "%"
+		// Both operands are lower-cased by the database and the caller: no
+		// ILIKE and no Go-only case folding for the stored column.
+		pattern := "%" + strings.ToLower(*arg.Q) + "%"
 		q = q.Where("LOWER(sql) LIKE ?", pattern)
 	}
 	var rows []model.TrinoQuerySnapshot
@@ -250,88 +272,72 @@ func (r *Repo) ListQueryClasses(ctx context.Context, arg db.ListQueryClassesPara
 func (r *Repo) UpsertTableHealthSnapshot(ctx context.Context, arg db.UpsertTableHealthSnapshotParams) (db.TableHealthSnapshot, error) {
 	var out db.TableHealthSnapshot
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var current model.TableHealthSnapshot
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("catalog_id = ? AND namespace = ? AND table_name = ?",
-				UUIDString(arg.CatalogID), arg.Namespace, arg.TableName).
-			First(&current).Error
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
 		now := time.Now().UTC()
-		lastMaintenance := current.LastMaintenanceAt
-		if arg.LastMaintenanceAt.Valid {
-			t := arg.LastMaintenanceAt.Time
-			lastMaintenance = &t
-		}
 		due := arg.DueOperations
 		if due == nil {
 			due = []string{}
 		}
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			row := model.TableHealthSnapshot{
-				ID:                     model.UUID(NewUUID()),
-				CatalogConnectionID:    model.UUID(UUIDString(arg.CatalogConnectionID)),
-				Catalog:                model.Text(arg.Catalog),
-				Namespace:              model.Text(arg.Namespace),
-				TableNameValue:         model.Text(arg.TableName),
-				CapturedAt:             now,
-				SnapshotCount:          arg.SnapshotCount,
-				FileCount:              arg.FileCount,
-				TotalSizeBytes:         arg.TotalSizeBytes,
-				OldestSnapshotAgeHours: arg.OldestSnapshotAgeHours,
-				LastMaintenanceAt:      lastMaintenance,
-				HealthScore:            arg.HealthScore,
-				NeedsCompaction:        arg.NeedsCompaction,
-				NeedsSnapshotExpiry:    arg.NeedsSnapshotExpiry,
-				CatalogID:              model.UUID(UUIDString(arg.CatalogID)),
-				DeleteFileCount:        arg.DeleteFileCount,
-				EqualityDeleteCount:    arg.EqualityDeleteCount,
-				PositionDeleteCount:    arg.PositionDeleteCount,
-				SmallFileCount:         arg.SmallFileCount,
-				CommitsLastHour:        arg.CommitsLastHour,
-				CommitsLastDay:         arg.CommitsLastDay,
-				AvgFileSizeBytes:       arg.AvgFileSizeBytes,
-				ManifestCount:          arg.ManifestCount,
-				FormatVersion:          arg.FormatVersion,
-				TableProperties:        jsonOrDefault(arg.TableProperties),
-				DueOperations:          model.StringArray(due),
-				PolicyRevision:         arg.PolicyRevision,
-			}
-			values := map[string]any{
-				"id":                        row.ID,
-				"catalog_connection_id":     row.CatalogConnectionID,
-				"catalog":                   row.Catalog,
-				"namespace":                 row.Namespace,
-				"table_name":                row.TableNameValue,
-				"captured_at":               row.CapturedAt,
-				"snapshot_count":            row.SnapshotCount,
-				"file_count":                row.FileCount,
-				"total_size_bytes":          row.TotalSizeBytes,
-				"oldest_snapshot_age_hours": row.OldestSnapshotAgeHours,
-				"last_maintenance_at":       row.LastMaintenanceAt,
-				"health_score":              row.HealthScore,
-				"needs_compaction":          row.NeedsCompaction,
-				"needs_snapshot_expiry":     row.NeedsSnapshotExpiry,
-				"catalog_id":                row.CatalogID,
-				"delete_file_count":         row.DeleteFileCount,
-				"equality_delete_count":     row.EqualityDeleteCount,
-				"position_delete_count":     row.PositionDeleteCount,
-				"small_file_count":          row.SmallFileCount,
-				"commits_last_hour":         row.CommitsLastHour,
-				"commits_last_day":          row.CommitsLastDay,
-				"avg_file_size_bytes":       row.AvgFileSizeBytes,
-				"manifest_count":            row.ManifestCount,
-				"format_version":            row.FormatVersion,
-				"table_properties":          row.TableProperties,
-				"due_operations":            row.DueOperations,
-				"policy_revision":           row.PolicyRevision,
-			}
-			if err := tx.Model(&model.TableHealthSnapshot{}).Create(values).Error; err != nil {
+		var insertedLast *time.Time
+		if arg.LastMaintenanceAt.Valid {
+			t := arg.LastMaintenanceAt.Time
+			insertedLast = &t
+		}
+		values := map[string]any{
+			"id":                        model.UUID(NewUUID()),
+			"catalog_connection_id":     model.UUID(UUIDString(arg.CatalogConnectionID)),
+			"catalog":                   model.Text(arg.Catalog),
+			"namespace":                 model.Text(arg.Namespace),
+			"table_name":                model.Text(arg.TableName),
+			"captured_at":               now,
+			"snapshot_count":            arg.SnapshotCount,
+			"file_count":                arg.FileCount,
+			"total_size_bytes":          arg.TotalSizeBytes,
+			"oldest_snapshot_age_hours": arg.OldestSnapshotAgeHours,
+			"last_maintenance_at":       insertedLast,
+			"health_score":              arg.HealthScore,
+			"needs_compaction":          arg.NeedsCompaction,
+			"needs_snapshot_expiry":     arg.NeedsSnapshotExpiry,
+			"catalog_id":                model.UUID(UUIDString(arg.CatalogID)),
+			"delete_file_count":         arg.DeleteFileCount,
+			"equality_delete_count":     arg.EqualityDeleteCount,
+			"position_delete_count":     arg.PositionDeleteCount,
+			"small_file_count":          arg.SmallFileCount,
+			"commits_last_hour":         arg.CommitsLastHour,
+			"commits_last_day":          arg.CommitsLastDay,
+			"avg_file_size_bytes":       arg.AvgFileSizeBytes,
+			"manifest_count":            arg.ManifestCount,
+			"format_version":            arg.FormatVersion,
+			"table_properties":          jsonOrDefault(arg.TableProperties),
+			"due_operations":            model.StringArray(due),
+			"policy_revision":           arg.PolicyRevision,
+		}
+		// Concurrent health passes for the same table must merge: DO NOTHING
+		// keeps the transaction usable, then the stored row is re-read under a
+		// lock and updated with the merge rules.
+		res := tx.Model(&model.TableHealthSnapshot{}).
+			Clauses(clause.OnConflict{DoNothing: true}).Create(values)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected > 0 {
+			var row model.TableHealthSnapshot
+			if err := tx.Where("id = ?", values["id"]).First(&row).Error; err != nil {
 				return err
 			}
 			out = toDBTableHealthSnapshot(row)
 			return nil
+		}
+		var current model.TableHealthSnapshot
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("catalog_id = ? AND namespace = ? AND table_name = ?",
+				UUIDString(arg.CatalogID), arg.Namespace, arg.TableName).
+			First(&current).Error; err != nil {
+			return err
+		}
+		lastMaintenance := current.LastMaintenanceAt
+		if arg.LastMaintenanceAt.Valid {
+			t := arg.LastMaintenanceAt.Time
+			lastMaintenance = &t
 		}
 		updates := map[string]any{
 			"captured_at":               now,
@@ -398,6 +404,32 @@ func (r *Repo) ListTableHealthByCatalog(ctx context.Context, arg db.ListTableHea
 	if arg.MaxScore != nil {
 		q = q.Where("health_score <= ?", *arg.MaxScore)
 	}
+	// The boolean needs filters are portable; the operation membership is not
+	// (due_operations is an array on PostgreSQL), so only that one is reduced
+	// in Go.
+	pageInDB := true
+	if arg.Needs != nil {
+		switch *arg.Needs {
+		case "compaction":
+			q = q.Where("needs_compaction = ?", true)
+		case "snapshot_expiry":
+			q = q.Where("needs_snapshot_expiry = ?", true)
+		default:
+			pageInDB = false
+		}
+	}
+	q = q.Order("health_score ASC, namespace, table_name")
+	if pageInDB {
+		var rows []model.TableHealthSnapshot
+		if err := q.Limit(int(arg.Lim)).Offset(int(arg.Off)).Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		out := make([]db.TableHealthSnapshot, len(rows))
+		for i, row := range rows {
+			out[i] = toDBTableHealthSnapshot(row)
+		}
+		return out, nil
+	}
 	var rows []model.TableHealthSnapshot
 	if err := q.Find(&rows).Error; err != nil {
 		return nil, err
@@ -409,15 +441,6 @@ func (r *Repo) ListTableHealthByCatalog(ctx context.Context, arg db.ListTableHea
 		}
 		out = append(out, toDBTableHealthSnapshot(row))
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].HealthScore != out[j].HealthScore {
-			return out[i].HealthScore < out[j].HealthScore
-		}
-		if out[i].Namespace != out[j].Namespace {
-			return out[i].Namespace < out[j].Namespace
-		}
-		return out[i].TableName < out[j].TableName
-	})
 	return pageTableHealth(out, arg.Off, arg.Lim), nil
 }
 
@@ -490,7 +513,7 @@ func (r *Repo) CreateMaintenanceRun(ctx context.Context, arg db.CreateMaintenanc
 		Attempts:       1,
 	}
 	if err := r.Users.db.WithContext(ctx).Create(&row).Error; err != nil {
-		return db.MaintenanceRun{}, err
+		return db.MaintenanceRun{}, asUniqueViolation(err, "maintenance_runs_one_running")
 	}
 	return toDBMaintenanceRun(row), nil
 }
@@ -521,11 +544,12 @@ func (r *Repo) GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (db.Mainte
 
 // ListMaintenanceRuns lists a catalog's runs, newest first, with the filters
 // the monitoring list offers. The operation filter is applied in Go because
-// operations is an array (ADR 0020: no dialect fragment).
+// operations is an array (ADR 0020: no dialect fragment); every other filter
+// and the page stay in the database.
 func (r *Repo) ListMaintenanceRuns(ctx context.Context, arg db.ListMaintenanceRunsParams) ([]db.MaintenanceRun, error) {
 	q := r.Users.db.WithContext(ctx).Where("catalog_id = ?", UUIDString(arg.CatalogID))
 	if arg.Trigger != nil {
-		q = q.Where("trigger = ?", *arg.Trigger)
+		q = q.Where(map[string]any{"trigger": *arg.Trigger})
 	}
 	if arg.Status != nil {
 		q = q.Where("status = ?", *arg.Status)
@@ -536,13 +560,25 @@ func (r *Repo) ListMaintenanceRuns(ctx context.Context, arg db.ListMaintenanceRu
 	if arg.Tbl != nil {
 		q = q.Where("table_name = ?", *arg.Tbl)
 	}
+	q = q.Order("started_at DESC")
+	if arg.Operation == nil {
+		var rows []model.MaintenanceRun
+		if err := q.Limit(int(arg.Lim)).Offset(int(arg.Off)).Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		out := make([]db.MaintenanceRun, len(rows))
+		for i, row := range rows {
+			out[i] = toDBMaintenanceRun(row)
+		}
+		return out, nil
+	}
 	var rows []model.MaintenanceRun
-	if err := q.Order("started_at DESC").Find(&rows).Error; err != nil {
+	if err := q.Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]db.MaintenanceRun, 0, len(rows))
 	for _, row := range rows {
-		if arg.Operation != nil && !containsString(row.Operations, *arg.Operation) {
+		if !containsString(row.Operations, *arg.Operation) {
 			continue
 		}
 		out = append(out, toDBMaintenanceRun(row))
@@ -601,6 +637,7 @@ func (r *Repo) getMaintenanceRun(ctx context.Context, id pgtype.UUID) (db.Mainte
 func (r *Repo) catalogFinishedRuns(ctx context.Context, catalogID pgtype.UUID) ([]model.MaintenanceRun, error) {
 	var rows []model.MaintenanceRun
 	if err := r.Users.db.WithContext(ctx).
+		Select("namespace", "table_name", "operations", "finished_at").
 		Where("catalog_id = ? AND status = ? AND finished_at IS NOT NULL", UUIDString(catalogID), "finished").
 		Find(&rows).Error; err != nil {
 		return nil, err
@@ -751,15 +788,4 @@ func firstNonNil[T any](a, b *T) *T {
 		return a
 	}
 	return b
-}
-
-// lowerASCII lower-cases ASCII letters without touching bytes outside it.
-func lowerASCII(s string) string {
-	b := []byte(s)
-	for i, c := range b {
-		if c >= 'A' && c <= 'Z' {
-			b[i] = c + ('a' - 'A')
-		}
-	}
-	return string(b)
 }

@@ -4,12 +4,35 @@
 package repo
 
 import (
+	"errors"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"gorm.io/gorm"
 )
+
+// uniqueViolationCode is PostgreSQL's SQLSTATE for a unique-index refusal;
+// MySQL and MariaDB report their own code, but callers only inspect this one
+// through the translated error GORM hands back.
+const uniqueViolationCode = "23505"
+
+// asUniqueViolation turns GORM's translated duplicate-key error back into the
+// *pgconn.PgError callers inspect. constraint names the unique index when the
+// caller knows it, so the specific 409 message survives (ADR 0020 keeps the
+// store API GORM-shaped while callers keep their sqlc-era error checks).
+func asUniqueViolation(err error, constraint string) error {
+	if err == nil || !errors.Is(err, gorm.ErrDuplicatedKey) {
+		return err
+	}
+	return &pgconn.PgError{
+		Code:           uniqueViolationCode,
+		ConstraintName: constraint,
+		Message:        "duplicate key value violates unique constraint \"" + constraint + "\"",
+	}
+}
 
 // UUIDString renders a sqlc pgtype.UUID as text.
 func UUIDString(u pgtype.UUID) string {

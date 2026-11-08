@@ -650,7 +650,9 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 
 		result, err := queryengine.CollectStringsWith(ctx, eng, spec, cmd, maintenanceMaxResultRows, cb)
 		if err != nil {
-			recordMaintenanceSnapshot(ctx, a.monitoring(), engineID, params.ExecutionID, cmd, "failed", 0, 0, err.Error())
+			if snapErr := recordMaintenanceSnapshot(ctx, a.monitoring(), engineID, params.ExecutionID, params.ExecutionID, cmd, "failed", 0, 0, err.Error()); snapErr != nil {
+				a.logger.ErrorContext(ctx, "record maintenance snapshot", "run", params.RunID, "err", snapErr)
+			}
 			finishMaintenanceRun(ctx, a.monitoring(), params.RunID, "failed", "maintenance_failed", err.Error())
 			return fmt.Errorf("maintenance %q: %w", cmd, err)
 		}
@@ -659,7 +661,9 @@ func (a *Activities) lensRunMaintenance(ctx context.Context, params LensRunMaint
 			return ctx.Err()
 		}
 
-		recordMaintenanceSnapshot(ctx, a.monitoring(), engineID, params.ExecutionID, cmd, "finished", int64(len(result)), 0, "")
+		if snapErr := recordMaintenanceSnapshot(ctx, a.monitoring(), engineID, params.ExecutionID, params.ExecutionID, cmd, "finished", int64(len(result)), 0, ""); snapErr != nil {
+			a.logger.ErrorContext(ctx, "record maintenance snapshot", "run", params.RunID, "err", snapErr)
+		}
 	}
 
 	finishMaintenanceRun(ctx, a.monitoring(), params.RunID, "finished", "", "")
@@ -732,13 +736,29 @@ func finishMaintenanceRun(ctx context.Context, queries monitoringStore, runID, s
 // maintenanceMaxResultRows bounds what a maintenance statement may return.
 const maintenanceMaxResultRows = 10000
 
-func recordMaintenanceSnapshot(ctx context.Context, queries monitoringStore, engineID pgtype.UUID, executionID, sql, state string, rows int64, elapsedMs int32, errMsg string) {
+// recordMaintenanceSnapshot stores the snapshot of one maintenance statement.
+// executionID is the query execution the statement belongs to, when there is
+// one; a planned run has no query_executions row, so it passes empty and only
+// snapshotID (its run id) identifies the snapshot. Persistence failures are
+// returned to the caller, never discarded.
+func recordMaintenanceSnapshot(ctx context.Context, queries monitoringStore, engineID pgtype.UUID, executionID, snapshotID, sql, state string, rows int64, elapsedMs int32, errMsg string) error {
 	var execID pgtype.UUID
-	execID.Scan(executionID)
+	if executionID != "" {
+		if err := execID.Scan(executionID); err != nil {
+			execID = pgtype.UUID{}
+		}
+	}
 
 	rawPayload, _ := json.Marshal(map[string]string{"sql": sql, "state": state})
 
-	trinoQueryID := fmt.Sprintf("lens-maint-%s-%d", executionID[:8], time.Now().UnixMilli())
+	prefix := snapshotID
+	if len(prefix) > 8 {
+		prefix = prefix[:8]
+	}
+	if prefix == "" {
+		prefix = uuid.NewString()[:8]
+	}
+	trinoQueryID := fmt.Sprintf("lens-maint-%s-%d", prefix, time.Now().UnixMilli())
 
 	var errorMsg *string
 	if errMsg != "" {
@@ -755,19 +775,19 @@ func recordMaintenanceSnapshot(ctx context.Context, queries monitoringStore, eng
 		elapsed = &elapsedMs
 	}
 
-	queries.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
+	_, err := queries.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
 		TrinoQueryID:    trinoQueryID,
 		EngineID:        engineID,
 		ExecutionID:     execID,
-		Origin:          "lens_maintenance",
+		Origin:          "baleia",
 		User:            "lens",
 		State:           state,
 		Sql:             sql,
-		Catalog:         strPtr(""),
 		CreatedAt:       pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		ElapsedMs:       elapsed,
 		OutputRows:      outputRows,
 		ErrorMessage:    errorMsg,
 		RawTrinoPayload: rawPayload,
 	})
+	return err
 }

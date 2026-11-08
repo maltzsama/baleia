@@ -40,7 +40,6 @@ func (r *Repo) MaxWorkloadRulePosition(ctx context.Context) (int32, error) {
 
 // CreateWorkloadRule inserts one rule and returns it.
 func (r *Repo) CreateWorkloadRule(ctx context.Context, arg db.CreateWorkloadRuleParams) (db.WorkloadRule, error) {
-	now := time.Now().UTC()
 	row := model.WorkloadRule{
 		ID:        model.UUID(NewUUID()),
 		Position:  arg.Position,
@@ -50,8 +49,6 @@ func (r *Repo) CreateWorkloadRule(ctx context.Context, arg db.CreateWorkloadRule
 		MaxClass:  arg.MaxClass,
 		Weight:    arg.Weight,
 		CreatedBy: modelUUIDPtr(arg.CreatedBy),
-		CreatedAt: now,
-		UpdatedAt: now,
 	}
 	values := map[string]any{
 		"id":         row.ID,
@@ -62,13 +59,13 @@ func (r *Repo) CreateWorkloadRule(ctx context.Context, arg db.CreateWorkloadRule
 		"max_class":  row.MaxClass,
 		"weight":     row.Weight,
 		"created_by": row.CreatedBy,
-		"created_at": row.CreatedAt,
-		"updated_at": row.UpdatedAt,
 	}
 	if err := r.Users.db.WithContext(ctx).Model(&model.WorkloadRule{}).Create(values).Error; err != nil {
 		return db.WorkloadRule{}, err
 	}
-	return toDBWorkloadRule(row), nil
+	// created_at/updated_at come from the database clock, and the stored row
+	// is what the caller returns, so ordering and timestamps agree.
+	return r.GetWorkloadRule(ctx, PGUUID(string(row.ID)))
 }
 
 // UpdateWorkloadRule replaces a rule's editable fields and stamps updated_at.

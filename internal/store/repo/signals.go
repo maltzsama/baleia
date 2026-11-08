@@ -57,7 +57,8 @@ func (r *Repo) MetadataStatusCounts(ctx context.Context, staleSeconds int32) (db
 }
 
 // syncableCatalogStates reads the enabled catalogs that a metadata pass syncs,
-// with their last finished pass and latest pass status.
+// with their last finished pass and latest pass status. Each reduction is a
+// database read that selects one row, so months of history are never loaded.
 func (r *Repo) syncableCatalogStates(ctx context.Context) ([]syncableCatalogState, error) {
 	var catalogs []model.Catalog
 	if err := r.Users.db.WithContext(ctx).Where("enabled = ?", true).Find(&catalogs).Error; err != nil {
@@ -71,39 +72,22 @@ func (r *Repo) syncableCatalogStates(ctx context.Context) ([]syncableCatalogStat
 	for _, b := range bindings {
 		bound[string(b.CatalogID)] = true
 	}
-	syncable := make([]model.Catalog, 0, len(catalogs))
-	ids := make([]string, 0, len(catalogs))
+	out := make([]syncableCatalogState, 0, len(catalogs))
 	for _, c := range catalogs {
-		if string(c.Origin) == "source" || bound[string(c.ID)] {
-			syncable = append(syncable, c)
-			ids = append(ids, string(c.ID))
+		if string(c.Origin) != "source" && !bound[string(c.ID)] {
+			continue
 		}
-	}
-	runsByCatalog := map[string][]model.MetadataSyncRun{}
-	if len(ids) > 0 {
-		var runs []model.MetadataSyncRun
-		if err := r.Users.db.WithContext(ctx).
-			Where("catalog_id IN ?", ids).
-			Order("started_at ASC").
-			Find(&runs).Error; err != nil {
-			return nil, err
-		}
-		for _, run := range runs {
-			runsByCatalog[string(run.CatalogID)] = append(runsByCatalog[string(run.CatalogID)], run)
-		}
-	}
-	out := make([]syncableCatalogState, 0, len(syncable))
-	for _, c := range syncable {
 		id := string(c.ID)
 		st := syncableCatalogState{catalogID: id, name: string(c.Name), createdAt: c.CreatedAt, lastStatus: "never"}
-		for _, run := range runsByCatalog[id] {
-			if run.Status == "finished" && run.FinishedAt != nil {
-				if st.lastFinished == nil || run.FinishedAt.After(*st.lastFinished) {
-					t := *run.FinishedAt
-					st.lastFinished = &t
-				}
-			}
+		run, ok, err := r.latestSyncRun(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			st.lastStatus = run.Status
+		}
+		if st.lastFinished, err = r.lastFinishedSync(ctx, id); err != nil {
+			return nil, err
 		}
 		out = append(out, st)
 	}
@@ -112,31 +96,32 @@ func (r *Repo) syncableCatalogStates(ctx context.Context) ([]syncableCatalogStat
 
 // LatestReconcileRuns is each engine's most recent reconcile run.
 func (r *Repo) LatestReconcileRuns(ctx context.Context) ([]db.LatestReconcileRunsRow, error) {
-	var rows []model.CatalogReconcileRun
-	if err := r.Users.db.WithContext(ctx).
-		Order("engine_id, started_at DESC").
-		Find(&rows).Error; err != nil {
+	var engines []model.Engine
+	if err := r.Users.db.WithContext(ctx).Select("id").Order("id").Find(&engines).Error; err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	out := make([]db.LatestReconcileRunsRow, 0)
-	for _, row := range rows {
-		engineID := string(row.EngineID)
-		if seen[engineID] {
+	out := make([]db.LatestReconcileRunsRow, 0, len(engines))
+	for _, engine := range engines {
+		var run model.CatalogReconcileRun
+		err := r.Users.db.WithContext(ctx).
+			Select("engine_id", "started_at", "finished_at", "dry_run", "error").
+			Where("engine_id = ?", string(engine.ID)).
+			Order("started_at DESC").
+			First(&run).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			continue
 		}
-		seen[engineID] = true
+		if err != nil {
+			return nil, err
+		}
 		out = append(out, db.LatestReconcileRunsRow{
-			EngineID:   PGUUID(engineID),
-			StartedAt:  PGTime(row.StartedAt),
-			FinishedAt: PGTime(row.FinishedAt),
-			DryRun:     row.DryRun,
-			Error:      row.Error,
+			EngineID:   PGUUID(string(run.EngineID)),
+			StartedAt:  PGTime(run.StartedAt),
+			FinishedAt: PGTime(run.FinishedAt),
+			DryRun:     run.DryRun,
+			Error:      run.Error,
 		})
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		return UUIDString(out[i].EngineID) < UUIDString(out[j].EngineID)
-	})
 	return out, nil
 }
 
@@ -199,11 +184,15 @@ func (r *Repo) ListAttentionBindingErrors(ctx context.Context) ([]db.ListAttenti
 		if state != "error" && !(state == "deprovisioning" && b.StateChangedAt.Before(grace)) {
 			continue
 		}
+		engineName, ok := engines[string(b.EngineID)]
+		if !ok {
+			continue
+		}
 		out = append(out, db.ListAttentionBindingErrorsRow{
 			ID:             PGUUID(string(b.ID)),
 			CatalogID:      PGUUID(string(b.CatalogID)),
 			CatalogName:    catalogName,
-			EngineName:     engines[string(b.EngineID)],
+			EngineName:     engineName,
 			LifecycleState: state,
 			StateChangedAt: PGTime(b.StateChangedAt),
 		})
@@ -400,13 +389,54 @@ func (r *Repo) workspaceNames(ctx context.Context) (map[string]string, error) {
 }
 
 func (r *Repo) latestSyncRuns(ctx context.Context) (map[string]model.MetadataSyncRun, error) {
-	var runs []model.MetadataSyncRun
-	if err := r.Users.db.WithContext(ctx).Order("started_at ASC").Find(&runs).Error; err != nil {
+	var catalogs []model.Catalog
+	if err := r.Users.db.WithContext(ctx).Select("id").Find(&catalogs).Error; err != nil {
 		return nil, err
 	}
 	out := map[string]model.MetadataSyncRun{}
-	for _, run := range runs {
-		out[string(run.CatalogID)] = run
+	for _, c := range catalogs {
+		run, ok, err := r.latestSyncRun(ctx, string(c.ID))
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out[string(c.ID)] = run
+		}
 	}
 	return out, nil
+}
+
+// latestSyncRun selects one catalog's latest pass (status and finish time only).
+func (r *Repo) latestSyncRun(ctx context.Context, catalogID string) (model.MetadataSyncRun, bool, error) {
+	var run model.MetadataSyncRun
+	err := r.Users.db.WithContext(ctx).
+		Select("catalog_id", "status", "finished_at", "error_code").
+		Where("catalog_id = ?", catalogID).
+		Order("started_at DESC").
+		First(&run).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.MetadataSyncRun{}, false, nil
+	}
+	if err != nil {
+		return model.MetadataSyncRun{}, false, err
+	}
+	return run, true, nil
+}
+
+// lastFinishedSync selects the newest finish time among a catalog's finished
+// passes, without loading the rows.
+func (r *Repo) lastFinishedSync(ctx context.Context, catalogID string) (*time.Time, error) {
+	var run model.MetadataSyncRun
+	err := r.Users.db.WithContext(ctx).
+		Select("finished_at").
+		Where("catalog_id = ? AND status = ? AND finished_at IS NOT NULL", catalogID, "finished").
+		Order("finished_at DESC").
+		First(&run).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return run.FinishedAt, nil
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -119,7 +120,7 @@ func TestTableHealthUpsert(t *testing.T) {
 		}
 	}
 	first := health(40, true, true, []string{"optimize", "expire_snapshots"})
-	first.LastMaintenanceAt = PGTime(time.Now().UTC().Add(-time.Hour))
+	first.LastMaintenanceAt = PGTime(time.Now().UTC().Add(-time.Hour).Truncate(time.Microsecond))
 	stored, err := f.r.UpsertTableHealthSnapshot(ctx, first)
 	if err != nil {
 		t.Fatalf("UpsertTableHealthSnapshot(create): %v", err)
@@ -136,8 +137,9 @@ func TestTableHealthUpsert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTableHealthByTable: %v", err)
 	}
-	if got.HealthScore != 90 || got.NeedsCompaction || !got.LastMaintenanceAt.Valid {
-		t.Fatalf("GetTableHealthByTable = %+v; want score 90 and the preserved maintenance time", got)
+	if got.HealthScore != 90 || got.NeedsCompaction || !got.LastMaintenanceAt.Valid ||
+		!got.LastMaintenanceAt.Time.Equal(first.LastMaintenanceAt.Time) {
+		t.Fatalf("GetTableHealthByTable = %+v; want score 90 and the preserved maintenance time %v", got, first.LastMaintenanceAt.Time)
 	}
 
 	// A second table gives the list something to order and filter.
@@ -268,11 +270,12 @@ func TestMaintenanceRuns(t *testing.T) {
 		t.Fatalf("GetRunningMaintenanceRun(finished) = %v, want ErrNoRows", err)
 	}
 
-	if _, err := f.r.CreatePlannedMaintenanceRun(ctx, db.CreatePlannedMaintenanceRunParams{
+	auto, err := f.r.CreatePlannedMaintenanceRun(ctx, db.CreatePlannedMaintenanceRunParams{
 		CatalogID: f.catalogID(), BindingID: f.bindingID(), Namespace: "sales", TableName: "orders",
 		Operations: []string{"optimize_manifests"}, Trigger: "automatic", WorkflowID: "auto",
 		Reason: []byte(`{"fired":"small_files"}`), Parameters: []byte(`{"enabled":true}`),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("CreatePlannedMaintenanceRun: %v", err)
 	}
 	dry, err := f.r.CreatePlannedMaintenanceRun(ctx, db.CreatePlannedMaintenanceRunParams{
@@ -291,6 +294,15 @@ func TestMaintenanceRuns(t *testing.T) {
 		t.Fatal("a second running run on the table must be refused")
 	}
 
+	// Distinct start times make the page assertion deterministic.
+	base := time.Now().UTC().Add(-time.Hour)
+	for i, id := range []pgtype.UUID{run.ID, auto.ID, dry.ID} {
+		if err := f.gdb.Model(&model.MaintenanceRun{}).
+			Where("id = ?", string(model.UUID(UUIDString(id)))).
+			Update("started_at", base.Add(time.Duration(i)*time.Minute)).Error; err != nil {
+			t.Fatalf("set started_at: %v", err)
+		}
+	}
 	runs, err := f.r.ListTableMaintenanceRuns(ctx, db.ListTableMaintenanceRunsParams{
 		CatalogID: f.catalogID(), Namespace: "sales", TableName: "orders", Lim: 10,
 	})
@@ -310,8 +322,8 @@ func TestMaintenanceRuns(t *testing.T) {
 	}
 	if limited, err := f.r.ListMaintenanceRuns(ctx, db.ListMaintenanceRunsParams{
 		CatalogID: f.catalogID(), Lim: 1, Off: 1,
-	}); err != nil || len(limited) != 1 {
-		t.Fatalf("ListMaintenanceRuns(page) = %+v, %v", limited, err)
+	}); err != nil || len(limited) != 1 || limited[0].ID != runs[1].ID {
+		t.Fatalf("ListMaintenanceRuns(page) = %+v, %v; want runs[1]", limited, err)
 	}
 
 	last, err := f.r.LastSuccessfulMaintenanceByOperation(ctx, db.LastSuccessfulMaintenanceByOperationParams{
@@ -450,6 +462,24 @@ func TestMonitoringSnapshots(t *testing.T) {
 	}); err != nil || len(paged) != 1 || paged[0].TrinoQueryID != "q-2" {
 		t.Fatalf("ListTrinoQuerySnapshotsByEngine(page) = %+v, %v", paged, err)
 	}
+	// Cancelled is terminal too: a late running poll keeps the state and its
+	// final output count.
+	if _, err := f.r.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
+		TrinoQueryID: "q-3", EngineID: f.engineID(), Origin: "baleia", User: "alice",
+		State: "cancelled", Sql: "SELECT 3", CreatedAt: PGTime(time.Now().UTC()),
+		OutputRows: int64Ptr(3),
+	}); err != nil {
+		t.Fatalf("UpsertTrinoQuerySnapshot(cancelled): %v", err)
+	}
+	cancelled, err := f.r.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
+		TrinoQueryID: "q-3", EngineID: f.engineID(), Origin: "baleia", User: "alice",
+		State: "running", Sql: "SELECT 3", CreatedAt: PGTime(time.Now().UTC()),
+		OutputRows: int64Ptr(99),
+	})
+	if err != nil || cancelled.State != "cancelled" || cancelled.OutputRows == nil || *cancelled.OutputRows != 3 {
+		t.Fatalf("cancelled stale merge = %+v, %v", cancelled, err)
+	}
+
 	if _, err := f.r.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
 		EngineID: f.engineID(), TrinoQueryID: "missing",
 	}); !errors.Is(err, pgx.ErrNoRows) {
@@ -495,6 +525,19 @@ func TestResourceGroupSelectors(t *testing.T) {
 	if len(selectors) != 2 || selectors[0].GroupID != child {
 		t.Fatalf("selectors = %+v; want the higher priority on the child", selectors)
 	}
+	otherEnv := "staging"
+	other, err := f.r.InsertTrinoResourceGroup(ctx, db.InsertTrinoResourceGroupParams{
+		Name: "baleia", SoftMemoryLimit: "80%", MaxQueued: 3, HardConcurrencyLimit: 1,
+		Environment: &otherEnv,
+	})
+	if err != nil {
+		t.Fatalf("InsertTrinoResourceGroup(other environment): %v", err)
+	}
+	if err := f.r.InsertTrinoSelector(ctx, db.InsertTrinoSelectorParams{
+		ResourceGroupID: other, Priority: 1, ClientTags: strPtr("baleia.class=interactive"),
+	}); err != nil {
+		t.Fatalf("InsertTrinoSelector(other environment): %v", err)
+	}
 	if err := f.r.DeleteTrinoResourceGroups(ctx, &env); err != nil {
 		t.Fatalf("DeleteTrinoResourceGroups: %v", err)
 	}
@@ -504,6 +547,17 @@ func TestResourceGroupSelectors(t *testing.T) {
 	}
 	if remaining != 0 {
 		t.Fatalf("groups after delete = %d", remaining)
+	}
+	var survived int64
+	if err := f.gdb.Model(&model.ResourceGroup{}).Where("resource_group_id = ?", other).Count(&survived).Error; err != nil {
+		t.Fatalf("count other groups: %v", err)
+	}
+	var otherSelectors int64
+	if err := f.gdb.Model(&model.Selector{}).Where("resource_group_id = ?", other).Count(&otherSelectors).Error; err != nil {
+		t.Fatalf("count other selectors: %v", err)
+	}
+	if survived != 1 || otherSelectors != 1 {
+		t.Fatalf("other environment after prod delete = %d groups, %d selectors; want both", survived, otherSelectors)
 	}
 }
 
@@ -542,8 +596,9 @@ func TestReconcileRuns(t *testing.T) {
 	}
 
 	latest, err := f.r.LatestReconcileRuns(ctx)
-	if err != nil || len(latest) != 1 || latest[0].EngineID != f.engineID() {
-		t.Fatalf("LatestReconcileRuns = %+v, %v", latest, err)
+	if err != nil || len(latest) != 1 || latest[0].EngineID != f.engineID() ||
+		!latest[0].StartedAt.Time.Equal(runs[0].StartedAt.Time) {
+		t.Fatalf("LatestReconcileRuns = %+v, %v; want the newest run", latest, err)
 	}
 	driftRows, err := f.r.ListAttentionReconcileDrift(ctx)
 	if err != nil || len(driftRows) != 1 || driftRows[0].ActionCount != 2 {
@@ -552,6 +607,100 @@ func TestReconcileRuns(t *testing.T) {
 }
 
 func int32Ptr(v int32) *int32 { return &v }
+
+// TestUpsertTrinoQuerySnapshotConcurrentFirstWrite synchronizes a poller and an
+// event writer inserting the same query before it exists. Both must succeed and
+// the stored row must be the terminal one (#406, #773).
+func TestUpsertTrinoQuerySnapshotConcurrentFirstWrite(t *testing.T) {
+	t.Parallel()
+	f := monitoringFixture(t)
+	ctx := context.Background()
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		<-start
+		_, err := f.r.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
+			TrinoQueryID: "q-race", EngineID: f.engineID(), Origin: "baleia", User: "alice",
+			State: "finished", Sql: "SELECT 1", CreatedAt: PGTime(time.Now().UTC()),
+			OutputRows: int64Ptr(5),
+		})
+		errs <- err
+	}()
+	go func() {
+		defer wg.Done()
+		<-start
+		_, err := f.r.UpsertTrinoQuerySnapshot(ctx, db.UpsertTrinoQuerySnapshotParams{
+			TrinoQueryID: "q-race", EngineID: f.engineID(), Origin: "trino_direct", User: "alice",
+			State: "running", Sql: "SELECT 1", CreatedAt: PGTime(time.Now().UTC()),
+			OutputRows: int64Ptr(99),
+		})
+		errs <- err
+	}()
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent first write: %v", err)
+		}
+	}
+	snap, err := f.r.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
+		EngineID: f.engineID(), TrinoQueryID: "q-race",
+	})
+	if err != nil || snap.State != "finished" || snap.OutputRows == nil || *snap.OutputRows != 5 {
+		t.Fatalf("concurrent first write = %+v, %v; want the terminal row", snap, err)
+	}
+}
+
+// TestUpsertTableHealthSnapshotConcurrentFirstWrite synchronizes two health
+// passes creating the same row; both succeed and the maintenance timestamp is
+// preserved (#773).
+func TestUpsertTableHealthSnapshotConcurrentFirstWrite(t *testing.T) {
+	t.Parallel()
+	f := monitoringFixture(t)
+	ctx := context.Background()
+	connection := f.catalogConnection(t)
+	maintainedAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Microsecond)
+
+	base := db.UpsertTableHealthSnapshotParams{
+		CatalogID: f.catalogID(), CatalogConnectionID: PGUUID(string(connection)),
+		Catalog: "lake", Namespace: "race", TableName: "health",
+		HealthScore: 80, TableProperties: []byte(`{}`),
+	}
+	withTime := base
+	withTime.LastMaintenanceAt = PGTime(maintainedAt)
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	for _, arg := range []db.UpsertTableHealthSnapshotParams{base, withTime} {
+		go func(arg db.UpsertTableHealthSnapshotParams) {
+			defer wg.Done()
+			<-start
+			_, err := f.r.UpsertTableHealthSnapshot(ctx, arg)
+			errs <- err
+		}(arg)
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent health write: %v", err)
+		}
+	}
+	got, err := f.r.GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{
+		CatalogID: f.catalogID(), Namespace: "race", TableName: "health",
+	})
+	if err != nil || !got.LastMaintenanceAt.Valid || !got.LastMaintenanceAt.Time.Equal(maintainedAt) {
+		t.Fatalf("concurrent health write = %+v, %v; want the maintenance timestamp", got, err)
+	}
+}
 
 // TestQueryEventIngesterUsesRepo sends Trino's completed event through the
 // HTTP ingester with the GORM store and checks the row it writes, including the
@@ -599,7 +748,8 @@ func TestQueryEventIngesterUsesRepo(t *testing.T) {
 	snap, err = f.r.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
 		EngineID: f.engineID(), TrinoQueryID: "q-event-1",
 	})
-	if err != nil || snap.State != "finished" || snap.ElapsedMs == nil || *snap.ElapsedMs != 1500 {
+	if err != nil || snap.State != "finished" || snap.ElapsedMs == nil || *snap.ElapsedMs != 1500 ||
+		snap.OutputRows == nil || *snap.OutputRows != 1 {
 		t.Fatalf("stale query-event merge = %+v, %v", snap, err)
 	}
 }

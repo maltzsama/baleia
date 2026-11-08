@@ -135,42 +135,57 @@ func (r *Repo) CreateTableMaintenancePolicy(ctx context.Context, arg db.CreateTa
 		"created_at":                     row.CreatedAt,
 		"updated_at":                     row.UpdatedAt,
 	}
-	if err := r.Users.db.WithContext(ctx).Model(&model.TableMaintenancePolicy{}).Create(values).Error; err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			return db.TableMaintenancePolicy{}, pgx.ErrNoRows
-		}
-		return db.TableMaintenancePolicy{}, err
-	}
-	return toDBTableMaintenancePolicy(row), nil
-}
-
-// UpdateTableMaintenancePolicy replaces the parameters at the caller's
-// revision and bumps it. No row means the revision moved on or the table has
-// no parameters (pgx.ErrNoRows).
-func (r *Repo) UpdateTableMaintenancePolicy(ctx context.Context, arg db.UpdateTableMaintenancePolicyParams) (db.TableMaintenancePolicy, error) {
 	res := r.Users.db.WithContext(ctx).Model(&model.TableMaintenancePolicy{}).
-		Where("catalog_id = ? AND namespace = ? AND table_name = ? AND revision = ?",
-			UUIDString(arg.CatalogID), arg.Namespace, arg.TableName, arg.Revision).
-		Updates(map[string]any{
-			"mode":                           arg.Mode,
-			"writer_commit_interval_seconds": arg.WriterCommitIntervalSeconds,
-			"optimize":                       jsonOrDefault(arg.Optimize),
-			"optimize_manifests":             jsonOrDefault(arg.OptimizeManifests),
-			"expire_snapshots":               jsonOrDefault(arg.ExpireSnapshots),
-			"remove_orphan_files":            jsonOrDefault(arg.RemoveOrphanFiles),
-			"revision":                       arg.Revision + 1,
-			"updated_by":                     modelUUIDPtr(arg.Actor),
-			"updated_at":                     time.Now().UTC(),
-		})
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "catalog_id"}, {Name: "namespace"}, {Name: "table_name"}},
+			DoNothing: true,
+		}).Create(values)
 	if res.Error != nil {
 		return db.TableMaintenancePolicy{}, res.Error
 	}
 	if res.RowsAffected == 0 {
 		return db.TableMaintenancePolicy{}, pgx.ErrNoRows
 	}
-	return r.GetTableMaintenancePolicy(ctx, db.GetTableMaintenancePolicyParams{
-		CatalogID: arg.CatalogID, Namespace: arg.Namespace, TableName: arg.TableName,
+	return toDBTableMaintenancePolicy(row), nil
+}
+
+// UpdateTableMaintenancePolicy replaces the parameters at the caller's
+// revision and bumps it. No row means the revision moved on or the table has
+// no parameters (pgx.ErrNoRows). The stored row is read in the same
+// transaction as the guarded update, so another writer cannot slip between
+// them.
+func (r *Repo) UpdateTableMaintenancePolicy(ctx context.Context, arg db.UpdateTableMaintenancePolicyParams) (db.TableMaintenancePolicy, error) {
+	var out db.TableMaintenancePolicy
+	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&model.TableMaintenancePolicy{}).
+			Where("catalog_id = ? AND namespace = ? AND table_name = ? AND revision = ?",
+				UUIDString(arg.CatalogID), arg.Namespace, arg.TableName, arg.Revision).
+			Updates(map[string]any{
+				"mode":                           arg.Mode,
+				"writer_commit_interval_seconds": arg.WriterCommitIntervalSeconds,
+				"optimize":                       jsonOrDefault(arg.Optimize),
+				"optimize_manifests":             jsonOrDefault(arg.OptimizeManifests),
+				"expire_snapshots":               jsonOrDefault(arg.ExpireSnapshots),
+				"remove_orphan_files":            jsonOrDefault(arg.RemoveOrphanFiles),
+				"revision":                       arg.Revision + 1,
+				"updated_by":                     modelUUIDPtr(arg.Actor),
+				"updated_at":                     time.Now().UTC(),
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return pgx.ErrNoRows
+		}
+		var row model.TableMaintenancePolicy
+		if err := tx.Where("catalog_id = ? AND namespace = ? AND table_name = ?",
+			UUIDString(arg.CatalogID), arg.Namespace, arg.TableName).First(&row).Error; err != nil {
+			return err
+		}
+		out = toDBTableMaintenancePolicy(row)
+		return nil
 	})
+	return out, err
 }
 
 // DeleteTableMaintenancePolicy removes the table's parameters and returns them.
@@ -204,6 +219,7 @@ func (r *Repo) DeleteTableMaintenancePolicy(ctx context.Context, arg db.DeleteTa
 func (r *Repo) LastSuccessfulMaintenanceByOperation(ctx context.Context, arg db.LastSuccessfulMaintenanceByOperationParams) ([]db.LastSuccessfulMaintenanceByOperationRow, error) {
 	var rows []model.MaintenanceRun
 	if err := r.Users.db.WithContext(ctx).
+		Select("operations", "finished_at").
 		Where("catalog_id = ? AND namespace = ? AND table_name = ? AND status = ? AND finished_at IS NOT NULL",
 			UUIDString(arg.CatalogID), arg.Namespace, arg.TableName, "finished").
 		Find(&rows).Error; err != nil {
@@ -258,7 +274,7 @@ func (r *Repo) CreatePlannedMaintenanceRun(ctx context.Context, arg db.CreatePla
 		PolicyRevision: arg.PolicyRevision,
 	}
 	if err := r.Users.db.WithContext(ctx).Create(&row).Error; err != nil {
-		return db.MaintenanceRun{}, err
+		return db.MaintenanceRun{}, asUniqueViolation(err, "maintenance_runs_one_running")
 	}
 	return toDBMaintenanceRun(row), nil
 }
