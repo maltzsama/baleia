@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { onDestroy } from 'svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Checkbox from '$lib/ui/Checkbox.svelte';
@@ -23,6 +24,7 @@
 		getTableMaintenance,
 		runTableMaintenance,
 		saveTableMaintenance,
+		type MaintenanceLastRun,
 		type MaintenanceOperation,
 		type MaintenancePlan,
 		type MaintenancePlanStep,
@@ -214,10 +216,43 @@
 		return step.would_run ? 'success' : step.due ? 'info' : 'neutral';
 	}
 
-	/** The newest run that included op, for the per-operation last-run line. */
-	function lastRunFor(op: MaintenanceOperation): MaintenanceRun | undefined {
-		return data?.runs.find((run) => run.operations.includes(op));
+	/** The latest finished run of op, independent of the runs page. */
+	function lastRunFor(op: MaintenanceOperation): MaintenanceLastRun | undefined {
+		return data?.last_runs?.find((run) => run.operation === op);
 	}
+
+	// While a run is in progress, refresh only its data so the status and time
+	// update when it finishes; the form (possibly with unsaved edits) stays.
+	let runPoll: ReturnType<typeof setInterval> | null = null;
+
+	function stopRunPoll() {
+		if (!runPoll) return;
+		clearInterval(runPoll);
+		runPoll = null;
+	}
+
+	$effect(() => {
+		const active = data?.runs.some((run) => run.status === 'running') ?? false;
+		if (!active || runPoll) {
+			if (!active) stopRunPoll();
+			return;
+		}
+		runPoll = setInterval(() => {
+			void (async () => {
+				try {
+					const next = await getTableMaintenance(target);
+					if (data) {
+						data = { ...data, runs: next.runs, last_runs: next.last_runs, plan: next.plan };
+					}
+					if (!next.runs.some((run) => run.status === 'running')) stopRunPoll();
+				} catch {
+					stopRunPoll();
+				}
+			})();
+		}, 5000);
+	});
+
+	onDestroy(stopRunPoll);
 </script>
 
 {#snippet field(op: MaintenanceOperation, key: TextKey, label: string, placeholder = '')}
@@ -295,7 +330,7 @@
 								<p class="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-text-muted">
 									{m.maintenance_col_last_run()}:
 									<StatusBadge kind="maintenance" status={last.status} />
-									<RelativeTime at={last.finished_at ?? last.started_at} />
+									<RelativeTime at={last.finished_at} />
 									<!-- eslint-disable svelte/no-navigation-without-resolve -- external Temporal UI URL -->
 									{#if last.workflow_url}
 										<a

@@ -70,13 +70,22 @@ WHERE engine_id = @engine_id::uuid
 ORDER BY created_at DESC
 LIMIT @lim::int OFFSET @off::int;
 
--- name: ListQueryClassesByExecutionIDs :many
-SELECT id, queue_class FROM query_executions WHERE id = ANY(@ids::uuid[]);
+-- name: ListQueryClasses :many
+SELECT id, engine_query_id, queue_class FROM query_executions
+WHERE id = ANY(@execution_ids::uuid[]) OR engine_query_id = ANY(@query_ids::text[]);
+
+-- name: ListLastMaintenanceRuns :many
+SELECT DISTINCT ON (operation) operation, id, status, finished_at, workflow_id
+FROM maintenance_runs, unnest(operations) AS operation
+WHERE catalog_id = @catalog_id::uuid AND namespace = @namespace AND table_name = @table_name
+  AND status = 'finished' AND finished_at IS NOT NULL
+ORDER BY operation, finished_at DESC;
 
 -- name: ListLastMaintenancePerOperation :many
 SELECT namespace, table_name, operation, max(finished_at)::timestamptz AS last_at
 FROM maintenance_runs, unnest(operations) AS operation
 WHERE catalog_id = @catalog_id::uuid AND status = 'finished' AND finished_at IS NOT NULL
+  AND namespace = ANY(@namespaces::text[]) AND table_name = ANY(@tables::text[])
 GROUP BY namespace, table_name, operation;
 
 -- name: GetTrinoQuerySnapshotByEngine :one

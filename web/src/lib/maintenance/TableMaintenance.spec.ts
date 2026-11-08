@@ -129,6 +129,34 @@ describe('TableMaintenance', () => {
 		expect(within(expire).getByText('This value has an invalid format.')).toBeTruthy();
 	});
 
+	it('shows the latest run of each operation beyond the runs page', async () => {
+		server.use(
+			http.get(PATH, ({ response }) =>
+				response(200).json(
+					makeTableMaintenance({
+						policy: makeStoredMaintenancePolicy(),
+						runs: [],
+						last_runs: [
+							{
+								operation: 'optimize',
+								status: 'finished',
+								finished_at: '2026-10-01T12:00:00Z',
+								workflow_url: 'https://temporal.example/namespaces/default/workflows/wf-1'
+							}
+						]
+					})
+				)
+			)
+		);
+		render(TableMaintenance, { props });
+
+		const optimize = await screen.findByRole('group', { name: 'Optimize' });
+		expect(within(optimize).getByText(/Last run/)).toBeTruthy();
+		expect(
+			within(optimize).getByRole('link', { name: 'Open in Temporal' }).getAttribute('href')
+		).toBe('https://temporal.example/namespaces/default/workflows/wf-1');
+	});
+
 	it('shows the current plan, a dry run and starts a run', async () => {
 		let requested = '';
 		server.use(

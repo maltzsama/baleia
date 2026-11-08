@@ -2,6 +2,7 @@ package trino
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -227,6 +228,26 @@ func ParseDataSize(s string) (int64, bool) {
 	return int64(math.Round(v * u)), true
 }
 
+// cellInt64 reads a Trino result cell: JSON numbers arrive as json.Number.
+func cellInt64(v any) (int64, bool) {
+	switch n := v.(type) {
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return i, true
+		}
+		if f, err := n.Float64(); err == nil {
+			return int64(f), true
+		}
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	case float64:
+		return int64(n), true
+	}
+	return 0, false
+}
+
 func splitUnit(s string) (num, unit string) {
 	s = strings.TrimSpace(s)
 	i := len(s)
@@ -251,6 +272,11 @@ type ClusterStats struct {
 // /v1/node REST endpoint, so the count comes from system.runtime.nodes. The
 // Lens query poller skips this statement so it does not record itself.
 const ClusterNodesSQL = "SELECT count(*) FROM system.runtime.nodes WHERE state = 'active'"
+
+// ClusterMemorySQL sums the general memory pool across the workers. Trino 482
+// has no cluster endpoint that reports memory; this query is best-effort, and
+// a coordinator without system.memory simply leaves the fields nil.
+const ClusterMemorySQL = "SELECT sum(total), sum(free) FROM system.memory WHERE pool = 'general'"
 
 // GetClusterStats derives query counts from /v1/query and the worker count
 // from system.runtime.nodes.
@@ -282,6 +308,17 @@ func (c *Client) GetClusterStats(ctx context.Context) (*ClusterStats, error) {
 			return nil, fmt.Errorf("trino count nodes: unexpected value %v", res.Data[0][0])
 		}
 		cs.ActiveWorkers = n
+	}
+
+	// Memory is optional: an older coordinator or a missing permission must not
+	// fail the whole cluster snapshot.
+	if mem, merr := c.Execute(ctx, ClusterMemorySQL, "", ""); merr == nil && len(mem.Data) == 1 && len(mem.Data[0]) >= 2 {
+		if total, ok := cellInt64(mem.Data[0][0]); ok && total > 0 {
+			if free, ok := cellInt64(mem.Data[0][1]); ok {
+				cs.TotalMemoryBytes = &total
+				cs.FreeMemoryBytes = &free
+			}
+		}
 	}
 	return cs, nil
 }

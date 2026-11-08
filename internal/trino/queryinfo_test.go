@@ -152,6 +152,38 @@ func TestGetClusterStats(t *testing.T) {
 	}
 }
 
+// TestGetClusterStatsMemory: the best-effort memory query fills the fields
+// when system.memory answers, and a failure leaves them nil without failing
+// the snapshot.
+func TestGetClusterStatsMemory(t *testing.T) {
+	t.Parallel()
+	posts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/query":
+			_, _ = w.Write([]byte(listPayload))
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/statement":
+			posts++
+			if posts == 1 {
+				_, _ = w.Write([]byte(`{"id":"nodes","columns":[{"name":"_col0","type":"bigint"}],"data":[[3]],"stats":{"state":"FINISHED"}}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"memory","columns":[{"name":"total","type":"bigint"},{"name":"free","type":"bigint"}],"data":[[1024,512]],"stats":{"state":"FINISHED"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	cs, err := New(srv.URL, "baleia_admin").GetClusterStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetClusterStats: %v", err)
+	}
+	if cs.TotalMemoryBytes == nil || *cs.TotalMemoryBytes != 1024 || cs.FreeMemoryBytes == nil || *cs.FreeMemoryBytes != 512 {
+		t.Fatalf("memory = %v/%v", cs.TotalMemoryBytes, cs.FreeMemoryBytes)
+	}
+}
+
 // TestGetQuery_Resources: GetQuery reads the per-query statistics, keeps an
 // odd id in one path segment, and answers an unknown query with
 // ErrQueryGone (#407).

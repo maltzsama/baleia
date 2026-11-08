@@ -1,6 +1,11 @@
 package metrics
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"sync"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 // Monitoring carries the engine cluster gauges (#828), labelled by engine kind
 // (a bounded label; engine names are not allowed).
@@ -10,6 +15,11 @@ type Monitoring struct {
 	queued  *prometheus.GaugeVec
 	blocked *prometheus.GaugeVec
 	memory  *prometheus.GaugeVec
+
+	// Polls may finish out of order; only a newer observation may overwrite
+	// the gauges.
+	mu   sync.Mutex
+	last time.Time
 }
 
 // Monitoring registers the baleia_cluster_* metrics.
@@ -41,6 +51,13 @@ func (m *Monitoring) Cluster(engine string, workers, running, queued, blocked in
 	if m == nil {
 		return
 	}
+	now := time.Now()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if now.Before(m.last) {
+		return
+	}
+	m.last = now
 	m.workers.WithLabelValues(engine).Set(float64(workers))
 	m.running.WithLabelValues(engine).Set(float64(running))
 	m.queued.WithLabelValues(engine).Set(float64(queued))

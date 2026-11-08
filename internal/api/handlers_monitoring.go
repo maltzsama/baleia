@@ -153,23 +153,10 @@ func (h *OpsHandlers) ListMonitoringQueries(ctx context.Context, request ListMon
 	if err != nil {
 		return nil, err
 	}
-	// The workload class lives on the execution, not the engine snapshot; a
-	// best-effort batch keeps the list readable when it is missing.
-	classes := map[string]string{}
-	ids := make([]pgtype.UUID, 0, len(rows))
-	for _, row := range rows {
-		if row.ExecutionID.Valid {
-			ids = append(ids, row.ExecutionID)
-		}
-	}
-	if len(ids) > 0 {
-		if found, err := h.queries.ListQueryClassesByExecutionIDs(ctx, ids); err == nil {
-			for _, class := range found {
-				if class.QueueClass != nil {
-					classes[uuid.UUID(class.ID.Bytes).String()] = *class.QueueClass
-				}
-			}
-		}
+	// The workload class lives on the execution, not the engine snapshot.
+	byExecution, byQuery, err := h.queryClasses(ctx, rows)
+	if err != nil {
+		return nil, err
 	}
 	limit, offset := monitoring.DefaultQueries, 0
 	if request.Params.Limit != nil {
@@ -181,9 +168,7 @@ func (h *OpsHandlers) ListMonitoringQueries(ctx context.Context, request ListMon
 	page := MonitoringQueryPage{Items: make([]MonitoringQuery, 0, len(rows))}
 	for _, row := range rows {
 		item := monitoringQuery(row)
-		if class, ok := classes[uuid.UUID(row.ExecutionID.Bytes).String()]; ok {
-			item.QueueClass = &class
-		}
+		item.QueueClass = queryClass(byExecution, byQuery, row)
 		page.Items = append(page.Items, item)
 	}
 	if len(rows) == limit {
@@ -191,6 +176,57 @@ func (h *OpsHandlers) ListMonitoringQueries(ctx context.Context, request ListMon
 		page.NextOffset = &next
 	}
 	return ListMonitoringQueries200JSONResponse(page), nil
+}
+
+// queryClasses maps an execution id and a Trino query id to the workload class
+// recorded for the linked execution (#828). Engine-direct snapshots have no
+// execution id, so the query id is the fallback.
+func (h *OpsHandlers) queryClasses(ctx context.Context, rows []db.TrinoQuerySnapshot) (map[string]string, map[string]string, error) {
+	byExecution := map[string]string{}
+	byQuery := map[string]string{}
+	executions := make([]pgtype.UUID, 0, len(rows))
+	queries := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.ExecutionID.Valid {
+			executions = append(executions, row.ExecutionID)
+		}
+		if row.TrinoQueryID != "" {
+			queries = append(queries, row.TrinoQueryID)
+		}
+	}
+	if len(executions) == 0 && len(queries) == 0 {
+		return byExecution, byQuery, nil
+	}
+	found, err := h.queries.ListQueryClasses(ctx, db.ListQueryClassesParams{
+		ExecutionIds: executions,
+		QueryIds:     queries,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, class := range found {
+		if class.QueueClass == nil {
+			continue
+		}
+		byExecution[uuid.UUID(class.ID.Bytes).String()] = *class.QueueClass
+		if class.EngineQueryID != nil {
+			byQuery[*class.EngineQueryID] = *class.QueueClass
+		}
+	}
+	return byExecution, byQuery, nil
+}
+
+// queryClass picks the class of one snapshot, by execution id when present.
+func queryClass(byExecution, byQuery map[string]string, row db.TrinoQuerySnapshot) *string {
+	if row.ExecutionID.Valid {
+		if class, ok := byExecution[uuid.UUID(row.ExecutionID.Bytes).String()]; ok {
+			return &class
+		}
+	}
+	if class, ok := byQuery[row.TrinoQueryID]; ok {
+		return &class
+	}
+	return nil
 }
 
 func monitoringQuery(s db.TrinoQuerySnapshot) MonitoringQuery {
@@ -269,6 +305,11 @@ func (h *OpsHandlers) GetMonitoringQuery(ctx context.Context, request GetMonitor
 	// The detail carries what the list carries (#407), plus the SQL, the
 	// error and what the query used, read from the engine now.
 	base := monitoringQuery(snapshot)
+	byExecution, byQuery, err := h.queryClasses(ctx, []db.TrinoQuerySnapshot{snapshot})
+	if err != nil {
+		return nil, err
+	}
+	base.QueueClass = queryClass(byExecution, byQuery, snapshot)
 	detail := MonitoringQueryDetail{
 		TrinoQueryId:       base.TrinoQueryId,
 		ExecutionId:        base.ExecutionId,
@@ -283,6 +324,7 @@ func (h *OpsHandlers) GetMonitoringQuery(ctx context.Context, request GetMonitor
 		CpuMs:              base.CpuMs,
 		PhysicalInputBytes: base.PhysicalInputBytes,
 		OutputRows:         base.OutputRows,
+		QueueClass:         base.QueueClass,
 		Sql:                &snapshot.Sql,
 		ErrorMessage:       snapshot.ErrorMessage,
 		Resources:          h.queryResources(ctx, engineID, request.QueryId),
@@ -419,9 +461,22 @@ func (h *OpsHandlers) ListTableHealth(ctx context.Context, request ListTableHeal
 	for _, p := range policies {
 		modes[p.Namespace+"\x00"+p.TableName] = MaintenanceMode(p.Mode)
 	}
-	finished, err := h.queries.ListLastMaintenancePerOperation(ctx, catalogID)
-	if err != nil {
-		return nil, err
+	namespaces := make([]string, 0, len(rows))
+	tables := make([]string, 0, len(rows))
+	for _, row := range rows {
+		namespaces = append(namespaces, row.Namespace)
+		tables = append(tables, row.TableName)
+	}
+	var finished []db.ListLastMaintenancePerOperationRow
+	if len(rows) > 0 {
+		finished, err = h.queries.ListLastMaintenancePerOperation(ctx, db.ListLastMaintenancePerOperationParams{
+			CatalogID:  catalogID,
+			Namespaces: namespaces,
+			Tables:     tables,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	lastRuns := make(map[string]map[string]time.Time, len(finished))
 	for _, run := range finished {
@@ -608,6 +663,21 @@ func (h *OpsHandlers) ListMaintenanceRuns(ctx context.Context, request ListMaint
 	return ListMaintenanceRuns200JSONResponse(out), nil
 }
 
+// workflowURL opens one workflow in the Temporal UI; nil when the UI base is
+// not configured or the run has no workflow id.
+func (h *core) workflowURL(workflowID string) *string {
+	base := strings.TrimRight(h.settings.Ops.TemporalUIURL, "/")
+	if base == "" || workflowID == "" {
+		return nil
+	}
+	namespace := h.settings.Ops.TemporalNamespace
+	if namespace == "" {
+		namespace = "default"
+	}
+	link := fmt.Sprintf("%s/namespaces/%s/workflows/%s", base, url.PathEscape(namespace), url.PathEscape(workflowID))
+	return &link
+}
+
 func (h *core) maintenanceRun(r db.MaintenanceRun) MaintenanceRun {
 	out := MaintenanceRun{
 		Id:             openapi_types.UUID(r.ID.Bytes),
@@ -626,14 +696,7 @@ func (h *core) maintenanceRun(r db.MaintenanceRun) MaintenanceRun {
 		PolicyRevision: r.PolicyRevision,
 	}
 	_ = json.Unmarshal(r.Reason, &out.Reason)
-	if base := strings.TrimRight(h.settings.Ops.TemporalUIURL, "/"); base != "" && r.WorkflowID != "" {
-		namespace := h.settings.Ops.TemporalNamespace
-		if namespace == "" {
-			namespace = "default"
-		}
-		link := fmt.Sprintf("%s/namespaces/%s/workflows/%s", base, url.PathEscape(namespace), url.PathEscape(r.WorkflowID))
-		out.WorkflowUrl = &link
-	}
+	out.WorkflowUrl = h.workflowURL(r.WorkflowID)
 	if len(r.Parameters) > 0 && string(r.Parameters) != "{}" {
 		var params map[string]interface{}
 		if json.Unmarshal(r.Parameters, &params) == nil {

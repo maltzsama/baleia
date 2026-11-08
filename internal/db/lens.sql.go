@@ -440,8 +440,15 @@ const listLastMaintenancePerOperation = `-- name: ListLastMaintenancePerOperatio
 SELECT namespace, table_name, operation, max(finished_at)::timestamptz AS last_at
 FROM maintenance_runs, unnest(operations) AS operation
 WHERE catalog_id = $1::uuid AND status = 'finished' AND finished_at IS NOT NULL
+  AND namespace = ANY($2::text[]) AND table_name = ANY($3::text[])
 GROUP BY namespace, table_name, operation
 `
+
+type ListLastMaintenancePerOperationParams struct {
+	CatalogID  pgtype.UUID `json:"catalog_id"`
+	Namespaces []string    `json:"namespaces"`
+	Tables     []string    `json:"tables"`
+}
 
 type ListLastMaintenancePerOperationRow struct {
 	Namespace string             `json:"namespace"`
@@ -450,8 +457,8 @@ type ListLastMaintenancePerOperationRow struct {
 	LastAt    pgtype.Timestamptz `json:"last_at"`
 }
 
-func (q *Queries) ListLastMaintenancePerOperation(ctx context.Context, catalogID pgtype.UUID) ([]ListLastMaintenancePerOperationRow, error) {
-	rows, err := q.db.Query(ctx, listLastMaintenancePerOperation, catalogID)
+func (q *Queries) ListLastMaintenancePerOperation(ctx context.Context, arg ListLastMaintenancePerOperationParams) ([]ListLastMaintenancePerOperationRow, error) {
+	rows, err := q.db.Query(ctx, listLastMaintenancePerOperation, arg.CatalogID, arg.Namespaces, arg.Tables)
 	if err != nil {
 		return nil, err
 	}
@@ -464,6 +471,54 @@ func (q *Queries) ListLastMaintenancePerOperation(ctx context.Context, catalogID
 			&i.TableName,
 			&i.Operation,
 			&i.LastAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLastMaintenanceRuns = `-- name: ListLastMaintenanceRuns :many
+SELECT DISTINCT ON (operation) operation, id, status, finished_at, workflow_id
+FROM maintenance_runs, unnest(operations) AS operation
+WHERE catalog_id = $1::uuid AND namespace = $2 AND table_name = $3
+  AND status = 'finished' AND finished_at IS NOT NULL
+ORDER BY operation, finished_at DESC
+`
+
+type ListLastMaintenanceRunsParams struct {
+	CatalogID pgtype.UUID `json:"catalog_id"`
+	Namespace string      `json:"namespace"`
+	TableName string      `json:"table_name"`
+}
+
+type ListLastMaintenanceRunsRow struct {
+	Operation  interface{}        `json:"operation"`
+	ID         pgtype.UUID        `json:"id"`
+	Status     string             `json:"status"`
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	WorkflowID string             `json:"workflow_id"`
+}
+
+func (q *Queries) ListLastMaintenanceRuns(ctx context.Context, arg ListLastMaintenanceRunsParams) ([]ListLastMaintenanceRunsRow, error) {
+	rows, err := q.db.Query(ctx, listLastMaintenanceRuns, arg.CatalogID, arg.Namespace, arg.TableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLastMaintenanceRunsRow
+	for rows.Next() {
+		var i ListLastMaintenanceRunsRow
+		if err := rows.Scan(
+			&i.Operation,
+			&i.ID,
+			&i.Status,
+			&i.FinishedAt,
+			&i.WorkflowID,
 		); err != nil {
 			return nil, err
 		}
@@ -547,25 +602,32 @@ func (q *Queries) ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRu
 	return items, nil
 }
 
-const listQueryClassesByExecutionIDs = `-- name: ListQueryClassesByExecutionIDs :many
-SELECT id, queue_class FROM query_executions WHERE id = ANY($1::uuid[])
+const listQueryClasses = `-- name: ListQueryClasses :many
+SELECT id, engine_query_id, queue_class FROM query_executions
+WHERE id = ANY($1::uuid[]) OR engine_query_id = ANY($2::text[])
 `
 
-type ListQueryClassesByExecutionIDsRow struct {
-	ID         pgtype.UUID `json:"id"`
-	QueueClass *string     `json:"queue_class"`
+type ListQueryClassesParams struct {
+	ExecutionIds []pgtype.UUID `json:"execution_ids"`
+	QueryIds     []string      `json:"query_ids"`
 }
 
-func (q *Queries) ListQueryClassesByExecutionIDs(ctx context.Context, ids []pgtype.UUID) ([]ListQueryClassesByExecutionIDsRow, error) {
-	rows, err := q.db.Query(ctx, listQueryClassesByExecutionIDs, ids)
+type ListQueryClassesRow struct {
+	ID            pgtype.UUID `json:"id"`
+	EngineQueryID *string     `json:"engine_query_id"`
+	QueueClass    *string     `json:"queue_class"`
+}
+
+func (q *Queries) ListQueryClasses(ctx context.Context, arg ListQueryClassesParams) ([]ListQueryClassesRow, error) {
+	rows, err := q.db.Query(ctx, listQueryClasses, arg.ExecutionIds, arg.QueryIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListQueryClassesByExecutionIDsRow
+	var items []ListQueryClassesRow
 	for rows.Next() {
-		var i ListQueryClassesByExecutionIDsRow
-		if err := rows.Scan(&i.ID, &i.QueueClass); err != nil {
+		var i ListQueryClassesRow
+		if err := rows.Scan(&i.ID, &i.EngineQueryID, &i.QueueClass); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

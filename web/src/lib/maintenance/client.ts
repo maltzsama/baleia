@@ -15,6 +15,7 @@ export type MaintenanceMode = components['schemas']['MaintenanceMode'];
 export type TableMaintenance = components['schemas']['TableMaintenance'];
 export type CatalogMaintenancePlanItem = components['schemas']['CatalogMaintenancePlanItem'];
 export type MaintenanceRun = components['schemas']['MaintenanceRun'];
+export type MaintenanceLastRun = components['schemas']['MaintenanceLastRun'];
 type FieldError = components['schemas']['FieldError'];
 
 /** The operations in the order a round runs them. */

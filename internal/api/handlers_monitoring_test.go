@@ -34,6 +34,21 @@ func (q snapshotFake) GetTrinoQuerySnapshotByEngine(context.Context, db.GetTrino
 
 // TestMonitoringQuery_LookupErrors: an unknown query is a 404, and a failed
 // lookup is a server error, not "query not found".
+func TestQueryClassFallback(t *testing.T) {
+	t.Parallel()
+	row := db.TrinoQuerySnapshot{TrinoQueryID: "q1"}
+	if got := queryClass(map[string]string{}, map[string]string{"q1": "heavy"}, row); got == nil || *got != "heavy" {
+		t.Errorf("class by query id = %v", got)
+	}
+	row.ExecutionID = pgtype.UUID{Bytes: [16]byte{0xE2}, Valid: true}
+	if got := queryClass(map[string]string{"e2000000-0000-0000-0000-000000000000": "interactive"}, map[string]string{"q1": "heavy"}, row); got == nil || *got != "interactive" {
+		t.Errorf("class by execution id = %v", got)
+	}
+	if got := queryClass(map[string]string{}, map[string]string{}, db.TrinoQuerySnapshot{TrinoQueryID: "q2"}); got != nil {
+		t.Errorf("unknown class = %v, want nil", got)
+	}
+}
+
 func TestMaintenanceRun_WorkflowURL(t *testing.T) {
 	t.Parallel()
 	h := &core{settings: Settings{Ops: OpsSettings{

@@ -6887,6 +6887,8 @@ export interface components {
                 [key: string]: string;
             };
             runs: components["schemas"]["MaintenanceRun"][];
+            /** @description The latest finished run of each operation, independent of the runs page. */
+            last_runs?: components["schemas"]["MaintenanceLastRun"][];
             plan?: components["schemas"]["MaintenancePlan"] | null;
         };
         /** @enum {string} */
@@ -6901,6 +6903,15 @@ export interface components {
         ManualMaintenanceRequest: {
             /** @enum {string} */
             operation: "optimize" | "optimize_manifests" | "expire_snapshots" | "remove_orphan_files" | "next_due";
+        };
+        /** @description The latest finished run of one maintenance operation. */
+        MaintenanceLastRun: {
+            operation: string;
+            status: string;
+            /** Format: date-time */
+            finished_at: string;
+            /** @description Link to the workflow in the Temporal UI; null when no UI URL is configured */
+            workflow_url?: string | null;
         };
         MaintenanceRun: {
             /** Format: uuid */
