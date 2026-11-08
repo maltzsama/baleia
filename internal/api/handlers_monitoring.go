@@ -419,11 +419,41 @@ func (h *OpsHandlers) ListTableHealth(ctx context.Context, request ListTableHeal
 	for _, p := range policies {
 		modes[p.Namespace+"\x00"+p.TableName] = MaintenanceMode(p.Mode)
 	}
+	finished, err := h.queries.ListLastMaintenancePerOperation(ctx, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	lastRuns := make(map[string]map[string]time.Time, len(finished))
+	for _, run := range finished {
+		operation, ok := run.Operation.(string)
+		if !ok || !run.LastAt.Valid {
+			continue
+		}
+		key := run.Namespace + "\x00" + run.TableName
+		if lastRuns[key] == nil {
+			lastRuns[key] = map[string]time.Time{}
+		}
+		lastRuns[key][operation] = run.LastAt.Time
+	}
 	out := make([]TableHealth, 0, len(rows))
 	for _, row := range rows {
 		item := tableHealth(catalog, row)
 		if mode, ok := modes[row.Namespace+"\x00"+row.TableName]; ok {
 			item.MaintenanceMode = &mode
+		}
+		if byOperation, ok := lastRuns[row.Namespace+"\x00"+row.TableName]; ok {
+			if at, ok := byOperation["optimize"]; ok {
+				item.LastOptimizeAt = &at
+			}
+			if at, ok := byOperation["optimize_manifests"]; ok {
+				item.LastOptimizeManifestsAt = &at
+			}
+			if at, ok := byOperation["expire_snapshots"]; ok {
+				item.LastExpireSnapshotsAt = &at
+			}
+			if at, ok := byOperation["remove_orphan_files"]; ok {
+				item.LastRemoveOrphanFilesAt = &at
+			}
 		}
 		out = append(out, item)
 	}

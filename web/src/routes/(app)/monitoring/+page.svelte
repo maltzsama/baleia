@@ -462,7 +462,11 @@
 						m.monitoring_oldest_hours(),
 						m.monitoring_needs(),
 						m.maintenance_mode(),
-						m.monitoring_last_maintenance()
+						m.monitoring_last_maintenance(),
+						`${m.maintenance_op_optimize()} ${m.maintenance_col_last_run()}`,
+						`${m.maintenance_op_optimize_manifests()} ${m.maintenance_col_last_run()}`,
+						`${m.maintenance_op_expire_snapshots()} ${m.maintenance_col_last_run()}`,
+						`${m.maintenance_op_remove_orphan_files()} ${m.maintenance_col_last_run()}`
 					],
 					health.map((row) => [
 						row.namespace,
@@ -476,7 +480,11 @@
 						row.oldest_snapshot_age_hours,
 						row.due_operations?.join(' ') ?? '',
 						row.maintenance_mode ?? '',
-						row.last_maintenance_at ?? ''
+						row.last_maintenance_at ?? '',
+						row.last_optimize_at ?? '',
+						row.last_optimize_manifests_at ?? '',
+						row.last_expire_snapshots_at ?? '',
+						row.last_remove_orphan_files_at ?? ''
 					])
 				)
 			);
@@ -1296,6 +1304,13 @@
 										{:else}
 											—
 										{/if}
+										<div class="mt-0.5 flex flex-col text-[10px] text-text-muted">
+											{#each [[m.maintenance_op_optimize(), row.last_optimize_at], [m.maintenance_op_optimize_manifests(), row.last_optimize_manifests_at], [m.maintenance_op_expire_snapshots(), row.last_expire_snapshots_at], [m.maintenance_op_remove_orphan_files(), row.last_remove_orphan_files_at]] as [label, at] (label)}
+												{#if at}
+													<span>{label}: <RelativeTime {at} /></span>
+												{/if}
+											{/each}
+										</div>
 									</td>
 									<td class="px-3 py-1.5 text-right">
 										<div class="flex justify-end gap-1.5">

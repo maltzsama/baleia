@@ -3564,6 +3564,10 @@ components:
         total_size_bytes: { type: integer, nullable: true }
         oldest_snapshot_age_hours: { type: integer, nullable: true }
         last_maintenance_at: { type: string, format: date-time, nullable: true }
+        last_optimize_at: { type: string, format: date-time, nullable: true, description: "Last successful optimize run on this table" }
+        last_optimize_manifests_at: { type: string, format: date-time, nullable: true, description: "Last successful optimize_manifests run on this table" }
+        last_expire_snapshots_at: { type: string, format: date-time, nullable: true, description: "Last successful expire_snapshots run on this table" }
+        last_remove_orphan_files_at: { type: string, format: date-time, nullable: true, description: "Last successful remove_orphan_files run on this table" }
         health_score: { type: integer }
         needs_compaction: { type: boolean }
         needs_snapshot_expiry: { type: boolean }

@@ -456,6 +456,7 @@ type Querier interface {
 	// left column always belongs to @left_table and the right to @right_table,
 	// whatever order the statements wrote them in.
 	ListJoinSuggestions(ctx context.Context, arg ListJoinSuggestionsParams) ([]ListJoinSuggestionsRow, error)
+	ListLastMaintenancePerOperation(ctx context.Context, catalogID pgtype.UUID) ([]ListLastMaintenancePerOperationRow, error)
 	// Every metric, to detect a base table that no longer exists.
 	ListLineageBrokenMetrics(ctx context.Context) ([]ListLineageBrokenMetricsRow, error)
 	// Every model, to detect a base table or column that no longer exists.

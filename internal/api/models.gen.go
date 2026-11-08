@@ -4459,7 +4459,19 @@ type TableHealth struct {
 	FileCount           *int                   `json:"file_count"`
 	FormatVersion       *int                   `json:"format_version"`
 	HealthScore         int                    `json:"health_score"`
-	LastMaintenanceAt   *time.Time             `json:"last_maintenance_at"`
+
+	// LastExpireSnapshotsAt Last successful expire_snapshots run on this table
+	LastExpireSnapshotsAt *time.Time `json:"last_expire_snapshots_at"`
+	LastMaintenanceAt     *time.Time `json:"last_maintenance_at"`
+
+	// LastOptimizeAt Last successful optimize run on this table
+	LastOptimizeAt *time.Time `json:"last_optimize_at"`
+
+	// LastOptimizeManifestsAt Last successful optimize_manifests run on this table
+	LastOptimizeManifestsAt *time.Time `json:"last_optimize_manifests_at"`
+
+	// LastRemoveOrphanFilesAt Last successful remove_orphan_files run on this table
+	LastRemoveOrphanFilesAt *time.Time `json:"last_remove_orphan_files_at"`
 
 	// MaintenanceMode The table's maintenance mode; null when it has no parameters.
 	MaintenanceMode        *MaintenanceMode `json:"maintenance_mode"`
