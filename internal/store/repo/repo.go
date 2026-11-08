@@ -10,6 +10,7 @@ type Repo struct {
 	*Providers
 	*Sessions
 	*APIKeys
+	*Teams
 }
 
 // New builds every domain store over one connection.
@@ -19,5 +20,6 @@ func New(db *gorm.DB) *Repo {
 		Providers: NewProviders(db),
 		Sessions:  NewSessions(db),
 		APIKeys:   NewAPIKeys(db),
+		Teams:     NewTeams(db),
 	}
 }
