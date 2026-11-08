@@ -1,4 +1,4 @@
-package assistant
+package assistant_test
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/assistant"
 	"github.com/galileostudio/baleia/internal/assistant/llm"
-	adb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -23,10 +23,10 @@ func (f *fakeTools) CallTool(_ context.Context, name string, _ map[string]any) (
 	return f.result, nil
 }
 
-func newTurnFixture(t *testing.T) (*Service, pgtype.UUID, pgtype.UUID) {
+func newTurnFixture(t *testing.T) (*assistant.Service, pgtype.UUID, pgtype.UUID) {
 	t.Helper()
 	pool := testdb.New(t)
-	svc := New(adb.New(pool), nil)
+	svc := newAssistantService(t, pool, nil)
 	ctx := context.Background()
 	var userID, workspaceID pgtype.UUID
 	if err := pool.QueryRow(ctx,
@@ -40,7 +40,7 @@ func newTurnFixture(t *testing.T) (*Service, pgtype.UUID, pgtype.UUID) {
 	).Scan(&workspaceID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.UpdateSettings(ctx, SettingsInput{
+	if _, err := svc.UpdateSettings(ctx, assistant.SettingsInput{
 		Enabled: true, Provider: strptr("anthropic"), Model: strptr("fake"),
 		DataSharing: "metadata_and_samples", MaxTurnSeconds: 10,
 		MaxToolCallsPerTurn: 5, MaxOutputTokensPerTurn: 100, DailyTokenBudgetPerUser: 100000,
@@ -50,7 +50,7 @@ func newTurnFixture(t *testing.T) (*Service, pgtype.UUID, pgtype.UUID) {
 	return svc, userID, workspaceID
 }
 
-func waitIdle(t *testing.T, svc *Service, userID, id pgtype.UUID) {
+func waitIdle(t *testing.T, svc *assistant.Service, userID, id pgtype.UUID) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
@@ -81,7 +81,7 @@ func TestTurnToolCallsGoThroughTheCaller(t *testing.T) {
 		{Text: "done", InputTokens: 1, OutputTokens: 1},
 	}}
 	tools := &fakeTools{result: map[string]any{"rows": []any{1, 2}, "row_count": 2}}
-	runner := NewRunner(slog.New(slog.DiscardHandler), svc, provider, tools)
+	runner := assistant.NewRunner(slog.New(slog.DiscardHandler), svc, provider, tools)
 
 	seq, err := runner.Start(context.Background(), userID, conv.ID, "how many?")
 	if err != nil {
@@ -133,7 +133,7 @@ func TestTurnToolCallsGoThroughTheCaller(t *testing.T) {
 func TestTurnBudgetStopsBeforeTheProvider(t *testing.T) {
 	t.Parallel()
 	svc, userID, workspaceID := newTurnFixture(t)
-	if _, err := svc.UpdateSettings(context.Background(), SettingsInput{
+	if _, err := svc.UpdateSettings(context.Background(), assistant.SettingsInput{
 		Enabled: true, Provider: strptr("anthropic"), Model: strptr("fake"),
 		DataSharing: "metadata_only", MaxTurnSeconds: 10,
 		MaxToolCallsPerTurn: 5, MaxOutputTokensPerTurn: 100, DailyTokenBudgetPerUser: 0,
@@ -141,7 +141,7 @@ func TestTurnBudgetStopsBeforeTheProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 0 disables the check, so force a tiny budget with a large usage row.
-	if _, err := svc.UpdateSettings(context.Background(), SettingsInput{
+	if _, err := svc.UpdateSettings(context.Background(), assistant.SettingsInput{
 		Enabled: true, Provider: strptr("anthropic"), Model: strptr("fake"),
 		DataSharing: "metadata_only", MaxTurnSeconds: 10,
 		MaxToolCallsPerTurn: 5, MaxOutputTokensPerTurn: 100, DailyTokenBudgetPerUser: 1,
@@ -157,7 +157,7 @@ func TestTurnBudgetStopsBeforeTheProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := &llm.Fake{Responses: []llm.Response{{Text: "should not run"}}}
-	runner := NewRunner(slog.New(slog.DiscardHandler), svc, provider, &fakeTools{})
+	runner := assistant.NewRunner(slog.New(slog.DiscardHandler), svc, provider, &fakeTools{})
 	if _, err := runner.Start(context.Background(), userID, conv.ID, "hello"); err != nil {
 		t.Fatal(err)
 	}
@@ -178,15 +178,15 @@ func TestTurnBudgetStopsBeforeTheProvider(t *testing.T) {
 // TestRunnerSlot: an empty or nil slot loads nil; a stored runner loads back.
 func TestRunnerSlot(t *testing.T) {
 	t.Parallel()
-	var none *RunnerSlot
+	var none *assistant.RunnerSlot
 	if none.Load() != nil {
 		t.Fatal("a nil slot must load nil")
 	}
-	slot := &RunnerSlot{}
+	slot := &assistant.RunnerSlot{}
 	if slot.Load() != nil {
 		t.Fatal("an empty slot must load nil")
 	}
-	r := &Runner{}
+	r := &assistant.Runner{}
 	slot.Store(r)
 	if slot.Load() != r {
 		t.Fatal("the stored runner must load back")

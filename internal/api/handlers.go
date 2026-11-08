@@ -21,7 +21,6 @@ import (
 	"github.com/galileostudio/baleia/internal/content/history"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
-	assistantdb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/identity/idptoken"
 	"github.com/galileostudio/baleia/internal/identity/oidclogin"
@@ -197,7 +196,9 @@ type IdentityDeps struct {
 type DataDeps struct {
 	Queries db.Querier
 	Pool    *pgxpool.Pool
-	// Store is the GORM connection; nil keeps the sqlc path (tests).
+	// Store is the GORM connection; nil keeps the sqlc path (tests). The
+	// assistant has no sqlc path, so its service is built only when Store is
+	// set.
 	Store *gorm.DB
 }
 
@@ -285,6 +286,10 @@ func NewAPI(d Deps) (*API, error) {
 		c.access = wsaccess.New(c.queries)
 		c.topology = topology.New(c.queries)
 	}
+	var assistantService *assistant.Service
+	if d.Data.Store != nil {
+		assistantService = assistant.New(repo.New(d.Data.Store), d.Keyring)
+	}
 	h := &API{
 		core:              c,
 		AuthHandlers:      newAuthHandlers(c),
@@ -292,7 +297,7 @@ func NewAPI(d Deps) (*API, error) {
 		CatalogHandlers:   newCatalogHandlers(c, d.Engines.Binder),
 		QueryHandlers:     newQueryHandlers(c, d.WSTickets),
 		SemanticHandlers:  newSemanticHandlers(c),
-		AgentHandlers:     newAgentHandlers(c, assistant.New(assistantdb.New(d.Data.Pool), d.Keyring), d.Assistant, d.Engines.Dialer),
+		AgentHandlers:     newAgentHandlers(c, assistantService, d.Assistant, d.Engines.Dialer),
 		OpsHandlers:       newOpsHandlers(c, poolSchema{pool: d.Data.Pool}),
 	}
 	if d.Observability.Metrics != nil {

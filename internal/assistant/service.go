@@ -33,20 +33,20 @@ var (
 
 // Service is the assistant's persistence boundary.
 type Service struct {
-	q       *adb.Queries
+	store   Store
 	keyring *crypto.Keyring
 }
 
 // New builds the service. keyring may be nil in tests that never write a key.
-func New(q *adb.Queries, keyring *crypto.Keyring) *Service {
-	return &Service{q: q, keyring: keyring}
+func New(store Store, keyring *crypto.Keyring) *Service {
+	return &Service{store: store, keyring: keyring}
 }
 
 // ── settings ────────────────────────────────────────────────────────────────
 
 // Settings returns the single settings row.
 func (s *Service) Settings(ctx context.Context) (adb.AssistantSetting, error) {
-	row, err := s.q.GetAssistantSettings(ctx)
+	row, err := s.store.GetAssistantSettings(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return adb.AssistantSetting{}, ErrNotFound
 	}
@@ -87,7 +87,7 @@ func (s *Service) UpdateSettings(ctx context.Context, in SettingsInput) (adb.Ass
 		}
 		apiKeyEnc = &sealed
 	}
-	return s.q.UpdateAssistantSettings(ctx, adb.UpdateAssistantSettingsParams{
+	return s.store.UpdateAssistantSettings(ctx, adb.UpdateAssistantSettingsParams{
 		Enabled:                 in.Enabled,
 		Provider:                in.Provider,
 		BaseUrl:                 in.BaseURL,
@@ -127,29 +127,8 @@ func (s *Service) APIKey(ctx context.Context) (string, error) {
 // EnsureAgent returns the assistant agent for a user × workspace, creating it
 // on first use. The agent is never listed or minted by the agents API.
 func (s *Service) EnsureAgent(ctx context.Context, ownerID, workspaceID pgtype.UUID) (adb.Agent, error) {
-	agent, err := s.q.FindAssistantAgent(ctx, adb.FindAssistantAgentParams{
-		OwnerID: ownerID, WorkspaceID: workspaceID,
-	})
-	if err == nil {
-		return agent, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return adb.Agent{}, err
-	}
-	agent, err = s.q.CreateAssistantAgent(ctx, adb.CreateAssistantAgentParams{
-		OwnerID:     ownerID,
-		Name:        "Assistant",
-		Description: "Embedded assistant acting on behalf of its owner",
-	})
-	if err != nil {
-		return adb.Agent{}, err
-	}
-	if err := s.q.AddAssistantAgentWorkspace(ctx, adb.AddAssistantAgentWorkspaceParams{
-		AgentID: agent.ID, WorkspaceID: workspaceID,
-	}); err != nil {
-		return adb.Agent{}, err
-	}
-	return agent, nil
+	return s.store.EnsureAssistantAgent(ctx, ownerID, workspaceID,
+		"Assistant", "Embedded assistant acting on behalf of its owner")
 }
 
 // ── conversations ───────────────────────────────────────────────────────────
@@ -160,7 +139,7 @@ func (s *Service) CreateConversation(ctx context.Context, userID, workspaceID pg
 	if err != nil {
 		return adb.AssistantConversation{}, err
 	}
-	return s.q.CreateConversation(ctx, adb.CreateConversationParams{
+	return s.store.CreateConversation(ctx, adb.CreateConversationParams{
 		UserID: userID, WorkspaceID: workspaceID, AgentID: agent.ID, Title: "",
 	})
 }
@@ -168,7 +147,7 @@ func (s *Service) CreateConversation(ctx context.Context, userID, workspaceID pg
 // GetConversation is scoped to the caller: another user's conversation is a
 // 404, admins included.
 func (s *Service) GetConversation(ctx context.Context, userID, id pgtype.UUID) (adb.AssistantConversation, error) {
-	row, err := s.q.GetConversation(ctx, adb.GetConversationParams{ID: id, UserID: userID})
+	row, err := s.store.GetConversation(ctx, adb.GetConversationParams{ID: id, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return adb.AssistantConversation{}, ErrNotFound
 	}
@@ -181,7 +160,7 @@ func (s *Service) ListConversations(ctx context.Context, userID, workspaceID pgt
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	return s.q.ListConversations(ctx, adb.ListConversationsParams{
+	return s.store.ListConversations(ctx, adb.ListConversationsParams{
 		UserID: userID, WorkspaceID: workspaceID, Limit: limit,
 	})
 }
@@ -191,7 +170,7 @@ func (s *Service) DeleteConversation(ctx context.Context, userID, id pgtype.UUID
 	if _, err := s.GetConversation(ctx, userID, id); err != nil {
 		return err
 	}
-	return s.q.DeleteConversation(ctx, adb.DeleteConversationParams{ID: id, UserID: userID})
+	return s.store.DeleteConversation(ctx, adb.DeleteConversationParams{ID: id, UserID: userID})
 }
 
 // ── messages ────────────────────────────────────────────────────────────────
@@ -203,7 +182,7 @@ func (s *Service) AppendMessage(ctx context.Context, conversationID pgtype.UUID,
 	if err != nil {
 		return adb.AssistantMessage{}, err
 	}
-	return s.q.AppendMessage(ctx, adb.AppendMessageParams{
+	return s.store.AppendMessage(ctx, adb.AppendMessageParams{
 		ConversationID: conversationID,
 		Role:           role,
 		Content:        raw,
@@ -217,7 +196,7 @@ func (s *Service) ListMessages(ctx context.Context, conversationID pgtype.UUID, 
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
-	return s.q.ListMessages(ctx, adb.ListMessagesParams{
+	return s.store.ListMessages(ctx, adb.ListMessagesParams{
 		ConversationID: conversationID, Seq: afterSeq, Limit: limit,
 	})
 }
@@ -226,7 +205,7 @@ func (s *Service) ListMessages(ctx context.Context, conversationID pgtype.UUID, 
 
 // Claim starts a turn or returns ErrTurnRunning when one is already in flight.
 func (s *Service) Claim(ctx context.Context, userID, id pgtype.UUID, owner string) (adb.AssistantConversation, error) {
-	row, err := s.q.ClaimConversation(ctx, adb.ClaimConversationParams{
+	row, err := s.store.ClaimConversation(ctx, adb.ClaimConversationParams{
 		ID: id, UserID: userID, TurnOwner: &owner,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -235,29 +214,31 @@ func (s *Service) Claim(ctx context.Context, userID, id pgtype.UUID, owner strin
 	return row, err
 }
 
-// Release returns a conversation to idle after a turn.
-func (s *Service) Release(ctx context.Context, id pgtype.UUID) error {
-	return s.q.ReleaseConversation(ctx, id)
+// Release returns a conversation to idle after a turn. turnOwner is the token
+// the claim returned; a stale runner that lost the conversation cannot release
+// the reclaimed turn.
+func (s *Service) Release(ctx context.Context, id pgtype.UUID, turnOwner string) error {
+	return s.store.ReleaseConversation(ctx, id, turnOwner)
 }
 
 // Interrupt marks a conversation interrupted (cancel, crash recovery).
 func (s *Service) Interrupt(ctx context.Context, id pgtype.UUID) error {
-	return s.q.SetConversationInterrupted(ctx, id)
+	return s.store.SetConversationInterrupted(ctx, id)
 }
 
 // Heartbeat refreshes the turn lease.
 func (s *Service) Heartbeat(ctx context.Context, id pgtype.UUID) error {
-	return s.q.HeartbeatConversation(ctx, id)
+	return s.store.HeartbeatConversation(ctx, id)
 }
 
 // InterruptStale recovers turns whose replica stopped heartbeating.
 func (s *Service) InterruptStale(ctx context.Context) ([]pgtype.UUID, error) {
-	return s.q.InterruptStaleConversations(ctx)
+	return s.store.InterruptStaleConversations(ctx)
 }
 
 // SetTitle names a conversation once, from its first user message.
 func (s *Service) SetTitle(ctx context.Context, id pgtype.UUID, title string) error {
-	return s.q.SetConversationTitle(ctx, adb.SetConversationTitleParams{ID: id, Title: title})
+	return s.store.SetConversationTitle(ctx, adb.SetConversationTitleParams{ID: id, Title: title})
 }
 
 // OverBudget reports whether the user's last 24 h of tokens reached the
@@ -266,7 +247,7 @@ func (s *Service) OverBudget(ctx context.Context, userID pgtype.UUID, budget int
 	if budget <= 0 {
 		return false, nil
 	}
-	used, err := s.q.CountUserTokensSince(ctx, adb.CountUserTokensSinceParams{
+	used, err := s.store.CountUserTokensSince(ctx, adb.CountUserTokensSinceParams{
 		UserID:    userID,
 		CreatedAt: pgtype.Timestamptz{Time: time.Now().Add(-24 * time.Hour), Valid: true},
 	})

@@ -1,15 +1,37 @@
-package assistant
+package assistant_test
 
 import (
 	"context"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/assistant"
 	"github.com/galileostudio/baleia/internal/crypto"
-	adb "github.com/galileostudio/baleia/internal/db/assistant"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 func strptr(v string) *string { return &v }
+
+// newAssistantService builds the assistant service over the GORM store, as the
+// API does (ADR 0020).
+func newAssistantService(t *testing.T, pool *pgxpool.Pool, keyring *crypto.Keyring) *assistant.Service {
+	t.Helper()
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger:         gormlogger.Discard,
+		TranslateError: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	return assistant.New(repo.New(gdb), keyring)
+}
 
 // TestSettingsKeyIsWriteOnly: the provider key is sealed at rest and opened only
 // by the adapters; the stored row never carries the plaintext.
@@ -20,10 +42,10 @@ func TestSettingsKeyIsWriteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := New(adb.New(pool), keyring)
+	svc := newAssistantService(t, pool, keyring)
 	secret := "sk-test-secret"
 
-	row, err := svc.UpdateSettings(context.Background(), SettingsInput{
+	row, err := svc.UpdateSettings(context.Background(), assistant.SettingsInput{
 		Enabled:                 true,
 		Provider:                strptr("anthropic"),
 		Model:                   strptr("claude-test"),
@@ -49,7 +71,7 @@ func TestSettingsKeyIsWriteOnly(t *testing.T) {
 	}
 
 	// An empty update keeps the stored key.
-	row, err = svc.UpdateSettings(context.Background(), SettingsInput{
+	row, err = svc.UpdateSettings(context.Background(), assistant.SettingsInput{
 		Enabled:                 true,
 		Provider:                strptr("anthropic"),
 		Model:                   strptr("claude-test"),
