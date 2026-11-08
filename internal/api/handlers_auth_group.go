@@ -111,13 +111,23 @@ func newAuthHandlers(c *core) *AuthHandlers {
 		PasswordCost:  c.settings.Auth.PasswordCost,
 		Logger:        c.logger,
 	})
-	a.resets = passwordreset.New(c.queries, groupMailer{a}, a.sessions, passwordreset.Config{
-		PublicURL:     c.settings.Mail.PublicURL,
-		DefaultLocale: c.settings.Mail.DefaultLocale,
-		TokenTTL:      c.settings.Auth.ResetTTL,
-		PasswordCost:  c.settings.Auth.PasswordCost,
-		Logger:        c.logger,
-	})
+	if c.store != nil {
+		a.resets = passwordreset.New(repo.NewUsers(c.store), groupMailer{a}, a.sessions, passwordreset.Config{
+			PublicURL:     c.settings.Mail.PublicURL,
+			DefaultLocale: c.settings.Mail.DefaultLocale,
+			TokenTTL:      c.settings.Auth.ResetTTL,
+			PasswordCost:  c.settings.Auth.PasswordCost,
+			Logger:        c.logger,
+		})
+	} else {
+		a.resets = passwordreset.New(c.queries, groupMailer{a}, a.sessions, passwordreset.Config{
+			PublicURL:     c.settings.Mail.PublicURL,
+			DefaultLocale: c.settings.Mail.DefaultLocale,
+			TokenTTL:      c.settings.Auth.ResetTTL,
+			PasswordCost:  c.settings.Auth.PasswordCost,
+			Logger:        c.logger,
+		})
+	}
 	return a
 }
 
