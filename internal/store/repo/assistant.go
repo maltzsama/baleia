@@ -77,11 +77,74 @@ func (r *Repo) UpdateAssistantSettings(ctx context.Context, arg adb.UpdateAssist
 // FindAssistantAgent returns the owner × workspace assistant agent or
 // pgx.ErrNoRows.
 func (r *Repo) FindAssistantAgent(ctx context.Context, arg adb.FindAssistantAgentParams) (adb.Agent, error) {
+	return findAssistantAgent(r.Users.db.WithContext(ctx), arg.OwnerID, arg.WorkspaceID)
+}
+
+// EnsureAssistantAgent returns the owner × workspace assistant agent,
+// provisioning it on first use. The owner's row is locked for the duration, so
+// concurrent first conversations for the same owner create one agent: the loser
+// waits, then finds the committed agent. A binding failure rolls the created
+// agent back (ADR 0020: row locks, never advisory locks).
+func (r *Repo) EnsureAssistantAgent(ctx context.Context, ownerID, workspaceID pgtype.UUID, name, description string) (adb.Agent, error) {
+	var out adb.Agent
+	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var owner model.User
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id").
+			Where("id = ?", UUIDString(ownerID)).
+			First(&owner).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return pgx.ErrNoRows
+		}
+		if err != nil {
+			return err
+		}
+		found, err := findAssistantAgent(tx, ownerID, workspaceID)
+		if err == nil {
+			out = found
+			return nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		agent, err := createAssistantAgent(tx, adb.CreateAssistantAgentParams{
+			OwnerID: ownerID, Name: name, Description: description,
+		})
+		if err != nil {
+			return err
+		}
+		if err := addAssistantAgentWorkspace(tx, adb.AddAssistantAgentWorkspaceParams{
+			AgentID: agent.ID, WorkspaceID: workspaceID,
+		}); err != nil {
+			return err
+		}
+		out = agent
+		return nil
+	})
+	if err != nil {
+		return adb.Agent{}, err
+	}
+	return out, nil
+}
+
+// CreateAssistantAgent inserts an assistant agent with an application-generated
+// id.
+func (r *Repo) CreateAssistantAgent(ctx context.Context, arg adb.CreateAssistantAgentParams) (adb.Agent, error) {
+	return createAssistantAgent(r.Users.db.WithContext(ctx), arg)
+}
+
+// AddAssistantAgentWorkspace binds the agent to the workspace; a repeated bind
+// is a no-op.
+func (r *Repo) AddAssistantAgentWorkspace(ctx context.Context, arg adb.AddAssistantAgentWorkspaceParams) error {
+	return addAssistantAgentWorkspace(r.Users.db.WithContext(ctx), arg)
+}
+
+func findAssistantAgent(db *gorm.DB, ownerID, workspaceID pgtype.UUID) (adb.Agent, error) {
 	var row model.Agent
-	err := r.Users.db.WithContext(ctx).
+	err := db.
 		Joins("JOIN agent_workspaces aw ON aw.agent_id = agents.id").
 		Where("agents.owner_id = ? AND agents.kind = ? AND aw.workspace_id = ?",
-			UUIDString(arg.OwnerID), "assistant", UUIDString(arg.WorkspaceID)).
+			UUIDString(ownerID), "assistant", UUIDString(workspaceID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return adb.Agent{}, pgx.ErrNoRows
@@ -92,9 +155,7 @@ func (r *Repo) FindAssistantAgent(ctx context.Context, arg adb.FindAssistantAgen
 	return toAssistantAgent(row), nil
 }
 
-// CreateAssistantAgent inserts an assistant agent with an application-generated
-// id.
-func (r *Repo) CreateAssistantAgent(ctx context.Context, arg adb.CreateAssistantAgentParams) (adb.Agent, error) {
+func createAssistantAgent(db *gorm.DB, arg adb.CreateAssistantAgentParams) (adb.Agent, error) {
 	now := time.Now().UTC()
 	row := model.Agent{
 		ID:              model.UUID(NewUUID()),
@@ -108,22 +169,18 @@ func (r *Repo) CreateAssistantAgent(ctx context.Context, arg adb.CreateAssistant
 		Policy:          model.JSON("{}"),
 		PolicyUpdatedAt: now,
 	}
-	if err := r.Users.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := db.Create(&row).Error; err != nil {
 		return adb.Agent{}, err
 	}
 	return toAssistantAgent(row), nil
 }
 
-// AddAssistantAgentWorkspace binds the agent to the workspace; a repeated bind
-// is a no-op.
-func (r *Repo) AddAssistantAgentWorkspace(ctx context.Context, arg adb.AddAssistantAgentWorkspaceParams) error {
+func addAssistantAgentWorkspace(db *gorm.DB, arg adb.AddAssistantAgentWorkspaceParams) error {
 	row := model.AgentWorkspace{
 		AgentID:     model.UUID(UUIDString(arg.AgentID)),
 		WorkspaceID: model.UUID(UUIDString(arg.WorkspaceID)),
 	}
-	return r.Users.db.WithContext(ctx).
-		Clauses(clause.OnConflict{DoNothing: true}).
-		Create(&row).Error
+	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error
 }
 
 // ── conversations ─────────────────────────────────────────────────────────────
@@ -236,13 +293,15 @@ func (r *Repo) ClaimConversation(ctx context.Context, arg adb.ClaimConversationP
 	return out, nil
 }
 
-// ReleaseConversation returns a conversation to idle after a turn.
-func (r *Repo) ReleaseConversation(ctx context.Context, id pgtype.UUID) error {
+// ReleaseConversation returns a conversation to idle after a turn. The turn
+// token must still be the owner, so a runner that lost the conversation to a
+// reclaim cannot release the new turn.
+func (r *Repo) ReleaseConversation(ctx context.Context, id pgtype.UUID, turnOwner string) error {
 	if !id.Valid {
 		return nil
 	}
 	return r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
-		Where("id = ?", UUIDString(id)).
+		Where("id = ? AND turn_owner = ?", UUIDString(id), turnOwner).
 		Updates(map[string]any{
 			"state":             "idle",
 			"turn_owner":        nil,
@@ -420,31 +479,21 @@ func (r *Repo) LatestConversationMessage(ctx context.Context, conversationID pgt
 }
 
 // CountUserTokensSince returns the user's token usage over their conversations
-// since the given time. The rows are summed in Go so the store keeps to
-// GORM's model API (ADR 0020); a message with only one side counted is ignored,
-// as a NULL summand was in the SQL aggregate.
+// since the given time. A subquery scopes the messages to the user, and the
+// token columns are summed in Go so the store keeps to GORM's model API
+// (ADR 0020); a message with only one side counted is ignored, as a NULL
+// summand was in the SQL aggregate.
 func (r *Repo) CountUserTokensSince(ctx context.Context, arg adb.CountUserTokensSinceParams) (int64, error) {
 	if !arg.UserID.Valid || !arg.CreatedAt.Valid {
 		return 0, nil
 	}
-	var conversations []model.AssistantConversation
-	if err := r.Users.db.WithContext(ctx).
+	conversations := r.Users.db.Model(&model.AssistantConversation{}).
 		Select("id").
-		Where("user_id = ?", UUIDString(arg.UserID)).
-		Find(&conversations).Error; err != nil {
-		return 0, err
-	}
-	if len(conversations) == 0 {
-		return 0, nil
-	}
-	ids := make([]string, len(conversations))
-	for i, conv := range conversations {
-		ids[i] = string(conv.ID)
-	}
+		Where("user_id = ?", UUIDString(arg.UserID))
 	var messages []model.AssistantMessage
 	if err := r.Users.db.WithContext(ctx).
 		Select("input_tokens", "output_tokens").
-		Where("conversation_id IN ? AND created_at >= ?", ids, arg.CreatedAt.Time).
+		Where("conversation_id IN (?) AND created_at >= ?", conversations, arg.CreatedAt.Time).
 		Find(&messages).Error; err != nil {
 		return 0, err
 	}

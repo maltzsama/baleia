@@ -172,6 +172,99 @@ func TestAssistantAgentBootstrap(t *testing.T) {
 	}
 }
 
+// TestEnsureAssistantAgentIsSerialized: concurrent first conversations for one
+// owner × workspace create one agent and all receive it.
+func TestEnsureAssistantAgentIsSerialized(t *testing.T) {
+	t.Parallel()
+	gdb := openTestGorm(t)
+	r := New(gdb)
+	ctx := context.Background()
+	user := createAPIKeyUser(t, gdb, fmt.Sprintf("ensure-%s@example.test", NewUUID()[:8]))
+	userID := PGUUID(string(user.ID))
+	ws, err := r.CreateWorkspace(ctx, db.CreateWorkspaceParams{
+		Name: "Ensure", Type: "personal",
+		PolarisCatalogName: "ws_ensure_" + NewUUID()[:8],
+		OwnerUserID:        userID,
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkspace: %v", err)
+	}
+
+	const callers = 6
+	ids := make(chan pgtype.UUID, callers)
+	errs := make(chan error, callers)
+	var wg sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			agent, err := r.EnsureAssistantAgent(ctx, userID, ws.ID, "Assistant", "Embedded assistant")
+			if err != nil {
+				errs <- err
+				return
+			}
+			ids <- agent.ID
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	close(ids)
+	for err := range errs {
+		t.Fatalf("EnsureAssistantAgent: %v", err)
+	}
+	var want pgtype.UUID
+	seen := 0
+	for id := range ids {
+		if seen == 0 {
+			want = id
+		}
+		if id != want {
+			t.Fatalf("agent ids differ: %s vs %s", id, want)
+		}
+		seen++
+	}
+	if seen != callers {
+		t.Fatalf("agents returned = %d, want %d", seen, callers)
+	}
+	var agents int64
+	if err := gdb.Model(&model.Agent{}).
+		Where("owner_id = ? AND kind = ?", UUIDString(userID), "assistant").
+		Count(&agents).Error; err != nil {
+		t.Fatalf("count agents: %v", err)
+	}
+	if agents != 1 {
+		t.Fatalf("assistant agents = %d, want 1", agents)
+	}
+	found, err := r.FindAssistantAgent(ctx, adb.FindAssistantAgentParams{OwnerID: userID, WorkspaceID: ws.ID})
+	if err != nil || found.ID != want {
+		t.Fatalf("FindAssistantAgent = %+v, %v", found, err)
+	}
+}
+
+// TestEnsureAssistantAgentRollsBackOnBindingFailure: an unknown workspace
+// leaves no half-provisioned agent behind.
+func TestEnsureAssistantAgentRollsBackOnBindingFailure(t *testing.T) {
+	t.Parallel()
+	gdb := openTestGorm(t)
+	r := New(gdb)
+	ctx := context.Background()
+	user := createAPIKeyUser(t, gdb, fmt.Sprintf("rollback-%s@example.test", NewUUID()[:8]))
+	userID := PGUUID(string(user.ID))
+
+	if _, err := r.EnsureAssistantAgent(ctx, userID, PGUUID(NewUUID()), "Assistant", "Embedded assistant"); err == nil {
+		t.Fatal("EnsureAssistantAgent with an unknown workspace returned no error")
+	}
+	var agents int64
+	if err := gdb.Model(&model.Agent{}).
+		Where("owner_id = ? AND kind = ?", UUIDString(userID), "assistant").
+		Count(&agents).Error; err != nil {
+		t.Fatalf("count agents: %v", err)
+	}
+	if agents != 0 {
+		t.Fatalf("assistant agents after rollback = %d, want 0", agents)
+	}
+}
+
 // TestAssistantConversationStore covers create, scoped read, newest-first list,
 // the one-shot title and delete with its messages.
 func TestAssistantConversationStore(t *testing.T) {
@@ -275,7 +368,15 @@ func TestAssistantTurnLifecycle(t *testing.T) {
 		t.Fatalf("heartbeat moved updated_at: %v -> %v", claimed.UpdatedAt.Time, beaten.UpdatedAt.Time)
 	}
 
-	if err := f.r.ReleaseConversation(ctx, conv.ID); err != nil {
+	// A stale runner must not release a turn it no longer owns.
+	if err := f.r.ReleaseConversation(ctx, conv.ID, "replica-2"); err != nil {
+		t.Fatalf("ReleaseConversation(stale token): %v", err)
+	}
+	held, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user})
+	if err != nil || held.State != "running" || held.TurnOwner == nil || *held.TurnOwner != owner {
+		t.Fatalf("stale release changed the turn = %+v, %v", held, err)
+	}
+	if err := f.r.ReleaseConversation(ctx, conv.ID, owner); err != nil {
 		t.Fatalf("ReleaseConversation: %v", err)
 	}
 	released, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user})
@@ -495,6 +596,22 @@ func TestAssistantTokenCount(t *testing.T) {
 	}
 	hundred := int32(100)
 	appendTokens(strangerConv.ID, &hundred, &hundred)
+
+	// A message older than the window does not count, even in the user's own
+	// conversation.
+	thousand := int32(1000)
+	old, err := f.r.AppendMessage(ctx, adb.AppendMessageParams{
+		ConversationID: conv.ID, Role: "assistant", Content: []byte(`{"text":"old"}`),
+		InputTokens: &thousand, OutputTokens: &thousand,
+	})
+	if err != nil {
+		t.Fatalf("AppendMessage(old): %v", err)
+	}
+	if err := f.gdb.Model(&model.AssistantMessage{}).
+		Where("conversation_id = ? AND seq = ?", UUIDString(conv.ID), old.Seq).
+		Update("created_at", time.Now().UTC().Add(-2*time.Hour)).Error; err != nil {
+		t.Fatalf("age message: %v", err)
+	}
 
 	used, err := f.r.CountUserTokensSince(ctx, adb.CountUserTokensSinceParams{
 		UserID: f.user, CreatedAt: pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},

@@ -137,10 +137,14 @@ func (r *Runner) Start(ctx context.Context, userID, id pgtype.UUID, text string)
 	if err != nil {
 		return 0, err
 	}
+	turnOwner := ""
+	if claimed.TurnOwner != nil {
+		turnOwner = *claimed.TurnOwner
+	}
 	msg, err := r.append(ctx, id, "user", map[string]any{"text": text}, nil, nil)
 	if err != nil {
 		// Best effort: a claim left behind is freed by RunSweeper.
-		_ = r.svc.Release(context.Background(), id)
+		_ = r.svc.Release(context.WithoutCancel(ctx), id, turnOwner)
 		return 0, err
 	}
 	if claimed.Title == "" {
@@ -163,7 +167,7 @@ func (r *Runner) Start(ctx context.Context, userID, id pgtype.UUID, text string)
 			delete(r.cancels, id.Bytes)
 			r.mu.Unlock()
 			// Best effort: a claim left behind is freed by RunSweeper.
-			_ = r.svc.Release(context.Background(), id)
+			_ = r.svc.Release(context.WithoutCancel(turnCtx), id, turnOwner)
 		}()
 		r.run(turnCtx, claimed, settings)
 	}()

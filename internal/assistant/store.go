@@ -17,9 +17,7 @@ type Store interface {
 	UpdateAssistantSettings(ctx context.Context, arg adb.UpdateAssistantSettingsParams) (adb.AssistantSetting, error)
 
 	// Assistant agent
-	FindAssistantAgent(ctx context.Context, arg adb.FindAssistantAgentParams) (adb.Agent, error)
-	CreateAssistantAgent(ctx context.Context, arg adb.CreateAssistantAgentParams) (adb.Agent, error)
-	AddAssistantAgentWorkspace(ctx context.Context, arg adb.AddAssistantAgentWorkspaceParams) error
+	EnsureAssistantAgent(ctx context.Context, ownerID, workspaceID pgtype.UUID, name, description string) (adb.Agent, error)
 
 	// Conversations
 	CreateConversation(ctx context.Context, arg adb.CreateConversationParams) (adb.AssistantConversation, error)
@@ -29,7 +27,7 @@ type Store interface {
 
 	// Turn lifecycle
 	ClaimConversation(ctx context.Context, arg adb.ClaimConversationParams) (adb.AssistantConversation, error)
-	ReleaseConversation(ctx context.Context, id pgtype.UUID) error
+	ReleaseConversation(ctx context.Context, id pgtype.UUID, turnOwner string) error
 	SetConversationInterrupted(ctx context.Context, id pgtype.UUID) error
 	HeartbeatConversation(ctx context.Context, id pgtype.UUID) error
 	InterruptStaleConversations(ctx context.Context) ([]pgtype.UUID, error)

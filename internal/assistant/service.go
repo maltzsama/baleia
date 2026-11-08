@@ -127,29 +127,8 @@ func (s *Service) APIKey(ctx context.Context) (string, error) {
 // EnsureAgent returns the assistant agent for a user × workspace, creating it
 // on first use. The agent is never listed or minted by the agents API.
 func (s *Service) EnsureAgent(ctx context.Context, ownerID, workspaceID pgtype.UUID) (adb.Agent, error) {
-	agent, err := s.store.FindAssistantAgent(ctx, adb.FindAssistantAgentParams{
-		OwnerID: ownerID, WorkspaceID: workspaceID,
-	})
-	if err == nil {
-		return agent, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return adb.Agent{}, err
-	}
-	agent, err = s.store.CreateAssistantAgent(ctx, adb.CreateAssistantAgentParams{
-		OwnerID:     ownerID,
-		Name:        "Assistant",
-		Description: "Embedded assistant acting on behalf of its owner",
-	})
-	if err != nil {
-		return adb.Agent{}, err
-	}
-	if err := s.store.AddAssistantAgentWorkspace(ctx, adb.AddAssistantAgentWorkspaceParams{
-		AgentID: agent.ID, WorkspaceID: workspaceID,
-	}); err != nil {
-		return adb.Agent{}, err
-	}
-	return agent, nil
+	return s.store.EnsureAssistantAgent(ctx, ownerID, workspaceID,
+		"Assistant", "Embedded assistant acting on behalf of its owner")
 }
 
 // ── conversations ───────────────────────────────────────────────────────────
@@ -235,9 +214,11 @@ func (s *Service) Claim(ctx context.Context, userID, id pgtype.UUID, owner strin
 	return row, err
 }
 
-// Release returns a conversation to idle after a turn.
-func (s *Service) Release(ctx context.Context, id pgtype.UUID) error {
-	return s.store.ReleaseConversation(ctx, id)
+// Release returns a conversation to idle after a turn. turnOwner is the token
+// the claim returned; a stale runner that lost the conversation cannot release
+// the reclaimed turn.
+func (s *Service) Release(ctx context.Context, id pgtype.UUID, turnOwner string) error {
+	return s.store.ReleaseConversation(ctx, id, turnOwner)
 }
 
 // Interrupt marks a conversation interrupted (cancel, crash recovery).
