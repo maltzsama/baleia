@@ -253,14 +253,14 @@ func (h *CatalogHandlers) resyncConnectionBindings(ctx context.Context, p authz.
 		defer lock.Unlock()
 	}
 
-	cats, err := h.queries.ListCatalogsByConnection(ctx, connID)
+	cats, err := h.topology.CatalogsOfConnection(ctx, connID)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "list catalogs to re-apply bindings; sync them by hand", "connection_id", idString(connID), "err", err)
 		return
 	}
 	ctx = audit.WithAction(ctx, audit.BindingSync)
 	for _, c := range cats {
-		bs, err := h.queries.ListBindingsByCatalog(ctx, c.ID)
+		bs, err := h.topology.BindingsOfCatalog(ctx, c.ID)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "list bindings to re-apply; sync them by hand", "catalog_id", idString(c.ID), "err", err)
 			continue

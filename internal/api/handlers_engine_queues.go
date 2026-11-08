@@ -16,7 +16,6 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/workbench/executions"
 	"github.com/galileostudio/baleia/internal/workload"
-	"github.com/galileostudio/baleia/internal/workload/resourcegroups"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
@@ -90,7 +89,7 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 		revision int
 		refusal  *UnprocessableEntityJSONResponse
 	)
-	err = h.inTx(ctx, func(q db.Querier) error {
+	err = h.engineQueueTx(ctx, func(q engineQueueTxStore) error {
 		// The switch and the one-owner rule are read under the lock, so two
 		// concurrent saves cannot both take the groups over, nor can a save
 		// that omits the switch miss an enable that commits meanwhile.
@@ -139,7 +138,7 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 		if !handover {
 			return nil
 		}
-		revision, err = resourcegroups.Publish(ctx, q, id, environment, resourceGroupsDocument(caps))
+		revision, err = q.PublishTrinoResourceGroups(ctx, id, environment, resourceGroupsDocument(caps))
 		if err != nil {
 			return fmt.Errorf("publish trino resource groups: %w", err)
 		}
@@ -169,7 +168,7 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 	})
 	h.signalAdmission(ctx, idString(id), caps)
 
-	eng, err := h.queries.GetEngineByID(ctx, id)
+	eng, err := h.topology.Engine(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +192,7 @@ var errHandoverRefused = errors.New("trino resource group handover refused")
 // engine at a time: the groups are stored per environment, so a second engine
 // would overwrite the first one's. q is the save's transaction, holding
 // LockTrinoResourceGroups.
-func resourceGroupsRefusal(ctx context.Context, q db.Querier, eng db.Engine) (*UnprocessableEntityJSONResponse, error) {
+func resourceGroupsRefusal(ctx context.Context, q engineQueueTxStore, eng db.Engine) (*UnprocessableEntityJSONResponse, error) {
 	if eng.Kind != qtrino.Kind {
 		refusal := unprocessable(ErrorCodeEngineUnsupported, "only a Trino engine can hand its queue over to Trino resource groups")
 		return &refusal, nil
@@ -226,7 +225,7 @@ func resourceGroupsDocument(caps workflows.AdmissionCapacities) workload.Resourc
 // engineQueues merges the configured capacity (or its default) with the live
 // state the admission workflow reports.
 func (h *CatalogHandlers) engineQueues(ctx context.Context, eng db.Engine) (EngineQueues, error) {
-	rows, err := h.queries.ListEngineQueueCapacities(ctx, eng.ID)
+	rows, err := h.capacityStore().ListEngineQueueCapacities(ctx, eng.ID)
 	if err != nil {
 		return EngineQueues{}, err
 	}

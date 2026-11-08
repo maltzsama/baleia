@@ -55,11 +55,21 @@ func (s *Store) Write(ctx context.Context, engineID pgtype.UUID, environment str
 	return revision, err
 }
 
+// Writer is the resource-group write surface Publish needs; db.Querier and the
+// GORM store both implement it (ADR 0020).
+type Writer interface {
+	DeleteTrinoResourceGroups(ctx context.Context, environment *string) error
+	InsertTrinoResourceGroup(ctx context.Context, arg db.InsertTrinoResourceGroupParams) (int64, error)
+	InsertTrinoSelector(ctx context.Context, arg db.InsertTrinoSelectorParams) error
+	NextTrinoResourceGroupRevision(ctx context.Context, engineID pgtype.UUID) (int32, error)
+	InsertTrinoResourceGroupRevision(ctx context.Context, arg db.InsertTrinoResourceGroupRevisionParams) error
+}
+
 // Publish validates and publishes the document on q, which must already be
 // inside a transaction, and returns the new revision. Callers that change the
 // settings the document is generated from use it so the settings and the
 // published groups commit together (#635).
-func Publish(ctx context.Context, q db.Querier, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
+func Publish(ctx context.Context, q Writer, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
 	if err := workload.Validate(doc); err != nil {
 		return 0, err
 	}
@@ -90,7 +100,7 @@ func (s *Store) Rollback(ctx context.Context, engineID pgtype.UUID, environment 
 
 // publish replaces the environment's groups and selectors and records the
 // revision, on the querier already inside a transaction.
-func publish(ctx context.Context, q db.Querier, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
+func publish(ctx context.Context, q Writer, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
 	if err := q.DeleteTrinoResourceGroups(ctx, &environment); err != nil {
 		return 0, err
 	}
@@ -123,7 +133,7 @@ func publish(ctx context.Context, q db.Querier, engineID pgtype.UUID, environmen
 // subgroup limits, and the queued limit is the sum of the subgroup queues. A
 // sum past the int32 column is clamped: at that size the root adds no limit of
 // its own, which is what the sum means.
-func writeGroups(ctx context.Context, q db.Querier, environment string, doc workload.ResourceGroups) (map[string]int64, error) {
+func writeGroups(ctx context.Context, q Writer, environment string, doc workload.ResourceGroups) (map[string]int64, error) {
 	root := doc.RootGroups[0]
 
 	var ceiling, maxQueued int64
@@ -170,7 +180,7 @@ func writeGroups(ctx context.Context, q db.Querier, environment string, doc work
 
 // writeSelectors inserts the selectors, in order, giving the first the highest
 // priority (Trino processes them in descending priority).
-func writeSelectors(ctx context.Context, q db.Querier, ids map[string]int64, doc workload.ResourceGroups) error {
+func writeSelectors(ctx context.Context, q Writer, ids map[string]int64, doc workload.ResourceGroups) error {
 	for i, sel := range doc.Selectors {
 		groupID, ok := ids[sel.Group]
 		if !ok {

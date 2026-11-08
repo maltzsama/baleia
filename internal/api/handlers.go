@@ -276,10 +276,11 @@ func NewAPI(d Deps) (*API, error) {
 	c.spaces = spacesOver(c, c.queries)
 	if c.store != nil {
 		c.access = wsaccess.New(repo.New(c.store))
+		c.topology = topology.New(repo.New(c.store))
 	} else {
 		c.access = wsaccess.New(c.queries)
+		c.topology = topology.New(c.queries)
 	}
-	c.topology = topology.New(c.queries)
 	h := &API{
 		core:              c,
 		AuthHandlers:      newAuthHandlers(c),
