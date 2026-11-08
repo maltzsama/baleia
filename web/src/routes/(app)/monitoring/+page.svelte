@@ -6,6 +6,7 @@
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { loadCatalogs, type MetadataCatalog } from '$lib/metadata/client';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { hasTableHealth } from '$lib/ui/patterns/kindIcon';
 	import {
 		analyzeCatalogTableHealth,
@@ -120,6 +121,9 @@
 	// The live SSE subscription (#733): the server pushes a "changed" signal
 	// instead of the client polling on a timer.
 	let eventsAbort: AbortController | null = null;
+	// Tab and engine changes overlap async loads; only the latest one may
+	// start its polls and stream.
+	let activeSeq = 0;
 
 	function stopPolls() {
 		for (const controller of polls) controller.stop();
@@ -264,12 +268,13 @@
 	}
 
 	async function loadActive() {
+		const seq = ++activeSeq;
 		stopPolls();
 		stopEvents();
 		if (!engineId && tab !== 'tables') return;
 		if (tab === 'cluster') {
 			await loadCluster();
-			if (!live) return;
+			if (seq !== activeSeq || !live) return;
 			// Push is the primary path (#733); this slow poll is the safety net.
 			polls.push(
 				poll(loadCluster, { until: () => false, intervals: [60_000], maxDurationMs: 3_600_000 })
@@ -277,7 +282,7 @@
 			startEvents();
 		} else if (tab === 'queries') {
 			await loadQueries();
-			if (!live) return;
+			if (seq !== activeSeq || !live) return;
 			polls.push(
 				poll(loadQueries, {
 					until: () => false,
@@ -293,6 +298,7 @@
 			startEvents();
 		} else {
 			await loadCatalogList();
+			if (seq !== activeSeq) return;
 			// The first tick loads the rows and keeps watching for the hourly
 			// pass (#750); don't also await loadHealth or it double-fetches.
 			polls.push(
@@ -488,10 +494,18 @@
 		return score >= 80 ? 'success' : score >= 50 ? 'warning' : 'danger';
 	}
 
-	onMount(async () => {
-		await workspaceStore.load();
-		await loadEngines();
-		if (engines.length > 0) await loadActive();
+	onMount(() => {
+		// The awaits must not restart the live streams after the page is gone;
+		// the abort signal is the cleanup the async body cannot return itself.
+		const controller = new AbortController();
+		void (async () => {
+			await workspaceStore.load();
+			if (controller.signal.aborted) return;
+			await loadEngines();
+			if (controller.signal.aborted) return;
+			if (engines.length > 0) await loadActive();
+		})();
+		return () => controller.abort();
 	});
 
 	onDestroy(() => {
@@ -901,7 +915,9 @@
 									<td class="px-3 py-1.5">{row.commits_last_hour ?? '—'}</td>
 									<td class="px-3 py-1.5">
 										{row.total_size_bytes != null
-											? m.monitoring_mib({ value: Math.round(row.total_size_bytes / 1024 / 1024) })
+											? m.monitoring_mib({
+													value: Math.round(row.total_size_bytes / 1024 / 1024)
+												})
 											: '—'}
 									</td>
 									<td class="px-3 py-1.5">
@@ -1075,7 +1091,9 @@
 						class="text-primary hover:underline"
 						onclick={() => {
 							if (selectedQuery) {
-								window.location.href = `/history?execution=${selectedQuery.execution_id}`;
+								// The history route is resolve('/history') plus the execution query.
+								// eslint-disable-next-line svelte/no-navigation-without-resolve
+								void goto(`${resolve('/history')}?execution=${selectedQuery.execution_id}`);
 							}
 						}}
 					>
