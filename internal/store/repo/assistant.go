@@ -1,0 +1,523 @@
+package repo
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/galileostudio/baleia/internal/assistant"
+	adb "github.com/galileostudio/baleia/internal/db/assistant"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+var _ assistant.Store = (*Repo)(nil)
+
+// staleTurnAge is how long a running turn may stay without a heartbeat before
+// the sweeper marks it interrupted (#62).
+const staleTurnAge = 60 * time.Second
+
+// ── settings ──────────────────────────────────────────────────────────────────
+
+// GetAssistantSettings returns the single settings row or pgx.ErrNoRows.
+func (r *Repo) GetAssistantSettings(ctx context.Context) (adb.AssistantSetting, error) {
+	var row model.AssistantSetting
+	err := r.Users.db.WithContext(ctx).Where("id = ?", true).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return adb.AssistantSetting{}, pgx.ErrNoRows
+	}
+	if err != nil {
+		return adb.AssistantSetting{}, err
+	}
+	return toAssistantSetting(row), nil
+}
+
+// UpdateAssistantSettings merges the configuration over the single row.
+func (r *Repo) UpdateAssistantSettings(ctx context.Context, arg adb.UpdateAssistantSettingsParams) (adb.AssistantSetting, error) {
+	var out adb.AssistantSetting
+	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.AssistantSetting{}).Where("id = ?", true).
+			Updates(map[string]any{
+				"enabled":                     arg.Enabled,
+				"provider":                    arg.Provider,
+				"base_url":                    arg.BaseUrl,
+				"model":                       arg.Model,
+				"api_key_enc":                 arg.ApiKeyEnc,
+				"data_sharing":                arg.DataSharing,
+				"max_turn_seconds":            arg.MaxTurnSeconds,
+				"max_tool_calls_per_turn":     arg.MaxToolCallsPerTurn,
+				"max_output_tokens_per_turn":  arg.MaxOutputTokensPerTurn,
+				"daily_token_budget_per_user": arg.DailyTokenBudgetPerUser,
+				"updated_by":                  modelUUIDPtr(arg.UpdatedBy),
+				"updated_at":                  time.Now().UTC(),
+			}).Error; err != nil {
+			return err
+		}
+		var row model.AssistantSetting
+		if err := tx.Where("id = ?", true).First(&row).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return pgx.ErrNoRows
+			}
+			return err
+		}
+		out = toAssistantSetting(row)
+		return nil
+	})
+	if err != nil {
+		return adb.AssistantSetting{}, err
+	}
+	return out, nil
+}
+
+// ── assistant agent ───────────────────────────────────────────────────────────
+
+// FindAssistantAgent returns the owner × workspace assistant agent or
+// pgx.ErrNoRows.
+func (r *Repo) FindAssistantAgent(ctx context.Context, arg adb.FindAssistantAgentParams) (adb.Agent, error) {
+	var row model.Agent
+	err := r.Users.db.WithContext(ctx).
+		Joins("JOIN agent_workspaces aw ON aw.agent_id = agents.id").
+		Where("agents.owner_id = ? AND agents.kind = ? AND aw.workspace_id = ?",
+			UUIDString(arg.OwnerID), "assistant", UUIDString(arg.WorkspaceID)).
+		First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return adb.Agent{}, pgx.ErrNoRows
+	}
+	if err != nil {
+		return adb.Agent{}, err
+	}
+	return toAssistantAgent(row), nil
+}
+
+// CreateAssistantAgent inserts an assistant agent with an application-generated
+// id.
+func (r *Repo) CreateAssistantAgent(ctx context.Context, arg adb.CreateAssistantAgentParams) (adb.Agent, error) {
+	now := time.Now().UTC()
+	row := model.Agent{
+		ID:              model.UUID(NewUUID()),
+		OwnerID:         model.UUID(UUIDString(arg.OwnerID)),
+		Kind:            "assistant",
+		Name:            arg.Name,
+		Description:     model.Text(arg.Description),
+		Status:          "active",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		Policy:          model.JSON("{}"),
+		PolicyUpdatedAt: now,
+	}
+	if err := r.Users.db.WithContext(ctx).Create(&row).Error; err != nil {
+		return adb.Agent{}, err
+	}
+	return toAssistantAgent(row), nil
+}
+
+// AddAssistantAgentWorkspace binds the agent to the workspace; a repeated bind
+// is a no-op.
+func (r *Repo) AddAssistantAgentWorkspace(ctx context.Context, arg adb.AddAssistantAgentWorkspaceParams) error {
+	row := model.AgentWorkspace{
+		AgentID:     model.UUID(UUIDString(arg.AgentID)),
+		WorkspaceID: model.UUID(UUIDString(arg.WorkspaceID)),
+	}
+	return r.Users.db.WithContext(ctx).
+		Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&row).Error
+}
+
+// ── conversations ─────────────────────────────────────────────────────────────
+
+// CreateConversation starts an idle, empty conversation.
+func (r *Repo) CreateConversation(ctx context.Context, arg adb.CreateConversationParams) (adb.AssistantConversation, error) {
+	now := time.Now().UTC()
+	row := model.AssistantConversation{
+		ID:          model.UUID(NewUUID()),
+		UserID:      model.UUID(UUIDString(arg.UserID)),
+		WorkspaceID: model.UUID(UUIDString(arg.WorkspaceID)),
+		AgentID:     model.UUID(UUIDString(arg.AgentID)),
+		Title:       model.Text(arg.Title),
+		State:       "idle",
+		LastSeq:     0,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := r.Users.db.WithContext(ctx).Create(&row).Error; err != nil {
+		return adb.AssistantConversation{}, err
+	}
+	return toAssistantConversation(row), nil
+}
+
+// GetConversation returns one of the caller's conversations or pgx.ErrNoRows.
+func (r *Repo) GetConversation(ctx context.Context, arg adb.GetConversationParams) (adb.AssistantConversation, error) {
+	if !arg.ID.Valid || !arg.UserID.Valid {
+		return adb.AssistantConversation{}, pgx.ErrNoRows
+	}
+	var row model.AssistantConversation
+	err := r.Users.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", UUIDString(arg.ID), UUIDString(arg.UserID)).
+		First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return adb.AssistantConversation{}, pgx.ErrNoRows
+	}
+	if err != nil {
+		return adb.AssistantConversation{}, err
+	}
+	return toAssistantConversation(row), nil
+}
+
+// ListConversations returns the caller's conversations in a workspace, newest
+// first.
+func (r *Repo) ListConversations(ctx context.Context, arg adb.ListConversationsParams) ([]adb.AssistantConversation, error) {
+	var rows []model.AssistantConversation
+	if err := r.Users.db.WithContext(ctx).
+		Where("user_id = ? AND workspace_id = ?", UUIDString(arg.UserID), UUIDString(arg.WorkspaceID)).
+		Order("updated_at DESC, id DESC").
+		Limit(int(arg.Limit)).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]adb.AssistantConversation, len(rows))
+	for i, row := range rows {
+		out[i] = toAssistantConversation(row)
+	}
+	return out, nil
+}
+
+// DeleteConversation hard-deletes the caller's conversation; its messages go
+// with it through the foreign key.
+func (r *Repo) DeleteConversation(ctx context.Context, arg adb.DeleteConversationParams) error {
+	return r.Users.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", UUIDString(arg.ID), UUIDString(arg.UserID)).
+		Delete(&model.AssistantConversation{}).Error
+}
+
+// ── turn lifecycle ────────────────────────────────────────────────────────────
+
+// ClaimConversation starts a turn or returns pgx.ErrNoRows when one is already
+// running. The row lock makes the check and the transition one step.
+func (r *Repo) ClaimConversation(ctx context.Context, arg adb.ClaimConversationParams) (adb.AssistantConversation, error) {
+	var out adb.AssistantConversation
+	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row model.AssistantConversation
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND user_id = ?", UUIDString(arg.ID), UUIDString(arg.UserID)).
+			First(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return pgx.ErrNoRows
+		}
+		if err != nil {
+			return err
+		}
+		if row.State == "running" {
+			return pgx.ErrNoRows
+		}
+		now := time.Now().UTC()
+		if err := tx.Model(&model.AssistantConversation{}).
+			Where("id = ?", string(row.ID)).
+			Updates(map[string]any{
+				"state":             "running",
+				"turn_owner":        arg.TurnOwner,
+				"turn_heartbeat_at": now,
+				"updated_at":        now,
+			}).Error; err != nil {
+			return err
+		}
+		row.State = "running"
+		row.TurnOwner = arg.TurnOwner
+		row.TurnHeartbeatAt = &now
+		row.UpdatedAt = now
+		out = toAssistantConversation(row)
+		return nil
+	})
+	if err != nil {
+		return adb.AssistantConversation{}, err
+	}
+	return out, nil
+}
+
+// ReleaseConversation returns a conversation to idle after a turn.
+func (r *Repo) ReleaseConversation(ctx context.Context, id pgtype.UUID) error {
+	if !id.Valid {
+		return nil
+	}
+	return r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
+		Where("id = ?", UUIDString(id)).
+		Updates(map[string]any{
+			"state":             "idle",
+			"turn_owner":        nil,
+			"turn_heartbeat_at": nil,
+			"updated_at":        time.Now().UTC(),
+		}).Error
+}
+
+// SetConversationInterrupted marks a conversation interrupted (cancel, crash
+// recovery).
+func (r *Repo) SetConversationInterrupted(ctx context.Context, id pgtype.UUID) error {
+	if !id.Valid {
+		return nil
+	}
+	return r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
+		Where("id = ?", UUIDString(id)).
+		Updates(map[string]any{
+			"state":             "interrupted",
+			"turn_owner":        nil,
+			"turn_heartbeat_at": nil,
+			"updated_at":        time.Now().UTC(),
+		}).Error
+}
+
+// HeartbeatConversation refreshes the turn lease while the turn is running. It
+// deliberately does not touch updated_at: listing order follows the last real
+// activity, not the beat.
+func (r *Repo) HeartbeatConversation(ctx context.Context, id pgtype.UUID) error {
+	if !id.Valid {
+		return nil
+	}
+	return r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
+		Where("id = ? AND state = ?", UUIDString(id), "running").
+		UpdateColumn("turn_heartbeat_at", time.Now().UTC()).Error
+}
+
+// InterruptStaleConversations marks turns whose replica stopped heartbeating as
+// interrupted and returns their ids.
+func (r *Repo) InterruptStaleConversations(ctx context.Context) ([]pgtype.UUID, error) {
+	var ids []pgtype.UUID
+	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var stale []model.AssistantConversation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id", "state", "turn_heartbeat_at").
+			Where("state = ? AND turn_heartbeat_at < ?", "running", time.Now().UTC().Add(-staleTurnAge)).
+			Find(&stale).Error; err != nil {
+			return err
+		}
+		if len(stale) == 0 {
+			return nil
+		}
+		keys := make([]string, len(stale))
+		for i, row := range stale {
+			keys[i] = string(row.ID)
+		}
+		if err := tx.Model(&model.AssistantConversation{}).
+			Where("id IN ?", keys).
+			Updates(map[string]any{
+				"state":             "interrupted",
+				"turn_owner":        nil,
+				"turn_heartbeat_at": nil,
+				"updated_at":        time.Now().UTC(),
+			}).Error; err != nil {
+			return err
+		}
+		ids = make([]pgtype.UUID, len(stale))
+		for i, row := range stale {
+			ids[i] = PGUUID(string(row.ID))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// SetConversationTitle names a conversation once, from its first user message.
+func (r *Repo) SetConversationTitle(ctx context.Context, arg adb.SetConversationTitleParams) error {
+	if !arg.ID.Valid {
+		return nil
+	}
+	return r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
+		Where("id = ? AND title = ?", UUIDString(arg.ID), "").
+		Updates(map[string]any{
+			"title":      arg.Title,
+			"updated_at": time.Now().UTC(),
+		}).Error
+}
+
+// ── messages ──────────────────────────────────────────────────────────────────
+
+// AppendMessage bumps last_seq and inserts the message in one transaction, so
+// SSE sequence numbers have no gaps.
+func (r *Repo) AppendMessage(ctx context.Context, arg adb.AppendMessageParams) (adb.AssistantMessage, error) {
+	var out adb.AssistantMessage
+	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var conv model.AssistantConversation
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id", "last_seq").
+			Where("id = ?", UUIDString(arg.ConversationID)).
+			First(&conv).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return pgx.ErrNoRows
+		}
+		if err != nil {
+			return err
+		}
+		now := time.Now().UTC()
+		seq := conv.LastSeq + 1
+		if err := tx.Model(&model.AssistantConversation{}).
+			Where("id = ?", string(conv.ID)).
+			Updates(map[string]any{
+				"last_seq":   seq,
+				"updated_at": now,
+			}).Error; err != nil {
+			return err
+		}
+		msg := model.AssistantMessage{
+			ConversationID: conv.ID,
+			Seq:            seq,
+			Role:           arg.Role,
+			Content:        model.JSON(arg.Content),
+			InputTokens:    arg.InputTokens,
+			OutputTokens:   arg.OutputTokens,
+			CreatedAt:      now,
+		}
+		if err := tx.Create(&msg).Error; err != nil {
+			return err
+		}
+		out = toAssistantMessage(msg)
+		return nil
+	})
+	if err != nil {
+		return adb.AssistantMessage{}, err
+	}
+	return out, nil
+}
+
+// ListMessages returns messages after a sequence number, oldest first.
+func (r *Repo) ListMessages(ctx context.Context, arg adb.ListMessagesParams) ([]adb.AssistantMessage, error) {
+	var rows []model.AssistantMessage
+	if err := r.Users.db.WithContext(ctx).
+		Where("conversation_id = ? AND seq > ?", UUIDString(arg.ConversationID), arg.Seq).
+		Order("seq").
+		Limit(int(arg.Limit)).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]adb.AssistantMessage, len(rows))
+	for i, row := range rows {
+		out[i] = toAssistantMessage(row)
+	}
+	return out, nil
+}
+
+// LatestConversationMessage returns the conversation's newest message or
+// pgx.ErrNoRows.
+func (r *Repo) LatestConversationMessage(ctx context.Context, conversationID pgtype.UUID) (adb.AssistantMessage, error) {
+	if !conversationID.Valid {
+		return adb.AssistantMessage{}, pgx.ErrNoRows
+	}
+	var row model.AssistantMessage
+	err := r.Users.db.WithContext(ctx).
+		Where("conversation_id = ?", UUIDString(conversationID)).
+		Order("seq DESC").
+		First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return adb.AssistantMessage{}, pgx.ErrNoRows
+	}
+	if err != nil {
+		return adb.AssistantMessage{}, err
+	}
+	return toAssistantMessage(row), nil
+}
+
+// CountUserTokensSince returns the user's token usage over their conversations
+// since the given time. The rows are summed in Go so the store keeps to
+// GORM's model API (ADR 0020); a message with only one side counted is ignored,
+// as a NULL summand was in the SQL aggregate.
+func (r *Repo) CountUserTokensSince(ctx context.Context, arg adb.CountUserTokensSinceParams) (int64, error) {
+	if !arg.UserID.Valid || !arg.CreatedAt.Valid {
+		return 0, nil
+	}
+	var conversations []model.AssistantConversation
+	if err := r.Users.db.WithContext(ctx).
+		Select("id").
+		Where("user_id = ?", UUIDString(arg.UserID)).
+		Find(&conversations).Error; err != nil {
+		return 0, err
+	}
+	if len(conversations) == 0 {
+		return 0, nil
+	}
+	ids := make([]string, len(conversations))
+	for i, conv := range conversations {
+		ids[i] = string(conv.ID)
+	}
+	var messages []model.AssistantMessage
+	if err := r.Users.db.WithContext(ctx).
+		Select("input_tokens", "output_tokens").
+		Where("conversation_id IN ? AND created_at >= ?", ids, arg.CreatedAt.Time).
+		Find(&messages).Error; err != nil {
+		return 0, err
+	}
+	var used int64
+	for _, msg := range messages {
+		if msg.InputTokens == nil || msg.OutputTokens == nil {
+			continue
+		}
+		used += int64(*msg.InputTokens) + int64(*msg.OutputTokens)
+	}
+	return used, nil
+}
+
+// ── conversions ───────────────────────────────────────────────────────────────
+
+func toAssistantSetting(s model.AssistantSetting) adb.AssistantSetting {
+	return adb.AssistantSetting{
+		ID:                      s.ID,
+		Enabled:                 s.Enabled,
+		Provider:                s.Provider,
+		BaseUrl:                 s.BaseURL,
+		Model:                   s.Model,
+		ApiKeyEnc:               s.APIKeyEnc,
+		DataSharing:             string(s.DataSharing),
+		MaxTurnSeconds:          s.MaxTurnSeconds,
+		MaxToolCallsPerTurn:     s.MaxToolCallsPerTurn,
+		MaxOutputTokensPerTurn:  s.MaxOutputTokensPerTurn,
+		DailyTokenBudgetPerUser: s.DailyTokenBudgetPerUser,
+		UpdatedBy:               uuidPtr(s.UpdatedBy),
+		UpdatedAt:               PGTime(s.UpdatedAt),
+	}
+}
+
+func toAssistantAgent(a model.Agent) adb.Agent {
+	return adb.Agent{
+		ID:              PGUUID(string(a.ID)),
+		OwnerID:         PGUUID(string(a.OwnerID)),
+		Kind:            string(a.Kind),
+		Name:            a.Name,
+		Description:     string(a.Description),
+		Status:          string(a.Status),
+		CreatedAt:       PGTime(a.CreatedAt),
+		UpdatedAt:       PGTime(a.UpdatedAt),
+		Policy:          []byte(a.Policy),
+		PolicyUpdatedAt: PGTime(a.PolicyUpdatedAt),
+		PolicyUpdatedBy: uuidPtr(a.PolicyUpdatedBy),
+	}
+}
+
+func toAssistantConversation(c model.AssistantConversation) adb.AssistantConversation {
+	return adb.AssistantConversation{
+		ID:              PGUUID(string(c.ID)),
+		UserID:          PGUUID(string(c.UserID)),
+		WorkspaceID:     PGUUID(string(c.WorkspaceID)),
+		AgentID:         PGUUID(string(c.AgentID)),
+		Title:           string(c.Title),
+		State:           string(c.State),
+		TurnOwner:       c.TurnOwner,
+		TurnHeartbeatAt: PGTimePtr(c.TurnHeartbeatAt),
+		LastSeq:         c.LastSeq,
+		CreatedAt:       PGTime(c.CreatedAt),
+		UpdatedAt:       PGTime(c.UpdatedAt),
+	}
+}
+
+func toAssistantMessage(m model.AssistantMessage) adb.AssistantMessage {
+	return adb.AssistantMessage{
+		ConversationID: PGUUID(string(m.ConversationID)),
+		Seq:            m.Seq,
+		Role:           m.Role,
+		Content:        []byte(m.Content),
+		InputTokens:    m.InputTokens,
+		OutputTokens:   m.OutputTokens,
+		CreatedAt:      PGTime(m.CreatedAt),
+	}
+}
