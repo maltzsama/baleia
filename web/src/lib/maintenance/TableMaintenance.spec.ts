@@ -166,6 +166,28 @@ describe('TableMaintenance', () => {
 		await waitFor(() => expect(requested).toBe('next_due'));
 	});
 
+	it('keeps the run dialog open when the request fails', async () => {
+		let called = false;
+		server.use(
+			http.get(PATH, ({ response }) =>
+				response(200).json(makeTableMaintenance({ policy: makeStoredMaintenancePolicy() }))
+			),
+			http.post(`${PATH}/runs`, ({ response }) => {
+				called = true;
+				return response(409).json({ code: 'conflict', message: 'engine down' });
+			})
+		);
+		render(TableMaintenance, { props });
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Run now' }));
+		const dialog = await screen.findByRole('dialog');
+		await fireEvent.click(within(dialog).getByRole('button', { name: 'Run now' }));
+
+		await waitFor(() => expect(called).toBe(true));
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(within(dialog).getByRole('button', { name: 'Run now' })).toBeTruthy();
+	});
+
 	it('removes the parameters after confirmation', async () => {
 		let removed = false;
 		server.use(

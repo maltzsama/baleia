@@ -156,14 +156,15 @@
 			planOpen = true;
 		});
 
-	const runNow = () =>
-		act('run', async () => {
-			const run = await runTableMaintenance(target, runOperation);
-			toasts.success(
-				m.maintenance_run_started({ operation: operationLabel(run.operations[0] ?? '') })
-			);
-			await load();
-		});
+	// Failures propagate to ConfirmDialog, which shows them and keeps the
+	// dialog open for a retry; success only toasts and reloads.
+	const runNow = async () => {
+		const run = await runTableMaintenance(target, runOperation);
+		toasts.success(
+			m.maintenance_run_started({ operation: operationLabel(run.operations[0] ?? '') })
+		);
+		await load();
+	};
 	const runTarget = $derived(
 		runOperation === 'next_due' ? m.maintenance_run_next_due() : operationLabel(runOperation)
 	);
@@ -444,9 +445,7 @@
 								options={runOptions}
 							/>
 						</div>
-						<Button size="sm" loading={busy === 'run'} onclick={() => (runOpen = true)}
-							>{m.maintenance_run_now()}</Button
-						>
+						<Button size="sm" onclick={() => (runOpen = true)}>{m.maintenance_run_now()}</Button>
 					</div>
 				{/if}
 			</div>

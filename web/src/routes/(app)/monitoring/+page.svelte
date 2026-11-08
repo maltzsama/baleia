@@ -181,18 +181,18 @@
 	let queryPage = $state<MonitoringQueryPage>({ items: [] });
 	let queriesLoading = $state(false);
 	let queriesError = $state('');
+	let exportingQueries = $state(false);
 	let scope = $state('mine');
 	let queryState = $state('');
 	let queryText = $state('');
 	let querySort = $state<'created' | 'elapsed' | 'cpu'>('created');
 	// Top-N by duration or CPU is a sort of the page the API already returned.
-	const sortedQueries = $derived(
-		[...queryPage.items].sort((a, b) => {
-			if (querySort === 'elapsed') return (b.elapsed_ms ?? -1) - (a.elapsed_ms ?? -1);
-			if (querySort === 'cpu') return (b.cpu_ms ?? -1) - (a.cpu_ms ?? -1);
-			return b.created_at.localeCompare(a.created_at);
-		})
-	);
+	const compareQueries = (a: MonitoringQuery, b: MonitoringQuery) => {
+		if (querySort === 'elapsed') return (b.elapsed_ms ?? -1) - (a.elapsed_ms ?? -1);
+		if (querySort === 'cpu') return (b.cpu_ms ?? -1) - (a.cpu_ms ?? -1);
+		return b.created_at.localeCompare(a.created_at);
+	};
+	const sortedQueries = $derived([...queryPage.items].sort(compareQueries));
 	let selectedQuery = $state<MonitoringQueryDetail | null>(null);
 	let queryDrawer = $state(false);
 
@@ -447,8 +447,8 @@
 						m.monitoring_files(),
 						m.maintenance_col_delete_files(),
 						m.maintenance_col_commits_hour(),
-						m.monitoring_size(),
-						m.monitoring_oldest(),
+						m.monitoring_size_bytes(),
+						m.monitoring_oldest_hours(),
 						m.monitoring_needs(),
 						m.maintenance_mode(),
 						m.monitoring_last_maintenance()
@@ -474,8 +474,26 @@
 		}
 	}
 
-	function exportQueries() {
+	async function exportQueries() {
+		if (!engineId || exportingQueries) return;
+		exportingQueries = true;
 		try {
+			// The visible table is one page; the export walks every page with the
+			// current filters, so a stale table cannot truncate it.
+			const rows: MonitoringQuery[] = [];
+			let offset = 0;
+			for (;;) {
+				const page = await listQueries(engineId, {
+					state: queryState || undefined,
+					scope,
+					q: queryText.trim() || undefined,
+					limit: 100,
+					offset
+				});
+				rows.push(...page.items);
+				if (page.next_offset == null || page.items.length === 0) break;
+				offset = page.next_offset;
+			}
 			downloadCsv(
 				'monitoring-queries.csv',
 				toCsv(
@@ -486,25 +504,29 @@
 						m.common_catalog(),
 						m.monitoring_schema(),
 						m.monitoring_started(),
-						m.monitoring_elapsed(),
-						m.monitoring_cpu(),
+						m.monitoring_elapsed_ms(),
+						m.monitoring_cpu_ms(),
 						m.common_sql()
 					],
-					sortedQueries.map((query) => [
-						query.trino_query_id,
-						query.state,
-						query.user,
-						query.catalog,
-						query.schema ?? '',
-						query.created_at,
-						query.elapsed_ms,
-						query.cpu_ms,
-						query.sql_first_line
-					])
+					rows
+						.sort(compareQueries)
+						.map((query) => [
+							query.trino_query_id,
+							query.state,
+							query.user,
+							query.catalog,
+							query.schema ?? '',
+							query.created_at,
+							query.elapsed_ms,
+							query.cpu_ms,
+							query.sql_first_line
+						])
 				)
 			);
 		} catch {
 			toasts.error(m.monitoring_export_failed());
+		} finally {
+			exportingQueries = false;
 		}
 	}
 
@@ -1003,7 +1025,12 @@
 				/>
 				<div class="flex items-end gap-2">
 					<Button onclick={() => loadQueries()}>{m.monitoring_search()}</Button>
-					<Button variant="secondary" onclick={exportQueries}>{m.monitoring_export_csv()}</Button>
+					<Button
+						variant="secondary"
+						loading={exportingQueries}
+						disabled={exportingQueries}
+						onclick={exportQueries}>{m.monitoring_export_csv()}</Button
+					>
 				</div>
 			</div>
 			{#if queriesLoading && queryPage.items.length === 0}

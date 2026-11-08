@@ -25,4 +25,16 @@ describe('toCsv', () => {
 			)
 		).toBe('a,b\r\n"x,y","say ""hi"""\r\n,"line\nbreak"');
 	});
+
+	it('neutralizes spreadsheet formulas in text and keeps numbers', () => {
+		expect(
+			toCsv(
+				['a', 'b'],
+				[
+					['=1+1', -5],
+					[' +SUM(A1)', '@x']
+				]
+			)
+		).toBe("a,b\r\n'=1+1,-5\r\n' +SUM(A1),'@x");
+	});
 });
