@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { HttpResponse, http as mswHttp } from 'msw';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { http, server } from '../../../test/server';
 import {
 	makeMaintenancePlan,
@@ -25,6 +25,13 @@ describe('monitoring page', () => {
 		clearMetadataCache();
 		authStore.set(makeMe());
 		workspaceStore.select(makeWorkspace({ id: WORKSPACE }));
+		// Downloads in jsdom: object URLs and anchor navigation are stubs.
+		Object.defineProperty(URL, 'createObjectURL', {
+			value: vi.fn(() => 'blob:test'),
+			configurable: true
+		});
+		Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true });
+		vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 		server.use(
 			http.get('/workspaces', ({ response }) =>
 				response(200).json([makeWorkspace({ id: WORKSPACE })])
@@ -224,6 +231,43 @@ describe('monitoring page', () => {
 
 		const dialog = await screen.findByRole('dialog');
 		expect(await within(dialog).findByText(/has no maintenance parameters/)).toBeTruthy();
+	});
+
+	it('exports every query page with the current filters', async () => {
+		const row = (id: string) => ({
+			trino_query_id: id,
+			state: 'finished',
+			user: 'ada',
+			sql_first_line: `SELECT ${id}`,
+			catalog: 'lake',
+			created_at: '2026-10-01T12:00:00Z'
+		});
+		const requests: URLSearchParams[] = [];
+		server.use(
+			http.get('/engines/{id}/monitoring/queries', ({ request, response }) => {
+				const params = new URL(request.url).searchParams;
+				requests.push(params);
+				const offset = Number(params.get('offset') ?? 0);
+				return response(200).json(
+					offset === 0
+						? { items: [row('q1')], next_offset: 1 }
+						: { items: [row('q2')], next_offset: null }
+				);
+			})
+		);
+		render(MonitoringPage);
+
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Queries' }));
+		await screen.findByText('SELECT q1');
+		await fireEvent.input(screen.getByLabelText('SQL contains'), {
+			target: { value: 'orders' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+
+		await waitFor(() => expect(requests.some((params) => params.get('offset') === '1')).toBe(true));
+		const exported = requests.filter((params) => params.get('q') === 'orders');
+		expect(exported.map((params) => params.get('offset'))).toEqual(['0', '1']);
+		expect(exported[0]?.get('limit')).toBe('100');
 	});
 
 	// #733: the server pushes a "changed" signal; the page re-fetches the data
