@@ -323,6 +323,7 @@ func TestSetSpaceMember_LookupFailureIsAnError(t *testing.T) {
 	space := createSpaceIn(t, f, owner, ws, CreateSpaceRequest{Name: "Shared", Visibility: CreateSpaceRequestVisibilityWorkspace})
 	broken := brokenPrincipals{db.New(f.pool)}
 	f.h.queries = broken
+	f.h.store = nil // exercise the sqlc path this fixture deliberately breaks
 	f.h.access = wsaccess.New(f.h.queries)
 	f.h.topology = topology.New(f.h.queries)
 	f.h.spaces = spacesOver(f.h.core, broken)

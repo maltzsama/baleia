@@ -102,7 +102,14 @@ func (h *core) contentService() *content.Service {
 	if h.content != nil {
 		return h.content
 	}
-	return content.New(h.pool, h.queries)
+	if h.store != nil {
+		r := repo.New(h.store)
+		return content.New(r, r.TxContent)
+	}
+	tx := func(ctx context.Context, fn func(content.Store) error) error {
+		return h.inTx(ctx, func(q db.Querier) error { return fn(q) })
+	}
+	return content.New(h.queries, tx)
 }
 
 // apiMetrics are the API's producers (#87); all nil-safe, zero without a
@@ -247,7 +254,6 @@ func NewAPI(d Deps) (*API, error) {
 		kinds:          d.Engines.Kinds,
 		dialects:       d.Engines.Dialects,
 		audit:          d.Observability.Audit,
-		content:        content.New(d.Data.Pool, d.Data.Queries),
 		oidcLogin:      d.Identity.OIDC,
 		idpTokens:      d.Identity.IDPTokens,
 		monitoringHub:  d.Monitoring,
@@ -255,7 +261,17 @@ func NewAPI(d Deps) (*API, error) {
 	if c.audit == nil {
 		c.audit = audit.Nop{}
 	}
-	c.history = history.New(c.queries)
+	if c.store != nil {
+		contentStore := repo.New(c.store)
+		c.content = content.New(contentStore, contentStore.TxContent)
+		c.history = history.New(contentStore)
+	} else {
+		tx := func(ctx context.Context, fn func(content.Store) error) error {
+			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+		}
+		c.content = content.New(c.queries, tx)
+		c.history = history.New(c.queries)
+	}
 	c.browse = browse.New(c.queries)
 	c.spaces = spacesOver(c, c.queries)
 	if c.store != nil {

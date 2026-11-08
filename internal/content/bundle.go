@@ -97,23 +97,23 @@ func (b Bundle) Marshal() ([]byte, error) {
 
 // Export builds the bundle of one space. The caller must have viewer access.
 func (s *Service) Export(ctx context.Context, workspaceID, spaceID pgtype.UUID, baleiaVersion string) (Bundle, error) {
-	space, err := s.q.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: workspaceID, ID: spaceID})
+	space, err := s.store.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: workspaceID, ID: spaceID})
 	if err != nil {
 		return Bundle{}, err
 	}
-	folders, err := s.q.ListSpaceFolders(ctx, spaceID)
+	folders, err := s.store.ListSpaceFolders(ctx, spaceID)
 	if err != nil {
 		return Bundle{}, err
 	}
-	queries, err := s.q.ListSpaceSavedQueries(ctx, spaceID)
+	queries, err := s.store.ListSpaceSavedQueries(ctx, spaceID)
 	if err != nil {
 		return Bundle{}, err
 	}
-	metrics, err := s.q.ListSpaceMetrics(ctx, spaceID)
+	metrics, err := s.store.ListSpaceMetrics(ctx, spaceID)
 	if err != nil {
 		return Bundle{}, err
 	}
-	models, err := s.q.ListSpaceModels(ctx, spaceID)
+	models, err := s.store.ListSpaceModels(ctx, spaceID)
 	if err != nil {
 		return Bundle{}, err
 	}
@@ -143,14 +143,14 @@ func (s *Service) Export(ctx context.Context, workspaceID, spaceID pgtype.UUID, 
 			}
 		}
 		if q.TargetBindingID.Valid {
-			if names, err := s.q.GetBindingTargetNames(ctx, q.TargetBindingID); err == nil {
+			if names, err := s.store.GetBindingTargetNames(ctx, q.TargetBindingID); err == nil {
 				item.Target = &BundleTarget{Engine: names.EngineName, Catalog: names.CatalogName, Schema: q.TargetSchema}
 			}
 		}
 		b.Items = append(b.Items, item)
 	}
 	for _, m := range metrics {
-		name, err := s.q.GetCatalogNameByID(ctx, m.CatalogID)
+		name, err := s.store.GetCatalogNameByID(ctx, m.CatalogID)
 		if err != nil {
 			return Bundle{}, err
 		}
@@ -161,7 +161,7 @@ func (s *Service) Export(ctx context.Context, workspaceID, spaceID pgtype.UUID, 
 		})
 	}
 	for _, m := range models {
-		name, err := s.q.GetCatalogNameByID(ctx, m.CatalogID)
+		name, err := s.store.GetCatalogNameByID(ctx, m.CatalogID)
 		if err != nil {
 			return Bundle{}, err
 		}
@@ -237,42 +237,40 @@ type ImportOptions struct {
 }
 
 // Import plans every item and, in apply mode with no errors, writes them in one
-// transaction. A dry run always rolls back.
+// transaction. A dry run writes nothing and runs against the store directly.
 func (s *Service) Import(ctx context.Context, opts ImportOptions) (ImportReport, error) {
 	report := ImportReport{Mode: string(opts.Mode)}
 	if opts.Dialect == nil {
 		return report, ErrNoDialect
 	}
-	var q db.Querier
-	var tx pgx.Tx
-	var err error
-	if s.pool != nil {
-		tx, err = s.pool.Begin(ctx)
-		if err != nil {
-			return report, err
-		}
-		defer func() { _ = tx.Rollback(ctx) }()
-		q = db.New(tx)
-	} else {
-		q = s.q
+	if opts.Mode == ImportApply && s.tx != nil {
+		var out ImportReport
+		err := s.tx(ctx, func(store Store) error {
+			var err error
+			out, err = s.runImport(ctx, s.WithStore(store), store, opts)
+			return err
+		})
+		return out, err
 	}
+	return s.runImport(ctx, s, s.store, opts)
+}
 
-	imp := &importer{q: q, svc: s.WithQuerier(q), opts: opts}
-	report, err = imp.run(ctx)
+// runImport plans the bundle over store and applies it through svc, which must
+// already be bound to that same store.
+func (s *Service) runImport(ctx context.Context, svc *Service, store Store, opts ImportOptions) (ImportReport, error) {
+	imp := &importer{q: store, svc: svc, opts: opts}
+	report, err := imp.run(ctx)
 	if err != nil {
 		return report, err
 	}
 	if opts.Mode == ImportApply && !report.OK {
 		return report, ErrImportFailed
 	}
-	if tx != nil && opts.Mode == ImportApply {
-		return report, tx.Commit(ctx)
-	}
 	return report, nil
 }
 
 type importer struct {
-	q    db.Querier
+	q    Store
 	svc  *Service
 	opts ImportOptions
 
@@ -654,7 +652,7 @@ func (im *importer) apply(ctx context.Context) error {
 				parentID = im.folderIDs[*p.item.Parent]
 			}
 			if p.action == ActionCreate {
-				folder, err := im.svc.q.CreateQueryFolder(ctx, db.CreateQueryFolderParams{
+				folder, err := im.svc.store.CreateQueryFolder(ctx, db.CreateQueryFolderParams{
 					WorkspaceID: im.opts.WorkspaceID, SpaceID: im.opts.SpaceID, ParentID: parentID,
 					Name: p.item.Name, Slug: p.item.Slug,
 				})
@@ -663,7 +661,7 @@ func (im *importer) apply(ctx context.Context) error {
 				}
 				im.folderIDs[p.item.Slug] = folder.ID
 			} else {
-				if _, err := im.svc.q.UpdateQueryFolder(ctx, db.UpdateQueryFolderParams{
+				if _, err := im.svc.store.UpdateQueryFolder(ctx, db.UpdateQueryFolderParams{
 					WorkspaceID: im.opts.WorkspaceID, ID: p.existingID, Name: p.item.Name, ParentID: parentID,
 				}); err != nil {
 					return err
