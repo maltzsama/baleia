@@ -43,6 +43,7 @@
 		listMaintenanceRuns,
 		listMonitoringEngines,
 		listQueries,
+		type ClusterPoint,
 		type ClusterSeries,
 		type MaintenanceRun,
 		type MonitoringEngine,
@@ -51,6 +52,8 @@
 		type MonitoringQueryPage,
 		type TableHealth
 	} from '$lib/monitoring/client';
+	import { engineHealth, memoryUsedPercent, type EngineHealth } from '$lib/monitoring/health';
+	import { getEngineQueues, type EngineQueue } from '$lib/workload/admin';
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 	const isAdmin = $derived(authStore.user?.role === 'admin');
@@ -69,9 +72,75 @@
 	// pausing stops both, and Refresh still pulls one snapshot on demand.
 	let live = $state(true);
 
+	// One card per engine: its latest snapshot, the health that snapshot
+	// implies, and (for an admin or the owner) its queue classes.
+	type EngineOverview = {
+		engine: MonitoringEngine;
+		latest: ClusterPoint | null;
+		classes: EngineQueue[];
+	};
+	let overview = $state<EngineOverview[]>([]);
+	let overviewLoading = $state(false);
+	let overviewSeq = 0;
+
+	async function loadOverview() {
+		// The overview is only shown (and fetched) with more than one engine.
+		if (engines.length < 2) return;
+		const seq = ++overviewSeq;
+		overviewLoading = true;
+		const rows = await Promise.all(
+			engines.map(async (engine) => {
+				try {
+					const [series, queues] = await Promise.all([
+						getCluster(engine.id, clusterWindow),
+						// Queue capacities are admin/owner only; a member still gets the card.
+						getEngineQueues(engine.id).catch(() => null)
+					]);
+					return { engine, latest: series.latest ?? null, classes: queues?.classes ?? [] };
+				} catch {
+					return { engine, latest: null, classes: [] };
+				}
+			})
+		);
+		if (seq !== overviewSeq) return;
+		overview = rows;
+		overviewLoading = false;
+	}
+
+	function selectEngine(id: string) {
+		if (id === engineId) return;
+		engineId = id;
+		void loadActive();
+	}
+
+	function healthTone(health: EngineHealth): 'success' | 'warning' | 'danger' {
+		return health === 'ok' ? 'success' : health === 'degraded' ? 'warning' : 'danger';
+	}
+
+	function healthLabel(health: EngineHealth): string {
+		return health === 'ok'
+			? m.monitoring_health_ok()
+			: health === 'degraded'
+				? m.monitoring_health_degraded()
+				: m.monitoring_health_critical();
+	}
+
+	function classLabel(name: string): string {
+		switch (name) {
+			case 'interactive':
+				return m.workload_class_interactive();
+			case 'heavy':
+				return m.workload_class_heavy();
+			case 'background':
+				return m.workload_class_background();
+		}
+		return name;
+	}
+
 	// The chart takes series of `{ t, v }`; the cluster snapshot keeps the
-	// capture in `captured_at` (#820).
-	const runningSeries = $derived(
+	// capture in `captured_at` (#820). Running, queued and blocked share the
+	// same capture, so they read on one axis.
+	const clusterSeries = $derived(
 		cluster
 			? [
 					{
@@ -80,6 +149,22 @@
 						points: cluster.series.map((point) => ({
 							t: point.captured_at,
 							v: point.running_queries
+						}))
+					},
+					{
+						key: 'queued',
+						label: m.monitoring_queued(),
+						points: cluster.series.map((point) => ({
+							t: point.captured_at,
+							v: point.queued_queries
+						}))
+					},
+					{
+						key: 'blocked',
+						label: m.monitoring_blocked(),
+						points: cluster.series.map((point) => ({
+							t: point.captured_at,
+							v: point.blocked_queries
 						}))
 					}
 				]
@@ -92,6 +177,15 @@
 	let scope = $state('mine');
 	let queryState = $state('');
 	let queryText = $state('');
+	let querySort = $state<'created' | 'elapsed' | 'cpu'>('created');
+	// Top-N by duration or CPU is a sort of the page the API already returned.
+	const sortedQueries = $derived(
+		[...queryPage.items].sort((a, b) => {
+			if (querySort === 'elapsed') return (b.elapsed_ms ?? -1) - (a.elapsed_ms ?? -1);
+			if (querySort === 'cpu') return (b.cpu_ms ?? -1) - (a.cpu_ms ?? -1);
+			return b.created_at.localeCompare(a.created_at);
+		})
+	);
 	let selectedQuery = $state<MonitoringQueryDetail | null>(null);
 	let queryDrawer = $state(false);
 
@@ -273,6 +367,7 @@
 		stopEvents();
 		if (!engineId && tab !== 'tables') return;
 		if (tab === 'cluster') {
+			void loadOverview();
 			await loadCluster();
 			if (seq !== activeSeq || !live) return;
 			// Push is the primary path (#733); this slow poll is the safety net.
@@ -616,7 +711,10 @@
 							{ value: '6h', label: m.monitoring_last_6_hours() },
 							{ value: '24h', label: m.monitoring_last_24_hours() }
 						]}
-						onchange={() => loadCluster()}
+						onchange={() => {
+							void loadOverview();
+							void loadCluster();
+						}}
 					/>
 				</div>
 				{#if cluster?.latest}
@@ -626,6 +724,78 @@
 					</span>
 				{/if}
 			</div>
+			{#if engines.length > 1}
+				<section class="mb-4" aria-labelledby="engine-overview-heading">
+					<div class="mb-2 flex items-center justify-between gap-2">
+						<h2
+							id="engine-overview-heading"
+							class="text-[10px] font-semibold uppercase tracking-wide text-text-muted"
+						>
+							{m.monitoring_engines()}
+						</h2>
+						{#if isAdmin}
+							<a
+								class="text-[11px] font-semibold text-primary hover:underline"
+								href={resolve('/settings/workload')}>{m.monitoring_open_workload()}</a
+							>
+						{/if}
+					</div>
+					{#if overviewLoading && overview.length === 0}
+						<Skeleton class="h-24 w-full" />
+					{:else}
+						<div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+							{#each overview as row (row.engine.id)}
+								{@const health = engineHealth(row.latest)}
+								{@const memory = row.latest ? memoryUsedPercent(row.latest) : null}
+								<button
+									type="button"
+									aria-pressed={engineId === row.engine.id}
+									onclick={() => selectEngine(row.engine.id)}
+									class="rounded-lg border bg-bg-panel p-3 text-left transition-colors {engineId ===
+									row.engine.id
+										? 'border-primary'
+										: 'border-border hover:border-border-hover'}"
+								>
+									<span class="flex items-center justify-between gap-2">
+										<span class="truncate text-[12px] font-semibold">{row.engine.name}</span>
+										<Badge tone={healthTone(health)}>{healthLabel(health)}</Badge>
+									</span>
+									<span class="mt-2 grid grid-cols-4 gap-2">
+										{#each [[m.monitoring_workers(), row.latest?.active_workers], [m.monitoring_running(), row.latest?.running_queries], [m.monitoring_queued(), row.latest?.queued_queries], [m.monitoring_blocked(), row.latest?.blocked_queries]] as [label, value] (label)}
+											<span class="block">
+												<span class="block text-[10px] uppercase tracking-wide text-text-muted"
+													>{label}</span
+												>
+												<span class="block text-[12px] font-semibold">{value ?? '—'}</span>
+											</span>
+										{/each}
+									</span>
+									<span class="mt-1 block text-[10px] text-text-muted">
+										{m.monitoring_memory_used()}:
+										<span class="font-semibold text-text-main"
+											>{memory === null ? '—' : `${memory}%`}</span
+										>
+									</span>
+									{#if row.classes.length > 0}
+										<span class="mt-1 flex flex-wrap gap-1">
+											{#each row.classes as queue (queue.class)}
+												<span
+													class="rounded-full border border-border bg-bg-toolbar px-1.5 py-px text-[10px] text-text-muted"
+												>
+													{classLabel(queue.class)}: {m.monitoring_class_load({
+														running: queue.running,
+														queued: queue.queued
+													})}
+												</span>
+											{/each}
+										</span>
+									{/if}
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</section>
+			{/if}
 			{#if clusterLoading && !cluster}
 				<Skeleton class="h-32 w-full" />
 			{:else if clusterError}
@@ -664,16 +834,15 @@
 				</div>
 				{#if cluster.series.length > 1}
 					<TimeSeriesChart
-						series={runningSeries}
-						title={m.monitoring_running_queries()}
-						yLabel={m.monitoring_running()}
-						unit={m.monitoring_running()}
+						series={clusterSeries}
+						title={m.monitoring_queries()}
+						yLabel={m.monitoring_queries()}
 					/>
 				{/if}
 			{/if}
 		{:else if tab === 'queries'}
 			<div
-				class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
+				class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-5"
 			>
 				<Select
 					label={m.monitoring_scope()}
@@ -722,6 +891,15 @@
 					onchange={() => loadQueries()}
 				/>
 				<Input label={m.monitoring_sql_contains()} bind:value={queryText} placeholder="orders" />
+				<Select
+					label={m.monitoring_sort()}
+					bind:value={querySort}
+					options={[
+						{ value: 'created', label: m.monitoring_sort_created() },
+						{ value: 'elapsed', label: m.monitoring_sort_elapsed() },
+						{ value: 'cpu', label: m.monitoring_sort_cpu() }
+					]}
+				/>
 				<div class="flex items-end">
 					<Button onclick={() => loadQueries()}>{m.monitoring_search()}</Button>
 				</div>
@@ -757,7 +935,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each queryPage.items as query (query.trino_query_id)}
+							{#each sortedQueries as query (query.trino_query_id)}
 								<tr
 									class="cursor-pointer border-b border-border/60 last:border-b-0 hover:bg-bg-toolbar"
 									onclick={() => openQuery(query)}

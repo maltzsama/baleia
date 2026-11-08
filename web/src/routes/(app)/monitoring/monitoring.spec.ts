@@ -83,6 +83,71 @@ describe('monitoring page', () => {
 		expect(await screen.findByRole('button', { name: 'Pause live updates' })).toBeTruthy();
 	});
 
+	it('shows a health card per engine and selects one', async () => {
+		const other = '00000000-0000-0000-0000-0000000000e2';
+		server.use(
+			http.get('/monitoring/engines', ({ response }) =>
+				response(200).json([
+					{ id: ENGINE, name: 'trino', kind: 'trino', class: 'federated' },
+					{ id: other, name: 'trino-b', kind: 'trino', class: 'federated' }
+				])
+			),
+			http.get('/engines/{id}/queues', ({ params, response }) =>
+				response(200).json({
+					engine_id: params.id,
+					classes: [
+						{
+							class: 'interactive',
+							max_running: 5,
+							max_queued: 10,
+							queue_timeout_ms: 1000,
+							runtime_timeout_ms: 2000,
+							running: 2,
+							queued: 1,
+							oldest_wait_ms: null
+						}
+					]
+				})
+			)
+		);
+		render(MonitoringPage);
+
+		expect(await screen.findByRole('heading', { name: 'Engines' })).toBeTruthy();
+		const second = await screen.findByRole('button', { name: /trino-b/ });
+		expect(within(second).getByText('Healthy')).toBeTruthy();
+		expect(within(second).getByText('Interactive: 2 running · 1 queued')).toBeTruthy();
+
+		await fireEvent.click(second);
+		await waitFor(() => expect(second.getAttribute('aria-pressed')).toBe('true'));
+	});
+
+	it('sorts the query page by duration', async () => {
+		const base = {
+			state: 'finished',
+			user: 'ada',
+			catalog: 'lake',
+			created_at: '2026-10-01T12:00:00Z'
+		};
+		server.use(
+			http.get('/engines/{id}/monitoring/queries', ({ response }) =>
+				response(200).json({
+					items: [
+						{ ...base, trino_query_id: 'fast', sql_first_line: 'SELECT fast', elapsed_ms: 100 },
+						{ ...base, trino_query_id: 'slow', sql_first_line: 'SELECT slow', elapsed_ms: 5000 }
+					]
+				})
+			)
+		);
+		render(MonitoringPage);
+
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Queries' }));
+		await screen.findByText('SELECT fast');
+		await fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'elapsed' } });
+
+		const rows = screen.getAllByRole('row');
+		expect(within(rows[1]).getByText('SELECT slow')).toBeTruthy();
+	});
+
 	// #733: the server pushes a "changed" signal; the page re-fetches the data
 	// instead of polling on a fixed timer.
 	it('re-fetches the cluster when the push stream reports a change', async () => {
