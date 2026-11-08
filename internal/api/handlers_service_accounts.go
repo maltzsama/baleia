@@ -12,10 +12,26 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/slug"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// serviceAccountStore is the persistence the service-account handlers need.
+// *repo.ServiceAccounts implements it over GORM; db.Querier implements it over
+// sqlc while the store migrates (#769).
+type serviceAccountStore interface {
+	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
+	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error)
+	GetServiceAccount(ctx context.Context, id pgtype.UUID) (db.User, error)
+	ListServiceAccounts(ctx context.Context) ([]db.User, error)
+	ListAdminWorkspaceIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
+	ListServiceAccountsOfWorkspaces(ctx context.Context, workspaceIDs []pgtype.UUID) ([]db.User, error)
+	UpdateServiceAccount(ctx context.Context, arg db.UpdateServiceAccountParams) (db.User, error)
+	DeleteUserIDPToken(ctx context.Context, userID pgtype.UUID) error
+	DeleteServiceAccount(ctx context.Context, id pgtype.UUID) (int64, error)
+}
 
 // serviceAccountEmailDomain is reserved (RFC 2606): a service account's
 // address never receives mail.
@@ -57,7 +73,7 @@ func (h *core) serviceAccountManager(ctx context.Context) (authz.Principal, bool
 	if err != nil || p.IsAgent() {
 		return authz.Principal{}, false
 	}
-	u, err := h.queries.GetUserByID(ctx, p.UserID)
+	u, err := h.serviceAccounts.GetUserByID(ctx, p.UserID)
 	if err != nil || u.Kind == "service_account" {
 		return authz.Principal{}, false
 	}
@@ -84,7 +100,7 @@ func (h *core) managedServiceAccount(ctx context.Context, id openapi_types.UUID)
 	if !ok {
 		return p, db.User{}, false, nil
 	}
-	sa, err := h.queries.GetServiceAccount(ctx, pgtype.UUID{Bytes: id, Valid: true})
+	sa, err := h.serviceAccounts.GetServiceAccount(ctx, pgtype.UUID{Bytes: id, Valid: true})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, db.User{}, false, nil
 	}
@@ -117,7 +133,7 @@ func (h *core) identityLink(ctx context.Context, providerID *openapi_types.UUID,
 	case providerID == nil || cid == "":
 		return "", pgtype.UUID{}, nil, &FieldError{Field: "client_id", Code: FieldCodeRequired}, nil
 	}
-	ap, err := h.queries.GetAuthProviderByID(ctx, pgtype.UUID{Bytes: *providerID, Valid: true})
+	ap, err := h.serviceAccounts.GetAuthProviderByID(ctx, pgtype.UUID{Bytes: *providerID, Valid: true})
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && ap.Type != "oidc") {
 		return "", pgtype.UUID{}, nil, &FieldError{Field: "identity_provider_id", Code: FieldCodeInvalidFormat}, nil
 	}
@@ -147,11 +163,11 @@ func (h *AuthHandlers) ListServiceAccounts(ctx context.Context, _ ListServiceAcc
 	var rows []db.User
 	var err error
 	if p.IsAdmin() {
-		rows, err = h.queries.ListServiceAccounts(ctx)
+		rows, err = h.serviceAccounts.ListServiceAccounts(ctx)
 	} else {
 		var ws []pgtype.UUID
-		if ws, err = h.queries.ListAdminWorkspaceIDs(ctx, p.UserID); err == nil && len(ws) > 0 {
-			rows, err = h.queries.ListServiceAccountsOfWorkspaces(ctx, ws)
+		if ws, err = h.serviceAccounts.ListAdminWorkspaceIDs(ctx, p.UserID); err == nil && len(ws) > 0 {
+			rows, err = h.serviceAccounts.ListServiceAccountsOfWorkspaces(ctx, ws)
 		}
 	}
 	if err != nil {
@@ -210,7 +226,7 @@ func (h *AuthHandlers) CreateServiceAccount(ctx context.Context, request CreateS
 		return CreateServiceAccount422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("identity_provider_id and client_id go together and name an OIDC provider", *fieldErr)}, nil
 	}
 	var sa db.User
-	err = h.tx.InTx(ctx, func(q db.Querier) error {
+	write := func(q repo.ServiceAccountWrites) error {
 		var err error
 		sa, err = q.CreateServiceAccount(ctx, db.CreateServiceAccountParams{
 			Name: strings.TrimSpace(body.Name), Email: newServiceAccountEmail(body.Name),
@@ -228,7 +244,12 @@ func (h *AuthHandlers) CreateServiceAccount(ctx context.Context, request CreateS
 			return err
 		}
 		return nil
-	})
+	}
+	if h.store != nil {
+		err = repo.NewServiceAccounts(h.store).Tx(ctx, write)
+	} else {
+		err = h.tx.InTx(ctx, func(q db.Querier) error { return write(q) })
+	}
 	if isUniqueViolation(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return CreateServiceAccount409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: "a service account already signs in as this client"}}, nil
@@ -273,7 +294,7 @@ func (h *AuthHandlers) UpdateServiceAccount(ctx context.Context, request UpdateS
 		return UpdateServiceAccount422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("identity_provider_id and client_id go together and name an OIDC provider", *fieldErr)}, nil
 	}
 	ev := audit.Event{Action: audit.ServiceAccountUpdate, ResourceType: "service_account", ResourceID: idString(sa.ID)}
-	updated, err := h.queries.UpdateServiceAccount(ctx, db.UpdateServiceAccountParams{
+	updated, err := h.serviceAccounts.UpdateServiceAccount(ctx, db.UpdateServiceAccountParams{
 		ID: sa.ID, Name: strings.TrimSpace(request.Body.Name), Description: request.Body.Description,
 		AuthProvider: authProvider, AuthProviderID: pid, ExternalID: external,
 	})
@@ -286,7 +307,7 @@ func (h *AuthHandlers) UpdateServiceAccount(ctx context.Context, request UpdateS
 	}
 	// A new identity-provider link drops the token of the old one.
 	if sa.AuthProviderID != updated.AuthProviderID || !strEq(sa.ExternalID, updated.ExternalID) {
-		if err := h.queries.DeleteUserIDPToken(ctx, sa.ID); err != nil {
+		if err := h.serviceAccounts.DeleteUserIDPToken(ctx, sa.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -308,7 +329,7 @@ func (h *AuthHandlers) DeleteServiceAccount(ctx context.Context, request DeleteS
 	if !ok {
 		return DeleteServiceAccount404JSONResponse{NotFoundJSONResponse: serviceAccountNotFound()}, nil
 	}
-	if _, err := h.queries.DeleteServiceAccount(ctx, sa.ID); err != nil {
+	if _, err := h.serviceAccounts.DeleteServiceAccount(ctx, sa.ID); err != nil {
 		return nil, err
 	}
 	h.catalogCache.Clear()
