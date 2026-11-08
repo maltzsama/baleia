@@ -69,10 +69,10 @@ describe('maintenance form', () => {
 		expect(formKey('mode')).toBe('mode');
 	});
 
-	it('finds non-numeric input in enabled operations only', () => {
+	it('finds non-numeric input in every operation, enabled or not', () => {
 		const form = toForm(makeMaintenancePolicy());
 		form.operations.expire_snapshots.snapshots = 'lots';
 		form.operations.optimize.deleteFiles = 'x';
-		expect(notNumbers(form)).toEqual(['expire_snapshots.snapshots']);
+		expect(notNumbers(form)).toEqual(['optimize.deleteFiles', 'expire_snapshots.snapshots']);
 	});
 });

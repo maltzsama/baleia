@@ -65,6 +65,18 @@ describe('TableMaintenance', () => {
 		expect(sent!.body.optimize.enabled).toBe(false);
 	});
 
+	it('shows every parameter before its operation is enabled', async () => {
+		server.use(http.get(PATH, ({ response }) => response(200).json(makeTableMaintenance())));
+		render(TableMaintenance, { props });
+
+		const optimize = await screen.findByRole('group', { name: 'Optimize' });
+		expect(within(optimize).getByLabelText('Target file size (MB)')).toBeTruthy();
+		const expire = screen.getByRole('group', { name: 'Expire snapshots' });
+		expect(within(expire).getByLabelText('Retention (hours)')).toBeTruthy();
+		const orphans = screen.getByRole('group', { name: 'Remove orphan files' });
+		expect(within(orphans).getByLabelText('Older than (hours)')).toBeTruthy();
+	});
+
 	it('replaces parameters at their revision and shows field errors on their inputs', async () => {
 		let ifMatch: string | null = null;
 		server.use(

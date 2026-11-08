@@ -275,7 +275,6 @@ export function notNumbers(form: MaintenanceForm): string[] {
 	const bad = (v: string) => v.trim() !== '' && !Number.isFinite(Number(v.trim()));
 	if (bad(form.writerCommitIntervalSeconds)) out.push('writerCommitIntervalSeconds');
 	for (const [op, f] of Object.entries(form.operations)) {
-		if (!f.enabled) continue;
 		for (const key of NUMERIC) if (bad(f[key] as string)) out.push(`${op}.${key}`);
 	}
 	return out;
