@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/sqlref"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
@@ -188,7 +189,7 @@ func (s *script) openSession() (queryengine.Session, error) {
 	// The execution's workspace owns its catalog scope (ADR 0018 §5); resolve
 	// it once here and hand the engine a source it re-reads per statement, so a
 	// revocation stops the next statement instead of the next run.
-	exec, err := s.a.queries.GetQueryExecutionByID(s.ctx, s.execID)
+	exec, err := s.a.workbench().GetQueryExecutionByID(s.ctx, s.execID)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +274,7 @@ func (s *script) heartbeats() (stop func()) {
 // script from starting (no engine, no session) and skips the rest.
 func (s *script) failBeforeStart(err error) (*ExecuteScriptResult, error) {
 	pos := s.p.Statements[0].Position
-	if _, serr := s.a.queries.StartQueryStatement(s.bk, db.StartQueryStatementParams{ExecutionID: s.execID, Position: pos}); serr != nil {
+	if _, serr := s.a.workbench().StartQueryStatement(s.bk, db.StartQueryStatementParams{ExecutionID: s.execID, Position: pos}); serr != nil {
 		return nil, serr
 	}
 	return &s.res, s.finish(StatementOutcome{Position: pos, Status: "failed", ErrorCode: string(queryengine.CodeOf(err)), Error: err.Error()})
@@ -287,7 +288,7 @@ func (s *script) finish(o StatementOutcome) error {
 		return err
 	}
 	if o.Status != "finished" {
-		return s.a.queries.SkipPendingStatements(s.bk, s.execID)
+		return s.a.workbench().SkipPendingStatements(s.bk, s.execID)
 	}
 	return nil
 }
@@ -300,10 +301,10 @@ func (s *script) cancelled(position int32, h queryengine.QueryHandle) error {
 	}
 	// Best effort: the workflow's cancel path runs the same bookkeeping
 	// with retries (AbandonStatements).
-	_, _ = s.a.queries.AbandonRunningStatements(s.bk, db.AbandonRunningStatementsParams{
+	_, _ = s.a.workbench().AbandonRunningStatements(s.bk, db.AbandonRunningStatementsParams{
 		ExecutionID: s.execID, Status: "cancelled", ErrorCode: optional(string(queryengine.CodeCancelled)),
 	})
-	_ = s.a.queries.SkipPendingStatements(s.bk, s.execID)
+	_ = s.a.workbench().SkipPendingStatements(s.bk, s.execID)
 	activity.GetLogger(s.ctx).Info("script cancelled", "execution_id", s.p.ExecutionID, "position", position)
 	return temporal.NewCanceledError()
 }
@@ -320,7 +321,7 @@ func (s *script) cancelOnEngine(h queryengine.QueryHandle, reason string) {
 // run executes one statement on the session. stop is true when the script
 // must not continue (the statement failed).
 func (s *script) run(sess queryengine.Session, st StatementRef) (stop bool, err error) {
-	n, err := s.a.queries.StartQueryStatement(s.bk, db.StartQueryStatementParams{ExecutionID: s.execID, Position: st.Position})
+	n, err := s.a.workbench().StartQueryStatement(s.bk, db.StartQueryStatementParams{ExecutionID: s.execID, Position: st.Position})
 	if err != nil {
 		return true, fmt.Errorf("start statement %d: %w", st.Position, err)
 	}
@@ -441,16 +442,25 @@ func (s *script) run(sess queryengine.Session, st StatementRef) (stop bool, err 
 // persistReferences stores the tables and equi-joins of a finished statement
 // (#538). Best effort: extraction or a write failure never fails the run.
 func (s *script) persistReferences(st StatementRef) {
-	if s.a.pool == nil {
+	if s.a.pool == nil && s.a.store == nil {
 		return
 	}
-	row, err := s.a.queries.GetStatementReferenceTarget(s.bk, db.GetStatementReferenceTargetParams{
+	row, err := s.a.workbench().GetStatementReferenceTarget(s.bk, db.GetStatementReferenceTargetParams{
 		ExecutionID: s.execID,
 		Position:    st.Position,
 	})
 	if err != nil {
 		activity.GetLogger(s.ctx).Warn("could not load the statement for references",
 			"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
+		return
+	}
+	if s.a.store != nil {
+		if err := s.a.store.TxWorkbench(s.bk, func(tx *repo.Repo) error {
+			return sqlref.Persist(s.bk, tx, row.StatementID, row.WorkspaceID, s.p.Target.CatalogID, s.p.Target.Schema, st.SQL)
+		}); err != nil {
+			activity.GetLogger(s.ctx).Warn("could not persist statement references",
+				"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
+		}
 		return
 	}
 	tx, err := s.a.pool.Begin(s.bk)
@@ -479,7 +489,7 @@ func (s *script) persistHandle(position int32, h queryengine.QueryHandle) {
 	if err != nil {
 		return
 	}
-	if err := s.a.queries.SetStatementQueryHandle(s.bk, db.SetStatementQueryHandleParams{
+	if err := s.a.workbench().SetStatementQueryHandle(s.bk, db.SetStatementQueryHandleParams{
 		ExecutionID: s.execID, Position: position, QueryHandle: raw,
 	}); err != nil {
 		activity.GetLogger(s.ctx).Warn("could not persist the query handle", "execution_id", s.p.ExecutionID, "err", err)
@@ -508,14 +518,14 @@ func (a *Activities) abandonStatements(ctx context.Context, p AbandonStatementsP
 	if err := execID.Scan(p.ExecutionID); err != nil {
 		return temporal.NewNonRetryableApplicationError("invalid execution id", "invalid_input", err)
 	}
-	rows, err := a.queries.ListRunningStatementHandles(ctx, execID)
+	rows, err := a.workbench().ListRunningStatementHandles(ctx, execID)
 	if err != nil {
 		return err
 	}
 	if len(rows) > 0 && p.EngineID.Valid {
 		a.cancelHandles(ctx, p, rows)
 	}
-	if _, err := a.queries.AbandonRunningStatements(ctx, db.AbandonRunningStatementsParams{
+	if _, err := a.workbench().AbandonRunningStatements(ctx, db.AbandonRunningStatementsParams{
 		ExecutionID:  execID,
 		Status:       p.Status,
 		ErrorCode:    optional(p.ErrorCode),
@@ -523,7 +533,7 @@ func (a *Activities) abandonStatements(ctx context.Context, p AbandonStatementsP
 	}); err != nil {
 		return err
 	}
-	return a.queries.SkipPendingStatements(ctx, execID)
+	return a.workbench().SkipPendingStatements(ctx, execID)
 }
 
 // cancelHandles asks the engine to stop orphaned statements, bounded in time.
@@ -683,7 +693,7 @@ func (a *Activities) agentStillWrites(ctx context.Context, executionID string) (
 	if err := id.Scan(executionID); err != nil {
 		return false, nil
 	}
-	exec, err := a.queries.GetQueryExecutionByID(ctx, id)
+	exec, err := a.workbench().GetQueryExecutionByID(ctx, id)
 	if err != nil {
 		return false, fmt.Errorf("recheck agent role: %w", err)
 	}

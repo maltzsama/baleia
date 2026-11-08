@@ -70,25 +70,76 @@ func (r *Repo) GetFolderBySlug(ctx context.Context, arg db.GetFolderBySlugParams
 }
 
 // UpdateQueryFolder edits a folder; a nil slug or an invalid space keeps the
-// stored value, as the sqlc COALESCE did.
+// stored value, as the sqlc COALESCE did. A space change detaches and
+// reattaches the folder's saved queries around the move, because the
+// (space_id, folder_id) foreign key is immediate.
 func (r *Repo) UpdateQueryFolder(ctx context.Context, arg db.UpdateQueryFolderParams) (db.QueryFolder, error) {
-	updates := map[string]any{
-		"name":       arg.Name,
-		"parent_id":  modelUUIDPtr(arg.ParentID),
-		"updated_at": time.Now().UTC(),
-	}
-	if arg.Slug != nil {
-		updates["slug"] = *arg.Slug
-	}
-	if arg.SpaceID.Valid {
-		updates["space_id"] = model.UUID(UUIDString(arg.SpaceID))
-	}
-	if err := r.Users.db.WithContext(ctx).Model(&model.QueryFolder{}).
-		Where("id = ? AND workspace_id = ?", UUIDString(arg.ID), UUIDString(arg.WorkspaceID)).
-		Updates(updates).Error; err != nil {
-		return db.QueryFolder{}, contentDuplicate(err)
-	}
-	return r.getQueryFolder(ctx, arg.ID, arg.WorkspaceID)
+	var out db.QueryFolder
+	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var current model.QueryFolder
+		err := tx.Where("id = ? AND workspace_id = ?", UUIDString(arg.ID), UUIDString(arg.WorkspaceID)).
+			First(&current).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return pgx.ErrNoRows
+		}
+		if err != nil {
+			return err
+		}
+		moving := arg.SpaceID.Valid && string(current.SpaceID) != UUIDString(arg.SpaceID)
+		var saved []model.SavedQuery
+		if moving {
+			if err := tx.Where("folder_id = ?", string(current.ID)).Find(&saved).Error; err != nil {
+				return err
+			}
+			if len(saved) > 0 {
+				ids := make([]string, len(saved))
+				for i, query := range saved {
+					ids[i] = string(query.ID)
+				}
+				if err := tx.Model(&model.SavedQuery{}).Where("id IN ?", ids).
+					Update("folder_id", nil).Error; err != nil {
+					return err
+				}
+			}
+		}
+		updates := map[string]any{
+			"name":      arg.Name,
+			"parent_id": modelUUIDPtr(arg.ParentID),
+		}
+		if arg.Slug != nil {
+			updates["slug"] = *arg.Slug
+		}
+		if arg.SpaceID.Valid {
+			updates["space_id"] = model.UUID(UUIDString(arg.SpaceID))
+		}
+		if err := tx.Model(&model.QueryFolder{}).
+			Where("id = ? AND workspace_id = ?", UUIDString(arg.ID), UUIDString(arg.WorkspaceID)).
+			Updates(updates).Error; err != nil {
+			return contentDuplicate(err)
+		}
+		if moving {
+			spaceID := model.UUID(UUIDString(arg.SpaceID))
+			now := time.Now().UTC()
+			for _, query := range saved {
+				if err := tx.Model(&model.SavedQuery{}).Where("id = ?", string(query.ID)).
+					Updates(map[string]any{
+						"folder_id":  model.UUID(string(*query.FolderID)),
+						"space_id":   spaceID,
+						"updated_at": now,
+					}).Error; err != nil {
+					return err
+				}
+			}
+		}
+		var stored model.QueryFolder
+		if err := tx.Where("id = ? AND workspace_id = ?", UUIDString(arg.ID), UUIDString(arg.WorkspaceID)).
+			First(&stored).Error; err != nil {
+			return err
+		}
+		out = toDBQueryFolder(stored)
+		return nil
+	})
+	return out, err
 }
 
 // CreateSavedQuery inserts a saved query with an application-generated id.

@@ -41,7 +41,7 @@ func (h *CatalogHandlers) ListJoinSuggestions(ctx context.Context, request ListJ
 		return ListJoinSuggestions404JSONResponse{NotFoundJSONResponse: metadataNotFound("right table not found")}, nil
 	}
 
-	history, err := h.queries.ListJoinSuggestions(ctx, db.ListJoinSuggestionsParams{
+	history, err := h.workbenchReader().ListJoinSuggestions(ctx, db.ListJoinSuggestionsParams{
 		Lim:         joinSuggestionLimit,
 		WorkspaceID: ws,
 		CatalogID:   left.CatalogID,
@@ -54,7 +54,7 @@ func (h *CatalogHandlers) ListJoinSuggestions(ctx context.Context, request ListJ
 		return nil, err
 	}
 
-	keys, err := h.queries.ListForeignKeyJoinSuggestions(ctx, db.ListForeignKeyJoinSuggestionsParams{
+	keys, err := h.workbenchReader().ListForeignKeyJoinSuggestions(ctx, db.ListForeignKeyJoinSuggestionsParams{
 		LeftTableID:    left.ID,
 		LeftNamespace:  left.Namespace,
 		LeftTable:      left.Name,
@@ -94,7 +94,7 @@ func (h *CatalogHandlers) ListJoinSuggestions(ctx context.Context, request ListJ
 // grantedTable loads a live table of a catalog granted to the workspace. A
 // missing, foreign or removed table is notFound, never an error.
 func (h *CatalogHandlers) grantedTable(ctx context.Context, ws pgtype.UUID, id [16]byte) (db.GetGrantedMetadataTableRow, bool, error) {
-	t, err := h.queries.GetGrantedMetadataTable(ctx, db.GetGrantedMetadataTableParams{
+	t, err := h.workbenchReader().GetGrantedMetadataTable(ctx, db.GetGrantedMetadataTableParams{
 		WorkspaceID: ws, TableID: pgtype.UUID{Bytes: id, Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -671,7 +671,7 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 			return nil, err
 		}
 		// The built-in assistant stays read-only whatever its owner's role.
-		agent, err := h.queries.GetAgentByID(ctx, principal.AgentID)
+		agent, err := h.workbenchReader().GetAgentByID(ctx, principal.AgentID)
 		if err != nil {
 			return nil, err
 		}

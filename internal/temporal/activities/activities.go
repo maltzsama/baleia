@@ -21,6 +21,7 @@ import (
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -45,11 +46,14 @@ type Activities struct {
 	dialects *dialect.Registry
 	metrics  workerMetrics
 	queries  db.Querier
-	pool     *pgxpool.Pool
-	engines  engineSource
-	monitor  lensMonitor
-	s3       s3Client
-	cfg      *config.Config
+	// store is the GORM store for the query workbench, statement references
+	// and joins (#770); nil in tests and when the store is not configured.
+	store   *repo.Repo
+	pool    *pgxpool.Pool
+	engines engineSource
+	monitor lensMonitor
+	s3      s3Client
+	cfg     *config.Config
 	// keyring opens stored connection credentials (table health talks to the
 	// catalog manager). May be nil on a fresh install with no credentials.
 	keyring *crypto.Keyring
@@ -225,7 +229,7 @@ func (a *Activities) createStatementRecords(ctx context.Context, params CreateSt
 		if err := srcID.Scan(params.RerunExecutionID); err != nil {
 			return nil, err
 		}
-		src, err := a.queries.ListQueryStatements(ctx, srcID)
+		src, err := a.workbench().ListQueryStatements(ctx, srcID)
 		if err != nil {
 			return nil, err
 		}
@@ -242,7 +246,7 @@ func (a *Activities) createStatementRecords(ctx context.Context, params CreateSt
 	}
 
 	for i, sql := range statements {
-		_, err := a.queries.CreateQueryStatement(ctx, db.CreateQueryStatementParams{
+		_, err := a.workbench().CreateQueryStatement(ctx, db.CreateQueryStatementParams{
 			ExecutionID: execID,
 			Position:    int32(i + 1),
 			Sql:         sql,
@@ -279,7 +283,7 @@ func resultSets(o StatementOutcome) []byte {
 // conditional on status='running', so it never overwrites a statement that
 // was already abandoned.
 func (a *Activities) recordOutcome(ctx context.Context, execID pgtype.UUID, o StatementOutcome) error {
-	statements, err := a.queries.ListQueryStatements(ctx, execID)
+	statements, err := a.workbench().ListQueryStatements(ctx, execID)
 	if err != nil {
 		return err
 	}
@@ -287,7 +291,7 @@ func (a *Activities) recordOutcome(ctx context.Context, execID pgtype.UUID, o St
 		if s.Position != o.Position {
 			continue
 		}
-		_, err := a.queries.UpdateQueryStatement(ctx, db.UpdateQueryStatementParams{
+		_, err := a.workbench().UpdateQueryStatement(ctx, db.UpdateQueryStatementParams{
 			ID:            s.ID,
 			Status:        o.Status,
 			EngineQueryID: optional(o.EngineQueryID),
@@ -310,7 +314,7 @@ func (a *Activities) recordOutcome(ctx context.Context, execID pgtype.UUID, o St
 		// The execution's result_key points at the last statement that
 		// produced a result set; statements run in order, so later ones win.
 		if o.ResultKey != "" {
-			if err := a.queries.SetExecutionResult(ctx, db.SetExecutionResultParams{
+			if err := a.workbench().SetExecutionResult(ctx, db.SetExecutionResultParams{
 				ID:        execID,
 				ResultKey: &o.ResultKey,
 			}); err != nil {
@@ -346,7 +350,7 @@ func (a *Activities) completeExecution(ctx context.Context, params CompleteExecu
 		return err
 	}
 
-	_, err := a.queries.UpdateQueryExecution(ctx, db.UpdateQueryExecutionParams{
+	_, err := a.workbench().UpdateQueryExecution(ctx, db.UpdateQueryExecutionParams{
 		ID:           execID,
 		Status:       params.Status,
 		RowsReturned: &params.RowsReturned,
@@ -379,12 +383,12 @@ func (a *Activities) failExecution(ctx context.Context, params FailExecutionPara
 
 	var err error
 	if params.ErrorCode != "" {
-		_, err = a.queries.FailQueryExecution(ctx, db.FailQueryExecutionParams{
+		_, err = a.workbench().FailQueryExecution(ctx, db.FailQueryExecutionParams{
 			ID:        execID,
 			ErrorCode: &params.ErrorCode,
 		})
 	} else {
-		_, err = a.queries.UpdateQueryExecution(ctx, db.UpdateQueryExecutionParams{
+		_, err = a.workbench().UpdateQueryExecution(ctx, db.UpdateQueryExecutionParams{
 			ID:     execID,
 			Status: "failed",
 		})
