@@ -11,7 +11,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-control-plane-only.md) | Baleia is a control plane, never a data plane | Accepted; BI clause amended by 0017 |
-| [0002](0002-connections-engines-catalogs-bindings.md) | Connections, engines, catalogs and bindings | Accepted |
+| [0002](0002-connections-engines-catalogs-bindings.md) | Connections, engines, catalogs and bindings | Accepted; access modes amended by 0021 |
 | [0003](0003-trino-binding.md) | How a catalog reaches Trino (the Trino binder) | Accepted |
 | [0004](0004-plugin-distribution.md) | Catalog-store plugin distribution | Accepted |
 | [0005](0005-trino-security-model.md) | Trino security model | Accepted; Polaris identity superseded by 0015, scope added by 0018 |
@@ -30,6 +30,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0018](0018-workspace-catalog-scope.md) | Workspace-scoped catalog access | Proposed; supersedes 0016 layer 1, extends 0005 |
 | [0019](0019-sqlingo-editor-sql-intelligence.md) | sqlingo is the editor's SQL intelligence; the server keeps its own parser | Accepted |
 | [0020](0020-gorm-store.md) | GORM is the store ORM; no handwritten SQL survives in the data layer | Accepted |
+| [0021](0021-unified-connection-model.md) | Unified connection model and Trino catalog support | Proposed; amends 0002 |
 
 ## Owner decisions
 
