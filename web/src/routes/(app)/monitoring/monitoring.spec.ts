@@ -69,6 +69,20 @@ describe('monitoring page', () => {
 		expect(screen.queryByLabelText('Engine')).toBeNull();
 	});
 
+	it('offers a five-minute window and pauses live updates', async () => {
+		render(MonitoringPage);
+		expect(await screen.findByText('Workers')).toBeTruthy();
+
+		const window = screen.getByLabelText('Window');
+		expect(within(window).getByRole('option', { name: 'Last 5 minutes' })).toBeTruthy();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Pause live updates' }));
+		expect(screen.getByRole('button', { name: 'Resume live updates' })).toBeTruthy();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Resume live updates' }));
+		expect(await screen.findByRole('button', { name: 'Pause live updates' })).toBeTruthy();
+	});
+
 	// #733: the server pushes a "changed" signal; the page re-fetches the data
 	// instead of polling on a fixed timer.
 	it('re-fetches the cluster when the push stream reports a change', async () => {

@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import QueriesChart from '$lib/monitoring/QueriesChart.svelte';
+	import TimeSeriesChart from '$lib/monitoring/TimeSeriesChart.svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { loadCatalogs, type MetadataCatalog } from '$lib/metadata/client';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { hasTableHealth } from '$lib/ui/patterns/kindIcon';
 	import {
 		analyzeCatalogTableHealth,
@@ -64,6 +65,26 @@
 	let cluster = $state<ClusterSeries | null>(null);
 	let clusterLoading = $state(false);
 	let clusterError = $state('');
+	// Live updates arrive over SSE (#733) with a slow poll as the fallback;
+	// pausing stops both, and Refresh still pulls one snapshot on demand.
+	let live = $state(true);
+
+	// The chart takes series of `{ t, v }`; the cluster snapshot keeps the
+	// capture in `captured_at` (#820).
+	const runningSeries = $derived(
+		cluster
+			? [
+					{
+						key: 'running',
+						label: m.monitoring_running(),
+						points: cluster.series.map((point) => ({
+							t: point.captured_at,
+							v: point.running_queries
+						}))
+					}
+				]
+			: []
+	);
 
 	let queryPage = $state<MonitoringQueryPage>({ items: [] });
 	let queriesLoading = $state(false);
@@ -100,6 +121,9 @@
 	// The live SSE subscription (#733): the server pushes a "changed" signal
 	// instead of the client polling on a timer.
 	let eventsAbort: AbortController | null = null;
+	// Tab and engine changes overlap async loads; only the latest one may
+	// start its polls and stream.
+	let activeSeq = 0;
 
 	function stopPolls() {
 		for (const controller of polls) controller.stop();
@@ -244,11 +268,13 @@
 	}
 
 	async function loadActive() {
+		const seq = ++activeSeq;
 		stopPolls();
 		stopEvents();
 		if (!engineId && tab !== 'tables') return;
 		if (tab === 'cluster') {
 			await loadCluster();
+			if (seq !== activeSeq || !live) return;
 			// Push is the primary path (#733); this slow poll is the safety net.
 			polls.push(
 				poll(loadCluster, { until: () => false, intervals: [60_000], maxDurationMs: 3_600_000 })
@@ -256,6 +282,7 @@
 			startEvents();
 		} else if (tab === 'queries') {
 			await loadQueries();
+			if (seq !== activeSeq || !live) return;
 			polls.push(
 				poll(loadQueries, {
 					until: () => false,
@@ -271,12 +298,28 @@
 			startEvents();
 		} else {
 			await loadCatalogList();
+			if (seq !== activeSeq) return;
 			// The first tick loads the rows and keeps watching for the hourly
 			// pass (#750); don't also await loadHealth or it double-fetches.
 			polls.push(
 				poll(loadHealth, { until: () => false, intervals: [60_000], maxDurationMs: 3_600_000 })
 			);
 		}
+	}
+
+	function setLive(next: boolean) {
+		if (next === live) return;
+		live = next;
+		if (live) void loadActive();
+		else {
+			stopPolls();
+			stopEvents();
+		}
+	}
+
+	function refreshActive() {
+		if (tab === 'cluster') void loadCluster();
+		else if (tab === 'queries') void loadQueries();
 	}
 
 	function selectTab(next: 'cluster' | 'queries' | 'tables') {
@@ -451,10 +494,18 @@
 		return score >= 80 ? 'success' : score >= 50 ? 'warning' : 'danger';
 	}
 
-	onMount(async () => {
-		await workspaceStore.load();
-		await loadEngines();
-		if (engines.length > 0) await loadActive();
+	onMount(() => {
+		// The awaits must not restart the live streams after the page is gone;
+		// the abort signal is the cleanup the async body cannot return itself.
+		const controller = new AbortController();
+		void (async () => {
+			await workspaceStore.load();
+			if (controller.signal.aborted) return;
+			await loadEngines();
+			if (controller.signal.aborted) return;
+			if (engines.length > 0) await loadActive();
+		})();
+		return () => controller.abort();
 	});
 
 	onDestroy(() => {
@@ -527,24 +578,30 @@
 			description={m.monitoring_monitoring_is_available_for_federated_engines()}
 		/>
 	{:else}
-		<div
-			class="mb-4 flex gap-1 border-b border-border"
-			role="tablist"
-			aria-label={m.monitoring_monitoring_tabs()}
-		>
-			{#each [['cluster', m.monitoring_cluster()], ['queries', m.monitoring_queries()], ['tables', m.monitoring_table_health()]] as [value, label] (value)}
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === value}
-					class="-mb-px border-b-2 px-3 py-1.5 text-[12px] font-semibold {tab === value
-						? 'border-primary text-primary'
-						: 'border-transparent text-slate-600 hover:text-text-main dark:text-slate-300'}"
-					onclick={() => selectTab(value as 'cluster' | 'queries' | 'tables')}
-				>
-					{label}
-				</button>
-			{/each}
+		<div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border">
+			<div class="flex gap-1" role="tablist" aria-label={m.monitoring_monitoring_tabs()}>
+				{#each [['cluster', m.monitoring_cluster()], ['queries', m.monitoring_queries()], ['tables', m.monitoring_table_health()]] as [value, label] (value)}
+					<button
+						type="button"
+						role="tab"
+						aria-selected={tab === value}
+						class="-mb-px border-b-2 px-3 py-1.5 text-[12px] font-semibold {tab === value
+							? 'border-primary text-primary'
+							: 'border-transparent text-slate-600 hover:text-text-main dark:text-slate-300'}"
+						onclick={() => selectTab(value as 'cluster' | 'queries' | 'tables')}
+					>
+						{label}
+					</button>
+				{/each}
+			</div>
+			{#if tab !== 'tables'}
+				<div class="flex items-center gap-2 pb-1">
+					<Button size="sm" onclick={refreshActive}>{m.monitoring_refresh()}</Button>
+					<Button size="sm" variant={live ? 'secondary' : 'primary'} onclick={() => setLive(!live)}>
+						{live ? m.monitoring_pause_live() : m.monitoring_resume_live()}
+					</Button>
+				</div>
+			{/if}
 		</div>
 
 		{#if tab === 'cluster'}
@@ -554,6 +611,7 @@
 						label={m.monitoring_window()}
 						bind:value={clusterWindow}
 						options={[
+							{ value: '5m', label: m.monitoring_last_5_minutes() },
 							{ value: '1h', label: m.monitoring_last_hour() },
 							{ value: '6h', label: m.monitoring_last_6_hours() },
 							{ value: '24h', label: m.monitoring_last_24_hours() }
@@ -605,7 +663,12 @@
 					</div>
 				</div>
 				{#if cluster.series.length > 1}
-					<QueriesChart series={cluster.series} />
+					<TimeSeriesChart
+						series={runningSeries}
+						title={m.monitoring_running_queries()}
+						yLabel={m.monitoring_running()}
+						unit={m.monitoring_running()}
+					/>
 				{/if}
 			{/if}
 		{:else if tab === 'queries'}
@@ -852,7 +915,9 @@
 									<td class="px-3 py-1.5">{row.commits_last_hour ?? '—'}</td>
 									<td class="px-3 py-1.5">
 										{row.total_size_bytes != null
-											? m.monitoring_mib({ value: Math.round(row.total_size_bytes / 1024 / 1024) })
+											? m.monitoring_mib({
+													value: Math.round(row.total_size_bytes / 1024 / 1024)
+												})
 											: '—'}
 									</td>
 									<td class="px-3 py-1.5">
@@ -1026,7 +1091,9 @@
 						class="text-primary hover:underline"
 						onclick={() => {
 							if (selectedQuery) {
-								window.location.href = `/history?execution=${selectedQuery.execution_id}`;
+								// The history route is resolve('/history') plus the execution query.
+								// eslint-disable-next-line svelte/no-navigation-without-resolve
+								void goto(`${resolve('/history')}?execution=${selectedQuery.execution_id}`);
 							}
 						}}
 					>
