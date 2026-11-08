@@ -38,6 +38,7 @@ import (
 	sqliteengine "github.com/galileostudio/baleia/internal/queryengine/sqlite"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/store"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5"
@@ -222,14 +223,21 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.Engines = queryengine.NewManager(c.Queries, c.Keyring, c.Connections, c.Dialer, kinds)
 	// Catalog managers set to per-user identity authorize each user with
 	// their identity-provider token, carried by every query session (#648).
-	c.OIDC = oidclogin.New(c.Queries, c.Queries, c.Keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
+	var oidcStore oidclogin.Store = c.Queries
+	var tokenStore idptoken.Store = c.Queries
+	tokenTx := func(ctx context.Context, fn func(idptoken.Store) error) error {
+		return pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error { return fn(db.New(tx)) })
+	}
+	if c.Store != nil {
+		r := repo.New(c.Store)
+		oidcStore, tokenStore, tokenTx = r, r, r.TxIDPToken
+	}
+	c.OIDC = oidclogin.New(oidcStore, c.Queries, c.Keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
 		PublicURL: cfg.PublicURL,
 		CacheTTL:  time.Hour,
 		Logger:    c.Logger,
 	})
-	c.IDPTokens = idptoken.New(c.Queries, func(ctx context.Context, fn func(idptoken.Store) error) error {
-		return pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error { return fn(db.New(tx)) })
-	}, c.Keyring, c.OIDC, c.Logger)
+	c.IDPTokens = idptoken.New(tokenStore, tokenTx, c.Keyring, c.OIDC, c.Logger)
 	c.OIDC.SetTokens(c.IDPTokens)
 	c.Engines.SetCatalogCredentials(catalogidentity.New(c.Queries, c.Keyring, c.Connections, c.IDPTokens, c.Logger))
 
