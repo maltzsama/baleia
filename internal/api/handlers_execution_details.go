@@ -100,7 +100,7 @@ func (h *QueryHandlers) GetExecutionDetails(ctx context.Context, request GetExec
 // trinoProfile reads the snapshot Lens wrote for one engine query; absent is
 // nil, never an error (the UI says the profile is unavailable).
 func (h *QueryHandlers) trinoProfile(ctx context.Context, queryID string) *ExecutionProfile {
-	snap, err := h.queries.GetTrinoQuerySnapshot(ctx, queryID)
+	snap, err := h.workbenchReader().GetTrinoQuerySnapshot(ctx, queryID)
 	if err != nil {
 		return nil
 	}

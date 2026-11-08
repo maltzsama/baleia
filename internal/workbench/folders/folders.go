@@ -222,21 +222,26 @@ func (s *Service) Update(ctx context.Context, folder db.QueryFolder, e Edit) (db
 	}
 
 	// The folder, its subtree and their saved queries move together: a
-	// failure halfway must not leave them in different spaces.
+	// failure halfway must not leave them in different spaces. The subtree
+	// moves first, because the (space_id, parent_id) and (space_id, folder_id)
+	// foreign keys are immediate: renaming the folder into the destination
+	// space before its descendants would break them.
 	var updated db.QueryFolder
 	err = s.tx(ctx, func(q Mover) error {
+		if moving {
+			move := db.MoveQueryFolderSubtreeParams{ID: folder.ID, WorkspaceID: folder.WorkspaceID, SpaceID: e.SpaceID}
+			if err := q.MoveQueryFolderSubtree(ctx, move); err != nil {
+				return err
+			}
+			if err := q.MoveSavedQueriesInFolderSubtree(ctx, db.MoveSavedQueriesInFolderSubtreeParams(move)); err != nil {
+				return err
+			}
+		}
 		var err error
 		updated, err = q.UpdateQueryFolder(ctx, db.UpdateQueryFolderParams{
 			Name: name, Slug: &folderSlug, ParentID: parent, SpaceID: e.SpaceID, ID: folder.ID, WorkspaceID: folder.WorkspaceID,
 		})
-		if err != nil || !moving {
-			return err
-		}
-		move := db.MoveQueryFolderSubtreeParams{ID: folder.ID, WorkspaceID: folder.WorkspaceID, SpaceID: e.SpaceID}
-		if err := q.MoveQueryFolderSubtree(ctx, move); err != nil {
-			return err
-		}
-		return q.MoveSavedQueriesInFolderSubtree(ctx, db.MoveSavedQueriesInFolderSubtreeParams(move))
+		return err
 	})
 	if isUniqueViolation(err) {
 		// Another folder took the slug in the destination space.

@@ -6,6 +6,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/retrievers"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/workbench/executions"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/galileostudio/baleia/internal/workbench/savedqueries"
@@ -43,16 +44,31 @@ func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
 		trino, _ = c.dialects.Get(dialect.Trino)
 		dialects = c.dialects
 	}
-	f := folders.New(c.queries, func(ctx context.Context, fn func(folders.Mover) error) error {
-		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
-	})
+	// The workbench runs on the GORM store when it is configured (#770); the
+	// sqlc querier stays as the seam for fixtures without a store.
+	var (
+		folderStore    folders.Store      = c.queries
+		savedStore     savedqueries.Store = c.queries
+		executionStore executions.Store   = c.queries
+		folderTx       folders.Tx
+	)
+	if c.store != nil {
+		r := repo.New(c.store)
+		folderStore, savedStore, executionStore = r, r, r
+		folderTx = r.TxFolders
+	} else {
+		folderTx = func(ctx context.Context, fn func(folders.Mover) error) error {
+			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+		}
+	}
+	f := folders.New(folderStore, folderTx)
 	return &QueryHandlers{
 		core:       c,
 		wsTickets:  tickets,
 		folders:    f,
-		saved:      savedqueries.NewService(c.queries, f, c.contentService()),
+		saved:      savedqueries.NewService(savedStore, f, c.contentService()),
 		retrievers: retrievers.New(c.queries, c.temporalClient, c.engines, trino),
-		executions: executions.New(c.queries, c.temporalClient, c.engines, dialects, executions.Config{
+		executions: executions.New(executionStore, c.temporalClient, c.engines, dialects, executions.Config{
 			StatementTimeout: c.settings.Execution.StatementTimeout,
 			ExecutionTimeout: c.settings.Execution.ExecutionTimeout,
 			WorkloadEnabled:  c.settings.Execution.WorkloadEnabled,

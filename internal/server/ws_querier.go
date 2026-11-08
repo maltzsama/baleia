@@ -8,12 +8,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// wsQuerier adapts *db.Queries to the WebSocket handler's narrow interfaces.
-// It lives here, not in internal/db, because the handler needs the workflow
-// package and the workflow package reaches internal/db: keeping the adapter
-// in db would close an import cycle.
+// wsStore is the workbench persistence the WebSocket handler reads.
+// *db.Queries and *repo.Repo both implement it (#770).
+type wsStore interface {
+	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
+	GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg db.GetQueryExecutionByIDAndWorkspaceParams) (db.QueryExecution, error)
+	ListQueryStatementsByWorkspace(ctx context.Context, arg db.ListQueryStatementsByWorkspaceParams) ([]db.QueryStatement, error)
+}
+
+// wsQuerier adapts the workbench store to the WebSocket handler's narrow
+// interfaces. It lives here, not in internal/db, because the handler needs the
+// workflow package and the workflow package reaches internal/db: keeping the
+// adapter in db would close an import cycle.
 type wsQuerier struct {
-	q *db.Queries
+	q wsStore
 }
 
 func (a wsQuerier) CheckWorkspaceAccess(ctx context.Context, arg ws.QuerierCheckWorkspaceAccessParams) (bool, error) {

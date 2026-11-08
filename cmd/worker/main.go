@@ -103,6 +103,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, core.TrinoHTTP))
 
 	act := activities.New(logger, pool, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
+	act.SetStore(core.StoreRepo)
 	act.SetMetrics(reg)
 	act.SetTemporal(core.Temporal)
 	act.SetMetadataSyncer(metadata.NewSyncer(pool, metadata.NewSources(core.Queries, core.Keyring, core.Connections, core.Engines)))

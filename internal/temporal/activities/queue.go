@@ -24,7 +24,7 @@ func (a *Activities) markQueued(ctx context.Context, params MarkQueuedParams) er
 	if err := id.Scan(params.ExecutionID); err != nil {
 		return err
 	}
-	_, err := a.queries.QueueQueryExecution(ctx, id)
+	_, err := a.workbench().QueueQueryExecution(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -46,7 +46,7 @@ func (a *Activities) markAdmitted(ctx context.Context, params MarkAdmittedParams
 	if err := id.Scan(params.ExecutionID); err != nil {
 		return err
 	}
-	_, err := a.queries.AdmitQueryExecution(ctx, id)
+	_, err := a.workbench().AdmitQueryExecution(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
