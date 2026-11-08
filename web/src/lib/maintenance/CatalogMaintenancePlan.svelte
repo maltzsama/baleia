@@ -17,7 +17,14 @@
 	} from './client';
 	import { operationLabel, reasonText } from './labels';
 
-	let { catalogId }: { catalogId: string } = $props();
+	let {
+		catalogId,
+		onconfigure
+	}: {
+		catalogId: string;
+		/** Opens the editor in place instead of linking to the maintenance page. */
+		onconfigure?: (item: CatalogMaintenancePlanItem) => void;
+	} = $props();
 
 	let loading = $state(true);
 	let error = $state('');
@@ -106,8 +113,17 @@
 						{@const configureHref = `${resolve('/maintenance')}?${maintenanceTableQuery(catalogId, item.namespace, item.table_name)}`}
 						<tr class="border-t border-border align-top">
 							<td class="px-3 py-1.5 font-mono">
-								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- configureHref is resolve('/maintenance') plus the query -->
-								<a class="text-primary" href={configureHref}>{item.namespace}.{item.table_name}</a>
+								{#if onconfigure}
+									<button
+										type="button"
+										class="text-primary hover:underline"
+										onclick={() => onconfigure(item)}>{item.namespace}.{item.table_name}</button
+									>
+								{:else}
+									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- configureHref is resolve('/maintenance') plus the query -->
+									<a class="text-primary" href={configureHref}>{item.namespace}.{item.table_name}</a
+									>
+								{/if}
 							</td>
 							<td class="px-3 py-1.5"><Badge tone="neutral">{modeLabel(item.mode)}</Badge></td>
 							<td class="px-3 py-1.5">

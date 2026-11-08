@@ -2,7 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { HttpResponse, http as mswHttp } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { http, server } from '../../../test/server';
-import { makeMe, makeMetadataCatalog, makeWorkspace } from '../../../test/factories';
+import {
+	makeMaintenancePlan,
+	makeMe,
+	makeMetadataCatalog,
+	makeTableMaintenance,
+	makeWorkspace
+} from '../../../test/factories';
 import { renderPage } from '../../../test/render';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { authStore } from '$lib/stores/auth.svelte';
@@ -146,6 +152,78 @@ describe('monitoring page', () => {
 
 		const rows = screen.getAllByRole('row');
 		expect(within(rows[1]).getByText('SELECT slow')).toBeTruthy();
+	});
+
+	it('filters Iceberg health by schema and opens the maintenance editor', async () => {
+		const CATALOG = '00000000-0000-0000-0000-0000000000c1';
+		const healthQueries: URLSearchParams[] = [];
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([makeMetadataCatalog({ id: CATALOG, origin: 'source' })])
+			),
+			http.get('/catalogs/{catalog_id}/table-health', ({ request, response }) => {
+				healthQueries.push(new URL(request.url).searchParams);
+				return response(200).json([
+					{
+						catalog_id: CATALOG,
+						catalog_name: 'lake',
+						namespace: 'sales',
+						table_name: 'orders',
+						health_score: 80,
+						needs_compaction: false,
+						needs_snapshot_expiry: false,
+						due_operations: []
+					}
+				]);
+			}),
+			http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) => response(200).json([])),
+			http.get('/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance', ({ response }) =>
+				response(200).json(makeTableMaintenance({ properties: {} }))
+			)
+		);
+		render(MonitoringPage);
+
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Iceberg health' }));
+		await screen.findByText('sales.orders');
+
+		await fireEvent.input(screen.getByLabelText('Schema'), { target: { value: 'sales' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+		await waitFor(() => expect(healthQueries.at(-1)?.get('ns')).toBe('sales'));
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Configure' }));
+		const dialog = await screen.findByRole('dialog');
+		expect(await within(dialog).findByText(/has no maintenance parameters/)).toBeTruthy();
+		expect(within(dialog).getByText('Optimize')).toBeTruthy();
+	});
+
+	it('lists the catalog maintenance plan and opens the editor', async () => {
+		const CATALOG = '00000000-0000-0000-0000-0000000000c1';
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([makeMetadataCatalog({ id: CATALOG, origin: 'source' })])
+			),
+			http.get('/catalogs/{catalog_id}/maintenance-plan', ({ response }) =>
+				response(200).json([
+					{
+						namespace: 'sales',
+						table_name: 'orders',
+						mode: 'managed',
+						plan: makeMaintenancePlan(),
+						last_run: null
+					}
+				])
+			),
+			http.get('/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance', ({ response }) =>
+				response(200).json(makeTableMaintenance({ properties: {} }))
+			)
+		);
+		render(MonitoringPage);
+
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Maintenance' }));
+		await fireEvent.click(await screen.findByRole('button', { name: 'sales.orders' }));
+
+		const dialog = await screen.findByRole('dialog');
+		expect(await within(dialog).findByText(/has no maintenance parameters/)).toBeTruthy();
 	});
 
 	// #733: the server pushes a "changed" signal; the page re-fetches the data
@@ -301,7 +379,7 @@ describe('monitoring page', () => {
 
 		async function openTables() {
 			renderPage(MonitoringPage, { me: makeMe(), url: '/monitoring' });
-			await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
+			await fireEvent.click(await screen.findByRole('tab', { name: 'Iceberg health' }));
 		}
 
 		it('lists running, finished and failed runs', async () => {
@@ -357,9 +435,7 @@ describe('monitoring page', () => {
 			expect(within(row).getByText('Optimize')).toBeTruthy();
 			expect(within(row).getByText('Expire snapshots')).toBeTruthy();
 			expect(within(row).getByText('Managed')).toBeTruthy();
-			expect(within(row).getByRole('link', { name: 'Configure' }).getAttribute('href')).toBe(
-				`/maintenance?catalog=${CATALOG}&ns=sales&table=orders`
-			);
+			expect(within(row).getByRole('button', { name: 'Configure' })).toBeTruthy();
 			expect(within(row).getByRole('button', { name: 'Run now' })).toBeTruthy();
 			expect(within(row).queryByRole('button', { name: 'Run maintenance…' })).toBeNull();
 		});
@@ -573,7 +649,7 @@ describe('monitoring page', () => {
 			})
 		);
 		render(MonitoringPage);
-		await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Iceberg health' }));
 		expect(await screen.findByText('sales.orders')).toBeTruthy();
 
 		// While B loads, no row of A is left to act on.
@@ -641,7 +717,7 @@ describe('monitoring page', () => {
 			})
 		);
 		render(MonitoringPage);
-		await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Iceberg health' }));
 		await screen.findByRole('option', { name: 'warehouse' });
 		await fireEvent.change(screen.getByLabelText('Catalog'), { target: { value: B } });
 		expect(await screen.findByText('sales.orders')).toBeTruthy();
@@ -775,7 +851,7 @@ describe('monitoring page', () => {
 			})
 		);
 		render(MonitoringPage);
-		await fireEvent.click(await screen.findByRole('tab', { name: 'Table health' }));
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Iceberg health' }));
 
 		await fireEvent.click(await screen.findByRole('button', { name: 'Run maintenance…' }));
 		let dialog = await screen.findByRole('dialog');
