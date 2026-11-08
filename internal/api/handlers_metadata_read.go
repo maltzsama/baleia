@@ -375,7 +375,7 @@ func (h *CatalogHandlers) ListPopularTables(ctx context.Context, request ListPop
 	if request.Params.Limit != nil {
 		limit = *request.Params.Limit
 	}
-	rows, err := h.queries.ListPopularTables(ctx, db.ListPopularTablesParams{
+	rows, err := h.popular.ListPopularTables(ctx, db.ListPopularTablesParams{
 		WorkspaceID: ws, Lim: int32(limit),
 	})
 	if err != nil {

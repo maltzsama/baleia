@@ -75,13 +75,14 @@ func testAPI(f handlerFields) *API {
 		c.content = content.New(contentStore, contentStore.TxContent)
 		c.history = history.New(contentStore)
 	}
-	c.browse = browse.New(c.queries)
 	c.spaces = spacesOver(c, c.queries)
 	c.access = wsaccess.New(c.queries)
 	if c.store != nil {
+		c.browse = browse.New(repo.New(c.store))
 		c.access = wsaccess.New(repo.New(c.store))
 		c.topology = topology.New(repo.New(c.store))
 	} else {
+		c.browse = browse.New(c.queries)
 		c.topology = topology.New(c.queries)
 	}
 	h := &API{

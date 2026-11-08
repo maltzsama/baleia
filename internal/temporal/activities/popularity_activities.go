@@ -18,6 +18,13 @@ func RefreshTablePopularity(ctx context.Context, _ struct{}) error {
 }
 
 func (a *Activities) refreshTablePopularity(ctx context.Context) error {
+	if a.store != nil {
+		if err := a.store.RefreshTablePopularity(ctx); err != nil {
+			return err
+		}
+		activity.GetLogger(ctx).Info("popular tables refreshed")
+		return nil
+	}
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
 		return err

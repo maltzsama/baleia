@@ -420,7 +420,7 @@ func ptrString(s string) *string { return &s }
 func (h *OpsHandlers) attentionLineageBroken(ctx context.Context, p authz.Principal) []AttentionItem {
 	var items []AttentionItem
 
-	models, err := h.queries.ListLineageBrokenModels(ctx)
+	models, err := h.lineage.ListLineageBrokenModels(ctx)
 	if err != nil {
 		return items
 	}
@@ -428,7 +428,7 @@ func (h *OpsHandlers) attentionLineageBroken(ctx context.Context, p authz.Princi
 		if _, err := h.authz().Workspace(ctx, p, m.WorkspaceID, authz.ActWrite); err != nil {
 			continue
 		}
-		missing, broken := brokenModelReference(ctx, h.queries, m)
+		missing, broken := brokenModelReference(ctx, h.lineage, m)
 		if !broken {
 			continue
 		}
@@ -447,7 +447,7 @@ func (h *OpsHandlers) attentionLineageBroken(ctx context.Context, p authz.Princi
 		})
 	}
 
-	metrics, err := h.queries.ListLineageBrokenMetrics(ctx)
+	metrics, err := h.lineage.ListLineageBrokenMetrics(ctx)
 	if err != nil {
 		return items
 	}
@@ -455,7 +455,7 @@ func (h *OpsHandlers) attentionLineageBroken(ctx context.Context, p authz.Princi
 		if _, err := h.authz().Workspace(ctx, p, mt.WorkspaceID, authz.ActWrite); err != nil {
 			continue
 		}
-		if tableExists(ctx, h.queries, mt.CatalogID, mt.Namespace, mt.TableName) {
+		if tableExists(ctx, h.lineage, mt.CatalogID, mt.Namespace, mt.TableName) {
 			continue
 		}
 		params := map[string]string{"metric": mt.Slug, "missing": mt.TableName}
@@ -477,7 +477,7 @@ func (h *OpsHandlers) attentionLineageBroken(ctx context.Context, p authz.Princi
 
 // brokenModelReference reports whether a model's base table or one of its
 // referenced columns no longer exists. missing names what is gone.
-func brokenModelReference(ctx context.Context, q db.Querier, m db.ListLineageBrokenModelsRow) (missing string, broken bool) {
+func brokenModelReference(ctx context.Context, q lineageReads, m db.ListLineageBrokenModelsRow) (missing string, broken bool) {
 	var def semantic.Model
 	if err := json.Unmarshal(m.Definition, &def); err != nil {
 		return "", false
@@ -511,7 +511,7 @@ func brokenModelReference(ctx context.Context, q db.Querier, m db.ListLineageBro
 }
 
 // tableExists reports whether a live table row matches the natural key.
-func tableExists(ctx context.Context, q db.Querier, catalogID pgtype.UUID, namespace []string, name string) bool {
+func tableExists(ctx context.Context, q lineageReads, catalogID pgtype.UUID, namespace []string, name string) bool {
 	_, err := q.GetMetadataTableByName(ctx, db.GetMetadataTableByNameParams{
 		CatalogID: catalogID, Namespace: namespace, Name: name,
 	})

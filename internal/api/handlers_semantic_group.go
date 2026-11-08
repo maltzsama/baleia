@@ -5,6 +5,7 @@ import (
 	"github.com/galileostudio/baleia/internal/semantic/docs"
 	"github.com/galileostudio/baleia/internal/semantic/metrics"
 	"github.com/galileostudio/baleia/internal/semantic/models"
+	"github.com/galileostudio/baleia/internal/store/repo"
 )
 
 // SemanticHandlers serves semantic models and metrics, saved content, versions and bundles (#365).
@@ -21,5 +22,21 @@ type SemanticHandlers struct {
 }
 
 func newSemanticHandlers(c *core) *SemanticHandlers {
-	return &SemanticHandlers{core: c, docs: docs.New(c.queries), metricDefs: metrics.New(c.queries, c.contentService()), modelDefs: models.New(c.queries, c.contentService()), search: search.New(c.queries)}
+	var (
+		docStore    docs.Store    = c.queries
+		metricStore metrics.Store = c.queries
+		modelStore  models.Store  = c.queries
+		searchStore search.Store  = c.queries
+	)
+	if c.store != nil {
+		r := repo.New(c.store)
+		docStore, metricStore, modelStore, searchStore = r, r, r, r
+	}
+	return &SemanticHandlers{
+		core:       c,
+		docs:       docs.New(docStore),
+		metricDefs: metrics.New(metricStore, c.contentService()),
+		modelDefs:  models.New(modelStore, c.contentService()),
+		search:     search.New(searchStore),
+	}
 }
