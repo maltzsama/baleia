@@ -23,8 +23,11 @@ func newWorkspaceHandlers(c *core) *WorkspaceHandlers {
 		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
 	}
 	var teamStore teams.Store = c.queries
+	var wsStore wsmanage.Store = c.queries
+	var wsTx wsmanage.Tx = tx
 	if c.store != nil {
-		teamStore = repo.New(c.store)
+		r := repo.New(c.store)
+		teamStore, wsStore, wsTx = r, r, r.TxWorkspace
 	}
-	return &WorkspaceHandlers{core: c, teams: teams.New(teamStore), workspaces: wsmanage.New(c.queries, tx)}
+	return &WorkspaceHandlers{core: c, teams: teams.New(teamStore), workspaces: wsmanage.New(wsStore, wsTx)}
 }

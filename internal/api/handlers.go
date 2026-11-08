@@ -32,6 +32,7 @@ import (
 	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -257,7 +258,11 @@ func NewAPI(d Deps) (*API, error) {
 	c.history = history.New(c.queries)
 	c.browse = browse.New(c.queries)
 	c.spaces = spacesOver(c, c.queries)
-	c.access = wsaccess.New(c.queries)
+	if c.store != nil {
+		c.access = wsaccess.New(repo.New(c.store))
+	} else {
+		c.access = wsaccess.New(c.queries)
+	}
 	c.topology = topology.New(c.queries)
 	h := &API{
 		core:              c,
