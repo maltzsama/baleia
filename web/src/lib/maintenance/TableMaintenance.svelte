@@ -26,6 +26,7 @@
 		type MaintenanceOperation,
 		type MaintenancePlan,
 		type MaintenancePlanStep,
+		type MaintenanceRun,
 		type TableMaintenance
 	} from './client';
 	import { fieldMessage } from './fieldMessage';
@@ -41,8 +42,18 @@
 	} from './form';
 	import { operationLabel, reasonText, triggerLabel } from './labels';
 
-	let { catalogId, namespace, table }: { catalogId: string; namespace: string; table: string } =
-		$props();
+	let {
+		catalogId,
+		namespace,
+		table,
+		onruns
+	}: {
+		catalogId: string;
+		namespace: string;
+		table: string;
+		/** The most recent runs, for the page's summary. */
+		onruns?: (runs: MaintenanceRun[]) => void;
+	} = $props();
 
 	const target = $derived({ catalogId, namespace, table });
 
@@ -74,6 +85,7 @@
 			form = toForm(next.policy ?? fromTableProperties(emptyPolicy(), next.properties));
 			errors = {};
 			saveError = '';
+			onruns?.(next.runs);
 		} catch (e) {
 			if (loadedFor === key) loadError = e instanceof Error ? e.message : String(e);
 		} finally {
