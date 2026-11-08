@@ -94,9 +94,18 @@ func newAuthHandlers(c *core) *AuthHandlers {
 			Logger:    c.logger,
 		})
 	}
-	a.users = users.New(c.queries, func(ctx context.Context, fn func(users.TxStore) error) error {
-		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
-	}, groupMailer{a}, a.sessions, users.Config{
+	var userStore users.Store
+	var userTx users.Tx
+	if c.store != nil {
+		ur := repo.NewUsers(c.store)
+		userStore, userTx = ur, ur.Tx
+	} else {
+		userStore = c.queries
+		userTx = func(ctx context.Context, fn func(users.TxStore) error) error {
+			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+		}
+	}
+	a.users = users.New(userStore, userTx, groupMailer{a}, a.sessions, users.Config{
 		PublicURL:     c.settings.Mail.PublicURL,
 		DefaultLocale: c.settings.Mail.DefaultLocale,
 		PasswordCost:  c.settings.Auth.PasswordCost,
