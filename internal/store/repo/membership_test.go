@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -92,6 +93,7 @@ func TestWorkspaceRoleMatchesSQLFunction(t *testing.T) {
 		want string
 	}{
 		{"personal owner", personal.ID, owner.ID, "admin"},
+		{"personal owner uppercase id", personal.ID, model.UUID(strings.ToUpper(string(owner.ID))), "admin"},
 		{"personal shared", personal.ID, outsiderID, "editor"},
 		{"personal non-member", personal.ID, member.ID, ""},
 		{"shared team owner", shared.ID, owner.ID, "admin"},
