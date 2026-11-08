@@ -158,24 +158,56 @@ func (r *Repo) ListWorkspacesByUser(ctx context.Context, userID pgtype.UUID) ([]
 	return out, err
 }
 
-// CreateWorkspace inserts a workspace.
+// CreateWorkspace inserts a workspace and, when the schema has no default-space
+// trigger, its default space in the same transaction (ADR 0020 removed the
+// trigger). On the goose schema the trigger wins and the check skips the write.
 func (r *Repo) CreateWorkspace(ctx context.Context, arg db.CreateWorkspaceParams) (db.Workspace, error) {
-	now := time.Now().UTC()
-	row := model.Workspace{
-		ID:                 model.UUID(NewUUID()),
-		Name:               arg.Name,
-		Description:        arg.Description,
-		Type:               arg.Type,
-		PolarisCatalogName: model.Text(arg.PolarisCatalogName),
-		OwnerUserID:        modelUUIDPtr(arg.OwnerUserID),
-		OwnerTeamID:        modelUUIDPtr(arg.OwnerTeamID),
-		CreatedAt:          now,
-		UpdatedAt:          now,
-	}
-	if err := r.Users.db.WithContext(ctx).Create(&row).Error; err != nil {
+	var out db.Workspace
+	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := time.Now().UTC()
+		row := model.Workspace{
+			ID:                 model.UUID(NewUUID()),
+			Name:               arg.Name,
+			Description:        arg.Description,
+			Type:               arg.Type,
+			PolarisCatalogName: model.Text(arg.PolarisCatalogName),
+			OwnerUserID:        modelUUIDPtr(arg.OwnerUserID),
+			OwnerTeamID:        modelUUIDPtr(arg.OwnerTeamID),
+			CreatedAt:          now,
+			UpdatedAt:          now,
+		}
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Model(&model.Space{}).
+			Where("workspace_id = ? AND is_default = ?", string(row.ID), true).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			space := model.Space{
+				ID:          model.UUID(NewUUID()),
+				WorkspaceID: row.ID,
+				Name:        "General",
+				Visibility:  "workspace",
+				DefaultRole: "editor",
+				IsDefault:   true,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+				Slug:        "general",
+			}
+			if err := tx.Create(&space).Error; err != nil {
+				return err
+			}
+		}
+		out = toDBWorkspace(row)
+		return nil
+	})
+	if err != nil {
 		return db.Workspace{}, err
 	}
-	return toDBWorkspace(row), nil
+	return out, nil
 }
 
 // GetDefaultTrinoCluster returns the default cluster or pgx.ErrNoRows.
