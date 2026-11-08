@@ -99,9 +99,10 @@ func Open(ctx context.Context, dsn string, backend Backend, opts Options) (*gorm
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger:               gormLog,
-		DisableAutomaticPing: true,
-		TranslateError:       true,
+		Logger:                                   gormLog,
+		DisableAutomaticPing:                     true,
+		TranslateError:                           true,
+		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open %s store: %w", backend, err)
