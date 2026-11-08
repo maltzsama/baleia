@@ -123,6 +123,14 @@ func newAuthHandlers(c *core) *AuthHandlers {
 
 // newSessions builds the session service over the core's database and settings.
 func newSessions(c *core) *session.Service {
+	if c.store != nil {
+		return session.New(repo.NewSessions(c.store), repo.NewUsers(c.store), session.Config{
+			JWTSecret:  c.settings.Auth.JWTSecret,
+			AccessTTL:  c.settings.Auth.AccessTTL,
+			RefreshTTL: c.settings.Auth.RefreshTTL,
+			Logger:     c.logger,
+		})
+	}
 	return session.New(c.queries, c.queries, session.Config{
 		JWTSecret:  c.settings.Auth.JWTSecret,
 		AccessTTL:  c.settings.Auth.AccessTTL,
