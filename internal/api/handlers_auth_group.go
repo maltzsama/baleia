@@ -16,6 +16,7 @@ import (
 	"github.com/galileostudio/baleia/internal/identity/setup"
 	"github.com/galileostudio/baleia/internal/identity/users"
 	"github.com/galileostudio/baleia/internal/mail"
+	"github.com/galileostudio/baleia/internal/store/repo"
 )
 
 // AuthHandlers serves sign-in, sessions, users, API keys and identity providers (#365).
@@ -73,7 +74,11 @@ func newAuthHandlers(c *core) *AuthHandlers {
 		}, c.settings.Auth.PasswordCost),
 	}
 	a.logins = newLogins(c, login.LDAP{})
-	a.apiKeys = apikeys.New(c.queries)
+	if c.store != nil {
+		a.apiKeys = apikeys.New(repo.NewAPIKeys(c.store))
+	} else {
+		a.apiKeys = apikeys.New(c.queries)
+	}
 	a.providers = providers.New(c.queries, func(ctx context.Context, fn func(providers.TxStore) error) error {
 		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
 	})

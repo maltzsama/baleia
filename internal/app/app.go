@@ -37,11 +37,13 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine/oracle"
 	sqliteengine "github.com/galileostudio/baleia/internal/queryengine/sqlite"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
+	"gorm.io/gorm"
 )
 
 // Options are what differs between the processes.
@@ -62,6 +64,9 @@ type Core struct {
 	Metrics *metrics.Registry
 	Pool    *pgxpool.Pool
 	Queries *db.Queries
+	// Store is the GORM connection for the domains migrated off sqlc
+	// (#769–#774).
+	Store *gorm.DB
 	// Keyring seals stored connection credentials; RegistryKeyring is nil
 	// when registry encryption is disabled.
 	Keyring         *crypto.Keyring
@@ -136,6 +141,19 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.onClose(c.Pool.Close)
 	c.Metrics.WatchPool(c.Pool)
 	c.Queries = db.New(c.Pool)
+
+	backend, err := store.ResolveBackend(cfg.StoreBackend, cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("store backend: %w", err)
+	}
+	c.Store, err = store.Open(ctx, cfg.DatabaseURL, backend, store.Options{
+		MaxOpenConns: int(cfg.PoolSize(opts.PoolSize)),
+		Logger:       c.Logger,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gorm store: %w", err)
+	}
+	c.onClose(func() { _ = store.Close(c.Store) })
 
 	// Credentials are sealed with BALEIA_ENCRYPTION_KEY (never JWT_SECRET).
 	// With stored credentials and no key, refuse to start rather than serve

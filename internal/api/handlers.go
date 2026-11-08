@@ -38,6 +38,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
+	"gorm.io/gorm"
 )
 
 var ErrWorkspaceNotFound = errors.New("workspace not found")
@@ -188,6 +189,8 @@ type IdentityDeps struct {
 type DataDeps struct {
 	Queries db.Querier
 	Pool    *pgxpool.Pool
+	// Store is the GORM connection; nil keeps the sqlc path (tests).
+	Store *gorm.DB
 }
 
 // EngineDeps are the connections, engines and catalog bindings.
@@ -230,6 +233,7 @@ func NewAPI(d Deps) (*API, error) {
 		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),
 		s3:             d.Storage,
 		queries:        d.Data.Queries,
+		store:          d.Data.Store,
 		pool:           d.Data.Pool,
 		tx:             poolTx{pool: d.Data.Pool},
 		settings:       d.Settings,

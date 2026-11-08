@@ -22,6 +22,7 @@ import (
 	"github.com/galileostudio/baleia/internal/workspaces/spaces"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
+	"gorm.io/gorm"
 )
 
 // core is what every handler group shares (#365): Baleia's database, the
@@ -31,7 +32,10 @@ type core struct {
 	// logger is the process logger (#379); every group logs through it.
 	logger  *slog.Logger
 	queries db.Querier
-	pool    *pgxpool.Pool
+	// store is the GORM connection for domains migrated off sqlc (#769–#774);
+	// nil in tests, which keep using queries.
+	store *gorm.DB
+	pool  *pgxpool.Pool
 	// tx runs dependent writes in one transaction (poolTx outside tests).
 	tx txRunner
 	// settings is the resolved configuration the handlers read (#363).
