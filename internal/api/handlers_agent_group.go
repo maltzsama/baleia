@@ -7,6 +7,7 @@ import (
 	"github.com/galileostudio/baleia/internal/assistant"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 )
 
 // AgentHandlers serves agents, their policy and tokens, the assistant and the MCP surface (#365).
@@ -27,5 +28,11 @@ func newAgentHandlers(c *core, svc *assistant.Service, runner *assistant.RunnerS
 	tx := func(ctx context.Context, fn func(agentmanage.TxStore) error) error {
 		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
 	}
-	return &AgentHandlers{core: c, assistant: svc, assistantRunner: runner, dialer: dialer, agents: agentmanage.New(c.queries, tx)}
+	var store agentmanage.Store = c.queries
+	var agentTx agentmanage.Tx = tx
+	if c.store != nil {
+		r := repo.New(c.store)
+		store, agentTx = r, r.TxAgents
+	}
+	return &AgentHandlers{core: c, assistant: svc, assistantRunner: runner, dialer: dialer, agents: agentmanage.New(store, agentTx)}
 }
