@@ -8,11 +8,9 @@
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { hasTableHealth } from '$lib/ui/patterns/kindIcon';
-	import {
-		analyzeCatalogTableHealth,
-		maintenanceTableQuery,
-		runTableMaintenance
-	} from '$lib/maintenance/client';
+	import { analyzeCatalogTableHealth, runTableMaintenance } from '$lib/maintenance/client';
+	import TableMaintenance from '$lib/maintenance/TableMaintenance.svelte';
+	import CatalogMaintenancePlan from '$lib/maintenance/CatalogMaintenancePlan.svelte';
 	import { operationLabel, triggerLabel } from '$lib/maintenance/labels';
 	import { poll, type PollController } from '$lib/util/poll';
 	import { streamEvents } from '$lib/assistant/sse';
@@ -60,7 +58,7 @@
 
 	let engines = $state<MonitoringEngine[]>([]);
 	let engineId = $state('');
-	let tab = $state<'cluster' | 'queries' | 'tables'>('cluster');
+	let tab = $state<'cluster' | 'queries' | 'tables' | 'maintenance'>('cluster');
 	let loading = $state(true);
 	let error = $state('');
 
@@ -194,6 +192,7 @@
 	let health = $state<TableHealth[]>([]);
 	let healthLoading = $state(false);
 	let healthError = $state('');
+	let healthNamespace = $state('');
 	let needs = $state('');
 	let maxScore = $state('');
 	let runs = $state<MaintenanceRun[]>([]);
@@ -210,6 +209,10 @@
 	let retention = $state('7d');
 	let maintaining = $state(false);
 	let maintainError = $state('');
+	// The per-table maintenance editor (#820) opens in a drawer from the
+	// health and maintenance tabs; it reuses the full page component.
+	let editor = $state<{ catalogId: string; namespace: string; table: string } | null>(null);
+	let editorOpen = $state(false);
 
 	let polls: PollController<unknown>[] = [];
 	// The live SSE subscription (#733): the server pushes a "changed" signal
@@ -347,6 +350,7 @@
 		healthError = '';
 		try {
 			const rows = await listHealth(target, {
+				ns: healthNamespace.trim() || undefined,
 				needs: needs || undefined,
 				maxScore: maxScore ? Number(maxScore) : undefined
 			});
@@ -365,7 +369,7 @@
 		const seq = ++activeSeq;
 		stopPolls();
 		stopEvents();
-		if (!engineId && tab !== 'tables') return;
+		if (!engineId && tab !== 'tables' && tab !== 'maintenance') return;
 		if (tab === 'cluster') {
 			void loadOverview();
 			await loadCluster();
@@ -391,7 +395,7 @@
 				})
 			);
 			startEvents();
-		} else {
+		} else if (tab === 'tables') {
 			await loadCatalogList();
 			if (seq !== activeSeq) return;
 			// The first tick loads the rows and keeps watching for the hourly
@@ -399,6 +403,10 @@
 			polls.push(
 				poll(loadHealth, { until: () => false, intervals: [60_000], maxDurationMs: 3_600_000 })
 			);
+		} else {
+			// The Maintenance tab only needs the catalog list; the plan loads
+			// in the component itself.
+			await loadCatalogList();
 		}
 	}
 
@@ -417,7 +425,7 @@
 		else if (tab === 'queries') void loadQueries();
 	}
 
-	function selectTab(next: 'cluster' | 'queries' | 'tables') {
+	function selectTab(next: 'cluster' | 'queries' | 'tables' | 'maintenance') {
 		tab = next;
 		void loadActive();
 	}
@@ -462,6 +470,11 @@
 		await killQuery(engineId, target.trino_query_id);
 		toasts.success(m.monitoring_query_killed());
 		await loadQueries();
+	}
+
+	function openEditor(catalogId: string, namespace: string, table: string) {
+		editor = { catalogId, namespace, table };
+		editorOpen = true;
 	}
 
 	function openMaintenance(row: TableHealth) {
@@ -675,7 +688,7 @@
 	{:else}
 		<div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border">
 			<div class="flex gap-1" role="tablist" aria-label={m.monitoring_monitoring_tabs()}>
-				{#each [['cluster', m.monitoring_cluster()], ['queries', m.monitoring_queries()], ['tables', m.monitoring_table_health()]] as [value, label] (value)}
+				{#each [['cluster', m.monitoring_cluster()], ['queries', m.monitoring_queries()], ['tables', m.monitoring_iceberg_health()], ['maintenance', m.maintenance_title()]] as [value, label] (value)}
 					<button
 						type="button"
 						role="tab"
@@ -683,13 +696,13 @@
 						class="-mb-px border-b-2 px-3 py-1.5 text-[12px] font-semibold {tab === value
 							? 'border-primary text-primary'
 							: 'border-transparent text-slate-600 hover:text-text-main dark:text-slate-300'}"
-						onclick={() => selectTab(value as 'cluster' | 'queries' | 'tables')}
+						onclick={() => selectTab(value as 'cluster' | 'queries' | 'tables' | 'maintenance')}
 					>
 						{label}
 					</button>
 				{/each}
 			</div>
-			{#if tab !== 'tables'}
+			{#if tab === 'cluster' || tab === 'queries'}
 				<div class="flex items-center gap-2 pb-1">
 					<Button size="sm" onclick={refreshActive}>{m.monitoring_refresh()}</Button>
 					<Button size="sm" variant={live ? 'secondary' : 'primary'} onclick={() => setLive(!live)}>
@@ -991,9 +1004,9 @@
 					</table>
 				</div>
 			{/if}
-		{:else}
+		{:else if tab === 'tables'}
 			<div
-				class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
+				class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-5"
 			>
 				<Select
 					label={m.monitoring_catalog()}
@@ -1001,6 +1014,7 @@
 					options={catalogs.map((catalog) => ({ value: catalog.id, label: catalog.name }))}
 					onchange={() => loadHealth()}
 				/>
+				<Input label={m.monitoring_schema()} bind:value={healthNamespace} placeholder="sales" />
 				<Select
 					label={m.monitoring_needs()}
 					bind:value={needs}
@@ -1069,7 +1083,6 @@
 						</thead>
 						<tbody>
 							{#each health as row (row.catalog_id + row.namespace + row.table_name)}
-								{@const configureHref = `${resolve('/maintenance')}?${maintenanceTableQuery(row.catalog_id, row.namespace, row.table_name)}`}
 								<tr class="border-b border-border/60 last:border-b-0">
 									<td class="px-3 py-1.5 font-mono">{row.namespace}.{row.table_name}</td>
 									<td class="px-3 py-1.5">
@@ -1126,12 +1139,11 @@
 									</td>
 									<td class="px-3 py-1.5 text-right">
 										<div class="flex justify-end gap-1.5">
-											<!-- eslint-disable svelte/no-navigation-without-resolve -- configureHref is resolve('/maintenance') plus the query -->
-											<a
-												class="inline-flex h-7 items-center rounded-md border border-border px-2.5 text-[11px] font-semibold text-text-muted no-underline hover:text-text-main"
-												href={configureHref}>{m.maintenance_configure()}</a
+											<Button
+												size="sm"
+												onclick={() => openEditor(row.catalog_id, row.namespace, row.table_name)}
+												>{m.maintenance_configure()}</Button
 											>
-											<!-- eslint-enable svelte/no-navigation-without-resolve -->
 											{#if row.maintenance_mode === 'managed' || row.maintenance_mode === 'off'}
 												<Button size="sm" onclick={() => runDue(row)}
 													>{m.maintenance_run_now()}</Button
@@ -1233,6 +1245,31 @@
 						</tbody>
 					</table>
 				</div>
+			{/if}
+		{:else}
+			<div
+				class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
+			>
+				<Select
+					label={m.monitoring_catalog()}
+					bind:value={catalogId}
+					options={catalogs.map((catalog) => ({ value: catalog.id, label: catalog.name }))}
+				/>
+			</div>
+			{#if catalogs.length === 0}
+				<EmptyState
+					title={m.monitoring_no_catalogs()}
+					description={m.maintenance_no_iceberg_catalog()}
+				>
+					<a class="text-[12px] font-semibold text-primary" href={resolve('/connections')}
+						>{m.maintenance_go_to_connections()}</a
+					>
+				</EmptyState>
+			{:else if catalogId}
+				<CatalogMaintenancePlan
+					{catalogId}
+					onconfigure={(item) => openEditor(catalogId, item.namespace, item.table_name)}
+				/>
 			{/if}
 		{/if}
 	{/if}
@@ -1383,3 +1420,20 @@
 		onconfirm={kill}
 	/>
 {/if}
+
+<Drawer
+	bind:open={editorOpen}
+	title={editor
+		? `${m.maintenance_title()} · ${editor.namespace}.${editor.table}`
+		: m.maintenance_title()}
+	size="lg"
+	onclose={() => void loadHealth()}
+>
+	{#if editor}
+		<TableMaintenance
+			catalogId={editor.catalogId}
+			namespace={editor.namespace}
+			table={editor.table}
+		/>
+	{/if}
+</Drawer>
