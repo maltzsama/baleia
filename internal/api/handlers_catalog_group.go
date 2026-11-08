@@ -36,6 +36,10 @@ type CatalogHandlers struct {
 	// stores are the parts of the database the binding procedures,
 	// reconcile and Hive redirection use, injected here once.
 	stores catalogStores
+	// lineage reads the graph of what depends on what (#558).
+	lineage lineageReads
+	// popular lists the workspace's most used tables (#562).
+	popular popularTablesReads
 }
 
 // catalogStores hands each binding package the store it declares.
@@ -70,10 +74,13 @@ func newCatalogHandlers(c *core, binder *bindtrino.Binder) *CatalogHandlers {
 			lifecycle: c.queries, registry: c.queries, reconcile: c.queries,
 			projector: c.queries, runs: c.queries, redirect: c.queries, primary: c.queries,
 		}
+		lineageStore lineageReads       = c.queries
+		popularStore popularTablesReads = c.queries
 	)
 	if c.store != nil {
 		r := repo.New(c.store)
 		connStore, engineStore, catalogStore = r, r, r
+		lineageStore, popularStore = r, r
 		engineTx = func(ctx context.Context, fn func(manage.TxStore) error) error {
 			return r.TxEngines(ctx, fn)
 		}
@@ -87,7 +94,7 @@ func newCatalogHandlers(c *core, binder *bindtrino.Binder) *CatalogHandlers {
 	}
 	return &CatalogHandlers{
 		core: c, binder: binder, engineAdmin: manage.New(engineStore, engineTx), catalogAdmin: admin.New(catalogStore, catalogTx),
-		conns: conns.New(connStore), stores: stores,
+		conns: conns.New(connStore), stores: stores, lineage: lineageStore, popular: popularStore,
 		connectionTests: newTestLimiter(),
 		ddlTimeout:      catalogDDLTimeout,
 	}

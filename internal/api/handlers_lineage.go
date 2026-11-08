@@ -27,6 +27,25 @@ const (
 	lineageMaxDepth     = 8
 )
 
+// lineageReads reads the rows the lineage graph and the broken-lineage
+// attention item need. *db.Queries implements it on the sqlc path and
+// *repo.Repo on the GORM path (ADR 0020, #772).
+type lineageReads interface {
+	GetMetadataTableByRef(ctx context.Context, arg db.GetMetadataTableByRefParams) (db.GetMetadataTableByRefRow, error)
+	ListMetadataColumns(ctx context.Context, tableID pgtype.UUID) ([]db.ListMetadataColumnsRow, error)
+	GetMetadataTableByName(ctx context.Context, arg db.GetMetadataTableByNameParams) (pgtype.UUID, error)
+	ListLineageModels(ctx context.Context, arg db.ListLineageModelsParams) ([]db.ListLineageModelsRow, error)
+	ListLineageMetrics(ctx context.Context, arg db.ListLineageMetricsParams) ([]db.ListLineageMetricsRow, error)
+	ListLineageSavedQueries(ctx context.Context, arg db.ListLineageSavedQueriesParams) ([]db.ListLineageSavedQueriesRow, error)
+	ListLineageBrokenModels(ctx context.Context) ([]db.ListLineageBrokenModelsRow, error)
+	ListLineageBrokenMetrics(ctx context.Context) ([]db.ListLineageBrokenMetricsRow, error)
+}
+
+// popularTablesReads reads the workspace's popular tables.
+type popularTablesReads interface {
+	ListPopularTables(ctx context.Context, arg db.ListPopularTablesParams) ([]db.ListPopularTablesRow, error)
+}
+
 // lineageTableRef is a content item's reference to a table, by natural key.
 type lineageTableRef struct {
 	catalogID pgtype.UUID
@@ -84,7 +103,7 @@ func (h *CatalogHandlers) ListLineage(ctx context.Context, request ListLineageRe
 		tableKeys: map[string]string{},
 		ws:        ws,
 		ctx:       ctx,
-		q:         h.queries,
+		q:         h.lineage,
 	}
 
 	var start string
@@ -125,7 +144,7 @@ func (h *CatalogHandlers) lineageContent(ctx context.Context, ws, userID pgtype.
 	content := map[string]lineageItem{}
 	dependents := map[string][]string{}
 
-	models, err := h.queries.ListLineageModels(ctx, db.ListLineageModelsParams{WorkspaceID: ws, UserID: userID})
+	models, err := h.lineage.ListLineageModels(ctx, db.ListLineageModelsParams{WorkspaceID: ws, UserID: userID})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -146,7 +165,7 @@ func (h *CatalogHandlers) lineageContent(ctx context.Context, ws, userID pgtype.
 		}
 	}
 
-	metrics, err := h.queries.ListLineageMetrics(ctx, db.ListLineageMetricsParams{WorkspaceID: ws, UserID: userID})
+	metrics, err := h.lineage.ListLineageMetrics(ctx, db.ListLineageMetricsParams{WorkspaceID: ws, UserID: userID})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -167,7 +186,7 @@ func (h *CatalogHandlers) lineageContent(ctx context.Context, ws, userID pgtype.
 		}
 	}
 
-	queries, err := h.queries.ListLineageSavedQueries(ctx, db.ListLineageSavedQueriesParams{WorkspaceID: ws, UserID: userID})
+	queries, err := h.lineage.ListLineageSavedQueries(ctx, db.ListLineageSavedQueriesParams{WorkspaceID: ws, UserID: userID})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -198,7 +217,7 @@ type lineageGraph struct {
 	tableKeys map[string]string // table node id -> natural key
 	ws        pgtype.UUID       // workspace, for a table's deep link
 	ctx       context.Context
-	q         db.Querier
+	q         lineageReads
 }
 
 func (g *lineageGraph) addNode(n LineageNode) string {

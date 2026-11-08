@@ -272,7 +272,11 @@ func NewAPI(d Deps) (*API, error) {
 		c.content = content.New(c.queries, tx)
 		c.history = history.New(c.queries)
 	}
-	c.browse = browse.New(c.queries)
+	if c.store != nil {
+		c.browse = browse.New(repo.New(c.store))
+	} else {
+		c.browse = browse.New(c.queries)
+	}
 	c.spaces = spacesOver(c, c.queries)
 	if c.store != nil {
 		c.access = wsaccess.New(repo.New(c.store))
