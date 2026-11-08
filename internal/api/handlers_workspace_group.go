@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	wsmanage "github.com/galileostudio/baleia/internal/workspaces/manage"
 	"github.com/galileostudio/baleia/internal/workspaces/teams"
 )
@@ -21,5 +22,9 @@ func newWorkspaceHandlers(c *core) *WorkspaceHandlers {
 	tx := func(ctx context.Context, fn func(wsmanage.TxStore) error) error {
 		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
 	}
-	return &WorkspaceHandlers{core: c, teams: teams.New(c.queries), workspaces: wsmanage.New(c.queries, tx)}
+	var teamStore teams.Store = c.queries
+	if c.store != nil {
+		teamStore = repo.New(c.store)
+	}
+	return &WorkspaceHandlers{core: c, teams: teams.New(teamStore), workspaces: wsmanage.New(c.queries, tx)}
 }
