@@ -78,7 +78,12 @@ func testAPI(f handlerFields) *API {
 	c.browse = browse.New(c.queries)
 	c.spaces = spacesOver(c, c.queries)
 	c.access = wsaccess.New(c.queries)
-	c.topology = topology.New(c.queries)
+	if c.store != nil {
+		c.access = wsaccess.New(repo.New(c.store))
+		c.topology = topology.New(repo.New(c.store))
+	} else {
+		c.topology = topology.New(c.queries)
+	}
 	h := &API{
 		core:              c,
 		OpsHandlers:       newOpsHandlers(c, f.schema),

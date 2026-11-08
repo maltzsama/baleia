@@ -43,19 +43,20 @@ func (h *core) catalogOwner(ctx context.Context, p authz.Principal, catID pgtype
 
 // activeItem builds the active-grant item for a (workspace, catalog) pair.
 func (h *core) activeItem(ctx context.Context, wsID, catID pgtype.UUID) CatalogGrantItem {
+	store := h.catalogGrants()
 	item := CatalogGrantItem{
 		WorkspaceId:    openapi_types.UUID(wsID.Bytes),
 		CatalogId:      openapi_types.UUID(catID.Bytes),
 		State:          CatalogGrantItemStateActive,
 		AllowedActions: actionsPtr("unlink"),
 	}
-	if cat, err := h.queries.GetCatalogByID(ctx, catID); err == nil {
+	if cat, err := store.GetCatalogByID(ctx, catID); err == nil {
 		item.CatalogName = grantStr(cat.Name)
 		if cat.TrinoCatalogName != nil && *cat.TrinoCatalogName != "" {
 			item.EngineCatalogName = cat.TrinoCatalogName
 		}
 	}
-	if w, err := h.queries.GetWorkspaceByID(ctx, wsID); err == nil {
+	if w, err := store.GetWorkspaceByID(ctx, wsID); err == nil {
 		item.WorkspaceName = grantStr(w.Name)
 	}
 	return item
@@ -65,6 +66,7 @@ func (h *core) activeItem(ctx context.Context, wsID, catID pgtype.UUID) CatalogG
 // catalog_id selects the side the caller manages; the result is the active
 // grants and the pending requests on that side.
 func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request ListCatalogGrantItemsRequestObject) (ListCatalogGrantItemsResponseObject, error) {
+	store := h.catalogGrants()
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListCatalogGrantItems401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -80,7 +82,7 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 		if _, err := h.authz().Workspace(ctx, p, wsID, authz.ActRead); err != nil {
 			return ListCatalogGrantItems404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 		}
-		grants, err := h.queries.ListWorkspaceCatalogGrants(ctx, wsID)
+		grants, err := store.ListWorkspaceCatalogGrants(ctx, wsID)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +100,7 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 			}
 			out = append(out, item)
 		}
-		pending, err := h.queries.ListCatalogGrantRequestsForWorkspace(ctx, wsID)
+		pending, err := store.ListCatalogGrantRequestsForWorkspace(ctx, wsID)
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +109,7 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 		}
 	} else {
 		catID := pgtype.UUID{Bytes: *params.CatalogId, Valid: true}
-		if _, err := h.queries.GetCatalogByID(ctx, catID); err != nil {
+		if _, err := store.GetCatalogByID(ctx, catID); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ListCatalogGrantItems404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 			}
@@ -116,7 +118,7 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 		if !h.catalogOwner(ctx, p, catID) {
 			return ListCatalogGrantItems404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		}
-		grants, err := h.queries.ListCatalogGrants(ctx, catID)
+		grants, err := store.ListCatalogGrants(ctx, catID)
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +136,7 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 			}
 			out = append(out, item)
 		}
-		pending, err := h.queries.ListCatalogGrantRequestsForCatalog(ctx, catID)
+		pending, err := store.ListCatalogGrantRequestsForCatalog(ctx, catID)
 		if err != nil {
 			return nil, err
 		}
@@ -175,6 +177,7 @@ func requestItem(catID pgtype.UUID, side string, requestedBy pgtype.UUID, reques
 // outcome: both rights are a direct grant, only the catalog side is an offer,
 // only the workspace side is a request.
 func (h *CatalogHandlers) CreateCatalogGrant(ctx context.Context, request CreateCatalogGrantRequestObject) (CreateCatalogGrantResponseObject, error) {
+	store := h.catalogGrants()
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return CreateCatalogGrant401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -194,7 +197,7 @@ func (h *CatalogHandlers) CreateCatalogGrant(ctx context.Context, request Create
 	}
 
 	if wsAdmin && catOwner {
-		if _, err := h.queries.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{WorkspaceID: wsID, CatalogID: catID, GrantedBy: p.UserID}); err != nil {
+		if _, err := store.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{WorkspaceID: wsID, CatalogID: catID, GrantedBy: p.UserID}); err != nil {
 			return nil, err
 		}
 		h.catalogCache.Clear()
@@ -206,13 +209,13 @@ func (h *CatalogHandlers) CreateCatalogGrant(ctx context.Context, request Create
 	if catOwner {
 		side = "catalog"
 	}
-	if _, err := h.queries.GetCatalogByID(ctx, catID); err != nil {
+	if _, err := store.GetCatalogByID(ctx, catID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return CreateCatalogGrant404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		}
 		return nil, err
 	}
-	req, err := h.queries.CreateCatalogGrantRequest(ctx, db.CreateCatalogGrantRequestParams{
+	req, err := store.CreateCatalogGrantRequest(ctx, db.CreateCatalogGrantRequestParams{
 		WorkspaceID: wsID, CatalogID: catID, InitiatedBySide: side, RequestedBy: p.UserID,
 	})
 	if err != nil {
@@ -226,6 +229,7 @@ func (h *CatalogHandlers) CreateCatalogGrant(ctx context.Context, request Create
 // The other party turns a pending request into an active grant in one
 // transaction.
 func (h *CatalogHandlers) ApproveCatalogGrant(ctx context.Context, request ApproveCatalogGrantRequestObject) (ApproveCatalogGrantResponseObject, error) {
+	store := h.catalogGrants()
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ApproveCatalogGrant401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -235,7 +239,7 @@ func (h *CatalogHandlers) ApproveCatalogGrant(ctx context.Context, request Appro
 	ev := audit.Event{Action: audit.GrantCreate, ResourceType: "grant", ResourceID: idString(catID), WorkspaceID: idString(wsID)}
 	ctx = audit.WithAction(ctx, ev.Action)
 
-	req, err := h.queries.GetCatalogGrantRequest(ctx, db.GetCatalogGrantRequestParams{WorkspaceID: wsID, CatalogID: catID})
+	req, err := store.GetCatalogGrantRequest(ctx, db.GetCatalogGrantRequestParams{WorkspaceID: wsID, CatalogID: catID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ApproveCatalogGrant404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "no pending request"}}, nil
@@ -252,7 +256,7 @@ func (h *CatalogHandlers) ApproveCatalogGrant(ctx context.Context, request Appro
 		}
 	}
 
-	txErr := h.inTx(ctx, func(q db.Querier) error {
+	txErr := h.inCatalogTx(ctx, func(q catalogWriteStore) error {
 		if _, err := q.DeleteCatalogGrantRequest(ctx, db.DeleteCatalogGrantRequestParams{WorkspaceID: wsID, CatalogID: catID}); err != nil {
 			return err
 		}
@@ -270,6 +274,7 @@ func (h *CatalogHandlers) ApproveCatalogGrant(ctx context.Context, request Appro
 // DeleteCatalogGrant — DELETE /catalog-grants/{workspace_id}/{catalog_id}.
 // Declines a pending request or unlinks an active grant.
 func (h *CatalogHandlers) DeleteCatalogGrant(ctx context.Context, request DeleteCatalogGrantRequestObject) (DeleteCatalogGrantResponseObject, error) {
+	store := h.catalogGrants()
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return DeleteCatalogGrant401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -284,12 +289,12 @@ func (h *CatalogHandlers) DeleteCatalogGrant(ctx context.Context, request Delete
 	}
 
 	found := false
-	if n, err := h.queries.DeleteCatalogGrantRequest(ctx, db.DeleteCatalogGrantRequestParams{WorkspaceID: wsID, CatalogID: catID}); err != nil {
+	if n, err := store.DeleteCatalogGrantRequest(ctx, db.DeleteCatalogGrantRequestParams{WorkspaceID: wsID, CatalogID: catID}); err != nil {
 		return nil, err
 	} else if n > 0 {
 		found = true
 	}
-	if n, err := h.queries.DeleteWorkspaceCatalogGrant(ctx, db.DeleteWorkspaceCatalogGrantParams{WorkspaceID: wsID, CatalogID: catID}); err != nil {
+	if n, err := store.DeleteWorkspaceCatalogGrant(ctx, db.DeleteWorkspaceCatalogGrantParams{WorkspaceID: wsID, CatalogID: catID}); err != nil {
 		return nil, err
 	} else if n > 0 {
 		found = true
@@ -304,6 +309,7 @@ func (h *CatalogHandlers) DeleteCatalogGrant(ctx context.Context, request Delete
 
 // ListGrantableWorkspaces — GET /catalogs/{catalog_id}/grantable-workspaces.
 func (h *CatalogHandlers) ListGrantableWorkspaces(ctx context.Context, request ListGrantableWorkspacesRequestObject) (ListGrantableWorkspacesResponseObject, error) {
+	store := h.catalogGrants()
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListGrantableWorkspaces401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -312,7 +318,7 @@ func (h *CatalogHandlers) ListGrantableWorkspaces(ctx context.Context, request L
 	if !h.catalogOwner(ctx, p, catID) {
 		return ListGrantableWorkspaces404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
-	rows, err := h.queries.ListGrantableWorkspaces(ctx)
+	rows, err := store.ListGrantableWorkspaces(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -325,6 +331,7 @@ func (h *CatalogHandlers) ListGrantableWorkspaces(ctx context.Context, request L
 
 // SetCatalogDiscoverable — PATCH /catalogs/{catalog_id}/discoverable.
 func (h *CatalogHandlers) SetCatalogDiscoverable(ctx context.Context, request SetCatalogDiscoverableRequestObject) (SetCatalogDiscoverableResponseObject, error) {
+	store := h.catalogGrants()
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return SetCatalogDiscoverable401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -336,10 +343,10 @@ func (h *CatalogHandlers) SetCatalogDiscoverable(ctx context.Context, request Se
 	if !h.catalogOwner(ctx, p, catID) {
 		return SetCatalogDiscoverable404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
-	if err := h.queries.SetCatalogDiscoverable(ctx, db.SetCatalogDiscoverableParams{ID: catID, Discoverable: request.Body.Discoverable}); err != nil {
+	if err := store.SetCatalogDiscoverable(ctx, db.SetCatalogDiscoverableParams{ID: catID, Discoverable: request.Body.Discoverable}); err != nil {
 		return nil, err
 	}
-	cat, err := h.queries.GetCatalogByID(ctx, catID)
+	cat, err := store.GetCatalogByID(ctx, catID)
 	if err != nil {
 		return nil, err
 	}
@@ -348,6 +355,7 @@ func (h *CatalogHandlers) SetCatalogDiscoverable(ctx context.Context, request Se
 
 // ListRequestableCatalogs — GET /workspaces/{id}/requestable-catalogs.
 func (h *CatalogHandlers) ListRequestableCatalogs(ctx context.Context, request ListRequestableCatalogsRequestObject) (ListRequestableCatalogsResponseObject, error) {
+	store := h.catalogGrants()
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return ListRequestableCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
@@ -356,7 +364,7 @@ func (h *CatalogHandlers) ListRequestableCatalogs(ctx context.Context, request L
 	if !h.workspaceAdmin(ctx, p, wsID) {
 		return ListRequestableCatalogs404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	}
-	rows, err := h.queries.ListDiscoverableCatalogs(ctx)
+	rows, err := store.ListDiscoverableCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}

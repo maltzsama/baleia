@@ -11,6 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs/conns"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/engines/manage"
+	"github.com/galileostudio/baleia/internal/store/repo"
 )
 
 // CatalogHandlers serves connections, catalogs, engines, bindings and their metadata (#365).
@@ -55,16 +56,38 @@ type primaryCatalogStore interface {
 }
 
 func newCatalogHandlers(c *core, binder *bindtrino.Binder) *CatalogHandlers {
-	tx := func(ctx context.Context, fn func(manage.TxStore) error) error {
-		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+	var (
+		connStore    conns.Store  = c.queries
+		engineStore  manage.Store = c.queries
+		catalogStore admin.Store  = c.queries
+		engineTx                  = func(ctx context.Context, fn func(manage.TxStore) error) error {
+			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+		}
+		catalogTx = func(ctx context.Context, fn func(admin.TxStore) error) error {
+			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+		}
+		stores = catalogStores{
+			lifecycle: c.queries, registry: c.queries, reconcile: c.queries,
+			projector: c.queries, runs: c.queries, redirect: c.queries, primary: c.queries,
+		}
+	)
+	if c.store != nil {
+		r := repo.New(c.store)
+		connStore, engineStore, catalogStore = r, r, r
+		engineTx = func(ctx context.Context, fn func(manage.TxStore) error) error {
+			return r.TxEngines(ctx, fn)
+		}
+		catalogTx = func(ctx context.Context, fn func(admin.TxStore) error) error {
+			return r.TxCatalogs(ctx, fn)
+		}
+		stores = catalogStores{
+			lifecycle: r, registry: r, reconcile: r,
+			projector: r, runs: r, redirect: r, primary: r,
+		}
 	}
-	catalogTx := func(ctx context.Context, fn func(admin.TxStore) error) error {
-		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
-	}
-	q := c.queries
 	return &CatalogHandlers{
-		core: c, binder: binder, engineAdmin: manage.New(q, tx), catalogAdmin: admin.New(q, catalogTx), conns: conns.New(q),
-		stores:          catalogStores{lifecycle: q, registry: q, reconcile: q, projector: q, runs: q, redirect: q, primary: q},
+		core: c, binder: binder, engineAdmin: manage.New(engineStore, engineTx), catalogAdmin: admin.New(catalogStore, catalogTx),
+		conns: conns.New(connStore), stores: stores,
 		connectionTests: newTestLimiter(),
 		ddlTimeout:      catalogDDLTimeout,
 	}

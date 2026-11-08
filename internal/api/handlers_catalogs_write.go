@@ -167,7 +167,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		}
 		shareWith = pgtype.UUID{Bytes: *body.ShareWithWorkspaceId, Valid: true}
 	}
-	txErr := h.inTx(ctx, func(q db.Querier) error {
+	txErr := h.inCatalogTx(ctx, func(q catalogWriteStore) error {
 		c, err := q.CreateCatalog(ctx, db.CreateCatalogParams{
 			ConnectionID:     connID,
 			Name:             body.Name,
@@ -220,7 +220,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 // upsertPrimaryBinding writes the managed binding a catalog's Trino columns
 // describe, on its cluster's engine, entering state with the version it
 // wants.
-func upsertPrimaryBinding(ctx context.Context, q db.Querier, cluster db.TrinoCluster, c db.Catalog, state, version string) (db.CatalogBinding, error) {
+func upsertPrimaryBinding(ctx context.Context, q catalogWriteStore, cluster db.TrinoCluster, c db.Catalog, state, version string) (db.CatalogBinding, error) {
 	return q.UpsertManagedBinding(ctx, db.UpsertManagedBindingParams{
 		CatalogID: c.ID, EngineID: cluster.EngineID, EngineCatalogName: c.TrinoName(),
 		Connector: c.Connector, ExtraProps: c.ExtraProps, Enabled: c.Enabled,
@@ -419,7 +419,7 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 	}
 	var updated db.Catalog
 	var binding db.CatalogBinding
-	if err := h.inTx(ctx, func(q db.Querier) error {
+	if err := h.inCatalogTx(ctx, func(q catalogWriteStore) error {
 		u, err := q.UpdateCatalog(ctx, db.UpdateCatalogParams{
 			ID:               id,
 			Name:             newName,
@@ -510,7 +510,7 @@ func (h *CatalogHandlers) DeleteCatalog(ctx context.Context, request DeleteCatal
 	if err != nil {
 		return nil, fmt.Errorf("catalog binding: %w", err)
 	}
-	if err := h.inTx(ctx, func(q db.Querier) error {
+	if err := h.inCatalogTx(ctx, func(q catalogWriteStore) error {
 		if err := q.SetCatalogEnabled(ctx, db.SetCatalogEnabledParams{ID: id, Enabled: false}); err != nil {
 			return err
 		}

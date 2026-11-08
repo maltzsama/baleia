@@ -6,6 +6,7 @@ package repo
 import (
 	"time"
 
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -16,6 +17,23 @@ func UUIDString(u pgtype.UUID) string {
 		return ""
 	}
 	return uuid.UUID(u.Bytes).String()
+}
+
+// uuidText renders a UUID for a query, using the zero UUID when unset so a
+// comparison stays well-typed (sqlc passed the zero value the same way).
+func uuidText(u pgtype.UUID) string {
+	if !u.Valid {
+		return "00000000-0000-0000-0000-000000000000"
+	}
+	return uuid.UUID(u.Bytes).String()
+}
+
+// jsonOrDefault keeps a NOT NULL json column inside its contract.
+func jsonOrDefault(b []byte) model.JSON {
+	if len(b) == 0 {
+		return model.JSON("{}")
+	}
+	return model.JSON(b)
 }
 
 // PGUUID parses a text UUID into the sqlc type.

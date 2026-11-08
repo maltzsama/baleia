@@ -20,6 +20,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/icebergrest"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -266,13 +267,13 @@ func (t connectionTest) bind(ctx context.Context, b testBind) error {
 	defer func() {
 		dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ephemeralDropTime)
 		defer cancel()
-		if err := t.h.binder.DropEphemeral(dctx, t.h.queries, ref, name); err != nil {
+		if err := t.h.binder.DropEphemeral(dctx, t.h.ephemeralStore(), ref, name); err != nil {
 			t.h.logger.WarnContext(dctx, "drop test catalog; the sweeper will retry", "catalog", name, "err", err)
 		}
 	}()
 	bctx, cancel := context.WithTimeout(ctx, bindCheckTimeout)
 	defer cancel()
-	if err := t.h.binder.CreateEphemeral(bctx, t.h.queries, ref, proj, ephemeralTTL); err != nil {
+	if err := t.h.binder.CreateEphemeral(bctx, t.h.ephemeralStore(), ref, proj, ephemeralTTL); err != nil {
 		return err
 	}
 	eng, err := t.h.engines.Get(bctx, b.engine.ID)
@@ -299,8 +300,8 @@ func (h *CatalogHandlers) planTest(ctx context.Context, p authz.Principal, provi
 		t.metadata = true
 		t.direct = slices.Contains(roles, connections.RoleDirect)
 		if (provider.Family() == connections.FamilyDatabase || provider.Family() == connections.FamilyMetastore) && h.binder != nil && len(h.binder.Supports()[provider.Kind()]) > 0 {
-			if cluster, err := h.queries.GetDefaultTrinoCluster(ctx); err == nil && cluster.EngineID.Valid {
-				if eng, err := h.queries.GetEngineByID(ctx, cluster.EngineID); err == nil && eng.Enabled {
+			if cluster, err := h.topology.DefaultCluster(ctx); err == nil && cluster.EngineID.Valid {
+				if eng, err := h.topology.Engine(ctx, cluster.EngineID); err == nil && eng.Enabled {
 					t.binds = append(t.binds, testBind{engine: eng, cluster: cluster})
 				}
 			}
@@ -325,7 +326,7 @@ func (h *CatalogHandlers) planTest(ctx context.Context, p authz.Principal, provi
 			if err != nil {
 				return t, nil, err
 			}
-			cluster, err := h.queries.GetTrinoClusterByEngine(ctx, eng.ID)
+			cluster, err := h.topology.ClusterOfEngine(ctx, eng.ID)
 			if err != nil || h.binder == nil || eng.Kind != h.binder.EngineKind() {
 				return t, ptr("engine not found"), nil
 			}
@@ -421,4 +422,13 @@ func (h *CatalogHandlers) TestConnectionDraft(ctx context.Context, request TestC
 		return TestConnectionDraft404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: *refused}}, nil
 	}
 	return TestConnectionDraft200JSONResponse(t.run(ctx)), nil
+}
+
+// ephemeralStore returns the registry write surface of a connection test:
+// GORM when the store is configured, sqlc otherwise (#771).
+func (h *core) ephemeralStore() bindtrino.EphemeralStore {
+	if h.store != nil {
+		return repo.New(h.store)
+	}
+	return h.queries
 }
