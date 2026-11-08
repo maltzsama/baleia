@@ -35,9 +35,14 @@ func workspaceRole(db *gorm.DB, workspaceID, userID string) (string, error) {
 		}
 		return "", err
 	}
+	return workspaceRoleFor(db, ws, userID)
+}
 
+// workspaceRoleFor is workspaceRole over an already-loaded workspace, so a
+// caller listing workspaces does not fetch each row twice.
+func workspaceRoleFor(db *gorm.DB, ws model.Workspace, userID string) (string, error) {
 	var member model.WorkspaceMember
-	memberErr := db.Where("workspace_id = ? AND user_id = ?", workspaceID, userID).First(&member).Error
+	memberErr := db.Where("workspace_id = ? AND user_id = ?", string(ws.ID), userID).First(&member).Error
 	if memberErr != nil && !errors.Is(memberErr, gorm.ErrRecordNotFound) {
 		return "", memberErr
 	}

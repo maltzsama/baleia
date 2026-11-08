@@ -144,6 +144,8 @@ func (h *core) identityLink(ctx context.Context, providerID *openapi_types.UUID,
 	return "oidc", ap.ID, &ext, nil, nil
 }
 
+// newServiceAccountEmail builds a reserved-domain address so the account never
+// receives mail.
 func newServiceAccountEmail(name string) string {
 	b := make([]byte, 4)
 	_, _ = rand.Read(b)
@@ -315,6 +317,7 @@ func (h *AuthHandlers) UpdateServiceAccount(ctx context.Context, request UpdateS
 	return UpdateServiceAccount200JSONResponse(serviceAccountToPublic(updated, allServiceAccountActions)), nil
 }
 
+// strEq reports whether two optional strings are equal, treating nil as "".
 func strEq(a, b *string) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }

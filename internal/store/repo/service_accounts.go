@@ -133,7 +133,7 @@ func (s *ServiceAccounts) ListAdminWorkspaceIDs(ctx context.Context, userID pgty
 			return err
 		}
 		for _, ws := range rows {
-			role, err := workspaceRole(tx, string(ws.ID), UUIDString(userID))
+			role, err := workspaceRoleFor(tx, ws, UUIDString(userID))
 			if err != nil {
 				return err
 			}
@@ -175,28 +175,48 @@ func (s *ServiceAccounts) CreateServiceAccount(ctx context.Context, arg db.Creat
 	return toDBUser(row), nil
 }
 
-// UpdateServiceAccount edits a service account and returns the row.
+// UpdateServiceAccount edits a service account and returns the row. The target
+// row is locked for the update and the read, so a concurrent update or delete
+// cannot change the identity-provider link or vanish between the two.
 func (s *ServiceAccounts) UpdateServiceAccount(ctx context.Context, arg db.UpdateServiceAccountParams) (db.User, error) {
-	res := s.db.WithContext(ctx).Model(&model.User{}).
-		Where("id = ? AND kind = ?", UUIDString(arg.ID), "service_account").
-		Updates(map[string]any{
-			"name":             arg.Name,
-			"description":      arg.Description,
-			"auth_provider":    arg.AuthProvider,
-			"auth_provider_id": modelUUIDPtr(arg.AuthProviderID),
-			"external_id":      modelTextPtr(arg.ExternalID),
-			"updated_at":       time.Now().UTC(),
-		})
-	if res.Error != nil {
-		if errors.Is(res.Error, gorm.ErrDuplicatedKey) {
-			return db.User{}, &pgconn.PgError{Code: uniqueViolation, Message: "duplicate key value violates unique constraint"}
+	var out db.User
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row model.User
+		found := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND kind = ?", UUIDString(arg.ID), "service_account").
+			First(&row)
+		if errors.Is(found.Error, gorm.ErrRecordNotFound) {
+			return pgx.ErrNoRows
 		}
-		return db.User{}, res.Error
+		if found.Error != nil {
+			return found.Error
+		}
+		upd := tx.Model(&model.User{}).
+			Where("id = ?", UUIDString(arg.ID)).
+			Updates(map[string]any{
+				"name":             arg.Name,
+				"description":      arg.Description,
+				"auth_provider":    arg.AuthProvider,
+				"auth_provider_id": modelUUIDPtr(arg.AuthProviderID),
+				"external_id":      modelTextPtr(arg.ExternalID),
+				"updated_at":       time.Now().UTC(),
+			})
+		if upd.Error != nil {
+			if errors.Is(upd.Error, gorm.ErrDuplicatedKey) {
+				return &pgconn.PgError{Code: uniqueViolation, Message: "duplicate key value violates unique constraint"}
+			}
+			return upd.Error
+		}
+		if err := tx.Where("id = ?", UUIDString(arg.ID)).First(&row).Error; err != nil {
+			return err
+		}
+		out = toDBUser(row)
+		return nil
+	})
+	if err != nil {
+		return db.User{}, err
 	}
-	if res.RowsAffected == 0 {
-		return db.User{}, pgx.ErrNoRows
-	}
-	return s.GetServiceAccount(ctx, arg.ID)
+	return out, nil
 }
 
 // DeleteServiceAccount removes a service account and returns the rows.
@@ -209,32 +229,39 @@ func (s *ServiceAccounts) DeleteServiceAccount(ctx context.Context, id pgtype.UU
 
 // UpsertWorkspaceMember writes a membership the caller may grant and returns
 // the rows: 0 when the user cannot be a member. On a shared workspace a person
-// needs the owning team; a service account joins directly (#653). The
-// PostgreSQL share lock the sqlc query took is not reproduced (ADR 0020).
+// needs the owning team; a service account joins directly (#653). The check
+// and the write share one transaction; the PostgreSQL share lock the sqlc
+// query took is not reproduced (ADR 0020 forbids SQL-specific locking), so a
+// concurrent team removal is serialized by the transaction, not a row lock.
 func (s *ServiceAccounts) UpsertWorkspaceMember(ctx context.Context, arg db.UpsertWorkspaceMemberParams) (int64, error) {
-	allowed, err := s.memberAllowed(ctx, arg.WorkspaceID, arg.UserID)
-	if err != nil || !allowed {
-		return 0, err
-	}
-	now := time.Now().UTC()
-	row := model.WorkspaceMember{
-		WorkspaceID: model.UUID(UUIDString(arg.WorkspaceID)),
-		UserID:      model.UUID(UUIDString(arg.UserID)),
-		Role:        arg.Role,
-		GrantedBy:   modelUUIDPtr(arg.GrantedBy),
-		GrantedAt:   now,
-		Source:      "manual",
-	}
-	res := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "workspace_id"}, {Name: "user_id"}},
-		DoUpdates: clause.Assignments(map[string]any{
-			"role":       arg.Role,
-			"granted_by": modelUUIDPtr(arg.GrantedBy),
-			"granted_at": now,
-			"source":     "manual",
-		}),
-	}).Create(&row)
-	return res.RowsAffected, res.Error
+	var rows int64
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		allowed, err := (&ServiceAccounts{db: tx}).memberAllowed(ctx, arg.WorkspaceID, arg.UserID)
+		if err != nil || !allowed {
+			return err
+		}
+		now := time.Now().UTC()
+		row := model.WorkspaceMember{
+			WorkspaceID: model.UUID(UUIDString(arg.WorkspaceID)),
+			UserID:      model.UUID(UUIDString(arg.UserID)),
+			Role:        arg.Role,
+			GrantedBy:   modelUUIDPtr(arg.GrantedBy),
+			GrantedAt:   now,
+			Source:      "manual",
+		}
+		res := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "workspace_id"}, {Name: "user_id"}},
+			DoUpdates: clause.Assignments(map[string]any{
+				"role":       arg.Role,
+				"granted_by": modelUUIDPtr(arg.GrantedBy),
+				"granted_at": now,
+				"source":     "manual",
+			}),
+		}).Create(&row)
+		rows = res.RowsAffected
+		return res.Error
+	})
+	return rows, err
 }
 
 // memberAllowed mirrors the sqlc query's allowed set: a personal workspace, a
@@ -274,6 +301,7 @@ func (s *ServiceAccounts) memberAllowed(ctx context.Context, workspaceID, userID
 	return user.Kind == "service_account", nil
 }
 
+// toDBUsers converts a slice of model users to the sqlc shape.
 func toDBUsers(rows []model.User) []db.User {
 	out := make([]db.User, len(rows))
 	for i, row := range rows {
