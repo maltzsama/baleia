@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
@@ -67,6 +68,29 @@ func (f *fakeStore) CreateMaintenanceRun(_ context.Context, arg db.CreateMainten
 func (f *fakeStore) UpdateMaintenanceRun(_ context.Context, arg db.UpdateMaintenanceRunParams) (db.MaintenanceRun, error) {
 	f.failed = append(f.failed, arg)
 	return db.MaintenanceRun{}, nil
+}
+
+func TestClusterWindow(t *testing.T) {
+	t.Parallel()
+	cases := map[string]time.Duration{
+		"5m":       5 * time.Minute,
+		"1h":       time.Hour,
+		"6h":       6 * time.Hour,
+		"24h":      24 * time.Hour,
+		"":         time.Hour,
+		"nonsense": time.Hour,
+	}
+	for window, want := range cases {
+		st := &fakeStore{}
+		before := time.Now()
+		if _, err := New(st).Cluster(context.Background(), newID(), window); err != nil {
+			t.Fatalf("%q: %v", window, err)
+		}
+		got := before.Sub(st.clusterTo.Time)
+		if got < want-time.Minute || got > want+time.Minute {
+			t.Errorf("%q: from = %v ago, want %v", window, got, want)
+		}
+	}
 }
 
 func TestQueries(t *testing.T) {

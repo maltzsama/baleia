@@ -94,11 +94,13 @@ type Cluster struct {
 	Series []db.ClusterSnapshot
 }
 
-// Cluster returns an engine's cluster snapshots over window: 1h (the
+// Cluster returns an engine's cluster snapshots over window: 5m, 1h (the
 // default), 6h or 24h.
 func (s *Service) Cluster(ctx context.Context, engineID pgtype.UUID, window string) (Cluster, error) {
 	duration := time.Hour
 	switch window {
+	case "5m":
+		duration = 5 * time.Minute
 	case "6h":
 		duration = 6 * time.Hour
 	case "24h":

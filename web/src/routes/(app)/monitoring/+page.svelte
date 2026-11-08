@@ -64,6 +64,9 @@
 	let cluster = $state<ClusterSeries | null>(null);
 	let clusterLoading = $state(false);
 	let clusterError = $state('');
+	// Live updates arrive over SSE (#733) with a slow poll as the fallback;
+	// pausing stops both, and Refresh still pulls one snapshot on demand.
+	let live = $state(true);
 
 	// The chart takes series of `{ t, v }`; the cluster snapshot keeps the
 	// capture in `captured_at` (#820).
@@ -266,6 +269,7 @@
 		if (!engineId && tab !== 'tables') return;
 		if (tab === 'cluster') {
 			await loadCluster();
+			if (!live) return;
 			// Push is the primary path (#733); this slow poll is the safety net.
 			polls.push(
 				poll(loadCluster, { until: () => false, intervals: [60_000], maxDurationMs: 3_600_000 })
@@ -273,6 +277,7 @@
 			startEvents();
 		} else if (tab === 'queries') {
 			await loadQueries();
+			if (!live) return;
 			polls.push(
 				poll(loadQueries, {
 					until: () => false,
@@ -294,6 +299,21 @@
 				poll(loadHealth, { until: () => false, intervals: [60_000], maxDurationMs: 3_600_000 })
 			);
 		}
+	}
+
+	function setLive(next: boolean) {
+		if (next === live) return;
+		live = next;
+		if (live) void loadActive();
+		else {
+			stopPolls();
+			stopEvents();
+		}
+	}
+
+	function refreshActive() {
+		if (tab === 'cluster') void loadCluster();
+		else if (tab === 'queries') void loadQueries();
 	}
 
 	function selectTab(next: 'cluster' | 'queries' | 'tables') {
@@ -544,24 +564,30 @@
 			description={m.monitoring_monitoring_is_available_for_federated_engines()}
 		/>
 	{:else}
-		<div
-			class="mb-4 flex gap-1 border-b border-border"
-			role="tablist"
-			aria-label={m.monitoring_monitoring_tabs()}
-		>
-			{#each [['cluster', m.monitoring_cluster()], ['queries', m.monitoring_queries()], ['tables', m.monitoring_table_health()]] as [value, label] (value)}
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === value}
-					class="-mb-px border-b-2 px-3 py-1.5 text-[12px] font-semibold {tab === value
-						? 'border-primary text-primary'
-						: 'border-transparent text-slate-600 hover:text-text-main dark:text-slate-300'}"
-					onclick={() => selectTab(value as 'cluster' | 'queries' | 'tables')}
-				>
-					{label}
-				</button>
-			{/each}
+		<div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border">
+			<div class="flex gap-1" role="tablist" aria-label={m.monitoring_monitoring_tabs()}>
+				{#each [['cluster', m.monitoring_cluster()], ['queries', m.monitoring_queries()], ['tables', m.monitoring_table_health()]] as [value, label] (value)}
+					<button
+						type="button"
+						role="tab"
+						aria-selected={tab === value}
+						class="-mb-px border-b-2 px-3 py-1.5 text-[12px] font-semibold {tab === value
+							? 'border-primary text-primary'
+							: 'border-transparent text-slate-600 hover:text-text-main dark:text-slate-300'}"
+						onclick={() => selectTab(value as 'cluster' | 'queries' | 'tables')}
+					>
+						{label}
+					</button>
+				{/each}
+			</div>
+			{#if tab !== 'tables'}
+				<div class="flex items-center gap-2 pb-1">
+					<Button size="sm" onclick={refreshActive}>{m.monitoring_refresh()}</Button>
+					<Button size="sm" variant={live ? 'secondary' : 'primary'} onclick={() => setLive(!live)}>
+						{live ? m.monitoring_pause_live() : m.monitoring_resume_live()}
+					</Button>
+				</div>
+			{/if}
 		</div>
 
 		{#if tab === 'cluster'}
@@ -571,6 +597,7 @@
 						label={m.monitoring_window()}
 						bind:value={clusterWindow}
 						options={[
+							{ value: '5m', label: m.monitoring_last_5_minutes() },
 							{ value: '1h', label: m.monitoring_last_hour() },
 							{ value: '6h', label: m.monitoring_last_6_hours() },
 							{ value: '24h', label: m.monitoring_last_24_hours() }
