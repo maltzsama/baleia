@@ -35,6 +35,9 @@ func (s *Users) Tx(ctx context.Context, fn func(users.TxStore) error) error {
 
 // GetUserByID returns one account or pgx.ErrNoRows.
 func (s *Users) GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error) {
+	if !id.Valid {
+		return db.User{}, pgx.ErrNoRows
+	}
 	var row model.User
 	err := s.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
