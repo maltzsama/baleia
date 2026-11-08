@@ -87,13 +87,16 @@ func TestEffectiveSpaceRoleMatchesSQLFunction(t *testing.T) {
 		}
 	}
 
+	if role, err := store.GetEffectiveSpaceRole(ctx, db.GetEffectiveSpaceRoleParams{}); err != nil || role != "" {
+		t.Fatalf("empty identifiers = %q, %v; want none", role, err)
+	}
+
 	cases := []struct {
 		name string
 		user model.UUID
 		want string
 	}{
-		{"global admin", admin.ID, "manager"},
-		{"team owner", owner.ID, "manager"},
+		{"global admin", admin.ID, "manager"}, {"team owner", owner.ID, "manager"},
 		{"team member capped by workspace editor", member.ID, "editor"},
 		{"workspace viewer", viewer.ID, "viewer"},
 		{"outsider", outsider.ID, ""},

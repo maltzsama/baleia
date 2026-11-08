@@ -248,14 +248,15 @@ func (r *Repo) GetWorkspaceMemberRole(ctx context.Context, arg db.GetWorkspaceMe
 	return r.WorkspaceRole(ctx, UUIDString(arg.ID), UUIDString(arg.UserID))
 }
 
-// GetTeamMemberRole returns the user's team role, or "".
+// GetTeamMemberRole returns the user's team role, or pgx.ErrNoRows when the
+// user is not a member.
 func (r *Repo) GetTeamMemberRole(ctx context.Context, arg db.GetTeamMemberRoleParams) (string, error) {
 	var row model.TeamMember
 	err := r.Users.db.WithContext(ctx).
 		Where("team_id = ? AND user_id = ?", UUIDString(arg.TeamID), UUIDString(arg.UserID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", nil
+		return "", pgx.ErrNoRows
 	}
 	if err != nil {
 		return "", err

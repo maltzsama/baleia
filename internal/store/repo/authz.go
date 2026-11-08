@@ -108,6 +108,9 @@ func (r *Repo) GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, er
 // GetEffectiveSpaceRole is the Go replacement for the
 // baleia_effective_space_role() PL/pgSQL function removed by ADR 0020.
 func (r *Repo) GetEffectiveSpaceRole(ctx context.Context, arg db.GetEffectiveSpaceRoleParams) (string, error) {
+	if !arg.WorkspaceID.Valid || !arg.SpaceID.Valid || !arg.UserID.Valid {
+		return "", nil
+	}
 	var role string
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var user model.User
