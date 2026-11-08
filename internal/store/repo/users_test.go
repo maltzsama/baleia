@@ -86,6 +86,10 @@ func TestUsersRoundTrip(t *testing.T) {
 	if err := store.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: created.ID, Role: "admin"}); err != nil {
 		t.Fatalf("UpdateUserRole: %v", err)
 	}
+	updated, err := store.GetUserByID(ctx, created.ID)
+	if err != nil || updated.Role != "admin" {
+		t.Fatalf("updated user = %+v, %v; want admin role", updated, err)
+	}
 	if err := store.DeleteUser(ctx, created.ID); err != nil {
 		t.Fatalf("DeleteUser: %v", err)
 	}
@@ -136,5 +140,67 @@ func TestPasswordResetTokenIsSingleUse(t *testing.T) {
 	}
 	if _, err := store.ConsumePasswordResetToken(ctx, token); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("replayed token = %v, want pgx.ErrNoRows", err)
+	}
+}
+
+func TestPasswordResetTokenConcurrentConsume(t *testing.T) {
+	t.Parallel()
+	pool := testdb.New(t)
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger:         gormlogger.Discard,
+		TranslateError: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	ctx := context.Background()
+	store := NewUsers(gdb)
+	hash := "x"
+	user, err := store.CreateUser(ctx, db.CreateUserParams{
+		Name:         "Concurrent",
+		Email:        "concurrent@example.test",
+		PasswordHash: &hash,
+		Role:         "member",
+		AuthProvider: "local",
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	const token = "concurrent-token-hash"
+	if err := store.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
+		TokenHash: token,
+		UserID:    user.ID,
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
+	}); err != nil {
+		t.Fatalf("CreatePasswordResetToken: %v", err)
+	}
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			_, err := store.ConsumePasswordResetToken(ctx, token)
+			errs <- err
+		}()
+	}
+	close(start)
+
+	var consumed, gone int
+	for range 2 {
+		switch err := <-errs; {
+		case err == nil:
+			consumed++
+		case errors.Is(err, pgx.ErrNoRows):
+			gone++
+		default:
+			t.Fatalf("unexpected consume error: %v", err)
+		}
+	}
+	if consumed != 1 || gone != 1 {
+		t.Fatalf("consumed=%d noRows=%d, want exactly one of each", consumed, gone)
 	}
 }
