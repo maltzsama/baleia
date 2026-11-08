@@ -521,18 +521,7 @@ func (r *Repo) ListWorkloadRules(ctx context.Context) ([]db.WorkloadRule, error)
 	}
 	out := make([]db.WorkloadRule, len(rows))
 	for i, row := range rows {
-		out[i] = db.WorkloadRule{
-			ID:        PGUUID(string(row.ID)),
-			Position:  row.Position,
-			Enabled:   row.Enabled,
-			Match:     []byte(row.Match),
-			Class:     row.Class,
-			MaxClass:  row.MaxClass,
-			Weight:    row.Weight,
-			CreatedBy: uuidPtr(row.CreatedBy),
-			CreatedAt: PGTime(row.CreatedAt),
-			UpdatedAt: PGTime(row.UpdatedAt),
-		}
+		out[i] = toDBWorkloadRule(row)
 	}
 	return out, nil
 }

@@ -113,7 +113,11 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	s.handlers = h
 	s.background = h
 	if cfg.TrinoEventsToken != "" {
-		s.queryEvents = queryevents.New(s.logger, core.Queries, defaultTrinoID(core.Engines), cfg.TrinoEventsToken, core.Pool)
+		var snapshotStore queryevents.Store = core.Queries
+		if core.StoreRepo != nil {
+			snapshotStore = core.StoreRepo
+		}
+		s.queryEvents = queryevents.New(s.logger, snapshotStore, defaultTrinoID(core.Engines), cfg.TrinoEventsToken, core.Pool)
 	}
 
 	authMetrics := h.AuthMetrics()

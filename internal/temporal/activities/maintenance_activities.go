@@ -16,11 +16,13 @@ import (
 	"github.com/galileostudio/baleia/internal/monitoring"
 	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
+	"gorm.io/gorm"
 )
 
 // snapshotMetrics is what one Iceberg table's metadata says (#500).
@@ -210,11 +212,11 @@ func (a *Activities) planMaintenanceRound(ctx context.Context, params PlanMainte
 	if !catalogID.Valid {
 		return nil, fmt.Errorf("invalid catalog id %q", params.CatalogID)
 	}
-	policies, err := a.queries.ListManagedMaintenancePolicies(ctx, catalogID)
+	policies, err := a.monitoring().ListManagedMaintenancePolicies(ctx, catalogID)
 	if err != nil || len(policies) == 0 {
 		return nil, err
 	}
-	bindings, err := a.queries.ListBindingsByCatalog(ctx, catalogID)
+	bindings, err := a.monitoring().ListBindingsByCatalog(ctx, catalogID)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +224,7 @@ func (a *Activities) planMaintenanceRound(ctx context.Context, params PlanMainte
 	if !ok {
 		return nil, nil
 	}
-	svc := monitoring.New(a.queries)
+	svc := monitoring.New(a.monitoring())
 	now := time.Now()
 	var candidates []roundCandidate
 	for _, row := range policies {
@@ -284,10 +286,61 @@ func orderCandidates(c []roundCandidate) {
 }
 
 // reserveRuns records runs for the candidates while the global limit has
-// room. The capacity check and the inserts share one transaction under an
-// advisory lock: concurrent catalog rounds take turns instead of each
-// filling the free capacity they read.
+// room. The capacity check and the inserts share one transaction; concurrent
+// catalog rounds take turns instead of each filling the free capacity they
+// read.
 func (a *Activities) reserveRuns(ctx context.Context, binding db.CatalogBinding, candidates []roundCandidate) ([]PlannedRun, error) {
+	if a.store != nil {
+		return a.reserveRunsStore(ctx, binding, candidates)
+	}
+	return a.reserveRunsSQLC(ctx, binding, candidates)
+}
+
+// reserveRunsStore is the GORM reservation: the engine rows are locked for
+// update so concurrent rounds serialize, and each insert runs in a savepoint
+// so a table's one-running index refusing it does not abort the transaction.
+func (a *Activities) reserveRunsStore(ctx context.Context, binding db.CatalogBinding, candidates []roundCandidate) ([]PlannedRun, error) {
+	limit := a.cfg.MaintenanceConcurrency()
+	var out []PlannedRun
+	err := a.store.TxOps(ctx, func(tx *repo.Repo) error {
+		if err := tx.LockMaintenanceCapacity(ctx); err != nil {
+			return err
+		}
+		running, err := tx.CountRunningMaintenanceRuns(ctx)
+		if err != nil {
+			return err
+		}
+		for _, c := range candidates {
+			if int(running) >= limit {
+				break
+			}
+			var run db.MaintenanceRun
+			err := tx.TxOps(ctx, func(sp *repo.Repo) error {
+				var createErr error
+				run, createErr = RecordMaintenanceRun(ctx, sp, c.key, binding, c.row, c.step, c.settings, string(maintenance.Automatic), pgtype.UUID{})
+				return createErr
+			})
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
+				continue // a run started on the table meanwhile
+			}
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			running++
+			out = append(out, PlannedRun{RunID: uuid.UUID(run.ID.Bytes).String(), WorkflowID: run.WorkflowID, TimeoutSeconds: c.settings.TimeoutSeconds})
+		}
+		return nil
+	})
+	return out, err
+}
+
+// reserveRunsSQLC is the fallback for tests that build the activities without
+// the GORM store.
+func (a *Activities) reserveRunsSQLC(ctx context.Context, binding db.CatalogBinding, candidates []roundCandidate) ([]PlannedRun, error) {
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -335,10 +388,16 @@ func (a *Activities) reserveRuns(ctx context.Context, binding db.CatalogBinding,
 	return out, nil
 }
 
+// maintenanceRunRecorder stores one planned run; the sqlc querier and the
+// GORM store both implement it.
+type maintenanceRunRecorder interface {
+	CreatePlannedMaintenanceRun(ctx context.Context, arg db.CreatePlannedMaintenanceRunParams) (db.MaintenanceRun, error)
+}
+
 // RecordMaintenanceRun stores a run of one operation, shared by the round
 // and the API's manual run. The unique index on running runs refuses a
 // second run on the table (23505).
-func RecordMaintenanceRun(ctx context.Context, q db.Querier, k monitoring.TableKey, b db.CatalogBinding, row db.TableMaintenancePolicy, step maintenance.Step, s maintenance.Settings, trigger string, actor pgtype.UUID) (db.MaintenanceRun, error) {
+func RecordMaintenanceRun(ctx context.Context, q maintenanceRunRecorder, k monitoring.TableKey, b db.CatalogBinding, row db.TableMaintenancePolicy, step maintenance.Step, s maintenance.Settings, trigger string, actor pgtype.UUID) (db.MaintenanceRun, error) {
 	params, err := json.Marshal(s)
 	if err != nil {
 		return db.MaintenanceRun{}, err
@@ -377,7 +436,7 @@ func RunMaintenanceOperation(ctx context.Context, params RunMaintenanceOperation
 
 func (a *Activities) runMaintenanceOperation(ctx context.Context, params RunMaintenanceOperationParams) error {
 	id := engineUUID(params.RunID)
-	run, err := a.queries.GetMaintenanceRun(ctx, id)
+	run, err := a.monitoring().GetMaintenanceRun(ctx, id)
 	if err != nil {
 		return fmt.Errorf("load maintenance run %s: %w", params.RunID, err)
 	}
@@ -385,7 +444,7 @@ func (a *Activities) runMaintenanceOperation(ctx context.Context, params RunMain
 		return nil // finished or closed meanwhile
 	}
 	fail := func(code string, cause error) error {
-		finishMaintenanceRun(a.queries, ctx, params.RunID, "failed", code, cause.Error())
+		finishMaintenanceRun(ctx, a.monitoring(), params.RunID, "failed", code, cause.Error())
 		return cause
 	}
 	if len(run.Operations) != 1 || !run.BindingID.Valid {
@@ -395,7 +454,7 @@ func (a *Activities) runMaintenanceOperation(ctx context.Context, params RunMain
 	if err != nil {
 		return fail("maintenance_failed", err)
 	}
-	binding, err := a.queries.GetBinding(ctx, run.BindingID)
+	binding, err := a.monitoring().GetBinding(ctx, run.BindingID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fail("maintenance_failed", errors.New("the run's binding no longer exists"))
 	}
@@ -425,15 +484,15 @@ func (a *Activities) runMaintenanceOperation(ctx context.Context, params RunMain
 	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "maintenance", ExecutionID: params.RunID}}
 	for attempt := 1; ; attempt++ {
 		if attempt > 1 {
-			_ = a.queries.SetMaintenanceRunAttempts(ctx, db.SetMaintenanceRunAttemptsParams{ID: id, Attempts: int32(attempt)})
+			_ = a.monitoring().SetMaintenanceRunAttempts(ctx, db.SetMaintenanceRunAttemptsParams{ID: id, Attempts: int32(attempt)})
 		}
 		_, err = queryengine.CollectStringsWith(ctx, eng, spec, sql, maintenanceMaxResultRows, cb)
 		if err == nil {
-			recordMaintenanceSnapshot(a.queries, ctx, binding.EngineID, params.RunID, sql, "finished", 0, 0, "")
-			finishMaintenanceRun(a.queries, ctx, params.RunID, "finished", "", "")
+			recordMaintenanceSnapshot(ctx, a.monitoring(), binding.EngineID, params.RunID, sql, "finished", 0, 0, "")
+			finishMaintenanceRun(ctx, a.monitoring(), params.RunID, "finished", "", "")
 			return nil
 		}
-		recordMaintenanceSnapshot(a.queries, ctx, binding.EngineID, params.RunID, sql, "failed", 0, 0, err.Error())
+		recordMaintenanceSnapshot(ctx, a.monitoring(), binding.EngineID, params.RunID, sql, "failed", 0, 0, err.Error())
 		if ctx.Err() != nil {
 			return fail("cancelled", ctx.Err())
 		}
@@ -441,7 +500,7 @@ func (a *Activities) runMaintenanceOperation(ctx context.Context, params RunMain
 			return fail("maintenance_failed", err)
 		}
 		if settings.OnConflict != maintenance.RetryWithBackoff || attempt > len(conflictBackoff) {
-			finishMaintenanceRun(a.queries, ctx, params.RunID, "gave_up", "commit_conflict", err.Error())
+			finishMaintenanceRun(ctx, a.monitoring(), params.RunID, "gave_up", "commit_conflict", err.Error())
 			return nil
 		}
 		if err := sleepBeating(ctx, conflictBackoff[attempt-1]); err != nil {
@@ -516,6 +575,6 @@ type FailMaintenanceRunParams struct {
 // FailMaintenanceRun marks a planned run failed when its workflow did not
 // start, so it does not block the table as "running".
 func FailMaintenanceRun(ctx context.Context, params FailMaintenanceRunParams) error {
-	finishMaintenanceRun(defaultActivities.queries, ctx, params.RunID, "failed", "workflow_start_failed", params.Message)
+	finishMaintenanceRun(ctx, defaultActivities.monitoring(), params.RunID, "failed", "workflow_start_failed", params.Message)
 	return nil
 }

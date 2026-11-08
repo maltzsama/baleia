@@ -30,6 +30,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"gorm.io/gorm"
 )
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1422,6 +1423,9 @@ func savedQueryUpdateConflict(msg string) savedQueryConflictJSONResponse {
 }
 
 func isUniqueViolation(err error) bool {
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true // the GORM store with TranslateError
+	}
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

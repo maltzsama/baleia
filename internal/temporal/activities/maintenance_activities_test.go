@@ -15,8 +15,14 @@ import (
 	"github.com/galileostudio/baleia/internal/monitoring"
 	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 func i64(v int64) *int64 { return &v }
@@ -222,5 +228,43 @@ func TestReserveRuns_GlobalLimit(t *testing.T) {
 	}
 	if running != limit {
 		t.Fatalf("running runs = %d, want the limit %d", running, limit)
+	}
+
+	// The same round over the GORM store: row locks on the engines serialize
+	// it and a savepoint absorbs the table that is already running (#773).
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger: gormlogger.Discard, TranslateError: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gdb.Where("id IS NOT NULL").Delete(&model.MaintenanceRun{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	a.store = repo.New(gdb)
+	if _, err := RecordMaintenanceRun(ctx, a.store, first.key, rounds[0].binding, first.row, first.step, first.settings, "manual", pgtype.UUID{}); err != nil {
+		t.Fatal(err)
+	}
+	errs = make(chan error, catalogs)
+	for _, r := range rounds {
+		wg.Go(func() {
+			if _, err := a.reserveRuns(ctx, r.binding, r.candidates); err != nil {
+				errs <- err
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+	var runningStore int64
+	if err := gdb.Model(&model.MaintenanceRun{}).Where("status = ?", "running").Count(&runningStore).Error; err != nil {
+		t.Fatal(err)
+	}
+	if runningStore != limit {
+		t.Fatalf("GORM running runs = %d, want the limit %d", runningStore, limit)
 	}
 }

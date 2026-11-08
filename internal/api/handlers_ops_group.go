@@ -86,10 +86,15 @@ func (m managedEngines) ProbeEngine(ctx context.Context, e db.Engine) (SystemSta
 
 func newOpsHandlers(c *core, schema schemaVersioner) *OpsHandlers {
 	var lineageStore lineageReads = c.queries
+	var monitorStore monitoring.Store = c.queries
+	var signalStore signals.Store = c.queries
 	if c.store != nil {
-		lineageStore = repo.New(c.store)
+		r := repo.New(c.store)
+		lineageStore = r
+		monitorStore = r
+		signalStore = r
 	}
-	o := &OpsHandlers{core: c, schema: schema, engineStatus: managedEngines{c: c}, monitor: monitoring.New(c.queries), trail: trail.New(c.queries), signals: signals.New(c.queries), lineage: lineageStore}
+	o := &OpsHandlers{core: c, schema: schema, engineStatus: managedEngines{c: c}, monitor: monitoring.New(monitorStore), trail: trail.New(c.queries), signals: signals.New(signalStore), lineage: lineageStore}
 	if c.temporalClient != nil {
 		o.schedules = temporalSchedules{client: c.temporalClient}
 	}

@@ -197,7 +197,7 @@ func (h *OpsHandlers) queryClasses(ctx context.Context, rows []db.TrinoQuerySnap
 	if len(executions) == 0 && len(queries) == 0 {
 		return byExecution, byQuery, nil
 	}
-	found, err := h.queries.ListQueryClasses(ctx, db.ListQueryClassesParams{
+	found, err := h.opsStore().ListQueryClasses(ctx, db.ListQueryClassesParams{
 		ExecutionIds: executions,
 		QueryIds:     queries,
 	})
@@ -453,7 +453,7 @@ func (h *OpsHandlers) ListTableHealth(ctx context.Context, request ListTableHeal
 	if err != nil {
 		return nil, err
 	}
-	policies, err := h.queries.ListTableMaintenancePolicies(ctx, catalogID)
+	policies, err := h.opsStore().ListTableMaintenancePolicies(ctx, catalogID)
 	if err != nil {
 		return nil, err
 	}
@@ -469,7 +469,7 @@ func (h *OpsHandlers) ListTableHealth(ctx context.Context, request ListTableHeal
 	}
 	var finished []db.ListLastMaintenancePerOperationRow
 	if len(rows) > 0 {
-		finished, err = h.queries.ListLastMaintenancePerOperation(ctx, db.ListLastMaintenancePerOperationParams{
+		finished, err = h.opsStore().ListLastMaintenancePerOperation(ctx, db.ListLastMaintenancePerOperationParams{
 			CatalogID:  catalogID,
 			Namespaces: namespaces,
 			Tables:     tables,

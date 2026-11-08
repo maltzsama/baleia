@@ -34,7 +34,7 @@ func (h *CatalogHandlers) ListWorkloadRules(ctx context.Context, _ ListWorkloadR
 	if auth.RoleFromContext(ctx) != authz.RoleAdmin {
 		return ListWorkloadRules403JSONResponse{ForbiddenJSONResponse: workloadForbidden()}, nil
 	}
-	rows, err := h.queries.ListWorkloadRules(ctx)
+	rows, err := h.workloadRulesStore().ListWorkloadRules(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (h *CatalogHandlers) CreateWorkloadRule(ctx context.Context, request Create
 		}
 		position = *request.Body.Position
 	} else {
-		last, err := h.queries.MaxWorkloadRulePosition(ctx)
+		last, err := h.workloadRulesStore().MaxWorkloadRulePosition(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +99,7 @@ func (h *CatalogHandlers) CreateWorkloadRule(ctx context.Context, request Create
 		return CreateWorkloadRule422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	}
 
-	row, err := h.queries.CreateWorkloadRule(ctx, db.CreateWorkloadRuleParams{
+	row, err := h.workloadRulesStore().CreateWorkloadRule(ctx, db.CreateWorkloadRuleParams{
 		Position:  int32(position), //nolint:gosec // validated non-negative
 		Enabled:   enabled,
 		Match:     raw,
@@ -134,7 +134,7 @@ func (h *CatalogHandlers) UpdateWorkloadRule(ctx context.Context, request Update
 		return UpdateWorkloadRule422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "a body is required")}, nil
 	}
 	id := pgtype.UUID{Bytes: request.RuleId, Valid: true}
-	row, err := h.queries.GetWorkloadRule(ctx, id)
+	row, err := h.workloadRulesStore().GetWorkloadRule(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return UpdateWorkloadRule404JSONResponse{NotFoundJSONResponse: workloadRuleNotFound()}, nil
 	}
@@ -195,7 +195,7 @@ func (h *CatalogHandlers) UpdateWorkloadRule(ctx context.Context, request Update
 		return UpdateWorkloadRule422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, err.Error())}, nil
 	}
 
-	updated, err := h.queries.UpdateWorkloadRule(ctx, db.UpdateWorkloadRuleParams{
+	updated, err := h.workloadRulesStore().UpdateWorkloadRule(ctx, db.UpdateWorkloadRuleParams{
 		ID:       id,
 		Position: position,
 		Enabled:  enabled,
@@ -231,7 +231,7 @@ func (h *CatalogHandlers) DeleteWorkloadRule(ctx context.Context, request Delete
 		return DeleteWorkloadRule403JSONResponse{ForbiddenJSONResponse: workloadForbidden()}, nil
 	}
 	id := pgtype.UUID{Bytes: request.RuleId, Valid: true}
-	deleted, err := h.queries.DeleteWorkloadRule(ctx, id)
+	deleted, err := h.workloadRulesStore().DeleteWorkloadRule(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func (h *CatalogHandlers) TestWorkloadRule(ctx context.Context, request TestWork
 
 // workloadRules loads the ordered rules in their in-memory form (#539, #546).
 func (h *core) workloadRules(ctx context.Context) ([]workload.Rule, error) {
-	rows, err := h.queries.ListWorkloadRules(ctx)
+	rows, err := h.workloadRulesStore().ListWorkloadRules(ctx)
 	if err != nil {
 		return nil, err
 	}
