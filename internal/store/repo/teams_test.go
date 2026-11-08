@@ -2,10 +2,12 @@ package repo
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -60,6 +62,14 @@ func TestTeamsRoundTrip(t *testing.T) {
 
 	if _, err := store.UpdateTeamMemberRole(ctx, db.UpdateTeamMemberRoleParams{TeamID: team.ID, UserID: memberID, Role: "owner"}); err != nil {
 		t.Fatalf("UpdateTeamMemberRole: %v", err)
+	}
+	repo := New(gdb)
+	role, err := repo.GetTeamMemberRole(ctx, db.GetTeamMemberRoleParams{TeamID: team.ID, UserID: memberID})
+	if err != nil || role != "owner" {
+		t.Fatalf("GetTeamMemberRole = %q, %v; want owner", role, err)
+	}
+	if _, err := repo.GetTeamMemberRole(ctx, db.GetTeamMemberRoleParams{TeamID: team.ID, UserID: PGUUID(NewUUID())}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("GetTeamMemberRole(non-member) = %v, want pgx.ErrNoRows", err)
 	}
 	if n, err := store.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{TeamID: team.ID, UserID: memberID}); err != nil || n != 1 {
 		t.Fatalf("RemoveTeamMember = %d, %v", n, err)

@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -32,7 +33,11 @@ import (
 const catalogDDLTimeout = 30 * time.Second
 
 func (h *core) authz() *authz.Checker {
-	c := authz.New(h.queries)
+	var q authz.Store = h.queries
+	if h.store != nil {
+		q = repo.New(h.store)
+	}
+	c := authz.New(q)
 	if h.metrics.authz != nil {
 		c.WithDenials(h.metrics.authz.Denied)
 	}
