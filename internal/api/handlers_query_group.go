@@ -50,11 +50,12 @@ func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
 		folderStore    folders.Store      = c.queries
 		savedStore     savedqueries.Store = c.queries
 		executionStore executions.Store   = c.queries
+		retrieverStore retrievers.Store   = c.queries
 		folderTx       folders.Tx
 	)
 	if c.store != nil {
 		r := repo.New(c.store)
-		folderStore, savedStore, executionStore = r, r, r
+		folderStore, savedStore, executionStore, retrieverStore = r, r, r, r
 		folderTx = r.TxFolders
 	} else {
 		folderTx = func(ctx context.Context, fn func(folders.Mover) error) error {
@@ -67,7 +68,7 @@ func newQueryHandlers(c *core, tickets *wsticket.Store) *QueryHandlers {
 		wsTickets:  tickets,
 		folders:    f,
 		saved:      savedqueries.NewService(savedStore, f, c.contentService()),
-		retrievers: retrievers.New(c.queries, c.temporalClient, c.engines, trino),
+		retrievers: retrievers.New(retrieverStore, c.temporalClient, c.engines, trino),
 		executions: executions.New(executionStore, c.temporalClient, c.engines, dialects, executions.Config{
 			StatementTimeout: c.settings.Execution.StatementTimeout,
 			ExecutionTimeout: c.settings.Execution.ExecutionTimeout,

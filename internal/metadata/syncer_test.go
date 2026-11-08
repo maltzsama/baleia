@@ -10,13 +10,41 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 func testPool(t *testing.T) *pgxpool.Pool { return testdb.New(t) }
+
+// testStore builds the GORM store over the test database.
+func testStore(t *testing.T, pool *pgxpool.Pool) *repo.Repo {
+	t.Helper()
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger:         gormlogger.Discard,
+		TranslateError: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	return repo.New(gdb)
+}
+
+// newSyncer builds the GORM-backed syncer over the test database.
+func newSyncer(t *testing.T, pool *pgxpool.Pool, opener Opener) *Syncer {
+	t.Helper()
+	r := testStore(t, pool)
+	return NewSyncer(r, func(ctx context.Context, fn func(Store) error) error {
+		return r.TxMetadata(ctx, func(tx *repo.Repo) error { return fn(tx) })
+	}, opener)
+}
 
 // testCatalog inserts a native catalog on a fresh connection.
 func testCatalog(t *testing.T, pool *pgxpool.Pool) pgtype.UUID {
@@ -122,7 +150,7 @@ func TestSync_InitialPass(t *testing.T) {
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
-	stats, err := NewSyncer(pool, fakeOpener{src}).Sync(context.Background(), cat, nil)
+	stats, err := newSyncer(t, pool, fakeOpener{src}).Sync(context.Background(), cat, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +184,7 @@ func TestSync_OnlyChangedTablesReload(t *testing.T) {
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
-	s := NewSyncer(pool, fakeOpener{src})
+	s := newSyncer(t, pool, fakeOpener{src})
 	if _, err := s.Sync(context.Background(), cat, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +219,7 @@ func TestSync_ForeignKeys(t *testing.T) {
 		{ns: []string{"sales"}, name: "orders", version: "v1", cols: []string{"id", "customer_id"}, fks: []ForeignKeySnapshot{fk}},
 		{ns: []string{"sales"}, name: "customers", version: "v1", cols: []string{"id"}},
 	}}
-	s := NewSyncer(pool, fakeOpener{src})
+	s := newSyncer(t, pool, fakeOpener{src})
 	ctx := context.Background()
 	if _, err := s.Sync(ctx, cat, nil); err != nil {
 		t.Fatal(err)
@@ -216,7 +244,7 @@ func TestSync_Tombstones(t *testing.T) {
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
-	s := NewSyncer(pool, fakeOpener{src})
+	s := newSyncer(t, pool, fakeOpener{src})
 	ctx := context.Background()
 	if _, err := s.Sync(ctx, cat, nil); err != nil {
 		t.Fatal(err)
@@ -270,7 +298,7 @@ func TestSync_ConcurrentLocked(t *testing.T) {
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree(), block: make(chan struct{}), entered: make(chan struct{})}
-	s := NewSyncer(pool, fakeOpener{src})
+	s := newSyncer(t, pool, fakeOpener{src})
 	done := make(chan error, 1)
 	go func() {
 		_, err := s.Sync(context.Background(), cat, nil)
@@ -291,6 +319,38 @@ func TestSync_ConcurrentLocked(t *testing.T) {
 	}
 }
 
+// TestSync_StaleRunTakenOver: a running row left by a crashed worker is
+// failed and the catalog is taken over, replacing the advisory lock (ADR
+// 0020).
+func TestSync_StaleRunTakenOver(t *testing.T) {
+	t.Parallel()
+	pool := testPool(t)
+	cat := testCatalog(t, pool)
+	store := testStore(t, pool)
+	ctx := context.Background()
+	stale, err := store.StartMetadataSyncRun(ctx, db.StartMetadataSyncRunParams{CatalogID: cat, SourcePath: PathProvider})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE metadata_sync_runs SET started_at = now() - interval '1 hour' WHERE id = $1`, stale.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	src := &fakeSource{tables: twoByThree()}
+	stats, err := newSyncer(t, pool, fakeOpener{src}).Sync(ctx, cat, nil)
+	if err != nil || stats.TablesSeen != 6 {
+		t.Fatalf("sync = %+v, %v", stats, err)
+	}
+	var status, code string
+	if err := pool.QueryRow(ctx, `SELECT status, error_code FROM metadata_sync_runs WHERE id = $1`, stale.ID).Scan(&status, &code); err != nil || status != "failed" || code != "interrupted" {
+		t.Fatalf("stale run = %s %s, %v", status, code, err)
+	}
+	var running int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM metadata_sync_runs WHERE catalog_id = $1 AND status = 'running'`, cat).Scan(&running); err != nil || running != 0 {
+		t.Fatalf("running rows = %d, %v", running, err)
+	}
+}
+
 // TestSync_FailedRunRecorded: a source error fails the run with a code and
 // keeps what was stored (nothing is tombstoned by a partial pass).
 func TestSync_FailedRunRecorded(t *testing.T) {
@@ -298,7 +358,7 @@ func TestSync_FailedRunRecorded(t *testing.T) {
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
-	s := NewSyncer(pool, fakeOpener{src})
+	s := newSyncer(t, pool, fakeOpener{src})
 	if _, err := s.Sync(context.Background(), cat, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +378,7 @@ func TestSync_FailedRunRecorded(t *testing.T) {
 func TestSync_UnknownCatalog(t *testing.T) {
 	t.Parallel()
 	pool := testPool(t)
-	_, err := NewSyncer(pool, fakeOpener{&fakeSource{}}).Sync(context.Background(), pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, nil)
+	_, err := newSyncer(t, pool, fakeOpener{&fakeSource{}}).Sync(context.Background(), pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, nil)
 	if !errors.Is(err, ErrCatalogNotFound) {
 		t.Fatalf("err = %v", err)
 	}

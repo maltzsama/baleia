@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/galileostudio/baleia/internal/connections"
@@ -15,13 +16,36 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
 // ErrCatalogNotFound means the catalog to sync does not exist.
 var ErrCatalogNotFound = errors.New("catalog not found")
+
+// Store is the persistence the syncer needs (ADR 0020, #774): the catalog
+// lookup, the run ledger and the per-table upserts. *repo.Repo implements it.
+type Store interface {
+	GetCatalogForSync(ctx context.Context, id pgtype.UUID) (db.GetCatalogForSyncRow, error)
+	BeginMetadataSyncRun(ctx context.Context, catalogID pgtype.UUID, sourcePath string, staleAfter time.Duration) (db.StartMetadataSyncRunRow, bool, error)
+	TouchMetadataSyncRun(ctx context.Context, id pgtype.UUID) error
+	FinishMetadataSyncRun(ctx context.Context, arg db.FinishMetadataSyncRunParams) error
+	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]db.GetTableFingerprintsRow, error)
+	UpsertMetadataNamespace(ctx context.Context, arg db.UpsertMetadataNamespaceParams) error
+	UpsertMetadataTable(ctx context.Context, arg db.UpsertMetadataTableParams) (db.UpsertMetadataTableRow, error)
+	TouchMetadataTable(ctx context.Context, arg db.TouchMetadataTableParams) (int64, error)
+	DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID) error
+	InsertMetadataColumns(ctx context.Context, arg db.InsertMetadataColumnsParams) error
+	DeleteMetadataForeignKeys(ctx context.Context, tableID pgtype.UUID) error
+	InsertMetadataForeignKeys(ctx context.Context, arg db.InsertMetadataForeignKeysParams) error
+	TombstoneMissingTables(ctx context.Context, arg db.TombstoneMissingTablesParams) (int64, error)
+	TombstoneMissingNamespaces(ctx context.Context, arg db.TombstoneMissingNamespacesParams) error
+	PurgeMetadataTableTombstones(ctx context.Context, catalogID pgtype.UUID) error
+	PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID pgtype.UUID) error
+}
+
+// Tx runs fn in one transaction over a Store bound to it.
+type Tx func(ctx context.Context, fn func(Store) error) error
 
 // Opener picks a catalog's source and opens it (SourceFor in production).
 type Opener interface {
@@ -30,15 +54,26 @@ type Opener interface {
 	Open(ctx context.Context, c db.GetCatalogForSyncRow) (path string, src Source, err error)
 }
 
+// syncHeartbeatEvery is how often a running pass refreshes its heartbeat;
+// syncRunStaleAfter is how old a heartbeat must be before the next pass takes
+// the catalog over. The activity heartbeat timeout is one minute, so a
+// crashed worker's retry can take over on its next attempt.
+const (
+	syncHeartbeatEvery = 10 * time.Second
+	syncRunStaleAfter  = 60 * time.Second
+)
+
 // Syncer stores what a catalog's source reports, one full pass at a time.
 type Syncer struct {
-	pool   *pgxpool.Pool
+	store  Store
+	tx     Tx
 	opener Opener
 }
 
-// NewSyncer returns a syncer writing through pool.
-func NewSyncer(pool *pgxpool.Pool, opener Opener) *Syncer {
-	return &Syncer{pool: pool, opener: opener}
+// NewSyncer returns a syncer writing through store, one table per
+// transaction.
+func NewSyncer(store Store, tx Tx, opener Opener) *Syncer {
+	return &Syncer{store: store, tx: tx, opener: opener}
 }
 
 // Sync applies a full pass to one catalog: it upserts the tables it sees,
@@ -60,45 +95,38 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 		obs.FailSpan(span, err, "metadata sync failed")
 		span.End()
 	}()
-	conn, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return RunStats{}, err
-	}
-	defer conn.Release()
-	q := db.New(conn)
 
-	lockKey := uuid.UUID(catalogID.Bytes).String()
-	locked, err := q.TryMetadataSyncLock(ctx, lockKey)
-	if err != nil {
-		return RunStats{}, err
-	}
-	if !locked {
-		return RunStats{}, ErrSyncInProgress
-	}
-	defer func() { _ = q.ReleaseMetadataSyncLock(context.WithoutCancel(ctx), lockKey) }()
-
-	cat, err := q.GetCatalogForSync(ctx, catalogID)
+	cat, err := s.store.GetCatalogForSync(ctx, catalogID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return RunStats{}, ErrCatalogNotFound
 	}
 	if err != nil {
 		return RunStats{}, err
 	}
-	// A run a crashed worker left running ends now: this pass holds the lock.
-	if err := q.FailStaleMetadataSyncRuns(ctx, catalogID); err != nil {
-		return RunStats{}, err
-	}
 
 	path, src, openErr := s.opener.Open(ctx, cat)
 	stats := RunStats{Path: path}
-	run, err := q.StartMetadataSyncRun(ctx, db.StartMetadataSyncRunParams{CatalogID: catalogID, SourcePath: path})
+	if src != nil {
+		defer func() { _ = src.Close() }()
+	}
+
+	run, started, err := s.store.BeginMetadataSyncRun(ctx, catalogID, path, syncRunStaleAfter)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return stats, ErrCatalogNotFound
+	}
 	if err != nil {
-		if src != nil {
-			_ = src.Close()
-		}
 		return stats, err
 	}
+	if !started {
+		return stats, ErrSyncInProgress
+	}
+	// The heartbeat keeps the run alive while a slow walk or a large table is
+	// being read; the next pass only takes over when it stops.
+	hbCtx, stopHeartbeat := context.WithCancel(ctx)
+	defer stopHeartbeat()
+	go s.heartbeat(hbCtx, run.ID)
 	finish := func(err error) (RunStats, error) {
+		stopHeartbeat()
 		p := db.FinishMetadataSyncRunParams{
 			ID: run.ID, Status: "finished",
 			TablesSeen: i32(stats.TablesSeen), TablesChanged: i32(stats.TablesChanged), TablesRemoved: i32(stats.TablesRemoved),
@@ -107,7 +135,7 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 			code, msg := errorCode(err), truncate(err.Error(), 1000)
 			p.Status, p.ErrorCode, p.ErrorMessage = "failed", &code, &msg
 		}
-		if ferr := q.FinishMetadataSyncRun(context.WithoutCancel(ctx), p); ferr != nil && err == nil {
+		if ferr := s.store.FinishMetadataSyncRun(context.WithoutCancel(ctx), p); ferr != nil && err == nil {
 			err = ferr
 		}
 		return stats, err
@@ -115,9 +143,8 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 	if openErr != nil {
 		return finish(openErr)
 	}
-	defer func() { _ = src.Close() }()
 
-	stored, err := q.GetTableFingerprints(ctx, catalogID)
+	stored, err := s.store.GetTableFingerprints(ctx, catalogID)
 	if err != nil {
 		return finish(err)
 	}
@@ -131,7 +158,7 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 		known[tableKey(r.Namespace, r.Name)] = k
 	}
 
-	w := &writer{ctx: ctx, conn: conn, q: q, catalogID: catalogID, typeSystem: src.TypeSystem(),
+	w := &writer{ctx: ctx, store: s.store, tx: s.tx, catalogID: catalogID, typeSystem: src.TypeSystem(),
 		stats: &stats, progress: progress, namespaces: map[string]bool{}}
 	lookup := func(ns []string, name string) (Known, bool) {
 		k, ok := known[tableKey(ns, name)]
@@ -141,28 +168,43 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 		return finish(err)
 	}
 
-	removed, err := q.TombstoneMissingTables(ctx, db.TombstoneMissingTablesParams{CatalogID: catalogID, PassStartedAt: run.StartedAt})
+	removed, err := s.store.TombstoneMissingTables(ctx, db.TombstoneMissingTablesParams{CatalogID: catalogID, PassStartedAt: run.StartedAt})
 	if err != nil {
 		return finish(err)
 	}
 	stats.TablesRemoved = int(removed)
-	if err := q.TombstoneMissingNamespaces(ctx, db.TombstoneMissingNamespacesParams{CatalogID: catalogID, PassStartedAt: run.StartedAt}); err != nil {
+	if err := s.store.TombstoneMissingNamespaces(ctx, db.TombstoneMissingNamespacesParams{CatalogID: catalogID, PassStartedAt: run.StartedAt}); err != nil {
 		return finish(err)
 	}
-	if err := q.PurgeMetadataTableTombstones(ctx, catalogID); err != nil {
+	if err := s.store.PurgeMetadataTableTombstones(ctx, catalogID); err != nil {
 		return finish(err)
 	}
-	if err := q.PurgeMetadataNamespaceTombstones(ctx, catalogID); err != nil {
+	if err := s.store.PurgeMetadataNamespaceTombstones(ctx, catalogID); err != nil {
 		return finish(err)
 	}
 	return finish(nil)
 }
 
-// writer stores what a source visits, on the connection holding the lock.
+// heartbeat refreshes the running row until ctx ends. A failure is ignored:
+// the sync itself reports the store failure that matters.
+func (s *Syncer) heartbeat(ctx context.Context, id pgtype.UUID) {
+	t := time.NewTicker(syncHeartbeatEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			_ = s.store.TouchMetadataSyncRun(context.WithoutCancel(ctx), id)
+		}
+	}
+}
+
+// writer stores what a source visits.
 type writer struct {
 	ctx        context.Context
-	conn       *pgxpool.Conn
-	q          *db.Queries
+	store      Store
+	tx         Tx
 	catalogID  pgtype.UUID
 	typeSystem string
 	stats      *RunStats
@@ -176,7 +218,7 @@ func (w *writer) Namespace(ns []string) error {
 		return nil
 	}
 	w.namespaces[key] = true
-	return w.q.UpsertMetadataNamespace(w.ctx, db.UpsertMetadataNamespaceParams{CatalogID: w.catalogID, Namespace: nonNil(ns)})
+	return w.store.UpsertMetadataNamespace(w.ctx, db.UpsertMetadataNamespaceParams{CatalogID: w.catalogID, Namespace: nonNil(ns)})
 }
 
 func (w *writer) Table(t TableSnapshot) error {
@@ -184,14 +226,14 @@ func (w *writer) Table(t TableSnapshot) error {
 		return err
 	}
 	if t.Unchanged {
-		n, err := w.q.TouchMetadataTable(w.ctx, db.TouchMetadataTableParams{CatalogID: w.catalogID, Namespace: nonNil(t.Namespace), Name: t.Name})
+		n, err := w.store.TouchMetadataTable(w.ctx, db.TouchMetadataTableParams{CatalogID: w.catalogID, Namespace: nonNil(t.Namespace), Name: t.Name})
 		if err != nil {
 			return err
 		}
 		if n == 0 {
 			return fmt.Errorf("table %v.%s reported unchanged but not stored", t.Namespace, t.Name)
 		}
-	} else if err := w.store(t); err != nil {
+	} else if err := w.storeTable(t); err != nil {
 		return fmt.Errorf("store table %v.%s: %w", t.Namespace, t.Name, err)
 	}
 	w.stats.TablesSeen++
@@ -201,28 +243,25 @@ func (w *writer) Table(t TableSnapshot) error {
 	return nil
 }
 
-// store upserts a table and, when it changed, replaces its columns, in one
-// transaction.
-func (w *writer) store(t TableSnapshot) error {
+// storeTable upserts a table and, when it changed, replaces its columns and
+// foreign keys, in one transaction.
+func (w *writer) storeTable(t TableSnapshot) error {
 	props, err := json.Marshal(nonNilMap(t.Properties))
 	if err != nil {
 		return err
 	}
-	tx, err := w.conn.Begin(w.ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(context.WithoutCancel(w.ctx)) }()
-	qtx := w.q.WithTx(tx)
-	row, err := qtx.UpsertMetadataTable(w.ctx, db.UpsertMetadataTableParams{
-		CatalogID: w.catalogID, Namespace: nonNil(t.Namespace), Name: t.Name, Kind: t.Kind,
-		Fingerprint: t.Fingerprint, Properties: props, Comment: optional(t.Comment),
-	})
-	if err != nil {
-		return err
-	}
-	if row.Changed {
-		if err := qtx.DeleteMetadataColumns(w.ctx, row.ID); err != nil {
+	return w.tx(w.ctx, func(tx Store) error {
+		row, err := tx.UpsertMetadataTable(w.ctx, db.UpsertMetadataTableParams{
+			CatalogID: w.catalogID, Namespace: nonNil(t.Namespace), Name: t.Name, Kind: t.Kind,
+			Fingerprint: t.Fingerprint, Properties: props, Comment: optional(t.Comment),
+		})
+		if err != nil {
+			return err
+		}
+		if !row.Changed {
+			return nil
+		}
+		if err := tx.DeleteMetadataColumns(w.ctx, row.ID); err != nil {
 			return err
 		}
 		p := db.InsertMetadataColumnsParams{TableID: row.ID, TypeSystem: w.typeSystem}
@@ -234,11 +273,11 @@ func (w *writer) store(t TableSnapshot) error {
 			p.Comments = append(p.Comments, c.Comment)
 		}
 		if len(t.Columns) > 0 {
-			if err := qtx.InsertMetadataColumns(w.ctx, p); err != nil {
+			if err := tx.InsertMetadataColumns(w.ctx, p); err != nil {
 				return err
 			}
 		}
-		if err := qtx.DeleteMetadataForeignKeys(w.ctx, row.ID); err != nil {
+		if err := tx.DeleteMetadataForeignKeys(w.ctx, row.ID); err != nil {
 			return err
 		}
 		if len(t.ForeignKeys) > 0 {
@@ -246,15 +285,15 @@ func (w *writer) store(t TableSnapshot) error {
 			if err != nil {
 				return err
 			}
-			if err := qtx.InsertMetadataForeignKeys(w.ctx, db.InsertMetadataForeignKeysParams{
+			if err := tx.InsertMetadataForeignKeys(w.ctx, db.InsertMetadataForeignKeysParams{
 				CatalogID: w.catalogID, TableID: row.ID, ForeignKeys: keys,
 			}); err != nil {
 				return err
 			}
 		}
 		w.stats.TablesChanged++
-	}
-	return tx.Commit(w.ctx)
+		return nil
+	})
 }
 
 func tableKey(ns []string, name string) string {

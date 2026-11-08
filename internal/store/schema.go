@@ -173,5 +173,19 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, Models()...)
 			},
 		},
+		Migration{
+			Version: 2,
+			Name:    "create setup locks",
+			Up: func(db *gorm.DB) error {
+				return AutoMigrate(db, &model.SetupLock{})
+			},
+		},
+		Migration{
+			Version: 3,
+			Name:    "add metadata sync heartbeat",
+			Up: func(db *gorm.DB) error {
+				return AutoMigrate(db, &model.MetadataSyncRun{})
+			},
+		},
 	)
 }

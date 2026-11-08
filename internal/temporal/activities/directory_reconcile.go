@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -51,7 +52,7 @@ func ReconcileDirectories(ctx context.Context, _ DirectoryReconcileParams) (*Dir
 }
 
 func (a *Activities) reconcileDirectories(ctx context.Context) (*DirectoryReconcileResult, error) {
-	providers, err := a.queries.ListEnabledLDAPProviders(ctx)
+	providers, err := a.directoryReads().ListEnabledLDAPProviders(ctx)
 	if err != nil {
 		a.passDone(schedules.DirectoryReconcile, err)
 		return nil, err
@@ -180,7 +181,7 @@ func (a *Activities) reconcileOneDirectory(ctx context.Context, ap db.AuthProvid
 		return 0, 0, false, err
 	}
 
-	run, err := a.queries.CreateDirectoryReconcileRun(ctx, ap.ID)
+	run, err := a.directoryReads().CreateDirectoryReconcileRun(ctx, ap.ID)
 	if err != nil {
 		return 0, 0, false, err
 	}
@@ -196,7 +197,7 @@ func (a *Activities) reconcileOneDirectory(ctx context.Context, ap db.AuthProvid
 		return fail(err)
 	}
 
-	rows, err := a.queries.ListUsersByAuthProvider(ctx, ap.ID)
+	rows, err := a.directoryReads().ListUsersByAuthProvider(ctx, ap.ID)
 	if err != nil {
 		return fail(err)
 	}
@@ -240,58 +241,97 @@ type reconcileAction struct {
 }
 
 func (a *Activities) applyReconcilePlan(ctx context.Context, plan reconcilePlan, actions *[]reconcileAction) error {
+	return a.directoryWrites(ctx, func(q directoryWrites) error {
+		for _, u := range plan.Suspend {
+			reason := directorySuspensionReason
+			if _, err := q.SuspendUser(ctx, db.SuspendUserParams{ID: u.ID, SuspendedReason: &reason}); err != nil {
+				return err
+			}
+			if err := q.RevokeUserRefreshTokens(ctx, u.ID); err != nil {
+				return err
+			}
+			if err := q.DeleteAPIKeysByUser(ctx, u.ID); err != nil {
+				return err
+			}
+			*actions = append(*actions, reconcileAction{UserID: u.ID.String(), Action: "suspend", Detail: "missing_or_disabled"})
+			a.metrics.directory.Suspended(directorySuspensionReason)
+			a.auditChange(ctx, audit.Event{Action: audit.UserSuspend, ResourceType: "user", ResourceID: u.ID.String(), Outcome: audit.Allowed, Reason: "directory"})
+		}
+		for _, u := range plan.Reinstate {
+			if err := q.ReinstateDirectoryUser(ctx, u.ID); err != nil {
+				return err
+			}
+			*actions = append(*actions, reconcileAction{UserID: u.ID.String(), Action: "reinstate", Detail: "reenabled_in_directory"})
+			a.auditChange(ctx, audit.Event{Action: audit.UserReinstate, ResourceType: "user", ResourceID: u.ID.String(), Outcome: audit.Allowed, Reason: "directory"})
+		}
+		for _, rc := range plan.Roles {
+			if err := q.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: rc.UserID, Role: rc.Role}); err != nil {
+				return err
+			}
+			*actions = append(*actions, reconcileAction{UserID: rc.UserID.String(), Action: "role", Detail: rc.Role})
+			a.auditChange(ctx, audit.Event{Action: audit.UserRoleChange, ResourceType: "user", ResourceID: rc.UserID.String(), Outcome: audit.Allowed, Reason: "directory"})
+		}
+		for _, tc := range plan.Teams {
+			teamID, err := uuidFromString(tc.TeamID)
+			if err != nil {
+				continue
+			}
+			if err := q.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{TeamID: teamID, UserID: tc.UserID, Role: tc.TeamRole}); err != nil {
+				return err
+			}
+			*actions = append(*actions, reconcileAction{UserID: tc.UserID.String(), Action: "team", Detail: tc.TeamID})
+		}
+		for _, u := range plan.Synced {
+			// Not best effort: a failed statement aborts the transaction, so the
+			// commit would fail anyway; report the cause instead.
+			if err := q.MarkDirectorySynced(ctx, u.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// directoryReads is the read side of the directory pass; *repo.Repo
+// implements it on the GORM path (ADR 0020, #774).
+type directoryReads interface {
+	ListEnabledLDAPProviders(ctx context.Context) ([]db.AuthProvider, error)
+	CreateDirectoryReconcileRun(ctx context.Context, providerID pgtype.UUID) (db.DirectoryReconcileRun, error)
+	FinishDirectoryReconcileRun(ctx context.Context, arg db.FinishDirectoryReconcileRunParams) error
+	ListUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) ([]db.User, error)
+}
+
+func (a *Activities) directoryReads() directoryReads {
+	if a.store != nil {
+		return a.store
+	}
+	return a.queries
+}
+
+// directoryWrites is the write side of one pass.
+type directoryWrites interface {
+	SuspendUser(ctx context.Context, arg db.SuspendUserParams) (db.User, error)
+	RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error
+	DeleteAPIKeysByUser(ctx context.Context, userID pgtype.UUID) error
+	ReinstateDirectoryUser(ctx context.Context, id pgtype.UUID) error
+	UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error
+	UpsertTeamMember(ctx context.Context, arg db.UpsertTeamMemberParams) error
+	MarkDirectorySynced(ctx context.Context, id pgtype.UUID) error
+}
+
+// directoryWrites runs fn in one transaction over the directory store: the
+// GORM store when configured, the pgx querier otherwise.
+func (a *Activities) directoryWrites(ctx context.Context, fn func(directoryWrites) error) error {
+	if a.store != nil {
+		return a.store.TxDirectory(ctx, func(r *repo.Repo) error { return fn(r) })
+	}
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	q := db.New(tx)
-
-	for _, u := range plan.Suspend {
-		reason := directorySuspensionReason
-		if _, err := q.SuspendUser(ctx, db.SuspendUserParams{ID: u.ID, SuspendedReason: &reason}); err != nil {
-			return err
-		}
-		if err := q.RevokeUserRefreshTokens(ctx, u.ID); err != nil {
-			return err
-		}
-		if err := q.DeleteAPIKeysByUser(ctx, u.ID); err != nil {
-			return err
-		}
-		*actions = append(*actions, reconcileAction{UserID: u.ID.String(), Action: "suspend", Detail: "missing_or_disabled"})
-		a.metrics.directory.Suspended(directorySuspensionReason)
-		a.auditChange(ctx, audit.Event{Action: audit.UserSuspend, ResourceType: "user", ResourceID: u.ID.String(), Outcome: audit.Allowed, Reason: "directory"})
-	}
-	for _, u := range plan.Reinstate {
-		if err := q.ReinstateDirectoryUser(ctx, u.ID); err != nil {
-			return err
-		}
-		*actions = append(*actions, reconcileAction{UserID: u.ID.String(), Action: "reinstate", Detail: "reenabled_in_directory"})
-		a.auditChange(ctx, audit.Event{Action: audit.UserReinstate, ResourceType: "user", ResourceID: u.ID.String(), Outcome: audit.Allowed, Reason: "directory"})
-	}
-	for _, rc := range plan.Roles {
-		if err := q.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: rc.UserID, Role: rc.Role}); err != nil {
-			return err
-		}
-		*actions = append(*actions, reconcileAction{UserID: rc.UserID.String(), Action: "role", Detail: rc.Role})
-		a.auditChange(ctx, audit.Event{Action: audit.UserRoleChange, ResourceType: "user", ResourceID: rc.UserID.String(), Outcome: audit.Allowed, Reason: "directory"})
-	}
-	for _, tc := range plan.Teams {
-		teamID, err := uuidFromString(tc.TeamID)
-		if err != nil {
-			continue
-		}
-		if err := q.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{TeamID: teamID, UserID: tc.UserID, Role: tc.TeamRole}); err != nil {
-			return err
-		}
-		*actions = append(*actions, reconcileAction{UserID: tc.UserID.String(), Action: "team", Detail: tc.TeamID})
-	}
-	for _, u := range plan.Synced {
-		// Not best effort: a failed statement aborts the transaction, so the
-		// commit would fail anyway; report the cause instead.
-		if err := q.MarkDirectorySynced(ctx, u.ID); err != nil {
-			return err
-		}
+	if err := fn(db.New(tx)); err != nil {
+		return err
 	}
 	return tx.Commit(ctx)
 }
@@ -310,7 +350,7 @@ func (a *Activities) finishReconcileRun(ctx context.Context, run db.DirectoryRec
 		raw = []byte("[]")
 	}
 	o := outcome
-	if err := a.queries.FinishDirectoryReconcileRun(context.WithoutCancel(ctx), db.FinishDirectoryReconcileRunParams{
+	if err := a.directoryReads().FinishDirectoryReconcileRun(context.WithoutCancel(ctx), db.FinishDirectoryReconcileRunParams{
 		ID: run.ID, Outcome: &o, Seen: int32(seen), Suspended: int32(suspended), Reinstated: int32(reinstated),
 		Error: errText, Actions: raw,
 	}); err != nil {

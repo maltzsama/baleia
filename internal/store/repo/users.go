@@ -101,6 +101,75 @@ func (s *Users) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.Use
 	return toDBUser(row), nil
 }
 
+// UpdateUser edits the account profile and returns the row.
+func (s *Users) UpdateUser(ctx context.Context, arg db.UpdateUserParams) (db.User, error) {
+	if err := s.db.WithContext(ctx).Model(&model.User{}).
+		Where("id = ?", UUIDString(arg.ID)).
+		Updates(map[string]any{
+			"name":       arg.Name,
+			"email":      arg.Email,
+			"locale":     arg.Locale,
+			"updated_at": time.Now().UTC(),
+		}).Error; err != nil {
+		return db.User{}, err
+	}
+	return s.GetUserByID(ctx, arg.ID)
+}
+
+// PersonalWorkspaceID returns the account's personal workspace or
+// pgx.ErrNoRows when it has none.
+func (s *Users) PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID) (pgtype.UUID, error) {
+	if !ownerUserID.Valid {
+		return pgtype.UUID{}, pgx.ErrNoRows
+	}
+	var ws model.Workspace
+	err := s.db.WithContext(ctx).
+		Select("id").
+		Where("type = ? AND owner_user_id = ?", "personal", UUIDString(ownerUserID)).
+		Order("created_at").
+		First(&ws).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return pgtype.UUID{}, pgx.ErrNoRows
+	}
+	if err != nil {
+		return pgtype.UUID{}, err
+	}
+	return PGUUID(string(ws.ID)), nil
+}
+
+// RevokeUserRefreshTokens revokes every live refresh token of the account.
+// The explicit method resolves the ambiguity between the Users and Sessions
+// promoted methods so *Repo can satisfy the directory-reconcile interface.
+func (r *Repo) RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error {
+	return r.Users.RevokeUserRefreshTokens(ctx, userID)
+}
+
+// HasUsers reports whether the installation has any account yet.
+func (s *Users) HasUsers(ctx context.Context) (bool, error) {
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&model.User{}).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// LockFirstAdminSetup serializes the first-admin setup until the caller's
+// transaction ends (ADR 0020: no advisory lock). It creates a stable lock row
+// when it is missing and takes a row lock on it, so two concurrent setups
+// serialize on the same row.
+func (s *Users) LockFirstAdminSetup(ctx context.Context) error {
+	lock := model.SetupLock{Name: firstAdminSetupLock}
+	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&lock).Error; err != nil {
+		return err
+	}
+	return s.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("name = ?", firstAdminSetupLock).
+		First(&lock).Error
+}
+
+// firstAdminSetupLock names the singleton row serializing first-admin setup.
+const firstAdminSetupLock = "first_admin"
+
 // UpdateUserRole sets the platform role.
 func (s *Users) UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error {
 	return s.db.WithContext(ctx).Model(&model.User{}).

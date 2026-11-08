@@ -66,8 +66,19 @@ func main() {
 	case "oidc-providers":
 		err = migrateOIDCProviders(ctx, logger, db, cfg)
 	case "audit-prune":
+		backend, berr := store.ResolveBackend(cfg.StoreBackend, cfg.DatabaseURL)
+		if berr != nil {
+			err = berr
+			break
+		}
+		var gdb *gorm.DB
+		gdb, err = store.Open(ctx, cfg.DatabaseURL, backend, store.Options{})
+		if err != nil {
+			break
+		}
+		defer func() { _ = store.Close(gdb) }()
 		var dropped []string
-		dropped, err = audit.Prune(ctx, db, before, time.Now().UTC())
+		dropped, err = audit.Prune(ctx, gdb, before, time.Now().UTC())
 		for _, name := range dropped {
 			logger.InfoContext(ctx, "audit partition dropped", "partition", name)
 		}

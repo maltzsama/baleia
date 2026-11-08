@@ -19,6 +19,9 @@ import (
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 type recordedInserter struct {
@@ -255,10 +258,14 @@ func TestPrune(t *testing.T) {
 	}
 	sqlDB := stdlib.OpenDBFromPool(pool)
 	defer sqlDB.Close()
-	if _, err := Prune(ctx, sqlDB, now.Format("2006-01"), now); err == nil {
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{Logger: gormlogger.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Prune(ctx, gdb, now.Format("2006-01"), now); err == nil {
 		t.Fatal("pruning the current month must be refused")
 	}
-	dropped, err := Prune(ctx, sqlDB, old.AddDate(0, 1, 0).Format("2006-01"), now)
+	dropped, err := Prune(ctx, gdb, old.AddDate(0, 1, 0).Format("2006-01"), now)
 	if err != nil {
 		t.Fatal(err)
 	}

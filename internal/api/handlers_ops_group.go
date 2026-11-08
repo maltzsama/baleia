@@ -88,13 +88,15 @@ func newOpsHandlers(c *core, schema schemaVersioner) *OpsHandlers {
 	var lineageStore lineageReads = c.queries
 	var monitorStore monitoring.Store = c.queries
 	var signalStore signals.Store = c.queries
+	var trailStore trail.Store = c.queries
 	if c.store != nil {
 		r := repo.New(c.store)
 		lineageStore = r
 		monitorStore = r
 		signalStore = r
+		trailStore = r
 	}
-	o := &OpsHandlers{core: c, schema: schema, engineStatus: managedEngines{c: c}, monitor: monitoring.New(monitorStore), trail: trail.New(c.queries), signals: signals.New(signalStore), lineage: lineageStore}
+	o := &OpsHandlers{core: c, schema: schema, engineStatus: managedEngines{c: c}, monitor: monitoring.New(monitorStore), trail: trail.New(trailStore), signals: signals.New(signalStore), lineage: lineageStore}
 	if c.temporalClient != nil {
 		o.schedules = temporalSchedules{client: c.temporalClient}
 	}

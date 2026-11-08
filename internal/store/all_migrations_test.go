@@ -54,8 +54,14 @@ func TestAllMigrationsUpCreatesSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
-	if len(applied) != 1 || applied[0].Version != 1 {
-		t.Fatalf("applied = %+v, want migration 1", applied)
+	want := reg.All()
+	if len(applied) != len(want) {
+		t.Fatalf("applied = %+v, want %d migrations", applied, len(want))
+	}
+	for i, m := range want {
+		if applied[i].Version != m.Version {
+			t.Fatalf("applied[%d] = %d, want %d", i, applied[i].Version, m.Version)
+		}
 	}
 
 	again, err := runner.Up(ctx)

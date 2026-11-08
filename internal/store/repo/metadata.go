@@ -444,6 +444,93 @@ func (r *Repo) ListSyncBindings(ctx context.Context, catalogID pgtype.UUID) ([]d
 	return out, nil
 }
 
+// BeginMetadataSyncRun starts a pass under a transactional row lock on the
+// catalog, replacing the session advisory lock of the pgx path (ADR 0020).
+// It fails a running pass older than staleAfter (a crashed worker) and
+// reports false when a live pass already owns the catalog, so the caller
+// returns ErrSyncInProgress.
+func (r *Repo) BeginMetadataSyncRun(ctx context.Context, catalogID pgtype.UUID, sourcePath string, staleAfter time.Duration) (db.StartMetadataSyncRunRow, bool, error) {
+	var (
+		out     db.StartMetadataSyncRunRow
+		started bool
+	)
+	if !catalogID.Valid {
+		return out, false, pgx.ErrNoRows
+	}
+	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// The row lock serializes two starters: the second waits until the
+		// first has committed its running row.
+		var catalog model.Catalog
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", UUIDString(catalogID)).
+			First(&catalog).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return pgx.ErrNoRows
+		}
+		if err != nil {
+			return err
+		}
+		now := time.Now().UTC()
+		if staleAfter > 0 {
+			code, message := "interrupted", "the sync stopped before it finished"
+			if err := tx.Model(&model.MetadataSyncRun{}).
+				Where("catalog_id = ? AND status = ? AND COALESCE(heartbeat_at, started_at) < ?",
+					UUIDString(catalogID), "running", now.Add(-staleAfter)).
+				Updates(map[string]any{
+					"status":        "failed",
+					"finished_at":   now,
+					"error_code":    &code,
+					"error_message": &message,
+				}).Error; err != nil {
+				return err
+			}
+		}
+		var running int64
+		if err := tx.Model(&model.MetadataSyncRun{}).
+			Where("catalog_id = ? AND status = ?", UUIDString(catalogID), "running").
+			Count(&running).Error; err != nil {
+			return err
+		}
+		if running > 0 {
+			return nil
+		}
+		row := model.MetadataSyncRun{
+			ID:          model.UUID(NewUUID()),
+			CatalogID:   model.UUID(UUIDString(catalogID)),
+			Status:      "running",
+			SourcePath:  sourcePath,
+			StartedAt:   now,
+			HeartbeatAt: &now,
+		}
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		out = db.StartMetadataSyncRunRow{ID: PGUUID(string(row.ID)), StartedAt: PGTime(row.StartedAt)}
+		started = true
+		return nil
+	})
+	return out, started, err
+}
+
+// TouchMetadataSyncRun records that a running pass is still alive, so a
+// retry can tell a crashed worker from a slow one.
+func (r *Repo) TouchMetadataSyncRun(ctx context.Context, id pgtype.UUID) error {
+	if !id.Valid {
+		return nil
+	}
+	return r.Users.db.WithContext(ctx).Model(&model.MetadataSyncRun{}).
+		Where("id = ? AND status = ?", UUIDString(id), "running").
+		Update("heartbeat_at", time.Now().UTC()).Error
+}
+
+// TxMetadata runs fn in one transaction over a Repo bound to it, so a table
+// and its columns and foreign keys are replaced atomically (ADR 0020).
+func (r *Repo) TxMetadata(ctx context.Context, fn func(*Repo) error) error {
+	return r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(New(tx))
+	})
+}
+
 // StartMetadataSyncRun opens a running pass.
 func (r *Repo) StartMetadataSyncRun(ctx context.Context, arg db.StartMetadataSyncRunParams) (db.StartMetadataSyncRunRow, error) {
 	now := time.Now().UTC()
