@@ -3251,6 +3251,9 @@ type MaintenanceRun struct {
 	TableName      string                  `json:"table_name"`
 	Trigger        MaintenanceRunTrigger   `json:"trigger"`
 	WorkflowId     string                  `json:"workflow_id"`
+
+	// WorkflowUrl Link to the workflow in the Temporal UI; null when no UI URL is configured
+	WorkflowUrl *string `json:"workflow_url"`
 }
 
 // MaintenanceRunTrigger defines model for MaintenanceRun.Trigger.
@@ -3623,13 +3626,16 @@ type MonitoringQuery struct {
 	OutputRows  *int                `json:"output_rows"`
 
 	// PeakMemoryBytes Peak user memory the engine reported; null when unknown
-	PeakMemoryBytes    *int64  `json:"peak_memory_bytes"`
-	PhysicalInputBytes *int    `json:"physical_input_bytes"`
-	Schema             *string `json:"schema"`
-	SqlFirstLine       *string `json:"sql_first_line,omitempty"`
-	State              string  `json:"state"`
-	TrinoQueryId       string  `json:"trino_query_id"`
-	User               string  `json:"user"`
+	PeakMemoryBytes    *int64 `json:"peak_memory_bytes"`
+	PhysicalInputBytes *int   `json:"physical_input_bytes"`
+
+	// QueueClass Workload class the run was queued in (interactive, heavy, background); null for engine-direct queries
+	QueueClass   *string `json:"queue_class"`
+	Schema       *string `json:"schema"`
+	SqlFirstLine *string `json:"sql_first_line,omitempty"`
+	State        string  `json:"state"`
+	TrinoQueryId string  `json:"trino_query_id"`
+	User         string  `json:"user"`
 }
 
 // MonitoringQueryDetail defines model for MonitoringQueryDetail.
@@ -3646,6 +3652,9 @@ type MonitoringQueryDetail struct {
 	// PeakMemoryBytes Peak user memory the engine reported; null when unknown
 	PeakMemoryBytes    *int64 `json:"peak_memory_bytes"`
 	PhysicalInputBytes *int   `json:"physical_input_bytes"`
+
+	// QueueClass Workload class the run was queued in (interactive, heavy, background); null for engine-direct queries
+	QueueClass *string `json:"queue_class"`
 
 	// Resources What the query used, read from the coordinator when the detail is opened (#407). Absent when the engine does not report it or no longer knows the query; a field is null when the engine leaves it out.
 	Resources    *MonitoringQueryResources `json:"resources"`
@@ -4450,7 +4459,19 @@ type TableHealth struct {
 	FileCount           *int                   `json:"file_count"`
 	FormatVersion       *int                   `json:"format_version"`
 	HealthScore         int                    `json:"health_score"`
-	LastMaintenanceAt   *time.Time             `json:"last_maintenance_at"`
+
+	// LastExpireSnapshotsAt Last successful expire_snapshots run on this table
+	LastExpireSnapshotsAt *time.Time `json:"last_expire_snapshots_at"`
+	LastMaintenanceAt     *time.Time `json:"last_maintenance_at"`
+
+	// LastOptimizeAt Last successful optimize run on this table
+	LastOptimizeAt *time.Time `json:"last_optimize_at"`
+
+	// LastOptimizeManifestsAt Last successful optimize_manifests run on this table
+	LastOptimizeManifestsAt *time.Time `json:"last_optimize_manifests_at"`
+
+	// LastRemoveOrphanFilesAt Last successful remove_orphan_files run on this table
+	LastRemoveOrphanFilesAt *time.Time `json:"last_remove_orphan_files_at"`
 
 	// MaintenanceMode The table's maintenance mode; null when it has no parameters.
 	MaintenanceMode        *MaintenanceMode `json:"maintenance_mode"`

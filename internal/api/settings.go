@@ -75,6 +75,8 @@ type OpsSettings struct {
 	MetadataSyncEvery   time.Duration
 	ReconcileMaxActions int
 	ReconcileInterval   time.Duration
+	TemporalUIURL       string
+	TemporalNamespace   string
 }
 
 // ConnectionSettings say who may create and edit connections.
@@ -129,6 +131,8 @@ func SettingsFromConfig(c *config.Config) Settings {
 			MetadataSyncEvery:   c.MetadataSyncEvery(),
 			ReconcileMaxActions: c.ReconcileMaxActions,
 			ReconcileInterval:   c.ReconcileInterval,
+			TemporalUIURL:       c.TemporalUIURL,
+			TemporalNamespace:   c.TemporalNamespace,
 		},
 		Connections: ConnectionSettings{AdminsOnly: c.ConnectionsCreate == "admins"},
 	}

@@ -462,7 +462,11 @@
 						m.monitoring_oldest_hours(),
 						m.monitoring_needs(),
 						m.maintenance_mode(),
-						m.monitoring_last_maintenance()
+						m.monitoring_last_maintenance(),
+						`${m.maintenance_op_optimize()} ${m.maintenance_col_last_run()}`,
+						`${m.maintenance_op_optimize_manifests()} ${m.maintenance_col_last_run()}`,
+						`${m.maintenance_op_expire_snapshots()} ${m.maintenance_col_last_run()}`,
+						`${m.maintenance_op_remove_orphan_files()} ${m.maintenance_col_last_run()}`
 					],
 					health.map((row) => [
 						row.namespace,
@@ -476,7 +480,11 @@
 						row.oldest_snapshot_age_hours,
 						row.due_operations?.join(' ') ?? '',
 						row.maintenance_mode ?? '',
-						row.last_maintenance_at ?? ''
+						row.last_maintenance_at ?? '',
+						row.last_optimize_at ?? '',
+						row.last_optimize_manifests_at ?? '',
+						row.last_expire_snapshots_at ?? '',
+						row.last_remove_orphan_files_at ?? ''
 					])
 				)
 			);
@@ -512,6 +520,7 @@
 						m.monitoring_query_id(),
 						m.monitoring_state(),
 						m.common_user(),
+						m.monitoring_class(),
 						m.common_catalog(),
 						m.monitoring_schema(),
 						m.monitoring_started(),
@@ -526,6 +535,7 @@
 							query.trino_query_id,
 							query.state,
 							query.user,
+							query.queue_class ?? '',
 							query.catalog,
 							query.schema ?? '',
 							query.created_at,
@@ -1084,6 +1094,7 @@
 							<tr>
 								<th class="px-3 py-2">{m.monitoring_state()}</th>
 								<th class="px-3 py-2">{m.monitoring_user()}</th>
+								<th class="px-3 py-2">{m.monitoring_class()}</th>
 								<th class="px-3 py-2">SQL</th>
 								<th class="px-3 py-2">{m.monitoring_catalog()}</th>
 								<th class="px-3 py-2">{m.monitoring_elapsed()}</th>
@@ -1114,6 +1125,13 @@
 										/>
 									</td>
 									<td class="px-3 py-1.5 font-mono">{query.user}</td>
+									<td class="px-3 py-1.5">
+										{#if query.queue_class}
+											<Badge tone="neutral">{classLabel(query.queue_class)}</Badge>
+										{:else}
+											<span class="text-text-muted">—</span>
+										{/if}
+									</td>
 									<td
 										class="max-w-[320px] truncate px-3 py-1.5 font-mono"
 										title={query.sql_first_line}
@@ -1286,6 +1304,13 @@
 										{:else}
 											—
 										{/if}
+										<div class="mt-0.5 flex flex-col text-[10px] text-text-muted">
+											{#each [[m.maintenance_op_optimize(), row.last_optimize_at], [m.maintenance_op_optimize_manifests(), row.last_optimize_manifests_at], [m.maintenance_op_expire_snapshots(), row.last_expire_snapshots_at], [m.maintenance_op_remove_orphan_files(), row.last_remove_orphan_files_at]] as [label, at] (label)}
+												{#if at}
+													<span>{label}: <RelativeTime {at} /></span>
+												{/if}
+											{/each}
+										</div>
 									</td>
 									<td class="px-3 py-1.5 text-right">
 										<div class="flex justify-end gap-1.5">
@@ -1366,8 +1391,19 @@
 										<StatusBadge kind="maintenance" status={run.status} />
 									</td>
 									<td class="px-3 py-1.5 font-mono">{run.namespace}.{run.table_name}</td>
-									<td class="px-3 py-1.5">{run.operations.map(operationLabel).join(', ') || '—'}</td
-									>
+									<td class="px-3 py-1.5">
+										{run.operations.map(operationLabel).join(', ') || '—'}
+										<!-- eslint-disable svelte/no-navigation-without-resolve -- external Temporal UI URL -->
+										{#if run.workflow_url}
+											<a
+												class="ml-1 font-semibold text-primary hover:underline"
+												href={run.workflow_url}
+												target="_blank"
+												rel="noopener noreferrer">{m.maintenance_open_temporal()}</a
+											>
+										{/if}
+										<!-- eslint-enable svelte/no-navigation-without-resolve -->
+									</td>
 									<td class="px-3 py-1.5">{triggerLabel(run.trigger)}</td>
 									<td class="px-3 py-1.5"><RelativeTime at={run.started_at} /></td>
 									<td class="px-3 py-1.5">

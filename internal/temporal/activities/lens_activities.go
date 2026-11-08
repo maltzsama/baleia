@@ -186,6 +186,14 @@ func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if a.metrics.monitoring != nil {
+		var used *float64
+		if totalMem != nil && freeMem != nil && *totalMem > 0 {
+			ratio := 1 - float64(*freeMem)/float64(*totalMem)
+			used = &ratio
+		}
+		a.metrics.monitoring.Cluster(eng.Kind(), stats.ActiveWorkers, stats.RunningQueries, stats.QueuedQueries, stats.BlockedQueries, used)
+	}
 	if err := events.Notify(ctx, a.pool, uuid.UUID(engineID.Bytes).String(), events.KindCluster); err != nil {
 		a.logger.WarnContext(ctx, "monitoring notify failed", "err", err)
 	}

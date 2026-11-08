@@ -126,7 +126,7 @@ func (h *OpsHandlers) GetTableMaintenance(ctx context.Context, request GetTableM
 		return nil, err
 	}
 	for _, r := range runs {
-		out.Runs = append(out.Runs, maintenanceRun(r))
+		out.Runs = append(out.Runs, h.maintenanceRun(r))
 	}
 	row, err := h.monitor.TablePolicy(ctx, t.key)
 	if errors.Is(err, monitoring.ErrPolicyNotFound) {
@@ -353,7 +353,7 @@ func (h *OpsHandlers) RunTableMaintenance(ctx context.Context, request RunTableM
 	}
 	h.audited(ctx, audit.Event{Action: audit.MaintenanceRunRequested, ResourceType: "table_maintenance",
 		ResourceID: tableResource(t.key), Changes: map[string]audit.Change{"operation": {To: step.Operation}}}.Allowed())
-	return RunTableMaintenance202JSONResponse(maintenanceRun(run)), nil
+	return RunTableMaintenance202JSONResponse(h.maintenanceRun(run)), nil
 }
 
 // AnalyzeCatalogTableHealth starts a health pass of one catalog now.
@@ -464,7 +464,7 @@ func (h *OpsHandlers) GetCatalogMaintenancePlan(ctx context.Context, request Get
 			}
 		}
 		if p.LastRun != nil {
-			last := maintenanceRun(*p.LastRun)
+			last := h.maintenanceRun(*p.LastRun)
 			item.LastRun = &last
 		}
 		out = append(out, item)

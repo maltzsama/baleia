@@ -403,22 +403,24 @@ func (a *Activities) failExecution(ctx context.Context, params FailExecutionPara
 // workerMetrics are the worker's producers (#87); nil-safe, zero without
 // SetMetrics.
 type workerMetrics struct {
-	engine    *metrics.Engine
-	schedules *metrics.Schedules
-	metadata  *metrics.Metadata
-	directory *metrics.Directory
-	workload  *metrics.Workload
+	engine     *metrics.Engine
+	schedules  *metrics.Schedules
+	metadata   *metrics.Metadata
+	directory  *metrics.Directory
+	workload   *metrics.Workload
+	monitoring *metrics.Monitoring
 }
 
 // SetMetrics registers the worker's producers on reg. Result storage is
 // instrumented where it is built (internal/app).
 func (a *Activities) SetMetrics(reg *metrics.Registry) {
 	a.metrics = workerMetrics{
-		engine:    reg.Engine(),
-		schedules: reg.Schedules(),
-		metadata:  reg.Metadata(),
-		directory: reg.Directory(),
-		workload:  reg.Workload(),
+		engine:     reg.Engine(),
+		schedules:  reg.Schedules(),
+		metadata:   reg.Metadata(),
+		directory:  reg.Directory(),
+		workload:   reg.Workload(),
+		monitoring: reg.Monitoring(),
 	}
 }
 

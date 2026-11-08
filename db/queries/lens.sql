@@ -70,6 +70,15 @@ WHERE engine_id = @engine_id::uuid
 ORDER BY created_at DESC
 LIMIT @lim::int OFFSET @off::int;
 
+-- name: ListQueryClassesByExecutionIDs :many
+SELECT id, queue_class FROM query_executions WHERE id = ANY(@ids::uuid[]);
+
+-- name: ListLastMaintenancePerOperation :many
+SELECT namespace, table_name, operation, max(finished_at)::timestamptz AS last_at
+FROM maintenance_runs, unnest(operations) AS operation
+WHERE catalog_id = @catalog_id::uuid AND status = 'finished' AND finished_at IS NOT NULL
+GROUP BY namespace, table_name, operation;
+
 -- name: GetTrinoQuerySnapshotByEngine :one
 SELECT * FROM trino_query_snapshots
 WHERE engine_id = @engine_id::uuid AND trino_query_id = @trino_query_id::text;

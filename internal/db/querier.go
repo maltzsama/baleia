@@ -456,6 +456,7 @@ type Querier interface {
 	// left column always belongs to @left_table and the right to @right_table,
 	// whatever order the statements wrote them in.
 	ListJoinSuggestions(ctx context.Context, arg ListJoinSuggestionsParams) ([]ListJoinSuggestionsRow, error)
+	ListLastMaintenancePerOperation(ctx context.Context, catalogID pgtype.UUID) ([]ListLastMaintenancePerOperationRow, error)
 	// Every metric, to detect a base table that no longer exists.
 	ListLineageBrokenMetrics(ctx context.Context) ([]ListLineageBrokenMetricsRow, error)
 	// Every model, to detect a base table or column that no longer exists.
@@ -483,6 +484,7 @@ type Querier interface {
 	ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
 	// The workspace's most used tables, live and granted only, best first.
 	ListPopularTables(ctx context.Context, arg ListPopularTablesParams) ([]ListPopularTablesRow, error)
+	ListQueryClassesByExecutionIDs(ctx context.Context, ids []pgtype.UUID) ([]ListQueryClassesByExecutionIDsRow, error)
 	ListQueryExecutionsByWorkspace(ctx context.Context, arg ListQueryExecutionsByWorkspaceParams) ([]QueryExecution, error)
 	ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]QueryStatement, error)
 	// Only returns statements of an execution that belongs to the given workspace.

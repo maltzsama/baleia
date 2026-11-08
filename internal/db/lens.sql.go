@@ -436,6 +436,45 @@ func (q *Queries) ListClusterSnapshotsByEngine(ctx context.Context, arg ListClus
 	return items, nil
 }
 
+const listLastMaintenancePerOperation = `-- name: ListLastMaintenancePerOperation :many
+SELECT namespace, table_name, operation, max(finished_at)::timestamptz AS last_at
+FROM maintenance_runs, unnest(operations) AS operation
+WHERE catalog_id = $1::uuid AND status = 'finished' AND finished_at IS NOT NULL
+GROUP BY namespace, table_name, operation
+`
+
+type ListLastMaintenancePerOperationRow struct {
+	Namespace string             `json:"namespace"`
+	TableName string             `json:"table_name"`
+	Operation interface{}        `json:"operation"`
+	LastAt    pgtype.Timestamptz `json:"last_at"`
+}
+
+func (q *Queries) ListLastMaintenancePerOperation(ctx context.Context, catalogID pgtype.UUID) ([]ListLastMaintenancePerOperationRow, error) {
+	rows, err := q.db.Query(ctx, listLastMaintenancePerOperation, catalogID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLastMaintenancePerOperationRow
+	for rows.Next() {
+		var i ListLastMaintenancePerOperationRow
+		if err := rows.Scan(
+			&i.Namespace,
+			&i.TableName,
+			&i.Operation,
+			&i.LastAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMaintenanceRuns = `-- name: ListMaintenanceRuns :many
 SELECT id, catalog_id, binding_id, namespace, table_name, operations, retention, status, error_code, error_message, started_by, started_at, finished_at, workflow_id, trigger, reason, parameters, attempts, policy_revision FROM maintenance_runs
 WHERE catalog_id = $1::uuid
@@ -498,6 +537,35 @@ func (q *Queries) ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRu
 			&i.Attempts,
 			&i.PolicyRevision,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listQueryClassesByExecutionIDs = `-- name: ListQueryClassesByExecutionIDs :many
+SELECT id, queue_class FROM query_executions WHERE id = ANY($1::uuid[])
+`
+
+type ListQueryClassesByExecutionIDsRow struct {
+	ID         pgtype.UUID `json:"id"`
+	QueueClass *string     `json:"queue_class"`
+}
+
+func (q *Queries) ListQueryClassesByExecutionIDs(ctx context.Context, ids []pgtype.UUID) ([]ListQueryClassesByExecutionIDsRow, error) {
+	rows, err := q.db.Query(ctx, listQueryClassesByExecutionIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListQueryClassesByExecutionIDsRow
+	for rows.Next() {
+		var i ListQueryClassesByExecutionIDsRow
+		if err := rows.Scan(&i.ID, &i.QueueClass); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

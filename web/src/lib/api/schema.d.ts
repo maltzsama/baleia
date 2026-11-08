@@ -6647,6 +6647,8 @@ export interface components {
              * @description Peak user memory the engine reported; null when unknown
              */
             peak_memory_bytes?: number | null;
+            /** @description Workload class the run was queued in (interactive, heavy, background); null for engine-direct queries */
+            queue_class?: string | null;
             origin?: string;
         };
         MonitoringQueryDetail: components["schemas"]["MonitoringQuery"] & {
@@ -6702,6 +6704,26 @@ export interface components {
             oldest_snapshot_age_hours?: number | null;
             /** Format: date-time */
             last_maintenance_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Last successful optimize run on this table
+             */
+            last_optimize_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Last successful optimize_manifests run on this table
+             */
+            last_optimize_manifests_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Last successful expire_snapshots run on this table
+             */
+            last_expire_snapshots_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Last successful remove_orphan_files run on this table
+             */
+            last_remove_orphan_files_at?: string | null;
             health_score: number;
             needs_compaction: boolean;
             needs_snapshot_expiry: boolean;
@@ -6901,6 +6923,8 @@ export interface components {
             /** Format: date-time */
             finished_at?: string | null;
             workflow_id: string;
+            /** @description Link to the workflow in the Temporal UI; null when no UI URL is configured */
+            workflow_url?: string | null;
             /** @enum {string} */
             trigger: "manual" | "automatic" | "dry_run";
             reason: components["schemas"]["MaintenanceReason"];
