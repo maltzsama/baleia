@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Users persists accounts, their suspensions and directory runs.
@@ -171,6 +172,42 @@ func (s *Users) CreatePasswordResetToken(ctx context.Context, arg db.CreatePassw
 	return s.db.WithContext(ctx).Create(&row).Error
 }
 
+// ConsumePasswordResetToken marks the token used atomically, so a replayed
+// link fails even before its expiry.
+func (s *Users) ConsumePasswordResetToken(ctx context.Context, tokenHash string) (db.PasswordResetToken, error) {
+	var row model.PasswordResetToken
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("token_hash = ? AND used_at IS NULL AND expires_at > ?", tokenHash, time.Now().UTC()).
+			First(&row)
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return pgx.ErrNoRows
+		}
+		if res.Error != nil {
+			return res.Error
+		}
+		now := time.Now().UTC()
+		if err := tx.Model(&model.PasswordResetToken{}).
+			Where("token_hash = ?", tokenHash).
+			Update("used_at", now).Error; err != nil {
+			return err
+		}
+		row.UsedAt = &now
+		return nil
+	})
+	if err != nil {
+		return db.PasswordResetToken{}, err
+	}
+	return toDBPasswordResetToken(row), nil
+}
+
+// UpdateUserPassword replaces the password hash.
+func (s *Users) UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error {
+	return s.db.WithContext(ctx).Model(&model.User{}).
+		Where("id = ?", UUIDString(arg.ID)).
+		Updates(map[string]any{"password_hash": arg.PasswordHash, "updated_at": time.Now().UTC()}).Error
+}
+
 // ListDirectoryReconcileRuns returns the latest runs, newest first.
 func (s *Users) ListDirectoryReconcileRuns(ctx context.Context, arg db.ListDirectoryReconcileRunsParams) ([]db.DirectoryReconcileRun, error) {
 	q := s.db.WithContext(ctx).Model(&model.DirectoryReconcileRun{})
@@ -209,6 +246,16 @@ func toDBUser(u model.User) db.User {
 		Kind:                string(u.Kind),
 		HomeWorkspaceID:     uuidPtr(u.HomeWorkspaceID),
 		Description:         u.Description,
+	}
+}
+
+func toDBPasswordResetToken(t model.PasswordResetToken) db.PasswordResetToken {
+	return db.PasswordResetToken{
+		TokenHash: string(t.TokenHash),
+		UserID:    PGUUID(string(t.UserID)),
+		ExpiresAt: PGTime(t.ExpiresAt),
+		UsedAt:    PGTimePtr(t.UsedAt),
+		CreatedAt: PGTime(t.CreatedAt),
 	}
 }
 

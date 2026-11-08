@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -89,5 +91,50 @@ func TestUsersRoundTrip(t *testing.T) {
 	}
 	if _, err := store.GetUserByID(ctx, created.ID); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("GetUserByID after delete = %v, want pgx.ErrNoRows", err)
+	}
+}
+
+func TestPasswordResetTokenIsSingleUse(t *testing.T) {
+	t.Parallel()
+	pool := testdb.New(t)
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger:         gormlogger.Discard,
+		TranslateError: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	ctx := context.Background()
+	store := NewUsers(gdb)
+	hash := "x"
+	user, err := store.CreateUser(ctx, db.CreateUserParams{
+		Name:         "Reset",
+		Email:        "reset@example.test",
+		PasswordHash: &hash,
+		Role:         "member",
+		AuthProvider: "local",
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	const token = "reset-token-hash"
+	if err := store.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
+		TokenHash: token,
+		UserID:    user.ID,
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
+	}); err != nil {
+		t.Fatalf("CreatePasswordResetToken: %v", err)
+	}
+
+	consumed, err := store.ConsumePasswordResetToken(ctx, token)
+	if err != nil || !consumed.UsedAt.Valid {
+		t.Fatalf("ConsumePasswordResetToken = %+v, %v", consumed, err)
+	}
+	if _, err := store.ConsumePasswordResetToken(ctx, token); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("replayed token = %v, want pgx.ErrNoRows", err)
 	}
 }
