@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -50,17 +51,32 @@ func (h *AgentHandlers) agentScope(ctx context.Context, p authz.Principal, id pg
 // p acting as that service account (#653): the account cannot sign in to the
 // web app, so its managers manage its agents.
 func (h *AgentHandlers) asAgentOwner(ctx context.Context, p authz.Principal, id pgtype.UUID) authz.Principal {
-	a, err := h.queries.GetAgentByID(ctx, id)
+	owners := h.agentOwners()
+	a, err := owners.GetAgentByID(ctx, id)
 	if err != nil || a.OwnerID == p.UserID {
 		return p
 	}
-	sa, err := h.queries.GetServiceAccount(ctx, a.OwnerID)
+	sa, err := owners.GetServiceAccount(ctx, a.OwnerID)
 	if err != nil || !h.managesServiceAccount(ctx, p, sa) {
 		return p
 	}
 	q := p
 	q.UserID = sa.ID
 	return q
+}
+
+// agentOwners is the account lookup the agent handlers need: the GORM store
+// when configured, the sqlc querier otherwise (ADR 0020, #774).
+type agentOwners interface {
+	GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, error)
+	GetServiceAccount(ctx context.Context, id pgtype.UUID) (db.User, error)
+}
+
+func (h *core) agentOwners() agentOwners {
+	if h.store != nil {
+		return repo.New(h.store)
+	}
+	return h.queries
 }
 
 // agentOwned loads an external agent only when the caller owns it.

@@ -69,9 +69,14 @@ func newAuthHandlers(c *core) *AuthHandlers {
 		core:     c,
 		prober:   networkProber{},
 		sessions: newSessions(c),
-		setup: setup.New(c.queries, func(ctx context.Context, fn func(setup.Store) error) error {
+	}
+	if c.store != nil {
+		r := repo.New(c.store)
+		a.setup = setup.New(r, r.TxSetup, c.settings.Auth.PasswordCost)
+	} else {
+		a.setup = setup.New(c.queries, func(ctx context.Context, fn func(setup.Store) error) error {
 			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
-		}, c.settings.Auth.PasswordCost),
+		}, c.settings.Auth.PasswordCost)
 	}
 	a.logins = newLogins(c, login.LDAP{})
 	if c.store != nil {
@@ -87,7 +92,11 @@ func newAuthHandlers(c *core) *AuthHandlers {
 			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
 		})
 	}
-	a.accounts = account.New(c.queries, a.sessions, account.Config{
+	var accountStore account.Store = c.queries
+	if c.store != nil {
+		accountStore = repo.NewUsers(c.store)
+	}
+	a.accounts = account.New(accountStore, a.sessions, account.Config{
 		PasswordCost:      c.settings.Auth.PasswordCost,
 		MinPasswordLength: minPasswordLength,
 	})

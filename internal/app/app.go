@@ -273,7 +273,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.TrinoAdmin = trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoAdminUser, c.TrinoHTTP)
 	c.Binder = bindtrino.New(c.Logger, c.TrinoAdmin, c.Queries).WithRegistryKeyring(c.RegistryKeyring).
 		WithIcebergMinRetention(cfg.MaintenanceMinRetention())
-	c.Audit = audit.NewPostgres(c.Logger, c.Queries, c.Connections.SecretKeys(), c.Metrics.Audit().WriteFailed)
+	c.Audit = audit.NewPostgres(c.Logger, c.StoreRepo, c.Connections.SecretKeys(), c.Metrics.Audit().WriteFailed)
 	return c, nil
 }
 

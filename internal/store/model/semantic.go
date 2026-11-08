@@ -151,6 +151,7 @@ type MetadataSyncRun struct {
 	CatalogID     UUID       `gorm:"column:catalog_id;not null;index:metadata_sync_runs_catalog,priority:1;check:metadata_sync_runs_source_path_check,((source_path = ANY (ARRAY['provider'::text, 'engine'::text])))"`
 	StartedAt     time.Time  `gorm:"column:started_at;not null;default:CURRENT_TIMESTAMP(3);index:metadata_sync_runs_catalog,priority:2"`
 	FinishedAt    *time.Time `gorm:"column:finished_at"`
+	HeartbeatAt   *time.Time `gorm:"column:heartbeat_at"`
 	Status        string     `gorm:"column:status;not null"`
 	TablesSeen    *int32     `gorm:"column:tables_seen"`
 	TablesChanged *int32     `gorm:"column:tables_changed"`

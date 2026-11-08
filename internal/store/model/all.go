@@ -47,6 +47,7 @@ func All() []any {
 		&SemanticDoc{},
 		&SemanticMetric{},
 		&SemanticModel{},
+		&SetupLock{},
 		&SpaceMember{},
 		&Space{},
 		&StatementJoin{},

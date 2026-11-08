@@ -8,6 +8,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -19,6 +20,23 @@ func workspaceMemberToPublic(r db.ListWorkspaceMembersRow) WorkspaceMember {
 		Source:  WorkspaceMemberSource(r.Source),
 		RoleSet: r.RoleSet,
 	}
+}
+
+// workspaceMemberStore is the membership persistence the handlers need: the
+// GORM store when configured, the sqlc querier otherwise (ADR 0020, #774).
+type workspaceMemberStore interface {
+	ListWorkspaceMembers(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceMembersRow, error)
+	UpsertWorkspaceMember(ctx context.Context, arg db.UpsertWorkspaceMemberParams) (int64, error)
+	DeleteWorkspaceMember(ctx context.Context, arg db.DeleteWorkspaceMemberParams) (int64, error)
+	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
+	GetUserByEmail(ctx context.Context, email string) (db.User, error)
+}
+
+func (h *core) memberStore() workspaceMemberStore {
+	if h.store != nil {
+		return repo.New(h.store)
+	}
+	return h.queries
 }
 
 // ListWorkspaceMembers — GET /workspaces/{id}/members (#653). Any member may
@@ -35,7 +53,7 @@ func (h *WorkspaceHandlers) ListWorkspaceMembers(ctx context.Context, request Li
 		}
 		return nil, err
 	}
-	rows, err := h.queries.ListWorkspaceMembers(ctx, wsID)
+	rows, err := h.memberStore().ListWorkspaceMembers(ctx, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +113,7 @@ func (h *core) setMember(ctx context.Context, wsID pgtype.UUID, user *db.User, r
 	}
 	// The write itself checks a shared workspace's team membership, so a
 	// concurrent removal from the team cannot leave a role that has no effect.
-	n, err := h.queries.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: wsID, UserID: user.ID, Role: role, GrantedBy: p.UserID})
+	n, err := h.memberStore().UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: wsID, UserID: user.ID, Role: role, GrantedBy: p.UserID})
 	if err != nil {
 		return db.ListWorkspaceMembersRow{}, 0, err
 	}
@@ -134,7 +152,7 @@ func (h *WorkspaceHandlers) SetWorkspaceMember(ctx context.Context, request SetW
 	if request.Body != nil {
 		role = string(request.Body.Role)
 	}
-	user, err := lookupUser(h.queries.GetUserByID(ctx, pgtype.UUID{Bytes: request.UserId, Valid: true}))
+	user, err := lookupUser(h.memberStore().GetUserByID(ctx, pgtype.UUID{Bytes: request.UserId, Valid: true}))
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +186,7 @@ func (h *WorkspaceHandlers) AddWorkspaceMember(ctx context.Context, request AddW
 	if request.Body == nil {
 		return AddWorkspaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "email and role are required")}, nil
 	}
-	user, err := lookupUser(h.queries.GetUserByEmail(ctx, strings.TrimSpace(string(request.Body.Email))))
+	user, err := lookupUser(h.memberStore().GetUserByEmail(ctx, strings.TrimSpace(string(request.Body.Email))))
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +236,7 @@ func (h *WorkspaceHandlers) RemoveWorkspaceMember(ctx context.Context, request R
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return RemoveWorkspaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeWorkspaceOwnerRoleFixed, "the owner of a personal workspace is always its admin")}, nil
 	}
-	n, err := h.queries.DeleteWorkspaceMember(ctx, db.DeleteWorkspaceMemberParams{WorkspaceID: wsID, UserID: userID})
+	n, err := h.memberStore().DeleteWorkspaceMember(ctx, db.DeleteWorkspaceMemberParams{WorkspaceID: wsID, UserID: userID})
 	if err != nil {
 		return nil, err
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/obs"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/temporal/schedulespecs"
@@ -106,7 +107,10 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	act.SetStore(core.StoreRepo)
 	act.SetMetrics(reg)
 	act.SetTemporal(core.Temporal)
-	act.SetMetadataSyncer(metadata.NewSyncer(pool, metadata.NewSources(core.Queries, core.Keyring, core.Connections, core.Engines)))
+	r := core.StoreRepo
+	act.SetMetadataSyncer(metadata.NewSyncer(r, func(ctx context.Context, runID pgtype.UUID, fn func(metadata.Store) error) error {
+		return r.TxMetadata(ctx, runID, func(tx *repo.Repo) error { return fn(tx) })
+	}, metadata.NewSources(r, core.Keyring, core.Connections, core.Engines)))
 	// The dispatcher observes federated engines' catalogs (adopting the ones
 	// Baleia did not create) with the binder, as the catalog DDL identity.
 	binder := core.Binder
@@ -146,7 +150,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 		if err != nil {
 			return fmt.Errorf("audit export sink: %w", err)
 		}
-		pg := auditexport.Postgres{Queries: core.Queries}
+		pg := auditexport.Postgres{Queries: core.StoreRepo}
 		// Registered once: calling AuditExport() per lag report would register
 		// the collectors again and panic.
 		exportMetrics := reg.AuditExport()

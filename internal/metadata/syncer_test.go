@@ -8,15 +8,47 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
-func testPool(t *testing.T) *pgxpool.Pool { return testdb.New(t) }
+func testPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	return testdb.New(t)
+}
+
+// testStore builds the GORM store over the test database.
+func testStore(t *testing.T, pool *pgxpool.Pool) *repo.Repo {
+	t.Helper()
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger:         gormlogger.Discard,
+		TranslateError: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	return repo.New(gdb)
+}
+
+// newSyncer builds the GORM-backed syncer over the test database.
+func newSyncer(t *testing.T, pool *pgxpool.Pool, opener Opener) *Syncer {
+	t.Helper()
+	r := testStore(t, pool)
+	return NewSyncer(r, func(ctx context.Context, runID pgtype.UUID, fn func(Store) error) error {
+		return r.TxMetadata(ctx, runID, func(tx *repo.Repo) error { return fn(tx) })
+	}, opener)
+}
 
 // testCatalog inserts a native catalog on a fresh connection.
 func testCatalog(t *testing.T, pool *pgxpool.Pool) pgtype.UUID {
@@ -122,7 +154,7 @@ func TestSync_InitialPass(t *testing.T) {
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
-	stats, err := NewSyncer(pool, fakeOpener{src}).Sync(context.Background(), cat, nil)
+	stats, err := newSyncer(t, pool, fakeOpener{src}).Sync(context.Background(), cat, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +188,7 @@ func TestSync_OnlyChangedTablesReload(t *testing.T) {
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
-	s := NewSyncer(pool, fakeOpener{src})
+	s := newSyncer(t, pool, fakeOpener{src})
 	if _, err := s.Sync(context.Background(), cat, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +223,7 @@ func TestSync_ForeignKeys(t *testing.T) {
 		{ns: []string{"sales"}, name: "orders", version: "v1", cols: []string{"id", "customer_id"}, fks: []ForeignKeySnapshot{fk}},
 		{ns: []string{"sales"}, name: "customers", version: "v1", cols: []string{"id"}},
 	}}
-	s := NewSyncer(pool, fakeOpener{src})
+	s := newSyncer(t, pool, fakeOpener{src})
 	ctx := context.Background()
 	if _, err := s.Sync(ctx, cat, nil); err != nil {
 		t.Fatal(err)
@@ -216,7 +248,7 @@ func TestSync_Tombstones(t *testing.T) {
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
-	s := NewSyncer(pool, fakeOpener{src})
+	s := newSyncer(t, pool, fakeOpener{src})
 	ctx := context.Background()
 	if _, err := s.Sync(ctx, cat, nil); err != nil {
 		t.Fatal(err)
@@ -263,14 +295,16 @@ func TestSync_Tombstones(t *testing.T) {
 	}
 }
 
-// TestSync_ConcurrentLocked: a second sync of the same catalog while one runs
-// gets ErrSyncInProgress.
+// TestSync_ConcurrentLocked: a second sync of a live pass waits for its lease
+// and then gives up with ErrSyncInProgress, never running concurrently.
 func TestSync_ConcurrentLocked(t *testing.T) {
 	t.Parallel()
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree(), block: make(chan struct{}), entered: make(chan struct{})}
-	s := NewSyncer(pool, fakeOpener{src})
+	s := newSyncer(t, pool, fakeOpener{src})
+	s.heartbeatEvery = 100 * time.Millisecond
+	s.staleAfter = time.Second
 	done := make(chan error, 1)
 	go func() {
 		_, err := s.Sync(context.Background(), cat, nil)
@@ -284,10 +318,75 @@ func TestSync_ConcurrentLocked(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	// The lock is released: the next sync runs.
+	// The lease is released: the next sync runs.
 	src.block, src.entered = nil, nil
 	if _, err := s.Sync(context.Background(), cat, nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestSync_StaleRunTakenOver: a running row with a stale heartbeat left by a
+// crashed worker is failed and the catalog is taken over (ADR 0020).
+func TestSync_StaleRunTakenOver(t *testing.T) {
+	t.Parallel()
+	pool := testPool(t)
+	cat := testCatalog(t, pool)
+	store := testStore(t, pool)
+	ctx := context.Background()
+	stale, err := store.StartMetadataSyncRun(ctx, db.StartMetadataSyncRunParams{CatalogID: cat, SourcePath: PathProvider})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE metadata_sync_runs SET started_at = now() - interval '1 hour', heartbeat_at = now() - interval '1 hour' WHERE id = $1`, stale.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	src := &fakeSource{tables: twoByThree()}
+	stats, err := newSyncer(t, pool, fakeOpener{src}).Sync(ctx, cat, nil)
+	if err != nil || stats.TablesSeen != 6 {
+		t.Fatalf("sync = %+v, %v", stats, err)
+	}
+	var status, code string
+	if err := pool.QueryRow(ctx, `SELECT status, error_code FROM metadata_sync_runs WHERE id = $1`, stale.ID).Scan(&status, &code); err != nil || status != "failed" || code != "interrupted" {
+		t.Fatalf("stale run = %s %s, %v", status, code, err)
+	}
+	var running int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM metadata_sync_runs WHERE catalog_id = $1 AND status = 'running'`, cat).Scan(&running); err != nil || running != 0 {
+		t.Fatalf("running rows = %d, %v", running, err)
+	}
+}
+
+// TestSync_FreshRunLeaseWaitedOut: a retry that finds a fresh heartbeat must
+// wait for the lease to expire instead of failing at once, then take over.
+func TestSync_FreshRunLeaseWaitedOut(t *testing.T) {
+	t.Parallel()
+	pool := testPool(t)
+	cat := testCatalog(t, pool)
+	store := testStore(t, pool)
+	ctx := context.Background()
+	crashed, err := store.StartMetadataSyncRun(ctx, db.StartMetadataSyncRunParams{CatalogID: cat, SourcePath: PathProvider})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The row of a worker that just died: its heartbeat is still fresh.
+	if _, err := pool.Exec(ctx, `UPDATE metadata_sync_runs SET heartbeat_at = now() WHERE id = $1`, crashed.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	s := newSyncer(t, pool, fakeOpener{&fakeSource{tables: twoByThree()}})
+	s.heartbeatEvery = 100 * time.Millisecond
+	s.staleAfter = time.Second
+	start := time.Now()
+	stats, err := s.Sync(ctx, cat, nil)
+	if err != nil || stats.TablesSeen != 6 {
+		t.Fatalf("sync = %+v, %v", stats, err)
+	}
+	if elapsed := time.Since(start); elapsed < s.staleAfter {
+		t.Fatalf("retry took %s, want it to wait for the %s lease", elapsed, s.staleAfter)
+	}
+	var status string
+	if err := pool.QueryRow(ctx, `SELECT status FROM metadata_sync_runs WHERE id = $1`, crashed.ID).Scan(&status); err != nil || status != "failed" {
+		t.Fatalf("crashed run = %s, %v", status, err)
 	}
 }
 
@@ -298,7 +397,7 @@ func TestSync_FailedRunRecorded(t *testing.T) {
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree()}
-	s := NewSyncer(pool, fakeOpener{src})
+	s := newSyncer(t, pool, fakeOpener{src})
 	if _, err := s.Sync(context.Background(), cat, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +417,7 @@ func TestSync_FailedRunRecorded(t *testing.T) {
 func TestSync_UnknownCatalog(t *testing.T) {
 	t.Parallel()
 	pool := testPool(t)
-	_, err := NewSyncer(pool, fakeOpener{&fakeSource{}}).Sync(context.Background(), pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, nil)
+	_, err := newSyncer(t, pool, fakeOpener{&fakeSource{}}).Sync(context.Background(), pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, nil)
 	if !errors.Is(err, ErrCatalogNotFound) {
 		t.Fatalf("err = %v", err)
 	}
