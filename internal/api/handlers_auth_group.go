@@ -79,20 +79,34 @@ func newAuthHandlers(c *core) *AuthHandlers {
 	} else {
 		a.apiKeys = apikeys.New(c.queries)
 	}
-	a.providers = providers.New(c.queries, func(ctx context.Context, fn func(providers.TxStore) error) error {
-		return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
-	})
+	if c.store != nil {
+		pr := repo.NewProviders(c.store)
+		a.providers = providers.New(pr, pr.Tx)
+	} else {
+		a.providers = providers.New(c.queries, func(ctx context.Context, fn func(providers.TxStore) error) error {
+			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
+		})
+	}
 	a.accounts = account.New(c.queries, a.sessions, account.Config{
 		PasswordCost:      c.settings.Auth.PasswordCost,
 		MinPasswordLength: minPasswordLength,
 	})
 	a.oidc = c.oidcLogin
 	if a.oidc == nil {
-		a.oidc = oidclogin.New(c.queries, c.queries, c.keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
-			PublicURL: c.settings.Mail.PublicURL,
-			CacheTTL:  time.Hour,
-			Logger:    c.logger,
-		})
+		if c.store != nil {
+			r := repo.New(c.store)
+			a.oidc = oidclogin.New(r, c.queries, c.keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
+				PublicURL: c.settings.Mail.PublicURL,
+				CacheTTL:  time.Hour,
+				Logger:    c.logger,
+			})
+		} else {
+			a.oidc = oidclogin.New(c.queries, c.queries, c.keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
+				PublicURL: c.settings.Mail.PublicURL,
+				CacheTTL:  time.Hour,
+				Logger:    c.logger,
+			})
+		}
 	}
 	var userStore users.Store
 	var userTx users.Tx
