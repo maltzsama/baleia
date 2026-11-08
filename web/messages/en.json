@@ -1119,6 +1119,8 @@
 	"monitoring_show_as_table": "Show as a table",
 	"monitoring_hide_table": "Hide the table",
 	"monitoring_chart_legend": "Series",
+	"monitoring_custom_window": "Custom",
+	"monitoring_window_duration": "Window (e.g. 90m)",
 	"monitoring_chart_from_to": "From {from} to {to}.",
 	"monitoring_chart_series_stats": "{label}: {latest} now, peak {peak}.",
 	"monitoring_chart_point": "{time}: {values}.",

@@ -77,6 +77,11 @@ func TestClusterWindow(t *testing.T) {
 		"1h":       time.Hour,
 		"6h":       6 * time.Hour,
 		"24h":      24 * time.Hour,
+		"90m":      90 * time.Minute,
+		"36h":      36 * time.Hour,
+		"7d":       7 * 24 * time.Hour,
+		"1m":       time.Minute,
+		"31d":      time.Hour,
 		"":         time.Hour,
 		"nonsense": time.Hour,
 	}

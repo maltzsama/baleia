@@ -34,6 +34,19 @@ func (q snapshotFake) GetTrinoQuerySnapshotByEngine(context.Context, db.GetTrino
 
 // TestMonitoringQuery_LookupErrors: an unknown query is a 404, and a failed
 // lookup is a server error, not "query not found".
+func TestMonitoringQuery_PeakMemory(t *testing.T) {
+	t.Parallel()
+	q := monitoringQuery(db.TrinoQuerySnapshot{
+		RawTrinoPayload: []byte(`{"peakMemoryBytes":4096}`),
+	})
+	if q.PeakMemoryBytes == nil || *q.PeakMemoryBytes != 4096 {
+		t.Errorf("peak memory = %v, want 4096", q.PeakMemoryBytes)
+	}
+	if got := monitoringQuery(db.TrinoQuerySnapshot{}); got.PeakMemoryBytes != nil {
+		t.Errorf("empty payload peak memory = %v, want nil", got.PeakMemoryBytes)
+	}
+}
+
 func TestMonitoringQuery_LookupErrors(t *testing.T) {
 	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
