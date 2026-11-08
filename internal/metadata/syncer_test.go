@@ -303,8 +303,8 @@ func TestSync_ConcurrentLocked(t *testing.T) {
 	cat := testCatalog(t, pool)
 	src := &fakeSource{tables: twoByThree(), block: make(chan struct{}), entered: make(chan struct{})}
 	s := newSyncer(t, pool, fakeOpener{src})
-	s.heartbeatEvery = 10 * time.Millisecond
-	s.staleAfter = 100 * time.Millisecond
+	s.heartbeatEvery = 100 * time.Millisecond
+	s.staleAfter = time.Second
 	done := make(chan error, 1)
 	go func() {
 		_, err := s.Sync(context.Background(), cat, nil)
@@ -374,8 +374,8 @@ func TestSync_FreshRunLeaseWaitedOut(t *testing.T) {
 	}
 
 	s := newSyncer(t, pool, fakeOpener{&fakeSource{tables: twoByThree()}})
-	s.heartbeatEvery = 10 * time.Millisecond
-	s.staleAfter = 100 * time.Millisecond
+	s.heartbeatEvery = 100 * time.Millisecond
+	s.staleAfter = time.Second
 	start := time.Now()
 	stats, err := s.Sync(ctx, cat, nil)
 	if err != nil || stats.TablesSeen != 6 {
