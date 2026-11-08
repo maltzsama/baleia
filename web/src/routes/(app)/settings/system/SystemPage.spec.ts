@@ -64,6 +64,13 @@ describe('system status page', () => {
 		expect(await screen.findByRole('button', { name: 'Refresh' })).toBeTruthy();
 	});
 
+	it('leaves credits out of the system status', async () => {
+		renderPage(SystemPage, { me: makeMe(), url: '/settings/system' });
+		await screen.findByText('Baleia');
+		expect(screen.queryByText('Credits')).toBeNull();
+		expect(screen.queryByRole('link', { name: 'View credits' })).toBeNull();
+	});
+
 	// #695: "Checked" is refreshed to now on every load. A frozen reference
 	// clock rendered it as "in N minutes" once the page had been open a while;
 	// it must reset to "just now" instead.

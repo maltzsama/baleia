@@ -2469,8 +2469,6 @@
 	"maintenance_nothing_due": "Nada devido",
 	"maintenance_read_only": "Você pode ver a manutenção desta tabela, mas não alterá-la.",
 	"common_credits": "Créditos",
-	"common_view_credits": "Ver créditos",
-	"settings_system_icon_and_font_licenses": "O ícone do app e as fontes incluídas são usados sob suas próprias licenças.",
 	"credits_intro": "O Baleia é um projeto de código aberto. O ícone, as fontes e as dependências mantêm suas próprias licenças.",
 	"credits_brand_heading": "Ícone da marca",
 	"credits_brand_body": "A marca da Baleia e os favicons são o ícone \"pet\" de bsd no Flaticon, usado sob a Licença Gratuita do Flaticon.",
