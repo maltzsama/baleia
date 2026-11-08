@@ -152,7 +152,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		gate := agentpolicy.NewGate(core.Queries, engineCapabilities{h: h}, h.AgentCeilings(), core.Dialects)
 		gate.SetObserver(core.Metrics.Agent())
 		gate.SetQueueing(cfg.WorkloadEnabled)
-		s.mcp = mcp.New(s.logger, h, gate, core.Queries, mcp.NewAuditHooks(core.Audit), cfg.MCPAllowedOrigins)
+		s.mcp = mcp.New(s.logger, h, gate, core.AgentTokens(), mcp.NewAuditHooks(core.Audit), cfg.MCPAllowedOrigins)
 		startAssistant(ctx, s.logger, h, s.mcp, core.Dialer, runner)
 	}
 

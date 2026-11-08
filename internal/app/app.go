@@ -15,6 +15,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/agentauth"
 	"github.com/galileostudio/baleia/internal/audit"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/bootstrap"
@@ -68,6 +69,8 @@ type Core struct {
 	// Store is the GORM connection for the domains migrated off sqlc
 	// (#769–#774).
 	Store *gorm.DB
+	// StoreRepo is the GORM-backed store shared by the migrated domains.
+	StoreRepo *repo.Repo
 	// Keyring seals stored connection credentials; RegistryKeyring is nil
 	// when registry encryption is disabled.
 	Keyring         *crypto.Keyring
@@ -173,6 +176,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		return nil, fmt.Errorf("gorm store: %w", err)
 	}
 	c.onClose(func() { _ = store.Close(c.Store) })
+	c.StoreRepo = repo.New(c.Store)
 
 	// Credentials are sealed with BALEIA_ENCRYPTION_KEY (never JWT_SECRET).
 	// With stored credentials and no key, refuse to start rather than serve
@@ -275,6 +279,15 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 
 // onClose registers f to run on Close, in reverse order of registration.
 func (c *Core) onClose(f func()) { c.closers = append(c.closers, f) }
+
+// AgentTokens is the GORM-backed agent-token store, or sqlc in tests without
+// one.
+func (c *Core) AgentTokens() agentauth.Store {
+	if c.StoreRepo != nil {
+		return c.StoreRepo
+	}
+	return c.Queries
+}
 
 // Close releases the graph, last built first. It is safe to call twice.
 func (c *Core) Close() {
