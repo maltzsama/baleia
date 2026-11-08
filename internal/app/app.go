@@ -125,12 +125,27 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	})
 
 	c.Metrics = metrics.New(opts.Service)
+	// The sqlc pgx pool and the GORM store share one per-process connection
+	// budget: the store gets a quarter and the pgx pool the rest.
+	totalConns := int(cfg.PoolSize(opts.PoolSize))
+	storeConns := totalConns / 4
+	if storeConns < 1 {
+		storeConns = 1
+	}
+	poolConns := totalConns - storeConns
+	if poolConns < 1 {
+		poolConns = 1
+		storeConns = totalConns - 1
+	}
 	var minConns int32
 	if cfg.DBMinConns > 0 && cfg.DBMinConns <= math.MaxInt32 {
 		minConns = int32(cfg.DBMinConns)
 	}
+	if int(minConns) > poolConns {
+		minConns = int32(poolConns)
+	}
 	c.Pool, err = dbpool.Open(ctx, cfg.DatabaseURL, dbpool.Options{
-		MaxConns: cfg.PoolSize(opts.PoolSize), MinConns: minConns, MaxConnLifetime: cfg.DBMaxConnLifetime,
+		MaxConns: int32(poolConns), MinConns: minConns, MaxConnLifetime: cfg.DBMaxConnLifetime,
 		MaxConnIdleTime: cfg.DBMaxConnIdleTime, HealthCheckPeriod: cfg.DBHealthCheckPeriod,
 		StatementTimeout: cfg.DBStatementTimeout, IdleInTxTimeout: cfg.DBIdleInTxTimeout, LockTimeout: cfg.DBLockTimeout,
 		Tracer: obs.PGXTracer(c.Metrics.NewPoolTracer()),
@@ -147,8 +162,11 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		return nil, fmt.Errorf("store backend: %w", err)
 	}
 	c.Store, err = store.Open(ctx, cfg.DatabaseURL, backend, store.Options{
-		MaxOpenConns: int(cfg.PoolSize(opts.PoolSize)),
-		Logger:       c.Logger,
+		MaxOpenConns:     storeConns,
+		Logger:           c.Logger,
+		StatementTimeout: cfg.DBStatementTimeout,
+		IdleInTxTimeout:  cfg.DBIdleInTxTimeout,
+		LockTimeout:      cfg.DBLockTimeout,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gorm store: %w", err)
