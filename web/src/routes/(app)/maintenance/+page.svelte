@@ -8,15 +8,32 @@
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { findTable, loadTable, type MetadataTableDetail } from '$lib/metadata/client';
 	import TableMaintenance from '$lib/maintenance/TableMaintenance.svelte';
+	import type { MaintenanceRun } from '$lib/maintenance/client';
+	import { operationLabel, triggerLabel } from '$lib/maintenance/labels';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
+	import Badge from '$lib/ui/Badge.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
+	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
+	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 	const catalogId = $derived(selection.catalog);
 	const namespace = $derived(selection.ns);
 	const tableName = $derived(selection.table);
+
+	// The component reports the table's runs; the latest one is the page's
+	// top-right summary, so it shows without scrolling past the parameters.
+	let runs = $state<MaintenanceRun[]>([]);
+	const lastRun = $derived(runs[0] ?? null);
+	$effect(() => {
+		// A new selection starts from no runs.
+		void catalogId;
+		void namespace;
+		void tableName;
+		runs = [];
+	});
 
 	type MaintenanceResult =
 		| { kind: 'empty' }
@@ -60,18 +77,41 @@
 </script>
 
 <div class="flex-1 overflow-y-auto p-7">
-	<div class="mb-4">
-		<a class="text-[12px] font-semibold text-primary hover:underline" href={resolve('/monitoring')}
-			>{m.maintenance_back_to_monitoring()}</a
-		>
-		<h1 class="mt-1 text-xl font-semibold tracking-[-0.3px]">{m.maintenance_title()}</h1>
-		{#await result then state}
-			{#if state.kind === 'found'}
-				<p class="mt-1 font-mono text-[13px] text-slate-600 dark:text-slate-300">
-					{state.detail.qualified_name ?? [...namespace, tableName].join('.')}
+	<div class="mb-4 flex flex-wrap items-start justify-between gap-4">
+		<div class="min-w-0">
+			<a
+				class="text-[12px] font-semibold text-primary hover:underline"
+				href={resolve('/monitoring')}>{m.maintenance_back_to_monitoring()}</a
+			>
+			<h1 class="mt-1 text-xl font-semibold tracking-[-0.3px]">{m.maintenance_title()}</h1>
+			{#await result then state}
+				{#if state.kind === 'found'}
+					<p class="mt-1 font-mono text-[13px] text-slate-600 dark:text-slate-300">
+						{state.detail.qualified_name ?? [...namespace, tableName].join('.')}
+					</p>
+				{/if}
+			{/await}
+		</div>
+		{#if tableName}
+			<div class="shrink-0 text-right" data-testid="last-run">
+				<p class="text-[10px] font-bold uppercase tracking-wide text-text-muted">
+					{m.maintenance_col_last_run()}
 				</p>
-			{/if}
-		{/await}
+				{#if lastRun}
+					<div class="mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-[12px]">
+						<StatusBadge kind="maintenance" status={lastRun.status} />
+						<span>{lastRun.operations.map(operationLabel).join(', ') || '—'}</span>
+						<Badge tone="neutral">{triggerLabel(lastRun.trigger)}</Badge>
+						<RelativeTime at={lastRun.started_at} />
+						{#if lastRun.error_code}
+							<span class="font-mono text-danger">{lastRun.error_code}</span>
+						{/if}
+					</div>
+				{:else}
+					<p class="mt-1 text-[12px] text-text-muted">{m.maintenance_no_runs()}</p>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	{#await result}
@@ -104,6 +144,7 @@
 				catalogId={state.detail.catalog_id}
 				namespace={state.detail.namespace.join('.')}
 				table={state.detail.name}
+				onruns={(next) => (runs = next)}
 			/>
 			<div class="mt-4">
 				<ActivityPanel

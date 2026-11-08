@@ -112,6 +112,13 @@ func TestLineage_TableUp(t *testing.T) {
 	if len(got.Edges) != 3 {
 		t.Fatalf("edges = %+v, want 3", got.Edges)
 	}
+	// The table node links to the data explorer, on this workspace's table.
+	tables := nodeByKind(got.Nodes, LineageNodeKindTable)
+	wantHref := "/data?catalog=" + idString(pgtype.UUID{Bytes: f.lake, Valid: true}) +
+		"&ns=sales&table=orders&ws=" + idString(pgtype.UUID{Bytes: f.ws, Valid: true})
+	if tables[0].Href == nil || *tables[0].Href != wantHref {
+		t.Errorf("table href = %v, want %q", tables[0].Href, wantHref)
+	}
 	// Every edge is "content depends on table": to == the table node.
 	tableID := "table:" + idString(pgtype.UUID{Bytes: f.orders, Valid: true})
 	for _, e := range got.Edges {

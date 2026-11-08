@@ -1076,7 +1076,7 @@
 			title={canExplain
 				? m.components_queryeditor_run_an_explain_plan()
 				: m.components_queryeditor_this_engine_does_not_support_explain_2()}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
 		>
 			<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
 				><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line
@@ -1091,17 +1091,17 @@
 		<div class="w-px h-[18px] bg-border mx-1"></div>
 		<button
 			onclick={formatSQL}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{m.components_queryeditor_format()}</button
 		>
 		<button
 			onclick={() => (functionsOpen = true)}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{m.functions_panel_title()}</button
 		>
 		<button
 			onclick={() => openSave(activeTab.readOnly ? 'copy' : 'save')}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{activeTab.readOnly
 				? m.components_queryeditor_save_a_copy()
 				: m.components_queryeditor_save()}</button
@@ -1111,7 +1111,7 @@
 				paletteMode = 'commands';
 				paletteOpen = true;
 			}}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-transparent bg-transparent hover:bg-border hover:text-text-main whitespace-nowrap"
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{m.components_queryeditor_commands()}</button
 		>
 		{#if exploreLink}

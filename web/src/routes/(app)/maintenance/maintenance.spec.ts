@@ -1,10 +1,11 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { http, server } from '../../../test/server';
 import { setTestUrl } from '../../../test/nav.svelte';
 import {
+	makeMaintenanceRun,
 	makeSearchResult,
 	makeTableDetail,
 	makeTableMaintenance,
@@ -57,6 +58,31 @@ describe('maintenance page', () => {
 		expect(await screen.findByRole('heading', { level: 1, name: 'Maintenance' })).toBeTruthy();
 		expect(await screen.findByText('"lake_t"."sales"."orders"')).toBeTruthy();
 		expect(await screen.findByText(/has no maintenance parameters/)).toBeTruthy();
+	});
+
+	it('shows the latest run next to the table name', async () => {
+		useBackend();
+		server.use(
+			http.get('/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance', ({ response }) =>
+				response(200).json(
+					makeTableMaintenance({
+						properties: {},
+						runs: [
+							makeMaintenanceRun({
+								operations: ['expire_snapshots'],
+								trigger: 'automatic'
+							})
+						]
+					})
+				)
+			)
+		);
+		setTestUrl(URL);
+		render(MaintenancePage);
+
+		const summary = await screen.findByTestId('last-run');
+		expect(await within(summary).findByText('Expire snapshots')).toBeTruthy();
+		expect(within(summary).getByText('Automatic')).toBeTruthy();
 	});
 
 	it('offers the way back to monitoring when the URL names no table', async () => {

@@ -26,6 +26,7 @@
 		type MaintenanceOperation,
 		type MaintenancePlan,
 		type MaintenancePlanStep,
+		type MaintenanceRun,
 		type TableMaintenance
 	} from './client';
 	import { fieldMessage } from './fieldMessage';
@@ -41,8 +42,18 @@
 	} from './form';
 	import { operationLabel, reasonText, triggerLabel } from './labels';
 
-	let { catalogId, namespace, table }: { catalogId: string; namespace: string; table: string } =
-		$props();
+	let {
+		catalogId,
+		namespace,
+		table,
+		onruns
+	}: {
+		catalogId: string;
+		namespace: string;
+		table: string;
+		/** The most recent runs, for the page's summary. */
+		onruns?: (runs: MaintenanceRun[]) => void;
+	} = $props();
 
 	const target = $derived({ catalogId, namespace, table });
 
@@ -74,6 +85,7 @@
 			form = toForm(next.policy ?? fromTableProperties(emptyPolicy(), next.properties));
 			errors = {};
 			saveError = '';
+			onruns?.(next.runs);
 		} catch (e) {
 			if (loadedFor === key) loadError = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -268,118 +280,111 @@
 						<fieldset class="rounded-lg border border-border p-3">
 							<legend class="px-1 text-[12px] font-semibold">{operationLabel(op)}</legend>
 							<Checkbox bind:checked={f.enabled} label={m.maintenance_enabled()} />
-							{#if f.enabled}
-								<p class="mt-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-									{m.maintenance_triggers()}
+							<p class="mt-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+								{m.maintenance_triggers()}
+							</p>
+							<div class="mt-1 grid gap-2 sm:grid-cols-3">
+								{#if op === 'optimize'}
+									{@render field(op, 'smallFilePercent', m.maintenance_small_file_percent(), '30')}
+									{#if formatVersion === null || formatVersion >= 2}
+										{@render field(op, 'deleteFiles', m.maintenance_delete_files(), '200')}
+									{/if}
+								{:else if op === 'optimize_manifests'}
+									{@render field(op, 'manifests', m.maintenance_manifests(), '100')}
+								{:else if op === 'expire_snapshots'}
+									{@render field(op, 'snapshots', m.maintenance_snapshots(), '100')}
+									{@render field(op, 'oldestAgeHours', m.maintenance_oldest_age_hours(), '72')}
+								{:else}
+									<p class="text-[11px] text-text-muted sm:col-span-3">
+										{m.maintenance_orphans_interval_only()}
+									</p>
+								{/if}
+							</div>
+
+							<p class="mt-3 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+								{m.maintenance_schedule()}
+							</p>
+							<div class="mt-1 grid gap-2 sm:grid-cols-3">
+								{@render field(
+									op,
+									'minIntervalMinutes',
+									m.maintenance_min_interval_minutes(),
+									'60'
+								)}
+								{@render field(
+									op,
+									'maxIntervalMinutes',
+									m.maintenance_max_interval_minutes(),
+									'1440'
+								)}
+								{@render field(op, 'timeoutMinutes', m.maintenance_timeout_minutes(), '30')}
+								<Select
+									label={m.maintenance_on_conflict()}
+									bind:value={f.onConflict}
+									options={conflictOptions}
+								/>
+							</div>
+							<div class="mt-2">
+								<Checkbox bind:checked={f.windowEnabled} label={m.maintenance_window_enabled()} />
+								{#if f.windowEnabled}
+									<div class="mt-1 grid gap-2 sm:grid-cols-3">
+										{@render field(op, 'startHour', m.maintenance_window_start(), '22')}
+										{@render field(op, 'endHour', m.maintenance_window_end(), '6')}
+										{@render field(op, 'timeZone', m.maintenance_window_tz(), 'UTC')}
+									</div>
+								{/if}
+							</div>
+
+							{#if op !== 'optimize_manifests'}
+								<p class="mt-3 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+									{m.maintenance_params()}
 								</p>
-								<div class="mt-1 grid gap-2 sm:grid-cols-3">
+								<div class="mt-1 grid gap-2 sm:grid-cols-2">
 									{#if op === 'optimize'}
 										{@render field(
 											op,
-											'smallFilePercent',
-											m.maintenance_small_file_percent(),
-											'30'
+											'targetFileSizeMB',
+											m.maintenance_target_file_size_mb(),
+											'256'
 										)}
-										{#if formatVersion === null || formatVersion >= 2}
-											{@render field(op, 'deleteFiles', m.maintenance_delete_files(), '200')}
-										{/if}
-									{:else if op === 'optimize_manifests'}
-										{@render field(op, 'manifests', m.maintenance_manifests(), '100')}
+										{@render field(
+											op,
+											'skipFilesNewerThanMinutes',
+											m.maintenance_skip_newer_minutes(),
+											'60'
+										)}
+										{@render field(
+											op,
+											'partitionFilter',
+											m.maintenance_partition_filter(),
+											"day < DATE '2026-01-01'"
+										)}
+										{@render field(op, 'sortedBy', m.maintenance_sorted_by(), 'id, ts')}
 									{:else if op === 'expire_snapshots'}
-										{@render field(op, 'snapshots', m.maintenance_snapshots(), '100')}
-										{@render field(op, 'oldestAgeHours', m.maintenance_oldest_age_hours(), '72')}
+										{@render field(
+											op,
+											'retentionHours',
+											m.maintenance_retention_hours(),
+											String(floorHours)
+										)}
+										{@render field(op, 'retainLast', m.maintenance_retain_last(), '10')}
+										<Checkbox
+											bind:checked={f.cleanExpiredMetadata}
+											label={m.maintenance_clean_expired_metadata()}
+										/>
 									{:else}
-										<p class="text-[11px] text-text-muted sm:col-span-3">
-											{m.maintenance_orphans_interval_only()}
-										</p>
+										{@render field(
+											op,
+											'olderThanHours',
+											m.maintenance_older_than_hours(),
+											String(floorHours)
+										)}
 									{/if}
 								</div>
-
-								<p class="mt-3 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-									{m.maintenance_schedule()}
-								</p>
-								<div class="mt-1 grid gap-2 sm:grid-cols-3">
-									{@render field(
-										op,
-										'minIntervalMinutes',
-										m.maintenance_min_interval_minutes(),
-										'60'
-									)}
-									{@render field(
-										op,
-										'maxIntervalMinutes',
-										m.maintenance_max_interval_minutes(),
-										'1440'
-									)}
-									{@render field(op, 'timeoutMinutes', m.maintenance_timeout_minutes(), '30')}
-									<Select
-										label={m.maintenance_on_conflict()}
-										bind:value={f.onConflict}
-										options={conflictOptions}
-									/>
-								</div>
-								<div class="mt-2">
-									<Checkbox bind:checked={f.windowEnabled} label={m.maintenance_window_enabled()} />
-									{#if f.windowEnabled}
-										<div class="mt-1 grid gap-2 sm:grid-cols-3">
-											{@render field(op, 'startHour', m.maintenance_window_start(), '22')}
-											{@render field(op, 'endHour', m.maintenance_window_end(), '6')}
-											{@render field(op, 'timeZone', m.maintenance_window_tz(), 'UTC')}
-										</div>
-									{/if}
-								</div>
-
-								{#if op !== 'optimize_manifests'}
-									<p class="mt-3 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-										{m.maintenance_params()}
+								{#if op !== 'optimize'}
+									<p class="mt-1 text-[10px] text-text-muted">
+										{m.maintenance_retention_floor({ hours: floorHours })}
 									</p>
-									<div class="mt-1 grid gap-2 sm:grid-cols-2">
-										{#if op === 'optimize'}
-											{@render field(
-												op,
-												'targetFileSizeMB',
-												m.maintenance_target_file_size_mb(),
-												'256'
-											)}
-											{@render field(
-												op,
-												'skipFilesNewerThanMinutes',
-												m.maintenance_skip_newer_minutes(),
-												'60'
-											)}
-											{@render field(
-												op,
-												'partitionFilter',
-												m.maintenance_partition_filter(),
-												"day < DATE '2026-01-01'"
-											)}
-											{@render field(op, 'sortedBy', m.maintenance_sorted_by(), 'id, ts')}
-										{:else if op === 'expire_snapshots'}
-											{@render field(
-												op,
-												'retentionHours',
-												m.maintenance_retention_hours(),
-												String(floorHours)
-											)}
-											{@render field(op, 'retainLast', m.maintenance_retain_last(), '10')}
-											<Checkbox
-												bind:checked={f.cleanExpiredMetadata}
-												label={m.maintenance_clean_expired_metadata()}
-											/>
-										{:else}
-											{@render field(
-												op,
-												'olderThanHours',
-												m.maintenance_older_than_hours(),
-												String(floorHours)
-											)}
-										{/if}
-									</div>
-									{#if op !== 'optimize'}
-										<p class="mt-1 text-[10px] text-text-muted">
-											{m.maintenance_retention_floor({ hours: floorHours })}
-										</p>
-									{/if}
 								{/if}
 							{/if}
 						</fieldset>

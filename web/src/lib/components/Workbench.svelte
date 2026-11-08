@@ -50,5 +50,5 @@
 			label={m.ui_panelresizer_resize_inspector()}
 		/>
 	{/if}
-	<RightSidebar bind:collapsed={rightCollapsed} {selectedTable} width={rightWidth} />
+	<RightSidebar bind:collapsed={rightCollapsed} bind:selectedTable width={rightWidth} />
 </div>

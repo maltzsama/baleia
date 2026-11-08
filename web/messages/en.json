@@ -2469,8 +2469,6 @@
 	"maintenance_nothing_due": "Nothing due",
 	"maintenance_read_only": "You can see this table's maintenance but not change it.",
 	"common_credits": "Credits",
-	"common_view_credits": "View credits",
-	"settings_system_icon_and_font_licenses": "The app icon and the bundled fonts are used under their own licenses.",
 	"credits_intro": "Baleia is an open source project. The icon, the fonts and the dependencies keep their own licenses.",
 	"credits_brand_heading": "Brand icon",
 	"credits_brand_body": "The Baleia mark and the favicons are the \"pet\" icon by bsd on Flaticon, used under the Flaticon Free License.",

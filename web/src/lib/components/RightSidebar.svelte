@@ -11,7 +11,7 @@
 
 	let {
 		collapsed = $bindable(true),
-		selectedTable,
+		selectedTable = $bindable<TableRef | null>(null),
 		width = 340
 	}: {
 		collapsed?: boolean;
@@ -26,6 +26,18 @@
 	const savedQueryId = $derived(editor.activeTab.savedId);
 	// A save that edits the SQL bumps the version, so the graph refetches.
 	const savedQueryVersion = $derived(editor.activeTab.savedRef?.version ?? 0);
+
+	// A table opened from the dependencies list keeps the list above the
+	// table detail, so the other dependencies stay one click away.
+	let lineageTableId = $state('');
+	const lineageVisible = $derived(
+		!!workspaceId && !!savedQueryId && (!selectedTable || selectedTable.tableId === lineageTableId)
+	);
+
+	function openTable(table: TableRef) {
+		lineageTableId = table.tableId;
+		selectedTable = table;
+	}
 
 	onMount(() => {
 		void assistantStore.loadStatus();
@@ -122,14 +134,21 @@
 			{#if tab === 'assistant' && assistantStore.enabled}
 				<AssistantPanel />
 			{:else}
-				{#if !selectedTable && savedQueryId && workspaceId}
-					<div class="border-b border-border p-3">
+				{#if lineageVisible}
+					<div class="shrink-0 border-b border-border p-3">
 						{#key `${savedQueryId}:${savedQueryVersion}`}
-							<LineageGraph {workspaceId} node={`saved_query:${savedQueryId}`} direction="down" />
+							<LineageGraph
+								{workspaceId}
+								node={`saved_query:${savedQueryId}`}
+								direction="down"
+								onselecttable={openTable}
+							/>
 						{/key}
 					</div>
 				{/if}
-				<TableDetail table={selectedTable ?? null} />
+				<div class="min-h-0 flex-1 overflow-hidden">
+					<TableDetail table={selectedTable ?? null} />
+				</div>
 			{/if}
 		</div>
 	{/if}

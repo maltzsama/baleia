@@ -235,19 +235,19 @@
 		<span class="flex-1"></span>
 		<button
 			type="button"
-			class="rounded px-1.5 py-0.5 hover:bg-bg-toolbar disabled:opacity-40"
+			class="rounded border border-border px-1.5 py-0.5 font-medium text-text-muted hover:border-border-hover hover:text-text-main disabled:opacity-40"
 			disabled={!selected}
 			onclick={copyCell}>{m.components_resultgrid_copy_cell()}</button
 		>
 		<button
 			type="button"
-			class="rounded px-1.5 py-0.5 hover:bg-bg-toolbar disabled:opacity-40"
+			class="rounded border border-border px-1.5 py-0.5 font-medium text-text-muted hover:border-border-hover hover:text-text-main disabled:opacity-40"
 			disabled={!selected}
 			onclick={copyRow}>{m.components_resultgrid_copy_row()}</button
 		>
 		<button
 			type="button"
-			class="rounded px-1.5 py-0.5 hover:bg-bg-toolbar disabled:opacity-40"
+			class="rounded border border-border px-1.5 py-0.5 font-medium text-text-muted hover:border-border-hover hover:text-text-main disabled:opacity-40"
 			disabled={!selected}
 			onclick={copyColumn}>{m.components_resultgrid_copy_column()}</button
 		>
