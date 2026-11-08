@@ -157,9 +157,12 @@ describe('TableMaintenance', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Dry run' }));
 		const dialog = await screen.findByRole('dialog');
 		expect(within(dialog).getByText('runs next: snapshots 140 ≥ 100')).toBeTruthy();
-		await fireEvent.keyDown(dialog, { key: 'Escape' });
+		await fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Run now' }));
+		const confirm = await screen.findByRole('dialog');
+		expect(within(confirm).getByText(/starts Next due now/)).toBeTruthy();
+		await fireEvent.click(within(confirm).getByRole('button', { name: 'Run now' }));
 		await waitFor(() => expect(requested).toBe('next_due'));
 	});
 

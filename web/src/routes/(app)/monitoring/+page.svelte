@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
 	import TimeSeriesChart from '$lib/monitoring/TimeSeriesChart.svelte';
+	import Sparkline from '$lib/monitoring/Sparkline.svelte';
+	import { downloadCsv, toCsv } from '$lib/util/csv';
 	import { onDestroy, onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -71,10 +73,12 @@
 	let live = $state(true);
 
 	// One card per engine: its latest snapshot, the health that snapshot
-	// implies, and (for an admin or the owner) its queue classes.
+	// implies, its running-query trend, and (for an admin or the owner) its
+	// queue classes.
 	type EngineOverview = {
 		engine: MonitoringEngine;
 		latest: ClusterPoint | null;
+		history: number[];
 		classes: EngineQueue[];
 	};
 	let overview = $state<EngineOverview[]>([]);
@@ -94,9 +98,14 @@
 						// Queue capacities are admin/owner only; a member still gets the card.
 						getEngineQueues(engine.id).catch(() => null)
 					]);
-					return { engine, latest: series.latest ?? null, classes: queues?.classes ?? [] };
+					return {
+						engine,
+						latest: series.latest ?? null,
+						history: series.series.map((point) => point.running_queries),
+						classes: queues?.classes ?? []
+					};
 				} catch {
-					return { engine, latest: null, classes: [] };
+					return { engine, latest: null, history: [], classes: [] };
 				}
 			})
 		);
@@ -423,6 +432,80 @@
 	function refreshActive() {
 		if (tab === 'cluster') void loadCluster();
 		else if (tab === 'queries') void loadQueries();
+	}
+
+	function exportHealth() {
+		try {
+			downloadCsv(
+				'iceberg-health.csv',
+				toCsv(
+					[
+						m.monitoring_schema(),
+						m.monitoring_table(),
+						m.monitoring_health(),
+						m.monitoring_snapshots(),
+						m.monitoring_files(),
+						m.maintenance_col_delete_files(),
+						m.maintenance_col_commits_hour(),
+						m.monitoring_size(),
+						m.monitoring_oldest(),
+						m.monitoring_needs(),
+						m.maintenance_mode(),
+						m.monitoring_last_maintenance()
+					],
+					health.map((row) => [
+						row.namespace,
+						row.table_name,
+						row.health_score,
+						row.snapshot_count,
+						row.file_count,
+						row.delete_file_count,
+						row.commits_last_hour,
+						row.total_size_bytes,
+						row.oldest_snapshot_age_hours,
+						row.due_operations?.join(' ') ?? '',
+						row.maintenance_mode ?? '',
+						row.last_maintenance_at ?? ''
+					])
+				)
+			);
+		} catch {
+			toasts.error(m.monitoring_export_failed());
+		}
+	}
+
+	function exportQueries() {
+		try {
+			downloadCsv(
+				'monitoring-queries.csv',
+				toCsv(
+					[
+						m.monitoring_query_id(),
+						m.monitoring_state(),
+						m.common_user(),
+						m.common_catalog(),
+						m.monitoring_schema(),
+						m.monitoring_started(),
+						m.monitoring_elapsed(),
+						m.monitoring_cpu(),
+						m.common_sql()
+					],
+					sortedQueries.map((query) => [
+						query.trino_query_id,
+						query.state,
+						query.user,
+						query.catalog,
+						query.schema ?? '',
+						query.created_at,
+						query.elapsed_ms,
+						query.cpu_ms,
+						query.sql_first_line
+					])
+				)
+			);
+		} catch {
+			toasts.error(m.monitoring_export_failed());
+		}
 	}
 
 	function selectTab(next: 'cluster' | 'queries' | 'tables' | 'maintenance') {
@@ -789,6 +872,11 @@
 											>{memory === null ? '—' : `${memory}%`}</span
 										>
 									</span>
+									{#if row.history.length > 1}
+										<span class="mt-1 block">
+											<Sparkline points={row.history} />
+										</span>
+									{/if}
 									{#if row.classes.length > 0}
 										<span class="mt-1 flex flex-wrap gap-1">
 											{#each row.classes as queue (queue.class)}
@@ -913,8 +1001,9 @@
 						{ value: 'cpu', label: m.monitoring_sort_cpu() }
 					]}
 				/>
-				<div class="flex items-end">
+				<div class="flex items-end gap-2">
 					<Button onclick={() => loadQueries()}>{m.monitoring_search()}</Button>
+					<Button variant="secondary" onclick={exportQueries}>{m.monitoring_export_csv()}</Button>
 				</div>
 			</div>
 			{#if queriesLoading && queryPage.items.length === 0}
@@ -1030,8 +1119,9 @@
 					onchange={() => loadHealth()}
 				/>
 				<Input label={m.monitoring_max_health_score()} bind:value={maxScore} placeholder="80" />
-				<div class="flex items-end">
+				<div class="flex items-end gap-2">
 					<Button onclick={() => loadHealth()}>{m.monitoring_refresh()}</Button>
+					<Button variant="secondary" onclick={exportHealth}>{m.monitoring_export_csv()}</Button>
 				</div>
 			</div>
 			{#if catalogs.length === 0}

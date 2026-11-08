@@ -65,6 +65,7 @@
 	let saving = $state(false);
 	let saveError = $state('');
 	let removeOpen = $state(false);
+	let runOpen = $state(false);
 	let planOpen = $state(false);
 	let dryPlan = $state<MaintenancePlan | null>(null);
 	let busy = $state('');
@@ -163,6 +164,9 @@
 			);
 			await load();
 		});
+	const runTarget = $derived(
+		runOperation === 'next_due' ? m.maintenance_run_next_due() : operationLabel(runOperation)
+	);
 
 	const analyze = () =>
 		act('analyze', async () => {
@@ -440,7 +444,7 @@
 								options={runOptions}
 							/>
 						</div>
-						<Button size="sm" loading={busy === 'run'} onclick={runNow}
+						<Button size="sm" loading={busy === 'run'} onclick={() => (runOpen = true)}
 							>{m.maintenance_run_now()}</Button
 						>
 					</div>
@@ -477,6 +481,16 @@
 		</div>
 	{/if}
 </section>
+
+<ConfirmDialog
+	bind:open={runOpen}
+	title={m.maintenance_run_now()}
+	resourceName={`${namespace}.${table}`}
+	consequences={[m.maintenance_run_consequence({ operation: runTarget })]}
+	confirmLabel={m.maintenance_run_now()}
+	danger={false}
+	onconfirm={runNow}
+/>
 
 <ConfirmDialog
 	bind:open={removeOpen}
