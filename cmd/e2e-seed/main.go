@@ -24,10 +24,15 @@ import (
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 type seedUser struct {
@@ -113,10 +118,14 @@ func main() {
 			log.Fatalf("e2e-seed: trino catalog: %v", err)
 		}
 	}
-	if err := ensureModels(ctx, pool, q, member, catalog, binding); err != nil {
+	contentSvc, err := newContentService(pool)
+	if err != nil {
+		log.Fatalf("e2e-seed: content store: %v", err)
+	}
+	if err := ensureModels(ctx, q, contentSvc, member, catalog, binding); err != nil {
 		log.Fatalf("e2e-seed: models: %v", err)
 	}
-	if err := ensureV1Metric(ctx, pool, q, member, catalog, binding); err != nil {
+	if err := ensureV1Metric(ctx, q, contentSvc, member, catalog, binding); err != nil {
 		log.Fatalf("e2e-seed: v1 metric: %v", err)
 	}
 	if err := ensureMetadata(ctx, q, catalog); err != nil {
@@ -317,9 +326,24 @@ var seedModels = []struct {
 	},
 }
 
+// newContentService builds the content writer over the GORM store (ADR 0020).
+// The seed writes saved content through the same path as the API.
+func newContentService(pool *pgxpool.Pool) (*content.Service, error) {
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger:         gormlogger.Discard,
+		TranslateError: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	r := repo.New(gdb)
+	return content.New(r, r.TxContent), nil
+}
+
 // ensureModels creates the e2e models in the member's default space; an
 // existing slug is left untouched so the seed stays idempotent.
-func ensureModels(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, member db.User, catalog db.Catalog, binding db.CatalogBinding) error {
+func ensureModels(ctx context.Context, q *db.Queries, svc *content.Service, member db.User, catalog db.Catalog, binding db.CatalogBinding) error {
 	workspaceID, err := q.PersonalWorkspaceID(ctx, member.ID)
 	if err != nil {
 		return err
@@ -328,7 +352,6 @@ func ensureModels(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, member
 	if err != nil {
 		return err
 	}
-	svc := content.New(pool, q)
 	for _, m := range seedModels {
 		_, err := q.GetSemanticModelBySlug(ctx, db.GetSemanticModelBySlugParams{WorkspaceID: workspaceID, Slug: m.slug})
 		if err == nil {
@@ -351,7 +374,7 @@ func ensureModels(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, member
 
 // ensureV1Metric seeds one v1 metric on a table no model uses, so the
 // migration dialog (#121) has something to migrate.
-func ensureV1Metric(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, member db.User, catalog db.Catalog, binding db.CatalogBinding) error {
+func ensureV1Metric(ctx context.Context, q *db.Queries, svc *content.Service, member db.User, catalog db.Catalog, binding db.CatalogBinding) error {
 	workspaceID, err := q.PersonalWorkspaceID(ctx, member.ID)
 	if err != nil {
 		return err
@@ -365,7 +388,7 @@ func ensureV1Metric(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, memb
 	if err != nil {
 		return err
 	}
-	_, err = content.New(pool, q).CreateSemanticMetric(ctx, member.ID, db.CreateSemanticMetricParams{
+	_, err = svc.CreateSemanticMetric(ctx, member.ID, db.CreateSemanticMetricParams{
 		WorkspaceID: workspaceID, SpaceID: space.ID, Slug: "e2e_nation_count", Label: "E2E Nations",
 		CatalogID: catalog.ID, Namespace: []string{"tiny"}, TableName: "nation", BindingID: binding.ID,
 		Definition: []byte(`{"type":"simple","aggregation":"count"}`), FormatVersion: 1,

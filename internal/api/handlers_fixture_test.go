@@ -9,12 +9,14 @@ import (
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/content/history"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -68,6 +70,11 @@ func testAPI(f handlerFields) *API {
 		audit:          f.audit,
 	}
 	c.history = history.New(c.queries)
+	if c.store != nil {
+		contentStore := repo.New(c.store)
+		c.content = content.New(contentStore, contentStore.TxContent)
+		c.history = history.New(contentStore)
+	}
 	c.browse = browse.New(c.queries)
 	c.spaces = spacesOver(c, c.queries)
 	c.access = wsaccess.New(c.queries)

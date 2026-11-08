@@ -31,7 +31,7 @@ func testDeps(t *testing.T) Deps {
 		t.Fatal(err)
 	}
 	return Deps{
-		Data:     DataDeps{Queries: db.New(pool), Pool: pool},
+		Data:     DataDeps{Queries: db.New(pool), Pool: pool, Store: openTestStore(t, pool)},
 		Engines:  EngineDeps{Connections: testRegistry(t), Engines: testEngines(), Kinds: testKinds(t, nil), Dialects: dialect.NewRegistry(), Binder: bindtrino.New(slog.New(slog.DiscardHandler), nil, nil), Dialer: d},
 		Settings: SettingsFromConfig(&config.Config{}),
 		Temporal: &fakeTemporalClient{},

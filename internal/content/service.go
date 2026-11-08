@@ -22,7 +22,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Entity types and snapshot schemas.
@@ -61,30 +60,24 @@ func (e *VersionConflict) Unwrap() error { return ErrVersionConflict }
 
 // Service writes content and its versions in one transaction.
 type Service struct {
-	pool *pgxpool.Pool
-	q    db.Querier
+	store Store
+	tx    Tx
 }
 
-// New returns a Service over a pool and its queries.
-func New(pool *pgxpool.Pool, q db.Querier) *Service { return &Service{pool: pool, q: q} }
+// New returns a Service over a store and the transaction runner it writes
+// through (ADR 0020). A nil tx writes directly to the store.
+func New(store Store, tx Tx) *Service { return &Service{store: store, tx: tx} }
 
-// WithQuerier returns a Service that writes through q and never opens its own
-// transaction; the bundle importer uses it to make the whole import atomic.
-func (s *Service) WithQuerier(q db.Querier) *Service { return &Service{q: q} }
+// WithStore returns a Service that writes through store and never opens its
+// own transaction; the bundle importer uses it to make the whole import
+// atomic.
+func (s *Service) WithStore(store Store) *Service { return &Service{store: store} }
 
-func (s *Service) inTx(ctx context.Context, fn func(db.Querier) error) error {
-	if s.pool == nil {
-		return fn(s.q)
+func (s *Service) inTx(ctx context.Context, fn func(Store) error) error {
+	if s.tx == nil {
+		return fn(s.store)
 	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := fn(db.New(tx)); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return s.tx(ctx, fn)
 }
 
 // ── snapshots ───────────────────────────────────────────────────────────────────
@@ -221,7 +214,7 @@ func ParseModelSnapshot(raw []byte) (SemanticModelSnapshot, error) {
 // CreateSavedQuery creates a query and its version 1.
 func (s *Service) CreateSavedQuery(ctx context.Context, actor pgtype.UUID, in db.CreateSavedQueryParams) (db.SavedQuery, error) {
 	var out db.SavedQuery
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		var err error
 		out, err = q.CreateSavedQuery(ctx, in)
 		if err != nil {
@@ -245,7 +238,7 @@ func (s *Service) CreateSavedQuery(ctx context.Context, actor pgtype.UUID, in db
 func (s *Service) UpdateSavedQuery(ctx context.Context, actor pgtype.UUID, in db.UpdateSavedQueryParams, expectedVersion *int32) (db.SavedQuery, bool, error) {
 	var out db.SavedQuery
 	changed := false
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		current, err := q.GetSavedQueryForUpdate(ctx, db.GetSavedQueryForUpdateParams{ID: in.ID, WorkspaceID: in.WorkspaceID})
 		if err != nil {
 			return err
@@ -293,7 +286,7 @@ func (s *Service) UpdateSavedQuery(ctx context.Context, actor pgtype.UUID, in db
 
 // DeleteSavedQuery records the last state and then deletes the row.
 func (s *Service) DeleteSavedQuery(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID) error {
-	return s.inTx(ctx, func(q db.Querier) error {
+	return s.inTx(ctx, func(q Store) error {
 		current, err := q.GetSavedQueryForUpdate(ctx, db.GetSavedQueryForUpdateParams{ID: id, WorkspaceID: workspaceID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
@@ -331,7 +324,7 @@ func (s *Service) DeleteSavedQuery(ctx context.Context, actor pgtype.UUID, works
 // caller pick a live space when the snapshot's space is gone.
 func (s *Service) RestoreSavedQuery(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID, version int32, newName *string, spaceID *pgtype.UUID) (db.SavedQuery, error) {
 	var out db.SavedQuery
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		v, err := q.GetContentVersion(ctx, db.GetContentVersionParams{
 			WorkspaceID: workspaceID, EntityType: EntitySavedQuery, EntityID: id, Version: version,
 		})
@@ -395,7 +388,7 @@ func (s *Service) RestoreSavedQuery(ctx context.Context, actor pgtype.UUID, work
 // 'import' version.
 func (s *Service) ImportSavedQuery(ctx context.Context, actor pgtype.UUID, in db.UpdateSavedQueryParams) (db.SavedQuery, error) {
 	var out db.SavedQuery
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		var err error
 		out, err = q.UpdateSavedQuery(ctx, in)
 		if err != nil {
@@ -413,7 +406,7 @@ func (s *Service) ImportSavedQuery(ctx context.Context, actor pgtype.UUID, in db
 // CreateSemanticMetric creates a metric and its version 1.
 func (s *Service) CreateSemanticMetric(ctx context.Context, actor pgtype.UUID, in db.CreateSemanticMetricParams) (db.SemanticMetric, error) {
 	var out db.SemanticMetric
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		var err error
 		out, err = q.CreateSemanticMetric(ctx, in)
 		if err != nil {
@@ -437,7 +430,7 @@ func (s *Service) CreateSemanticMetric(ctx context.Context, actor pgtype.UUID, i
 func (s *Service) UpdateSemanticMetric(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticMetricParams, expectedVersion *int32) (db.SemanticMetric, bool, error) {
 	var out db.SemanticMetric
 	changed := false
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		current, err := q.GetSemanticMetricForUpdate(ctx, db.GetSemanticMetricForUpdateParams{ID: in.ID, WorkspaceID: in.WorkspaceID})
 		if err != nil {
 			return err
@@ -487,7 +480,7 @@ func (s *Service) UpdateSemanticMetric(ctx context.Context, actor pgtype.UUID, i
 // 'import' version.
 func (s *Service) ImportSemanticMetric(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticMetricParams) (db.SemanticMetric, error) {
 	var out db.SemanticMetric
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		var err error
 		out, err = q.UpdateSemanticMetric(ctx, in)
 		if err != nil {
@@ -502,7 +495,7 @@ func (s *Service) ImportSemanticMetric(ctx context.Context, actor pgtype.UUID, i
 
 // DeleteSemanticMetric records the last state and deletes the row.
 func (s *Service) DeleteSemanticMetric(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID) error {
-	return s.inTx(ctx, func(q db.Querier) error {
+	return s.inTx(ctx, func(q Store) error {
 		current, err := q.GetSemanticMetricForUpdate(ctx, db.GetSemanticMetricForUpdateParams{ID: id, WorkspaceID: workspaceID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
@@ -539,7 +532,7 @@ func (s *Service) DeleteSemanticMetric(ctx context.Context, actor pgtype.UUID, w
 // metric with its original id. The caller validates the definition first.
 func (s *Service) RestoreSemanticMetric(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID, version int32, newSlug *string, spaceID *pgtype.UUID) (db.SemanticMetric, error) {
 	var out db.SemanticMetric
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		v, err := q.GetContentVersion(ctx, db.GetContentVersionParams{
 			WorkspaceID: workspaceID, EntityType: EntitySemanticMetric, EntityID: id, Version: version,
 		})
@@ -608,7 +601,7 @@ func (s *Service) RestoreSemanticMetric(ctx context.Context, actor pgtype.UUID, 
 // CreateSemanticModel creates a model and its version 1.
 func (s *Service) CreateSemanticModel(ctx context.Context, actor pgtype.UUID, in db.CreateSemanticModelParams) (db.SemanticModel, error) {
 	var out db.SemanticModel
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		var err error
 		out, err = q.CreateSemanticModel(ctx, in)
 		if err != nil {
@@ -632,7 +625,7 @@ func (s *Service) CreateSemanticModel(ctx context.Context, actor pgtype.UUID, in
 func (s *Service) UpdateSemanticModel(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticModelParams, expectedVersion *int32) (db.SemanticModel, bool, error) {
 	var out db.SemanticModel
 	changed := false
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		current, err := q.GetSemanticModelForUpdate(ctx, db.GetSemanticModelForUpdateParams{ID: in.ID, WorkspaceID: in.WorkspaceID})
 		if err != nil {
 			return err
@@ -682,7 +675,7 @@ func (s *Service) UpdateSemanticModel(ctx context.Context, actor pgtype.UUID, in
 // 'import' version.
 func (s *Service) ImportSemanticModel(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticModelParams) (db.SemanticModel, error) {
 	var out db.SemanticModel
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		var err error
 		out, err = q.UpdateSemanticModel(ctx, in)
 		if err != nil {
@@ -697,7 +690,7 @@ func (s *Service) ImportSemanticModel(ctx context.Context, actor pgtype.UUID, in
 
 // DeleteSemanticModel records the last state and deletes the row.
 func (s *Service) DeleteSemanticModel(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID) error {
-	return s.inTx(ctx, func(q db.Querier) error {
+	return s.inTx(ctx, func(q Store) error {
 		current, err := q.GetSemanticModelForUpdate(ctx, db.GetSemanticModelForUpdateParams{ID: id, WorkspaceID: workspaceID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
@@ -734,7 +727,7 @@ func (s *Service) DeleteSemanticModel(ctx context.Context, actor pgtype.UUID, wo
 // model with its original id.
 func (s *Service) RestoreSemanticModel(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID, version int32, newSlug *string, spaceID *pgtype.UUID) (db.SemanticModel, error) {
 	var out db.SemanticModel
-	err := s.inTx(ctx, func(q db.Querier) error {
+	err := s.inTx(ctx, func(q Store) error {
 		v, err := q.GetContentVersion(ctx, db.GetContentVersionParams{
 			WorkspaceID: workspaceID, EntityType: EntitySemanticModel, EntityID: id, Version: version,
 		})
@@ -798,7 +791,7 @@ func (s *Service) RestoreSemanticModel(ctx context.Context, actor pgtype.UUID, w
 
 // ── helpers ─────────────────────────────────────────────────────────────────────
 
-func (s *Service) writeVersion(ctx context.Context, q db.Querier, workspaceID, spaceID pgtype.UUID, entityType string, entityID pgtype.UUID, kind string, actor pgtype.UUID, restoredFrom *int32, snap func() ([]byte, error)) error {
+func (s *Service) writeVersion(ctx context.Context, q Store, workspaceID, spaceID pgtype.UUID, entityType string, entityID pgtype.UUID, kind string, actor pgtype.UUID, restoredFrom *int32, snap func() ([]byte, error)) error {
 	next, err := q.NextContentVersion(ctx, db.NextContentVersionParams{EntityType: entityType, EntityID: entityID})
 	if err != nil {
 		return err
@@ -814,7 +807,7 @@ func (s *Service) writeVersion(ctx context.Context, q db.Querier, workspaceID, s
 	return err
 }
 
-func folderIfLive(ctx context.Context, q db.Querier, workspaceID pgtype.UUID, folder *uuid.UUID) pgtype.UUID {
+func folderIfLive(ctx context.Context, q Store, workspaceID pgtype.UUID, folder *uuid.UUID) pgtype.UUID {
 	if folder == nil {
 		return pgtype.UUID{}
 	}

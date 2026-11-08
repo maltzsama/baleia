@@ -1,4 +1,4 @@
-package content
+package content_test
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -136,7 +137,7 @@ func TestExportDeterministic(t *testing.T) {
 	if kindOrder["saved_query:revenue"] < kindOrder["folder:monthly"] {
 		t.Fatalf("query exported before folders: %+v", a.Items)
 	}
-	if a.Items[len(a.Items)-1].Kind != KindSemanticMetric {
+	if a.Items[len(a.Items)-1].Kind != content.KindSemanticMetric {
 		t.Fatalf("metrics should come last: %+v", a.Items)
 	}
 }
@@ -156,8 +157,8 @@ func TestRoundTripNoChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := f.s.Import(context.Background(), ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino),
-		WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: ImportApply,
+	report, err := f.s.Import(context.Background(), content.ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino),
+		WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: content.ImportApply,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -166,19 +167,19 @@ func TestRoundTripNoChanges(t *testing.T) {
 		t.Fatalf("first import: %+v", report)
 	}
 	for _, it := range report.Items {
-		if it.Action != ActionCreate {
+		if it.Action != content.ActionCreate {
 			t.Fatalf("first import action = %s for %s/%s, want CREATE", it.Action, it.Kind, it.Slug)
 		}
 	}
 
-	report, err = f.s.Import(context.Background(), ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino),
-		WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: ImportApply,
+	report, err = f.s.Import(context.Background(), content.ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino),
+		WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: content.ImportApply,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, it := range report.Items {
-		if it.Action != ActionNoChanges {
+		if it.Action != content.ActionNoChanges {
 			t.Fatalf("re-import action = %s for %s/%s, want NO_CHANGES", it.Action, it.Kind, it.Slug)
 		}
 	}
@@ -206,7 +207,7 @@ func TestUpdateCreatesImportVersion(t *testing.T) {
 	dest := f.spaceIn(t, ws2, "Finance copy", "finance_copy")
 
 	bundle, _ := f.s.Export(ctx, f.ws, source, "dev")
-	if _, err := f.s.Import(ctx, ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: ImportApply}); err != nil {
+	if _, err := f.s.Import(ctx, content.ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: content.ImportApply}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -221,21 +222,21 @@ func TestUpdateCreatesImportVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report, err := f.s.Import(ctx, ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: ImportApply})
+	report, err := f.s.Import(ctx, content.ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: content.ImportApply})
 	if err != nil {
 		t.Fatal(err)
 	}
 	updated := false
 	for _, it := range report.Items {
-		if it.Kind == KindSavedQuery && it.Slug == "revenue" {
-			updated = it.Action == ActionUpdate
+		if it.Kind == content.KindSavedQuery && it.Slug == "revenue" {
+			updated = it.Action == content.ActionUpdate
 		}
 	}
 	if !updated {
 		t.Fatalf("changed SQL was not an UPDATE: %+v", report.Items)
 	}
 	rows, err := f.q.ListContentVersions(ctx, db.ListContentVersionsParams{
-		WorkspaceID: ws2, EntityType: EntitySavedQuery, EntityID: destQuery.ID, Lim: 10,
+		WorkspaceID: ws2, EntityType: content.EntitySavedQuery, EntityID: destQuery.ID, Lim: 10,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -263,12 +264,12 @@ func TestOmittedItemsNotDeleted(t *testing.T) {
 	dest := f.spaceIn(t, ws2, "Finance copy", "finance_copy")
 
 	bundle, _ := f.s.Export(ctx, f.ws, source, "dev")
-	if _, err := f.s.Import(ctx, ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: ImportApply}); err != nil {
+	if _, err := f.s.Import(ctx, content.ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: content.ImportApply}); err != nil {
 		t.Fatal(err)
 	}
-	partial := Bundle{Format: BundleFormat, FormatVersion: BundleVersion, BaleiaVersion: "dev",
-		Space: bundle.Space, Items: []BundleItem{{Kind: KindFolder, Slug: "monthly", Name: "Monthly"}}}
-	if _, err := f.s.Import(ctx, ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: partial, Mode: ImportApply}); err != nil {
+	partial := content.Bundle{Format: content.BundleFormat, FormatVersion: content.BundleVersion, BaleiaVersion: "dev",
+		Space: bundle.Space, Items: []content.BundleItem{{Kind: content.KindFolder, Slug: "monthly", Name: "Monthly"}}}
+	if _, err := f.s.Import(ctx, content.ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: ws2, SpaceID: dest, Actor: f.user, Bundle: partial, Mode: content.ImportApply}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.q.GetSavedQueryBySlug(ctx, db.GetSavedQueryBySlugParams{WorkspaceID: ws2, Slug: "revenue"}); err != nil {
@@ -280,21 +281,21 @@ func TestUnknownKindAndForbiddenSQL(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	dest := f.spaceNamed(t, "Dest", "dest")
-	bundle := Bundle{Format: BundleFormat, FormatVersion: BundleVersion, BaleiaVersion: "dev",
-		Space: BundleSpace{Slug: "dest", Name: "Dest"},
-		Items: []BundleItem{
+	bundle := content.Bundle{Format: content.BundleFormat, FormatVersion: content.BundleVersion, BaleiaVersion: "dev",
+		Space: content.BundleSpace{Slug: "dest", Name: "Dest"},
+		Items: []content.BundleItem{
 			{Kind: "model", Slug: "nope"},
-			{Kind: KindSavedQuery, Slug: "ddl", Name: "DDL", SQL: "CREATE CATALOG x WITH (a = 'b')"},
+			{Kind: content.KindSavedQuery, Slug: "ddl", Name: "DDL", SQL: "CREATE CATALOG x WITH (a = 'b')"},
 		}}
-	report, err := f.s.Import(context.Background(), ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: f.ws, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: ImportApply})
-	if !errors.Is(err, ErrImportFailed) {
-		t.Fatalf("apply with errors = %v, want ErrImportFailed", err)
+	report, err := f.s.Import(context.Background(), content.ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: f.ws, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: content.ImportApply})
+	if !errors.Is(err, content.ErrImportFailed) {
+		t.Fatalf("apply with errors = %v, want content.ErrImportFailed", err)
 	}
 	if report.OK {
 		t.Fatalf("report should not be ok: %+v", report)
 	}
 	for _, it := range report.Items {
-		if it.Action != ActionError {
+		if it.Action != content.ActionError {
 			t.Fatalf("%s/%s = %s, want ERROR", it.Kind, it.Slug, it.Action)
 		}
 	}
@@ -311,17 +312,17 @@ func TestDryRunWritesNothing(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	dest := f.spaceNamed(t, "Dest", "dest")
-	bundle := Bundle{Format: BundleFormat, FormatVersion: BundleVersion, BaleiaVersion: "dev",
-		Space: BundleSpace{Slug: "dest", Name: "Dest"},
-		Items: []BundleItem{
-			{Kind: KindFolder, Slug: "f", Name: "F"},
-			{Kind: KindSavedQuery, Slug: "q", Name: "Q", SQL: "SELECT 1", Folder: ptr("f")},
+	bundle := content.Bundle{Format: content.BundleFormat, FormatVersion: content.BundleVersion, BaleiaVersion: "dev",
+		Space: content.BundleSpace{Slug: "dest", Name: "Dest"},
+		Items: []content.BundleItem{
+			{Kind: content.KindFolder, Slug: "f", Name: "F"},
+			{Kind: content.KindSavedQuery, Slug: "q", Name: "Q", SQL: "SELECT 1", Folder: ptr("f")},
 		}}
-	report, err := f.s.Import(context.Background(), ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: f.ws, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: ImportDryRun})
+	report, err := f.s.Import(context.Background(), content.ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: f.ws, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: content.ImportDryRun})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !report.OK || report.Items[0].Action != ActionCreate {
+	if !report.OK || report.Items[0].Action != content.ActionCreate {
 		t.Fatalf("dry run report = %+v", report)
 	}
 	var folders, queries int
@@ -340,15 +341,15 @@ func TestDependencyOrder(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	dest := f.spaceNamed(t, "Dest", "dest")
-	bundle := Bundle{Format: BundleFormat, FormatVersion: BundleVersion, BaleiaVersion: "dev",
-		Space: BundleSpace{Slug: "dest", Name: "Dest"},
-		Items: []BundleItem{
+	bundle := content.Bundle{Format: content.BundleFormat, FormatVersion: content.BundleVersion, BaleiaVersion: "dev",
+		Space: content.BundleSpace{Slug: "dest", Name: "Dest"},
+		Items: []content.BundleItem{
 			// The query references the folder before it is defined.
-			{Kind: KindSavedQuery, Slug: "q", Name: "Q", SQL: "SELECT 1", Folder: ptr("child")},
-			{Kind: KindFolder, Slug: "child", Name: "Child", Parent: ptr("parent")},
-			{Kind: KindFolder, Slug: "parent", Name: "Parent"},
+			{Kind: content.KindSavedQuery, Slug: "q", Name: "Q", SQL: "SELECT 1", Folder: ptr("child")},
+			{Kind: content.KindFolder, Slug: "child", Name: "Child", Parent: ptr("parent")},
+			{Kind: content.KindFolder, Slug: "parent", Name: "Parent"},
 		}}
-	report, err := f.s.Import(context.Background(), ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: f.ws, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: ImportApply})
+	report, err := f.s.Import(context.Background(), content.ImportOptions{Dialect: dialect.NewRegistry().MustGet(dialect.Trino), WorkspaceID: f.ws, SpaceID: dest, Actor: f.user, Bundle: bundle, Mode: content.ImportApply})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,8 +373,8 @@ func TestDependencyOrder(t *testing.T) {
 // instead of panicking on the first saved query.
 func TestImport_RequiresDialect(t *testing.T) {
 	t.Parallel()
-	s := New(nil, nil)
-	if _, err := s.Import(context.Background(), ImportOptions{Mode: ImportDryRun}); !errors.Is(err, ErrNoDialect) {
-		t.Fatalf("err = %v, want ErrNoDialect", err)
+	s := content.New(nil, nil)
+	if _, err := s.Import(context.Background(), content.ImportOptions{Mode: content.ImportDryRun}); !errors.Is(err, content.ErrNoDialect) {
+		t.Fatalf("err = %v, want content.ErrNoDialect", err)
 	}
 }

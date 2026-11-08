@@ -1,4 +1,4 @@
-package content
+package content_test
 
 import (
 	"context"
@@ -7,19 +7,42 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 func pgUUID(id uuid.UUID) pgtype.UUID { return pgtype.UUID{Bytes: id, Valid: true} }
 
+// newContentStore builds the content service over the GORM store, as the API
+// does (ADR 0020).
+func newContentStore(t *testing.T, pool *pgxpool.Pool) *content.Service {
+	t.Helper()
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger:         gormlogger.Discard,
+		TranslateError: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	r := repo.New(gdb)
+	return content.New(r, r.TxContent)
+}
+
 type fixture struct {
 	pool  *pgxpool.Pool
 	q     db.Querier
-	s     *Service
+	s     *content.Service
 	user  pgtype.UUID
 	ws    pgtype.UUID
 	space pgtype.UUID
@@ -40,7 +63,7 @@ func newFixture(t *testing.T) *fixture {
 	if err := pool.QueryRow(ctx, `SELECT id FROM spaces WHERE workspace_id = $1 AND is_default`, ws).Scan(&space); err != nil {
 		t.Fatal(err)
 	}
-	return &fixture{pool: pool, q: q, s: New(pool, q), user: user, ws: ws, space: space}
+	return &fixture{pool: pool, q: q, s: newContentStore(t, pool), user: user, ws: ws, space: space}
 }
 
 func (f *fixture) create(t *testing.T, name, slug string) db.SavedQuery {
@@ -73,7 +96,7 @@ func (f *fixture) update(t *testing.T, q db.SavedQuery, sql string) (db.SavedQue
 func (f *fixture) versions(t *testing.T, id pgtype.UUID) []db.ContentVersion {
 	t.Helper()
 	rows, err := f.q.ListContentVersions(context.Background(), db.ListContentVersionsParams{
-		WorkspaceID: f.ws, EntityType: EntitySavedQuery, EntityID: id, Lim: 100,
+		WorkspaceID: f.ws, EntityType: content.EntitySavedQuery, EntityID: id, Lim: 100,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -181,8 +204,8 @@ func TestRestoreNameConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.create(t, "Revenue", "revenue_2")
-	if _, err := f.s.RestoreSavedQuery(ctx, f.user, f.ws, q.ID, 1, nil, nil); !errors.Is(err, ErrNameConflict) {
-		t.Fatalf("restore conflict = %v, want ErrNameConflict", err)
+	if _, err := f.s.RestoreSavedQuery(ctx, f.user, f.ws, q.ID, 1, nil, nil); !errors.Is(err, content.ErrNameConflict) {
+		t.Fatalf("restore conflict = %v, want content.ErrNameConflict", err)
 	}
 	newName := "Revenue restored"
 	restored, err := f.s.RestoreSavedQuery(ctx, f.user, f.ws, q.ID, 1, &newName, nil)
@@ -258,15 +281,15 @@ func TestUpdate_VersionConflict(t *testing.T) {
 		WorkspaceID: f.ws, ID: q.ID, Name: q.Name, Sql: "SELECT 3",
 		SpaceID: q.SpaceID, Slug: q.Slug, UpdatedBy: f.user,
 	}, int32Ptr(1))
-	var vc *VersionConflict
+	var vc *content.VersionConflict
 	if !errors.As(err, &vc) {
-		t.Fatalf("stale expected_version: err = %v, want VersionConflict", err)
+		t.Fatalf("stale expected_version: err = %v, want content.VersionConflict", err)
 	}
 	if vc.Current != 2 {
 		t.Fatalf("current version = %d, want 2", vc.Current)
 	}
-	if !errors.Is(err, ErrVersionConflict) {
-		t.Fatal("VersionConflict must wrap ErrVersionConflict")
+	if !errors.Is(err, content.ErrVersionConflict) {
+		t.Fatal("content.VersionConflict must wrap content.ErrVersionConflict")
 	}
 }
 
