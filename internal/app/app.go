@@ -190,7 +190,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 
 	temporalMetrics, flushTemporal := c.Metrics.TemporalHandler()
 	c.onClose(func() { _ = flushTemporal() })
-	if c.Temporal, err = dial.Temporal(ctx, c.Logger, cfg.TemporalHost, temporalMetrics, 30*time.Second, obs.ClientInterceptors()); err != nil {
+	if c.Temporal, err = dial.Temporal(ctx, c.Logger, cfg.TemporalHost, cfg.TemporalNamespace, temporalMetrics, 30*time.Second, obs.ClientInterceptors()); err != nil {
 		return nil, fmt.Errorf("temporal: %w", err)
 	}
 	c.onClose(c.Temporal.Close)

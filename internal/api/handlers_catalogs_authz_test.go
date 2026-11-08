@@ -82,6 +82,10 @@ func (q *authzFake) GetCatalogSyncState(context.Context, pgtype.UUID) (db.GetCat
 	return q.syncState, nil
 }
 
+func (q *authzFake) ListQueryClasses(context.Context, db.ListQueryClassesParams) ([]db.ListQueryClassesRow, error) {
+	return nil, nil
+}
+
 func (q *authzFake) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
 	if id.Bytes == [16]byte{0xC9} { // the engine's own, system-owned connection
 		return db.CatalogConnection{ID: id, Name: "trino", Type: "trino", Config: []byte(`{"url":"http://trino:8080"}`)}, nil

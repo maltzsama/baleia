@@ -11,6 +11,7 @@ func TestObservable(t *testing.T) {
 		"CREATE CATALOG lake USING iceberg WITH (\"s3.aws-secret-key\" = 'x')": false,
 		"DROP CATALOG lake":                                                    false,
 		ClusterNodesSQL:                                                        false,
+		ClusterMemorySQL:                                                       false,
 	} {
 		if got := Observable(sql); got != want {
 			t.Errorf("Observable(%q) = %v, want %v", sql, got, want)

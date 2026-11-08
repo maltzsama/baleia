@@ -16,9 +16,12 @@ type QueryInfo = trino.QueryInfo
 // ClusterStats is the coordinator's cluster summary.
 type ClusterStats = trino.ClusterStats
 
-// ClusterNodesSQL is the statement the cluster poller runs; Lens excludes it
-// from user activity.
-const ClusterNodesSQL = trino.ClusterNodesSQL
+// ClusterNodesSQL and ClusterMemorySQL are the statements the cluster poller
+// runs; Lens excludes them from user activity.
+const (
+	ClusterNodesSQL  = trino.ClusterNodesSQL
+	ClusterMemorySQL = trino.ClusterMemorySQL
+)
 
 // Monitor reads a coordinator's runtime state.
 type Monitor struct{ c *trino.Client }
@@ -46,7 +49,7 @@ func (m *Monitor) ClusterStats(ctx context.Context) (*ClusterStats, error) {
 // not user activity either. The poller and the event ingestion (#406) both
 // apply it.
 func Observable(sql string) bool {
-	return !policy.IsCatalogDDL(sql) && sql != ClusterNodesSQL
+	return !policy.IsCatalogDDL(sql) && sql != ClusterNodesSQL && sql != ClusterMemorySQL
 }
 
 // SnapshotState maps a Trino query state to a snapshot state: running,

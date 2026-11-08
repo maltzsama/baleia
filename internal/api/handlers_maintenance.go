@@ -128,6 +128,26 @@ func (h *OpsHandlers) GetTableMaintenance(ctx context.Context, request GetTableM
 	for _, r := range runs {
 		out.Runs = append(out.Runs, h.maintenanceRun(r))
 	}
+	lastRuns, err := h.queries.ListLastMaintenanceRuns(ctx, db.ListLastMaintenanceRunsParams{
+		CatalogID: t.key.CatalogID, Namespace: t.key.Namespace, TableName: t.key.Table,
+	})
+	if err != nil {
+		return nil, err
+	}
+	latest := make([]MaintenanceLastRun, 0, len(lastRuns))
+	for _, r := range lastRuns {
+		operation, ok := r.Operation.(string)
+		if !ok {
+			continue
+		}
+		latest = append(latest, MaintenanceLastRun{
+			Operation:   operation,
+			Status:      r.Status,
+			FinishedAt:  pgTimestampToTime(r.FinishedAt),
+			WorkflowUrl: h.workflowURL(r.WorkflowID),
+		})
+	}
+	out.LastRuns = &latest
 	row, err := h.monitor.TablePolicy(ctx, t.key)
 	if errors.Is(err, monitoring.ErrPolicyNotFound) {
 		return GetTableMaintenance200JSONResponse(out), nil

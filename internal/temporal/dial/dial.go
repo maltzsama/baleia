@@ -22,6 +22,7 @@ func Temporal(
 	ctx context.Context,
 	logger *slog.Logger,
 	host string,
+	namespace string,
 	handler client.MetricsHandler,
 	wait time.Duration,
 	interceptors []interceptor.ClientInterceptor,
@@ -29,8 +30,12 @@ func Temporal(
 	deadline := time.Now().Add(wait)
 	backoff := 500 * time.Millisecond
 	for {
+		if namespace == "" {
+			namespace = "default"
+		}
 		c, err := client.DialContext(ctx, client.Options{
 			HostPort:       host,
+			Namespace:      namespace,
 			Logger:         tlog.NewStructuredLogger(logger),
 			MetricsHandler: handler,
 			Interceptors:   interceptors,

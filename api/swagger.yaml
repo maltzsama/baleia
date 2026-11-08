@@ -3730,6 +3730,10 @@ components:
         runs:
           type: array
           items: { $ref: "#/components/schemas/MaintenanceRun" }
+        last_runs:
+          type: array
+          description: The latest finished run of each operation, independent of the runs page.
+          items: { $ref: "#/components/schemas/MaintenanceLastRun" }
         plan:
           allOf: [{ $ref: "#/components/schemas/MaintenancePlan" }]
           nullable: true
@@ -3758,6 +3762,16 @@ components:
         operation:
           type: string
           enum: [optimize, optimize_manifests, expire_snapshots, remove_orphan_files, next_due]
+
+    MaintenanceLastRun:
+      type: object
+      description: The latest finished run of one maintenance operation.
+      required: [operation, status, finished_at]
+      properties:
+        operation: { type: string }
+        status: { type: string }
+        finished_at: { type: string, format: date-time }
+        workflow_url: { type: string, nullable: true, description: "Link to the workflow in the Temporal UI; null when no UI URL is configured" }
 
     MaintenanceRun:
       type: object

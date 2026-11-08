@@ -3164,6 +3164,16 @@ type LogoutRequest struct {
 	RefreshToken *string `json:"refresh_token,omitempty"`
 }
 
+// MaintenanceLastRun The latest finished run of one maintenance operation.
+type MaintenanceLastRun struct {
+	FinishedAt time.Time `json:"finished_at"`
+	Operation  string    `json:"operation"`
+	Status     string    `json:"status"`
+
+	// WorkflowUrl Link to the workflow in the Temporal UI; null when no UI URL is configured
+	WorkflowUrl *string `json:"workflow_url"`
+}
+
 // MaintenanceMode defines model for MaintenanceMode.
 type MaintenanceMode string
 
@@ -4494,9 +4504,12 @@ type TableMaintenance struct {
 	AllowedActions *[]TableMaintenanceAllowedAction `json:"allowed_actions,omitempty"`
 	CatalogId      openapi_types.UUID               `json:"catalog_id"`
 	FormatVersion  *int                             `json:"format_version"`
-	Namespace      string                           `json:"namespace"`
-	Plan           *MaintenancePlan                 `json:"plan"`
-	Policy         *StoredMaintenancePolicy         `json:"policy"`
+
+	// LastRuns The latest finished run of each operation, independent of the runs page.
+	LastRuns  *[]MaintenanceLastRun    `json:"last_runs,omitempty"`
+	Namespace string                   `json:"namespace"`
+	Plan      *MaintenancePlan         `json:"plan"`
+	Policy    *StoredMaintenancePolicy `json:"policy"`
 
 	// Properties Iceberg table properties read at the last health pass.
 	Properties *map[string]string `json:"properties,omitempty"`
