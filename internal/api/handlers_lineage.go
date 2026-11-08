@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/authz"
@@ -81,6 +82,7 @@ func (h *CatalogHandlers) ListLineage(ctx context.Context, request ListLineageRe
 		nodes:     map[string]LineageNode{},
 		edgeSet:   map[string]bool{},
 		tableKeys: map[string]string{},
+		ws:        ws,
 		ctx:       ctx,
 		q:         h.queries,
 	}
@@ -194,6 +196,7 @@ type lineageGraph struct {
 	edges     []LineageEdge
 	edgeSet   map[string]bool
 	tableKeys map[string]string // table node id -> natural key
+	ws        pgtype.UUID       // workspace, for a table's deep link
 	ctx       context.Context
 	q         db.Querier
 }
@@ -212,6 +215,7 @@ func (g *lineageGraph) addTable(t db.GetGrantedMetadataTableRow) string {
 		Id:     id,
 		Label:  t.Name,
 		Detail: ptrString(tableDetail(t.Namespace, t.Name)),
+		Href:   ptrString(g.tableHref(t.CatalogID, t.Namespace, t.Name)),
 	})
 	g.tableKeys[id] = lineageTableRef{catalogID: t.CatalogID, namespace: t.Namespace, name: t.Name}.key()
 	return id
@@ -288,6 +292,7 @@ func (g *lineageGraph) resolveTable(ref lineageTableRef) (string, bool) {
 		Id:     id,
 		Label:  row.Name,
 		Detail: ptrString(tableDetail(row.Namespace, row.Name)),
+		Href:   ptrString(g.tableHref(row.CatalogID, row.Namespace, row.Name)),
 	})
 	g.tableKeys[id] = lineageTableRef{catalogID: row.CatalogID, namespace: row.Namespace, name: row.Name}.key()
 	return id, true
@@ -338,6 +343,19 @@ func sqlRefs(sql string, catalogID pgtype.UUID, fallback []string) []lineageTabl
 
 func tableDetail(namespace []string, name string) string {
 	return strings.Join(append(append([]string{}, namespace...), name), ".")
+}
+
+// tableHref is the data explorer route that opens the table. It carries the
+// workspace: the URL is the source of truth for the selected one (#732).
+func (g *lineageGraph) tableHref(catalogID pgtype.UUID, namespace []string, name string) string {
+	q := url.Values{}
+	q.Set("ws", idString(g.ws))
+	q.Set("catalog", idString(catalogID))
+	for _, part := range namespace {
+		q.Add("ns", part)
+	}
+	q.Set("table", name)
+	return "/data?" + q.Encode()
 }
 
 func nodeID(kind LineageNodeKind, id pgtype.UUID) string {

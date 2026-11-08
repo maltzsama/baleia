@@ -41,6 +41,8 @@ A table's detail shows its lineage in two directions:
 - **Used by:** the saved queries, metrics and semantic models that read the table.
 - **Depends on:** for a saved query or a model, the tables it reads. It shows in the workbench sidebar and in the model editor.
 
+A table in either list opens it: in the workbench inspector its detail appears below the list, and elsewhere (the model editor) the table opens in the data explorer.
+
 Lineage comes from the statements themselves, so it stays current as content changes. When a metadata sync finds that a model or metric points at a table or column that no longer exists, the attention bell reports it ([administration](administration.md#attention)).
 
 ## Open in a BI tool
