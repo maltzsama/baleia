@@ -86,28 +86,31 @@ func (r *Repo) ListWorkspaceMembers(ctx context.Context, workspaceID pgtype.UUID
 	return out, err
 }
 
-// effectiveMemberRole mirrors workspaceRoleFor without extra reads: an
-// explicit grant wins, a personal workspace's owner is its admin, a shared
-// workspace's team owner is an admin and its other team members are editors,
-// and a service account only has the role it was granted.
+// effectiveMemberRole mirrors workspaceRoleFor without extra reads. A
+// personal workspace's owner is its admin and an explicit grant applies. On a
+// shared workspace a service account only has the role it was granted, while
+// a human must still be in the owning team: a stale grant for a former team
+// member grants nothing.
 func effectiveMemberRole(ws model.Workspace, user model.User, teamRole, explicitRole string) string {
-	if ws.Type == "personal" && ws.OwnerUserID != nil && sameUUID(string(*ws.OwnerUserID), string(user.ID)) {
-		return "admin"
+	if ws.Type == "personal" {
+		if ws.OwnerUserID != nil && sameUUID(string(*ws.OwnerUserID), string(user.ID)) {
+			return "admin"
+		}
+		return explicitRole
+	}
+	if user.Kind == "service_account" {
+		return explicitRole
+	}
+	if teamRole == "" {
+		return ""
 	}
 	if explicitRole != "" {
 		return explicitRole
 	}
-	if ws.Type == "personal" || user.Kind == "service_account" {
-		return ""
-	}
-	switch teamRole {
-	case "owner":
+	if teamRole == "owner" {
 		return "admin"
-	case "":
-		return ""
-	default:
-		return "editor"
 	}
+	return "editor"
 }
 
 // DeleteWorkspaceMember removes an explicitly granted role (#653).

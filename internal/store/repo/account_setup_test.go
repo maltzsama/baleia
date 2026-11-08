@@ -151,6 +151,24 @@ func TestWorkspaceMembers(t *testing.T) {
 			t.Fatalf("member after delete = %+v", row)
 		}
 	}
+
+	// A stale grant does not keep a former team member in a shared workspace.
+	if n, err := f.r.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{
+		WorkspaceID: f.wsID(), UserID: f.memberID(), Role: "viewer",
+	}); err != nil || n != 1 {
+		t.Fatalf("UpsertWorkspaceMember(stale) = %d, %v", n, err)
+	}
+	if err := f.gdb.Where("team_id = ? AND user_id = ?", string(f.teamID(t)), UUIDString(f.memberID())).
+		Delete(&model.TeamMember{}).Error; err != nil {
+		t.Fatalf("remove team member: %v", err)
+	}
+	rows, err = f.r.ListWorkspaceMembers(ctx, f.wsID())
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("ListWorkspaceMembers(former team member) = %+v, %v", rows, err)
+	}
+	if UUIDString(rows[0].User.ID) != UUIDString(f.ownerID()) {
+		t.Fatalf("former team member with a stale grant is still listed: %+v", rows)
+	}
 }
 
 // TestFirstAdminSetupRace: two concurrent setups of a fresh installation make

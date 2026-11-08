@@ -44,8 +44,9 @@ type Store interface {
 	PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID pgtype.UUID) error
 }
 
-// Tx runs fn in one transaction over a Store bound to it.
-type Tx func(ctx context.Context, fn func(Store) error) error
+// Tx runs fn in one transaction over a Store bound to it, after atomically
+// checking that runID is still the running owner of the pass.
+type Tx func(ctx context.Context, runID pgtype.UUID, fn func(Store) error) error
 
 // Opener picks a catalog's source and opens it (SourceFor in production).
 type Opener interface {
@@ -68,12 +69,61 @@ type Syncer struct {
 	store  Store
 	tx     Tx
 	opener Opener
+	// heartbeatEvery and staleAfter are the lease timings; zero uses the
+	// package defaults. Tests shrink them.
+	heartbeatEvery time.Duration
+	staleAfter     time.Duration
 }
 
 // NewSyncer returns a syncer writing through store, one table per
 // transaction.
 func NewSyncer(store Store, tx Tx, opener Opener) *Syncer {
 	return &Syncer{store: store, tx: tx, opener: opener}
+}
+
+// heartbeatInterval is how often a running pass refreshes its lease.
+func (s *Syncer) heartbeatInterval() time.Duration {
+	if s.heartbeatEvery > 0 {
+		return s.heartbeatEvery
+	}
+	return syncHeartbeatEvery
+}
+
+// leaseDuration is how old a heartbeat must be before another pass may take
+// the catalog over.
+func (s *Syncer) leaseDuration() time.Duration {
+	if s.staleAfter > 0 {
+		return s.staleAfter
+	}
+	return syncRunStaleAfter
+}
+
+// beginRun acquires the catalog's lease. A pass that finds a fresh lease
+// waits for it to expire (a retry after a crashed worker) instead of failing
+// at once; a duplicate of a live pass gives up after one lease period.
+func (s *Syncer) beginRun(ctx context.Context, catalogID pgtype.UUID, path string) (db.StartMetadataSyncRunRow, bool, error) {
+	lease := s.leaseDuration()
+	deadline := time.Now().Add(lease + 2*s.heartbeatInterval())
+	poll := min(s.heartbeatInterval(), time.Second)
+	for {
+		run, started, err := s.store.BeginMetadataSyncRun(ctx, catalogID, path, lease)
+		if err != nil {
+			return run, false, err
+		}
+		if started {
+			return run, true, nil
+		}
+		if !time.Now().Before(deadline) {
+			return run, false, nil
+		}
+		timer := time.NewTimer(poll)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return run, false, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 // Sync applies a full pass to one catalog: it upserts the tables it sees,
@@ -110,7 +160,7 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 		defer func() { _ = src.Close() }()
 	}
 
-	run, started, err := s.store.BeginMetadataSyncRun(ctx, catalogID, path, syncRunStaleAfter)
+	run, started, err := s.beginRun(ctx, catalogID, path)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return stats, ErrCatalogNotFound
 	}
@@ -158,7 +208,7 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 		known[tableKey(r.Namespace, r.Name)] = k
 	}
 
-	w := &writer{ctx: ctx, store: s.store, tx: s.tx, catalogID: catalogID, typeSystem: src.TypeSystem(),
+	w := &writer{ctx: ctx, tx: s.tx, runID: run.ID, catalogID: catalogID, typeSystem: src.TypeSystem(),
 		stats: &stats, progress: progress, namespaces: map[string]bool{}}
 	lookup := func(ns []string, name string) (Known, bool) {
 		k, ok := known[tableKey(ns, name)]
@@ -168,18 +218,20 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 		return finish(err)
 	}
 
-	removed, err := s.store.TombstoneMissingTables(ctx, db.TombstoneMissingTablesParams{CatalogID: catalogID, PassStartedAt: run.StartedAt})
-	if err != nil {
-		return finish(err)
-	}
-	stats.TablesRemoved = int(removed)
-	if err := s.store.TombstoneMissingNamespaces(ctx, db.TombstoneMissingNamespacesParams{CatalogID: catalogID, PassStartedAt: run.StartedAt}); err != nil {
-		return finish(err)
-	}
-	if err := s.store.PurgeMetadataTableTombstones(ctx, catalogID); err != nil {
-		return finish(err)
-	}
-	if err := s.store.PurgeMetadataNamespaceTombstones(ctx, catalogID); err != nil {
+	if err := s.tx(ctx, run.ID, func(tx Store) error {
+		removed, err := tx.TombstoneMissingTables(ctx, db.TombstoneMissingTablesParams{CatalogID: catalogID, PassStartedAt: run.StartedAt})
+		if err != nil {
+			return err
+		}
+		stats.TablesRemoved = int(removed)
+		if err := tx.TombstoneMissingNamespaces(ctx, db.TombstoneMissingNamespacesParams{CatalogID: catalogID, PassStartedAt: run.StartedAt}); err != nil {
+			return err
+		}
+		if err := tx.PurgeMetadataTableTombstones(ctx, catalogID); err != nil {
+			return err
+		}
+		return tx.PurgeMetadataNamespaceTombstones(ctx, catalogID)
+	}); err != nil {
 		return finish(err)
 	}
 	return finish(nil)
@@ -188,14 +240,14 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 // heartbeat refreshes the running row until ctx ends. A failure is ignored:
 // the sync itself reports the store failure that matters.
 func (s *Syncer) heartbeat(ctx context.Context, id pgtype.UUID) {
-	t := time.NewTicker(syncHeartbeatEvery)
+	t := time.NewTicker(s.heartbeatInterval())
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			_ = s.store.TouchMetadataSyncRun(context.WithoutCancel(ctx), id)
+			_ = s.store.TouchMetadataSyncRun(ctx, id)
 		}
 	}
 }
@@ -203,8 +255,8 @@ func (s *Syncer) heartbeat(ctx context.Context, id pgtype.UUID) {
 // writer stores what a source visits.
 type writer struct {
 	ctx        context.Context
-	store      Store
 	tx         Tx
+	runID      pgtype.UUID
 	catalogID  pgtype.UUID
 	typeSystem string
 	stats      *RunStats
@@ -218,7 +270,9 @@ func (w *writer) Namespace(ns []string) error {
 		return nil
 	}
 	w.namespaces[key] = true
-	return w.store.UpsertMetadataNamespace(w.ctx, db.UpsertMetadataNamespaceParams{CatalogID: w.catalogID, Namespace: nonNil(ns)})
+	return w.tx(w.ctx, w.runID, func(tx Store) error {
+		return tx.UpsertMetadataNamespace(w.ctx, db.UpsertMetadataNamespaceParams{CatalogID: w.catalogID, Namespace: nonNil(ns)})
+	})
 }
 
 func (w *writer) Table(t TableSnapshot) error {
@@ -226,7 +280,12 @@ func (w *writer) Table(t TableSnapshot) error {
 		return err
 	}
 	if t.Unchanged {
-		n, err := w.store.TouchMetadataTable(w.ctx, db.TouchMetadataTableParams{CatalogID: w.catalogID, Namespace: nonNil(t.Namespace), Name: t.Name})
+		var n int64
+		err := w.tx(w.ctx, w.runID, func(tx Store) error {
+			var err error
+			n, err = tx.TouchMetadataTable(w.ctx, db.TouchMetadataTableParams{CatalogID: w.catalogID, Namespace: nonNil(t.Namespace), Name: t.Name})
+			return err
+		})
 		if err != nil {
 			return err
 		}
@@ -250,7 +309,7 @@ func (w *writer) storeTable(t TableSnapshot) error {
 	if err != nil {
 		return err
 	}
-	return w.tx(w.ctx, func(tx Store) error {
+	return w.tx(w.ctx, w.runID, func(tx Store) error {
 		row, err := tx.UpsertMetadataTable(w.ctx, db.UpsertMetadataTableParams{
 			CatalogID: w.catalogID, Namespace: nonNil(t.Namespace), Name: t.Name, Kind: t.Kind,
 			Fingerprint: t.Fingerprint, Properties: props, Comment: optional(t.Comment),

@@ -162,39 +162,149 @@ func (r *Repo) auditOwnedWorkspaceIDs(ctx context.Context, owner pgtype.UUID) ([
 }
 
 // SharesWorkspace reports whether two users are both members of one
-// workspace (#432). The effective role is resolved in Go, like WorkspaceRole,
-// so the result does not depend on a PL/pgSQL helper.
+// workspace (#432). The effective role is resolved from set-based reads of
+// the workspaces each user belongs to, so no per-workspace query is issued.
 func (r *Repo) SharesWorkspace(ctx context.Context, arg db.SharesWorkspaceParams) (bool, error) {
 	if !arg.CallerID.Valid || !arg.UserID.Valid {
 		return false, nil
 	}
 	caller, user := UUIDString(arg.CallerID), UUIDString(arg.UserID)
-	shares := false
+	sets := map[string]map[string]bool{}
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		sets, err = memberWorkspaceSets(tx, []string{caller, user})
+		return err
+	})
+	if err != nil {
+		return false, err
+	}
+	for workspaceID := range sets[caller] {
+		if sets[user][workspaceID] {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// memberWorkspaceSets resolves, in a fixed number of set-based queries, the
+// workspaces where each user has an effective role. It mirrors
+// workspaceRoleFor: a personal owner, an explicit grant, a shared workspace's
+// owning team (except for service accounts, which only hold explicit grants).
+func memberWorkspaceSets(tx *gorm.DB, userIDs []string) (map[string]map[string]bool, error) {
+	sets := make(map[string]map[string]bool, len(userIDs))
+	for _, id := range userIDs {
+		sets[id] = map[string]bool{}
+	}
+	var users []model.User
+	if err := tx.Select("id", "kind").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	kinds := make(map[string]string, len(users))
+	for _, user := range users {
+		kinds[string(user.ID)] = string(user.Kind)
+	}
+
+	var owned []model.Workspace
+	if err := tx.Select("id", "owner_user_id").
+		Where("type = ? AND owner_user_id IN ?", "personal", userIDs).
+		Find(&owned).Error; err != nil {
+		return nil, err
+	}
+	for _, ws := range owned {
+		if ws.OwnerUserID != nil {
+			sets[string(*ws.OwnerUserID)][string(ws.ID)] = true
+		}
+	}
+
+	var explicit []model.WorkspaceMember
+	if err := tx.Where("user_id IN ?", userIDs).Find(&explicit).Error; err != nil {
+		return nil, err
+	}
+	explicitIDs := map[string]bool{}
+	for _, member := range explicit {
+		explicitIDs[string(member.WorkspaceID)] = true
+	}
+	explicitWS := make(map[string]model.Workspace, len(explicitIDs))
+	if len(explicitIDs) > 0 {
+		ids := make([]string, 0, len(explicitIDs))
+		for id := range explicitIDs {
+			ids = append(ids, id)
+		}
 		var workspaces []model.Workspace
-		if err := tx.Order("id").Find(&workspaces).Error; err != nil {
-			return err
+		if err := tx.Select("id", "type", "owner_team_id").Where("id IN ?", ids).Find(&workspaces).Error; err != nil {
+			return nil, err
 		}
 		for _, ws := range workspaces {
-			callerRole, err := workspaceRoleFor(tx, ws, caller)
-			if err != nil {
-				return err
-			}
-			if callerRole == "" {
-				continue
-			}
-			userRole, err := workspaceRoleFor(tx, ws, user)
-			if err != nil {
-				return err
-			}
-			if userRole != "" {
-				shares = true
-				return nil
+			explicitWS[string(ws.ID)] = ws
+		}
+	}
+
+	var teams []model.TeamMember
+	if err := tx.Where("user_id IN ?", userIDs).Find(&teams).Error; err != nil {
+		return nil, err
+	}
+	teamIDs := map[string]bool{}
+	teamRoles := map[string]map[string]string{}
+	for _, member := range teams {
+		teamID, userID := string(member.TeamID), string(member.UserID)
+		teamIDs[teamID] = true
+		if teamRoles[userID] == nil {
+			teamRoles[userID] = map[string]string{}
+		}
+		teamRoles[userID][teamID] = string(member.Role)
+	}
+	sharedByTeam := map[string][]string{}
+	if len(teamIDs) > 0 {
+		ids := make([]string, 0, len(teamIDs))
+		for id := range teamIDs {
+			ids = append(ids, id)
+		}
+		var shared []model.Workspace
+		if err := tx.Select("id", "owner_team_id").
+			Where("type = ? AND owner_team_id IN ?", "shared", ids).
+			Find(&shared).Error; err != nil {
+			return nil, err
+		}
+		for _, ws := range shared {
+			if ws.OwnerTeamID != nil {
+				sharedByTeam[string(*ws.OwnerTeamID)] = append(sharedByTeam[string(*ws.OwnerTeamID)], string(ws.ID))
 			}
 		}
-		return nil
-	})
-	return shares, err
+	}
+
+	// A team's shared workspaces belong to its humans, not to a service
+	// account that happened to be added to the team.
+	for userID, roles := range teamRoles {
+		if kinds[userID] == "service_account" {
+			continue
+		}
+		for teamID := range roles {
+			for _, workspaceID := range sharedByTeam[teamID] {
+				sets[userID][workspaceID] = true
+			}
+		}
+	}
+
+	for _, member := range explicit {
+		userID := string(member.UserID)
+		ws, ok := explicitWS[string(member.WorkspaceID)]
+		if !ok {
+			continue
+		}
+		switch ws.Type {
+		case "personal":
+			sets[userID][string(ws.ID)] = true
+		case "shared":
+			if kinds[userID] == "service_account" {
+				sets[userID][string(ws.ID)] = true
+				continue
+			}
+			if ws.OwnerTeamID != nil && teamRoles[userID][string(*ws.OwnerTeamID)] != "" {
+				sets[userID][string(ws.ID)] = true
+			}
+		}
+	}
+	return sets, nil
 }
 
 // ListAuditEventsForExport returns the batch after the cursor, before the
@@ -290,11 +400,16 @@ func inetPtr(v *model.Inet) *netip.Addr {
 	if v == nil {
 		return nil
 	}
-	addr, err := netip.ParseAddr(string(*v))
-	if err != nil {
-		return nil
+	raw := string(*v)
+	if addr, err := netip.ParseAddr(raw); err == nil {
+		return &addr
 	}
-	return &addr
+	// PostgreSQL's inet may carry a prefix (for example "10.0.0.0/8").
+	if prefix, err := netip.ParsePrefix(raw); err == nil {
+		addr := prefix.Addr()
+		return &addr
+	}
+	return nil
 }
 
 func derefString(v *string) string {

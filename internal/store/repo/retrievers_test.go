@@ -117,4 +117,11 @@ func TestRetrieverStore(t *testing.T) {
 	if _, err := r.GetRetrieverByID(ctx, db.GetRetrieverByIDParams{WorkspaceID: f.wsID(), ID: created.ID}); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("GetRetrieverByID(deleted) = %v, want ErrNoRows", err)
 	}
+	runs, err = r.ListRetrieverRefreshHistory(ctx, db.ListRetrieverRefreshHistoryParams{RetrieverID: created.ID, Limit: 10})
+	if err != nil || len(runs) != 0 {
+		t.Fatalf("history after delete = %+v, %v", runs, err)
+	}
+	if _, err := r.LatestRetrieverRefresh(ctx, created.ID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("LatestRetrieverRefresh(deleted) = %v, want ErrNoRows", err)
+	}
 }

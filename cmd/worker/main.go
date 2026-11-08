@@ -108,8 +108,8 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	act.SetMetrics(reg)
 	act.SetTemporal(core.Temporal)
 	r := core.StoreRepo
-	act.SetMetadataSyncer(metadata.NewSyncer(r, func(ctx context.Context, fn func(metadata.Store) error) error {
-		return r.TxMetadata(ctx, func(tx *repo.Repo) error { return fn(tx) })
+	act.SetMetadataSyncer(metadata.NewSyncer(r, func(ctx context.Context, runID pgtype.UUID, fn func(metadata.Store) error) error {
+		return r.TxMetadata(ctx, runID, func(tx *repo.Repo) error { return fn(tx) })
 	}, metadata.NewSources(r, core.Keyring, core.Connections, core.Engines)))
 	// The dispatcher observes federated engines' catalogs (adopting the ones
 	// Baleia did not create) with the binder, as the catalog DDL identity.

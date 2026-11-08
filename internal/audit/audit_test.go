@@ -257,7 +257,7 @@ func TestPrune(t *testing.T) {
 		}
 	}
 	sqlDB := stdlib.OpenDBFromPool(pool)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{Logger: gormlogger.Discard})
 	if err != nil {
 		t.Fatal(err)
@@ -265,6 +265,27 @@ func TestPrune(t *testing.T) {
 	if _, err := Prune(ctx, gdb, now.Format("2006-01"), now); err == nil {
 		t.Fatal("pruning the current month must be refused")
 	}
+
+	// A dependent view makes the non-cascading drop fail and stays intact.
+	oldest := "audit_events_" + old.Format("200601")
+	if _, err := pool.Exec(ctx, "CREATE VIEW audit_prune_probe AS SELECT * FROM "+oldest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Prune(ctx, gdb, old.AddDate(0, 1, 0).Format("2006-01"), now); err == nil {
+		t.Fatal("a dependent view must make the drop fail")
+	}
+	var views int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_views WHERE viewname = 'audit_prune_probe'`).Scan(&views); err != nil || views != 1 {
+		t.Fatalf("dependent view = %d, %v", views, err)
+	}
+	var stillAttached int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_inherits WHERE inhrelid = $1::regclass`, oldest).Scan(&stillAttached); err != nil || stillAttached != 1 {
+		t.Fatalf("partition attached after failed drop = %d, %v", stillAttached, err)
+	}
+	if _, err := pool.Exec(ctx, "DROP VIEW audit_prune_probe"); err != nil {
+		t.Fatal(err)
+	}
+
 	dropped, err := Prune(ctx, gdb, old.AddDate(0, 1, 0).Format("2006-01"), now)
 	if err != nil {
 		t.Fatal(err)

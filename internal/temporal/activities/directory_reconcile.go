@@ -241,7 +241,8 @@ type reconcileAction struct {
 }
 
 func (a *Activities) applyReconcilePlan(ctx context.Context, plan reconcilePlan, actions *[]reconcileAction) error {
-	return a.directoryWrites(ctx, func(q directoryWrites) error {
+	var events []audit.Event
+	err := a.directoryWrites(ctx, func(q directoryWrites) error {
 		for _, u := range plan.Suspend {
 			reason := directorySuspensionReason
 			if _, err := q.SuspendUser(ctx, db.SuspendUserParams{ID: u.ID, SuspendedReason: &reason}); err != nil {
@@ -255,21 +256,21 @@ func (a *Activities) applyReconcilePlan(ctx context.Context, plan reconcilePlan,
 			}
 			*actions = append(*actions, reconcileAction{UserID: u.ID.String(), Action: "suspend", Detail: "missing_or_disabled"})
 			a.metrics.directory.Suspended(directorySuspensionReason)
-			a.auditChange(ctx, audit.Event{Action: audit.UserSuspend, ResourceType: "user", ResourceID: u.ID.String(), Outcome: audit.Allowed, Reason: "directory"})
+			events = append(events, audit.Event{Action: audit.UserSuspend, ResourceType: "user", ResourceID: u.ID.String(), Outcome: audit.Allowed, Reason: "directory"})
 		}
 		for _, u := range plan.Reinstate {
 			if err := q.ReinstateDirectoryUser(ctx, u.ID); err != nil {
 				return err
 			}
 			*actions = append(*actions, reconcileAction{UserID: u.ID.String(), Action: "reinstate", Detail: "reenabled_in_directory"})
-			a.auditChange(ctx, audit.Event{Action: audit.UserReinstate, ResourceType: "user", ResourceID: u.ID.String(), Outcome: audit.Allowed, Reason: "directory"})
+			events = append(events, audit.Event{Action: audit.UserReinstate, ResourceType: "user", ResourceID: u.ID.String(), Outcome: audit.Allowed, Reason: "directory"})
 		}
 		for _, rc := range plan.Roles {
 			if err := q.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: rc.UserID, Role: rc.Role}); err != nil {
 				return err
 			}
 			*actions = append(*actions, reconcileAction{UserID: rc.UserID.String(), Action: "role", Detail: rc.Role})
-			a.auditChange(ctx, audit.Event{Action: audit.UserRoleChange, ResourceType: "user", ResourceID: rc.UserID.String(), Outcome: audit.Allowed, Reason: "directory"})
+			events = append(events, audit.Event{Action: audit.UserRoleChange, ResourceType: "user", ResourceID: rc.UserID.String(), Outcome: audit.Allowed, Reason: "directory"})
 		}
 		for _, tc := range plan.Teams {
 			teamID, err := uuidFromString(tc.TeamID)
@@ -290,6 +291,15 @@ func (a *Activities) applyReconcilePlan(ctx context.Context, plan reconcilePlan,
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	// The transaction has committed and released its connection: audit events
+	// describe changes that are now durable. Auditing is best effort.
+	for _, event := range events {
+		a.auditChange(ctx, event)
+	}
+	return nil
 }
 
 // directoryReads is the read side of the directory pass; *repo.Repo

@@ -523,10 +523,32 @@ func (r *Repo) TouchMetadataSyncRun(ctx context.Context, id pgtype.UUID) error {
 		Update("heartbeat_at", time.Now().UTC()).Error
 }
 
+// ErrMetadataSyncTakenOver means the sync run is no longer the owner of the
+// catalog: a newer pass took it over, so this pass must stop writing.
+var ErrMetadataSyncTakenOver = errors.New("metadata sync run is no longer the owner")
+
 // TxMetadata runs fn in one transaction over a Repo bound to it, so a table
-// and its columns and foreign keys are replaced atomically (ADR 0020).
-func (r *Repo) TxMetadata(ctx context.Context, fn func(*Repo) error) error {
+// and its columns and foreign keys are replaced atomically (ADR 0020). It
+// first locks the run row and verifies it is still running: a pass that lost
+// its lease cannot mutate the catalog any more.
+func (r *Repo) TxMetadata(ctx context.Context, runID pgtype.UUID, fn func(*Repo) error) error {
+	if !runID.Valid {
+		return ErrMetadataSyncTakenOver
+	}
 	return r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var run model.MetadataSyncRun
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", UUIDString(runID)).
+			First(&run).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrMetadataSyncTakenOver
+		}
+		if err != nil {
+			return err
+		}
+		if run.Status != "running" {
+			return ErrMetadataSyncTakenOver
+		}
 		return fn(New(tx))
 	})
 }

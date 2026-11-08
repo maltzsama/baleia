@@ -149,4 +149,16 @@ func TestAuditExportCursor(t *testing.T) {
 	if err != nil || len(after) != 1 || after[0].ID <= pos.ID {
 		t.Fatalf("batch after cursor = %+v, %v", after, err)
 	}
+
+	// Advancing an existing sink replaces its position.
+	second := batch[2]
+	if err := r.SetAuditExportCursor(ctx, db.SetAuditExportCursorParams{
+		Sink: "opensearch", OccurredAt: second.OccurredAt, ID: second.ID,
+	}); err != nil {
+		t.Fatalf("SetAuditExportCursor(second): %v", err)
+	}
+	got, err = r.GetAuditExportCursor(ctx, "opensearch")
+	if err != nil || got.ID != second.ID {
+		t.Fatalf("cursor after second set = %+v, %v", got, err)
+	}
 }
