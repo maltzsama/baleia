@@ -95,7 +95,7 @@ func newAuthHandlers(c *core) *AuthHandlers {
 	if a.oidc == nil {
 		if c.store != nil {
 			r := repo.New(c.store)
-			a.oidc = oidclogin.New(r, c.queries, c.keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
+			a.oidc = oidclogin.New(r, r, c.keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
 				PublicURL: c.settings.Mail.PublicURL,
 				CacheTTL:  time.Hour,
 				Logger:    c.logger,
@@ -179,5 +179,9 @@ func (m groupMailer) Send(ctx context.Context, to, locale string, template mail.
 // newLogins builds the credential verifier over the core's database; tests
 // pass a fake directory.
 func newLogins(c *core, directory login.Directory) *login.Service {
-	return login.New(c.logger, c.queries, directory, c.keyring, c.settings.Auth.PasswordCost)
+	var store login.Store = c.queries
+	if c.store != nil {
+		store = repo.New(c.store)
+	}
+	return login.New(c.logger, store, directory, c.keyring, c.settings.Auth.PasswordCost)
 }
