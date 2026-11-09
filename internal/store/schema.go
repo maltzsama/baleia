@@ -87,6 +87,30 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.CatalogConnection{})
 			},
 		},
+		Migration{
+			Version: 6,
+			Name:    "expand connection type check",
+			Up: func(db *gorm.DB) error {
+				// GORM owns the constraint: drop and recreate it from the
+				// portable model tag. The MySQL driver maps it to DROP CHECK.
+				// A transaction keeps the drop and create together where the
+				// backend has transactional DDL (PostgreSQL); MySQL/MariaDB
+				// commit DDL per statement, so a failed create leaves the ledger
+				// dirty and an operator reconciles it.
+				const name = "catalog_connections_type_check"
+				return db.Transaction(func(tx *gorm.DB) error {
+					if tx.Migrator().HasConstraint(&model.CatalogConnection{}, name) {
+						if err := tx.Migrator().DropConstraint(&model.CatalogConnection{}, name); err != nil {
+							return fmt.Errorf("drop connection type check: %w", err)
+						}
+					}
+					if err := tx.Migrator().CreateConstraint(&model.CatalogConnection{}, name); err != nil {
+						return fmt.Errorf("create connection type check: %w", err)
+					}
+					return nil
+				})
+			},
+		},
 	)
 }
 

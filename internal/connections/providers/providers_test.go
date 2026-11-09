@@ -34,6 +34,12 @@ var storedKinds = []connections.Kind{
 	"polaris", "nessie", "iceberg", "lakekeeper", "unity", "hive", "glue",
 	"postgresql", "mysql", "mariadb", "sqlserver", "oracle", "sqlite", "clickhouse",
 	"flightsql", "trino", "doris", "starrocks",
+	// Planned Trino catalog types (ADR 0021 D.9).
+	"bigquery", "snowflake", "redshift", "singlestore", "exasol",
+	"cassandra", "mongodb", "redis", "elasticsearch", "opensearch", "druid",
+	"pinot", "duckdb", "ignite", "kafka", "loki", "prometheus", "gsheets",
+	"faker", "memory", "blackhole", "jmx", "tpch", "tpcds", "delta", "hudi",
+	"system",
 }
 
 func TestEveryProviderIsComplete(t *testing.T) {
@@ -45,8 +51,13 @@ func TestEveryProviderIsComplete(t *testing.T) {
 			if !slices.Contains(storedKinds, p.Kind()) {
 				t.Errorf("kind %q is not allowed by catalog_connections.type", p.Kind())
 			}
-			if p.Label() == "" || p.Family() == "" || len(p.ConfigSchema()) == 0 {
-				t.Fatal("label, family and schema are required")
+			if p.Label() == "" || p.Family() == "" {
+				t.Fatal("label and family are required")
+			}
+			// Planned and not-applicable types may have an empty schema (ADR
+			// 0021 D.9); a creatable type must declare its config fields.
+			if len(p.ConfigSchema()) == 0 && (p.Status().State == connections.StateSupported || p.Status().State == connections.StateExperimental) {
+				t.Fatal("a creatable type needs a config schema")
 			}
 			meta := p.Meta()
 			if meta.Description == "" || meta.Category == "" {
@@ -327,14 +338,18 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 		connections.KindTrino:         {Values: map[string]string{"url": "http://localhost:8080"}},
 	}
 	// SQLite opens no network connection (TestSQLiteRootConfinement guards
-	// it); planned kinds never connect.
+	// it); planned, unsupported and not-applicable kinds never connect.
 	noNetwork := map[connections.Kind]bool{connections.KindSQLite: true}
 	for _, p := range reg.All() {
-		if p.Status().State == connections.StateUnsupported && p.Kind() != connections.KindSQLite {
-			noNetwork[p.Kind()] = true
-			if err := p.Ping(context.Background(), connections.Config{}); !errors.Is(err, connections.ErrUnsupported) {
-				t.Errorf("%s: planned kind pinged: %v", p.Kind(), err)
-			}
+		if p.Kind() == connections.KindSQLite {
+			continue
+		}
+		if p.Status().State == connections.StateSupported || p.Status().State == connections.StateExperimental {
+			continue
+		}
+		noNetwork[p.Kind()] = true
+		if err := p.Ping(context.Background(), connections.Config{}); !errors.Is(err, connections.ErrUnsupported) {
+			t.Errorf("%s: non-creatable kind pinged: %v", p.Kind(), err)
 		}
 	}
 	for _, p := range reg.All() {
@@ -379,8 +394,8 @@ func TestFromStored(t *testing.T) {
 		t.Errorf("postgresql = %+v", cfg)
 	}
 
-	if _, err := FromStored(reg, connections.Kind("duckdb"), pgtype.UUID{}, "", nil, nil); !errors.Is(err, connections.ErrUnknownKind) {
-		t.Errorf("duckdb: want ErrUnknownKind, got %v", err)
+	if _, err := FromStored(reg, connections.Kind("does-not-exist"), pgtype.UUID{}, "", nil, nil); !errors.Is(err, connections.ErrUnknownKind) {
+		t.Errorf("unknown kind: want ErrUnknownKind, got %v", err)
 	}
 }
 
