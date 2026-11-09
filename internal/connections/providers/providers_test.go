@@ -502,7 +502,12 @@ func TestLegacyURL(t *testing.T) {
 		{connections.Config{Kind: connections.KindPolaris, Values: map[string]string{"url": "http://p"}}, "http://p"},
 		{connections.Config{Kind: connections.KindPostgreSQL, Values: map[string]string{"host": "db", "port": "5432", "database": "s"}}, "jdbc:postgresql://db:5432/s"},
 		{connections.Config{Kind: connections.KindMySQL, Values: map[string]string{"host": "::1", "port": "3306"}}, "jdbc:mysql://[::1]:3306"},
+		{connections.Config{Kind: connections.KindFaker, Values: map[string]string{}}, ""},
 		{connections.Config{Kind: connections.KindMemory, Values: map[string]string{}}, ""},
+		{connections.Config{Kind: connections.KindBlackhole, Values: map[string]string{}}, ""},
+		{connections.Config{Kind: connections.KindJMX, Values: map[string]string{}}, ""},
+		{connections.Config{Kind: connections.KindTPCH, Values: map[string]string{}}, ""},
+		{connections.Config{Kind: connections.KindTPCDS, Values: map[string]string{}}, ""},
 	} {
 		if got := LegacyURL(c.cfg); got != c.want {
 			t.Errorf("%s: %q, want %q", c.cfg.Kind, got, c.want)
