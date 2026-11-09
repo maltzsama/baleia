@@ -206,16 +206,30 @@ func AllMigrations() (*Registry, error) {
 			Version: 6,
 			Name:    "expand connection type check",
 			Up: func(db *gorm.DB) error {
-				// Reconcile the column first (on MySQL this also translates the
-				// check), then replace the old constraint with the expanded list.
+				// Reconcile the column and, on MySQL/MariaDB, translate the
+				// check expression into that dialect's form.
 				if err := AutoMigrate(db, &model.CatalogConnection{}); err != nil {
 					return err
 				}
-				if err := db.Migrator().DropConstraint(&model.CatalogConnection{}, "catalog_connections_type_check"); err != nil {
-					return fmt.Errorf("drop connection type check: %w", err)
+				stmt := &gorm.Statement{DB: db}
+				if err := stmt.Parse(&model.CatalogConnection{}); err != nil {
+					return err
 				}
-				if err := db.Migrator().CreateConstraint(&model.CatalogConnection{}, "catalog_connections_type_check"); err != nil {
-					return fmt.Errorf("recreate connection type check: %w", err)
+				chk, ok := stmt.Schema.ParseCheckConstraints()["catalog_connections_type_check"]
+				if !ok {
+					return fmt.Errorf("connection type check is not declared")
+				}
+				add, values := chk.Build()
+				if !db.Migrator().HasConstraint(&model.CatalogConnection{}, chk.Name) {
+					args := append([]any{clause.Table{Name: stmt.Table}}, values...)
+					return db.Exec("ALTER TABLE ? ADD "+add, args...).Error
+				}
+				// Drop and add in one statement: the two actions commit together,
+				// so an interruption cannot leave the table without the check
+				// (ADR 0021 CR-11).
+				args := append([]any{clause.Table{Name: stmt.Table}, clause.Column{Name: chk.Name}}, values...)
+				if err := db.Exec("ALTER TABLE ? DROP CONSTRAINT ?, ADD "+add, args...).Error; err != nil {
+					return fmt.Errorf("replace connection type check: %w", err)
 				}
 				return nil
 			},
