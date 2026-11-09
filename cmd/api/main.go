@@ -7,15 +7,10 @@ import (
 
 	"github.com/galileostudio/baleia/internal/app"
 	"github.com/galileostudio/baleia/internal/bootstrap"
-	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/command"
 	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/server"
 	"github.com/galileostudio/baleia/internal/store"
-	"github.com/galileostudio/baleia/internal/store/repo"
-	"gorm.io/gorm"
 )
 
 func main() {
@@ -35,24 +30,10 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	}
 	defer core.Close()
 
-	// Set the baleia_trino password from BALEIA_TRINO_DB_PASSWORD so the role and
-	// the Trino plugin's connection stay in sync (no secret in a migration).
-	if err := bootstrap.EnsureTrinoRole(ctx, core.Store); err != nil {
-		return fmt.Errorf("baleia_trino role: %w", err)
-	}
-	if err := bootstrap.SetTrinoRolePassword(ctx, core.Store, cfg.TrinoDBPassword); err != nil {
-		return fmt.Errorf("baleia_trino password: %w", err)
-	}
-
-	// Engine endpoints live in the database; TRINO_URL only seeds and updates
-	// the default Trino engine Baleia created itself.
-	if err := core.Store.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return bootstrap.EnsureDefaultTrinoEngine(ctx, logger, repo.New(tx), bootstrap.DefaultTrinoEngine{
-			URL: cfg.TrinoURL, ServiceUser: cfg.TrinoServiceUser, AdminUser: cfg.TrinoAdminUser,
-			Password: cfg.TrinoPassword != "", CA: core.TrinoCA, Seal: sealCredentials(core.Keyring),
-		})
+	if err := bootstrap.PrepareAPI(ctx, logger, cfg, bootstrap.APIState{
+		Store: core.Store, Keyring: core.Keyring, TrinoCA: core.TrinoCA,
 	}); err != nil {
-		return fmt.Errorf("default trino engine: %w", err)
+		return err
 	}
 
 	srv, err := server.New(ctx, core)
@@ -60,15 +41,4 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("server setup: %w", err)
 	}
 	return srv.Run(ctx)
-}
-
-// sealCredentials seals a connection's credentials with the keyring; nil when
-// no keyring is configured (config.Validate refuses a Trino password then).
-func sealCredentials(kr *crypto.Keyring) func([]byte, db.UUID) (string, error) {
-	if kr == nil {
-		return nil
-	}
-	return func(plain []byte, id db.UUID) (string, error) {
-		return kr.Seal(plain, catalogs.CredentialsAAD(id))
-	}
 }
