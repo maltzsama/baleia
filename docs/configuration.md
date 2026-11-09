@@ -5,8 +5,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `8080` | HTTP listen port |
-| `DATABASE_URL` | `postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable` | Connection string of Baleia's own store (PostgreSQL, or the MySQL/MariaDB DSN with `BALEIA_STORE_BACKEND=mysql`) |
-| `BALEIA_STORE_BACKEND` | inferred from `DATABASE_URL` | Store backend: `postgres` (default) or `mysql` (MySQL 8 / MariaDB). Set it explicitly; the DSN alone is only a fallback |
+| `DATABASE_URL` | `postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable` | Connection string of Baleia's own store. The DSN selects the GORM dialector: a `postgres://` URL for PostgreSQL, or the MySQL go-sql-driver DSN (`user:pass@tcp(host:port)/db`) for MySQL/MariaDB |
 | `JWT_SECRET` | `change-me-in-production` | Key for signing JWTs |
 | `BALEIA_ENCRYPTION_KEY` | _(unset)_ | Key that encrypts stored connection credentials (≥ 32 characters, must differ from `JWT_SECRET`). Required once any credential is stored; the API refuses to start without it. Derived with HKDF-SHA256; each value is bound to its connection row |
 | `BALEIA_ENCRYPTION_KEY_PREVIOUS` | _(unset)_ | Previous encryption key, set only during rotation: values are read with the current or previous key and always written with the current one |
@@ -93,14 +92,14 @@ Baleia (the API and the worker) is configured with environment variables. The de
 
 ## Store backend
 
-Baleia's own metadata (users, workspaces, content, models, connections, catalogs, audit, snapshots) lives in PostgreSQL by default. MySQL 8 and MariaDB are supported through GORM's MySQL dialector: set `BALEIA_STORE_BACKEND=mysql` and point `DATABASE_URL` at the MySQL DSN.
+Baleia's own metadata (users, workspaces, content, models, connections, catalogs, audit, snapshots) lives in PostgreSQL by default. MySQL 8 and MariaDB are supported through GORM's MySQL dialector. The `DATABASE_URL` DSN alone selects the dialector; there is no separate backend setting.
 
-| Backend | `BALEIA_STORE_BACKEND` | `DATABASE_URL` example |
-|---|---|---|
-| PostgreSQL | `postgres` (default) | `postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable` |
-| MySQL 8 / MariaDB | `mysql` | `baleia:baleia@tcp(localhost:3306)/baleia?parseTime=true` |
+| Backend | `DATABASE_URL` example |
+|---|---|
+| PostgreSQL | `postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable` |
+| MySQL 8 / MariaDB | `baleia:baleia@tcp(localhost:3306)/baleia?parseTime=true` |
 
-The backend is chosen explicitly so a connection string never picks a dialector by accident. When unset, Baleia infers it (`postgres://`/`postgresql://` → PostgreSQL, `@tcp(`/`@unix(` → MySQL), but the explicit value is recommended.
+Baleia infers the backend from the DSN: `postgres://`/`postgresql://` → PostgreSQL, `@tcp(`/`@unix(` → MySQL. A MySQL/MariaDB DSN must use the go-sql-driver form, not a URL.
 
 The schema is created and evolved by the versioned Go migrations in `internal/store` (`store-up`, also applied at API start). Both backends are exercised by the test suite.
 
