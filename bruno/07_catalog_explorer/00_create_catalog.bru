@@ -16,8 +16,12 @@ auth:bearer {
 
 body:json {
   {
-    "name": "Bruno Explorer",
-    "trino_catalog_name": "bruno_explorer",
+    "catalogs": [
+      {
+        "name": "Bruno Explorer",
+        "trino_catalog_name": "bruno_explorer"
+      }
+    ],
     "warehouse": "baleia_polaris"
   }
 }
@@ -27,7 +31,7 @@ assert {
 }
 
 vars:post-response {
-  explorer_catalog_id: res.body.id
+  explorer_catalog_id: res.body[0].id
 }
 
 docs {
