@@ -1,4 +1,4 @@
-package main
+package workerapp
 
 import (
 	"io"
@@ -15,7 +15,7 @@ func TestMetricsListener(t *testing.T) {
 	handler, flush := reg.TemporalHandler()
 	handler.Counter("temporal_activity_execution_failed").Inc(1) // the SDK's own name
 	_ = flush()
-	srv := httptest.NewServer(metricsMux(reg, ""))
+	srv := httptest.NewServer(MetricsMux(reg, ""))
 	defer srv.Close()
 	for path, want := range map[string]string{"/metrics": "temporal_activity_execution_failed_total 1", "/healthz": `"ok"`} {
 		resp, err := srv.Client().Get(srv.URL + path)
