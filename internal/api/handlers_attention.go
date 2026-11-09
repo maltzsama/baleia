@@ -12,8 +12,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )
@@ -488,7 +486,7 @@ func brokenModelReference(ctx context.Context, q lineageReads, m db.ListLineageB
 	table, err := q.GetMetadataTableByRef(ctx, db.GetMetadataTableByRefParams{
 		CatalogID: m.CatalogID, Namespace: def.Source.Namespace, Name: def.Source.Table,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return def.Source.Table, true
 	}
 	if err != nil {
@@ -511,7 +509,7 @@ func brokenModelReference(ctx context.Context, q lineageReads, m db.ListLineageB
 }
 
 // tableExists reports whether a live table row matches the natural key.
-func tableExists(ctx context.Context, q lineageReads, catalogID pgtype.UUID, namespace []string, name string) bool {
+func tableExists(ctx context.Context, q lineageReads, catalogID db.UUID, namespace []string, name string) bool {
 	_, err := q.GetMetadataTableByName(ctx, db.GetMetadataTableByNameParams{
 		CatalogID: catalogID, Namespace: namespace, Name: name,
 	})

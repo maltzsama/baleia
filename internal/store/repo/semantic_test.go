@@ -9,7 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/semantic/docs"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // semanticFixture is the workbench fixture with its granted catalog, binding
@@ -29,15 +28,15 @@ func semanticFixture(t *testing.T) *workbenchFixture {
 	return f
 }
 
-func (f *workbenchFixture) ownerPG() pgtype.UUID { return PGUUID(string(f.owner)) }
-func (f *workbenchFixture) memberPG() pgtype.UUID {
+func (f *workbenchFixture) ownerPG() db.UUID { return PGUUID(string(f.owner)) }
+func (f *workbenchFixture) memberPG() db.UUID {
 	return PGUUID(string(f.member))
 }
-func (f *workbenchFixture) wsPG() pgtype.UUID      { return PGUUID(string(f.ws)) }
-func (f *workbenchFixture) spacePG() pgtype.UUID   { return PGUUID(string(f.space)) }
-func (f *workbenchFixture) privatePG() pgtype.UUID { return PGUUID(string(f.private)) }
-func (f *workbenchFixture) catalogPG() pgtype.UUID { return PGUUID(string(f.catalog)) }
-func (f *workbenchFixture) bindingPG() pgtype.UUID { return PGUUID(string(f.binding)) }
+func (f *workbenchFixture) wsPG() db.UUID      { return PGUUID(string(f.ws)) }
+func (f *workbenchFixture) spacePG() db.UUID   { return PGUUID(string(f.space)) }
+func (f *workbenchFixture) privatePG() db.UUID { return PGUUID(string(f.private)) }
+func (f *workbenchFixture) catalogPG() db.UUID { return PGUUID(string(f.catalog)) }
+func (f *workbenchFixture) bindingPG() db.UUID { return PGUUID(string(f.binding)) }
 
 // TestSemanticDocsRoundTrip covers the doc reads, writes, search and tags over
 // the GORM store (#116, #772).
@@ -133,7 +132,7 @@ func TestVisibleSemanticMetricsAndModels(t *testing.T) {
 	f := semanticFixture(t)
 	ctx := context.Background()
 
-	metric := func(space pgtype.UUID, slug, label string) db.SemanticMetric {
+	metric := func(space db.UUID, slug, label string) db.SemanticMetric {
 		t.Helper()
 		m, err := f.r.CreateSemanticMetric(ctx, db.CreateSemanticMetricParams{
 			WorkspaceID: f.wsPG(), SpaceID: space, Slug: slug, Label: label,
@@ -148,7 +147,7 @@ func TestVisibleSemanticMetricsAndModels(t *testing.T) {
 	mDefault := metric(f.spacePG(), "orders_count", "Orders")
 	mPrivate := metric(f.privatePG(), "secret_count", "Secret")
 
-	model := func(space pgtype.UUID, slug, label string) db.SemanticModel {
+	model := func(space db.UUID, slug, label string) db.SemanticModel {
 		t.Helper()
 		m, err := f.r.CreateSemanticModel(ctx, db.CreateSemanticModelParams{
 			WorkspaceID: f.wsPG(), SpaceID: space, Slug: slug, Label: label,
@@ -164,7 +163,7 @@ func TestVisibleSemanticMetricsAndModels(t *testing.T) {
 
 	for i, entity := range []struct {
 		kind string
-		id   pgtype.UUID
+		id   db.UUID
 	}{
 		{"semantic_metric", mDefault.ID},
 		{"semantic_metric", mPrivate.ID},
@@ -460,7 +459,7 @@ func TestMetadataBrowse(t *testing.T) {
 	}
 
 	// Tombstoning removes the tables from the page and the search.
-	passStart := pgtype.Timestamptz{Time: time.Now().UTC().Add(time.Hour), Valid: true}
+	passStart := db.Timestamptz{Time: time.Now().UTC().Add(time.Hour), Valid: true}
 	if n, err := f.r.TombstoneMissingTables(ctx, db.TombstoneMissingTablesParams{CatalogID: f.catalogPG(), PassStartedAt: passStart}); err != nil || n != 3 {
 		t.Fatalf("TombstoneMissingTables = %d, %v", n, err)
 	}
@@ -558,7 +557,7 @@ func TestLineage(t *testing.T) {
 		t.Fatalf("UpsertMetadataTable: %v", err)
 	}
 
-	metric := func(space pgtype.UUID, slug string) db.SemanticMetric {
+	metric := func(space db.UUID, slug string) db.SemanticMetric {
 		t.Helper()
 		m, err := f.r.CreateSemanticMetric(ctx, db.CreateSemanticMetricParams{
 			WorkspaceID: f.wsPG(), SpaceID: space, Slug: slug, Label: slug,
@@ -570,7 +569,7 @@ func TestLineage(t *testing.T) {
 		}
 		return m
 	}
-	model := func(space pgtype.UUID, slug string) db.SemanticModel {
+	model := func(space db.UUID, slug string) db.SemanticModel {
 		t.Helper()
 		m, err := f.r.CreateSemanticModel(ctx, db.CreateSemanticModelParams{
 			WorkspaceID: f.wsPG(), SpaceID: space, Slug: slug, Label: slug,
@@ -586,7 +585,7 @@ func TestLineage(t *testing.T) {
 	publicModel := model(f.spacePG(), "public_model")
 	privateModel := model(f.privatePG(), "private_model")
 
-	query := func(space pgtype.UUID, slug string) db.SavedQuery {
+	query := func(space db.UUID, slug string) db.SavedQuery {
 		t.Helper()
 		q, err := f.r.CreateSavedQuery(ctx, db.CreateSavedQueryParams{
 			WorkspaceID: f.wsPG(), SpaceID: space, CreatedBy: f.ownerPG(), UpdatedBy: f.ownerPG(),

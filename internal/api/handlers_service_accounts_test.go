@@ -9,7 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -31,13 +30,13 @@ func TestServiceAccounts(t *testing.T) {
 func runServiceAccounts(t *testing.T, withStore bool) {
 	t.Helper()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	ctx := context.Background()
-	fields := handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool},
+	fields := handlerFields{queries: q, tx: storeTx{db: pool},
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
 		settings:     SettingsFromConfig(&config.Config{AgentsEnabled: true})}
 	if withStore {
-		fields.store = openTestStore(t, pool)
+		fields.store = pool
 	}
 	h := testAPI(fields)
 
@@ -54,7 +53,7 @@ func runServiceAccounts(t *testing.T, withStore bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for u, r := range map[pgtype.UUID]string{wsAdmin.ID: "owner", editor.ID: "member"} {
+	for u, r := range map[db.UUID]string{wsAdmin.ID: "owner", editor.ID: "member"} {
 		if _, err := q.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: u, Role: r}); err != nil {
 			t.Fatal(err)
 		}
@@ -86,7 +85,7 @@ func runServiceAccounts(t *testing.T, withStore bool) {
 	if !ok {
 		t.Fatalf("create = %T %+v", created, created)
 	}
-	saID := pgtype.UUID{Bytes: sa.Id, Valid: true}
+	saID := db.UUID{Bytes: sa.Id, Valid: true}
 
 	// It is an editor of the shared workspace without being in its team.
 	if role, err := q.GetWorkspaceMemberRole(ctx, db.GetWorkspaceMemberRoleParams{ID: ws.ID, UserID: saID}); err != nil || role != "editor" {
@@ -165,7 +164,7 @@ func runServiceAccounts(t *testing.T, withStore bool) {
 	if !ok {
 		t.Fatalf("agent = %T %+v", agent, agent)
 	}
-	row, err := q.GetAgentByID(ctx, pgtype.UUID{Bytes: a.Id, Valid: true})
+	row, err := q.GetAgentByID(ctx, db.UUID{Bytes: a.Id, Valid: true})
 	if err != nil || row.OwnerID != saID {
 		t.Errorf("agent owner = %v, %v", row.OwnerID, err)
 	}

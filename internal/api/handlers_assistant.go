@@ -15,9 +15,9 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/db"
 	adb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/obs"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -154,7 +154,7 @@ func (h *AgentHandlers) PutAssistantSettings(ctx context.Context, request PutAss
 		MaxToolCallsPerTurn:     current.MaxToolCallsPerTurn,
 		MaxOutputTokensPerTurn:  current.MaxOutputTokensPerTurn,
 		DailyTokenBudgetPerUser: current.DailyTokenBudgetPerUser,
-		UpdatedBy:               pgtype.UUID{Bytes: [16]byte{}, Valid: false},
+		UpdatedBy:               db.UUID{Bytes: [16]byte{}, Valid: false},
 	}
 	if request.Body.Enabled != nil {
 		in.Enabled = *request.Body.Enabled
@@ -274,7 +274,7 @@ func (h *AgentHandlers) ListAssistantConversations(ctx context.Context, request 
 	if err != nil {
 		return ListAssistantConversations401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	wsID := pgtype.UUID{Bytes: [16]byte(request.Params.WorkspaceId), Valid: true}
+	wsID := db.UUID{Bytes: [16]byte(request.Params.WorkspaceId), Valid: true}
 	if err := requireWorkspaceAccess(ctx, h.access, request.Params.WorkspaceId); err != nil {
 		return ListAssistantConversations404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	}
@@ -302,7 +302,7 @@ func (h *AgentHandlers) CreateAssistantConversation(ctx context.Context, request
 	if request.Body == nil {
 		return CreateAssistantConversation422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
-	wsID := pgtype.UUID{Bytes: [16]byte(request.Body.WorkspaceId), Valid: true}
+	wsID := db.UUID{Bytes: [16]byte(request.Body.WorkspaceId), Valid: true}
 	if err := requireWorkspaceAccess(ctx, h.access, request.Body.WorkspaceId); err != nil {
 		return CreateAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	}
@@ -328,7 +328,7 @@ func (h *AgentHandlers) GetAssistantConversation(ctx context.Context, request Ge
 	if err != nil {
 		return nil, err
 	}
-	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
 	conv, err := svc.GetConversation(ctx, p.UserID, id)
 	if err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
@@ -377,7 +377,7 @@ func (h *AgentHandlers) SendAssistantMessage(ctx context.Context, request SendAs
 	if runner == nil {
 		return nil, assistant.ErrRunnerUnavailable
 	}
-	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
 	seq, err := runner.Start(ctx, p.UserID, id, text)
 	switch {
 	case errors.Is(err, assistant.ErrNotFound):
@@ -402,7 +402,7 @@ func (h *AgentHandlers) CancelAssistantTurn(ctx context.Context, request CancelA
 	if err != nil {
 		return nil, err
 	}
-	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
 	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
 			return CancelAssistantTurn404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
@@ -428,7 +428,7 @@ func (h *AgentHandlers) StreamAssistantConversation(ctx context.Context, request
 	if err != nil {
 		return nil, err
 	}
-	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
 	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
 			return StreamAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
@@ -551,7 +551,7 @@ func (h *AgentHandlers) DeleteAssistantConversation(ctx context.Context, request
 	if err != nil {
 		return nil, err
 	}
-	id := pgtype.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
 	if err := svc.DeleteConversation(ctx, p.UserID, id); err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
 			return DeleteAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil

@@ -9,11 +9,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 type fakeStore struct {
 	// Policies is not used by these tests (see policies_test.go).
@@ -22,13 +20,13 @@ type fakeStore struct {
 	queries   db.ListTrinoQuerySnapshotsByEngineParams
 	snapshot  error
 	failed    []db.UpdateMaintenanceRunParams
-	clusterTo pgtype.Timestamptz
+	clusterTo db.Timestamptz
 }
 
 func (f *fakeStore) ListEngines(context.Context) ([]db.Engine, error) { return nil, nil }
 
-func (f *fakeStore) GetLatestClusterSnapshotByEngine(context.Context, pgtype.UUID) (db.ClusterSnapshot, error) {
-	return db.ClusterSnapshot{}, pgx.ErrNoRows
+func (f *fakeStore) GetLatestClusterSnapshotByEngine(context.Context, db.UUID) (db.ClusterSnapshot, error) {
+	return db.ClusterSnapshot{}, db.ErrNoRows
 }
 
 func (f *fakeStore) ListClusterSnapshotsByEngine(_ context.Context, arg db.ListClusterSnapshotsByEngineParams) ([]db.ClusterSnapshot, error) {
@@ -45,15 +43,15 @@ func (f *fakeStore) GetTrinoQuerySnapshotByEngine(context.Context, db.GetTrinoQu
 	return db.TrinoQuerySnapshot{}, f.snapshot
 }
 
-func (f *fakeStore) GetCatalogByID(context.Context, pgtype.UUID) (db.Catalog, error) {
-	return db.Catalog{}, pgx.ErrNoRows
+func (f *fakeStore) GetCatalogByID(context.Context, db.UUID) (db.Catalog, error) {
+	return db.Catalog{}, db.ErrNoRows
 }
 
 func (f *fakeStore) ListTableHealthByCatalog(context.Context, db.ListTableHealthByCatalogParams) ([]db.TableHealthSnapshot, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) ListBindingsByCatalog(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+func (f *fakeStore) ListBindingsByCatalog(context.Context, db.UUID) ([]db.CatalogBinding, error) {
 	return f.bindings, nil
 }
 
@@ -112,7 +110,7 @@ func TestQueries(t *testing.T) {
 		t.Errorf("offset = %d; an out-of-range offset saturates instead of wrapping", st.queries.Off)
 	}
 
-	st.snapshot = pgx.ErrNoRows
+	st.snapshot = db.ErrNoRows
 	if _, err := s.Query(ctx, newID(), "q"); !errors.Is(err, ErrQueryNotFound) {
 		t.Errorf("unknown query = %v", err)
 	}
@@ -135,7 +133,7 @@ func TestPrepare(t *testing.T) {
 		{ID: newID(), EngineID: capableEngine},
 	}}
 	s := New(st)
-	capable := func(_ context.Context, id pgtype.UUID) bool { return id == capableEngine }
+	capable := func(_ context.Context, id db.UUID) bool { return id == capableEngine }
 	week := " 7d "
 
 	var inv *InvalidError
@@ -152,7 +150,7 @@ func TestPrepare(t *testing.T) {
 	if err != nil || plan.Binding.ID != st.bindings[1].ID || plan.Retention != "7d" {
 		t.Fatalf("Prepare = %+v, %v; want the capable binding and a trimmed retention", plan, err)
 	}
-	if _, err := s.Prepare(ctx, Maintenance{Operations: []string{"optimize"}}, func(context.Context, pgtype.UUID) bool { return false }); !errors.Is(err, ErrNoCapableBinding) {
+	if _, err := s.Prepare(ctx, Maintenance{Operations: []string{"optimize"}}, func(context.Context, db.UUID) bool { return false }); !errors.Is(err, ErrNoCapableBinding) {
 		t.Errorf("no capable binding = %v", err)
 	}
 
@@ -160,7 +158,7 @@ func TestPrepare(t *testing.T) {
 	if plan, err := s.Prepare(ctx, Maintenance{Operations: []string{"optimize"}, Binding: &explicit}, capable); err != nil || plan.Binding.EngineID != capableEngine {
 		t.Errorf("explicit capable binding = %+v, %v", plan.Binding, err)
 	}
-	for name, id := range map[string]pgtype.UUID{
+	for name, id := range map[string]db.UUID{
 		"binding of another catalog": newID(),
 		"disabled binding":           st.bindings[2].ID,
 	} {

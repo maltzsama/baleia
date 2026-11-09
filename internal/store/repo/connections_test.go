@@ -10,20 +10,13 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 func strPtr(s string) *string { return &s }
 
 func int64Ptr(v int64) *int64 { return &v }
 
-func containsConnection(rows []db.CatalogConnection, id pgtype.UUID) bool {
+func containsConnection(rows []db.CatalogConnection, id db.UUID) bool {
 	for _, row := range rows {
 		if row.ID == id {
 			return true
@@ -32,7 +25,7 @@ func containsConnection(rows []db.CatalogConnection, id pgtype.UUID) bool {
 	return false
 }
 
-func containsEngine(rows []db.Engine, id pgtype.UUID) bool {
+func containsEngine(rows []db.Engine, id db.UUID) bool {
 	for _, row := range rows {
 		if row.ID == id {
 			return true
@@ -46,16 +39,7 @@ func containsEngine(rows []db.Engine, id pgtype.UUID) bool {
 // registry, which the topology service and the catalog handlers run on.
 func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 	t.Parallel()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 
 	ctx := context.Background()
 	r := New(gdb)
@@ -78,7 +62,7 @@ func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 	}
 
 	// ── connections ────────────────────────────────────────────────────────
-	connID := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	connID := db.UUID{Bytes: uuid.New(), Valid: true}
 	trino := "trino"
 	conn, err := r.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
 		ID: connID, Name: "polaris-prod", Type: "polaris", AccessMode: &trino, Url: "http://polaris.test",
@@ -342,8 +326,8 @@ func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 	if _, err := r.UpdateBinding(ctx, db.UpdateBindingParams{
 		ID: binding.ID, EngineCatalogName: "lake_main", Enabled: true,
 		LifecycleState: "updating", FromStates: []string{"error"},
-	}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Errorf("update from the wrong state = %v, want pgx.ErrNoRows", err)
+	}); !errors.Is(err, db.ErrNoRows) {
+		t.Errorf("update from the wrong state = %v, want db.ErrNoRows", err)
 	}
 	updatedBinding, err := r.UpdateBinding(ctx, db.UpdateBindingParams{
 		ID: binding.ID, EngineCatalogName: "lake_main", Connector: strPtr("iceberg"),
@@ -388,7 +372,7 @@ func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 	if err := r.InsertEphemeralRegistryRow(ctx, db.InsertEphemeralRegistryRowParams{
 		ClusterID: PGUUID(string(cluster.ID)), CatalogName: "baleia_test_1", ConnectorName: "iceberg",
 		Column4: []byte(`{}`), CatalogVersion: strPtr("v1"),
-		Ttl: pgtype.Interval{Microseconds: -1, Valid: true},
+		Ttl: db.Interval{Microseconds: -1, Valid: true},
 	}); err != nil {
 		t.Fatalf("InsertEphemeralRegistryRow: %v", err)
 	}
@@ -509,20 +493,20 @@ func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 	if err := r.DeleteBinding(ctx, binding.ID); err != nil {
 		t.Fatalf("DeleteBinding: %v", err)
 	}
-	if _, err := r.GetBinding(ctx, binding.ID); !errors.Is(err, pgx.ErrNoRows) {
-		t.Errorf("deleted binding = %v, want pgx.ErrNoRows", err)
+	if _, err := r.GetBinding(ctx, binding.ID); !errors.Is(err, db.ErrNoRows) {
+		t.Errorf("deleted binding = %v, want db.ErrNoRows", err)
 	}
 	if err := r.DeleteCatalog(ctx, catalog.ID); err != nil {
 		t.Fatalf("DeleteCatalog: %v", err)
 	}
-	if _, err := r.GetCatalogByID(ctx, catalog.ID); !errors.Is(err, pgx.ErrNoRows) {
-		t.Errorf("deleted catalog = %v, want pgx.ErrNoRows", err)
+	if _, err := r.GetCatalogByID(ctx, catalog.ID); !errors.Is(err, db.ErrNoRows) {
+		t.Errorf("deleted catalog = %v, want db.ErrNoRows", err)
 	}
 	if err := r.DeleteNativeCatalogsOfEngine(ctx, engine.ID); err != nil {
 		t.Fatalf("DeleteNativeCatalogsOfEngine: %v", err)
 	}
-	if _, err := r.GetCatalogByID(ctx, native.ID); !errors.Is(err, pgx.ErrNoRows) {
-		t.Errorf("native catalog after delete = %v, want pgx.ErrNoRows", err)
+	if _, err := r.GetCatalogByID(ctx, native.ID); !errors.Is(err, db.ErrNoRows) {
+		t.Errorf("native catalog after delete = %v, want db.ErrNoRows", err)
 	}
 	if err := gdb.Model(&model.TrinoCluster{}).Where("engine_id = ?", UUIDString(engine.ID)).Update("engine_id", nil).Error; err != nil {
 		t.Fatalf("unlink cluster: %v", err)
@@ -530,14 +514,14 @@ func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 	if err := r.DeleteEngine(ctx, engine.ID); err != nil {
 		t.Fatalf("DeleteEngine: %v", err)
 	}
-	if _, err := r.GetEngineByID(ctx, engine.ID); !errors.Is(err, pgx.ErrNoRows) {
-		t.Errorf("deleted engine = %v, want pgx.ErrNoRows", err)
+	if _, err := r.GetEngineByID(ctx, engine.ID); !errors.Is(err, db.ErrNoRows) {
+		t.Errorf("deleted engine = %v, want db.ErrNoRows", err)
 	}
 	if err := r.DeleteCatalogConnection(ctx, connID); err != nil {
 		t.Fatalf("DeleteCatalogConnection: %v", err)
 	}
-	if _, err := r.GetCatalogConnectionByID(ctx, connID); !errors.Is(err, pgx.ErrNoRows) {
-		t.Errorf("deleted connection = %v, want pgx.ErrNoRows", err)
+	if _, err := r.GetCatalogConnectionByID(ctx, connID); !errors.Is(err, db.ErrNoRows) {
+		t.Errorf("deleted connection = %v, want db.ErrNoRows", err)
 	}
 }
 
@@ -545,16 +529,7 @@ func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 // the same PostgreSQL unique violation the service maps to ErrNameTaken.
 func TestCatalogConnectionUniqueName(t *testing.T) {
 	t.Parallel()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 
 	ctx := context.Background()
 	r := New(gdb)
@@ -562,7 +537,7 @@ func TestCatalogConnectionUniqueName(t *testing.T) {
 	ownerID := PGUUID(string(owner.ID))
 	create := func(name string) error {
 		_, err := r.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
-			ID:   pgtype.UUID{Bytes: uuid.New(), Valid: true},
+			ID:   db.UUID{Bytes: uuid.New(), Valid: true},
 			Name: name, Type: "polaris", Url: "http://polaris.test", CreatedBy: ownerID,
 		})
 		return err
@@ -570,9 +545,9 @@ func TestCatalogConnectionUniqueName(t *testing.T) {
 	if err := create("dup"); err != nil {
 		t.Fatalf("first create: %v", err)
 	}
-	err = create("dup")
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
+	err := create("dup")
+	pgErr, ok := db.AsPGError(err)
+	if !ok || pgErr.Code != "23505" {
 		t.Fatalf("duplicate create = %v, want a 23505 unique violation", err)
 	}
 }

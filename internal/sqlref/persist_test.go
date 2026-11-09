@@ -9,21 +9,20 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
 // seedStatement stores a finished execution with one statement through the
 // GORM store, as production does.
-func seedStatement(t *testing.T, statement string) (*repo.Repo, *gorm.DB, pgtype.UUID, pgtype.UUID) {
+func seedStatement(t *testing.T, statement string) (*repo.Repo, *gorm.DB, db.UUID, db.UUID) {
 	t.Helper()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	q := repo.New(gdb)
 
 	uid := uuid.New()
-	userID := pgtype.UUID{Bytes: uid, Valid: true}
+	userID := db.UUID{Bytes: uid, Valid: true}
 	password := "x"
 	if err := gdb.Create(&model.User{
 		ID: model.UUID(uid.String()), Name: "u", Email: "u@x", PasswordHash: &password,
@@ -60,7 +59,7 @@ func TestPersistIsIdempotent(t *testing.T) {
 	q, gdb, wsID, stmtID := seedStatement(t, statement)
 
 	for i := 0; i < 2; i++ {
-		if err := Persist(ctx, q, stmtID, wsID, pgtype.UUID{}, "sales", statement); err != nil {
+		if err := Persist(ctx, q, stmtID, wsID, db.UUID{}, "sales", statement); err != nil {
 			t.Fatalf("Persist %d: %v", i, err)
 		}
 	}
@@ -83,10 +82,10 @@ func TestPersistUnparsableWritesNothing(t *testing.T) {
 	ctx := context.Background()
 	q, gdb, wsID, stmtID := seedStatement(t, "SELECT 1")
 
-	if err := Persist(ctx, q, stmtID, wsID, pgtype.UUID{}, "sales", "SELECT * FROM orders"); err != nil {
+	if err := Persist(ctx, q, stmtID, wsID, db.UUID{}, "sales", "SELECT * FROM orders"); err != nil {
 		t.Fatal(err)
 	}
-	if err := Persist(ctx, q, stmtID, wsID, pgtype.UUID{}, "sales", "SELECT FROM ((("); err != nil {
+	if err := Persist(ctx, q, stmtID, wsID, db.UUID{}, "sales", "SELECT FROM ((("); err != nil {
 		t.Fatal(err)
 	}
 	var refs int64

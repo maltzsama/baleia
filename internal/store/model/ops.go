@@ -253,3 +253,14 @@ type CatalogReconcileRun struct {
 }
 
 func (CatalogReconcileRun) TableName() string { return "catalog_reconcile_runs" }
+
+// MonitoringEvent is the monitoring outbox: a writer inserts an event and every
+// API replica reads it and relays it to its SSE subscribers (#733).
+type MonitoringEvent struct {
+	ID        uint64    `gorm:"column:id;primaryKey;autoIncrement"`
+	Channel   Text      `gorm:"column:channel;not null;size:64;index:idx_monitoring_events_channel_id,priority:1"`
+	Payload   string    `gorm:"column:payload;not null"`
+	CreatedAt time.Time `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3);index:idx_monitoring_events_channel_id,priority:2"`
+}
+
+func (MonitoringEvent) TableName() string { return "monitoring_events" }

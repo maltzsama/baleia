@@ -7,8 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -44,7 +42,7 @@ func (r *Repo) CreateRetriever(ctx context.Context, arg db.CreateRetrieverParams
 	return toDBRetriever(row), nil
 }
 
-// GetRetrieverByID returns one retriever of the workspace or pgx.ErrNoRows.
+// GetRetrieverByID returns one retriever of the workspace or db.ErrNoRows.
 func (r *Repo) GetRetrieverByID(ctx context.Context, arg db.GetRetrieverByIDParams) (db.Retriever, error) {
 	row, err := r.retriever(ctx, arg.WorkspaceID, arg.ID)
 	if err != nil {
@@ -54,7 +52,7 @@ func (r *Repo) GetRetrieverByID(ctx context.Context, arg db.GetRetrieverByIDPara
 }
 
 // ListRetrieversByWorkspace lists a workspace's retrievers by name.
-func (r *Repo) ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]db.Retriever, error) {
+func (r *Repo) ListRetrieversByWorkspace(ctx context.Context, workspaceID db.UUID) ([]db.Retriever, error) {
 	if !workspaceID.Valid {
 		return nil, nil
 	}
@@ -83,7 +81,7 @@ func (r *Repo) UpdateRetriever(ctx context.Context, arg db.UpdateRetrieverParams
 			Where("id = ? AND workspace_id = ?", UUIDString(arg.ID), UUIDString(arg.WorkspaceID)).
 			First(&row).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if err != nil {
 			return err
@@ -129,7 +127,7 @@ func (r *Repo) DeleteRetriever(ctx context.Context, arg db.DeleteRetrieverParams
 // ListRetrieverDestinations lists the bindings a retriever of the workspace
 // may write to (#118): a granted catalog, an Iceberg connector, an active
 // binding on an enabled federated engine.
-func (r *Repo) ListRetrieverDestinations(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListRetrieverDestinationsRow, error) {
+func (r *Repo) ListRetrieverDestinations(ctx context.Context, workspaceID db.UUID) ([]db.ListRetrieverDestinationsRow, error) {
 	var out []db.ListRetrieverDestinationsRow
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		visible, err := grantedCatalogIDs(tx, workspaceID)
@@ -198,10 +196,10 @@ func (r *Repo) ListRetrieverRefreshHistory(ctx context.Context, arg db.ListRetri
 }
 
 // LatestRetrieverRefresh returns the latest refresh run's status or
-// pgx.ErrNoRows.
-func (r *Repo) LatestRetrieverRefresh(ctx context.Context, retrieverID pgtype.UUID) (db.LatestRetrieverRefreshRow, error) {
+// db.ErrNoRows.
+func (r *Repo) LatestRetrieverRefresh(ctx context.Context, retrieverID db.UUID) (db.LatestRetrieverRefreshRow, error) {
 	if !retrieverID.Valid {
-		return db.LatestRetrieverRefreshRow{}, pgx.ErrNoRows
+		return db.LatestRetrieverRefreshRow{}, db.ErrNoRows
 	}
 	var row model.RetrieverRefreshHistory
 	err := r.Users.db.WithContext(ctx).
@@ -210,7 +208,7 @@ func (r *Repo) LatestRetrieverRefresh(ctx context.Context, retrieverID pgtype.UU
 		Order("started_at DESC").
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.LatestRetrieverRefreshRow{}, pgx.ErrNoRows
+		return db.LatestRetrieverRefreshRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.LatestRetrieverRefreshRow{}, err
@@ -218,16 +216,16 @@ func (r *Repo) LatestRetrieverRefresh(ctx context.Context, retrieverID pgtype.UU
 	return db.LatestRetrieverRefreshRow{Status: string(row.Status), ErrorCode: row.ErrorCode}, nil
 }
 
-func (r *Repo) retriever(ctx context.Context, workspaceID, id pgtype.UUID) (model.Retriever, error) {
+func (r *Repo) retriever(ctx context.Context, workspaceID, id db.UUID) (model.Retriever, error) {
 	if !workspaceID.Valid || !id.Valid {
-		return model.Retriever{}, pgx.ErrNoRows
+		return model.Retriever{}, db.ErrNoRows
 	}
 	var row model.Retriever
 	err := r.Users.db.WithContext(ctx).
 		Where("id = ? AND workspace_id = ?", UUIDString(id), UUIDString(workspaceID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return model.Retriever{}, pgx.ErrNoRows
+		return model.Retriever{}, db.ErrNoRows
 	}
 	if err != nil {
 		return model.Retriever{}, err

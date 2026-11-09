@@ -11,14 +11,12 @@ import (
 	"unicode/utf8"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Catalogs reads the granted catalogs and their namespaces; *repo.Repo
 // implements it.
 type Catalogs interface {
-	ListMetadataCatalogs(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListMetadataCatalogsRow, error)
+	ListMetadataCatalogs(ctx context.Context, workspaceID db.UUID) ([]db.ListMetadataCatalogsRow, error)
 	GetGrantedMetadataCatalog(ctx context.Context, arg db.GetGrantedMetadataCatalogParams) (db.GetGrantedMetadataCatalogRow, error)
 	ListChildNamespaces(ctx context.Context, arg db.ListChildNamespacesParams) ([][]string, error)
 	ListMetadataSyncRuns(ctx context.Context, arg db.ListMetadataSyncRunsParams) ([]db.ListMetadataSyncRunsRow, error)
@@ -29,7 +27,7 @@ type Tables interface {
 	ListMetadataTablesPage(ctx context.Context, arg db.ListMetadataTablesPageParams) ([]db.ListMetadataTablesPageRow, error)
 	GetGrantedMetadataTable(ctx context.Context, arg db.GetGrantedMetadataTableParams) (db.GetGrantedMetadataTableRow, error)
 	GetCatalogBindingForDisplay(ctx context.Context, arg db.GetCatalogBindingForDisplayParams) (db.GetCatalogBindingForDisplayRow, error)
-	ListMetadataColumns(ctx context.Context, tableID pgtype.UUID) ([]db.ListMetadataColumnsRow, error)
+	ListMetadataColumns(ctx context.Context, tableID db.UUID) ([]db.ListMetadataColumnsRow, error)
 	ListSemanticDocsForTable(ctx context.Context, arg db.ListSemanticDocsForTableParams) ([]db.SemanticDoc, error)
 	SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) ([]db.SearchMetadataRow, error)
 }
@@ -76,21 +74,21 @@ type Service struct{ store Store }
 func New(store Store) *Service { return &Service{store: store} }
 
 // Catalogs lists the catalogs granted to ws with their bindings.
-func (s *Service) Catalogs(ctx context.Context, ws pgtype.UUID) ([]db.ListMetadataCatalogsRow, error) {
+func (s *Service) Catalogs(ctx context.Context, ws db.UUID) ([]db.ListMetadataCatalogsRow, error) {
 	return s.store.ListMetadataCatalogs(ctx, ws)
 }
 
 // Catalog returns a catalog granted to ws.
-func (s *Service) Catalog(ctx context.Context, ws, id pgtype.UUID) (db.GetGrantedMetadataCatalogRow, error) {
+func (s *Service) Catalog(ctx context.Context, ws, id db.UUID) (db.GetGrantedMetadataCatalogRow, error) {
 	c, err := s.store.GetGrantedMetadataCatalog(ctx, db.GetGrantedMetadataCatalogParams{WorkspaceID: ws, CatalogID: id})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return c, ErrCatalogNotFound
 	}
 	return c, err
 }
 
 // Namespaces lists the namespaces directly under parent in a granted catalog.
-func (s *Service) Namespaces(ctx context.Context, ws, catalogID pgtype.UUID, parent []string) (db.GetGrantedMetadataCatalogRow, [][]string, error) {
+func (s *Service) Namespaces(ctx context.Context, ws, catalogID db.UUID, parent []string) (db.GetGrantedMetadataCatalogRow, [][]string, error) {
 	cat, err := s.Catalog(ctx, ws, catalogID)
 	if err != nil {
 		return cat, nil, err
@@ -119,7 +117,7 @@ type TablesPage struct {
 }
 
 // Tables returns a page of tables of a granted catalog.
-func (s *Service) Tables(ctx context.Context, ws, catalogID pgtype.UUID, q TablesQuery) (TablesPage, error) {
+func (s *Service) Tables(ctx context.Context, ws, catalogID db.UUID, q TablesQuery) (TablesPage, error) {
 	cat, err := s.Catalog(ctx, ws, catalogID)
 	if err != nil {
 		return TablesPage{}, err
@@ -168,9 +166,9 @@ type Table struct {
 // Table returns a table of a catalog granted to ws. A valid bindingID shows
 // it through that binding, which must serve the catalog; otherwise through
 // the catalog's default binding, if any.
-func (s *Service) Table(ctx context.Context, ws, tableID, bindingID pgtype.UUID) (Table, error) {
+func (s *Service) Table(ctx context.Context, ws, tableID, bindingID db.UUID) (Table, error) {
 	t, err := s.store.GetGrantedMetadataTable(ctx, db.GetGrantedMetadataTableParams{WorkspaceID: ws, TableID: tableID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return Table{}, ErrTableNotFound
 	}
 	if err != nil {
@@ -181,7 +179,7 @@ func (s *Service) Table(ctx context.Context, ws, tableID, bindingID pgtype.UUID)
 	switch {
 	case err == nil:
 		out.Binding = &b
-	case !errors.Is(err, pgx.ErrNoRows):
+	case !errors.Is(err, db.ErrNoRows):
 		return Table{}, err
 	case bindingID.Valid:
 		return Table{}, ErrBindingNotFound
@@ -211,7 +209,7 @@ type SearchQuery struct {
 	Text      string
 	Kind      string
 	Limit     *int
-	CatalogID pgtype.UUID
+	CatalogID db.UUID
 	// Tags, Certified and Namespace filter tables through their workspace
 	// table-level docs (B6, #534). Namespace is one value per level, so a
 	// component that contains a dot is unambiguous.
@@ -221,7 +219,7 @@ type SearchQuery struct {
 }
 
 // Search finds tables and columns of the catalogs granted to ws.
-func (s *Service) Search(ctx context.Context, ws pgtype.UUID, q SearchQuery) ([]db.SearchMetadataRow, error) {
+func (s *Service) Search(ctx context.Context, ws db.UUID, q SearchQuery) ([]db.SearchMetadataRow, error) {
 	if n := utf8.RuneCountInString(q.Text); n < MinSearchQuery || n > MaxSearchQuery {
 		return nil, &InvalidError{Msg: "q must be 2 to 200 characters"}
 	}
@@ -254,7 +252,7 @@ func (s *Service) Search(ctx context.Context, ws pgtype.UUID, q SearchQuery) ([]
 
 // SyncRuns lists a catalog's latest metadata passes. A limit outside
 // 1..MaxSyncRuns is DefaultSyncRuns.
-func (s *Service) SyncRuns(ctx context.Context, catalogID pgtype.UUID, limit int) ([]db.ListMetadataSyncRunsRow, error) {
+func (s *Service) SyncRuns(ctx context.Context, catalogID db.UUID, limit int) ([]db.ListMetadataSyncRunsRow, error) {
 	if limit < 1 || limit > MaxSyncRuns {
 		limit = DefaultSyncRuns
 	}

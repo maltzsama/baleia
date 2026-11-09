@@ -12,23 +12,21 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store is the slice of the database agent authentication reads.
 type Store interface {
 	GetAgentTokenByHash(ctx context.Context, tokenHash string) (db.AgentToken, error)
-	GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, error)
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
-	TouchAgentToken(ctx context.Context, id pgtype.UUID) error
+	GetAgentByID(ctx context.Context, id db.UUID) (db.Agent, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
+	TouchAgentToken(ctx context.Context, id db.UUID) error
 }
 
 // Identity is what a valid agent token resolves to. OwnerID is the user the
 // agent acts for; an agent never has an identity of its own.
 type Identity struct {
-	AgentID pgtype.UUID
-	OwnerID pgtype.UUID
+	AgentID db.UUID
+	OwnerID db.UUID
 	Kind    string
 }
 
@@ -61,7 +59,7 @@ func Authenticate(ctx context.Context, q Store, raw string) (Identity, error) {
 
 	tok, err := q.GetAgentTokenByHash(ctx, auth.AgentTokenHash(raw))
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return fail(auth.AgentRejectUnknown, auth.ErrAgentTokenInvalid)
 		}
 		return Identity{}, err
@@ -75,7 +73,7 @@ func Authenticate(ctx context.Context, q Store, raw string) (Identity, error) {
 
 	agent, err := q.GetAgentByID(ctx, tok.AgentID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return fail(auth.AgentRejectUnknown, auth.ErrAgentTokenInvalid)
 		}
 		return Identity{}, err
@@ -86,7 +84,7 @@ func Authenticate(ctx context.Context, q Store, raw string) (Identity, error) {
 
 	owner, err := q.GetUserByID(ctx, agent.OwnerID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return fail(auth.AgentRejectOwnerSuspended, auth.ErrAgentOwnerSuspended)
 		}
 		return Identity{}, err

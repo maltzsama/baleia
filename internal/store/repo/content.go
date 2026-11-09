@@ -9,9 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -46,22 +43,22 @@ func (r *Repo) CreateQueryFolder(ctx context.Context, arg db.CreateQueryFolderPa
 	return toDBQueryFolder(row), nil
 }
 
-// GetQueryFolderByID returns one folder or pgx.ErrNoRows.
+// GetQueryFolderByID returns one folder or db.ErrNoRows.
 func (r *Repo) GetQueryFolderByID(ctx context.Context, arg db.GetQueryFolderByIDParams) (db.QueryFolder, error) {
 	return r.getQueryFolder(ctx, arg.ID, arg.WorkspaceID)
 }
 
-// GetFolderBySlug returns the folder of a space by slug or pgx.ErrNoRows.
+// GetFolderBySlug returns the folder of a space by slug or db.ErrNoRows.
 func (r *Repo) GetFolderBySlug(ctx context.Context, arg db.GetFolderBySlugParams) (db.QueryFolder, error) {
 	if !arg.SpaceID.Valid {
-		return db.QueryFolder{}, pgx.ErrNoRows
+		return db.QueryFolder{}, db.ErrNoRows
 	}
 	var row model.QueryFolder
 	err := r.Users.db.WithContext(ctx).
 		Where("space_id = ? AND slug = ?", UUIDString(arg.SpaceID), arg.Slug).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.QueryFolder{}, pgx.ErrNoRows
+		return db.QueryFolder{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.QueryFolder{}, err
@@ -80,7 +77,7 @@ func (r *Repo) UpdateQueryFolder(ctx context.Context, arg db.UpdateQueryFolderPa
 		err := tx.Where("id = ? AND workspace_id = ?", UUIDString(arg.ID), UUIDString(arg.WorkspaceID)).
 			First(&current).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if err != nil {
 			return err
@@ -166,22 +163,22 @@ func (r *Repo) CreateSavedQuery(ctx context.Context, arg db.CreateSavedQueryPara
 	return toDBSavedQuery(row), nil
 }
 
-// GetSavedQueryByID returns one query or pgx.ErrNoRows.
+// GetSavedQueryByID returns one query or db.ErrNoRows.
 func (r *Repo) GetSavedQueryByID(ctx context.Context, arg db.GetSavedQueryByIDParams) (db.SavedQuery, error) {
 	return r.getSavedQuery(ctx, arg.ID, arg.WorkspaceID)
 }
 
-// GetSavedQueryBySlug returns the workspace's query by slug or pgx.ErrNoRows.
+// GetSavedQueryBySlug returns the workspace's query by slug or db.ErrNoRows.
 func (r *Repo) GetSavedQueryBySlug(ctx context.Context, arg db.GetSavedQueryBySlugParams) (db.SavedQuery, error) {
 	if !arg.WorkspaceID.Valid {
-		return db.SavedQuery{}, pgx.ErrNoRows
+		return db.SavedQuery{}, db.ErrNoRows
 	}
 	var row model.SavedQuery
 	err := r.Users.db.WithContext(ctx).
 		Where("workspace_id = ? AND slug = ?", UUIDString(arg.WorkspaceID), arg.Slug).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.SavedQuery{}, pgx.ErrNoRows
+		return db.SavedQuery{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.SavedQuery{}, err
@@ -190,7 +187,7 @@ func (r *Repo) GetSavedQueryBySlug(ctx context.Context, arg db.GetSavedQueryBySl
 }
 
 // GetSavedQueryForUpdate returns one query with its row locked until the
-// surrounding transaction ends, or pgx.ErrNoRows.
+// surrounding transaction ends, or db.ErrNoRows.
 func (r *Repo) GetSavedQueryForUpdate(ctx context.Context, arg db.GetSavedQueryForUpdateParams) (db.SavedQuery, error) {
 	return r.lockSavedQuery(ctx, arg.ID, arg.WorkspaceID)
 }
@@ -250,7 +247,7 @@ func (r *Repo) RestoreSavedQuery(ctx context.Context, arg db.RestoreSavedQueryPa
 }
 
 // ListSpaceSavedQueries returns a space's queries by slug.
-func (r *Repo) ListSpaceSavedQueries(ctx context.Context, spaceID pgtype.UUID) ([]db.SavedQuery, error) {
+func (r *Repo) ListSpaceSavedQueries(ctx context.Context, spaceID db.UUID) ([]db.SavedQuery, error) {
 	var rows []model.SavedQuery
 	if err := r.Users.db.WithContext(ctx).
 		Where("space_id = ?", UUIDString(spaceID)).
@@ -266,7 +263,7 @@ func (r *Repo) ListSpaceSavedQueries(ctx context.Context, spaceID pgtype.UUID) (
 }
 
 // ListSpaceFolders returns a space's folders by slug.
-func (r *Repo) ListSpaceFolders(ctx context.Context, spaceID pgtype.UUID) ([]db.QueryFolder, error) {
+func (r *Repo) ListSpaceFolders(ctx context.Context, spaceID db.UUID) ([]db.QueryFolder, error) {
 	var rows []model.QueryFolder
 	if err := r.Users.db.WithContext(ctx).
 		Where("space_id = ?", UUIDString(spaceID)).
@@ -311,7 +308,7 @@ func (r *Repo) CreateSemanticMetric(ctx context.Context, arg db.CreateSemanticMe
 	return r.getSemanticMetric(ctx, PGUUID(string(row.ID)), arg.WorkspaceID)
 }
 
-// GetSemanticMetric returns one metric or pgx.ErrNoRows.
+// GetSemanticMetric returns one metric or db.ErrNoRows.
 func (r *Repo) GetSemanticMetric(ctx context.Context, arg db.GetSemanticMetricParams) (db.SemanticMetric, error) {
 	return r.getSemanticMetric(ctx, arg.ID, arg.WorkspaceID)
 }
@@ -319,14 +316,14 @@ func (r *Repo) GetSemanticMetric(ctx context.Context, arg db.GetSemanticMetricPa
 // GetSemanticMetricBySlug returns the workspace's metric by slug.
 func (r *Repo) GetSemanticMetricBySlug(ctx context.Context, arg db.GetSemanticMetricBySlugParams) (db.SemanticMetric, error) {
 	if !arg.WorkspaceID.Valid {
-		return db.SemanticMetric{}, pgx.ErrNoRows
+		return db.SemanticMetric{}, db.ErrNoRows
 	}
 	var row model.SemanticMetric
 	err := r.Users.db.WithContext(ctx).
 		Where("workspace_id = ? AND slug = ?", UUIDString(arg.WorkspaceID), arg.Slug).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.SemanticMetric{}, pgx.ErrNoRows
+		return db.SemanticMetric{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.SemanticMetric{}, err
@@ -401,7 +398,7 @@ func (r *Repo) RestoreSemanticMetric(ctx context.Context, arg db.RestoreSemantic
 }
 
 // ListSpaceMetrics returns a space's metrics by slug.
-func (r *Repo) ListSpaceMetrics(ctx context.Context, spaceID pgtype.UUID) ([]db.SemanticMetric, error) {
+func (r *Repo) ListSpaceMetrics(ctx context.Context, spaceID db.UUID) ([]db.SemanticMetric, error) {
 	var rows []model.SemanticMetric
 	if err := r.Users.db.WithContext(ctx).
 		Where("space_id = ?", UUIDString(spaceID)).
@@ -443,7 +440,7 @@ func (r *Repo) CreateSemanticModel(ctx context.Context, arg db.CreateSemanticMod
 	return r.getSemanticModel(ctx, PGUUID(string(row.ID)), arg.WorkspaceID)
 }
 
-// GetSemanticModel returns one model or pgx.ErrNoRows.
+// GetSemanticModel returns one model or db.ErrNoRows.
 func (r *Repo) GetSemanticModel(ctx context.Context, arg db.GetSemanticModelParams) (db.SemanticModel, error) {
 	return r.getSemanticModel(ctx, arg.ID, arg.WorkspaceID)
 }
@@ -451,14 +448,14 @@ func (r *Repo) GetSemanticModel(ctx context.Context, arg db.GetSemanticModelPara
 // GetSemanticModelBySlug returns the workspace's model by slug.
 func (r *Repo) GetSemanticModelBySlug(ctx context.Context, arg db.GetSemanticModelBySlugParams) (db.SemanticModel, error) {
 	if !arg.WorkspaceID.Valid {
-		return db.SemanticModel{}, pgx.ErrNoRows
+		return db.SemanticModel{}, db.ErrNoRows
 	}
 	var row model.SemanticModel
 	err := r.Users.db.WithContext(ctx).
 		Where("workspace_id = ? AND slug = ?", UUIDString(arg.WorkspaceID), arg.Slug).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.SemanticModel{}, pgx.ErrNoRows
+		return db.SemanticModel{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.SemanticModel{}, err
@@ -529,7 +526,7 @@ func (r *Repo) RestoreSemanticModel(ctx context.Context, arg db.RestoreSemanticM
 }
 
 // ListSpaceModels returns a space's models by label.
-func (r *Repo) ListSpaceModels(ctx context.Context, spaceID pgtype.UUID) ([]db.SemanticModel, error) {
+func (r *Repo) ListSpaceModels(ctx context.Context, spaceID db.UUID) ([]db.SemanticModel, error) {
 	var rows []model.SemanticModel
 	if err := r.Users.db.WithContext(ctx).
 		Where("space_id = ?", UUIDString(spaceID)).
@@ -593,7 +590,7 @@ func (r *Repo) LatestContentVersion(ctx context.Context, arg db.LatestContentVer
 		Order("version DESC").
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.ContentVersion{}, pgx.ErrNoRows
+		return db.ContentVersion{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.ContentVersion{}, err
@@ -633,7 +630,7 @@ func (r *Repo) GetContentVersion(ctx context.Context, arg db.GetContentVersionPa
 			UUIDString(arg.WorkspaceID), arg.EntityType, UUIDString(arg.EntityID), arg.Version).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetContentVersionRow{}, pgx.ErrNoRows
+		return db.GetContentVersionRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetContentVersionRow{}, err
@@ -730,11 +727,11 @@ func (r *Repo) ListDeletedContent(ctx context.Context, arg db.ListDeletedContent
 // ── catalogs, bindings and spaces ─────────────────────────────────────────────
 
 // GetBindingTargetNames returns the catalog and engine names of a binding.
-func (r *Repo) GetBindingTargetNames(ctx context.Context, id pgtype.UUID) (db.GetBindingTargetNamesRow, error) {
+func (r *Repo) GetBindingTargetNames(ctx context.Context, id db.UUID) (db.GetBindingTargetNamesRow, error) {
 	var binding model.CatalogBinding
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&binding).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetBindingTargetNamesRow{}, pgx.ErrNoRows
+		return db.GetBindingTargetNamesRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetBindingTargetNamesRow{}, err
@@ -742,7 +739,7 @@ func (r *Repo) GetBindingTargetNames(ctx context.Context, id pgtype.UUID) (db.Ge
 	var catalog model.Catalog
 	err = r.Users.db.WithContext(ctx).Where("id = ?", string(binding.CatalogID)).First(&catalog).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetBindingTargetNamesRow{}, pgx.ErrNoRows
+		return db.GetBindingTargetNamesRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetBindingTargetNamesRow{}, err
@@ -750,7 +747,7 @@ func (r *Repo) GetBindingTargetNames(ctx context.Context, id pgtype.UUID) (db.Ge
 	var engine model.Engine
 	err = r.Users.db.WithContext(ctx).Where("id = ?", string(binding.EngineID)).First(&engine).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetBindingTargetNamesRow{}, pgx.ErrNoRows
+		return db.GetBindingTargetNamesRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetBindingTargetNamesRow{}, err
@@ -759,11 +756,11 @@ func (r *Repo) GetBindingTargetNames(ctx context.Context, id pgtype.UUID) (db.Ge
 }
 
 // GetCatalogNameByID returns a catalog's logical name.
-func (r *Repo) GetCatalogNameByID(ctx context.Context, id pgtype.UUID) (string, error) {
+func (r *Repo) GetCatalogNameByID(ctx context.Context, id db.UUID) (string, error) {
 	var row model.Catalog
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", pgx.ErrNoRows
+		return "", db.ErrNoRows
 	}
 	if err != nil {
 		return "", err
@@ -773,7 +770,7 @@ func (r *Repo) GetCatalogNameByID(ctx context.Context, id pgtype.UUID) (string, 
 
 // GetGrantedCatalogByName returns the id of an enabled catalog the workspace
 // was granted, by its logical name.
-func (r *Repo) GetGrantedCatalogByName(ctx context.Context, arg db.GetGrantedCatalogByNameParams) (pgtype.UUID, error) {
+func (r *Repo) GetGrantedCatalogByName(ctx context.Context, arg db.GetGrantedCatalogByNameParams) (db.UUID, error) {
 	granted := r.Users.db.Model(&model.WorkspaceCatalogGrant{}).
 		Select("catalog_id").
 		Where("workspace_id = ?", UUIDString(arg.WorkspaceID))
@@ -782,26 +779,26 @@ func (r *Repo) GetGrantedCatalogByName(ctx context.Context, arg db.GetGrantedCat
 		Where("name = ? AND enabled = ? AND id IN (?)", arg.Name, true, granted).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return pgtype.UUID{}, pgx.ErrNoRows
+		return db.UUID{}, db.ErrNoRows
 	}
 	if err != nil {
-		return pgtype.UUID{}, err
+		return db.UUID{}, err
 	}
 	return PGUUID(string(row.ID)), nil
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-func (r *Repo) getQueryFolder(ctx context.Context, id, workspaceID pgtype.UUID) (db.QueryFolder, error) {
+func (r *Repo) getQueryFolder(ctx context.Context, id, workspaceID db.UUID) (db.QueryFolder, error) {
 	if !id.Valid || !workspaceID.Valid {
-		return db.QueryFolder{}, pgx.ErrNoRows
+		return db.QueryFolder{}, db.ErrNoRows
 	}
 	var row model.QueryFolder
 	err := r.Users.db.WithContext(ctx).
 		Where("id = ? AND workspace_id = ?", UUIDString(id), UUIDString(workspaceID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.QueryFolder{}, pgx.ErrNoRows
+		return db.QueryFolder{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.QueryFolder{}, err
@@ -809,16 +806,16 @@ func (r *Repo) getQueryFolder(ctx context.Context, id, workspaceID pgtype.UUID) 
 	return toDBQueryFolder(row), nil
 }
 
-func (r *Repo) getSavedQuery(ctx context.Context, id, workspaceID pgtype.UUID) (db.SavedQuery, error) {
+func (r *Repo) getSavedQuery(ctx context.Context, id, workspaceID db.UUID) (db.SavedQuery, error) {
 	if !id.Valid || !workspaceID.Valid {
-		return db.SavedQuery{}, pgx.ErrNoRows
+		return db.SavedQuery{}, db.ErrNoRows
 	}
 	var row model.SavedQuery
 	err := r.Users.db.WithContext(ctx).
 		Where("id = ? AND workspace_id = ?", UUIDString(id), UUIDString(workspaceID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.SavedQuery{}, pgx.ErrNoRows
+		return db.SavedQuery{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.SavedQuery{}, err
@@ -826,9 +823,9 @@ func (r *Repo) getSavedQuery(ctx context.Context, id, workspaceID pgtype.UUID) (
 	return toDBSavedQuery(row), nil
 }
 
-func (r *Repo) lockSavedQuery(ctx context.Context, id, workspaceID pgtype.UUID) (db.SavedQuery, error) {
+func (r *Repo) lockSavedQuery(ctx context.Context, id, workspaceID db.UUID) (db.SavedQuery, error) {
 	if !id.Valid || !workspaceID.Valid {
-		return db.SavedQuery{}, pgx.ErrNoRows
+		return db.SavedQuery{}, db.ErrNoRows
 	}
 	var row model.SavedQuery
 	err := r.Users.db.WithContext(ctx).
@@ -836,7 +833,7 @@ func (r *Repo) lockSavedQuery(ctx context.Context, id, workspaceID pgtype.UUID) 
 		Where("id = ? AND workspace_id = ?", UUIDString(id), UUIDString(workspaceID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.SavedQuery{}, pgx.ErrNoRows
+		return db.SavedQuery{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.SavedQuery{}, err
@@ -844,16 +841,16 @@ func (r *Repo) lockSavedQuery(ctx context.Context, id, workspaceID pgtype.UUID) 
 	return toDBSavedQuery(row), nil
 }
 
-func (r *Repo) getSemanticMetric(ctx context.Context, id, workspaceID pgtype.UUID) (db.SemanticMetric, error) {
+func (r *Repo) getSemanticMetric(ctx context.Context, id, workspaceID db.UUID) (db.SemanticMetric, error) {
 	if !id.Valid || !workspaceID.Valid {
-		return db.SemanticMetric{}, pgx.ErrNoRows
+		return db.SemanticMetric{}, db.ErrNoRows
 	}
 	var row model.SemanticMetric
 	err := r.Users.db.WithContext(ctx).
 		Where("workspace_id = ? AND id = ?", UUIDString(workspaceID), UUIDString(id)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.SemanticMetric{}, pgx.ErrNoRows
+		return db.SemanticMetric{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.SemanticMetric{}, err
@@ -861,9 +858,9 @@ func (r *Repo) getSemanticMetric(ctx context.Context, id, workspaceID pgtype.UUI
 	return toDBSemanticMetric(row), nil
 }
 
-func (r *Repo) lockSemanticMetric(ctx context.Context, id, workspaceID pgtype.UUID) (db.SemanticMetric, error) {
+func (r *Repo) lockSemanticMetric(ctx context.Context, id, workspaceID db.UUID) (db.SemanticMetric, error) {
 	if !id.Valid || !workspaceID.Valid {
-		return db.SemanticMetric{}, pgx.ErrNoRows
+		return db.SemanticMetric{}, db.ErrNoRows
 	}
 	var row model.SemanticMetric
 	err := r.Users.db.WithContext(ctx).
@@ -871,7 +868,7 @@ func (r *Repo) lockSemanticMetric(ctx context.Context, id, workspaceID pgtype.UU
 		Where("workspace_id = ? AND id = ?", UUIDString(workspaceID), UUIDString(id)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.SemanticMetric{}, pgx.ErrNoRows
+		return db.SemanticMetric{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.SemanticMetric{}, err
@@ -879,16 +876,16 @@ func (r *Repo) lockSemanticMetric(ctx context.Context, id, workspaceID pgtype.UU
 	return toDBSemanticMetric(row), nil
 }
 
-func (r *Repo) getSemanticModel(ctx context.Context, id, workspaceID pgtype.UUID) (db.SemanticModel, error) {
+func (r *Repo) getSemanticModel(ctx context.Context, id, workspaceID db.UUID) (db.SemanticModel, error) {
 	if !id.Valid || !workspaceID.Valid {
-		return db.SemanticModel{}, pgx.ErrNoRows
+		return db.SemanticModel{}, db.ErrNoRows
 	}
 	var row model.SemanticModel
 	err := r.Users.db.WithContext(ctx).
 		Where("workspace_id = ? AND id = ?", UUIDString(workspaceID), UUIDString(id)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.SemanticModel{}, pgx.ErrNoRows
+		return db.SemanticModel{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.SemanticModel{}, err
@@ -896,9 +893,9 @@ func (r *Repo) getSemanticModel(ctx context.Context, id, workspaceID pgtype.UUID
 	return toDBSemanticModel(row), nil
 }
 
-func (r *Repo) lockSemanticModel(ctx context.Context, id, workspaceID pgtype.UUID) (db.SemanticModel, error) {
+func (r *Repo) lockSemanticModel(ctx context.Context, id, workspaceID db.UUID) (db.SemanticModel, error) {
 	if !id.Valid || !workspaceID.Valid {
-		return db.SemanticModel{}, pgx.ErrNoRows
+		return db.SemanticModel{}, db.ErrNoRows
 	}
 	var row model.SemanticModel
 	err := r.Users.db.WithContext(ctx).
@@ -906,7 +903,7 @@ func (r *Repo) lockSemanticModel(ctx context.Context, id, workspaceID pgtype.UUI
 		Where("workspace_id = ? AND id = ?", UUIDString(workspaceID), UUIDString(id)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.SemanticModel{}, pgx.ErrNoRows
+		return db.SemanticModel{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.SemanticModel{}, err
@@ -973,7 +970,7 @@ func (r *Repo) spaceNames(ctx context.Context, rows []model.ContentVersion) (map
 // backend.
 func contentDuplicate(err error) error {
 	if errors.Is(err, gorm.ErrDuplicatedKey) {
-		return &pgconn.PgError{Code: uniqueViolation, Message: "duplicate key value violates unique constraint"}
+		return &db.PGError{Code: uniqueViolation, Message: "duplicate key value violates unique constraint"}
 	}
 	return err
 }

@@ -35,8 +35,6 @@ import (
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/galileostudio/baleia/internal/workspaces/spaces"
 	"github.com/galileostudio/baleia/internal/wsticket"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
 	"gorm.io/gorm"
@@ -143,7 +141,7 @@ func (h *core) registerMetrics(reg *metrics.Registry) {
 
 // engineSource returns engines; *queryengine.Manager implements it.
 type engineSource interface {
-	Get(ctx context.Context, engineID pgtype.UUID) (queryengine.Engine, error)
+	Get(ctx context.Context, engineID db.UUID) (queryengine.Engine, error)
 	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
 }
 
@@ -198,7 +196,6 @@ type DataDeps struct {
 	// Queries is accepted for source compatibility; NewAPI builds every
 	// service over Store and ignores it.
 	Queries db.Querier
-	Pool    *pgxpool.Pool
 	// Store is the GORM connection every service persists through (ADR 0020).
 	Store *gorm.DB
 }
@@ -220,7 +217,6 @@ func NewAPI(d Deps) (*API, error) {
 	var missing []string
 	for name, absent := range map[string]bool{
 		"Data.Store":          d.Data.Store == nil,
-		"Data.Pool":           d.Data.Pool == nil,
 		"Temporal":            d.Temporal == nil,
 		"Storage":             d.Storage == nil,
 		"Engines.Connections": d.Engines.Connections == nil,
@@ -244,7 +240,6 @@ func NewAPI(d Deps) (*API, error) {
 		s3:             d.Storage,
 		queries:        d.Data.Queries,
 		store:          d.Data.Store,
-		pool:           d.Data.Pool,
 		tx:             storeTx{db: d.Data.Store},
 		settings:       d.Settings,
 		keyring:        d.Keyring,
@@ -282,7 +277,7 @@ func NewAPI(d Deps) (*API, error) {
 		QueryHandlers:     newQueryHandlers(c, d.WSTickets),
 		SemanticHandlers:  newSemanticHandlers(c),
 		AgentHandlers:     newAgentHandlers(c, assistantService, d.Assistant, d.Engines.Dialer),
-		OpsHandlers:       newOpsHandlers(c, poolSchema{pool: d.Data.Pool}),
+		OpsHandlers:       newOpsHandlers(c, storeSchema{db: d.Data.Store}),
 	}
 	if d.Observability.Metrics != nil {
 		h.registerMetrics(d.Observability.Metrics)
@@ -318,21 +313,21 @@ func dbUserToPublic(u db.User) UserPublic {
 	return out
 }
 
-func pgTimestampToTime(ts pgtype.Timestamptz) time.Time {
+func pgTimestampToTime(ts db.Timestamptz) time.Time {
 	if ts.Valid {
 		return ts.Time
 	}
 	return time.Time{}
 }
 
-func uuidFromString(s string) (pgtype.UUID, error) {
-	var uid pgtype.UUID
+func uuidFromString(s string) (db.UUID, error) {
+	var uid db.UUID
 	err := uid.Scan(s)
 	return uid, err
 }
 
-func workspaceIDFromRequest(id openapi_types.UUID) pgtype.UUID {
-	return pgtype.UUID{Bytes: id, Valid: true}
+func workspaceIDFromRequest(id openapi_types.UUID) db.UUID {
+	return db.UUID{Bytes: id, Valid: true}
 }
 
 func requireWorkspaceAccess(ctx context.Context, svc *wsaccess.Service, workspaceID openapi_types.UUID) error {

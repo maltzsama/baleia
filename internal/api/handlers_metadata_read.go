@@ -13,7 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/metadata/typemap"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -30,13 +29,13 @@ const (
 
 // metadataWorkspace checks the caller is a member of the workspace. notFound
 // covers a foreign or missing workspace; err is anything else.
-func (h *core) metadataWorkspace(ctx context.Context, id openapi_types.UUID) (ws pgtype.UUID, notFound bool, err error) {
+func (h *core) metadataWorkspace(ctx context.Context, id openapi_types.UUID) (ws db.UUID, notFound bool, err error) {
 	err = requireWorkspaceAccess(ctx, h.access, id)
 	if errors.Is(err, ErrWorkspaceNotFound) {
-		return pgtype.UUID{}, true, nil
+		return db.UUID{}, true, nil
 	}
 	if err != nil {
-		return pgtype.UUID{}, false, err
+		return db.UUID{}, false, err
 	}
 	return workspaceIDFromRequest(id), false, nil
 }
@@ -45,11 +44,11 @@ func metadataNotFound(msg string) NotFoundJSONResponse {
 	return NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: msg}
 }
 
-func freshness(t pgtype.Timestamptz) MetadataFreshness {
+func freshness(t db.Timestamptz) MetadataFreshness {
 	return MetadataFreshness{MetadataSyncedAt: timePtr(t)}
 }
 
-func timePtr(t pgtype.Timestamptz) *time.Time {
+func timePtr(t db.Timestamptz) *time.Time {
 	if !t.Valid {
 		return nil
 	}
@@ -91,8 +90,8 @@ func (h *CatalogHandlers) ListMetadataCatalogs(ctx context.Context, request List
 
 // grantedCatalog loads a catalog granted to the workspace; ok is false when
 // the workspace may not see it.
-func (h *core) grantedCatalog(ctx context.Context, ws pgtype.UUID, id openapi_types.UUID) (db.GetGrantedMetadataCatalogRow, bool, error) {
-	c, err := h.browse.Catalog(ctx, ws, pgtype.UUID{Bytes: id, Valid: true})
+func (h *core) grantedCatalog(ctx context.Context, ws db.UUID, id openapi_types.UUID) (db.GetGrantedMetadataCatalogRow, bool, error) {
+	c, err := h.browse.Catalog(ctx, ws, db.UUID{Bytes: id, Valid: true})
 	if errors.Is(err, browse.ErrCatalogNotFound) {
 		return c, false, nil
 	}
@@ -112,7 +111,7 @@ func (h *CatalogHandlers) ListMetadataNamespaces(ctx context.Context, request Li
 	if request.Params.Parent != nil {
 		parent = *request.Params.Parent
 	}
-	cat, rows, err := h.browse.Namespaces(ctx, ws, pgtype.UUID{Bytes: request.CatalogId, Valid: true}, parent)
+	cat, rows, err := h.browse.Namespaces(ctx, ws, db.UUID{Bytes: request.CatalogId, Valid: true}, parent)
 	if errors.Is(err, browse.ErrCatalogNotFound) {
 		return ListMetadataNamespaces404JSONResponse{NotFoundJSONResponse: metadataNotFound("catalog not found")}, nil
 	}
@@ -146,7 +145,7 @@ func (h *CatalogHandlers) ListMetadataTables(ctx context.Context, request ListMe
 	if request.Params.Ns != nil {
 		q.Namespace = *request.Params.Ns
 	}
-	page, err := h.browse.Tables(ctx, ws, pgtype.UUID{Bytes: request.CatalogId, Valid: true}, q)
+	page, err := h.browse.Tables(ctx, ws, db.UUID{Bytes: request.CatalogId, Valid: true}, q)
 	var invalid *browse.InvalidError
 	switch {
 	case errors.Is(err, browse.ErrCatalogNotFound):
@@ -251,11 +250,11 @@ func (h *CatalogHandlers) GetMetadataTable(ctx context.Context, request GetMetad
 	if nf {
 		return GetMetadataTable404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	var bindingID pgtype.UUID
+	var bindingID db.UUID
 	if request.Params.BindingId != nil {
-		bindingID = pgtype.UUID{Bytes: *request.Params.BindingId, Valid: true}
+		bindingID = db.UUID{Bytes: *request.Params.BindingId, Valid: true}
 	}
-	detail, err := h.browse.Table(ctx, ws, pgtype.UUID{Bytes: request.TableId, Valid: true}, bindingID)
+	detail, err := h.browse.Table(ctx, ws, db.UUID{Bytes: request.TableId, Valid: true}, bindingID)
 	switch {
 	case errors.Is(err, browse.ErrTableNotFound):
 		return GetMetadataTable404JSONResponse{NotFoundJSONResponse: metadataNotFound("table not found")}, nil
@@ -326,7 +325,7 @@ func (h *CatalogHandlers) SearchMetadata(ctx context.Context, request SearchMeta
 		q.Kind = string(*p.Kind)
 	}
 	if p.CatalogId != nil {
-		q.CatalogID = pgtype.UUID{Bytes: *p.CatalogId, Valid: true}
+		q.CatalogID = db.UUID{Bytes: *p.CatalogId, Valid: true}
 	}
 	if p.Tags != nil {
 		q.Tags = *p.Tags

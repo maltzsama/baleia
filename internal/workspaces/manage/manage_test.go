@@ -8,11 +8,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 type fakeStore struct {
 	workspaces map[[16]byte]db.Workspace
@@ -27,26 +25,26 @@ func newStore() *fakeStore {
 	return &fakeStore{workspaces: map[[16]byte]db.Workspace{}, grants: map[[2][16]byte]bool{}}
 }
 
-func (f *fakeStore) ListWorkspacesByUser(context.Context, pgtype.UUID) ([]db.Workspace, error) {
+func (f *fakeStore) ListWorkspacesByUser(context.Context, db.UUID) ([]db.Workspace, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) GetWorkspaceByID(_ context.Context, id pgtype.UUID) (db.Workspace, error) {
+func (f *fakeStore) GetWorkspaceByID(_ context.Context, id db.UUID) (db.Workspace, error) {
 	if w, ok := f.workspaces[id.Bytes]; ok {
 		return w, nil
 	}
-	return db.Workspace{}, pgx.ErrNoRows
+	return db.Workspace{}, db.ErrNoRows
 }
 
-func (f *fakeStore) ListWorkspaceCatalogGrants(context.Context, pgtype.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
+func (f *fakeStore) ListWorkspaceCatalogGrants(context.Context, db.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) CountWorkspaceRunningExecutions(context.Context, pgtype.UUID) (int64, error) {
+func (f *fakeStore) CountWorkspaceRunningExecutions(context.Context, db.UUID) (int64, error) {
 	return f.running, nil
 }
 
-func (f *fakeStore) CountWorkspaceImpact(context.Context, pgtype.UUID) (db.CountWorkspaceImpactRow, error) {
+func (f *fakeStore) CountWorkspaceImpact(context.Context, db.UUID) (db.CountWorkspaceImpactRow, error) {
 	return db.CountWorkspaceImpactRow{}, nil
 }
 
@@ -60,7 +58,7 @@ func (f *fakeStore) CreateWorkspace(_ context.Context, arg db.CreateWorkspacePar
 	return w, nil
 }
 
-func (f *fakeStore) DeleteWorkspace(_ context.Context, id pgtype.UUID) (int64, error) {
+func (f *fakeStore) DeleteWorkspace(_ context.Context, id db.UUID) (int64, error) {
 	if _, ok := f.workspaces[id.Bytes]; !ok {
 		return 0, nil
 	}

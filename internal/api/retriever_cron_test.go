@@ -7,7 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/client"
 )
 
@@ -73,7 +72,7 @@ func TestUpdateRetriever_CronValidation(t *testing.T) {
 	if f.updated == nil || f.updated.CronSchedule != good || f.updated.NextRefreshAt.Time.Minute() != 30 || f.updated.NextRefreshAt.Time.Hour() != 2 {
 		t.Fatalf("update params = %+v", f.updated)
 	}
-	_ = pgtype.UUID{}
+	_ = db.UUID{}
 }
 
 // TestTriggerRetrieverRefresh_OnlyFull pins #143: the manual trigger rejects

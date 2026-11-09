@@ -9,11 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/galileostudio/baleia/internal/workspaces/spaces"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 // TestSpacesRoundTrip (#40, #770) exercises the GORM space store: the default
@@ -21,16 +16,7 @@ import (
 // grants and the content counts.
 func TestSpacesRoundTrip(t *testing.T) {
 	t.Parallel()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 
 	ctx := context.Background()
 	r := New(gdb)
@@ -147,7 +133,7 @@ func TestSpacesRoundTrip(t *testing.T) {
 	if n, err := r.DeleteSpace(ctx, db.DeleteSpaceParams{WorkspaceID: ws.ID, ID: secret.ID}); err != nil || n != 1 {
 		t.Errorf("delete secret = %d, %v", n, err)
 	}
-	if _, err := r.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: ws.ID, ID: secret.ID}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := r.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: ws.ID, ID: secret.ID}); !errors.Is(err, db.ErrNoRows) {
 		t.Errorf("deleted GetSpace = %v", err)
 	}
 }

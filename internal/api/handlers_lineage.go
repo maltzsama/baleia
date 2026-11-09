@@ -12,8 +12,6 @@ import (
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/sqlref"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Lineage (B4, #558): the graph of what depends on what, across tables,
@@ -31,8 +29,8 @@ const (
 // attention item need. *repo.Repo implements it over the GORM store (ADR 0020, #772).
 type lineageReads interface {
 	GetMetadataTableByRef(ctx context.Context, arg db.GetMetadataTableByRefParams) (db.GetMetadataTableByRefRow, error)
-	ListMetadataColumns(ctx context.Context, tableID pgtype.UUID) ([]db.ListMetadataColumnsRow, error)
-	GetMetadataTableByName(ctx context.Context, arg db.GetMetadataTableByNameParams) (pgtype.UUID, error)
+	ListMetadataColumns(ctx context.Context, tableID db.UUID) ([]db.ListMetadataColumnsRow, error)
+	GetMetadataTableByName(ctx context.Context, arg db.GetMetadataTableByNameParams) (db.UUID, error)
 	ListLineageModels(ctx context.Context, arg db.ListLineageModelsParams) ([]db.ListLineageModelsRow, error)
 	ListLineageMetrics(ctx context.Context, arg db.ListLineageMetricsParams) ([]db.ListLineageMetricsRow, error)
 	ListLineageSavedQueries(ctx context.Context, arg db.ListLineageSavedQueriesParams) ([]db.ListLineageSavedQueriesRow, error)
@@ -47,7 +45,7 @@ type popularTablesReads interface {
 
 // lineageTableRef is a content item's reference to a table, by natural key.
 type lineageTableRef struct {
-	catalogID pgtype.UUID
+	catalogID db.UUID
 	namespace []string
 	name      string
 }
@@ -117,7 +115,7 @@ func (h *CatalogHandlers) ListLineage(ctx context.Context, request ListLineageRe
 		}
 		start = g.addTable(t)
 	default:
-		nodeID := nodeID(kind, pgtype.UUID{Bytes: id, Valid: true})
+		nodeID := nodeID(kind, db.UUID{Bytes: id, Valid: true})
 		item, ok := content[nodeID]
 		if !ok {
 			return ListLineage404JSONResponse{NotFoundJSONResponse: metadataNotFound("node not found")}, nil
@@ -139,7 +137,7 @@ type lineageItem struct {
 // lineageContent loads the models, metrics and saved queries the caller can
 // read in the workspace, indexed by node id, plus the reverse map from a
 // table's natural key to the content that references it.
-func (h *CatalogHandlers) lineageContent(ctx context.Context, ws, userID pgtype.UUID) (map[string]lineageItem, map[string][]string, error) {
+func (h *CatalogHandlers) lineageContent(ctx context.Context, ws, userID db.UUID) (map[string]lineageItem, map[string][]string, error) {
 	content := map[string]lineageItem{}
 	dependents := map[string][]string{}
 
@@ -214,7 +212,7 @@ type lineageGraph struct {
 	edges     []LineageEdge
 	edgeSet   map[string]bool
 	tableKeys map[string]string // table node id -> natural key
-	ws        pgtype.UUID       // workspace, for a table's deep link
+	ws        db.UUID           // workspace, for a table's deep link
 	ctx       context.Context
 	q         lineageReads
 }
@@ -301,7 +299,7 @@ func (g *lineageGraph) resolveTable(ref lineageTableRef) (string, bool) {
 	row, err := g.q.GetMetadataTableByRef(g.ctx, db.GetMetadataTableByRefParams{
 		CatalogID: ref.catalogID, Namespace: ref.namespace, Name: ref.name,
 	})
-	if errors.Is(err, pgx.ErrNoRows) || err != nil {
+	if errors.Is(err, db.ErrNoRows) || err != nil {
 		return "", false
 	}
 	id := nodeID(LineageNodeKindTable, row.ID)
@@ -317,7 +315,7 @@ func (g *lineageGraph) resolveTable(ref lineageTableRef) (string, bool) {
 }
 
 // modelRefs extracts the tables a model reads from its definition.
-func modelRefs(definition []byte, catalogID pgtype.UUID) []lineageTableRef {
+func modelRefs(definition []byte, catalogID db.UUID) []lineageTableRef {
 	var m semantic.Model
 	if err := json.Unmarshal(definition, &m); err != nil {
 		return nil
@@ -332,7 +330,7 @@ func modelRefs(definition []byte, catalogID pgtype.UUID) []lineageTableRef {
 }
 
 // savedQueryRefs extracts the tables a saved query reads from its SQL.
-func savedQueryRefs(sql string, catalogID pgtype.UUID, schema *string) []lineageTableRef {
+func savedQueryRefs(sql string, catalogID db.UUID, schema *string) []lineageTableRef {
 	var fallback []string
 	if schema != nil && *schema != "" {
 		fallback = []string{*schema}
@@ -343,7 +341,7 @@ func savedQueryRefs(sql string, catalogID pgtype.UUID, schema *string) []lineage
 // sqlRefs runs the reference extractor over a statement and resolves each read
 // table to a natural key, using fallback as the default namespace for
 // unqualified names.
-func sqlRefs(sql string, catalogID pgtype.UUID, fallback []string) []lineageTableRef {
+func sqlRefs(sql string, catalogID db.UUID, fallback []string) []lineageTableRef {
 	ref := sqlref.Extract(sql)
 	var out []lineageTableRef
 	for _, t := range ref.Tables {
@@ -365,7 +363,7 @@ func tableDetail(namespace []string, name string) string {
 
 // tableHref is the data explorer route that opens the table. It carries the
 // workspace: the URL is the source of truth for the selected one (#732).
-func (g *lineageGraph) tableHref(catalogID pgtype.UUID, namespace []string, name string) string {
+func (g *lineageGraph) tableHref(catalogID db.UUID, namespace []string, name string) string {
 	q := url.Values{}
 	q.Set("ws", idString(g.ws))
 	q.Set("catalog", idString(catalogID))
@@ -376,7 +374,7 @@ func (g *lineageGraph) tableHref(catalogID pgtype.UUID, namespace []string, name
 	return "/data?" + q.Encode()
 }
 
-func nodeID(kind LineageNodeKind, id pgtype.UUID) string {
+func nodeID(kind LineageNodeKind, id db.UUID) string {
 	return string(kind) + ":" + uuid.UUID(id.Bytes).String()
 }
 

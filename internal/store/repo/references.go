@@ -10,8 +10,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -21,14 +19,14 @@ import (
 // execution, for the live persistence path.
 func (r *Repo) GetStatementReferenceTarget(ctx context.Context, arg db.GetStatementReferenceTargetParams) (db.GetStatementReferenceTargetRow, error) {
 	if !arg.ExecutionID.Valid {
-		return db.GetStatementReferenceTargetRow{}, pgx.ErrNoRows
+		return db.GetStatementReferenceTargetRow{}, db.ErrNoRows
 	}
 	var stmt model.QueryStatement
 	err := r.Users.db.WithContext(ctx).
 		Where("execution_id = ? AND position = ?", UUIDString(arg.ExecutionID), arg.Position).
 		First(&stmt).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetStatementReferenceTargetRow{}, pgx.ErrNoRows
+		return db.GetStatementReferenceTargetRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetStatementReferenceTargetRow{}, err
@@ -36,7 +34,7 @@ func (r *Repo) GetStatementReferenceTarget(ctx context.Context, arg db.GetStatem
 	var exec model.QueryExecution
 	err = r.Users.db.WithContext(ctx).Where("id = ?", string(stmt.ExecutionID)).First(&exec).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetStatementReferenceTargetRow{}, pgx.ErrNoRows
+		return db.GetStatementReferenceTargetRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetStatementReferenceTargetRow{}, err
@@ -48,7 +46,7 @@ func (r *Repo) GetStatementReferenceTarget(ctx context.Context, arg db.GetStatem
 }
 
 // DeleteStatementReferences removes a statement's table references.
-func (r *Repo) DeleteStatementReferences(ctx context.Context, statementID pgtype.UUID) error {
+func (r *Repo) DeleteStatementReferences(ctx context.Context, statementID db.UUID) error {
 	if !statementID.Valid {
 		return nil
 	}
@@ -58,7 +56,7 @@ func (r *Repo) DeleteStatementReferences(ctx context.Context, statementID pgtype
 }
 
 // DeleteStatementJoins removes a statement's equi-joins.
-func (r *Repo) DeleteStatementJoins(ctx context.Context, statementID pgtype.UUID) error {
+func (r *Repo) DeleteStatementJoins(ctx context.Context, statementID db.UUID) error {
 	if !statementID.Valid {
 		return nil
 	}
@@ -237,7 +235,7 @@ func orientJoin(join model.StatementJoin, left, right model.StatementReference, 
 
 // catalogAllowed reproduces the reference's catalog filter: a reference
 // without a catalog always passes; one with a catalog needs an explicit match.
-func catalogAllowed(ref model.StatementReference, catalogID pgtype.UUID) bool {
+func catalogAllowed(ref model.StatementReference, catalogID db.UUID) bool {
 	if ref.CatalogID == nil {
 		return true
 	}
@@ -282,7 +280,7 @@ func (r *Repo) ListForeignKeyJoinSuggestions(ctx context.Context, arg db.ListFor
 // foreignKeys returns the keys declared on a table that reference another
 // table; the reference table is matched case-insensitively, as the sqlc query
 // did.
-func (r *Repo) foreignKeys(ctx context.Context, tableID pgtype.UUID, namespace []string, refTable string) ([]model.MetadataForeignKey, error) {
+func (r *Repo) foreignKeys(ctx context.Context, tableID db.UUID, namespace []string, refTable string) ([]model.MetadataForeignKey, error) {
 	if !tableID.Valid {
 		return nil, nil
 	}
@@ -307,7 +305,7 @@ func (r *Repo) foreignKeys(ctx context.Context, tableID pgtype.UUID, namespace [
 // workspace, with its catalog freshness.
 func (r *Repo) GetGrantedMetadataTable(ctx context.Context, arg db.GetGrantedMetadataTableParams) (db.GetGrantedMetadataTableRow, error) {
 	if !arg.TableID.Valid || !arg.WorkspaceID.Valid {
-		return db.GetGrantedMetadataTableRow{}, pgx.ErrNoRows
+		return db.GetGrantedMetadataTableRow{}, db.ErrNoRows
 	}
 	granted := r.Users.db.WithContext(ctx).Model(&model.WorkspaceCatalogGrant{}).
 		Select("catalog_id").
@@ -319,7 +317,7 @@ func (r *Repo) GetGrantedMetadataTable(ctx context.Context, arg db.GetGrantedMet
 		return db.GetGrantedMetadataTableRow{}, err
 	}
 	if len(catalogs) == 0 {
-		return db.GetGrantedMetadataTableRow{}, pgx.ErrNoRows
+		return db.GetGrantedMetadataTableRow{}, db.ErrNoRows
 	}
 	ids := make([]string, len(catalogs))
 	for i, catalog := range catalogs {
@@ -330,12 +328,12 @@ func (r *Repo) GetGrantedMetadataTable(ctx context.Context, arg db.GetGrantedMet
 		Where("id = ? AND catalog_id IN ?", UUIDString(arg.TableID), ids).
 		First(&table).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetGrantedMetadataTableRow{}, pgx.ErrNoRows
+		return db.GetGrantedMetadataTableRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetGrantedMetadataTableRow{}, err
 	}
-	var syncedAt pgtype.Timestamptz
+	var syncedAt db.Timestamptz
 	var run model.MetadataSyncRun
 	err = r.Users.db.WithContext(ctx).
 		Where("catalog_id = ? AND status = ? AND finished_at IS NOT NULL", string(table.CatalogID), "finished").
@@ -363,14 +361,14 @@ func (r *Repo) GetGrantedMetadataTable(ctx context.Context, arg db.GetGrantedMet
 // ── Trino profile ─────────────────────────────────────────────────────────────
 
 // GetTrinoQuerySnapshot returns the profile Lens recorded for one engine
-// query, or pgx.ErrNoRows.
+// query, or db.ErrNoRows.
 func (r *Repo) GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string) (db.TrinoQuerySnapshot, error) {
 	var row model.TrinoQuerySnapshot
 	err := r.Users.db.WithContext(ctx).
 		Where("trino_query_id = ?", trinoQueryID).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.TrinoQuerySnapshot{}, pgx.ErrNoRows
+		return db.TrinoQuerySnapshot{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.TrinoQuerySnapshot{}, err

@@ -8,12 +8,19 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgconn"
+	"gorm.io/gorm"
 )
 
-// Execer is the subset of a database handle this package needs.
-type Execer interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+// execer is the subset of a database handle this package needs.
+type execer interface {
+	Exec(ctx context.Context, query string, args ...any) error
+}
+
+// storeExecer adapts the GORM store to execer.
+type storeExecer struct{ db *gorm.DB }
+
+func (e storeExecer) Exec(ctx context.Context, query string, args ...any) error {
+	return e.db.WithContext(ctx).Exec(query, args...).Error
 }
 
 // trinoRoleStatements recreate the baleia_trino role and its grants that the
@@ -33,9 +40,13 @@ var trinoRoleStatements = []string{
 // EnsureTrinoRole creates the baleia_trino login role if it is missing and
 // grants it the registry and resource-group reads the plugin needs. It is
 // idempotent.
-func EnsureTrinoRole(ctx context.Context, db Execer) error {
+func EnsureTrinoRole(ctx context.Context, db *gorm.DB) error {
+	return ensureTrinoRole(ctx, storeExecer{db: db})
+}
+
+func ensureTrinoRole(ctx context.Context, db execer) error {
 	for _, stmt := range trinoRoleStatements {
-		if _, err := db.Exec(ctx, stmt); err != nil {
+		if err := db.Exec(ctx, stmt); err != nil {
 			return fmt.Errorf("ensure baleia_trino role: %w", err)
 		}
 	}
@@ -61,12 +72,15 @@ func EnsureTrinoRoleSQL(ctx context.Context, db *sql.DB) error {
 // The value is escaped here (quoteLiteral) because Postgres does not accept a
 // bind parameter in ALTER ROLE ... PASSWORD. Operators who enable full statement
 // logging should be aware the generated DDL carries the value.
-func SetTrinoRolePassword(ctx context.Context, db Execer, password string) error {
+func SetTrinoRolePassword(ctx context.Context, db *gorm.DB, password string) error {
+	return setTrinoRolePassword(ctx, storeExecer{db: db}, password)
+}
+
+func setTrinoRolePassword(ctx context.Context, db execer, password string) error {
 	if password == "" {
 		return nil
 	}
-	_, err := db.Exec(ctx, "ALTER ROLE baleia_trino WITH LOGIN PASSWORD "+quoteLiteral(password))
-	return err
+	return db.Exec(ctx, "ALTER ROLE baleia_trino WITH LOGIN PASSWORD "+quoteLiteral(password))
 }
 
 // quoteLiteral renders s as a single-quoted SQL string literal, doubling any

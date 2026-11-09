@@ -11,7 +11,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // fakeStore returns n events per call, or a full page forever when endless.
@@ -21,7 +20,7 @@ type fakeStore struct {
 	calls   int
 	last    db.ListAuditEventsParams
 	// shared are the users the caller shares a workspace with.
-	shared map[pgtype.UUID]bool
+	shared map[db.UUID]bool
 }
 
 func (f *fakeStore) ListAuditEvents(ctx context.Context, p db.ListAuditEventsParams) ([]db.ListAuditEventsRow, error) {
@@ -36,12 +35,12 @@ func (f *fakeStore) ListAuditEvents(ctx context.Context, p db.ListAuditEventsPar
 	}
 	rows := make([]db.ListAuditEventsRow, n)
 	for i := range rows {
-		rows[i] = db.ListAuditEventsRow{ID: int64(n - i), OccurredAt: pgtype.Timestamptz{Time: time.Unix(int64(1000-i), 0), Valid: true}}
+		rows[i] = db.ListAuditEventsRow{ID: int64(n - i), OccurredAt: db.Timestamptz{Time: time.Unix(int64(1000-i), 0), Valid: true}}
 	}
 	return rows, nil
 }
 
-func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+func (f *fakeStore) GetUserByID(_ context.Context, id db.UUID) (db.User, error) {
 	return db.User{ID: id, Email: "someone@x.io"}, nil
 }
 
@@ -49,7 +48,7 @@ func (f *fakeStore) SharesWorkspace(_ context.Context, arg db.SharesWorkspacePar
 	return f.shared[arg.UserID], nil
 }
 
-func (f *fakeStore) GetCatalogByID(context.Context, pgtype.UUID) (db.Catalog, error) {
+func (f *fakeStore) GetCatalogByID(context.Context, db.UUID) (db.Catalog, error) {
 	return db.Catalog{}, nil
 }
 
@@ -60,7 +59,7 @@ func TestPage(t *testing.T) {
 	s := New(st)
 	from := time.Now().Add(-time.Hour)
 	two := 2
-	user := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	user := db.UUID{Bytes: uuid.New(), Valid: true}
 
 	page, err := s.Page(ctx, Viewer{UserID: user}, Filter{From: &from}, &two, "")
 	if err != nil || len(page.Events) != 2 || page.NextCursor == nil {
@@ -158,8 +157,8 @@ func TestUser_OnlyVisibleUsers(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	caller, peer, stranger := uid(1), uid(2), uid(3)
-	s := New(&fakeStore{shared: map[pgtype.UUID]bool{peer: true}})
-	for name, id := range map[string]pgtype.UUID{"themselves": caller, "a workspace peer": peer} {
+	s := New(&fakeStore{shared: map[db.UUID]bool{peer: true}})
+	for name, id := range map[string]db.UUID{"themselves": caller, "a workspace peer": peer} {
 		if u, err := s.User(ctx, caller, false, id); err != nil || u.ID != id {
 			t.Errorf("%s = %+v, %v; want the user", name, u, err)
 		}
@@ -172,4 +171,4 @@ func TestUser_OnlyVisibleUsers(t *testing.T) {
 	}
 }
 
-func uid(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }
+func uid(b byte) db.UUID { return db.UUID{Bytes: [16]byte{b}, Valid: true} }

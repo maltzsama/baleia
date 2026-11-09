@@ -15,25 +15,22 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/slug"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store reads metrics and records their certification; *repo.Repo
 // implements it.
 type Store interface {
 	ListVisibleSemanticMetrics(ctx context.Context, arg db.ListVisibleSemanticMetricsParams) ([]db.SemanticMetric, error)
-	ListSemanticMetricVersions(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListSemanticMetricVersionsRow, error)
+	ListSemanticMetricVersions(ctx context.Context, workspaceID db.UUID) ([]db.ListSemanticMetricVersionsRow, error)
 	GetSemanticMetric(ctx context.Context, arg db.GetSemanticMetricParams) (db.SemanticMetric, error)
 	SetSemanticMetricCertification(ctx context.Context, arg db.SetSemanticMetricCertificationParams) (db.SemanticMetric, error)
 }
 
 // Content writes metrics and their versions; *content.Service implements it.
 type Content interface {
-	CreateSemanticMetric(ctx context.Context, actor pgtype.UUID, in db.CreateSemanticMetricParams) (db.SemanticMetric, error)
-	UpdateSemanticMetric(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticMetricParams, expectedVersion *int32) (db.SemanticMetric, bool, error)
-	DeleteSemanticMetric(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID) error
+	CreateSemanticMetric(ctx context.Context, actor db.UUID, in db.CreateSemanticMetricParams) (db.SemanticMetric, error)
+	UpdateSemanticMetric(ctx context.Context, actor db.UUID, in db.UpdateSemanticMetricParams, expectedVersion *int32) (db.SemanticMetric, bool, error)
+	DeleteSemanticMetric(ctx context.Context, actor db.UUID, workspaceID, id db.UUID) error
 }
 
 var (
@@ -74,17 +71,17 @@ type Item struct {
 // Filter narrows a listing; nil fields do not filter. Q matches the label,
 // slug or description, case-insensitively.
 type Filter struct {
-	SpaceID   *pgtype.UUID
-	CatalogID *pgtype.UUID
+	SpaceID   *db.UUID
+	CatalogID *db.UUID
 	Certified *bool
-	OwnerID   *pgtype.UUID
+	OwnerID   *db.UUID
 	Q         string
 	// Limit is the most items returned; zero is no limit.
 	Limit int
 }
 
 // List returns the metrics the user can see, with their versions.
-func (s *Service) List(ctx context.Context, ws, userID pgtype.UUID, f Filter) ([]Item, error) {
+func (s *Service) List(ctx context.Context, ws, userID db.UUID, f Filter) ([]Item, error) {
 	all, err := s.store.ListVisibleSemanticMetrics(ctx, db.ListVisibleSemanticMetricsParams{WorkspaceID: ws, UserID: userID})
 	if err != nil {
 		return nil, err
@@ -117,9 +114,9 @@ func (s *Service) List(ctx context.Context, ws, userID pgtype.UUID, f Filter) ([
 }
 
 // Get returns one metric of the workspace.
-func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.SemanticMetric, error) {
+func (s *Service) Get(ctx context.Context, ws, id db.UUID) (db.SemanticMetric, error) {
 	m, err := s.store.GetSemanticMetric(ctx, db.GetSemanticMetricParams{WorkspaceID: ws, ID: id})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.SemanticMetric{}, ErrNotFound
 	}
 	return m, err
@@ -131,11 +128,11 @@ type Fields struct {
 	Label       string
 	Description string
 	Certified   bool
-	CatalogID   pgtype.UUID
+	CatalogID   db.UUID
 	Namespace   []string
 	Table       string
-	BindingID   pgtype.UUID
-	OwnerID     pgtype.UUID
+	BindingID   db.UUID
+	OwnerID     db.UUID
 }
 
 // Prepared is a validated metric, ready to probe and store.
@@ -160,7 +157,7 @@ func Prepare(f Fields, definition map[string]any) (Prepared, error) {
 
 // Create stores a prepared metric in spaceID as actor. Certifying needs
 // canCertify.
-func (s *Service) Create(ctx context.Context, actor, ws, spaceID pgtype.UUID, p Prepared, canCertify bool) (db.SemanticMetric, error) {
+func (s *Service) Create(ctx context.Context, actor, ws, spaceID db.UUID, p Prepared, canCertify bool) (db.SemanticMetric, error) {
 	if p.Certified && !canCertify {
 		return db.SemanticMetric{}, ErrCertifyForbidden
 	}
@@ -203,11 +200,11 @@ type Change struct {
 	Label       *string
 	Description *string
 	Certified   *bool
-	CatalogID   *pgtype.UUID
+	CatalogID   *db.UUID
 	Namespace   *[]string
 	Table       *string
-	BindingID   *pgtype.UUID
-	OwnerID     *pgtype.UUID
+	BindingID   *db.UUID
+	OwnerID     *db.UUID
 	Definition  *map[string]any
 }
 
@@ -271,7 +268,7 @@ func Merge(current db.SemanticMetric, change Change, isManager bool) (Prepared, 
 
 // Update stores a merged metric over current as actor. A version conflict is
 // returned as content reports it.
-func (s *Service) Update(ctx context.Context, actor pgtype.UUID, current db.SemanticMetric, p Prepared, expectedVersion *int32) (db.SemanticMetric, error) {
+func (s *Service) Update(ctx context.Context, actor db.UUID, current db.SemanticMetric, p Prepared, expectedVersion *int32) (db.SemanticMetric, error) {
 	updated, _, err := s.content.UpdateSemanticMetric(ctx, actor, db.UpdateSemanticMetricParams{
 		WorkspaceID:   current.WorkspaceID,
 		SpaceID:       current.SpaceID,
@@ -307,7 +304,7 @@ func (s *Service) Update(ctx context.Context, actor pgtype.UUID, current db.Sema
 }
 
 // Delete removes a metric as actor.
-func (s *Service) Delete(ctx context.Context, actor, ws, id pgtype.UUID) error {
+func (s *Service) Delete(ctx context.Context, actor, ws, id db.UUID) error {
 	return s.content.DeleteSemanticMetric(ctx, actor, ws, id)
 }
 
@@ -352,6 +349,6 @@ func checkFields(f Fields, requireNamespace bool) error {
 }
 
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505" // unique_violation
+	pgErr, ok := db.AsPGError(err)
+	return ok && pgErr.Code == "23505" // unique_violation
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type connQuerier struct {
@@ -23,7 +22,7 @@ type connQuerier struct {
 	conn db.CatalogConnection
 }
 
-func (q *connQuerier) GetCatalogConnectionByID(context.Context, pgtype.UUID) (db.CatalogConnection, error) {
+func (q *connQuerier) GetCatalogConnectionByID(context.Context, db.UUID) (db.CatalogConnection, error) {
 	return q.conn, nil
 }
 
@@ -48,7 +47,7 @@ func TestTableHealthOpensCredentialsThroughKeyring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	id := db.UUID{Bytes: [16]byte{7}, Valid: true}
 	sealed, err := kr.Seal([]byte(`{"client_id":"cid","client_secret":"sekret"}`), catalogs.CredentialsAAD(id))
 	if err != nil {
 		t.Fatal(err)

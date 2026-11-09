@@ -23,8 +23,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Connection tests (#12): the same checks for settings not saved yet and for
@@ -70,9 +68,9 @@ var codeMessages = map[string]string{
 // logged by the caller, never returned.
 func classifyTestError(err error) string {
 	var se *icebergrest.StatusError
-	var pgErr *pgconn.PgError
 	var netErr net.Error
 	var qe *queryengine.Error
+	pgErr, isPG := db.AsPGError(err)
 	msg := strings.ToLower(err.Error())
 	switch {
 	case errors.Is(err, connections.ErrDeniedNetwork):
@@ -93,9 +91,9 @@ func classifyTestError(err error) string {
 		return codeEngineUnavailable
 	case errors.Is(err, connections.ErrNotFound):
 		return codeNotFound
-	case errors.As(err, &pgErr) && strings.HasPrefix(pgErr.Code, "28"):
+	case isPG && strings.HasPrefix(pgErr.Code, "28"):
 		return codeAuthFailed
-	case errors.As(err, &pgErr) && pgErr.Code == "3D000":
+	case isPG && pgErr.Code == "3D000":
 		return codeNotFound
 	case errors.As(err, &qe):
 		switch qe.Code {
@@ -319,7 +317,7 @@ func (h *CatalogHandlers) planTest(ctx context.Context, p authz.Principal, provi
 		case in == "direct_engine":
 			t.direct = true
 		case strings.HasPrefix(in, "bind:"):
-			var id pgtype.UUID
+			var id db.UUID
 			if err := id.Scan(strings.TrimPrefix(in, "bind:")); err != nil {
 				return t, ptr("engine not found"), nil
 			}
@@ -403,7 +401,7 @@ func (h *CatalogHandlers) TestConnectionDraft(ctx context.Context, request TestC
 	if err := json.Unmarshal(raw, &draft); err != nil {
 		return nil, err
 	}
-	cfg, err := h.createConfig(pgtype.UUID{Bytes: uuid.New(), Valid: true}, &draft)
+	cfg, err := h.createConfig(db.UUID{Bytes: uuid.New(), Valid: true}, &draft)
 	var ce *configError
 	if errors.As(err, &ce) {
 		return TestConnectionDraft422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil

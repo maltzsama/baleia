@@ -27,8 +27,6 @@ import (
 	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -45,14 +43,14 @@ func (h *QueryHandlers) ListFolders(ctx context.Context, request ListFoldersRequ
 	if err != nil {
 		return nil, err
 	}
-	var spaceID pgtype.UUID
+	var spaceID db.UUID
 	if request.Params.SpaceId != nil {
-		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+		spaceID = db.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
 	// With a parent, only its children; without, every visible folder.
-	var parent *pgtype.UUID
+	var parent *db.UUID
 	if request.Params.ParentId != nil {
-		parent = &pgtype.UUID{Bytes: *request.Params.ParentId, Valid: true}
+		parent = &db.UUID{Bytes: *request.Params.ParentId, Valid: true}
 	}
 	visible, err := h.folders.List(ctx, workspaceIDFromRequest(request.Id), userID, spaceID, parent)
 	if err != nil {
@@ -83,9 +81,9 @@ func (h *QueryHandlers) CreateFolder(ctx context.Context, request CreateFolderRe
 		return CreateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "space not found"}}, nil
 	}
 
-	var parent *pgtype.UUID
+	var parent *db.UUID
 	if request.Body.ParentId != nil {
-		parent = &pgtype.UUID{Bytes: *request.Body.ParentId, Valid: true}
+		parent = &db.UUID{Bytes: *request.Body.ParentId, Valid: true}
 	}
 	folderSlug := ""
 	if request.Body.Slug != nil {
@@ -112,7 +110,7 @@ func (h *QueryHandlers) DeleteFolder(ctx context.Context, request DeleteFolderRe
 	}
 
 	ws := workspaceIDFromRequest(request.Id)
-	folderID := pgtype.UUID{Bytes: request.FolderId, Valid: true}
+	folderID := db.UUID{Bytes: request.FolderId, Valid: true}
 	folder, err := h.folders.Get(ctx, ws, folderID)
 	if errors.Is(err, folders.ErrNotFound) {
 		return DeleteFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
@@ -161,10 +159,10 @@ func (h *QueryHandlers) ListSavedQueries(ctx context.Context, request ListSavedQ
 
 	filter := savedqueries.Filter{Q: request.Params.Q, Limit: lim}
 	if request.Params.FolderId != nil {
-		filter.FolderID = pgtype.UUID{Bytes: *request.Params.FolderId, Valid: true}
+		filter.FolderID = db.UUID{Bytes: *request.Params.FolderId, Valid: true}
 	}
 	if request.Params.SpaceId != nil {
-		filter.SpaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+		filter.SpaceID = db.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
 	userID, err := uuidFromString(auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -212,7 +210,7 @@ func (h *QueryHandlers) CreateSavedQuery(ctx context.Context, request CreateSave
 		Target:  h.savedQueryTargetFunc(ws, request.Body.Target),
 	}
 	if request.Body.FolderId != nil {
-		in.FolderID = pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
+		in.FolderID = db.UUID{Bytes: *request.Body.FolderId, Valid: true}
 	}
 	if request.Body.Slug != nil {
 		in.Slug = *request.Body.Slug
@@ -240,7 +238,7 @@ func (h *QueryHandlers) GetSavedQuery(ctx context.Context, request GetSavedQuery
 		return GetSavedQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	var queryID pgtype.UUID
+	var queryID db.UUID
 	queryID.Bytes = request.QueryId
 	queryID.Valid = true
 
@@ -275,7 +273,7 @@ func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSave
 	}
 
 	ws := workspaceIDFromRequest(request.Id)
-	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
+	queryID := db.UUID{Bytes: request.QueryId, Valid: true}
 	current, err := h.saved.Get(ctx, ws, queryID)
 	if errors.Is(err, savedqueries.ErrNotFound) {
 		return UpdateSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
@@ -300,7 +298,7 @@ func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSave
 
 	spaceID := current.SpaceID
 	if request.Body.SpaceId != nil {
-		spaceID = pgtype.UUID{Bytes: *request.Body.SpaceId, Valid: true}
+		spaceID = db.UUID{Bytes: *request.Body.SpaceId, Valid: true}
 		if spaceID != current.SpaceID {
 			_, se, err := h.requireSpace(ctx, ws, spaceID, authz.SpaceEditor)
 			if err != nil {
@@ -330,7 +328,7 @@ func (h *QueryHandlers) UpdateSavedQuery(ctx context.Context, request UpdateSave
 		MoveToRoot: request.Body.MoveToRoot != nil && *request.Body.MoveToRoot,
 	}
 	if request.Body.FolderId != nil {
-		change.FolderID = &pgtype.UUID{Bytes: *request.Body.FolderId, Valid: true}
+		change.FolderID = &db.UUID{Bytes: *request.Body.FolderId, Valid: true}
 	}
 	if request.Body.Target != nil {
 		change.Target = h.savedQueryTargetFunc(ws, request.Body.Target)
@@ -366,7 +364,7 @@ func (h *QueryHandlers) DeleteSavedQuery(ctx context.Context, request DeleteSave
 	}
 
 	ws := workspaceIDFromRequest(request.Id)
-	queryID := pgtype.UUID{Bytes: request.QueryId, Valid: true}
+	queryID := db.UUID{Bytes: request.QueryId, Valid: true}
 	current, err := h.saved.Get(ctx, ws, queryID)
 	if errors.Is(err, savedqueries.ErrNotFound) {
 		return DeleteSavedQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "saved query not found"}}, nil
@@ -429,7 +427,7 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 		limit = *p.Limit
 	}
 
-	userFilter := pgtype.UUID{}
+	userFilter := db.UUID{}
 	if p.UserId != nil && *p.UserId != "" {
 		if *p.UserId == "me" {
 			userFilter = callerID
@@ -461,23 +459,23 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 		params.QueueClass = &class
 	}
 	if p.From != nil {
-		params.FromTime = pgtype.Timestamptz{Time: *p.From, Valid: true}
+		params.FromTime = db.Timestamptz{Time: *p.From, Valid: true}
 	}
 	if p.To != nil {
-		params.ToTime = pgtype.Timestamptz{Time: *p.To, Valid: true}
+		params.ToTime = db.Timestamptz{Time: *p.To, Valid: true}
 	}
 	if p.CatalogId != nil {
-		params.CatalogID = pgtype.UUID{Bytes: *p.CatalogId, Valid: true}
+		params.CatalogID = db.UUID{Bytes: *p.CatalogId, Valid: true}
 	}
 	if p.EngineId != nil {
-		params.EngineID = pgtype.UUID{Bytes: *p.EngineId, Valid: true}
+		params.EngineID = db.UUID{Bytes: *p.EngineId, Valid: true}
 	}
 	if p.Cursor != nil && *p.Cursor != "" {
 		at, id, ok := decodeHistoryCursor(*p.Cursor)
 		if !ok {
 			return ListExecutions422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "invalid cursor")}, nil
 		}
-		params.CursorAt = pgtype.Timestamptz{Time: at, Valid: true}
+		params.CursorAt = db.Timestamptz{Time: at, Valid: true}
 		params.CursorID = id
 	}
 
@@ -499,30 +497,30 @@ func (h *QueryHandlers) ListExecutions(ctx context.Context, request ListExecutio
 	return out, nil
 }
 
-func encodeHistoryCursor(at time.Time, id pgtype.UUID) string {
+func encodeHistoryCursor(at time.Time, id db.UUID) string {
 	return base64.RawURLEncoding.EncodeToString(
 		[]byte(at.UTC().Format(time.RFC3339Nano) + "|" + uuid.UUID(id.Bytes).String()),
 	)
 }
 
-func decodeHistoryCursor(cursor string) (time.Time, pgtype.UUID, bool) {
+func decodeHistoryCursor(cursor string) (time.Time, db.UUID, bool) {
 	raw, err := base64.RawURLEncoding.DecodeString(cursor)
 	if err != nil {
-		return time.Time{}, pgtype.UUID{}, false
+		return time.Time{}, db.UUID{}, false
 	}
 	ts, idStr, ok := strings.Cut(string(raw), "|")
 	if !ok {
-		return time.Time{}, pgtype.UUID{}, false
+		return time.Time{}, db.UUID{}, false
 	}
 	at, err := time.Parse(time.RFC3339Nano, ts)
 	if err != nil {
-		return time.Time{}, pgtype.UUID{}, false
+		return time.Time{}, db.UUID{}, false
 	}
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return time.Time{}, pgtype.UUID{}, false
+		return time.Time{}, db.UUID{}, false
 	}
-	return at, pgtype.UUID{Bytes: [16]byte(id), Valid: true}, true
+	return at, db.UUID{Bytes: [16]byte(id), Valid: true}, true
 }
 
 // historyRowToPublic maps one joined history row, including the runner.
@@ -598,7 +596,7 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 		return nil, err
 	}
 
-	var wsID pgtype.UUID
+	var wsID db.UUID
 	wsID.Bytes = request.Id
 	wsID.Valid = true
 
@@ -614,10 +612,10 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 
 	// #111: rerun copies the original statements on the server, never re-splits
 	// SQL. The target defaults to the original one unless the request names one.
-	var rerunOf pgtype.UUID
+	var rerunOf db.UUID
 	var rerunFromPosition int32
 	if request.Body.Rerun != nil {
-		originalID := pgtype.UUID{Bytes: request.Body.Rerun.ExecutionId, Valid: true}
+		originalID := db.UUID{Bytes: request.Body.Rerun.ExecutionId, Valid: true}
 		original, err := h.executions.Get(ctx, workspaceIDFromRequest(request.Id), originalID)
 		if errors.Is(err, executions.ErrNotFound) {
 			h.audited(ctx, ev.Failed(audit.ReasonNotFound))
@@ -657,7 +655,7 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 	// unless its credentials are asserted read-only); an editor or admin
 	// agent may write, and the catalog manager decides what (ADR 0015).
 	principal, _ := authz.PrincipalFromContext(ctx)
-	agentID := pgtype.UUID{}
+	agentID := db.UUID{}
 	origin := workload.OriginEditor
 	if principal.IsAgent() {
 		// The policy applies to the resolved target, not to the ids the
@@ -688,7 +686,7 @@ func (h *QueryHandlers) RunQuery(ctx context.Context, request RunQueryRequestObj
 			message: "queries on " + target.EngineKind + " engines are not available yet",
 		}).unprocessable()}, nil
 	}
-	var savedQueryID pgtype.UUID
+	var savedQueryID db.UUID
 	if request.Body.SavedQueryId != nil {
 		savedQueryID.Bytes = *request.Body.SavedQueryId
 		savedQueryID.Valid = true
@@ -756,7 +754,7 @@ func (h *QueryHandlers) GetExecution(ctx context.Context, request GetExecutionRe
 		return GetExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	var executionID pgtype.UUID
+	var executionID db.UUID
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
@@ -787,7 +785,7 @@ func agentOwnsExecution(ctx context.Context, exec db.QueryExecution) bool {
 // canSeeExecution enforces who may read an execution: an agent only its own
 // (#58); a human the workspace owner's/admin's or their own, mirroring
 // executions.History (#611).
-func (h *QueryHandlers) canSeeExecution(ctx context.Context, ws pgtype.UUID, exec db.QueryExecution) bool {
+func (h *QueryHandlers) canSeeExecution(ctx context.Context, ws db.UUID, exec db.QueryExecution) bool {
 	if !agentOwnsExecution(ctx, exec) {
 		return false
 	}
@@ -809,7 +807,7 @@ func (h *QueryHandlers) CancelExecution(ctx context.Context, request CancelExecu
 		return CancelExecution401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	var executionID pgtype.UUID
+	var executionID db.UUID
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 	wsID := workspaceIDFromRequest(request.Id)
@@ -849,7 +847,7 @@ func (h *QueryHandlers) ListStatements(ctx context.Context, request ListStatemen
 		return ListStatements401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	var executionID pgtype.UUID
+	var executionID db.UUID
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 	wsID := workspaceIDFromRequest(request.Id)
@@ -888,7 +886,7 @@ func (h *QueryHandlers) GetResults(ctx context.Context, request GetResultsReques
 		return GetResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	var executionID pgtype.UUID
+	var executionID db.UUID
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
@@ -967,7 +965,7 @@ func (h *QueryHandlers) GetStatementResults(ctx context.Context, request GetStat
 		return GetStatementResults401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	var executionID pgtype.UUID
+	var executionID db.UUID
 	executionID.Bytes = request.ExecutionId
 	executionID.Valid = true
 
@@ -1123,7 +1121,7 @@ func (h *QueryHandlers) StreamExecution(ctx context.Context, request StreamExecu
 // trinoIdentityFor maps a Baleia user to the Trino identity used for their
 // queries, according to BALEIA_TRINO_USER_IDENTITY ("uuid" default: u_<uuid>,
 // "email": the user's e-mail). Never an admin or service identity.
-func (h *core) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, error) {
+func (h *core) trinoIdentityFor(ctx context.Context, uid db.UUID) (string, error) {
 	return h.access.TrinoIdentity(ctx, h.settings.Execution.TrinoUserIdentity, uid)
 }
 
@@ -1131,11 +1129,11 @@ func (h *core) trinoIdentityFor(ctx context.Context, uid pgtype.UUID) (string, e
 // must be a target of the workspace (its catalog granted, #16).
 // savedQueryTargetFunc resolves a saved query's target for the service; a
 // target error comes back as a *targetError.
-func (h *QueryHandlers) savedQueryTargetFunc(ws pgtype.UUID, t *SavedQueryTarget) savedqueries.Target {
-	return func(ctx context.Context) (pgtype.UUID, *string, error) {
+func (h *QueryHandlers) savedQueryTargetFunc(ws db.UUID, t *SavedQueryTarget) savedqueries.Target {
+	return func(ctx context.Context) (db.UUID, *string, error) {
 		bindingID, schema, te := h.savedQueryTarget(ctx, ws, t)
 		if te != nil {
-			return pgtype.UUID{}, nil, te
+			return db.UUID{}, nil, te
 		}
 		return bindingID, schema, nil
 	}
@@ -1149,23 +1147,23 @@ func savedQueryTargetCode(te *targetError) (ErrorCode, string) {
 	return ErrorCodeTargetNotGranted, "the target's catalog is not granted to this workspace"
 }
 
-func (h *QueryHandlers) savedQueryTarget(ctx context.Context, ws pgtype.UUID, t *SavedQueryTarget) (pgtype.UUID, *string, *targetError) {
+func (h *QueryHandlers) savedQueryTarget(ctx context.Context, ws db.UUID, t *SavedQueryTarget) (db.UUID, *string, *targetError) {
 	if t == nil || t.BindingId == nil {
-		return pgtype.UUID{}, nil, nil
+		return db.UUID{}, nil, nil
 	}
 	workspace, err := h.access.Workspace(ctx, ws)
 	if err != nil {
-		return pgtype.UUID{}, nil, &targetError{code: ErrorCodeWorkspaceNotFound, message: "workspace not found"}
+		return db.UUID{}, nil, &targetError{code: ErrorCodeWorkspaceNotFound, message: "workspace not found"}
 	}
 	target, err := h.ResolveTarget(ctx, workspace, &TargetRequest{BindingId: t.BindingId, Schema: t.Schema})
 	if err != nil {
 		if te, ok := asTargetError(err); ok {
 			if te.notFound {
-				return pgtype.UUID{}, nil, &targetError{code: ErrorCodeTargetNotGranted, message: "the target's catalog is not granted to this workspace"}
+				return db.UUID{}, nil, &targetError{code: ErrorCodeTargetNotGranted, message: "the target's catalog is not granted to this workspace"}
 			}
-			return pgtype.UUID{}, nil, te
+			return db.UUID{}, nil, te
 		}
-		return pgtype.UUID{}, nil, &targetError{code: ErrorCodeInternal, message: err.Error()}
+		return db.UUID{}, nil, &targetError{code: ErrorCodeInternal, message: err.Error()}
 	}
 	return target.BindingID, t.Schema, nil
 }
@@ -1218,7 +1216,7 @@ func dbSavedQueryToPublic(q db.SavedQuery, version int32) SavedQuery {
 }
 
 // savedQueryVersion returns the latest content version, or 0 when none.
-func (h *core) savedQueryVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+func (h *core) savedQueryVersion(ctx context.Context, ws, id db.UUID) int32 {
 	return h.history.Latest(ctx, ws, content.EntitySavedQuery, id)
 }
 
@@ -1319,7 +1317,7 @@ func executionTarget(e db.QueryExecution) *ExecutionTarget {
 
 // executionTargetFrom is the target an execution recorded when it started: the
 // ids (null once the binding, catalog or engine is gone) and the snapshot.
-func executionTargetFrom(snapshot []byte, engineID, bindingID, catalogID pgtype.UUID) *ExecutionTarget {
+func executionTargetFrom(snapshot []byte, engineID, bindingID, catalogID db.UUID) *ExecutionTarget {
 	if len(snapshot) == 0 {
 		return nil
 	}
@@ -1327,7 +1325,7 @@ func executionTargetFrom(snapshot []byte, engineID, bindingID, catalogID pgtype.
 	if err := json.Unmarshal(snapshot, &t); err != nil {
 		return nil
 	}
-	uuidOrNil := func(u pgtype.UUID) *openapi_types.UUID {
+	uuidOrNil := func(u db.UUID) *openapi_types.UUID {
 		if !u.Valid {
 			return nil
 		}
@@ -1422,6 +1420,6 @@ func savedQueryUpdateConflict(msg string) savedQueryConflictJSONResponse {
 }
 
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	pgErr, ok := db.AsPGError(err)
+	return ok && pgErr.Code == "23505"
 }

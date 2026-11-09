@@ -12,7 +12,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/galileostudio/baleia/internal/workload"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -22,7 +21,7 @@ func TestStore_WriteAndRollback(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	engineID := insertEngine(t, gdb)
 
 	store := New(gdb)
@@ -69,7 +68,7 @@ func TestStore_RollbackUnknownRevision(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	engineID := insertEngine(t, gdb)
 
 	store := New(gdb)
@@ -83,7 +82,7 @@ func TestStore_WriteInvalid(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	engineID := insertEngine(t, gdb)
 
 	store := New(gdb)
@@ -99,7 +98,7 @@ func TestStore_WriteClampsRootSums(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	engineID := insertEngine(t, gdb)
 
 	huge := workload.Capacity{MaxRunning: math.MaxInt32, MaxQueued: math.MaxInt32}
@@ -147,7 +146,7 @@ func groupNames(t *testing.T, gdb *gorm.DB) []string {
 }
 
 // insertEngine creates a connection and a Trino engine for the revision FK.
-func insertEngine(t *testing.T, gdb *gorm.DB) pgtype.UUID {
+func insertEngine(t *testing.T, gdb *gorm.DB) db.UUID {
 	t.Helper()
 	ctx := context.Background()
 	q := repo.New(gdb)

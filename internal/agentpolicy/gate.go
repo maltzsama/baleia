@@ -14,8 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/time/rate"
 )
 
@@ -35,10 +33,10 @@ const (
 // Call is one tool invocation the gate decides on.
 type Call struct {
 	Tool        string
-	WorkspaceID pgtype.UUID
-	CatalogID   *pgtype.UUID
-	EngineID    *pgtype.UUID
-	ExecutionID *pgtype.UUID
+	WorkspaceID db.UUID
+	CatalogID   *db.UUID
+	EngineID    *db.UUID
+	ExecutionID *db.UUID
 	SQL         *string
 }
 
@@ -59,22 +57,22 @@ func refuse(reason ReasonCode, detail string) Decision {
 
 // Store is the slice of the database the gate reads.
 type Store interface {
-	GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, error)
+	GetAgentByID(ctx context.Context, id db.UUID) (db.Agent, error)
 	AgentWorkspaceBound(ctx context.Context, arg db.AgentWorkspaceBoundParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
 	GetWorkspaceMemberRole(ctx context.Context, arg db.GetWorkspaceMemberRoleParams) (string, error)
 	CatalogGrantedToAgent(ctx context.Context, arg db.CatalogGrantedToAgentParams) (bool, error)
-	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
-	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
-	CountRunningExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error)
+	GetEngineByID(ctx context.Context, id db.UUID) (db.Engine, error)
+	GetCatalogConnectionByID(ctx context.Context, id db.UUID) (db.CatalogConnection, error)
+	CountRunningExecutionsByAgent(ctx context.Context, agentID db.UUID) (int64, error)
 	CountExecutionsByAgentSince(ctx context.Context, arg db.CountExecutionsByAgentSinceParams) (int64, error)
-	OldestExecutionByAgentSince(ctx context.Context, arg db.OldestExecutionByAgentSinceParams) (pgtype.Timestamptz, error)
+	OldestExecutionByAgentSince(ctx context.Context, arg db.OldestExecutionByAgentSinceParams) (db.Timestamptz, error)
 }
 
 // EngineCapabilities reports whether an engine can enforce a read-only
 // session. The API wires it to the query-engine manager.
 type EngineCapabilities interface {
-	ReadOnly(ctx context.Context, engineID pgtype.UUID) (queryengine.ReadOnlySupport, error)
+	ReadOnly(ctx context.Context, engineID db.UUID) (queryengine.ReadOnlySupport, error)
 }
 
 // Observer records every decision (metrics, #87). It must not block.
@@ -141,7 +139,7 @@ func (g *Gate) Check(ctx context.Context, p authz.Principal, c Call) (dec Decisi
 	}
 	agent, err := g.store.GetAgentByID(ctx, p.AgentID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return refuse(ReasonScope, "agent not found"), nil
 		}
 		return Decision{}, err
@@ -215,7 +213,7 @@ func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff
 	}
 	engine, err := g.store.GetEngineByID(ctx, *c.EngineID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return refuse(ReasonScope, "engine not found"), nil
 		}
 		return Decision{}, err
@@ -276,7 +274,7 @@ func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff
 	since := g.now().Add(-time.Hour)
 	hourly, err := g.store.CountExecutionsByAgentSince(ctx, db.CountExecutionsByAgentSinceParams{
 		AgentID:   p.AgentID,
-		StartedAt: pgtype.Timestamptz{Time: since, Valid: true},
+		StartedAt: db.Timestamptz{Time: since, Valid: true},
 	})
 	if err != nil {
 		return Decision{}, err
@@ -285,7 +283,7 @@ func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff
 		retry := time.Hour
 		oldest, err := g.store.OldestExecutionByAgentSince(ctx, db.OldestExecutionByAgentSinceParams{
 			AgentID:   p.AgentID,
-			StartedAt: pgtype.Timestamptz{Time: since, Valid: true},
+			StartedAt: db.Timestamptz{Time: since, Valid: true},
 		})
 		if err == nil && oldest.Valid {
 			if d := oldest.Time.Add(time.Hour).Sub(g.now()); d > 0 {
@@ -316,7 +314,7 @@ func NewBurstLimiter() *BurstLimiter {
 
 // Allow consumes one token for agentID at now. It evicts agents idle for more
 // than ten minutes so the map does not grow forever.
-func (b *BurstLimiter) Allow(agentID pgtype.UUID, perMinute int, now time.Time) bool {
+func (b *BurstLimiter) Allow(agentID db.UUID, perMinute int, now time.Time) bool {
 	if perMinute <= 0 {
 		return true
 	}
@@ -377,7 +375,7 @@ func leadingKeyword(sql string) string {
 	return s
 }
 
-func uuidString(id pgtype.UUID) string {
+func uuidString(id db.UUID) string {
 	if !id.Valid {
 		return ""
 	}
@@ -387,7 +385,7 @@ func uuidString(id pgtype.UUID) string {
 // agentWrites reports whether the agent may run write statements in the
 // workspace: an external agent whose owner's workspace role is editor or
 // admin (#653). The built-in assistant stays read-only.
-func (g *Gate) agentWrites(ctx context.Context, p authz.Principal, agent db.Agent, ws pgtype.UUID) (bool, error) {
+func (g *Gate) agentWrites(ctx context.Context, p authz.Principal, agent db.Agent, ws db.UUID) (bool, error) {
 	if !ws.Valid || agent.Kind != "external" {
 		return false, nil
 	}

@@ -10,7 +10,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/workload"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Writer is the resource-group write surface Publish needs; db.Querier and the
@@ -19,7 +18,7 @@ type Writer interface {
 	DeleteTrinoResourceGroups(ctx context.Context, environment *string) error
 	InsertTrinoResourceGroup(ctx context.Context, arg db.InsertTrinoResourceGroupParams) (int64, error)
 	InsertTrinoSelector(ctx context.Context, arg db.InsertTrinoSelectorParams) error
-	NextTrinoResourceGroupRevision(ctx context.Context, engineID pgtype.UUID) (int32, error)
+	NextTrinoResourceGroupRevision(ctx context.Context, engineID db.UUID) (int32, error)
 	InsertTrinoResourceGroupRevision(ctx context.Context, arg db.InsertTrinoResourceGroupRevisionParams) error
 }
 
@@ -27,7 +26,7 @@ type Writer interface {
 // inside a transaction, and returns the new revision. Callers that change the
 // settings the document is generated from use it so the settings and the
 // published groups commit together (#635).
-func Publish(ctx context.Context, q Writer, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
+func Publish(ctx context.Context, q Writer, engineID db.UUID, environment string, doc workload.ResourceGroups) (int, error) {
 	if err := workload.Validate(doc); err != nil {
 		return 0, err
 	}
@@ -36,7 +35,7 @@ func Publish(ctx context.Context, q Writer, engineID pgtype.UUID, environment st
 
 // publish replaces the environment's groups and selectors and records the
 // revision, on the querier already inside a transaction.
-func publish(ctx context.Context, q Writer, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
+func publish(ctx context.Context, q Writer, engineID db.UUID, environment string, doc workload.ResourceGroups) (int, error) {
 	if err := q.DeleteTrinoResourceGroups(ctx, &environment); err != nil {
 		return 0, err
 	}

@@ -7,17 +7,17 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/identity/providers"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // UpdateIdentityProvider — PATCH /admin/identity-providers/{id} (#285).
 // Omitted config fields keep their stored value; an empty secret clears it.
 // The provider type is immutable.
 func (h *AuthHandlers) UpdateIdentityProvider(ctx context.Context, request UpdateIdentityProviderRequestObject) (UpdateIdentityProviderResponseObject, error) {
-	ev := audit.Event{Action: audit.IdentityProviderUpdate, ResourceType: "identity_provider", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ev := audit.Event{Action: audit.IdentityProviderUpdate, ResourceType: "identity_provider", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true})}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return UpdateIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
@@ -26,7 +26,7 @@ func (h *AuthHandlers) UpdateIdentityProvider(ctx context.Context, request Updat
 		return UpdateIdentityProvider422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "request body is required")}, nil
 	}
 
-	ap, err := h.providers.Get(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
+	ap, err := h.providers.Get(ctx, db.UUID{Bytes: request.Id, Valid: true})
 	if errors.Is(err, providers.ErrNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return UpdateIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "identity provider not found"}}, nil
@@ -106,13 +106,13 @@ func (h *AuthHandlers) UpdateIdentityProvider(ctx context.Context, request Updat
 // Linked users make the delete a 409 unless suspend_users=true; in that case
 // they are suspended and detached, never orphaned.
 func (h *AuthHandlers) DeleteIdentityProvider(ctx context.Context, request DeleteIdentityProviderRequestObject) (DeleteIdentityProviderResponseObject, error) {
-	ev := audit.Event{Action: audit.IdentityProviderDelete, ResourceType: "identity_provider", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ev := audit.Event{Action: audit.IdentityProviderDelete, ResourceType: "identity_provider", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true})}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return DeleteIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	suspend := request.Params.SuspendUsers != nil && *request.Params.SuspendUsers
 	switch err := h.providers.Delete(ctx, id, suspend); {
 	case errors.Is(err, providers.ErrNotFound):
@@ -137,7 +137,7 @@ func (h *AuthHandlers) TestIdentityProvider(ctx context.Context, request TestIde
 	if auth.RoleFromContext(ctx) != "admin" {
 		return TestIdentityProvider403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
-	ap, err := h.providers.Get(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
+	ap, err := h.providers.Get(ctx, db.UUID{Bytes: request.Id, Valid: true})
 	if errors.Is(err, providers.ErrNotFound) {
 		return TestIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "identity provider not found"}}, nil
 	}

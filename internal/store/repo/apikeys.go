@@ -6,7 +6,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -17,7 +16,7 @@ type APIKeys struct{ db *gorm.DB }
 func NewAPIKeys(db *gorm.DB) *APIKeys { return &APIKeys{db: db} }
 
 // ListAPIKeysByUser returns the user's keys, oldest first.
-func (s *APIKeys) ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]db.ApiKey, error) {
+func (s *APIKeys) ListAPIKeysByUser(ctx context.Context, userID db.UUID) ([]db.ApiKey, error) {
 	var rows []model.APIKey
 	if err := s.db.WithContext(ctx).
 		Where("user_id = ?", UUIDString(userID)).

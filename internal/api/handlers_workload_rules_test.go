@@ -19,7 +19,7 @@ func workloadRuleCtx(role string) context.Context {
 func TestWorkloadRulesCRUDAndTest(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	mem := &memAudit{}
 	h := testAPI(handlerFields{queries: q, tx: directTx{q: q}, audit: mem})
 	admin := workloadRuleCtx(authzRoleAdmin)

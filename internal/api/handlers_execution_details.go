@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryprofile"
 	"github.com/galileostudio/baleia/internal/workbench/executions"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -19,7 +19,7 @@ func (h *QueryHandlers) GetExecutionDetails(ctx context.Context, request GetExec
 		return GetExecutionDetails401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 	wsID := workspaceIDFromRequest(request.Id)
-	executionID := pgtype.UUID{Bytes: request.ExecutionId, Valid: true}
+	executionID := db.UUID{Bytes: request.ExecutionId, Valid: true}
 
 	execution, err := h.executions.Get(ctx, wsID, executionID)
 	if errors.Is(err, executions.ErrNotFound) {

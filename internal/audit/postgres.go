@@ -11,7 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // writeTimeout bounds one audit write: Record never blocks its caller longer.
@@ -83,14 +82,14 @@ func (p *Postgres) record(ctx context.Context, e Event) error {
 		if err != nil {
 			return fmt.Errorf("audit workspace id: %w", err)
 		}
-		row.WorkspaceID = pgtype.UUID{Bytes: id, Valid: true}
+		row.WorkspaceID = db.UUID{Bytes: id, Valid: true}
 	}
 	// Agent-caused events carry the owner (#61); human and service events leave
 	// on_behalf_of NULL.
 	if auth.ActorKindFromContext(ctx) == auth.ActorAgent {
 		if owner := auth.UserIDFromContext(ctx); owner != "" {
 			if id, err := uuid.Parse(owner); err == nil {
-				row.OnBehalfOf = pgtype.UUID{Bytes: id, Valid: true}
+				row.OnBehalfOf = db.UUID{Bytes: id, Valid: true}
 			}
 		}
 	}

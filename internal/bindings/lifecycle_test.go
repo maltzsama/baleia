@@ -11,8 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // fakeBinder fails the operations listed in fail and confirms unless told not to.
@@ -88,7 +86,7 @@ func (s *store) TransitionBinding(ctx context.Context, a db.TransitionBindingPar
 		return db.CatalogBinding{}, err // a real database fails on a dead context
 	}
 	if a.ID != s.b.ID || !slices.Contains(a.FromStates, s.b.LifecycleState) {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+		return db.CatalogBinding{}, db.ErrNoRows
 	}
 	s.b.LifecycleState, s.b.LastErrorCode, s.b.LastErrorMessage = a.ToState, a.ErrorCode, a.ErrorMessage
 	if a.EngineCatalogName != nil {
@@ -99,14 +97,14 @@ func (s *store) TransitionBinding(ctx context.Context, a db.TransitionBindingPar
 	}
 	return s.b, nil
 }
-func (s *store) ObservedManagedNamesOfEngine(context.Context, pgtype.UUID) ([]string, error) {
+func (s *store) ObservedManagedNamesOfEngine(context.Context, db.UUID) ([]string, error) {
 	return s.leftovers, nil
 }
 func (s *store) MarkEngineCatalogManaged(_ context.Context, a db.MarkEngineCatalogManagedParams) error {
 	s.leftovers = append(s.leftovers, a.CatalogName)
 	return nil
 }
-func (s *store) ManagedBindingNamesOfEngine(context.Context, pgtype.UUID) ([]string, error) {
+func (s *store) ManagedBindingNamesOfEngine(context.Context, db.UUID) ([]string, error) {
 	return []string{"sales"}, nil
 }
 func (s *store) UpsertEngineCatalogObservation(_ context.Context, a db.UpsertEngineCatalogObservationParams) error {
@@ -118,7 +116,7 @@ func (s *store) MarkEngineCatalogsAbsent(_ context.Context, a db.MarkEngineCatal
 	return nil
 }
 func (s *store) UpsertNativeCatalog(_ context.Context, a db.UpsertNativeCatalogParams) (db.Catalog, error) {
-	return db.Catalog{ID: pgtype.UUID{Bytes: [16]byte{9}, Valid: true}, Name: a.Name}, nil
+	return db.Catalog{ID: db.UUID{Bytes: [16]byte{9}, Valid: true}, Name: a.Name}, nil
 }
 func (s *store) UpsertAdoptedBinding(_ context.Context, a db.UpsertAdoptedBindingParams) error {
 	s.adopted = append(s.adopted, a.EngineCatalogName)
@@ -126,10 +124,10 @@ func (s *store) UpsertAdoptedBinding(_ context.Context, a db.UpsertAdoptedBindin
 }
 
 func setup(state string) (*store, *fakeBinder, bindings.Lifecycle) {
-	st := &store{b: db.CatalogBinding{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, EngineCatalogName: "sales", Mode: "managed", LifecycleState: state},
+	st := &store{b: db.CatalogBinding{ID: db.UUID{Bytes: [16]byte{1}, Valid: true}, EngineCatalogName: "sales", Mode: "managed", LifecycleState: state},
 		observations: map[string]string{}}
 	fb := &fakeBinder{fail: map[string]error{}}
-	return st, fb, bindings.Lifecycle{Store: st, Binder: fb, ConnectionID: pgtype.UUID{Bytes: [16]byte{7}, Valid: true}}
+	return st, fb, bindings.Lifecycle{Store: st, Binder: fb, ConnectionID: db.UUID{Bytes: [16]byte{7}, Valid: true}}
 }
 
 var proj = bindings.Projection{EngineCatalog: "sales", Version: "v2"}

@@ -9,9 +9,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -39,32 +36,32 @@ func (s *ServiceAccounts) Tx(ctx context.Context, fn func(ServiceAccountWrites) 
 	})
 }
 
-// GetUserByID returns one account or pgx.ErrNoRows.
-func (s *ServiceAccounts) GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error) {
+// GetUserByID returns one account or db.ErrNoRows.
+func (s *ServiceAccounts) GetUserByID(ctx context.Context, id db.UUID) (db.User, error) {
 	return NewUsers(s.db).GetUserByID(ctx, id)
 }
 
-// GetAuthProviderByID returns one provider or pgx.ErrNoRows.
-func (s *ServiceAccounts) GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error) {
+// GetAuthProviderByID returns one provider or db.ErrNoRows.
+func (s *ServiceAccounts) GetAuthProviderByID(ctx context.Context, id db.UUID) (db.AuthProvider, error) {
 	return NewProviders(s.db).GetAuthProviderByID(ctx, id)
 }
 
 // DeleteUserIDPToken removes the account's identity-provider token.
-func (s *ServiceAccounts) DeleteUserIDPToken(ctx context.Context, userID pgtype.UUID) error {
+func (s *ServiceAccounts) DeleteUserIDPToken(ctx context.Context, userID db.UUID) error {
 	return NewUsers(s.db).DeleteUserIDPToken(ctx, userID)
 }
 
-// GetServiceAccount returns one service account or pgx.ErrNoRows.
-func (s *ServiceAccounts) GetServiceAccount(ctx context.Context, id pgtype.UUID) (db.User, error) {
+// GetServiceAccount returns one service account or db.ErrNoRows.
+func (s *ServiceAccounts) GetServiceAccount(ctx context.Context, id db.UUID) (db.User, error) {
 	if !id.Valid {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	var row model.User
 	err := s.db.WithContext(ctx).
 		Where("id = ? AND kind = ?", UUIDString(id), "service_account").
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.User{}, err
@@ -87,7 +84,7 @@ func (s *ServiceAccounts) ListServiceAccounts(ctx context.Context) ([]db.User, e
 // ListServiceAccountsOfWorkspaces returns the service accounts created in, or
 // members of, the given workspaces, by name. Two model queries replace the
 // sqlc LEFT JOIN + DISTINCT so the result is identical on every backend.
-func (s *ServiceAccounts) ListServiceAccountsOfWorkspaces(ctx context.Context, workspaceIDs []pgtype.UUID) ([]db.User, error) {
+func (s *ServiceAccounts) ListServiceAccountsOfWorkspaces(ctx context.Context, workspaceIDs []db.UUID) ([]db.User, error) {
 	ids := make([]string, len(workspaceIDs))
 	for i, id := range workspaceIDs {
 		ids[i] = UUIDString(id)
@@ -126,8 +123,8 @@ func (s *ServiceAccounts) ListServiceAccountsOfWorkspaces(ctx context.Context, w
 // ListAdminWorkspaceIDs returns the workspaces the user administers (#653).
 // The role is the Go replacement for baleia_workspace_member_role, read in one
 // repeatable-read transaction like WorkspaceRole.
-func (s *ServiceAccounts) ListAdminWorkspaceIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
-	var out []pgtype.UUID
+func (s *ServiceAccounts) ListAdminWorkspaceIDs(ctx context.Context, userID db.UUID) ([]db.UUID, error) {
+	var out []db.UUID
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var rows []model.Workspace
 		if err := tx.Order("name").Find(&rows).Error; err != nil {
@@ -169,7 +166,7 @@ func (s *ServiceAccounts) CreateServiceAccount(ctx context.Context, arg db.Creat
 	}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			return db.User{}, &pgconn.PgError{Code: uniqueViolation, Message: "duplicate key value violates unique constraint"}
+			return db.User{}, &db.PGError{Code: uniqueViolation, Message: "duplicate key value violates unique constraint"}
 		}
 		return db.User{}, err
 	}
@@ -187,7 +184,7 @@ func (s *ServiceAccounts) UpdateServiceAccount(ctx context.Context, arg db.Updat
 			Where("id = ? AND kind = ?", UUIDString(arg.ID), "service_account").
 			First(&row)
 		if errors.Is(found.Error, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if found.Error != nil {
 			return found.Error
@@ -204,7 +201,7 @@ func (s *ServiceAccounts) UpdateServiceAccount(ctx context.Context, arg db.Updat
 			})
 		if upd.Error != nil {
 			if errors.Is(upd.Error, gorm.ErrDuplicatedKey) {
-				return &pgconn.PgError{Code: uniqueViolation, Message: "duplicate key value violates unique constraint"}
+				return &db.PGError{Code: uniqueViolation, Message: "duplicate key value violates unique constraint"}
 			}
 			return upd.Error
 		}
@@ -221,7 +218,7 @@ func (s *ServiceAccounts) UpdateServiceAccount(ctx context.Context, arg db.Updat
 }
 
 // DeleteServiceAccount removes a service account and returns the rows.
-func (s *ServiceAccounts) DeleteServiceAccount(ctx context.Context, id pgtype.UUID) (int64, error) {
+func (s *ServiceAccounts) DeleteServiceAccount(ctx context.Context, id db.UUID) (int64, error) {
 	res := s.db.WithContext(ctx).
 		Where("id = ? AND kind = ?", UUIDString(id), "service_account").
 		Delete(&model.User{})
@@ -268,7 +265,7 @@ func (s *ServiceAccounts) UpsertWorkspaceMember(ctx context.Context, arg db.Upse
 // memberAllowed mirrors the sqlc query's allowed set: a personal workspace, a
 // shared workspace whose owning team contains the user, or a service account
 // joined directly to a shared workspace.
-func (s *ServiceAccounts) memberAllowed(ctx context.Context, workspaceID, userID pgtype.UUID) (bool, error) {
+func (s *ServiceAccounts) memberAllowed(ctx context.Context, workspaceID, userID db.UUID) (bool, error) {
 	var ws model.Workspace
 	err := s.db.WithContext(ctx).Where("id = ?", UUIDString(workspaceID)).First(&ws).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {

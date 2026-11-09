@@ -12,18 +12,15 @@ import (
 	"regexp"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Reader reads engines and bindings; *repo.Repo implements it.
 type Reader interface {
 	ListEngines(ctx context.Context) ([]db.Engine, error)
-	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]db.Engine, error)
-	ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]db.CatalogBinding, error)
-	ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error)
-	CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (db.CountEngineBlockersRow, error)
+	ListEnginesVisibleToUser(ctx context.Context, userID db.UUID) ([]db.Engine, error)
+	ListBindingsByEngine(ctx context.Context, engineID db.UUID) ([]db.CatalogBinding, error)
+	ListBindingsByCatalog(ctx context.Context, catalogID db.UUID) ([]db.CatalogBinding, error)
+	CountEngineBlockers(ctx context.Context, engineID db.UUID) (db.CountEngineBlockersRow, error)
 }
 
 // Writer changes an engine; *repo.Repo implements it.
@@ -34,9 +31,9 @@ type Writer interface {
 // Ops reads what an engine reports and its reconcile runs; *repo.Repo
 // implements it.
 type Ops interface {
-	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
-	ListEngineObservations(ctx context.Context, engineID pgtype.UUID) ([]db.EngineCatalogObservation, error)
-	CountEngineImpact(ctx context.Context, engineID pgtype.UUID) (db.CountEngineImpactRow, error)
+	GetEngineByID(ctx context.Context, id db.UUID) (db.Engine, error)
+	ListEngineObservations(ctx context.Context, engineID db.UUID) ([]db.EngineCatalogObservation, error)
+	CountEngineImpact(ctx context.Context, engineID db.UUID) (db.CountEngineImpactRow, error)
 	GetReconcileRun(ctx context.Context, arg db.GetReconcileRunParams) (db.CatalogReconcileRun, error)
 	ListReconcileRuns(ctx context.Context, arg db.ListReconcileRunsParams) ([]db.CatalogReconcileRun, error)
 }
@@ -54,8 +51,8 @@ type TxStore interface {
 	CreateEngine(ctx context.Context, arg db.CreateEngineParams) (db.Engine, error)
 	UpsertNativeCatalog(ctx context.Context, arg db.UpsertNativeCatalogParams) (db.Catalog, error)
 	UpsertNativeBinding(ctx context.Context, arg db.UpsertNativeBindingParams) (db.CatalogBinding, error)
-	DeleteNativeCatalogsOfEngine(ctx context.Context, engineID pgtype.UUID) error
-	DeleteEngine(ctx context.Context, id pgtype.UUID) error
+	DeleteNativeCatalogsOfEngine(ctx context.Context, engineID db.UUID) error
+	DeleteEngine(ctx context.Context, id db.UUID) error
 }
 
 // Tx runs fn in one transaction.
@@ -107,7 +104,7 @@ func CheckName(name string) error {
 
 // List returns every engine to an admin, and to anyone else the engines
 // they may see.
-func (s *Service) List(ctx context.Context, userID pgtype.UUID, admin bool) ([]db.Engine, error) {
+func (s *Service) List(ctx context.Context, userID db.UUID, admin bool) ([]db.Engine, error) {
 	if admin {
 		return s.store.ListEngines(ctx)
 	}
@@ -118,8 +115,8 @@ func (s *Service) List(ctx context.Context, userID pgtype.UUID, admin bool) ([]d
 type NewEngine struct {
 	Name         string
 	Kind         string
-	ConnectionID pgtype.UUID
-	CreatedBy    pgtype.UUID
+	ConnectionID db.UUID
+	CreatedBy    db.UUID
 	// Natives are the connection's native catalogs, each bound to the
 	// engine under its own name.
 	Natives []string
@@ -127,12 +124,12 @@ type NewEngine struct {
 
 // Create stores the engine with its native catalogs and their bindings. It
 // returns the native catalogs, whose metadata the caller syncs.
-func (s *Service) Create(ctx context.Context, n NewEngine) (db.Engine, []pgtype.UUID, error) {
+func (s *Service) Create(ctx context.Context, n NewEngine) (db.Engine, []db.UUID, error) {
 	if err := CheckName(n.Name); err != nil {
 		return db.Engine{}, nil, err
 	}
 	var created db.Engine
-	var natives []pgtype.UUID
+	var natives []db.UUID
 	err := s.tx(ctx, func(q TxStore) error {
 		eng, err := q.CreateEngine(ctx, db.CreateEngineParams{
 			Name:         n.Name,
@@ -158,8 +155,7 @@ func (s *Service) Create(ctx context.Context, n NewEngine) (db.Engine, []pgtype.
 		}
 		return nil
 	})
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+	if pgErr, ok := db.AsPGError(err); ok && pgErr.Code == "23505" {
 		if pgErr.ConstraintName == "engines_connection_id_key" {
 			return db.Engine{}, nil, ErrConnectionTaken
 		}
@@ -172,12 +168,12 @@ func (s *Service) Create(ctx context.Context, n NewEngine) (db.Engine, []pgtype.
 }
 
 // SetEnabled enables or disables an engine; nil keeps it as it is.
-func (s *Service) SetEnabled(ctx context.Context, id pgtype.UUID, enabled *bool) (db.Engine, error) {
+func (s *Service) SetEnabled(ctx context.Context, id db.UUID, enabled *bool) (db.Engine, error) {
 	return s.store.UpdateEngine(ctx, db.UpdateEngineParams{ID: id, Enabled: enabled})
 }
 
 // SetCostRouting opts an engine into cost-based classification (#550).
-func (s *Service) SetCostRouting(ctx context.Context, id pgtype.UUID, enabled *bool, threshold *int64) (db.Engine, error) {
+func (s *Service) SetCostRouting(ctx context.Context, id db.UUID, enabled *bool, threshold *int64) (db.Engine, error) {
 	return s.store.UpdateEngine(ctx, db.UpdateEngineParams{
 		ID:                 id,
 		CostRoutingEnabled: enabled,
@@ -193,7 +189,7 @@ func (s *Service) Update(ctx context.Context, p db.UpdateEngineParams) (db.Engin
 
 // Delete removes an engine and its native catalogs. Managed bindings,
 // running executions or any other reference make it an InUseError.
-func (s *Service) Delete(ctx context.Context, id pgtype.UUID) error {
+func (s *Service) Delete(ctx context.Context, id db.UUID) error {
 	blockers, err := s.store.CountEngineBlockers(ctx, id)
 	if err != nil {
 		return err
@@ -214,32 +210,32 @@ func (s *Service) Delete(ctx context.Context, id pgtype.UUID) error {
 }
 
 // Bindings lists an engine's bindings.
-func (s *Service) Bindings(ctx context.Context, engineID pgtype.UUID) ([]db.CatalogBinding, error) {
+func (s *Service) Bindings(ctx context.Context, engineID db.UUID) ([]db.CatalogBinding, error) {
 	return s.store.ListBindingsByEngine(ctx, engineID)
 }
 
 // CatalogBindings lists the bindings of a catalog.
-func (s *Service) CatalogBindings(ctx context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error) {
+func (s *Service) CatalogBindings(ctx context.Context, catalogID db.UUID) ([]db.CatalogBinding, error) {
 	return s.store.ListBindingsByCatalog(ctx, catalogID)
 }
 
 // Observations lists the catalogs the engine reported, present or gone.
-func (s *Service) Observations(ctx context.Context, engineID pgtype.UUID) ([]db.EngineCatalogObservation, error) {
+func (s *Service) Observations(ctx context.Context, engineID db.UUID) ([]db.EngineCatalogObservation, error) {
 	return s.store.ListEngineObservations(ctx, engineID)
 }
 
 // Impact counts what depends on an engine.
-func (s *Service) Impact(ctx context.Context, engineID pgtype.UUID) (db.CountEngineImpactRow, error) {
+func (s *Service) Impact(ctx context.Context, engineID db.UUID) (db.CountEngineImpactRow, error) {
 	return s.store.CountEngineImpact(ctx, engineID)
 }
 
 // ReconcileRun returns one reconcile run of an engine.
-func (s *Service) ReconcileRun(ctx context.Context, engineID, runID pgtype.UUID) (db.CatalogReconcileRun, error) {
+func (s *Service) ReconcileRun(ctx context.Context, engineID, runID db.UUID) (db.CatalogReconcileRun, error) {
 	if err := s.exists(ctx, engineID); err != nil {
 		return db.CatalogReconcileRun{}, err
 	}
 	run, err := s.store.GetReconcileRun(ctx, db.GetReconcileRunParams{EngineID: engineID, ID: runID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.CatalogReconcileRun{}, ErrRunNotFound
 	}
 	return run, err
@@ -247,7 +243,7 @@ func (s *Service) ReconcileRun(ctx context.Context, engineID, runID pgtype.UUID)
 
 // ReconcileRuns lists an engine's latest reconcile runs. A limit outside
 // 1..MaxRuns is DefaultRuns.
-func (s *Service) ReconcileRuns(ctx context.Context, engineID pgtype.UUID, limit int) ([]db.CatalogReconcileRun, error) {
+func (s *Service) ReconcileRuns(ctx context.Context, engineID db.UUID, limit int) ([]db.CatalogReconcileRun, error) {
 	if err := s.exists(ctx, engineID); err != nil {
 		return nil, err
 	}
@@ -257,9 +253,9 @@ func (s *Service) ReconcileRuns(ctx context.Context, engineID pgtype.UUID, limit
 	return s.store.ListReconcileRuns(ctx, db.ListReconcileRunsParams{EngineID: engineID, Limit: int32(limit)})
 }
 
-func (s *Service) exists(ctx context.Context, id pgtype.UUID) error {
+func (s *Service) exists(ctx context.Context, id db.UUID) error {
 	_, err := s.store.GetEngineByID(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return ErrNotFound
 	}
 	return err
@@ -268,6 +264,6 @@ func (s *Service) exists(ctx context.Context, id pgtype.UUID) error {
 // IsFKViolation reports a delete blocked by a foreign key: 23503 for NO
 // ACTION, 23001 for RESTRICT.
 func IsFKViolation(err error) bool {
-	var e *pgconn.PgError
-	return errors.As(err, &e) && (e.Code == "23503" || e.Code == "23001")
+	e, ok := db.AsPGError(err)
+	return ok && (e.Code == "23503" || e.Code == "23001")
 }

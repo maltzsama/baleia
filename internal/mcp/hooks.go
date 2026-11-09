@@ -9,8 +9,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/agentpolicy"
 	"github.com/galileostudio/baleia/internal/audit"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // AuditHooks records exactly one agent.tool_call per invocation (#61). The
@@ -105,7 +105,7 @@ func argsHash(c agentpolicy.Call) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func uuidString(id pgtype.UUID) string {
+func uuidString(id db.UUID) string {
 	if !id.Valid {
 		return ""
 	}

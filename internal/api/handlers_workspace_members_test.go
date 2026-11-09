@@ -8,7 +8,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -18,9 +17,9 @@ import (
 func TestWorkspaceMembers(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	ctx := context.Background()
-	h := testAPI(handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
+	h := testAPI(handlerFields{queries: q, tx: storeTx{db: pool}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
 
 	user := func(email string) db.User {
 		pw := "x"
@@ -35,7 +34,7 @@ func TestWorkspaceMembers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for u, r := range map[pgtype.UUID]string{owner.ID: "owner", member.ID: "member"} {
+	for u, r := range map[db.UUID]string{owner.ID: "owner", member.ID: "member"} {
 		if _, err := q.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: u, Role: r}); err != nil {
 			t.Fatal(err)
 		}
@@ -49,8 +48,8 @@ func TestWorkspaceMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	as := func(u db.User) context.Context { return ctxAs(idString(u.ID), u.Role) }
-	path := func(id pgtype.UUID) PathId { return PathId(id.Bytes) }
-	set := func(caller db.User, ws, target pgtype.UUID, role WorkspaceRole) SetWorkspaceMemberResponseObject {
+	path := func(id db.UUID) PathId { return PathId(id.Bytes) }
+	set := func(caller db.User, ws, target db.UUID, role WorkspaceRole) SetWorkspaceMemberResponseObject {
 		t.Helper()
 		resp, err := h.SetWorkspaceMember(as(caller), SetWorkspaceMemberRequestObject{Id: path(ws), UserId: openapi_types.UUID(target.Bytes), Body: &SetWorkspaceMemberJSONRequestBody{Role: role}})
 		if err != nil {

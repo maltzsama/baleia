@@ -17,15 +17,14 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store reads events and the entities they name; *repo.Repo implements it.
 type Store interface {
 	ListAuditEvents(ctx context.Context, arg db.ListAuditEventsParams) ([]db.ListAuditEventsRow, error)
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
 	SharesWorkspace(ctx context.Context, arg db.SharesWorkspaceParams) (bool, error)
-	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
+	GetCatalogByID(ctx context.Context, id db.UUID) (db.Catalog, error)
 }
 
 // Limits on pages, windows and exports.
@@ -82,7 +81,7 @@ func New(store Store) *Service { return &Service{store: store} }
 // Viewer is who reads the trail: an admin reads every event, anyone else
 // the events they did or that touch what they own.
 type Viewer struct {
-	UserID pgtype.UUID
+	UserID db.UUID
 	Admin  bool
 }
 
@@ -117,7 +116,7 @@ func (s *Service) Page(ctx context.Context, v Viewer, f Filter, limit *int, curs
 		if !ok {
 			return Page{}, &InvalidError{Msg: "invalid cursor"}
 		}
-		params.CursorAt, params.CursorID = pgtype.Timestamptz{Time: at, Valid: true}, &id
+		params.CursorAt, params.CursorID = db.Timestamptz{Time: at, Valid: true}, &id
 	}
 	rows, err := s.store.ListAuditEvents(ctx, params)
 	if err != nil {
@@ -192,7 +191,7 @@ func (s *Service) Export(ctx context.Context, w io.Writer, f Filter) error {
 // User returns a user an event names, if the caller may see them: an
 // administrator sees everyone, anyone else themselves and the users they
 // share a workspace with (#432). Anyone else is ErrUserHidden.
-func (s *Service) User(ctx context.Context, caller pgtype.UUID, admin bool, id pgtype.UUID) (db.User, error) {
+func (s *Service) User(ctx context.Context, caller db.UUID, admin bool, id db.UUID) (db.User, error) {
 	if !admin && caller != id {
 		shares, err := s.store.SharesWorkspace(ctx, db.SharesWorkspaceParams{CallerID: caller, UserID: id})
 		if err != nil {
@@ -207,7 +206,7 @@ func (s *Service) User(ctx context.Context, caller pgtype.UUID, admin bool, id p
 
 // Catalog returns a catalog an event names, before the caller checks
 // access to its connection.
-func (s *Service) Catalog(ctx context.Context, id pgtype.UUID) (db.Catalog, error) {
+func (s *Service) Catalog(ctx context.Context, id db.UUID) (db.Catalog, error) {
 	return s.store.GetCatalogByID(ctx, id)
 }
 
@@ -230,10 +229,10 @@ func params(f Filter, lim int32) db.ListAuditEventsParams {
 		Outcome: f.Outcome, RequestID: f.RequestID, TraceID: f.TraceID, Lim: lim,
 	}
 	if f.From != nil {
-		p.FromTime = pgtype.Timestamptz{Time: *f.From, Valid: true}
+		p.FromTime = db.Timestamptz{Time: *f.From, Valid: true}
 	}
 	if f.To != nil {
-		p.ToTime = pgtype.Timestamptz{Time: *f.To, Valid: true}
+		p.ToTime = db.Timestamptz{Time: *f.To, Valid: true}
 	}
 	return p
 }
@@ -277,7 +276,7 @@ func ip(v *netip.Addr) string {
 	return v.String()
 }
 
-func id(v pgtype.UUID) string {
+func id(v db.UUID) string {
 	if !v.Valid {
 		return ""
 	}

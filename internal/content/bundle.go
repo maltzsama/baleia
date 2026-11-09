@@ -14,8 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Bundle format v1 (#34, ADR 0013): content-as-code. Repeated exports of
@@ -96,7 +94,7 @@ func (b Bundle) Marshal() ([]byte, error) {
 }
 
 // Export builds the bundle of one space. The caller must have viewer access.
-func (s *Service) Export(ctx context.Context, workspaceID, spaceID pgtype.UUID, baleiaVersion string) (Bundle, error) {
+func (s *Service) Export(ctx context.Context, workspaceID, spaceID db.UUID, baleiaVersion string) (Bundle, error) {
 	space, err := s.store.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: workspaceID, ID: spaceID})
 	if err != nil {
 		return Bundle{}, err
@@ -220,9 +218,9 @@ var ErrNoDialect = errors.New("content: import needs a dialect")
 
 // ImportOptions configure one import.
 type ImportOptions struct {
-	WorkspaceID pgtype.UUID
-	SpaceID     pgtype.UUID
-	Actor       pgtype.UUID
+	WorkspaceID db.UUID
+	SpaceID     db.UUID
+	Actor       db.UUID
 	Bundle      Bundle
 	Mode        ImportMode
 	// AllowCertification lets the importer honor an item's certified flag.
@@ -233,7 +231,7 @@ type ImportOptions struct {
 	// default Trino engine.
 	Dialect dialect.Dialect
 	// ValidateMetric runs #33's engine probe in apply mode; nil skips it.
-	ValidateMetric func(catalogID pgtype.UUID, namespace []string, table string, definition json.RawMessage, bindingID pgtype.UUID) error
+	ValidateMetric func(catalogID db.UUID, namespace []string, table string, definition json.RawMessage, bindingID db.UUID) error
 }
 
 // Import plans every item and, in apply mode with no errors, writes them in one
@@ -275,7 +273,7 @@ type importer struct {
 	opts ImportOptions
 
 	space         db.Space
-	folderIDs     map[string]pgtype.UUID
+	folderIDs     map[string]db.UUID
 	foldersBySlug map[string]db.QueryFolder
 	folderParents map[string]*string
 	targets       []db.ListWorkspaceTargetsRow
@@ -285,11 +283,11 @@ type importer struct {
 type planItem struct {
 	item       BundleItem
 	action     ImportAction
-	existingID pgtype.UUID
-	folderID   pgtype.UUID
-	bindingID  pgtype.UUID
+	existingID db.UUID
+	folderID   db.UUID
+	bindingID  db.UUID
 	target     *BundleTarget
-	catalogID  pgtype.UUID
+	catalogID  db.UUID
 	definition []byte
 	certified  bool
 	message    string
@@ -315,7 +313,7 @@ func (im *importer) run(ctx context.Context) (ImportReport, error) {
 	if err != nil {
 		return report, err
 	}
-	im.folderIDs = map[string]pgtype.UUID{}
+	im.folderIDs = map[string]db.UUID{}
 	im.foldersBySlug = map[string]db.QueryFolder{}
 	im.folderParents = map[string]*string{}
 	slugByID := map[string]string{}
@@ -390,7 +388,7 @@ func (im *importer) planFolder(p *planItem) {
 		p.action, p.message = ActionError, "name_required"
 		return
 	}
-	var parentID pgtype.UUID
+	var parentID db.UUID
 	if item.Parent != nil {
 		if id, ok := im.folderIDs[*item.Parent]; ok {
 			parentID = id
@@ -443,7 +441,7 @@ func (im *importer) planSavedQuery(ctx context.Context, p *planItem) {
 	}
 
 	existing, err := im.q.GetSavedQueryBySlug(ctx, db.GetSavedQueryBySlugParams{WorkspaceID: im.opts.WorkspaceID, Slug: item.Slug})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		p.action = ActionCreate
 		return
 	}
@@ -476,7 +474,7 @@ func (im *importer) planMetric(ctx context.Context, p *planItem) {
 	catID, err := im.q.GetGrantedCatalogByName(ctx, db.GetGrantedCatalogByNameParams{
 		WorkspaceID: im.opts.WorkspaceID, Name: item.Catalog,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		p.action, p.message = ActionError, "catalog_not_granted"
 		return
 	}
@@ -499,7 +497,7 @@ func (im *importer) planMetric(ctx context.Context, p *planItem) {
 
 	existing, err := im.q.GetSemanticMetricBySlug(ctx, db.GetSemanticMetricBySlugParams{WorkspaceID: im.opts.WorkspaceID, Slug: item.Slug})
 	effective := item
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		p.certified = item.Certified && im.opts.AllowCertification
 		effective.Certified = p.certified
 		p.action = ActionCreate
@@ -544,7 +542,7 @@ func (im *importer) planModel(ctx context.Context, p *planItem) {
 	catID, err := im.q.GetGrantedCatalogByName(ctx, db.GetGrantedCatalogByNameParams{
 		WorkspaceID: im.opts.WorkspaceID, Name: item.Catalog,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		p.action, p.message = ActionError, "catalog_not_granted"
 		return
 	}
@@ -567,7 +565,7 @@ func (im *importer) planModel(ctx context.Context, p *planItem) {
 
 	existing, err := im.q.GetSemanticModelBySlug(ctx, db.GetSemanticModelBySlugParams{WorkspaceID: im.opts.WorkspaceID, Slug: item.Slug})
 	effective := item
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		p.certified = item.Certified && im.opts.AllowCertification
 		effective.Certified = p.certified
 		p.action = ActionCreate
@@ -593,7 +591,7 @@ func (im *importer) planModel(ctx context.Context, p *planItem) {
 	}
 }
 
-func parseBundleModel(raw []byte, catalogID pgtype.UUID) (semantic.Model, error) {
+func parseBundleModel(raw []byte, catalogID db.UUID) (semantic.Model, error) {
 	var m semantic.Model
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
@@ -609,16 +607,16 @@ func parseBundleModel(raw []byte, catalogID pgtype.UUID) (semantic.Model, error)
 	return m, nil
 }
 
-func modelBundleEqual(cur db.SemanticModel, item BundleItem, definition []byte, catalogID pgtype.UUID) bool {
+func modelBundleEqual(cur db.SemanticModel, item BundleItem, definition []byte, catalogID db.UUID) bool {
 	return cur.Slug == item.Slug && cur.Label == item.Label && cur.Description == item.Description &&
 		cur.Certified == item.Certified && cur.CatalogID.Bytes == catalogID.Bytes &&
 		cur.FormatVersion == int32(item.ModelFormatVersion) &&
 		sameModelDefinition(cur.Definition, definition)
 }
 
-func (im *importer) resolveTarget(t *BundleTarget) (pgtype.UUID, *string, string, bool) {
+func (im *importer) resolveTarget(t *BundleTarget) (db.UUID, *string, string, bool) {
 	if t == nil || t.Catalog == "" {
-		return pgtype.UUID{}, nil, "", true
+		return db.UUID{}, nil, "", true
 	}
 	for _, row := range im.targets {
 		if !row.BindingEnabled || !row.EngineEnabled || !row.CatalogEnabled {
@@ -632,7 +630,7 @@ func (im *importer) resolveTarget(t *BundleTarget) (pgtype.UUID, *string, string
 		}
 		return row.BindingID, t.Schema, "", true
 	}
-	return pgtype.UUID{}, nil, "target_not_granted", false
+	return db.UUID{}, nil, "target_not_granted", false
 }
 
 func (im *importer) apply(ctx context.Context) error {
@@ -668,7 +666,7 @@ func (im *importer) apply(ctx context.Context) error {
 				}
 			}
 		case KindSavedQuery:
-			var folderID pgtype.UUID
+			var folderID db.UUID
 			if p.item.Folder != nil {
 				folderID = im.folderIDs[*p.item.Folder]
 			}
@@ -836,7 +834,7 @@ func bundleHasFolder(items []BundleItem, slug string) bool {
 	return false
 }
 
-func savedQueryBundleEqual(existing db.SavedQuery, item BundleItem, bindingID pgtype.UUID) bool {
+func savedQueryBundleEqual(existing db.SavedQuery, item BundleItem, bindingID db.UUID) bool {
 	if existing.Name != item.Name || existing.Sql != item.SQL || existing.Slug != item.Slug {
 		return false
 	}
@@ -865,6 +863,6 @@ func metricBundleEqual(existing db.SemanticMetric, item BundleItem, definition [
 	return reflect.DeepEqual(a, b)
 }
 
-func uuidKey(id pgtype.UUID) string {
+func uuidKey(id db.UUID) string {
 	return fmt.Sprintf("%x", id.Bytes)
 }

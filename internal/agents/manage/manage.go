@@ -13,18 +13,16 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Reader reads agents, their workspaces and tokens; *repo.Repo implements
 // it.
 type Reader interface {
-	GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, error)
+	GetAgentByID(ctx context.Context, id db.UUID) (db.Agent, error)
 	ListAllAgents(ctx context.Context) ([]db.Agent, error)
-	ListAgentsByOwner(ctx context.Context, ownerID pgtype.UUID) ([]db.Agent, error)
-	ListAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) ([]db.Workspace, error)
-	ListAgentTokensByAgent(ctx context.Context, agentID pgtype.UUID) ([]db.AgentToken, error)
+	ListAgentsByOwner(ctx context.Context, ownerID db.UUID) ([]db.Agent, error)
+	ListAgentWorkspaces(ctx context.Context, agentID db.UUID) ([]db.Workspace, error)
+	ListAgentTokensByAgent(ctx context.Context, agentID db.UUID) ([]db.AgentToken, error)
 	GetAgentTokenByID(ctx context.Context, arg db.GetAgentTokenByIDParams) (db.AgentToken, error)
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
 }
@@ -32,16 +30,16 @@ type Reader interface {
 // Reach reads what an agent can reach through its workspaces, and the
 // executions it ran; *repo.Repo implements it.
 type Reach interface {
-	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error)
-	ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error)
-	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
+	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error)
+	ListBindingsByCatalog(ctx context.Context, catalogID db.UUID) ([]db.CatalogBinding, error)
+	GetEngineByID(ctx context.Context, id db.UUID) (db.Engine, error)
 	GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg db.GetQueryExecutionByIDAndWorkspaceParams) (db.QueryExecution, error)
 }
 
 // Writer changes agents and tokens outside a transaction; *repo.Repo
 // implements it.
 type Writer interface {
-	DeleteAgent(ctx context.Context, id pgtype.UUID) error
+	DeleteAgent(ctx context.Context, id db.UUID) error
 	CreateAgentToken(ctx context.Context, arg db.CreateAgentTokenParams) (db.AgentToken, error)
 	RevokeAgentToken(ctx context.Context, arg db.RevokeAgentTokenParams) error
 	UpdateAgentPolicy(ctx context.Context, arg db.UpdateAgentPolicyParams) (db.Agent, error)
@@ -60,7 +58,7 @@ type TxStore interface {
 	CreateAgent(ctx context.Context, arg db.CreateAgentParams) (db.Agent, error)
 	UpdateAgent(ctx context.Context, arg db.UpdateAgentParams) (db.Agent, error)
 	SetAgentStatus(ctx context.Context, arg db.SetAgentStatusParams) (db.Agent, error)
-	ClearAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) error
+	ClearAgentWorkspaces(ctx context.Context, agentID db.UUID) error
 	AddAgentWorkspace(ctx context.Context, arg db.AddAgentWorkspaceParams) error
 }
 
@@ -104,15 +102,15 @@ func Name(name string) (string, error) {
 
 // Viewer is who looks at agents.
 type Viewer struct {
-	UserID pgtype.UUID
+	UserID db.UUID
 	Admin  bool
 }
 
 // Visible returns an external agent the viewer owns, or any external agent
 // to an admin; ok is false otherwise.
-func (s *Service) Visible(ctx context.Context, v Viewer, id pgtype.UUID) (db.Agent, bool, error) {
+func (s *Service) Visible(ctx context.Context, v Viewer, id db.UUID) (db.Agent, bool, error) {
 	agent, err := s.store.GetAgentByID(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.Agent{}, false, nil
 	}
 	if err != nil {
@@ -126,7 +124,7 @@ func (s *Service) Visible(ctx context.Context, v Viewer, id pgtype.UUID) (db.Age
 
 // Owned returns an external agent the viewer owns; an admin does not own
 // other users' agents.
-func (s *Service) Owned(ctx context.Context, v Viewer, id pgtype.UUID) (db.Agent, bool, error) {
+func (s *Service) Owned(ctx context.Context, v Viewer, id db.UUID) (db.Agent, bool, error) {
 	agent, ok, err := s.Visible(ctx, v, id)
 	if err != nil || !ok || agent.OwnerID.Bytes != v.UserID.Bytes {
 		return db.Agent{}, false, err
@@ -135,7 +133,7 @@ func (s *Service) Owned(ctx context.Context, v Viewer, id pgtype.UUID) (db.Agent
 }
 
 // List returns the agents of owner, or every agent when all is set.
-func (s *Service) List(ctx context.Context, owner pgtype.UUID, all bool) ([]db.Agent, error) {
+func (s *Service) List(ctx context.Context, owner db.UUID, all bool) ([]db.Agent, error) {
 	if all {
 		return s.store.ListAllAgents(ctx)
 	}
@@ -143,18 +141,18 @@ func (s *Service) List(ctx context.Context, owner pgtype.UUID, all bool) ([]db.A
 }
 
 // Workspaces lists the workspaces an agent is bound to.
-func (s *Service) Workspaces(ctx context.Context, agentID pgtype.UUID) ([]db.Workspace, error) {
+func (s *Service) Workspaces(ctx context.Context, agentID db.UUID) ([]db.Workspace, error) {
 	return s.store.ListAgentWorkspaces(ctx, agentID)
 }
 
 // Tokens lists an agent's tokens, revoked and expired included.
-func (s *Service) Tokens(ctx context.Context, agentID pgtype.UUID) ([]db.AgentToken, error) {
+func (s *Service) Tokens(ctx context.Context, agentID db.UUID) ([]db.AgentToken, error) {
 	return s.store.ListAgentTokensByAgent(ctx, agentID)
 }
 
 // CheckWorkspaces dedupes ids and checks the owner can use each workspace.
-func (s *Service) CheckWorkspaces(ctx context.Context, owner pgtype.UUID, ids []pgtype.UUID) ([]pgtype.UUID, error) {
-	out := make([]pgtype.UUID, 0, len(ids))
+func (s *Service) CheckWorkspaces(ctx context.Context, owner db.UUID, ids []db.UUID) ([]db.UUID, error) {
+	out := make([]db.UUID, 0, len(ids))
 	seen := make(map[[16]byte]bool, len(ids))
 	for _, ws := range ids {
 		if seen[ws.Bytes] {
@@ -175,7 +173,7 @@ func (s *Service) CheckWorkspaces(ctx context.Context, owner pgtype.UUID, ids []
 
 // Create stores an external agent of owner bound to workspaces, already
 // checked with CheckWorkspaces.
-func (s *Service) Create(ctx context.Context, owner pgtype.UUID, name, description string, workspaces []pgtype.UUID) (db.Agent, error) {
+func (s *Service) Create(ctx context.Context, owner db.UUID, name, description string, workspaces []db.UUID) (db.Agent, error) {
 	var agent db.Agent
 	err := s.tx(ctx, func(q TxStore) error {
 		var err error
@@ -197,7 +195,7 @@ type Edit struct {
 	Description string
 	Status      *string
 	// Workspaces replaces the bindings; already checked.
-	Workspaces *[]pgtype.UUID
+	Workspaces *[]db.UUID
 }
 
 // Update applies e to agent in one transaction and returns it as stored.
@@ -223,7 +221,7 @@ func (s *Service) Update(ctx context.Context, agent db.Agent, e Edit) (db.Agent,
 }
 
 // Delete removes an agent and, by cascade, its tokens and bindings.
-func (s *Service) Delete(ctx context.Context, id pgtype.UUID) error {
+func (s *Service) Delete(ctx context.Context, id db.UUID) error {
 	return s.store.DeleteAgent(ctx, id)
 }
 
@@ -245,11 +243,11 @@ func TokenTTL(days *int, def, maxTTL time.Duration) (time.Duration, error) {
 
 // IssueToken stores a new token of agentID; secret is shown once and only
 // its hash is stored.
-func (s *Service) IssueToken(ctx context.Context, agentID pgtype.UUID, name string, ttl time.Duration, by pgtype.UUID) (token db.AgentToken, secret string, err error) {
+func (s *Service) IssueToken(ctx context.Context, agentID db.UUID, name string, ttl time.Duration, by db.UUID) (token db.AgentToken, secret string, err error) {
 	secret, hash, prefix := auth.NewAgentToken()
 	token, err = s.store.CreateAgentToken(ctx, db.CreateAgentTokenParams{
 		AgentID: agentID, Name: name, TokenHash: hash, Prefix: prefix,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(ttl), Valid: true}, CreatedBy: by,
+		ExpiresAt: db.Timestamptz{Time: time.Now().Add(ttl), Valid: true}, CreatedBy: by,
 	})
 	if err != nil {
 		return db.AgentToken{}, "", err
@@ -258,9 +256,9 @@ func (s *Service) IssueToken(ctx context.Context, agentID pgtype.UUID, name stri
 }
 
 // RevokeToken revokes one of agentID's tokens.
-func (s *Service) RevokeToken(ctx context.Context, agentID, tokenID pgtype.UUID) error {
+func (s *Service) RevokeToken(ctx context.Context, agentID, tokenID db.UUID) error {
 	if _, err := s.store.GetAgentTokenByID(ctx, db.GetAgentTokenByIDParams{ID: tokenID, AgentID: agentID}); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return ErrTokenNotFound
 		}
 		return err
@@ -269,27 +267,27 @@ func (s *Service) RevokeToken(ctx context.Context, agentID, tokenID pgtype.UUID)
 }
 
 // SetPolicy stores an agent's policy, already validated, as by.
-func (s *Service) SetPolicy(ctx context.Context, agentID pgtype.UUID, policy []byte, by pgtype.UUID) (db.Agent, error) {
+func (s *Service) SetPolicy(ctx context.Context, agentID db.UUID, policy []byte, by db.UUID) (db.Agent, error) {
 	return s.store.UpdateAgentPolicy(ctx, db.UpdateAgentPolicyParams{ID: agentID, Policy: policy, PolicyUpdatedBy: by})
 }
 
 // EngineReach is an enabled engine bound to a catalog an agent reaches.
 type EngineReach struct {
-	EngineID pgtype.UUID
+	EngineID db.UUID
 	Engine   db.Engine
 }
 
 // CatalogReach is a catalog granted to one of an agent's workspaces, with
 // the enabled engines it is bound to.
 type CatalogReach struct {
-	CatalogID   pgtype.UUID
+	CatalogID   db.UUID
 	CatalogName string
 	Engines     []EngineReach
 }
 
 // Reach lists the catalogs an agent reaches through its workspaces, each
 // once, with their enabled bindings on enabled engines.
-func (s *Service) Reach(ctx context.Context, agentID pgtype.UUID) ([]CatalogReach, error) {
+func (s *Service) Reach(ctx context.Context, agentID db.UUID) ([]CatalogReach, error) {
 	workspaces, err := s.store.ListAgentWorkspaces(ctx, agentID)
 	if err != nil {
 		return nil, err
@@ -316,7 +314,7 @@ func (s *Service) Reach(ctx context.Context, agentID pgtype.UUID) ([]CatalogReac
 					continue
 				}
 				engine, err := s.store.GetEngineByID(ctx, b.EngineID)
-				if errors.Is(err, pgx.ErrNoRows) {
+				if errors.Is(err, db.ErrNoRows) {
 					continue
 				}
 				if err != nil {
@@ -334,15 +332,15 @@ func (s *Service) Reach(ctx context.Context, agentID pgtype.UUID) ([]CatalogReac
 
 // Execution returns an execution of a workspace, for an agent reading its
 // results.
-func (s *Service) Execution(ctx context.Context, ws, id pgtype.UUID) (db.QueryExecution, error) {
+func (s *Service) Execution(ctx context.Context, ws, id db.UUID) (db.QueryExecution, error) {
 	e, err := s.store.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{ID: id, WorkspaceID: ws})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.QueryExecution{}, ErrExecutionNotFound
 	}
 	return e, err
 }
 
-func bind(ctx context.Context, q TxStore, agentID pgtype.UUID, workspaces []pgtype.UUID) error {
+func bind(ctx context.Context, q TxStore, agentID db.UUID, workspaces []db.UUID) error {
 	if err := q.ClearAgentWorkspaces(ctx, agentID); err != nil {
 		return err
 	}

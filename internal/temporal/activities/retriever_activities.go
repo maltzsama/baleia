@@ -14,7 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/retrievers/schedule"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron"
 	"go.temporal.io/sdk/activity"
 )
@@ -61,7 +60,7 @@ func AdvanceRetrieverSchedule(ctx context.Context, params AdvanceRetrieverSchedu
 }
 
 func (a *Activities) advanceRetrieverSchedule(ctx context.Context, params AdvanceRetrieverScheduleParams) error {
-	var retrieverID pgtype.UUID
+	var retrieverID db.UUID
 	if err := retrieverID.Scan(params.RetrieverID); err != nil {
 		return err
 	}
@@ -80,7 +79,7 @@ func (a *Activities) advanceRetrieverSchedule(ctx context.Context, params Advanc
 
 	return a.store.AdvanceRetrieverSchedule(ctx, db.AdvanceRetrieverScheduleParams{
 		ID:            retrieverID,
-		NextRefreshAt: pgtype.Timestamptz{Time: next, Valid: true},
+		NextRefreshAt: db.Timestamptz{Time: next, Valid: true},
 	})
 }
 
@@ -96,7 +95,7 @@ func RetrieverRefresh(ctx context.Context, params RetrieverRefreshParams) error 
 func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefreshParams) error {
 	logger := activity.GetLogger(ctx)
 
-	var retrieverID pgtype.UUID
+	var retrieverID db.UUID
 	if err := retrieverID.Scan(params.RetrieverID); err != nil {
 		return err
 	}
@@ -122,7 +121,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	// v1 refresh: one atomic statement replaced under a new Iceberg snapshot.
 	// The binding names the engine that runs it and the catalog to write.
 	var eng queryengine.Engine
-	var engineID pgtype.UUID
+	var engineID db.UUID
 	destCatalog := retriever.DestCatalog
 	if retriever.DestBindingID.Valid {
 		binding, err := a.store.GetBinding(ctx, retriever.DestBindingID)
@@ -244,7 +243,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 // failRefresh records a failed run before returning: the retriever flips to
 // 'error' and the history row created as 'running' becomes 'failed', so a
 // binding/engine lookup failure never leaves the run stuck as running.
-func (a *Activities) failRefresh(ctx context.Context, retrieverID, historyID pgtype.UUID, err error) error {
+func (a *Activities) failRefresh(ctx context.Context, retrieverID, historyID db.UUID, err error) error {
 	msg := err.Error()
 	code := retrieverErrorCode(err)
 	if uerr := a.store.UpdateRetrieverAfterRefresh(ctx, db.UpdateRetrieverAfterRefreshParams{
@@ -304,7 +303,7 @@ func retrieverErrorCode(err error) string {
 }
 
 // uuidStr renders a valid id as its UUID string, "" otherwise.
-func uuidStr(id pgtype.UUID) string {
+func uuidStr(id db.UUID) string {
 	if !id.Valid {
 		return ""
 	}

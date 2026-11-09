@@ -31,22 +31,9 @@ const (
 	MySQL Backend = "mysql"
 )
 
-// ParseBackend validates a configured backend name. An empty name selects
-// PostgreSQL, preserving the previous default.
-func ParseBackend(name string) (Backend, error) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "", string(Postgres), "postgresql":
-		return Postgres, nil
-	case string(MySQL), "mariadb":
-		return MySQL, nil
-	default:
-		return "", fmt.Errorf("unsupported store backend %q (want postgres or mysql)", name)
-	}
-}
-
-// BackendFromDSN infers the backend from a connection string. PostgreSQL
-// accepts URL form; MySQL accepts the go-sql-driver DSN form. The ADR prefers
-// an explicit BALEIA_STORE_BACKEND, so this is only a fallback.
+// BackendFromDSN infers the backend from the connection string: a postgres://
+// URL or the go-sql-driver DSN form (@tcp/@unix). The DSN is the single source
+// of truth; there is no separate backend setting.
 func BackendFromDSN(dsn string) (Backend, error) {
 	switch {
 	case strings.HasPrefix(dsn, "postgres://"), strings.HasPrefix(dsn, "postgresql://"):
@@ -54,16 +41,8 @@ func BackendFromDSN(dsn string) (Backend, error) {
 	case strings.Contains(dsn, "@tcp("), strings.Contains(dsn, "@unix("):
 		return MySQL, nil
 	default:
-		return "", fmt.Errorf("cannot infer the store backend from the connection string; set BALEIA_STORE_BACKEND to postgres or mysql")
+		return "", fmt.Errorf("cannot infer the store backend from the connection string: use a postgres:// URL or the MySQL go-sql-driver DSN")
 	}
-}
-
-// ResolveBackend returns the configured backend, falling back to the DSN.
-func ResolveBackend(configured, dsn string) (Backend, error) {
-	if strings.TrimSpace(configured) != "" {
-		return ParseBackend(configured)
-	}
-	return BackendFromDSN(dsn)
 }
 
 // Options tune the GORM connection. Zero values keep GORM/database-sql
@@ -79,15 +58,15 @@ type Options struct {
 	// LogLevel overrides GORM's default (warn) when non-zero.
 	LogLevel gormlogger.LogLevel
 	// StatementTimeout, IdleInTxTimeout and LockTimeout are applied to every
-	// PostgreSQL session, as dbpool.Open does for the pgx pool.
+	// PostgreSQL session of the store connection.
 	StatementTimeout time.Duration
 	IdleInTxTimeout  time.Duration
 	LockTimeout      time.Duration
 }
 
-// Open connects to the store with the dialector selected by backend. The DSN
-// is never used to pick the dialector by itself: ADR 0020 requires an explicit
-// backend, and ResolveBackend is the supported inference fallback.
+// Open connects to the store with the dialector selected by backend. Callers
+// derive the backend from the DSN with BackendFromDSN; the DSN is the single
+// source of truth.
 func Open(ctx context.Context, dsn string, backend Backend, opts Options) (*gorm.DB, error) {
 	if backend == Postgres {
 		var err error
@@ -159,9 +138,9 @@ func Close(db *gorm.DB) error {
 	return sqlDB.Close()
 }
 
-// pgxPoolParams are accepted by pgxpool.ParseConfig but are not PostgreSQL
+// poolOnlyParams are accepted by connection-pool clients but are not PostgreSQL
 // parameters: forwarding them makes the server reject the startup.
-var pgxPoolParams = []string{
+var poolOnlyParams = []string{
 	"pool_max_conns",
 	"pool_min_conns",
 	"pool_max_conn_lifetime",
@@ -170,7 +149,7 @@ var pgxPoolParams = []string{
 	"pool_max_conn_lifetime_jitter",
 }
 
-// postgresDSN strips pgxpool-only parameters and applies the session timeouts
+// postgresDSN strips pool-only parameters and applies the session timeouts
 // through PostgreSQL's options parameter.
 func postgresDSN(dsn string, opts Options) (string, error) {
 	if !strings.Contains(dsn, "://") {
@@ -181,7 +160,7 @@ func postgresDSN(dsn string, opts Options) (string, error) {
 		return "", fmt.Errorf("parse postgres store DSN: %w", err)
 	}
 	q := u.Query()
-	for _, key := range pgxPoolParams {
+	for _, key := range poolOnlyParams {
 		q.Del(key)
 	}
 	var settings []string

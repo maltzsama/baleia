@@ -6,14 +6,12 @@ import (
 
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // RedirectionStore reads what Hive table redirection needs.
 type RedirectionStore interface {
-	ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]db.CatalogBinding, error)
-	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
+	ListBindingsByEngine(ctx context.Context, engineID db.UUID) ([]db.CatalogBinding, error)
+	GetCatalogByID(ctx context.Context, id db.UUID) (db.Catalog, error)
 }
 
 // HiveRedirection fills the Trino table-redirection properties of a
@@ -26,7 +24,7 @@ type RedirectionStore interface {
 // affected. Sidings must already be active on the engine, so the property
 // never names a catalog Trino cannot load. extra is mutated in place; the
 // caller merges it over the projection.
-func HiveRedirection(ctx context.Context, store RedirectionStore, srcKind connections.Kind, connID, engineID, catalogID pgtype.UUID, connector string, extra map[string]string) error {
+func HiveRedirection(ctx context.Context, store RedirectionStore, srcKind connections.Kind, connID, engineID, catalogID db.UUID, connector string, extra map[string]string) error {
 	if connector != "hive" || (srcKind != connections.KindHiveMetastore && srcKind != connections.KindGlue) {
 		return nil
 	}
@@ -42,7 +40,7 @@ func HiveRedirection(ctx context.Context, store RedirectionStore, srcKind connec
 			continue
 		}
 		cat, err := store.GetCatalogByID(ctx, b.CatalogID)
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			continue // the binding outlived its catalog: not a sibling
 		}
 		if err != nil {

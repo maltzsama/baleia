@@ -14,7 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/retrievers"
 	"github.com/galileostudio/baleia/internal/retrievers/schedule"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -71,7 +70,7 @@ func (h *QueryHandlers) CreateRetriever(ctx context.Context, request CreateRetri
 		CronSchedule:  request.Body.CronSchedule,
 	}
 	if request.Body.DestBindingId != nil {
-		draft.DestBindingID = &pgtype.UUID{Bytes: *request.Body.DestBindingId, Valid: true}
+		draft.DestBindingID = &db.UUID{Bytes: *request.Body.DestBindingId, Valid: true}
 	}
 	if request.Body.DestCatalog != nil {
 		draft.DestCatalog = *request.Body.DestCatalog
@@ -97,7 +96,7 @@ func (h *QueryHandlers) GetRetriever(ctx context.Context, request GetRetrieverRe
 		return GetRetriever401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	retriever, err := h.retrievers.Get(ctx, workspaceIDFromRequest(request.Id), pgtype.UUID{Bytes: request.RetrieverId, Valid: true})
+	retriever, err := h.retrievers.Get(ctx, workspaceIDFromRequest(request.Id), db.UUID{Bytes: request.RetrieverId, Valid: true})
 	if errors.Is(err, retrievers.ErrNotFound) {
 		return GetRetriever404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "retriever not found"}}, nil
 	}
@@ -149,7 +148,7 @@ func (h *QueryHandlers) UpdateRetriever(ctx context.Context, request UpdateRetri
 		CronSchedule:  b.CronSchedule,
 	}
 	if b.DestBindingId != nil {
-		change.DestBindingID = &pgtype.UUID{Bytes: *b.DestBindingId, Valid: true}
+		change.DestBindingID = &db.UUID{Bytes: *b.DestBindingId, Valid: true}
 	}
 	if b.RefreshType != nil {
 		v := string(*b.RefreshType)
@@ -159,7 +158,7 @@ func (h *QueryHandlers) UpdateRetriever(ctx context.Context, request UpdateRetri
 		v := string(*b.Status)
 		change.Status = &v
 	}
-	updated, err := h.retrievers.Update(ctx, workspaceIDFromRequest(request.Id), pgtype.UUID{Bytes: request.RetrieverId, Valid: true}, change)
+	updated, err := h.retrievers.Update(ctx, workspaceIDFromRequest(request.Id), db.UUID{Bytes: request.RetrieverId, Valid: true}, change)
 	if errors.Is(err, retrievers.ErrNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return UpdateRetriever404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "retriever not found"}}, nil
@@ -190,7 +189,7 @@ func (h *QueryHandlers) DeleteRetriever(ctx context.Context, request DeleteRetri
 		return nil, err
 	}
 
-	err := h.retrievers.Delete(ctx, workspaceIDFromRequest(request.Id), pgtype.UUID{Bytes: request.RetrieverId, Valid: true})
+	err := h.retrievers.Delete(ctx, workspaceIDFromRequest(request.Id), db.UUID{Bytes: request.RetrieverId, Valid: true})
 	if errors.Is(err, retrievers.ErrNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return DeleteRetriever404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "retriever not found"}}, nil
@@ -221,7 +220,7 @@ func (h *QueryHandlers) TriggerRetrieverRefresh(ctx context.Context, request Tri
 	if request.Body != nil && request.Body.RefreshType != nil {
 		refreshType = string(*request.Body.RefreshType)
 	}
-	err := h.retrievers.Refresh(ctx, workspaceIDFromRequest(request.Id), pgtype.UUID{Bytes: request.RetrieverId, Valid: true}, refreshType)
+	err := h.retrievers.Refresh(ctx, workspaceIDFromRequest(request.Id), db.UUID{Bytes: request.RetrieverId, Valid: true}, refreshType)
 	switch {
 	case errors.Is(err, retrievers.ErrNotFound):
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
@@ -245,7 +244,7 @@ func (h *QueryHandlers) GetRetrieverHistory(ctx context.Context, request GetRetr
 		return GetRetrieverHistory401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "workspace not found"}}, nil
 	}
 
-	history, err := h.retrievers.History(ctx, workspaceIDFromRequest(request.Id), pgtype.UUID{Bytes: request.RetrieverId, Valid: true})
+	history, err := h.retrievers.History(ctx, workspaceIDFromRequest(request.Id), db.UUID{Bytes: request.RetrieverId, Valid: true})
 	if errors.Is(err, retrievers.ErrNotFound) {
 		return GetRetrieverHistory404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "retriever not found"}}, nil
 	}
@@ -294,7 +293,7 @@ func (h *QueryHandlers) ValidateRetriever(ctx context.Context, request ValidateR
 		return nil, err
 	}
 
-	err = h.retrievers.Validate(ctx, workspaceIDFromRequest(request.Id), pgtype.UUID{Bytes: request.Body.DestBindingId, Valid: true}, request.Body.DefinitionSql, queryengine.Identity{UserID: identity, Principal: idString(uid)})
+	err = h.retrievers.Validate(ctx, workspaceIDFromRequest(request.Id), db.UUID{Bytes: request.Body.DestBindingId, Valid: true}, request.Body.DefinitionSql, queryengine.Identity{UserID: identity, Principal: idString(uid)})
 	switch {
 	case errors.Is(err, retrievers.ErrBindingNotFound):
 		return ValidateRetriever404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "binding not found"}}, nil

@@ -8,25 +8,11 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 func TestAgentManageRoundTrip(t *testing.T) {
 	t.Parallel()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -61,7 +47,7 @@ func TestAgentManageRoundTrip(t *testing.T) {
 
 	if _, err := store.CreateAgentToken(ctx, db.CreateAgentTokenParams{
 		AgentID: agent.ID, Name: "t", TokenHash: "hash", Prefix: "bal_",
-		ExpiresAt: pgtype.Timestamptz{Time: now.Add(time.Hour), Valid: true}, CreatedBy: ownerID,
+		ExpiresAt: db.Timestamptz{Time: now.Add(time.Hour), Valid: true}, CreatedBy: ownerID,
 	}); err != nil {
 		t.Fatalf("CreateAgentToken: %v", err)
 	}

@@ -13,8 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -133,9 +131,9 @@ func (h *CatalogHandlers) UpdateWorkloadRule(ctx context.Context, request Update
 	if request.Body == nil {
 		return UpdateWorkloadRule422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "a body is required")}, nil
 	}
-	id := pgtype.UUID{Bytes: request.RuleId, Valid: true}
+	id := db.UUID{Bytes: request.RuleId, Valid: true}
 	row, err := h.workloadRulesStore().GetWorkloadRule(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return UpdateWorkloadRule404JSONResponse{NotFoundJSONResponse: workloadRuleNotFound()}, nil
 	}
 	if err != nil {
@@ -204,7 +202,7 @@ func (h *CatalogHandlers) UpdateWorkloadRule(ctx context.Context, request Update
 		MaxClass: maxClass,
 		Weight:   int32(weight), //nolint:gosec // weight is a small admin setting
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return UpdateWorkloadRule404JSONResponse{NotFoundJSONResponse: workloadRuleNotFound()}, nil
 	}
 	if err != nil {
@@ -230,7 +228,7 @@ func (h *CatalogHandlers) DeleteWorkloadRule(ctx context.Context, request Delete
 	if auth.RoleFromContext(ctx) != authz.RoleAdmin {
 		return DeleteWorkloadRule403JSONResponse{ForbiddenJSONResponse: workloadForbidden()}, nil
 	}
-	id := pgtype.UUID{Bytes: request.RuleId, Valid: true}
+	id := db.UUID{Bytes: request.RuleId, Valid: true}
 	deleted, err := h.workloadRulesStore().DeleteWorkloadRule(ctx, id)
 	if err != nil {
 		return nil, err
@@ -454,10 +452,10 @@ func workloadRuleDiff(before, after WorkloadRule) map[string]audit.Change {
 }
 
 // callerID is the creating user, or the zero UUID for an agent principal.
-func callerID(ctx context.Context) pgtype.UUID {
-	var id pgtype.UUID
+func callerID(ctx context.Context) db.UUID {
+	var id db.UUID
 	if err := id.Scan(auth.UserIDFromContext(ctx)); err != nil {
-		return pgtype.UUID{}
+		return db.UUID{}
 	}
 	return id
 }

@@ -7,8 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -16,7 +14,7 @@ import (
 // ── grants and requests ──────────────────────────────────────────────────────
 
 // ListCatalogGrants lists the workspaces a catalog is granted to.
-func (r *Repo) ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogGrantsRow, error) {
+func (r *Repo) ListCatalogGrants(ctx context.Context, catalogID db.UUID) ([]db.ListCatalogGrantsRow, error) {
 	var rows []struct {
 		WorkspaceID   model.UUID
 		WorkspaceName string
@@ -49,7 +47,7 @@ func (r *Repo) ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) ([]
 
 // ListCatalogGrantRequestsForWorkspace lists a workspace's pending requests
 // with the catalog and connection names the UI shows.
-func (r *Repo) ListCatalogGrantRequestsForWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListCatalogGrantRequestsForWorkspaceRow, error) {
+func (r *Repo) ListCatalogGrantRequestsForWorkspace(ctx context.Context, workspaceID db.UUID) ([]db.ListCatalogGrantRequestsForWorkspaceRow, error) {
 	var rows []struct {
 		WorkspaceID       model.UUID
 		CatalogID         model.UUID
@@ -90,7 +88,7 @@ func (r *Repo) ListCatalogGrantRequestsForWorkspace(ctx context.Context, workspa
 }
 
 // ListCatalogGrantRequestsForCatalog lists a catalog's pending requests.
-func (r *Repo) ListCatalogGrantRequestsForCatalog(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogGrantRequestsForCatalogRow, error) {
+func (r *Repo) ListCatalogGrantRequestsForCatalog(ctx context.Context, catalogID db.UUID) ([]db.ListCatalogGrantRequestsForCatalogRow, error) {
 	var rows []struct {
 		WorkspaceID     model.UUID
 		CatalogID       model.UUID
@@ -153,14 +151,14 @@ func (r *Repo) CreateCatalogGrantRequest(ctx context.Context, arg db.CreateCatal
 	})
 }
 
-// GetCatalogGrantRequest returns one pending request or pgx.ErrNoRows.
+// GetCatalogGrantRequest returns one pending request or db.ErrNoRows.
 func (r *Repo) GetCatalogGrantRequest(ctx context.Context, arg db.GetCatalogGrantRequestParams) (db.CatalogGrantRequest, error) {
 	var row model.CatalogGrantRequest
 	err := r.Users.db.WithContext(ctx).
 		Where("workspace_id = ? AND catalog_id = ?", UUIDString(arg.WorkspaceID), UUIDString(arg.CatalogID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.CatalogGrantRequest{}, pgx.ErrNoRows
+		return db.CatalogGrantRequest{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.CatalogGrantRequest{}, err
@@ -208,7 +206,7 @@ func (r *Repo) ListGrantableWorkspaces(ctx context.Context) ([]db.ListGrantableW
 
 // ListGrantedCatalogsOfWorkspace lists the enabled catalogs granted to a
 // workspace, with their connection.
-func (r *Repo) ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListGrantedCatalogsOfWorkspaceRow, error) {
+func (r *Repo) ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID db.UUID) ([]db.ListGrantedCatalogsOfWorkspaceRow, error) {
 	var rows []struct {
 		ID               model.UUID
 		ConnectionID     model.UUID

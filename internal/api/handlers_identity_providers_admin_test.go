@@ -7,7 +7,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -21,7 +20,7 @@ func addDirectoryUser(t *testing.T, h *API, apID openapi_types.UUID) {
 	t.Helper()
 	providerID := model.UUID(apID.String())
 	externalID := model.Text("ext-1")
-	if err := testdb.GORM(t, h.pool).Create(&model.User{
+	if err := h.store.Create(&model.User{
 		ID: model.UUID(repo.NewUUID()), Name: "dir user", Email: "dir@example.test",
 		AuthProvider: "oidc", AuthProviderID: &providerID, ExternalID: &externalID,
 	}).Error; err != nil {
@@ -132,7 +131,7 @@ func TestIdP_DeleteSuspends(t *testing.T) {
 		t.Fatalf("delete = %T, want 204", got)
 	}
 
-	gdb := testdb.GORM(t, h.pool)
+	gdb := h.store
 	var user model.User
 	if err := gdb.Where("email = ?", "dir@example.test").First(&user).Error; err != nil {
 		t.Fatal(err)
@@ -172,7 +171,7 @@ func TestIdP_TransientTestPersistsNothing(t *testing.T) {
 	}
 
 	var n int64
-	if err := testdb.GORM(t, h.pool).Model(&model.AuthProvider{}).Count(&n).Error; err != nil {
+	if err := h.store.Model(&model.AuthProvider{}).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

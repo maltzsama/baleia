@@ -8,7 +8,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 // testSecret is a valid-length encryption key for the credential tests.
@@ -23,7 +23,7 @@ func testKeyring(t *testing.T) *crypto.Keyring {
 	return kr
 }
 
-var testConnID = pgtype.UUID{Bytes: [16]byte{0xC0, 0xFF, 0xEE}, Valid: true}
+var testConnID = db.UUID{Bytes: [16]byte{0xC0, 0xFF, 0xEE}, Valid: true}
 
 func TestEncodeCredentialsNil(t *testing.T) {
 	t.Parallel()
@@ -86,7 +86,7 @@ func TestEncodeCredentialsBoundToRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	other := pgtype.UUID{Bytes: [16]byte{0xDE, 0xAD}, Valid: true}
+	other := db.UUID{Bytes: [16]byte{0xDE, 0xAD}, Valid: true}
 	if _, err := kr.Open(*enc, catalogs.CredentialsAAD(other)); !errors.Is(err, crypto.ErrCorrupt) {
 		t.Fatalf("envelope opened for a different connection: %v", err)
 	}

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeConnQuerier struct {
@@ -15,11 +14,11 @@ type fakeConnQuerier struct {
 	conn db.CatalogConnection
 }
 
-func (f *fakeConnQuerier) GetCatalogConnectionByID(context.Context, pgtype.UUID) (db.CatalogConnection, error) {
+func (f *fakeConnQuerier) GetCatalogConnectionByID(context.Context, db.UUID) (db.CatalogConnection, error) {
 	return f.conn, nil
 }
 
-func ownerUUID(t *testing.T, s string) pgtype.UUID {
+func ownerUUID(t *testing.T, s string) db.UUID {
 	t.Helper()
 	u, err := uuidFromString(s)
 	if err != nil {
@@ -28,10 +27,10 @@ func ownerUUID(t *testing.T, s string) pgtype.UUID {
 	return u
 }
 
-func testConnection(t *testing.T, stored bool, owner pgtype.UUID) db.CatalogConnection {
+func testConnection(t *testing.T, stored bool, owner db.UUID) db.CatalogConnection {
 	t.Helper()
 	c := db.CatalogConnection{
-		ID:        pgtype.UUID{Bytes: [16]byte{0x01}, Valid: true},
+		ID:        db.UUID{Bytes: [16]byte{0x01}, Valid: true},
 		Name:      "prod",
 		Type:      "polaris",
 		Url:       "http://polaris:8181",
@@ -109,7 +108,7 @@ func TestGetCatalogConnectionHidesOtherUsersConnections(t *testing.T) {
 // unowned connection must not be readable by any caller.
 func TestGetCatalogConnectionHidesUnownedConnections(t *testing.T) {
 	t.Parallel()
-	h := testAPI(handlerFields{queries: &fakeConnQuerier{conn: testConnection(t, true, pgtype.UUID{})}})
+	h := testAPI(handlerFields{queries: &fakeConnQuerier{conn: testConnection(t, true, db.UUID{})}})
 
 	resp, err := h.GetCatalogConnection(testContext(), GetCatalogConnectionRequestObject{Id: PathId{0x01}})
 	if err != nil {
@@ -136,7 +135,7 @@ func TestTestCatalogConnectionHidesOtherUsersConnections(t *testing.T) {
 
 func TestTestCatalogConnectionHidesUnownedConnections(t *testing.T) {
 	t.Parallel()
-	h := testAPI(handlerFields{queries: &fakeConnQuerier{conn: testConnection(t, true, pgtype.UUID{})}})
+	h := testAPI(handlerFields{queries: &fakeConnQuerier{conn: testConnection(t, true, db.UUID{})}})
 
 	resp, err := h.TestCatalogConnection(testContext(), TestCatalogConnectionRequestObject{Id: PathId{0x01}})
 	if err != nil {

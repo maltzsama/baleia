@@ -10,7 +10,6 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	wsmanage "github.com/galileostudio/baleia/internal/workspaces/manage"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -49,8 +48,8 @@ func (h *WorkspaceHandlers) CreateWorkspace(ctx context.Context, request CreateW
 		)}, nil
 	}
 
-	var ownerUserID pgtype.UUID
-	var ownerTeamID pgtype.UUID
+	var ownerUserID db.UUID
+	var ownerTeamID db.UUID
 
 	wsType := string(request.Body.Type)
 	if wsType != "personal" && wsType != "shared" {
@@ -103,7 +102,7 @@ func (h *WorkspaceHandlers) GetWorkspace(ctx context.Context, request GetWorkspa
 		return nil, err
 	}
 
-	var uid pgtype.UUID
+	var uid db.UUID
 	uid.Bytes = request.Id
 	uid.Valid = true
 
@@ -138,7 +137,7 @@ func (h *WorkspaceHandlers) UpdateWorkspace(ctx context.Context, request UpdateW
 	}
 
 	var newDefault, clearDefault bool
-	var defaultBinding pgtype.UUID
+	var defaultBinding db.UUID
 	var defaultSchema *string
 	if dt := request.Body.DefaultTarget; dt != nil {
 		if dt.BindingId == nil {
@@ -215,12 +214,12 @@ func (h *WorkspaceHandlers) GrantCatalogAccess(ctx context.Context, request Gran
 		return GrantCatalogAccess401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	wsID := workspaceIDFromRequest(request.Id)
-	ev := audit.Event{Action: audit.GrantCreate, ResourceType: "grant", ResourceID: idString(pgtype.UUID{Bytes: request.Body.CatalogId, Valid: true}), WorkspaceID: idString(wsID)}
+	ev := audit.Event{Action: audit.GrantCreate, ResourceType: "grant", ResourceID: idString(db.UUID{Bytes: request.Body.CatalogId, Valid: true}), WorkspaceID: idString(wsID)}
 	ctx = audit.WithAction(ctx, ev.Action)
 	if _, err := h.authz().Workspace(ctx, p, wsID, authz.ActAdmin); err != nil {
 		return grantAccessError(err)
 	}
-	catalogID := pgtype.UUID{Bytes: request.Body.CatalogId, Valid: true}
+	catalogID := db.UUID{Bytes: request.Body.CatalogId, Valid: true}
 	cat, _, err := h.authz().Catalog(ctx, p, catalogID, authz.ActAdmin)
 	if err != nil {
 		return grantAccessError(err)
@@ -261,7 +260,7 @@ func (h *WorkspaceHandlers) RevokeCatalogAccess(ctx context.Context, request Rev
 		return RevokeCatalogAccess401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	wsID := workspaceIDFromRequest(request.Id)
-	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	catalogID := db.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.GrantRevoke, ResourceType: "grant", ResourceID: idString(catalogID), WorkspaceID: idString(wsID)}
 	ctx = audit.WithAction(ctx, ev.Action)
 	if _, err := h.authz().Workspace(ctx, p, wsID, authz.ActAdmin); err != nil {
@@ -394,7 +393,7 @@ func (h *WorkspaceHandlers) GetCatalogAccessImpact(ctx context.Context, request 
 		return GetCatalogAccessImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	wsID := workspaceIDFromRequest(request.Id)
-	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	catalogID := db.UUID{Bytes: request.CatalogId, Valid: true}
 	if _, err := h.authz().Workspace(ctx, p, wsID, authz.ActAdmin); errors.Is(err, authz.ErrNotFound) {
 		return GetCatalogAccessImpact404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 	} else if err != nil {

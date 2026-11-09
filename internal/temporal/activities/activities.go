@@ -18,12 +18,10 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/worker"
@@ -35,7 +33,7 @@ var defaultActivities *Activities
 // implements it. Until executions carry their target's engine (#13 PR 3),
 // everything runs on the default Trino engine.
 type engineSource interface {
-	Get(ctx context.Context, engineID pgtype.UUID) (queryengine.Engine, error)
+	Get(ctx context.Context, engineID db.UUID) (queryengine.Engine, error)
 	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
 }
 
@@ -48,7 +46,7 @@ type Activities struct {
 	// The field keeps the sqlc-shaped interface so unit tests can inject a
 	// fake; production always holds *repo.Repo.
 	store   db.Querier
-	pool    *pgxpool.Pool
+	notify  events.Transport
 	engines engineSource
 	monitor lensMonitor
 	s3      s3Client
@@ -90,12 +88,12 @@ type s3Client interface {
 	PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error)
 }
 
-func New(logger *slog.Logger, pool *pgxpool.Pool, store db.Querier, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client, dialects *dialect.Registry) *Activities {
+func New(logger *slog.Logger, notify events.Transport, store db.Querier, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client, dialects *dialect.Registry) *Activities {
 	a := &Activities{
 		logger:      cmp.Or(logger, slog.New(slog.DiscardHandler)),
 		dialects:    dialects,
 		store:       store,
-		pool:        pool,
+		notify:      notify,
 		engines:     engines,
 		monitor:     mon,
 		s3:          s3,
@@ -217,14 +215,14 @@ func CreateStatementRecords(ctx context.Context, params CreateStatementRecordsPa
 }
 
 func (a *Activities) createStatementRecords(ctx context.Context, params CreateStatementRecordsParams) (*CreateStatementRecordsResult, error) {
-	var execID pgtype.UUID
+	var execID db.UUID
 	if err := execID.Scan(params.ExecutionID); err != nil {
 		return nil, err
 	}
 
 	statements := params.Statements
 	if params.RerunExecutionID != "" {
-		var srcID pgtype.UUID
+		var srcID db.UUID
 		if err := srcID.Scan(params.RerunExecutionID); err != nil {
 			return nil, err
 		}
@@ -281,7 +279,7 @@ func resultSets(o StatementOutcome) []byte {
 // recordOutcome ends the running statement at o.Position. The update is
 // conditional on status='running', so it never overwrites a statement that
 // was already abandoned.
-func (a *Activities) recordOutcome(ctx context.Context, execID pgtype.UUID, o StatementOutcome) error {
+func (a *Activities) recordOutcome(ctx context.Context, execID db.UUID, o StatementOutcome) error {
 	statements, err := a.workbench().ListQueryStatements(ctx, execID)
 	if err != nil {
 		return err
@@ -299,12 +297,12 @@ func (a *Activities) recordOutcome(ctx context.Context, execID pgtype.UUID, o St
 			DurationMs:    &o.DurationMs,
 			ErrorMessage:  optional(o.Error),
 			ErrorCode:     optional(o.ErrorCode),
-			FinishedAt:    pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			FinishedAt:    db.Timestamptz{Time: time.Now(), Valid: true},
 			ResultKey:     optional(o.ResultKey),
 			ResultBytes:   &o.ResultBytes,
 			Truncated:     o.Truncated,
 		})
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
@@ -344,7 +342,7 @@ func CompleteExecution(ctx context.Context, params CompleteExecutionParams) erro
 }
 
 func (a *Activities) completeExecution(ctx context.Context, params CompleteExecutionParams) error {
-	var execID pgtype.UUID
+	var execID db.UUID
 	if err := execID.Scan(params.ExecutionID); err != nil {
 		return err
 	}
@@ -355,7 +353,7 @@ func (a *Activities) completeExecution(ctx context.Context, params CompleteExecu
 		RowsReturned: &params.RowsReturned,
 		DurationMs:   &params.DurationMs,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		// The execution was cancelled (or already terminal); do not overwrite it.
 		return nil
 	}
@@ -375,7 +373,7 @@ func FailExecution(ctx context.Context, params FailExecutionParams) error {
 }
 
 func (a *Activities) failExecution(ctx context.Context, params FailExecutionParams) error {
-	var execID pgtype.UUID
+	var execID db.UUID
 	if err := execID.Scan(params.ExecutionID); err != nil {
 		return err
 	}
@@ -392,7 +390,7 @@ func (a *Activities) failExecution(ctx context.Context, params FailExecutionPara
 			Status: "failed",
 		})
 	}
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		// The execution was cancelled (or already terminal); do not overwrite it.
 		return nil
 	}

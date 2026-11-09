@@ -19,7 +19,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -87,7 +86,7 @@ func refreshToken(t *testing.T, h *API, token string) string {
 func TestGetMe_IncludesStatus(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	ctx := context.Background()
 	hash, err := auth.HashPassword("correct horse")
 	if err != nil {
@@ -99,7 +98,7 @@ func TestGetMe_IncludesStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := testAPI(handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool}})
+	h := testAPI(handlerFields{queries: q, tx: storeTx{db: pool}})
 
 	resp, err := h.GetMe(ctxAs(user.ID.String(), "admin"), GetMeRequestObject{})
 	if err != nil {
@@ -252,7 +251,7 @@ func TestLogout_CookieRevokesFamily(t *testing.T) {
 func TestCreateFirstAdmin_RejectsShortPassword(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	h := testAPI(handlerFields{queries: repo.New(testdb.GORM(t, pool)), settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
+	h := testAPI(handlerFields{queries: repo.New(pool), settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
 	resp, err := h.CreateFirstAdmin(context.Background(), CreateFirstAdminRequestObject{
 		Body: &CreateAdminRequest{Name: "Admin", Email: "admin@example.test", Password: "short"},
 	})
@@ -312,7 +311,7 @@ func createResetToken(t *testing.T, f *auditFixture, userID string, raw string, 
 	if err := f.h.queries.CreatePasswordResetToken(context.Background(), db.CreatePasswordResetTokenParams{
 		TokenHash: auth.HashToken(raw),
 		UserID:    mustUUID(t, userID),
-		ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
+		ExpiresAt: db.Timestamptz{Time: expires, Valid: true},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -489,7 +488,7 @@ func TestRoleChange_RevokesRefresh(t *testing.T) {
 // failingRevoke is the real querier with RevokeRefreshFamily failing.
 type failingRevoke struct{ db.Querier }
 
-func (failingRevoke) RevokeRefreshFamily(context.Context, pgtype.UUID) error {
+func (failingRevoke) RevokeRefreshFamily(context.Context, db.UUID) error {
 	return errors.New("db down")
 }
 
@@ -541,7 +540,7 @@ func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
 func TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	h := testAPI(handlerFields{queries: repo.New(testdb.GORM(t, pool)), pool: pool, tx: poolTx{pool: pool}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
+	h := testAPI(handlerFields{queries: repo.New(pool), tx: storeTx{db: pool}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
 	const n = 8
 	var wg sync.WaitGroup
 	created := make(chan bool, n)
@@ -570,7 +569,7 @@ func TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin(t *testing.T) {
 	if len(created) != 1 {
 		t.Fatalf("%d setups succeeded, want 1", len(created))
 	}
-	users, err := repo.New(testdb.GORM(t, pool)).ListUsers(context.Background())
+	users, err := repo.New(pool).ListUsers(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

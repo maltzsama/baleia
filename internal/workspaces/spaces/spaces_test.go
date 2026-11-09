@@ -7,12 +7,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 func ptr(s string) *string { return &s }
 
@@ -38,11 +35,11 @@ func (f *fakeStore) GetSpace(_ context.Context, arg db.GetSpaceParams) (db.Space
 	if sp, ok := f.spaces[arg.ID.Bytes]; ok && sp.WorkspaceID == arg.WorkspaceID {
 		return sp, nil
 	}
-	return db.Space{}, pgx.ErrNoRows
+	return db.Space{}, db.ErrNoRows
 }
 
-func (f *fakeStore) GetDefaultSpace(context.Context, pgtype.UUID) (db.Space, error) {
-	return db.Space{}, pgx.ErrNoRows
+func (f *fakeStore) GetDefaultSpace(context.Context, db.UUID) (db.Space, error) {
+	return db.Space{}, db.ErrNoRows
 }
 
 func (f *fakeStore) SpaceSlugExists(_ context.Context, arg db.SpaceSlugExistsParams) (bool, error) {
@@ -54,30 +51,30 @@ func (f *fakeStore) SpaceSlugExists(_ context.Context, arg db.SpaceSlugExistsPar
 	return false, nil
 }
 
-func (f *fakeStore) CountSpaceContent(context.Context, pgtype.UUID) (int32, error) {
+func (f *fakeStore) CountSpaceContent(context.Context, db.UUID) (int32, error) {
 	return f.content, nil
 }
 
-func (f *fakeStore) CountSpaceContentKinds(context.Context, pgtype.UUID) (db.CountSpaceContentKindsRow, error) {
+func (f *fakeStore) CountSpaceContentKinds(context.Context, db.UUID) (db.CountSpaceContentKindsRow, error) {
 	return db.CountSpaceContentKindsRow{}, nil
 }
 
-func (f *fakeStore) ListSpaceMembers(_ context.Context, id pgtype.UUID) ([]db.SpaceMember, error) {
+func (f *fakeStore) ListSpaceMembers(_ context.Context, id db.UUID) ([]db.SpaceMember, error) {
 	return f.members[id.Bytes], nil
 }
 
-func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+func (f *fakeStore) GetUserByID(_ context.Context, id db.UUID) (db.User, error) {
 	if !f.users[id.Bytes] {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	return db.User{ID: id}, nil
 }
 
-func (f *fakeStore) GetTeamByID(context.Context, pgtype.UUID) (db.Team, error) {
+func (f *fakeStore) GetTeamByID(context.Context, db.UUID) (db.Team, error) {
 	return db.Team{}, errors.New("connection reset")
 }
 
-func (f *fakeStore) nameTaken(name string, except pgtype.UUID) bool {
+func (f *fakeStore) nameTaken(name string, except db.UUID) bool {
 	for _, sp := range f.spaces {
 		if sp.Name == name && sp.ID != except {
 			return true
@@ -87,8 +84,8 @@ func (f *fakeStore) nameTaken(name string, except pgtype.UUID) bool {
 }
 
 func (f *fakeStore) CreateSpace(_ context.Context, arg db.CreateSpaceParams) (db.Space, error) {
-	if f.nameTaken(arg.Name, pgtype.UUID{}) {
-		return db.Space{}, &pgconn.PgError{Code: "23505"}
+	if f.nameTaken(arg.Name, db.UUID{}) {
+		return db.Space{}, &db.PGError{Code: "23505"}
 	}
 	sp := db.Space{ID: newID(), WorkspaceID: arg.WorkspaceID, Name: arg.Name, Slug: arg.Slug, Visibility: arg.Visibility, DefaultRole: arg.DefaultRole}
 	f.spaces[sp.ID.Bytes] = sp
@@ -97,7 +94,7 @@ func (f *fakeStore) CreateSpace(_ context.Context, arg db.CreateSpaceParams) (db
 
 func (f *fakeStore) UpdateSpace(_ context.Context, arg db.UpdateSpaceParams) (db.Space, error) {
 	if f.nameTaken(arg.Name, arg.ID) {
-		return db.Space{}, &pgconn.PgError{Code: "23505"}
+		return db.Space{}, &db.PGError{Code: "23505"}
 	}
 	sp := f.spaces[arg.ID.Bytes]
 	sp.Name, sp.Visibility, sp.DefaultRole = arg.Name, arg.Visibility, arg.DefaultRole

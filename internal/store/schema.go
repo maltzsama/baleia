@@ -111,6 +111,13 @@ func AllMigrations() (*Registry, error) {
 				})
 			},
 		},
+		Migration{
+			Version: 7,
+			Name:    "create monitoring outbox",
+			Up: func(db *gorm.DB) error {
+				return AutoMigrate(db, &model.MonitoringEvent{})
+			},
+		},
 	)
 }
 

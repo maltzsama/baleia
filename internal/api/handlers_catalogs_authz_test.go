@@ -20,8 +20,6 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // fakeTrino records every statement it receives and answers FINISHED.
@@ -78,7 +76,7 @@ type authzFake struct {
 	syncState      db.GetCatalogSyncStateRow
 }
 
-func (q *authzFake) GetCatalogSyncState(context.Context, pgtype.UUID) (db.GetCatalogSyncStateRow, error) {
+func (q *authzFake) GetCatalogSyncState(context.Context, db.UUID) (db.GetCatalogSyncStateRow, error) {
 	return q.syncState, nil
 }
 
@@ -86,28 +84,28 @@ func (q *authzFake) ListQueryClasses(context.Context, db.ListQueryClassesParams)
 	return nil, nil
 }
 
-func (q *authzFake) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
+func (q *authzFake) GetCatalogConnectionByID(_ context.Context, id db.UUID) (db.CatalogConnection, error) {
 	if id.Bytes == [16]byte{0xC9} { // the engine's own, system-owned connection
 		return db.CatalogConnection{ID: id, Name: "trino", Type: "trino", Config: []byte(`{"url":"http://trino:8080"}`)}, nil
 	}
 	if id.Bytes != q.conn.ID.Bytes {
-		return db.CatalogConnection{}, pgx.ErrNoRows
+		return db.CatalogConnection{}, db.ErrNoRows
 	}
 	return q.conn, nil
 }
 
-func (q *authzFake) GetCatalogByID(_ context.Context, id pgtype.UUID) (db.Catalog, error) {
+func (q *authzFake) GetCatalogByID(_ context.Context, id db.UUID) (db.Catalog, error) {
 	if id.Bytes != q.cat.ID.Bytes {
-		return db.Catalog{}, pgx.ErrNoRows
+		return db.Catalog{}, db.ErrNoRows
 	}
 	return q.cat, nil
 }
 
-func (q *authzFake) ListCatalogsByConnection(context.Context, pgtype.UUID) ([]db.Catalog, error) {
+func (q *authzFake) ListCatalogsByConnection(context.Context, db.UUID) ([]db.Catalog, error) {
 	return []db.Catalog{q.cat}, nil
 }
 
-func (q *authzFake) ListBindingsByCatalog(_ context.Context, id pgtype.UUID) ([]db.CatalogBinding, error) {
+func (q *authzFake) ListBindingsByCatalog(_ context.Context, id db.UUID) ([]db.CatalogBinding, error) {
 	q.lmu.Lock()
 	defer q.lmu.Unlock()
 	var out []db.CatalogBinding
@@ -119,15 +117,15 @@ func (q *authzFake) ListBindingsByCatalog(_ context.Context, id pgtype.UUID) ([]
 	return out, nil
 }
 
-func (q *authzFake) GetTrinoClusterByEngine(_ context.Context, id pgtype.UUID) (db.TrinoCluster, error) {
-	return db.TrinoCluster{ID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Name: "default", EngineID: id}, nil
+func (q *authzFake) GetTrinoClusterByEngine(_ context.Context, id db.UUID) (db.TrinoCluster, error) {
+	return db.TrinoCluster{ID: db.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Name: "default", EngineID: id}, nil
 }
 
-func (q *authzFake) GetBinding(_ context.Context, id pgtype.UUID) (db.CatalogBinding, error) {
+func (q *authzFake) GetBinding(_ context.Context, id db.UUID) (db.CatalogBinding, error) {
 	if b, ok := q.current(id); ok {
 		return b, nil
 	}
-	return db.CatalogBinding{}, pgx.ErrNoRows
+	return db.CatalogBinding{}, db.ErrNoRows
 }
 
 func (q *authzFake) UpdateCatalogConnection(_ context.Context, p db.UpdateCatalogConnectionParams) (db.CatalogConnection, error) {
@@ -166,8 +164,8 @@ func (q *authzFake) UpsertTrinoCatalogRegistry(_ context.Context, p db.UpsertTri
 	return nil
 }
 
-func (q *authzFake) GetTrinoClusterByID(_ context.Context, id pgtype.UUID) (db.TrinoCluster, error) {
-	return db.TrinoCluster{ID: id, Name: "default", EngineID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}}, nil
+func (q *authzFake) GetTrinoClusterByID(_ context.Context, id db.UUID) (db.TrinoCluster, error) {
+	return db.TrinoCluster{ID: id, Name: "default", EngineID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true}}, nil
 }
 
 func (q *authzFake) UpsertManagedBinding(_ context.Context, p db.UpsertManagedBindingParams) (db.CatalogBinding, error) {
@@ -175,7 +173,7 @@ func (q *authzFake) UpsertManagedBinding(_ context.Context, p db.UpsertManagedBi
 	defer q.mu.Unlock()
 	q.bindingUpserts = append(q.bindingUpserts, p)
 	return q.track(db.CatalogBinding{
-		ID: pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true}, CatalogID: p.CatalogID, EngineID: p.EngineID, EngineCatalogName: p.EngineCatalogName,
+		ID: db.UUID{Bytes: [16]byte{0xB0}, Valid: true}, CatalogID: p.CatalogID, EngineID: p.EngineID, EngineCatalogName: p.EngineCatalogName,
 		Mode: "managed", Enabled: p.Enabled, LifecycleState: p.LifecycleState, DesiredVersion: p.DesiredVersion,
 	}), nil
 }
@@ -183,7 +181,7 @@ func (q *authzFake) UpsertManagedBinding(_ context.Context, p db.UpsertManagedBi
 func (q *authzFake) UpdateBinding(_ context.Context, p db.UpdateBindingParams) (db.CatalogBinding, error) {
 	b, ok := q.current(p.ID)
 	if !ok || !slices.Contains(p.FromStates, b.LifecycleState) {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+		return db.CatalogBinding{}, db.ErrNoRows
 	}
 	b.EngineCatalogName, b.Connector, b.ExtraProps, b.Enabled, b.LifecycleState = p.EngineCatalogName, p.Connector, p.ExtraProps, p.Enabled, p.LifecycleState
 	if p.DesiredVersion != nil {
@@ -195,11 +193,11 @@ func (q *authzFake) UpdateBinding(_ context.Context, p db.UpdateBindingParams) (
 	return q.track(b), nil
 }
 
-func (q *authzFake) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
-	return db.Engine{ID: id, Name: "default", Kind: "trino", Class: "federated", ConnectionID: pgtype.UUID{Bytes: [16]byte{0xC9}, Valid: true}, Enabled: true}, nil
+func (q *authzFake) GetEngineByID(_ context.Context, id db.UUID) (db.Engine, error) {
+	return db.Engine{ID: id, Name: "default", Kind: "trino", Class: "federated", ConnectionID: db.UUID{Bytes: [16]byte{0xC9}, Valid: true}, Enabled: true}, nil
 }
 
-func (q *authzFake) DisableManagedBindingsOfCatalog(context.Context, pgtype.UUID) error { return nil }
+func (q *authzFake) DisableManagedBindingsOfCatalog(context.Context, db.UUID) error { return nil }
 
 func (q *authzFake) SoftDeleteTrinoCatalogRegistry(_ context.Context, p db.SoftDeleteTrinoCatalogRegistryParams) error {
 	q.mu.Lock()
@@ -232,7 +230,7 @@ func newAuthzHandlers(t *testing.T) (*API, *authzFake, *fakeTrino) {
 		t.Fatal(err)
 	}
 	kr := testKeyring(t)
-	connID := pgtype.UUID{Bytes: [16]byte{0xC1}, Valid: true}
+	connID := db.UUID{Bytes: [16]byte{0xC1}, Valid: true}
 	sealed, err := kr.Seal([]byte(`{"client_id":"id","client_secret":"secret"}`), "catalog_connections:"+uuidString(connID))
 	if err != nil {
 		t.Fatal(err)
@@ -240,13 +238,13 @@ func newAuthzHandlers(t *testing.T) (*API, *authzFake, *fakeTrino) {
 	q := &authzFake{
 		conn: db.CatalogConnection{ID: connID, Name: "src", Type: "polaris", Url: "http://polaris:8181", CreatedBy: owner, CredentialsEnc: &sealed},
 		cat: db.Catalog{
-			ID: pgtype.UUID{Bytes: [16]byte{0xCA}, Valid: true}, ConnectionID: connID, Name: "wh", Origin: "source", TrinoCatalogName: strp("wh"),
-			ClusterID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Warehouse: strp("wh"), SourceRef: strp("wh"), Connector: strp("iceberg"), ExtraProps: []byte("{}"),
+			ID: db.UUID{Bytes: [16]byte{0xCA}, Valid: true}, ConnectionID: connID, Name: "wh", Origin: "source", TrinoCatalogName: strp("wh"),
+			ClusterID: db.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Warehouse: strp("wh"), SourceRef: strp("wh"), Connector: strp("iceberg"), ExtraProps: []byte("{}"),
 		},
 	}
 	// The catalog's primary binding, active (#38).
 	q.track(db.CatalogBinding{
-		ID: pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true}, CatalogID: q.cat.ID, EngineID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true},
+		ID: db.UUID{Bytes: [16]byte{0xB0}, Valid: true}, CatalogID: q.cat.ID, EngineID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true},
 		EngineCatalogName: "wh", Mode: "managed", Enabled: true, LifecycleState: "active",
 	})
 	ft := newFakeTrino(t)
@@ -261,7 +259,7 @@ func newAuthzHandlers(t *testing.T) (*API, *authzFake, *fakeTrino) {
 	return h, q, ft
 }
 
-func uuidString(u pgtype.UUID) string {
+func uuidString(u db.UUID) string {
 	s, _ := u.Value()
 	return s.(string)
 }
@@ -438,7 +436,7 @@ func TestSyncCatalog_FailedRecreateIsASyncError(t *testing.T) {
 	}
 	// The error lives on the binding (#38), never in the registry: writing it
 	// there would overwrite the plugin's confirmation.
-	b, _ := q.current(pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true})
+	b, _ := q.current(db.UUID{Bytes: [16]byte{0xB0}, Valid: true})
 	if code := visitCode(t, resp); code != 409 || b.LifecycleState != "error" || b.LastErrorMessage == nil || len(q.registryErr) != 0 {
 		t.Fatalf("status %d binding=%+v registryErr=%v, want 409 with the error on the binding", code, b, q.registryErr)
 	}
@@ -557,7 +555,7 @@ func TestUpdateCatalogConnection_ReappliesBindings(t *testing.T) {
 	if !applied {
 		t.Errorf("trino statements = %q, want a CREATE CATALOG", ft.statements())
 	}
-	if b, ok := q.current(pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true}); !ok || b.LifecycleState != "active" {
+	if b, ok := q.current(db.UUID{Bytes: [16]byte{0xB0}, Valid: true}); !ok || b.LifecycleState != "active" {
 		t.Errorf("binding = %+v, want active", b)
 	}
 }
@@ -697,7 +695,7 @@ func TestSyncCatalog_StuckDDLTimesOut(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Fatalf("sync took %s; the DDL deadline did not apply", elapsed)
 	}
-	b, _ := q.current(pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true})
+	b, _ := q.current(db.UUID{Bytes: [16]byte{0xB0}, Valid: true})
 	if code := visitCode(t, resp); code != 409 || b.LifecycleState != "error" || b.LastErrorMessage == nil {
 		t.Fatalf("status %d binding=%+v, want 409 with the timeout on the binding", code, b)
 	}
@@ -729,7 +727,7 @@ func TestBindingErrorsAre422(t *testing.T) {
 func TestUpdateCatalog_DeletedIsNotRecreated(t *testing.T) {
 	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
-	b, _ := q.current(pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true})
+	b, _ := q.current(db.UUID{Bytes: [16]byte{0xB0}, Valid: true})
 	b.LifecycleState = "disabled"
 	q.track(b)
 	conn, cat := reqIDs(q)
@@ -766,7 +764,7 @@ func TestNativeCatalogsAreNotManaged(t *testing.T) {
 // brokenCatalogList fails the catalog list of a connection.
 type brokenCatalogList struct{ *authzFake }
 
-func (brokenCatalogList) ListCatalogsByConnection(context.Context, pgtype.UUID) ([]db.Catalog, error) {
+func (brokenCatalogList) ListCatalogsByConnection(context.Context, db.UUID) ([]db.Catalog, error) {
 	return nil, errors.New("connection reset")
 }
 

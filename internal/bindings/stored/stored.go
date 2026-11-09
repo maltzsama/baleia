@@ -15,14 +15,13 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store is the slice of the database a projection reads.
 type Store interface {
-	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
-	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
-	ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]db.CatalogBinding, error)
+	GetCatalogByID(ctx context.Context, id db.UUID) (db.Catalog, error)
+	GetCatalogConnectionByID(ctx context.Context, id db.UUID) (db.CatalogConnection, error)
+	ListBindingsByEngine(ctx context.Context, engineID db.UUID) ([]db.CatalogBinding, error)
 }
 
 // Projector projects stored bindings.
@@ -79,7 +78,7 @@ type RunStore interface {
 
 // SaveRun persists one reconcile run of an engine (#37); the store keeps
 // the last 100 per engine.
-func SaveRun(ctx context.Context, q RunStore, engineID pgtype.UUID, rep bindings.Report, runErr error) (db.CatalogReconcileRun, error) {
+func SaveRun(ctx context.Context, q RunStore, engineID db.UUID, rep bindings.Report, runErr error) (db.CatalogReconcileRun, error) {
 	actions := rep.Actions
 	if actions == nil {
 		actions = []bindings.Action{}
@@ -98,8 +97,8 @@ func SaveRun(ctx context.Context, q RunStore, engineID pgtype.UUID, rep bindings
 	}
 	p := db.InsertReconcileRunParams{
 		EngineID: engineID, DryRun: rep.DryRun, Actions: raw, Adopted: adopted,
-		StartedAt:  pgtype.Timestamptz{Time: rep.StartedAt, Valid: true},
-		FinishedAt: pgtype.Timestamptz{Time: finished, Valid: true},
+		StartedAt:  db.Timestamptz{Time: rep.StartedAt, Valid: true},
+		FinishedAt: db.Timestamptz{Time: finished, Valid: true},
 	}
 	if runErr != nil {
 		msg := runErr.Error()

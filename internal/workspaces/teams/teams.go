@@ -7,24 +7,21 @@ import (
 	"errors"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Reader reads teams, members and users; *repo.Repo implements it.
 type Reader interface {
 	ListTeams(ctx context.Context) ([]db.Team, error)
-	ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]db.Team, error)
-	GetTeamByID(ctx context.Context, id pgtype.UUID) (db.Team, error)
-	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]db.ListTeamMembersRow, error)
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
+	ListTeamsByUser(ctx context.Context, userID db.UUID) ([]db.Team, error)
+	GetTeamByID(ctx context.Context, id db.UUID) (db.Team, error)
+	ListTeamMembers(ctx context.Context, teamID db.UUID) ([]db.ListTeamMembersRow, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
 }
 
 // Writer changes teams and members; *repo.Repo implements it.
 type Writer interface {
 	CreateTeam(ctx context.Context, arg db.CreateTeamParams) (db.Team, error)
-	DeleteTeam(ctx context.Context, id pgtype.UUID) error
+	DeleteTeam(ctx context.Context, id db.UUID) error
 	AddTeamMember(ctx context.Context, arg db.AddTeamMemberParams) (db.TeamMember, error)
 	UpdateTeamMemberRole(ctx context.Context, arg db.UpdateTeamMemberRoleParams) (db.TeamMember, error)
 	RemoveTeamMember(ctx context.Context, arg db.RemoveTeamMemberParams) (int64, error)
@@ -62,7 +59,7 @@ type Service struct{ store Store }
 func New(store Store) *Service { return &Service{store: store} }
 
 // List returns every team to an admin, and to anyone else their teams.
-func (s *Service) List(ctx context.Context, userID pgtype.UUID, admin bool) ([]db.Team, error) {
+func (s *Service) List(ctx context.Context, userID db.UUID, admin bool) ([]db.Team, error) {
 	if admin {
 		return s.store.ListTeams(ctx)
 	}
@@ -70,12 +67,12 @@ func (s *Service) List(ctx context.Context, userID pgtype.UUID, admin bool) ([]d
 }
 
 // Create stores a team.
-func (s *Service) Create(ctx context.Context, name string, description *string, createdBy pgtype.UUID) (db.Team, error) {
+func (s *Service) Create(ctx context.Context, name string, description *string, createdBy db.UUID) (db.Team, error) {
 	return s.store.CreateTeam(ctx, db.CreateTeamParams{Name: name, Description: description, CreatedBy: createdBy})
 }
 
 // Delete removes a team and, by cascade, its memberships.
-func (s *Service) Delete(ctx context.Context, id pgtype.UUID) error {
+func (s *Service) Delete(ctx context.Context, id db.UUID) error {
 	if err := s.exists(ctx, id); err != nil {
 		return err
 	}
@@ -83,21 +80,21 @@ func (s *Service) Delete(ctx context.Context, id pgtype.UUID) error {
 }
 
 // Members lists a team's members with their users.
-func (s *Service) Members(ctx context.Context, teamID pgtype.UUID) ([]db.ListTeamMembersRow, error) {
+func (s *Service) Members(ctx context.Context, teamID db.UUID) ([]db.ListTeamMembersRow, error) {
 	return s.store.ListTeamMembers(ctx, teamID)
 }
 
 // AddMember adds a user to a team with a role.
-func (s *Service) AddMember(ctx context.Context, teamID, userID pgtype.UUID, role string) (db.TeamMember, error) {
+func (s *Service) AddMember(ctx context.Context, teamID, userID db.UUID, role string) (db.TeamMember, error) {
 	if err := s.exists(ctx, teamID); err != nil {
 		return db.TeamMember{}, err
 	}
 	m, err := s.store.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: teamID, UserID: userID, Role: role})
-	var pgErr *pgconn.PgError
+	pgErr, isPG := db.AsPGError(err)
 	switch {
-	case errors.As(err, &pgErr) && pgErr.Code == "23505":
+	case isPG && pgErr.Code == "23505":
 		return db.TeamMember{}, ErrAlreadyMember
-	case errors.As(err, &pgErr) && pgErr.Code == "23503":
+	case isPG && pgErr.Code == "23503":
 		// The team exists, so the missing reference is the user.
 		return db.TeamMember{}, ErrUserNotFound
 	}
@@ -105,7 +102,7 @@ func (s *Service) AddMember(ctx context.Context, teamID, userID pgtype.UUID, rol
 }
 
 // SetRole changes a member's role.
-func (s *Service) SetRole(ctx context.Context, teamID, userID pgtype.UUID, role string) (db.TeamMember, error) {
+func (s *Service) SetRole(ctx context.Context, teamID, userID db.UUID, role string) (db.TeamMember, error) {
 	if err := s.exists(ctx, teamID); err != nil {
 		return db.TeamMember{}, err
 	}
@@ -113,14 +110,14 @@ func (s *Service) SetRole(ctx context.Context, teamID, userID pgtype.UUID, role 
 		return db.TeamMember{}, ErrInvalidRole
 	}
 	m, err := s.store.UpdateTeamMemberRole(ctx, db.UpdateTeamMemberRoleParams{TeamID: teamID, UserID: userID, Role: role})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.TeamMember{}, ErrMemberNotFound
 	}
 	return m, err
 }
 
 // RemoveMember removes a user from a team.
-func (s *Service) RemoveMember(ctx context.Context, teamID, userID pgtype.UUID) error {
+func (s *Service) RemoveMember(ctx context.Context, teamID, userID db.UUID) error {
 	n, err := s.store.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{TeamID: teamID, UserID: userID})
 	if err != nil {
 		return err
@@ -132,13 +129,13 @@ func (s *Service) RemoveMember(ctx context.Context, teamID, userID pgtype.UUID) 
 }
 
 // User returns a member's user, for the response.
-func (s *Service) User(ctx context.Context, id pgtype.UUID) (db.User, error) {
+func (s *Service) User(ctx context.Context, id db.UUID) (db.User, error) {
 	return s.store.GetUserByID(ctx, id)
 }
 
-func (s *Service) exists(ctx context.Context, id pgtype.UUID) error {
+func (s *Service) exists(ctx context.Context, id db.UUID) error {
 	_, err := s.store.GetTeamByID(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return ErrNotFound
 	}
 	return err

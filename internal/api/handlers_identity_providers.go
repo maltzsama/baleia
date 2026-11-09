@@ -12,7 +12,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/identity/providers"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -59,7 +58,7 @@ func (h *AuthHandlers) GetIdentityProvider(ctx context.Context, request GetIdent
 		}}, nil
 	}
 
-	ap, err := h.providers.Get(ctx, pgtype.UUID{Bytes: request.Id, Valid: true})
+	ap, err := h.providers.Get(ctx, db.UUID{Bytes: request.Id, Valid: true})
 	if errors.Is(err, providers.ErrNotFound) {
 		return GetIdentityProvider404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{
 			Code: ErrorCodeNotFound, Message: "identity provider not found",
@@ -108,7 +107,7 @@ func (h *AuthHandlers) CreateIdentityProvider(ctx context.Context, request Creat
 	}
 
 	// The config is sealed with the id the database generates as AAD.
-	ap, err := h.providers.Create(ctx, name, string(body.Type), enabled, func(id pgtype.UUID) (string, error) {
+	ap, err := h.providers.Create(ctx, name, string(body.Type), enabled, func(id db.UUID) (string, error) {
 		return sealProviderConfig(h.keyring, id, cfg)
 	})
 	if err != nil {
@@ -176,7 +175,7 @@ func parseProviderConfigParts(typ IdentityProviderType, oidc *OIDCConfig, ldap *
 }
 
 // sealProviderConfig encrypts a validated config bound to the provider id.
-func sealProviderConfig(kr *crypto.Keyring, id pgtype.UUID, cfg providerConfig) (string, error) {
+func sealProviderConfig(kr *crypto.Keyring, id db.UUID, cfg providerConfig) (string, error) {
 	switch {
 	case cfg.oidc != nil:
 		return auth.SealOIDCConfig(kr, idString(id), *cfg.oidc)

@@ -3,7 +3,7 @@ package activities
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 // AgentSlotParams asks whether an agent may start another run.
@@ -20,7 +20,7 @@ func AgentSlotAvailable(ctx context.Context, p AgentSlotParams) (bool, error) {
 }
 
 func (a *Activities) agentSlotAvailable(ctx context.Context, p AgentSlotParams) (bool, error) {
-	var id pgtype.UUID
+	var id db.UUID
 	if err := id.Scan(p.AgentID); err != nil || !id.Valid || p.Limit <= 0 {
 		return true, nil
 	}

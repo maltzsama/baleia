@@ -17,9 +17,8 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"gorm.io/gorm"
 )
 
 func TestSafeRelativePath(t *testing.T) {
@@ -44,7 +43,7 @@ func TestSafeRelativePath(t *testing.T) {
 func oidcAttemptFixture(t *testing.T) (db.Querier, db.AuthProvider) {
 	t.Helper()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	provider, err := q.CreateAuthProvider(context.Background(), db.CreateAuthProviderParams{
 		Name:      "test",
 		Type:      "oidc",
@@ -68,7 +67,7 @@ func TestOIDC_AttemptSingleUse(t *testing.T) {
 		State:        state,
 		ProviderID:   provider.ID,
 		CodeVerifier: "verifier-1",
-		ExpiresAt:    pgtype.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true},
+		ExpiresAt:    db.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +155,7 @@ func oidcHandlers(t *testing.T, q db.Querier) *API {
 }
 
 type oidcFlowFixture struct {
-	pool     *pgxpool.Pool
+	pool     *gorm.DB
 	q        db.Querier
 	h        *API
 	idp      *oidctest.StubIDP
@@ -171,7 +170,7 @@ func newOIDCFlow(t *testing.T) *oidcFlowFixture {
 func newOIDCFlowWithConfig(t *testing.T, config func(issuer string) auth.OIDCProviderConfig) *oidcFlowFixture {
 	t.Helper()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	idp, err := oidctest.New("", "client")
 	if err != nil {
 		t.Fatal(err)
@@ -293,7 +292,7 @@ func TestOIDC_Expired(t *testing.T) {
 	t.Parallel()
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
-	if err := testdb.GORM(t, f.pool).Model(&model.OIDCLoginAttempt{}).
+	if err := f.pool.Model(&model.OIDCLoginAttempt{}).
 		Where("state = ?", state).
 		Update("expires_at", time.Now().Add(-time.Minute)).Error; err != nil {
 		t.Fatal(err)
@@ -348,7 +347,7 @@ func TestOIDC_FailureRedirects(t *testing.T) {
 	}
 
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	h := oidcHandlers(t, q)
 
 	// An unreachable issuer is a 503 IdP outage.
@@ -395,7 +394,7 @@ func TestOIDC_FailureRedirects(t *testing.T) {
 // bound to the provider id (#278).
 func TestOIDC_ConfigEncrypted(t *testing.T) {
 	t.Parallel()
-	q := repo.New(testdb.GORM(t, testdb.New(t)))
+	q := repo.New(testdb.New(t))
 	provider := oidcProvider(t, q, "http://issuer.example")
 	stored, err := q.GetAuthProviderByID(context.Background(), provider.ID)
 	if err != nil {
@@ -413,7 +412,7 @@ func TestOIDC_ConfigEncrypted(t *testing.T) {
 // parsed as JSON (#278).
 func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
 	t.Parallel()
-	q := repo.New(testdb.GORM(t, testdb.New(t)))
+	q := repo.New(testdb.New(t))
 	plaintext := `{"issuer_url":"http://issuer.example","client_id":"client","client_secret":"secret"}`
 	provider, err := q.CreateAuthProvider(context.Background(), db.CreateAuthProviderParams{
 		Name: "plain", Type: "oidc", ConfigEnc: plaintext, Enabled: true,
@@ -432,7 +431,7 @@ func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
 func TestOIDC_ProviderCache(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	idp, err := oidctest.New("", "client")
 	if err != nil {
 		t.Fatal(err)
@@ -631,7 +630,7 @@ func TestOIDC_ConfigurableClaims(t *testing.T) {
 func TestOIDC_TeamMapping(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	idp, err := oidctest.New("", "client")
 	if err != nil {
 		t.Fatal(err)
@@ -651,7 +650,7 @@ func TestOIDC_TeamMapping(t *testing.T) {
 	cfg := oidcConfig(idp.URL)
 	cfg.TeamMapping = []identity.TeamMapping{{Group: "data-eng", TeamID: idString(team.ID), TeamRole: identity.TeamRoleOwner}}
 	f := &oidcFlowFixture{
-		pool: pool, q: q, h: oidcHandlers(t, q), idp: idp,
+		q: q, h: oidcHandlers(t, q), idp: idp,
 		provider: oidcProviderWithConfig(t, q, cfg),
 	}
 	f.idp.Groups = []string{"data-eng"}
@@ -683,7 +682,7 @@ func TestOIDC_AttemptExpired(t *testing.T) {
 		State:        "state-expired",
 		ProviderID:   provider.ID,
 		CodeVerifier: "verifier-1",
-		ExpiresAt:    pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
+		ExpiresAt:    db.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
 	}); err != nil {
 		t.Fatal(err)
 	}

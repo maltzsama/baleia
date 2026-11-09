@@ -7,10 +7,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 type fakeStore struct {
 	Store
@@ -31,11 +30,11 @@ func (f *fakeStore) ListWorkspacePrincipalUsers(context.Context, db.ListWorkspac
 	return f.users, nil
 }
 
-func (f *fakeStore) ListTeamsByUser(context.Context, pgtype.UUID) ([]db.Team, error) {
+func (f *fakeStore) ListTeamsByUser(context.Context, db.UUID) ([]db.Team, error) {
 	return f.teams, nil
 }
 
-func (f *fakeStore) ListTeamMembers(context.Context, pgtype.UUID) ([]db.ListTeamMembersRow, error) {
+func (f *fakeStore) ListTeamMembers(context.Context, db.UUID) ([]db.ListTeamMembersRow, error) {
 	return make([]db.ListTeamMembersRow, 3), nil
 }
 

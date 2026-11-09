@@ -14,8 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -102,7 +100,7 @@ func (h *OpsHandlers) ResolveAudit(ctx context.Context, request ResolveAuditRequ
 
 	if request.Body != nil {
 		for _, id := range ptrSlice(request.Body.Users) {
-			user, err := h.trail.User(ctx, p.UserID, p.IsAdmin(), pgtype.UUID{Bytes: [16]byte(id), Valid: true})
+			user, err := h.trail.User(ctx, p.UserID, p.IsAdmin(), db.UUID{Bytes: [16]byte(id), Valid: true})
 			if hidden(err) {
 				continue
 			}
@@ -113,7 +111,7 @@ func (h *OpsHandlers) ResolveAudit(ctx context.Context, request ResolveAuditRequ
 			users[uuid.UUID(id).String()] = AuditResolvedUser{Name: user.Name, Email: &email}
 		}
 		for _, id := range ptrSlice(request.Body.Workspaces) {
-			ws, err := h.authz().Workspace(ctx, p, pgtype.UUID{Bytes: [16]byte(id), Valid: true}, authz.ActRead)
+			ws, err := h.authz().Workspace(ctx, p, db.UUID{Bytes: [16]byte(id), Valid: true}, authz.ActRead)
 			if hidden(err) {
 				continue
 			}
@@ -123,7 +121,7 @@ func (h *OpsHandlers) ResolveAudit(ctx context.Context, request ResolveAuditRequ
 			workspaces[uuid.UUID(id).String()] = AuditResolvedName{Name: ws.Name}
 		}
 		for _, id := range ptrSlice(request.Body.Connections) {
-			conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: [16]byte(id), Valid: true}, authz.ActRead)
+			conn, err := h.authz().Connection(ctx, p, db.UUID{Bytes: [16]byte(id), Valid: true}, authz.ActRead)
 			if hidden(err) {
 				continue
 			}
@@ -133,7 +131,7 @@ func (h *OpsHandlers) ResolveAudit(ctx context.Context, request ResolveAuditRequ
 			connections[uuid.UUID(id).String()] = AuditResolvedName{Name: conn.Name}
 		}
 		for _, id := range ptrSlice(request.Body.Catalogs) {
-			catalog, err := h.trail.Catalog(ctx, pgtype.UUID{Bytes: [16]byte(id), Valid: true})
+			catalog, err := h.trail.Catalog(ctx, db.UUID{Bytes: [16]byte(id), Valid: true})
 			if hidden(err) {
 				continue
 			}
@@ -158,7 +156,7 @@ func (h *OpsHandlers) ResolveAudit(ctx context.Context, request ResolveAuditRequ
 // hidden reports an id the caller may not resolve, or that does not exist:
 // it is left out of the answer. Any other error is a failure, not a gap.
 func hidden(err error) bool {
-	return errors.Is(err, trail.ErrUserHidden) || errors.Is(err, pgx.ErrNoRows) ||
+	return errors.Is(err, trail.ErrUserHidden) || errors.Is(err, db.ErrNoRows) ||
 		errors.Is(err, authz.ErrNotFound) || errors.Is(err, authz.ErrForbidden)
 }
 
@@ -218,7 +216,7 @@ func (h *core) audited(ctx context.Context, e audit.Event) {
 }
 
 // idString renders a resource id for the audit trail.
-func idString(id pgtype.UUID) string {
+func idString(id db.UUID) string {
 	if !id.Valid {
 		return ""
 	}
@@ -272,7 +270,7 @@ func connectionChanges(logger *slog.Logger, before, after db.CatalogConnection, 
 }
 
 // withID returns ev about the resource id.
-func withID(ev audit.Event, id pgtype.UUID) audit.Event {
+func withID(ev audit.Event, id db.UUID) audit.Event {
 	ev.ResourceID = idString(id)
 	return ev
 }

@@ -7,10 +7,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 type fakeStore struct {
 	bindings []db.CatalogBinding
@@ -19,23 +18,23 @@ type fakeStore struct {
 	disabled bool
 }
 
-func (f *fakeStore) CountNamespacesByCatalog(context.Context, pgtype.UUID) (int64, error) {
+func (f *fakeStore) CountNamespacesByCatalog(context.Context, db.UUID) (int64, error) {
 	return 3, f.countErr
 }
 
-func (f *fakeStore) CountTablesByCatalog(context.Context, pgtype.UUID) (int64, error) {
+func (f *fakeStore) CountTablesByCatalog(context.Context, db.UUID) (int64, error) {
 	return 7, nil
 }
 
-func (f *fakeStore) CountCatalogImpact(context.Context, pgtype.UUID) (db.CountCatalogImpactRow, error) {
+func (f *fakeStore) CountCatalogImpact(context.Context, db.UUID) (db.CountCatalogImpactRow, error) {
 	return db.CountCatalogImpactRow{}, nil
 }
 
-func (f *fakeStore) CountConnectionImpact(context.Context, pgtype.UUID) (db.CountConnectionImpactRow, error) {
+func (f *fakeStore) CountConnectionImpact(context.Context, db.UUID) (db.CountConnectionImpactRow, error) {
 	return db.CountConnectionImpactRow{Catalogs: 2}, nil
 }
 
-func (f *fakeStore) ListBindingsByCatalog(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+func (f *fakeStore) ListBindingsByCatalog(context.Context, db.UUID) ([]db.CatalogBinding, error) {
 	return f.bindings, nil
 }
 
@@ -50,7 +49,7 @@ func (f *fakeStore) SetCatalogEnabled(context.Context, db.SetCatalogEnabledParam
 	return nil
 }
 
-func (f *fakeStore) DisableManagedBindingsOfCatalog(context.Context, pgtype.UUID) error { return nil }
+func (f *fakeStore) DisableManagedBindingsOfCatalog(context.Context, db.UUID) error { return nil }
 
 func (f *fakeStore) tx(_ context.Context, fn func(TxStore) error) error { return fn(f) }
 

@@ -6,9 +6,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
@@ -23,7 +23,7 @@ func (h *CatalogHandlers) SyncCatalogMetadata(ctx context.Context, request SyncC
 	if err != nil {
 		return SyncCatalogMetadata401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	id := db.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.MetadataSync, ResourceType: "catalog", ResourceID: idString(id)}
 	ctx = audit.WithAction(ctx, ev.Action)
 	if _, _, err := h.authz().Catalog(ctx, p, id, authz.ActWrite); err != nil {
@@ -63,7 +63,7 @@ func (h *CatalogHandlers) ListCatalogMetadataSyncRuns(ctx context.Context, reque
 	if err != nil {
 		return ListCatalogMetadataSyncRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	id := db.UUID{Bytes: request.CatalogId, Valid: true}
 	if _, _, err := h.authz().Catalog(ctx, p, id, authz.ActRead); err != nil {
 		if nf, _ := catalogAccessError(err); nf {
 			return ListCatalogMetadataSyncRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
@@ -110,7 +110,7 @@ func intPtr(v *int32) *int {
 // was created or changed (#17), so its metadata does not wait for the
 // schedule. A pass already running is reused (same workflow id). It never
 // fails the request: a failure is logged and the schedule catches up.
-func (h *core) startMetadataSync(ctx context.Context, catalogID pgtype.UUID) {
+func (h *core) startMetadataSync(ctx context.Context, catalogID db.UUID) {
 	if h.temporalClient == nil {
 		return
 	}

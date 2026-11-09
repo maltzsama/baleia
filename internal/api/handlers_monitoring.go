@@ -16,7 +16,6 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
 )
@@ -55,7 +54,7 @@ func (h *OpsHandlers) ListMonitoringEngines(ctx context.Context, _ ListMonitorin
 	return ListMonitoringEngines200JSONResponse(out), nil
 }
 
-func (h *core) engineForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID, act authz.Action) (db.Engine, bool) {
+func (h *core) engineForMonitoring(ctx context.Context, p authz.Principal, id db.UUID, act authz.Action) (db.Engine, bool) {
 	if h.engines == nil {
 		return db.Engine{}, false
 	}
@@ -72,7 +71,7 @@ func (h *OpsHandlers) GetEngineCluster(ctx context.Context, request GetEngineClu
 	if err != nil {
 		return GetEngineCluster401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	engineID := db.UUID{Bytes: request.Id, Valid: true}
 	if _, ok := h.engineForMonitoring(ctx, p, engineID, authz.ActRead); !ok {
 		return GetEngineCluster404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	}
@@ -122,7 +121,7 @@ func (h *OpsHandlers) ListMonitoringQueries(ctx context.Context, request ListMon
 	if err != nil {
 		return ListMonitoringQueries401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	engineID := db.UUID{Bytes: request.Id, Valid: true}
 	if _, ok := h.engineForMonitoring(ctx, p, engineID, authz.ActRead); !ok {
 		return ListMonitoringQueries404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	}
@@ -184,7 +183,7 @@ func (h *OpsHandlers) ListMonitoringQueries(ctx context.Context, request ListMon
 func (h *OpsHandlers) queryClasses(ctx context.Context, rows []db.TrinoQuerySnapshot) (map[string]string, map[string]string, error) {
 	byExecution := map[string]string{}
 	byQuery := map[string]string{}
-	executions := make([]pgtype.UUID, 0, len(rows))
+	executions := make([]db.UUID, 0, len(rows))
 	queries := make([]string, 0, len(rows))
 	for _, row := range rows {
 		if row.ExecutionID.Valid {
@@ -288,7 +287,7 @@ func (h *OpsHandlers) GetMonitoringQuery(ctx context.Context, request GetMonitor
 	if err != nil {
 		return GetMonitoringQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	engineID := db.UUID{Bytes: request.Id, Valid: true}
 	if _, ok := h.engineForMonitoring(ctx, p, engineID, authz.ActRead); !ok {
 		return GetMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
 	}
@@ -338,7 +337,7 @@ const queryResourcesTimeout = 3 * time.Second
 
 // queryResources reads what the query used from its engine, best effort: nil
 // when the engine does not report it, no longer knows the query, or fails.
-func (h *OpsHandlers) queryResources(ctx context.Context, engineID pgtype.UUID, queryID string) *MonitoringQueryResources {
+func (h *OpsHandlers) queryResources(ctx context.Context, engineID db.UUID, queryID string) *MonitoringQueryResources {
 	eng, err := h.engines.Get(ctx, engineID)
 	if err != nil {
 		h.logger.WarnContext(ctx, "query resources: engine unavailable", "engine_id", engineID.String(), "err", err)
@@ -384,7 +383,7 @@ func (h *OpsHandlers) KillMonitoringQuery(ctx context.Context, request KillMonit
 		return KillMonitoringQuery401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	ev := audit.Event{Action: audit.QueryKill, ResourceType: "query", ResourceID: request.QueryId}
-	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	engineID := db.UUID{Bytes: request.Id, Valid: true}
 	if _, ok := h.engineForMonitoring(ctx, p, engineID, authz.ActWrite); !ok {
 		h.audited(ctx, ev.Denied(audit.ReasonNotFound))
 		return KillMonitoringQuery404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "query not found"}}, nil
@@ -413,7 +412,7 @@ func (h *OpsHandlers) KillMonitoringQuery(ctx context.Context, request KillMonit
 	return KillMonitoringQuery202Response{}, nil
 }
 
-func (h *OpsHandlers) catalogForMonitoring(ctx context.Context, p authz.Principal, id pgtype.UUID, act authz.Action) (db.Catalog, bool, error) {
+func (h *OpsHandlers) catalogForMonitoring(ctx context.Context, p authz.Principal, id db.UUID, act authz.Action) (db.Catalog, bool, error) {
 	catalog, err := h.monitor.Catalog(ctx, id)
 	if errors.Is(err, monitoring.ErrCatalogNotFound) {
 		return db.Catalog{}, false, nil
@@ -436,7 +435,7 @@ func (h *OpsHandlers) ListTableHealth(ctx context.Context, request ListTableHeal
 	if err != nil {
 		return ListTableHealth401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	catalogID := db.UUID{Bytes: request.CatalogId, Valid: true}
 	catalog, ok, err := h.catalogForMonitoring(ctx, p, catalogID, authz.ActRead)
 	if err != nil {
 		return nil, err
@@ -569,7 +568,7 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 	if err != nil {
 		return CreateMaintenanceRun401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	catalogID := db.UUID{Bytes: request.CatalogId, Valid: true}
 	_, ok, err := h.catalogForMonitoring(ctx, p, catalogID, authz.ActWrite)
 	if err != nil {
 		return nil, err
@@ -585,10 +584,10 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 		Operations: request.Body.Operations, Retention: request.Body.Retention, StartedBy: p.UserID,
 	}
 	if request.Body.BindingId != nil {
-		b := pgtype.UUID{Bytes: [16]byte(*request.Body.BindingId), Valid: true}
+		b := db.UUID{Bytes: [16]byte(*request.Body.BindingId), Valid: true}
 		m.Binding = &b
 	}
-	plan, err := h.monitor.Prepare(ctx, m, func(ctx context.Context, engineID pgtype.UUID) bool {
+	plan, err := h.monitor.Prepare(ctx, m, func(ctx context.Context, engineID db.UUID) bool {
 		eng, err := h.engines.Get(ctx, engineID)
 		return err == nil && eng.Capabilities().IcebergMaintenance
 	})
@@ -635,7 +634,7 @@ func (h *OpsHandlers) ListMaintenanceRuns(ctx context.Context, request ListMaint
 	if err != nil {
 		return ListMaintenanceRuns401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	catalogID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	catalogID := db.UUID{Bytes: request.CatalogId, Valid: true}
 	if _, ok, err := h.catalogForMonitoring(ctx, p, catalogID, authz.ActRead); err != nil {
 		return nil, err
 	} else if !ok {

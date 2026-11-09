@@ -9,9 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -322,11 +320,11 @@ func TestSpaces_ForeignWorkspace404(t *testing.T) {
 // brokenPrincipals fails every user and team lookup.
 type brokenPrincipals struct{ db.Querier }
 
-func (brokenPrincipals) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+func (brokenPrincipals) GetUserByID(context.Context, db.UUID) (db.User, error) {
 	return db.User{}, errors.New("connection reset")
 }
 
-func (brokenPrincipals) GetTeamByID(context.Context, pgtype.UUID) (db.Team, error) {
+func (brokenPrincipals) GetTeamByID(context.Context, db.UUID) (db.Team, error) {
 	return db.Team{}, errors.New("connection reset")
 }
 
@@ -338,7 +336,7 @@ func TestSetSpaceMember_LookupFailureIsAnError(t *testing.T) {
 	ws := sharedWorkspace(t, f)
 	owner := f.as(f.owner)
 	space := createSpaceIn(t, f, owner, ws, CreateSpaceRequest{Name: "Shared", Visibility: CreateSpaceRequestVisibilityWorkspace})
-	broken := brokenPrincipals{repo.New(testdb.GORM(t, f.pool))}
+	broken := brokenPrincipals{repo.New(f.pool)}
 	f.h.queries = broken
 	f.h.store = nil // exercise the sqlc path this fixture deliberately breaks
 	f.h.access = wsaccess.New(f.h.queries)

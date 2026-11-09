@@ -8,11 +8,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func uid(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }
+func uid(b byte) db.UUID { return db.UUID{Bytes: [16]byte{b}, Valid: true} }
 
 type store struct {
 	conns   map[[16]byte]db.CatalogConnection
@@ -49,18 +47,18 @@ func (s store) GetEffectiveSpaceRole(_ context.Context, a db.GetEffectiveSpaceRo
 	return s.spaceRoles[[3][16]byte{a.WorkspaceID.Bytes, a.SpaceID.Bytes, a.UserID.Bytes}], nil
 }
 
-func (s store) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+func (s store) GetEngineByID(_ context.Context, id db.UUID) (db.Engine, error) {
 	if e, ok := s.engines[id.Bytes]; ok {
 		return e, nil
 	}
-	return db.Engine{}, pgx.ErrNoRows
+	return db.Engine{}, db.ErrNoRows
 }
 
-func (s store) GetWorkspaceByID(_ context.Context, id pgtype.UUID) (db.Workspace, error) {
+func (s store) GetWorkspaceByID(_ context.Context, id db.UUID) (db.Workspace, error) {
 	if w, ok := s.wss[id.Bytes]; ok {
 		return w, nil
 	}
-	return db.Workspace{}, pgx.ErrNoRows
+	return db.Workspace{}, db.ErrNoRows
 }
 
 func (s store) CheckWorkspaceAccess(_ context.Context, a db.CheckWorkspaceAccessParams) (bool, error) {
@@ -85,32 +83,32 @@ func (s store) GetWorkspaceMemberRole(_ context.Context, a db.GetWorkspaceMember
 	return "", nil
 }
 
-func (s store) GetTeamByID(_ context.Context, id pgtype.UUID) (db.Team, error) {
+func (s store) GetTeamByID(_ context.Context, id db.UUID) (db.Team, error) {
 	if t, ok := s.teams[id.Bytes]; ok {
 		return t, nil
 	}
-	return db.Team{}, pgx.ErrNoRows
+	return db.Team{}, db.ErrNoRows
 }
 
 func (s store) GetTeamMemberRole(_ context.Context, a db.GetTeamMemberRoleParams) (string, error) {
 	if r, ok := s.roles[[2][16]byte{a.TeamID.Bytes, a.UserID.Bytes}]; ok {
 		return r, nil
 	}
-	return "", pgx.ErrNoRows
+	return "", db.ErrNoRows
 }
 
-func (s store) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
+func (s store) GetCatalogConnectionByID(_ context.Context, id db.UUID) (db.CatalogConnection, error) {
 	if c, ok := s.conns[id.Bytes]; ok {
 		return c, nil
 	}
-	return db.CatalogConnection{}, pgx.ErrNoRows
+	return db.CatalogConnection{}, db.ErrNoRows
 }
 
-func (s store) GetCatalogByID(_ context.Context, id pgtype.UUID) (db.Catalog, error) {
+func (s store) GetCatalogByID(_ context.Context, id db.UUID) (db.Catalog, error) {
 	if c, ok := s.cats[id.Bytes]; ok {
 		return c, nil
 	}
-	return db.Catalog{}, pgx.ErrNoRows
+	return db.Catalog{}, db.ErrNoRows
 }
 
 var (
@@ -154,7 +152,7 @@ func TestConnection(t *testing.T) {
 	cases := []struct {
 		name string
 		p    Principal
-		conn pgtype.UUID
+		conn db.UUID
 		want error
 	}{
 		{"owner", owner, connA, nil},
@@ -220,7 +218,7 @@ func TestWorkspace(t *testing.T) {
 	cases := []struct {
 		name string
 		p    Principal
-		ws   pgtype.UUID
+		ws   db.UUID
 		act  Action
 		want error
 	}{

@@ -8,12 +8,11 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/fake"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeEngineSource struct{ readOnly queryengine.ReadOnlySupport }
 
-func (f fakeEngineSource) Get(context.Context, pgtype.UUID) (queryengine.Engine, error) {
+func (f fakeEngineSource) Get(context.Context, db.UUID) (queryengine.Engine, error) {
 	return fake.New(fake.Options{ReadOnly: f.readOnly}), nil
 }
 
@@ -53,8 +52,8 @@ func TestAgentsMeta(t *testing.T) {
 
 func TestAgentEligibilityPolicyExclusion(t *testing.T) {
 	t.Parallel()
-	catalogID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
-	engineID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
+	catalogID := db.UUID{Bytes: [16]byte{1}, Valid: true}
+	engineID := db.UUID{Bytes: [16]byte{2}, Valid: true}
 	h := testAPI(handlerFields{})
 	engine := db.Engine{Name: "prod", Kind: "trino", Enabled: true}
 
@@ -81,8 +80,8 @@ func TestAgentEligibilityPolicyExclusion(t *testing.T) {
 func TestAgentEligibilityReadOnlyNotEnforced(t *testing.T) {
 	t.Parallel()
 	h := testAPI(handlerFields{engines: fakeEngineSource{readOnly: queryengine.ReadOnlyNone}})
-	catalogID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
-	engineID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
+	catalogID := db.UUID{Bytes: [16]byte{1}, Valid: true}
+	engineID := db.UUID{Bytes: [16]byte{2}, Valid: true}
 	got := h.engineEligibility(t.Context(), agentpolicy.Effective{}, catalogID, engineID, db.Engine{Name: "prod", Kind: "postgresql", Enabled: true})
 	if got.Status != AgentEngineEligibilityStatusReadOnlyNotEnforced {
 		t.Fatalf("status = %q, want read_only_not_enforced", got.Status)

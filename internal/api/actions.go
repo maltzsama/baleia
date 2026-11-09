@@ -5,14 +5,13 @@ import (
 
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Allowed actions (#104): each list is computed by the same authz predicates
 // that enforce the action, so the UI never contradicts the server. The checker
 // is the single implementation; these helpers only classify its outcome.
 
-func (h *core) catalogActions(ctx context.Context, id pgtype.UUID) []CatalogAllowedAction {
+func (h *core) catalogActions(ctx context.Context, id db.UUID) []CatalogAllowedAction {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil
@@ -30,7 +29,7 @@ func (h *core) catalogActions(ctx context.Context, id pgtype.UUID) []CatalogAllo
 
 // tableMaintenanceActions classifies the same check the maintenance handlers
 // run (#500): reading the catalog's monitoring, and writing it.
-func (h *core) tableMaintenanceActions(ctx context.Context, connectionID, catalogID pgtype.UUID) []TableMaintenanceAllowedAction {
+func (h *core) tableMaintenanceActions(ctx context.Context, connectionID, catalogID db.UUID) []TableMaintenanceAllowedAction {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil
@@ -57,9 +56,9 @@ func (h *core) catalogBindingActions(ctx context.Context, b dbCatalogBindingRef)
 	return acts
 }
 
-type dbCatalogBindingRef struct{ catalogID pgtype.UUID }
+type dbCatalogBindingRef struct{ catalogID db.UUID }
 
-func (h *core) catalogConnectionActions(ctx context.Context, id pgtype.UUID) []CatalogConnectionAllowedAction {
+func (h *core) catalogConnectionActions(ctx context.Context, id db.UUID) []CatalogConnectionAllowedAction {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil
@@ -75,7 +74,7 @@ func (h *core) catalogConnectionActions(ctx context.Context, id pgtype.UUID) []C
 	return acts
 }
 
-func (h *core) engineActions(ctx context.Context, id pgtype.UUID) []EngineAllowedAction {
+func (h *core) engineActions(ctx context.Context, id db.UUID) []EngineAllowedAction {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil
@@ -91,7 +90,7 @@ func (h *core) engineActions(ctx context.Context, id pgtype.UUID) []EngineAllowe
 	return acts
 }
 
-func (h *core) workspaceActions(ctx context.Context, id pgtype.UUID) ([]WorkspaceAllowedAction, authz.WorkspaceRole) {
+func (h *core) workspaceActions(ctx context.Context, id db.UUID) ([]WorkspaceAllowedAction, authz.WorkspaceRole) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, authz.WorkspaceNone

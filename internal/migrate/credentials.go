@@ -7,8 +7,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/crypto"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // CredentialRow is one stored connection credential.
@@ -56,7 +56,7 @@ func MigrateCredentials(ctx context.Context, store CredentialStore, kr *crypto.K
 			res.Failed = append(res.Failed, r.ID)
 			continue
 		}
-		aad := catalogs.CredentialsAAD(pgtype.UUID{Bytes: id, Valid: true})
+		aad := catalogs.CredentialsAAD(db.UUID{Bytes: id, Valid: true})
 		var plain []byte
 		if isV1 {
 			// Sealed under the previous key: open it and re-seal under the current.

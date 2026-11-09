@@ -7,25 +7,11 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 func TestTeamsRoundTrip(t *testing.T) {
 	t.Parallel()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 
 	ctx := context.Background()
 	store := NewTeams(gdb)
@@ -68,8 +54,8 @@ func TestTeamsRoundTrip(t *testing.T) {
 	if err != nil || role != "owner" {
 		t.Fatalf("GetTeamMemberRole = %q, %v; want owner", role, err)
 	}
-	if _, err := repo.GetTeamMemberRole(ctx, db.GetTeamMemberRoleParams{TeamID: team.ID, UserID: PGUUID(NewUUID())}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("GetTeamMemberRole(non-member) = %v, want pgx.ErrNoRows", err)
+	if _, err := repo.GetTeamMemberRole(ctx, db.GetTeamMemberRoleParams{TeamID: team.ID, UserID: PGUUID(NewUUID())}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("GetTeamMemberRole(non-member) = %v, want db.ErrNoRows", err)
 	}
 	if n, err := store.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{TeamID: team.ID, UserID: memberID}); err != nil || n != 1 {
 		t.Fatalf("RemoveTeamMember = %d, %v", n, err)

@@ -8,11 +8,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 // fakeStore grants one catalog with one table; binding is its default
 // binding, if any.
@@ -26,13 +24,13 @@ type fakeStore struct {
 	lastSearch db.SearchMetadataParams
 }
 
-func (f *fakeStore) ListMetadataCatalogs(context.Context, pgtype.UUID) ([]db.ListMetadataCatalogsRow, error) {
+func (f *fakeStore) ListMetadataCatalogs(context.Context, db.UUID) ([]db.ListMetadataCatalogsRow, error) {
 	return nil, nil
 }
 
 func (f *fakeStore) GetGrantedMetadataCatalog(_ context.Context, arg db.GetGrantedMetadataCatalogParams) (db.GetGrantedMetadataCatalogRow, error) {
 	if arg.CatalogID != f.catalog.ID {
-		return db.GetGrantedMetadataCatalogRow{}, pgx.ErrNoRows
+		return db.GetGrantedMetadataCatalogRow{}, db.ErrNoRows
 	}
 	return f.catalog, nil
 }
@@ -58,19 +56,19 @@ func (f *fakeStore) ListMetadataTablesPage(_ context.Context, arg db.ListMetadat
 
 func (f *fakeStore) GetGrantedMetadataTable(_ context.Context, arg db.GetGrantedMetadataTableParams) (db.GetGrantedMetadataTableRow, error) {
 	if arg.TableID != f.table.ID {
-		return db.GetGrantedMetadataTableRow{}, pgx.ErrNoRows
+		return db.GetGrantedMetadataTableRow{}, db.ErrNoRows
 	}
 	return f.table, nil
 }
 
 func (f *fakeStore) GetCatalogBindingForDisplay(_ context.Context, arg db.GetCatalogBindingForDisplayParams) (db.GetCatalogBindingForDisplayRow, error) {
 	if f.binding == nil || (arg.BindingID.Valid && arg.BindingID != f.binding.ID) {
-		return db.GetCatalogBindingForDisplayRow{}, pgx.ErrNoRows
+		return db.GetCatalogBindingForDisplayRow{}, db.ErrNoRows
 	}
 	return *f.binding, nil
 }
 
-func (f *fakeStore) ListMetadataColumns(context.Context, pgtype.UUID) ([]db.ListMetadataColumnsRow, error) {
+func (f *fakeStore) ListMetadataColumns(context.Context, db.UUID) ([]db.ListMetadataColumnsRow, error) {
 	return []db.ListMetadataColumnsRow{{Name: "id"}}, nil
 }
 
@@ -150,7 +148,7 @@ func TestTable_Binding(t *testing.T) {
 	st := newStore()
 	s := New(st)
 
-	got, err := s.Table(ctx, newID(), st.table.ID, pgtype.UUID{})
+	got, err := s.Table(ctx, newID(), st.table.ID, db.UUID{})
 	if err != nil || got.Binding != nil || len(got.Columns) != 1 {
 		t.Fatalf("no binding = %+v, %v; want the table without a binding", got, err)
 	}
@@ -158,10 +156,10 @@ func TestTable_Binding(t *testing.T) {
 		t.Errorf("unknown binding = %v, want ErrBindingNotFound", err)
 	}
 	st.binding = &db.GetCatalogBindingForDisplayRow{ID: newID()}
-	if got, err := s.Table(ctx, newID(), st.table.ID, pgtype.UUID{}); err != nil || got.Binding == nil {
+	if got, err := s.Table(ctx, newID(), st.table.ID, db.UUID{}); err != nil || got.Binding == nil {
 		t.Errorf("default binding = %+v, %v", got.Binding, err)
 	}
-	if _, err := s.Table(ctx, newID(), newID(), pgtype.UUID{}); !errors.Is(err, ErrTableNotFound) {
+	if _, err := s.Table(ctx, newID(), newID(), db.UUID{}); !errors.Is(err, ErrTableNotFound) {
 		t.Errorf("unknown table = %v, want ErrTableNotFound", err)
 	}
 }

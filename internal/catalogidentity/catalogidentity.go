@@ -28,20 +28,18 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store is the subset of db.Querier the resolver reads.
 type Store interface {
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
 	GetManagedConnectionOfEngineCatalog(ctx context.Context, arg db.GetManagedConnectionOfEngineCatalogParams) (db.CatalogConnection, error)
 }
 
 // UserTokens returns a user's identity-provider access token, "" when none
 // is usable (idptoken.Tokens).
 type UserTokens interface {
-	Access(ctx context.Context, userID pgtype.UUID) (string, error)
+	Access(ctx context.Context, userID db.UUID) (string, error)
 }
 
 // notPerUserTTL is how long a connection found not to be per-user is
@@ -86,7 +84,7 @@ func (r *Resolver) CatalogToken(ctx context.Context, engineID string, spec query
 		if err != nil {
 			return "", fmt.Errorf("catalog identity: principal: %w", err)
 		}
-		id := pgtype.UUID{Bytes: uid, Valid: true}
+		id := db.UUID{Bytes: uid, Valid: true}
 		user, err := r.store.GetUserByID(ctx, id)
 		if err != nil {
 			return "", fmt.Errorf("catalog identity: principal: %w", err)
@@ -115,9 +113,9 @@ func (r *Resolver) connectionToken(ctx context.Context, engineID, catalog string
 		return "", nil // not a stored engine (a transient test engine)
 	}
 	conn, err := r.store.GetManagedConnectionOfEngineCatalog(ctx, db.GetManagedConnectionOfEngineCatalogParams{
-		EngineID: pgtype.UUID{Bytes: eid, Valid: true}, EngineCatalogName: catalog,
+		EngineID: db.UUID{Bytes: eid, Valid: true}, EngineCatalogName: catalog,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return "", nil
 	}
 	if err != nil {

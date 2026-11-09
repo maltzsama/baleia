@@ -305,9 +305,10 @@ func (d *spec) ExplainSQL(sql string) (string, bool) {
 func (d *spec) Placeholder(n int) string { return d.placeholder(n) }
 
 func (d *spec) MetadataQueries() MetadataQueries { return d.metadata }
+
 // FunctionQuery returns the configured function-catalog SQL without executing
 // it, or an empty string when no query is configured.
-func (d *spec) FunctionQuery() string            { return d.functionQuery }
+func (d *spec) FunctionQuery() string { return d.functionQuery }
 
 func (d *spec) Aggregate(fn AggFunc, expr string, distinct bool) (string, error) {
 	if strings.TrimSpace(expr) == "" {

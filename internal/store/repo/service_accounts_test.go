@@ -9,13 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 // TestServiceAccountsRoundTrip (#653, #769) exercises the GORM replacement for
@@ -24,16 +18,7 @@ import (
 // identity-provider link and deletion.
 func TestServiceAccountsRoundTrip(t *testing.T) {
 	t.Parallel()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 
 	ctx := context.Background()
 	accounts := NewServiceAccounts(gdb)
@@ -109,7 +94,7 @@ func TestServiceAccountsRoundTrip(t *testing.T) {
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("rollback tx = %v", err)
 	}
-	if _, err := accounts.GetServiceAccount(ctx, rolled.ID); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := accounts.GetServiceAccount(ctx, rolled.ID); !errors.Is(err, db.ErrNoRows) {
 		t.Errorf("rolled-back account = %v", err)
 	}
 	if count := membershipCount(t, gdb, ws.ID, rolled.ID); count != 0 {
@@ -158,7 +143,7 @@ func TestServiceAccountsRoundTrip(t *testing.T) {
 	if list, err := accounts.ListServiceAccounts(ctx); err != nil || len(list) != 4 {
 		t.Errorf("ListServiceAccounts = %d, %v", len(list), err)
 	}
-	list, err := accounts.ListServiceAccountsOfWorkspaces(ctx, []pgtype.UUID{ws.ID})
+	list, err := accounts.ListServiceAccountsOfWorkspaces(ctx, []db.UUID{ws.ID})
 	if err != nil {
 		t.Fatalf("ListServiceAccountsOfWorkspaces: %v", err)
 	}
@@ -217,8 +202,8 @@ func TestServiceAccountsRoundTrip(t *testing.T) {
 		Name: "Duplicate", Email: "dup@service-accounts.baleia.invalid",
 		AuthProvider: "oidc", AuthProviderID: provider.ID, ExternalID: &external,
 	})
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) || pgErr.Code != uniqueViolation {
+	pgErr, ok := db.AsPGError(err)
+	if !ok || pgErr.Code != uniqueViolation {
 		t.Errorf("duplicate client = %v", err)
 	}
 
@@ -226,7 +211,7 @@ func TestServiceAccountsRoundTrip(t *testing.T) {
 	if n, err := accounts.DeleteServiceAccount(ctx, sa.ID); err != nil || n != 1 {
 		t.Fatalf("DeleteServiceAccount = %d, %v", n, err)
 	}
-	if _, err := accounts.GetServiceAccount(ctx, sa.ID); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := accounts.GetServiceAccount(ctx, sa.ID); !errors.Is(err, db.ErrNoRows) {
 		t.Errorf("deleted get = %v", err)
 	}
 	if role, err := New(gdb).WorkspaceRole(ctx, UUIDString(ws.ID), UUIDString(sa.ID)); err != nil || role != "" {
@@ -240,7 +225,7 @@ func TestServiceAccountsRoundTrip(t *testing.T) {
 // membershipCount counts the workspace rows of a user directly, so a deletion
 // that leaves the junction row behind is caught even when the role reads back
 // empty for other reasons.
-func membershipCount(t *testing.T, gdb *gorm.DB, workspaceID, userID pgtype.UUID) int64 {
+func membershipCount(t *testing.T, gdb *gorm.DB, workspaceID, userID db.UUID) int64 {
 	t.Helper()
 	var count int64
 	if err := gdb.Model(&model.WorkspaceMember{}).

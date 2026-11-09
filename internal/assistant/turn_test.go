@@ -9,10 +9,10 @@ import (
 
 	"github.com/galileostudio/baleia/internal/assistant"
 	"github.com/galileostudio/baleia/internal/assistant/llm"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeTools struct {
@@ -25,11 +25,11 @@ func (f *fakeTools) CallTool(_ context.Context, name string, _ map[string]any) (
 	return f.result, nil
 }
 
-func newTurnFixture(t *testing.T) (*assistant.Service, pgtype.UUID, pgtype.UUID) {
+func newTurnFixture(t *testing.T) (*assistant.Service, db.UUID, db.UUID) {
 	t.Helper()
 	pool := testdb.New(t)
 	svc := newAssistantService(t, pool, nil)
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	ctx := context.Background()
 	uid, wsid := uuid.New(), uuid.New()
 	password := "x"
@@ -45,8 +45,8 @@ func newTurnFixture(t *testing.T) (*assistant.Service, pgtype.UUID, pgtype.UUID)
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
-	userID := pgtype.UUID{Bytes: uid, Valid: true}
-	workspaceID := pgtype.UUID{Bytes: wsid, Valid: true}
+	userID := db.UUID{Bytes: uid, Valid: true}
+	workspaceID := db.UUID{Bytes: wsid, Valid: true}
 	if _, err := svc.UpdateSettings(ctx, assistant.SettingsInput{
 		Enabled: true, Provider: strptr("anthropic"), Model: strptr("fake"),
 		DataSharing: "metadata_and_samples", MaxTurnSeconds: 10,
@@ -57,7 +57,7 @@ func newTurnFixture(t *testing.T) (*assistant.Service, pgtype.UUID, pgtype.UUID)
 	return svc, userID, workspaceID
 }
 
-func waitIdle(t *testing.T, svc *assistant.Service, userID, id pgtype.UUID) {
+func waitIdle(t *testing.T, svc *assistant.Service, userID, id db.UUID) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {

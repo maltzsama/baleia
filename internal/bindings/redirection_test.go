@@ -6,8 +6,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeRedirectionStore struct {
@@ -15,19 +13,19 @@ type fakeRedirectionStore struct {
 	catalogs map[[16]byte]db.Catalog
 }
 
-func (s fakeRedirectionStore) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+func (s fakeRedirectionStore) ListBindingsByEngine(context.Context, db.UUID) ([]db.CatalogBinding, error) {
 	return s.bindings, nil
 }
 
-func (s fakeRedirectionStore) GetCatalogByID(_ context.Context, id pgtype.UUID) (db.Catalog, error) {
+func (s fakeRedirectionStore) GetCatalogByID(_ context.Context, id db.UUID) (db.Catalog, error) {
 	c, ok := s.catalogs[id.Bytes]
 	if !ok {
-		return db.Catalog{}, pgx.ErrNoRows
+		return db.Catalog{}, db.ErrNoRows
 	}
 	return c, nil
 }
 
-func uuid(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }
+func uuid(b byte) db.UUID { return db.UUID{Bytes: [16]byte{b}, Valid: true} }
 
 func strptr(s string) *string { return &s }
 

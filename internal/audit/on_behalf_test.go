@@ -17,7 +17,7 @@ import (
 func TestOnBehalfOfOnlyForAgents(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	q := repo.New(gdb)
 	rec := NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
 	owner := uuid.New()

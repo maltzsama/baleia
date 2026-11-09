@@ -13,9 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -23,7 +20,7 @@ import (
 // transactional writes; failTx makes a transaction fail after its writes.
 type fakeStore struct {
 	users     map[[16]byte]db.User
-	resets    map[string]pgtype.UUID
+	resets    map[string]db.UUID
 	revoked   map[[16]byte]bool
 	keysDel   map[[16]byte]bool
 	idpForgot map[[16]byte]bool
@@ -37,10 +34,10 @@ type fakeStore struct {
 }
 
 func newStore() *fakeStore {
-	return &fakeStore{users: map[[16]byte]db.User{}, resets: map[string]pgtype.UUID{}, revoked: map[[16]byte]bool{}, keysDel: map[[16]byte]bool{}, idpForgot: map[[16]byte]bool{}}
+	return &fakeStore{users: map[[16]byte]db.User{}, resets: map[string]db.UUID{}, revoked: map[[16]byte]bool{}, keysDel: map[[16]byte]bool{}, idpForgot: map[[16]byte]bool{}}
 }
 
-func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+func (f *fakeStore) GetUserByID(_ context.Context, id db.UUID) (db.User, error) {
 	f.reads++
 	if f.readBackErr != nil && f.reads > 1 {
 		return db.User{}, f.readBackErr
@@ -48,7 +45,7 @@ func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, err
 	if u, ok := f.users[id.Bytes]; ok {
 		return u, nil
 	}
-	return db.User{}, pgx.ErrNoRows
+	return db.User{}, db.ErrNoRows
 }
 
 func (f *fakeStore) GetUserByEmail(_ context.Context, email string) (db.User, error) {
@@ -57,7 +54,7 @@ func (f *fakeStore) GetUserByEmail(_ context.Context, email string) (db.User, er
 			return u, nil
 		}
 	}
-	return db.User{}, pgx.ErrNoRows
+	return db.User{}, db.ErrNoRows
 }
 
 func (f *fakeStore) ListUsers(context.Context) ([]db.User, error) {
@@ -79,7 +76,7 @@ func (f *fakeStore) UpdateUserRole(_ context.Context, arg db.UpdateUserRoleParam
 	return nil
 }
 
-func (f *fakeStore) DeleteUser(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) DeleteUser(_ context.Context, id db.UUID) error {
 	if f.deleteE != nil {
 		return f.deleteE
 	}
@@ -87,7 +84,7 @@ func (f *fakeStore) DeleteUser(_ context.Context, id pgtype.UUID) error {
 	return nil
 }
 
-func (f *fakeStore) ReinstateUser(_ context.Context, id pgtype.UUID) (db.User, error) {
+func (f *fakeStore) ReinstateUser(_ context.Context, id db.UUID) (db.User, error) {
 	u := f.users[id.Bytes]
 	u.Status, u.SuspendedReason = auth.StatusActive, nil
 	f.users[id.Bytes] = u
@@ -96,9 +93,9 @@ func (f *fakeStore) ReinstateUser(_ context.Context, id pgtype.UUID) (db.User, e
 
 func (f *fakeStore) CreateUser(_ context.Context, arg db.CreateUserParams) (db.User, error) {
 	if f.emailRace == arg.Email {
-		return db.User{}, &pgconn.PgError{Code: "23505"}
+		return db.User{}, &db.PGError{Code: "23505"}
 	}
-	u := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Name: arg.Name, Email: arg.Email, Role: arg.Role, AuthProvider: arg.AuthProvider, PasswordHash: arg.PasswordHash, Status: auth.StatusActive}
+	u := db.User{ID: db.UUID{Bytes: uuid.New(), Valid: true}, Name: arg.Name, Email: arg.Email, Role: arg.Role, AuthProvider: arg.AuthProvider, PasswordHash: arg.PasswordHash, Status: auth.StatusActive}
 	f.users[u.ID.Bytes] = u
 	return u, nil
 }
@@ -115,17 +112,17 @@ func (f *fakeStore) SuspendUser(_ context.Context, arg db.SuspendUserParams) (db
 	return u, nil
 }
 
-func (f *fakeStore) RevokeUserRefreshTokens(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) RevokeUserRefreshTokens(_ context.Context, id db.UUID) error {
 	f.revoked[id.Bytes] = true
 	return nil
 }
 
-func (f *fakeStore) DeleteAPIKeysByUser(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) DeleteAPIKeysByUser(_ context.Context, id db.UUID) error {
 	f.keysDel[id.Bytes] = true
 	return nil
 }
 
-func (f *fakeStore) DeleteUserIDPToken(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) DeleteUserIDPToken(_ context.Context, id db.UUID) error {
 	f.idpForgot[id.Bytes] = true
 	return nil
 }
@@ -142,9 +139,9 @@ func (m *fakeMailer) Send(_ context.Context, _, _ string, template mail.Template
 	return nil
 }
 
-type fakeSessions struct{ revoked []pgtype.UUID }
+type fakeSessions struct{ revoked []db.UUID }
 
-func (s *fakeSessions) RevokeAll(_ context.Context, id pgtype.UUID) {
+func (s *fakeSessions) RevokeAll(_ context.Context, id db.UUID) {
 	s.revoked = append(s.revoked, id)
 }
 
@@ -192,7 +189,7 @@ func TestChangeRole(t *testing.T) {
 	if len(ss.revoked) != 1 {
 		t.Error("a role change ends the account's sessions")
 	}
-	if _, _, err := s.ChangeRole(ctx, pgtype.UUID{Bytes: uuid.New(), Valid: true}, "admin"); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.ChangeRole(ctx, db.UUID{Bytes: uuid.New(), Valid: true}, "admin"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown = %v, want ErrNotFound", err)
 	}
 }
@@ -281,7 +278,7 @@ type brokenStore struct{ *fakeStore }
 
 var errDown = errors.New("connection refused")
 
-func (brokenStore) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+func (brokenStore) GetUserByID(context.Context, db.UUID) (db.User, error) {
 	return db.User{}, errDown
 }
 
@@ -291,7 +288,7 @@ func TestStoreFailureIsNotNotFound(t *testing.T) {
 	t.Parallel()
 	st := brokenStore{newStore()}
 	s := New(st, st.tx, &fakeMailer{}, &fakeSessions{}, Config{})
-	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	id := db.UUID{Bytes: uuid.New(), Valid: true}
 	if _, _, err := s.ChangeRole(context.Background(), id, "admin"); !errors.Is(err, errDown) || errors.Is(err, ErrNotFound) {
 		t.Errorf("ChangeRole = %v, want the store error", err)
 	}

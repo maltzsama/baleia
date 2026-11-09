@@ -13,12 +13,8 @@ import (
 	"github.com/galileostudio/baleia/internal/identity/setup"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 var (
@@ -28,16 +24,7 @@ var (
 
 func openTestGorm(t *testing.T) *gorm.DB {
 	t.Helper()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 	return gdb
 }
 
@@ -77,7 +64,7 @@ func TestAccountStore(t *testing.T) {
 		t.Fatalf("reloaded = %+v, %v", reloaded, err)
 	}
 
-	if _, err := r.PersonalWorkspaceID(ctx, user.ID); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := r.PersonalWorkspaceID(ctx, user.ID); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("PersonalWorkspaceID(none) = %v, want ErrNoRows", err)
 	}
 	owner := model.UUID(UUIDString(user.ID))

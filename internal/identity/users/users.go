@@ -16,14 +16,11 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mail"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Reader reads accounts and reconciliation runs; *repo.Repo implements it.
 type Reader interface {
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
 	GetUserByEmail(ctx context.Context, email string) (db.User, error)
 	ListUsers(ctx context.Context) ([]db.User, error)
 	ListDirectoryReconcileRuns(ctx context.Context, arg db.ListDirectoryReconcileRunsParams) ([]db.DirectoryReconcileRun, error)
@@ -32,8 +29,8 @@ type Reader interface {
 // Writer changes one account; *repo.Repo implements it.
 type Writer interface {
 	UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error
-	DeleteUser(ctx context.Context, id pgtype.UUID) error
-	ReinstateUser(ctx context.Context, id pgtype.UUID) (db.User, error)
+	DeleteUser(ctx context.Context, id db.UUID) error
+	ReinstateUser(ctx context.Context, id db.UUID) (db.User, error)
 }
 
 // Store is Reader and Writer.
@@ -47,9 +44,9 @@ type TxStore interface {
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
 	CreatePasswordResetToken(ctx context.Context, arg db.CreatePasswordResetTokenParams) error
 	SuspendUser(ctx context.Context, arg db.SuspendUserParams) (db.User, error)
-	RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error
-	DeleteAPIKeysByUser(ctx context.Context, userID pgtype.UUID) error
-	DeleteUserIDPToken(ctx context.Context, userID pgtype.UUID) error
+	RevokeUserRefreshTokens(ctx context.Context, userID db.UUID) error
+	DeleteAPIKeysByUser(ctx context.Context, userID db.UUID) error
+	DeleteUserIDPToken(ctx context.Context, userID db.UUID) error
 }
 
 // Tx runs fn in one transaction over a TxStore.
@@ -62,7 +59,7 @@ type Mailer interface {
 
 // Sessions ends every session of an account; *session.Service implements it.
 type Sessions interface {
-	RevokeAll(ctx context.Context, userID pgtype.UUID)
+	RevokeAll(ctx context.Context, userID db.UUID)
 }
 
 // Config are the invitation settings, resolved by the caller.
@@ -150,7 +147,7 @@ func (s *Service) Invite(ctx context.Context, email, role string) (db.User, erro
 		if err := q.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
 			TokenHash: auth.HashToken(token),
 			UserID:    user.ID,
-			ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(InviteTTL), Valid: true},
+			ExpiresAt: db.Timestamptz{Time: time.Now().Add(InviteTTL), Valid: true},
 		}); err != nil {
 			return fmt.Errorf("create invite token: %w", err)
 		}
@@ -175,7 +172,7 @@ func (s *Service) Invite(ctx context.Context, email, role string) (db.User, erro
 // ChangeRole sets the platform role and ends the account's sessions, so the
 // new role applies at the next sign-in (#51). It returns the account before
 // and after.
-func (s *Service) ChangeRole(ctx context.Context, id pgtype.UUID, role string) (before, after db.User, err error) {
+func (s *Service) ChangeRole(ctx context.Context, id db.UUID, role string) (before, after db.User, err error) {
 	if before, err = s.get(ctx, id); err != nil {
 		return db.User{}, db.User{}, err
 	}
@@ -195,7 +192,7 @@ func (s *Service) ChangeRole(ctx context.Context, id pgtype.UUID, role string) (
 
 // Remove deletes the account. A delete the database refuses (the account is
 // still referenced) is returned unwrapped for the caller to classify.
-func (s *Service) Remove(ctx context.Context, id pgtype.UUID) error {
+func (s *Service) Remove(ctx context.Context, id db.UUID) error {
 	if _, err := s.get(ctx, id); err != nil {
 		return err
 	}
@@ -211,7 +208,7 @@ func (s *Service) Remove(ctx context.Context, id pgtype.UUID) error {
 // Suspend suspends the account and, in the same transaction, ends its
 // sessions and deletes its API keys. It returns the account before and after
 // and the recorded reason.
-func (s *Service) Suspend(ctx context.Context, id pgtype.UUID, reason string) (before, after db.User, recorded string, err error) {
+func (s *Service) Suspend(ctx context.Context, id db.UUID, reason string) (before, after db.User, recorded string, err error) {
 	if before, err = s.get(ctx, id); err != nil {
 		return db.User{}, db.User{}, "", err
 	}
@@ -241,7 +238,7 @@ func (s *Service) Suspend(ctx context.Context, id pgtype.UUID, reason string) (b
 
 // Reinstate lifts any suspension, including a directory one (#258). It
 // returns the account before and after.
-func (s *Service) Reinstate(ctx context.Context, id pgtype.UUID) (before, after db.User, err error) {
+func (s *Service) Reinstate(ctx context.Context, id db.UUID) (before, after db.User, err error) {
 	if before, err = s.get(ctx, id); err != nil {
 		return db.User{}, db.User{}, err
 	}
@@ -253,13 +250,13 @@ func (s *Service) Reinstate(ctx context.Context, id pgtype.UUID) (before, after 
 
 // ReconcileRuns lists the latest directory reconciliation runs, of one
 // provider when providerID is valid.
-func (s *Service) ReconcileRuns(ctx context.Context, providerID pgtype.UUID, limit int32) ([]db.DirectoryReconcileRun, error) {
+func (s *Service) ReconcileRuns(ctx context.Context, providerID db.UUID, limit int32) ([]db.DirectoryReconcileRun, error) {
 	return s.store.ListDirectoryReconcileRuns(ctx, db.ListDirectoryReconcileRunsParams{Column1: providerID, Limit: limit})
 }
 
-func (s *Service) get(ctx context.Context, id pgtype.UUID) (db.User, error) {
+func (s *Service) get(ctx context.Context, id db.UUID) (db.User, error) {
 	user, err := s.store.GetUserByID(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.User{}, ErrNotFound
 	}
 	if err != nil {
@@ -276,6 +273,6 @@ func newToken() string {
 }
 
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505" // unique_violation
+	pgErr, ok := db.AsPGError(err)
+	return ok && pgErr.Code == "23505" // unique_violation
 }

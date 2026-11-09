@@ -14,8 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -31,7 +29,7 @@ type grantsState struct {
 	writes   int // grant upserts and deletes that reached the store
 }
 
-func uuidOf(s string) pgtype.UUID {
+func uuidOf(s string) db.UUID {
 	u, err := uuidFromString(s)
 	if err != nil {
 		panic(err)
@@ -39,7 +37,7 @@ func uuidOf(s string) pgtype.UUID {
 	return u
 }
 
-func (q *authzFake) isWsMember(ws db.Workspace, user pgtype.UUID) bool {
+func (q *authzFake) isWsMember(ws db.Workspace, user db.UUID) bool {
 	if ws.OwnerUserID.Valid && ws.OwnerUserID.Bytes == user.Bytes {
 		return true
 	}
@@ -50,13 +48,13 @@ func (q *authzFake) isWsMember(ws db.Workspace, user pgtype.UUID) bool {
 	return false
 }
 
-func (q *authzFake) GetWorkspaceByID(_ context.Context, id pgtype.UUID) (db.Workspace, error) {
+func (q *authzFake) GetWorkspaceByID(_ context.Context, id db.UUID) (db.Workspace, error) {
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()
 	if w, ok := q.g.wss[id.Bytes]; ok {
 		return w, nil
 	}
-	return db.Workspace{}, pgx.ErrNoRows
+	return db.Workspace{}, db.ErrNoRows
 }
 
 func (q *authzFake) CheckWorkspaceAccess(_ context.Context, a db.CheckWorkspaceAccessParams) (bool, error) {
@@ -89,18 +87,18 @@ func (q *authzFake) GetWorkspaceMemberRole(ctx context.Context, a db.GetWorkspac
 	return "", nil
 }
 
-func (q *authzFake) GetTeamByID(_ context.Context, id pgtype.UUID) (db.Team, error) {
+func (q *authzFake) GetTeamByID(_ context.Context, id db.UUID) (db.Team, error) {
 	if t, ok := q.g.teams[id.Bytes]; ok {
 		return t, nil
 	}
-	return db.Team{}, pgx.ErrNoRows
+	return db.Team{}, db.ErrNoRows
 }
 
 func (q *authzFake) GetTeamMemberRole(_ context.Context, a db.GetTeamMemberRoleParams) (string, error) {
 	if r, ok := q.g.roles[[2][16]byte{a.TeamID.Bytes, a.UserID.Bytes}]; ok {
 		return r, nil
 	}
-	return "", pgx.ErrNoRows
+	return "", db.ErrNoRows
 }
 
 func (q *authzFake) ListTeams(context.Context) ([]db.Team, error) {
@@ -111,7 +109,7 @@ func (q *authzFake) ListTeams(context.Context) ([]db.Team, error) {
 	return out, nil
 }
 
-func (q *authzFake) ListTeamsByUser(_ context.Context, user pgtype.UUID) ([]db.Team, error) {
+func (q *authzFake) ListTeamsByUser(_ context.Context, user db.UUID) ([]db.Team, error) {
 	out := []db.Team{}
 	for k, t := range q.g.teams {
 		if _, ok := q.g.roles[[2][16]byte{k, user.Bytes}]; ok {
@@ -145,13 +143,13 @@ func (q *authzFake) UpsertWorkspaceCatalogGrant(_ context.Context, p db.UpsertWo
 	return g, nil
 }
 
-func (q *authzFake) ListWorkspaceCatalogGrants(_ context.Context, ws pgtype.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
+func (q *authzFake) ListWorkspaceCatalogGrants(_ context.Context, ws db.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()
 	out := []db.ListWorkspaceCatalogGrantsRow{}
 	for _, g := range q.g.grants {
 		if g.WorkspaceID.Bytes == ws.Bytes {
-			out = append(out, db.ListWorkspaceCatalogGrantsRow{WorkspaceID: g.WorkspaceID, CatalogID: g.CatalogID, GrantedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}, CatalogName: q.cat.TrinoName()})
+			out = append(out, db.ListWorkspaceCatalogGrantsRow{WorkspaceID: g.WorkspaceID, CatalogID: g.CatalogID, GrantedAt: db.Timestamptz{Time: time.Now(), Valid: true}, CatalogName: q.cat.TrinoName()})
 		}
 	}
 	return out, nil
@@ -183,7 +181,7 @@ func (q *authzFake) GetCatalogGrantRequest(_ context.Context, p db.GetCatalogGra
 			return e, nil
 		}
 	}
-	return db.CatalogGrantRequest{}, pgx.ErrNoRows
+	return db.CatalogGrantRequest{}, db.ErrNoRows
 }
 
 func (q *authzFake) DeleteCatalogGrantRequest(_ context.Context, p db.DeleteCatalogGrantRequestParams) (int64, error) {
@@ -198,7 +196,7 @@ func (q *authzFake) DeleteCatalogGrantRequest(_ context.Context, p db.DeleteCata
 	return 0, nil
 }
 
-func (q *authzFake) ListCatalogGrantRequestsForWorkspace(_ context.Context, ws pgtype.UUID) ([]db.ListCatalogGrantRequestsForWorkspaceRow, error) {
+func (q *authzFake) ListCatalogGrantRequestsForWorkspace(_ context.Context, ws db.UUID) ([]db.ListCatalogGrantRequestsForWorkspaceRow, error) {
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()
 	out := []db.ListCatalogGrantRequestsForWorkspaceRow{}
@@ -210,7 +208,7 @@ func (q *authzFake) ListCatalogGrantRequestsForWorkspace(_ context.Context, ws p
 	return out, nil
 }
 
-func (q *authzFake) ListCatalogGrantRequestsForCatalog(_ context.Context, cat pgtype.UUID) ([]db.ListCatalogGrantRequestsForCatalogRow, error) {
+func (q *authzFake) ListCatalogGrantRequestsForCatalog(_ context.Context, cat db.UUID) ([]db.ListCatalogGrantRequestsForCatalogRow, error) {
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()
 	out := []db.ListCatalogGrantRequestsForCatalogRow{}
@@ -254,7 +252,7 @@ func (q *authzFake) DeleteWorkspaceCatalogGrant(_ context.Context, p db.DeleteWo
 	return 0, nil
 }
 
-func (q *authzFake) ListGrantedCatalogsOfWorkspace(_ context.Context, ws pgtype.UUID) ([]db.ListGrantedCatalogsOfWorkspaceRow, error) {
+func (q *authzFake) ListGrantedCatalogsOfWorkspace(_ context.Context, ws db.UUID) ([]db.ListGrantedCatalogsOfWorkspaceRow, error) {
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()
 	out := []db.ListGrantedCatalogsOfWorkspaceRow{}
@@ -269,7 +267,7 @@ func (q *authzFake) ListGrantedCatalogsOfWorkspace(_ context.Context, ws pgtype.
 	return out, nil
 }
 
-func (q *authzFake) ListCatalogConnections(context.Context, pgtype.UUID) ([]db.CatalogConnection, error) {
+func (q *authzFake) ListCatalogConnections(context.Context, db.UUID) ([]db.CatalogConnection, error) {
 	return nil, nil
 }
 
@@ -278,8 +276,8 @@ const (
 )
 
 var (
-	teamID = pgtype.UUID{Bytes: [16]byte{0x7E}, Valid: true}
-	wsID   = pgtype.UUID{Bytes: [16]byte{0x5A}, Valid: true}
+	teamID = db.UUID{Bytes: [16]byte{0x7E}, Valid: true}
+	wsID   = db.UUID{Bytes: [16]byte{0x5A}, Valid: true}
 )
 
 // newGrantsHandlers builds on newAuthzHandlers: a team where ownerID is the team
@@ -634,7 +632,7 @@ func TestUpdateWorkspace_OwnerRule(t *testing.T) {
 func TestTeamsReadScoping(t *testing.T) {
 	t.Parallel()
 	h, q := newGrantsHandlers(t)
-	other := db.Team{ID: pgtype.UUID{Bytes: [16]byte{0x7F}, Valid: true}, Name: "other"}
+	other := db.Team{ID: db.UUID{Bytes: [16]byte{0x7F}, Valid: true}, Name: "other"}
 	q.g.teams[other.ID.Bytes] = other
 
 	n := func(ctx context.Context) int {
@@ -710,13 +708,13 @@ func TestListWorkspaceCatalogs_GrantsAndCache(t *testing.T) {
 	}
 }
 
-func (q *authzFake) ListTeamMembers(_ context.Context, team pgtype.UUID) ([]db.ListTeamMembersRow, error) {
+func (q *authzFake) ListTeamMembers(_ context.Context, team db.UUID) ([]db.ListTeamMembersRow, error) {
 	// Membership row ids differ from user ids on purpose, and the team role
 	// ("owner") is not the user's global role.
 	return []db.ListTeamMembersRow{
-		{ID: pgtype.UUID{Bytes: [16]byte{0xA1}, Valid: true}, TeamID: team, UserID: uuidOf(ownerID), Role: "owner",
+		{ID: db.UUID{Bytes: [16]byte{0xA1}, Valid: true}, TeamID: team, UserID: uuidOf(ownerID), Role: "owner",
 			UserName: "o", UserEmail: "o@x.io", UserRole: "admin", UserAuthProvider: "oidc", UserStatus: "active"},
-		{ID: pgtype.UUID{Bytes: [16]byte{0xA2}, Valid: true}, TeamID: team, UserID: uuidOf(memberID), Role: "member",
+		{ID: db.UUID{Bytes: [16]byte{0xA2}, Valid: true}, TeamID: team, UserID: uuidOf(memberID), Role: "member",
 			UserName: "m", UserEmail: "m@x.io", UserRole: "member", UserAuthProvider: "local", UserStatus: "active"},
 	}, nil
 }
@@ -789,7 +787,7 @@ func TestRevokeCatalogAccess_Atomic(t *testing.T) {
 // brokenWorkspaces fails the workspace lookup after the access check.
 type brokenWorkspaces struct{ *authzFake }
 
-func (brokenWorkspaces) GetWorkspaceByID(context.Context, pgtype.UUID) (db.Workspace, error) {
+func (brokenWorkspaces) GetWorkspaceByID(context.Context, db.UUID) (db.Workspace, error) {
 	return db.Workspace{}, errors.New("connection reset")
 }
 

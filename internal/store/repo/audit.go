@@ -9,8 +9,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -113,7 +111,7 @@ func (r *Repo) ListAuditEvents(ctx context.Context, arg db.ListAuditEventsParams
 
 // auditScope builds the non-admin predicate: the caller's own events, the
 // events of the workspaces they own and the events of agents they own.
-func (r *Repo) auditScope(ctx context.Context, actor *string, owner pgtype.UUID) (string, []any, error) {
+func (r *Repo) auditScope(ctx context.Context, actor *string, owner db.UUID) (string, []any, error) {
 	var clauses []string
 	var args []any
 	if actor != nil {
@@ -140,7 +138,7 @@ func (r *Repo) auditScope(ctx context.Context, actor *string, owner pgtype.UUID)
 
 // auditOwnedWorkspaceIDs lists the workspaces the user owns: their personal
 // ones and the ones owned by a team where they are an owner (#49).
-func (r *Repo) auditOwnedWorkspaceIDs(ctx context.Context, owner pgtype.UUID) ([]string, error) {
+func (r *Repo) auditOwnedWorkspaceIDs(ctx context.Context, owner db.UUID) ([]string, error) {
 	userID := UUIDString(owner)
 	var teamIDs []string
 	if err := r.Users.db.WithContext(ctx).Model(&model.TeamMember{}).
@@ -348,12 +346,12 @@ func (r *Repo) ListAuditEventsForExport(ctx context.Context, arg db.ListAuditEve
 	return out, nil
 }
 
-// GetAuditExportCursor returns the sink's position or pgx.ErrNoRows.
+// GetAuditExportCursor returns the sink's position or db.ErrNoRows.
 func (r *Repo) GetAuditExportCursor(ctx context.Context, sink string) (db.GetAuditExportCursorRow, error) {
 	var row model.AuditExportCursor
 	err := r.Users.db.WithContext(ctx).Where("sink = ?", sink).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetAuditExportCursorRow{}, pgx.ErrNoRows
+		return db.GetAuditExportCursorRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetAuditExportCursorRow{}, err
