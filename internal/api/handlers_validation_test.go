@@ -7,6 +7,20 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// catalogRequest builds a CreateCatalogRequest with one output per (name,
+// trino_catalog_name) pair.
+func catalogRequest(pairs ...string) *CreateCatalogRequest {
+	type item = struct {
+		Name             string `json:"name"`
+		TrinoCatalogName string `json:"trino_catalog_name"`
+	}
+	outs := make([]item, 0, len(pairs)/2)
+	for i := 0; i+1 < len(pairs); i += 2 {
+		outs = append(outs, item{pairs[i], pairs[i+1]})
+	}
+	return &CreateCatalogRequest{Catalogs: outs}
+}
+
 func TestCreateApiKey_RejectsEmptyName(t *testing.T) {
 	t.Parallel()
 	h := testAPI(handlerFields{})
@@ -74,9 +88,7 @@ func TestCreateCatalog_RejectsInvalidIdentifier(t *testing.T) {
 	t.Parallel()
 	h, q, _ := newAuthzHandlers(t)
 	conn, _ := reqIDs(q)
-	resp, err := h.CreateCatalog(ctxAs(ownerID, "member"), CreateCatalogRequestObject{ConnectionId: conn, Body: &CreateCatalogRequest{
-		Name: "x", TrinoCatalogName: "Bad-Name", Warehouse: strp("x"),
-	}})
+	resp, err := h.CreateCatalog(ctxAs(ownerID, "member"), CreateCatalogRequestObject{ConnectionId: conn, Body: catalogRequest("x", "Bad-Name")})
 	if err != nil {
 		t.Fatal(err)
 	}

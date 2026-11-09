@@ -4955,13 +4955,14 @@ export interface components {
             name?: string;
             description?: string | null;
         };
+        /** @description Registers the connection's logical catalog outputs. Each entry names one of the connection type's Trino catalog types, in the order GET /connection-providers lists them; the backend derives the connector. */
         CreateCatalogRequest: {
-            name: string;
-            trino_catalog_name: string;
+            catalogs: {
+                name: string;
+                trino_catalog_name: string;
+            }[];
             /** @description Warehouse or logical source the connector addresses. Required for catalog managers and Iceberg REST catalogs; omitted for databases (their catalog falls back to the connection's database) and for endpointless catalogs (memory, blackhole, faker, jmx, tpch, tpcds). */
             warehouse?: string;
-            /** @default iceberg */
-            connector: string;
             description?: string;
             /** @description Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties. */
             extra_props?: {
@@ -4971,9 +4972,21 @@ export interface components {
             enabled: boolean;
             /**
              * Format: uuid
-             * @description Workspace to grant the new catalog to as an active grant (the connection wizard's "Share with", preselected to the current workspace). Omitted, the catalog is created unshared; the owner shares it later from the catalog's Access screen.
+             * @description Workspace to grant the new catalogs to as active grants (the connection wizard's "Share with", preselected to the current workspace). Omitted, the catalogs are created unshared; the owner shares them later from each catalog's Access screen.
              */
             share_with_workspace_id?: string;
+        };
+        /** @description Partial update. `name` renames the catalog, `trino_catalog_name` renames its Trino catalog identifier, and the other fields replace their stored value. */
+        UpdateCatalogRequest: {
+            name?: string;
+            trino_catalog_name?: string;
+            warehouse?: string;
+            connector?: string;
+            description?: string;
+            /** @description Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties. */
+            extra_props?: {
+                [key: string]: string;
+            };
         };
         CatalogConnection: {
             readonly allowed_actions: components["schemas"]["CatalogConnectionAllowedAction"][];
@@ -12025,13 +12038,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Catalog created */
+            /** @description Catalogs created */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Catalog"];
+                    "application/json": components["schemas"]["Catalog"][];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -12098,7 +12111,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateCatalogRequest"];
+                "application/json": components["schemas"]["UpdateCatalogRequest"];
             };
         };
         responses: {

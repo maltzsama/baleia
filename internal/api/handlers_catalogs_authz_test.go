@@ -20,6 +20,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
+	"github.com/google/uuid"
 )
 
 // fakeTrino records every statement it receives and answers FINISHED.
@@ -63,17 +64,18 @@ func (f *fakeTrino) statements() []string {
 
 type authzFake struct {
 	lifecycleFake
-	conn           db.CatalogConnection
-	cat            db.Catalog
-	updated        []db.UpdateCatalogParams
-	upserts        []string
-	disabled       []string // registry rows soft-deleted
-	bindingUpserts []db.UpsertManagedBindingParams
-	registryErr    []string
-	order          []string
-	mu             sync.Mutex
-	g              grantsState
-	syncState      db.GetCatalogSyncStateRow
+	conn            db.CatalogConnection
+	cat             db.Catalog
+	updated         []db.UpdateCatalogParams
+	upserts         []string
+	disabled        []string // registry rows soft-deleted
+	bindingUpserts  []db.UpsertManagedBindingParams
+	registryErr     []string
+	order           []string
+	mu              sync.Mutex
+	g               grantsState
+	syncState       db.GetCatalogSyncStateRow
+	createdCatalogs []db.Catalog
 }
 
 func (q *authzFake) GetCatalogSyncState(context.Context, db.UUID) (db.GetCatalogSyncStateRow, error) {
@@ -101,6 +103,31 @@ func (q *authzFake) GetCatalogByID(_ context.Context, id db.UUID) (db.Catalog, e
 	return q.cat, nil
 }
 
+func (q *authzFake) CreateCatalog(_ context.Context, p db.CreateCatalogParams) (db.Catalog, error) {
+	c := db.Catalog{
+		ID: db.UUID{Bytes: uuid.New(), Valid: true}, ConnectionID: p.ConnectionID, Name: p.Name,
+		TrinoCatalogName: p.TrinoCatalogName, ClusterID: p.ClusterID, Warehouse: p.Warehouse,
+		Connector: p.Connector, ExtraProps: p.ExtraProps, Origin: "source", Enabled: true,
+	}
+	q.createdCatalogs = append(q.createdCatalogs, c)
+	return c, nil
+}
+
+func (*authzFake) SetCatalogEnabled(context.Context, db.SetCatalogEnabledParams) error { return nil }
+
+func (q *authzFake) ListBindingsByEngine(_ context.Context, engineID db.UUID) ([]db.CatalogBinding, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.init()
+	var out []db.CatalogBinding
+	for _, b := range q.tracked {
+		if b.EngineID == engineID {
+			out = append(out, b)
+		}
+	}
+	return out, nil
+}
+
 func (q *authzFake) ListCatalogsByConnection(context.Context, db.UUID) ([]db.Catalog, error) {
 	return []db.Catalog{q.cat}, nil
 }
@@ -119,6 +146,10 @@ func (q *authzFake) ListBindingsByCatalog(_ context.Context, id db.UUID) ([]db.C
 
 func (q *authzFake) GetTrinoClusterByEngine(_ context.Context, id db.UUID) (db.TrinoCluster, error) {
 	return db.TrinoCluster{ID: db.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Name: "default", EngineID: id}, nil
+}
+
+func (q *authzFake) GetDefaultTrinoCluster(context.Context) (db.TrinoCluster, error) {
+	return db.TrinoCluster{ID: db.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Name: "default", EngineID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true}}, nil
 }
 
 func (q *authzFake) GetBinding(_ context.Context, id db.UUID) (db.CatalogBinding, error) {
@@ -174,7 +205,7 @@ func (q *authzFake) UpsertManagedBinding(_ context.Context, p db.UpsertManagedBi
 	q.bindingUpserts = append(q.bindingUpserts, p)
 	return q.track(db.CatalogBinding{
 		ID: db.UUID{Bytes: [16]byte{0xB0}, Valid: true}, CatalogID: p.CatalogID, EngineID: p.EngineID, EngineCatalogName: p.EngineCatalogName,
-		Mode: "managed", Enabled: p.Enabled, LifecycleState: p.LifecycleState, DesiredVersion: p.DesiredVersion,
+		Connector: p.Connector, Mode: "managed", Enabled: p.Enabled, LifecycleState: p.LifecycleState, DesiredVersion: p.DesiredVersion,
 	}), nil
 }
 
@@ -316,7 +347,7 @@ func TestUpdateCatalog_Authz(t *testing.T) {
 	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	conn, cat := reqIDs(q)
-	body := &CreateCatalogRequest{Warehouse: strp("wh2")}
+	body := &UpdateCatalogRequest{Warehouse: strp("wh2")}
 
 	resp, err := h.UpdateCatalog(ctxAs(strangerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: body})
 	if err != nil {
@@ -347,7 +378,7 @@ func TestUpdateCatalog_RenamePersistsAndRecreatesInOrder(t *testing.T) {
 	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	conn, cat := reqIDs(q)
-	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{TrinoCatalogName: "wh_renamed"}})
+	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &UpdateCatalogRequest{TrinoCatalogName: strp("wh_renamed")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -462,7 +493,7 @@ func TestCreateCatalog_ForeignUser404_NothingWritten(t *testing.T) {
 	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	conn, _ := reqIDs(q)
-	resp, err := h.CreateCatalog(ctxAs(strangerID, "member"), CreateCatalogRequestObject{ConnectionId: conn, Body: &CreateCatalogRequest{Name: "x", TrinoCatalogName: "x", Warehouse: strp("x")}})
+	resp, err := h.CreateCatalog(ctxAs(strangerID, "member"), CreateCatalogRequestObject{ConnectionId: conn, Body: catalogRequest("x", "x")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -731,7 +762,7 @@ func TestUpdateCatalog_DeletedIsNotRecreated(t *testing.T) {
 	b.LifecycleState = "disabled"
 	q.track(b)
 	conn, cat := reqIDs(q)
-	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: strp("wh2")}})
+	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &UpdateCatalogRequest{Warehouse: strp("wh2")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -748,7 +779,7 @@ func TestNativeCatalogsAreNotManaged(t *testing.T) {
 	q.cat.Origin = "native"
 	conn, cat := reqIDs(q)
 	owner := ctxAs(ownerID, "member")
-	u, _ := h.UpdateCatalog(owner, UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: strp("x")}})
+	u, _ := h.UpdateCatalog(owner, UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &UpdateCatalogRequest{Warehouse: strp("x")}})
 	d, _ := h.DeleteCatalog(owner, DeleteCatalogRequestObject{ConnectionId: conn, CatalogId: cat})
 	s, _ := h.SyncCatalog(owner, SyncCatalogRequestObject{CatalogId: cat})
 	for name, code := range map[string]int{"update": visitCode(t, u), "delete": visitCode(t, d), "sync": visitCode(t, s)} {
@@ -779,5 +810,39 @@ func TestListCatalogs_StoreFailureIsAnError(t *testing.T) {
 	conn, _ := reqIDs(q)
 	if _, err := h.ListCatalogs(ctxAs(ownerID, "member"), ListCatalogsRequestObject{ConnectionId: conn}); err == nil {
 		t.Fatal("ListCatalogs hid the store failure behind an empty list")
+	}
+}
+
+// TestCreateCatalog_MultipleOutputsDrivenByType: a Hive Metastore connection
+// registers its three catalog outputs in one request, the backend derives the
+// connectors from the type, and the hive connector is provisioned last.
+func TestCreateCatalog_MultipleOutputsDrivenByType(t *testing.T) {
+	t.Parallel()
+	h, q, _ := newAuthzHandlers(t)
+	q.conn = db.CatalogConnection{
+		ID: q.conn.ID, Name: "hive-src", Type: "hive",
+		Url: "", Config: []byte(`{"metastore_uri":"thrift://hms:9083"}`), CreatedBy: q.conn.CreatedBy,
+	}
+	body := catalogRequest("lake_iceberg", "lake_iceberg", "lake_hive", "lake_hive", "lake_delta", "lake_delta")
+	resp, err := h.CreateCatalog(ctxAs(ownerID, "member"), CreateCatalogRequestObject{ConnectionId: q.conn.ID.Bytes, Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := visitCode(t, resp); code != 201 {
+		t.Fatalf("create catalogs: %d", code)
+	}
+	created := resp.(CreateCatalog201JSONResponse)
+	if len(created) != 3 || len(q.createdCatalogs) != 3 {
+		t.Fatalf("catalogs = %d (tracked %d), want 3", len(created), len(q.createdCatalogs))
+	}
+	var order []string
+	for _, c := range q.createdCatalogs {
+		if c.Connector == nil {
+			t.Fatalf("catalog %q has no connector", c.Name)
+		}
+		order = append(order, *c.Connector)
+	}
+	if !slices.Equal(order, []string{"iceberg", "delta_lake", "hive"}) {
+		t.Fatalf("connector order = %v, want [iceberg delta_lake hive]", order)
 	}
 }
