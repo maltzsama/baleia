@@ -18,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// TeamMembers writes team memberships; *db.Queries implements it.
+// TeamMembers writes team memberships; *repo.Repo implements it.
 type TeamMembers interface {
 	UpsertTeamMember(ctx context.Context, arg db.UpsertTeamMemberParams) error
 }
@@ -41,7 +41,7 @@ func ApplyTeams(ctx context.Context, logger *slog.Logger, store TeamMembers, use
 	}
 }
 
-// WorkspaceMembers writes group-derived workspace roles; *db.Queries
+// WorkspaceMembers writes group-derived workspace roles; *repo.Repo
 // implements it.
 type WorkspaceMembers interface {
 	ApplyGroupWorkspaceRoles(ctx context.Context, arg db.ApplyGroupWorkspaceRolesParams) error
@@ -73,7 +73,7 @@ func ApplyWorkspaces(ctx context.Context, store WorkspaceMembers, userID pgtype.
 }
 
 // Accounts finds, creates and updates directory-linked accounts;
-// *db.Queries implements it.
+// *repo.Repo implements it.
 type Accounts interface {
 	GetUserByExternalID(ctx context.Context, arg db.GetUserByExternalIDParams) (db.User, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)

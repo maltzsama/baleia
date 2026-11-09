@@ -9,7 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 )
 
-// Store reads and creates accounts; *db.Queries implements it.
+// Store reads and creates accounts; *repo.Repo implements it.
 type Store interface {
 	HasUsers(ctx context.Context) (bool, error)
 	LockFirstAdminSetup(ctx context.Context) error

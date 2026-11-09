@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store persists API keys; *db.Queries implements it.
+// Store persists API keys; *repo.Repo implements it.
 type Store interface {
 	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]db.ApiKey, error)
 	CreateAPIKey(ctx context.Context, arg db.CreateAPIKeyParams) (db.ApiKey, error)

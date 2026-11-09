@@ -131,7 +131,8 @@ type schemaVersioner interface {
 	SchemaVersion(ctx context.Context) (int64, error)
 }
 
-// poolSchema reads the version from goose's table on Baleia's pool.
+// poolSchema reads the version from the store's schema_migrations ledger on
+// Baleia's pool.
 type poolSchema struct{ pool *pgxpool.Pool }
 
 func (p poolSchema) SchemaVersion(ctx context.Context) (int64, error) {

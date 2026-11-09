@@ -10,8 +10,7 @@ import (
 
 // monitoringStore is the monitoring and maintenance persistence the worker
 // needs: the narrow monitoring service store plus the snapshot, health, run and
-// binding writes it shares with sqlc. *db.Queries and *repo.Repo both
-// implement it (#773).
+// binding writes it shares with sqlc. *repo.Repo implements it (#773).
 type monitoringStore interface {
 	monitoring.Store
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg db.UpsertTrinoQuerySnapshotParams) (db.TrinoQuerySnapshot, error)

@@ -15,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate migrate-credentials migrate-oidc-providers migrate-down migrate-status migrate-reset store-migrate store-migrate-down store-migrate-status sqlc generate lint lint-all vuln build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down
+.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_AGENTS_ENABLED=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -64,23 +64,9 @@ logs:
 restart-trino:
 	docker compose restart trino
 
-# ── Migrations ────────────────────────────────────────────────────────────────
-
-migrate:
-	go run ./cmd/migrate -cmd=up
-
-migrate-down:
-	go run ./cmd/migrate -cmd=down
-
-migrate-status:
-	go run ./cmd/migrate -cmd=status
-
-migrate-reset:
-	go run ./cmd/migrate -cmd=reset
-
 # ── Store migrations (GORM, ADR 0020) ─────────────────────────────────────────
-# The GORM runner lives beside goose until the domain migrations replace the
-# sqlc queries; see #759/#761.
+# The store schema is versioned Go migrations applied by the GORM runner; there
+# is no generated migration or query tooling left to run.
 
 store-migrate:
 	go run ./cmd/migrate -cmd=store-up
@@ -144,10 +130,6 @@ e2e-down:
 # Pin the generators so a different local binary cannot rewrite the checked-in
 # code and break the build (#208).
 OAPI_CODEGEN_VERSION ?= v2.4.1
-SQLC_VERSION ?= v1.31.1
-
-sqlc:
-	go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate
 
 generate:
 	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION) --config=config/oapi-models.yaml api/swagger.yaml

@@ -20,7 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store reads events and the entities they name; *db.Queries implements it.
+// Store reads events and the entities they name; *repo.Repo implements it.
 type Store interface {
 	ListAuditEvents(ctx context.Context, arg db.ListAuditEventsParams) ([]db.ListAuditEventsRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)

@@ -9,8 +9,7 @@ import (
 )
 
 // workbenchStore is the query_editor and statement_refs persistence the
-// activities need. *db.Queries implements it; *repo.Repo implements it on the
-// GORM store (#770).
+// activities need. *repo.Repo implements it on the GORM store.
 type workbenchStore interface {
 	GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (db.QueryExecution, error)
 	UpdateQueryExecution(ctx context.Context, arg db.UpdateQueryExecutionParams) (db.QueryExecution, error)

@@ -10,19 +10,19 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
+	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/store"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 	"gorm.io/gorm"
 )
 
 func main() {
 	var command, before string
-	flag.StringVar(&command, "cmd", "up", "command: up, down, status, reset, version (goose); store-up, store-down, store-status (GORM, ADR 0020); credentials (re-seal legacy credentials), oidc-providers (seal provider configs) or audit-prune (drop audit partitions before -before)")
+	flag.StringVar(&command, "cmd", "store-up", "command: store-up, store-down, store-status (GORM schema migrations, ADR 0020); credentials (re-seal legacy credentials), oidc-providers (seal provider configs) or audit-prune (drop audit partitions before -before)")
 	flag.StringVar(&before, "before", "", "audit-prune: drop the audit partitions of the months before this one (YYYY-MM)")
 	flag.Parse()
 
@@ -39,22 +39,7 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := goose.SetDialect("postgres"); err != nil {
-		logger.ErrorContext(ctx, "failed to set dialect", "err", err)
-		os.Exit(1)
-	}
-
 	switch command {
-	case "up":
-		err = goose.UpContext(ctx, db, "db/migrations")
-	case "down":
-		err = goose.DownContext(ctx, db, "db/migrations")
-	case "status":
-		err = goose.StatusContext(ctx, db, "db/migrations")
-	case "reset":
-		err = goose.ResetContext(ctx, db, "db/migrations")
-	case "version":
-		err = goose.VersionContext(ctx, db, "db/migrations")
 	case "store-up":
 		err = runStoreUp(ctx, logger, cfg)
 	case "store-down":
@@ -235,6 +220,11 @@ func runStoreUp(ctx context.Context, logger *slog.Logger, cfg *config.Config) er
 		return err
 	}
 	logger.InfoContext(ctx, "store migrations applied", "applied", len(applied))
+	if sqlDB, derr := db.DB(); derr == nil {
+		if err := bootstrap.EnsureTrinoRoleSQL(ctx, sqlDB); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

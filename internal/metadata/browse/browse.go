@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Catalogs reads the granted catalogs and their namespaces; *db.Queries
+// Catalogs reads the granted catalogs and their namespaces; *repo.Repo
 // implements it.
 type Catalogs interface {
 	ListMetadataCatalogs(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListMetadataCatalogsRow, error)
@@ -24,7 +24,7 @@ type Catalogs interface {
 	ListMetadataSyncRuns(ctx context.Context, arg db.ListMetadataSyncRunsParams) ([]db.ListMetadataSyncRunsRow, error)
 }
 
-// Tables reads tables, their columns and docs; *db.Queries implements it.
+// Tables reads tables, their columns and docs; *repo.Repo implements it.
 type Tables interface {
 	ListMetadataTablesPage(ctx context.Context, arg db.ListMetadataTablesPageParams) ([]db.ListMetadataTablesPageRow, error)
 	GetGrantedMetadataTable(ctx context.Context, arg db.GetGrantedMetadataTableParams) (db.GetGrantedMetadataTableRow, error)

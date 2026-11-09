@@ -18,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Workspaces reads membership, workspaces and targets; *db.Queries
+// Workspaces reads membership, workspaces and targets; *repo.Repo
 // implements it.
 type Workspaces interface {
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
@@ -27,7 +27,7 @@ type Workspaces interface {
 	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)
 }
 
-// Principals reads users and teams; *db.Queries implements it.
+// Principals reads users and teams; *repo.Repo implements it.
 type Principals interface {
 	ListWorkspacePrincipalUsers(ctx context.Context, arg db.ListWorkspacePrincipalUsersParams) ([]db.ListWorkspacePrincipalUsersRow, error)
 	ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]db.Team, error)
@@ -38,7 +38,7 @@ type Principals interface {
 	CreateWorkspace(ctx context.Context, arg db.CreateWorkspaceParams) (db.Workspace, error)
 }
 
-// Platform reads what the navigation flags depend on; *db.Queries
+// Platform reads what the navigation flags depend on; *repo.Repo
 // implements it.
 type Platform interface {
 	GetDefaultTrinoCluster(ctx context.Context) (db.TrinoCluster, error)

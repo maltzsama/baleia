@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store lists the workspace's targets; *db.Queries implements it.
+// Store lists the workspace's targets; *repo.Repo implements it.
 type Store interface {
 	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)
 }

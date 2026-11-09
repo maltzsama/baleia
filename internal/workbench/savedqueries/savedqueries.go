@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store reads saved queries; *db.Queries implements it.
+// Store reads saved queries; *repo.Repo implements it.
 type Store interface {
 	ListVisibleSavedQueries(ctx context.Context, arg db.ListVisibleSavedQueriesParams) ([]db.SavedQuery, error)
 	SearchVisibleSavedQueries(ctx context.Context, arg db.SearchVisibleSavedQueriesParams) ([]db.SavedQuery, error)

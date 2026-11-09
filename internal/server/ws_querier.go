@@ -9,7 +9,7 @@ import (
 )
 
 // wsStore is the workbench persistence the WebSocket handler reads.
-// *db.Queries and *repo.Repo both implement it (#770).
+// *repo.Repo implements it (#770).
 type wsStore interface {
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
 	GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg db.GetQueryExecutionByIDAndWorkspaceParams) (db.QueryExecution, error)

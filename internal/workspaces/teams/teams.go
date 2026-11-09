@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Reader reads teams, members and users; *db.Queries implements it.
+// Reader reads teams, members and users; *repo.Repo implements it.
 type Reader interface {
 	ListTeams(ctx context.Context) ([]db.Team, error)
 	ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]db.Team, error)
@@ -21,7 +21,7 @@ type Reader interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
 }
 
-// Writer changes teams and members; *db.Queries implements it.
+// Writer changes teams and members; *repo.Repo implements it.
 type Writer interface {
 	CreateTeam(ctx context.Context, arg db.CreateTeamParams) (db.Team, error)
 	DeleteTeam(ctx context.Context, id pgtype.UUID) error

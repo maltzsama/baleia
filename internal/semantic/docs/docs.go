@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Reader reads docs and tags; *db.Queries implements it.
+// Reader reads docs and tags; *repo.Repo implements it.
 type Reader interface {
 	GetSemanticDoc(ctx context.Context, arg db.GetSemanticDocParams) (db.SemanticDoc, error)
 	ListSemanticDocsForTable(ctx context.Context, arg db.ListSemanticDocsForTableParams) ([]db.SemanticDoc, error)
@@ -24,7 +24,7 @@ type Reader interface {
 	ListSemanticTags(ctx context.Context, arg db.ListSemanticTagsParams) ([]db.ListSemanticTagsRow, error)
 }
 
-// Writer writes docs; *db.Queries implements it.
+// Writer writes docs; *repo.Repo implements it.
 type Writer interface {
 	UpsertSemanticDoc(ctx context.Context, arg db.UpsertSemanticDocParams) (db.SemanticDoc, error)
 	DeleteSemanticDoc(ctx context.Context, arg db.DeleteSemanticDocParams) (int64, error)

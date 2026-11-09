@@ -8,9 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// catalogGrantStore is the grant flow's persistence. *db.Queries and
-// *repo.Repo both implement it, so the handlers keep the sqlc path in tests
-// and run GORM at runtime (#771).
+// catalogGrantStore is the grant flow's persistence. *repo.Repo implements it over the GORM store (#771).
 type catalogGrantStore interface {
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
 	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (db.Workspace, error)

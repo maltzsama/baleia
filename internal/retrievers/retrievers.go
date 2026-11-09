@@ -25,7 +25,7 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-// Retrievers stores retrievers; *db.Queries implements it.
+// Retrievers stores retrievers; *repo.Repo implements it.
 type Retrievers interface {
 	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]db.Retriever, error)
 	GetRetrieverByID(ctx context.Context, arg db.GetRetrieverByIDParams) (db.Retriever, error)
@@ -34,13 +34,13 @@ type Retrievers interface {
 	DeleteRetriever(ctx context.Context, arg db.DeleteRetrieverParams) (int64, error)
 }
 
-// Refreshes reads refresh runs; *db.Queries implements it.
+// Refreshes reads refresh runs; *repo.Repo implements it.
 type Refreshes interface {
 	ListRetrieverRefreshHistory(ctx context.Context, arg db.ListRetrieverRefreshHistoryParams) ([]db.RetrieverRefreshHistory, error)
 	LatestRetrieverRefresh(ctx context.Context, retrieverID pgtype.UUID) (db.LatestRetrieverRefreshRow, error)
 }
 
-// Destinations reads where a retriever can write; *db.Queries implements it.
+// Destinations reads where a retriever can write; *repo.Repo implements it.
 type Destinations interface {
 	ListRetrieverDestinations(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListRetrieverDestinationsRow, error)
 	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)

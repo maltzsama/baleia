@@ -74,9 +74,9 @@ linters:
           - gosec
           - noctx
       # These packages' tests share package state on purpose and stay serial:
-      # migrate steps goose's global migrator through versions; activities
-      # swap defaultActivities, the Temporal entry points' receiver; obs
-      # installs the global OpenTelemetry tracer provider (#374).
+      # migrate's one-shot backfills share package fixtures; activities swap
+      # defaultActivities, the Temporal entry points' receiver; obs installs the
+      # global OpenTelemetry tracer provider (#374).
       - path: internal/(migrate|temporal/activities|obs)/.*_test\.go
         linters:
           - paralleltest

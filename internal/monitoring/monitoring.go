@@ -20,7 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Engines reads engine snapshots; *db.Queries implements it.
+// Engines reads engine snapshots; *repo.Repo implements it.
 type Engines interface {
 	ListEngines(ctx context.Context) ([]db.Engine, error)
 	GetLatestClusterSnapshotByEngine(ctx context.Context, engineID pgtype.UUID) (db.ClusterSnapshot, error)
@@ -30,7 +30,7 @@ type Engines interface {
 }
 
 // Catalogs reads catalog health and maintenance and records runs;
-// *db.Queries implements it.
+// *repo.Repo implements it.
 type Catalogs interface {
 	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
 	ListTableHealthByCatalog(ctx context.Context, arg db.ListTableHealthByCatalogParams) ([]db.TableHealthSnapshot, error)

@@ -2,11 +2,11 @@ package export
 
 import (
 	"context"
-	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 )
@@ -17,9 +17,14 @@ func TestPostgres_EventsAndCursor(t *testing.T) {
 	t.Parallel()
 	q := repo.New(testdb.GORM(t, testdb.New(t)))
 	ctx := context.Background()
-	rec := audit.NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
+	// Seed directly: the recorder is best-effort with a 200ms write budget,
+	// which is unrelated to the cursor semantics under test and can time out
+	// on a loaded CI database.
 	for range 2 {
-		if err := rec.Record(ctx, audit.Event{Action: audit.CatalogUpdate, ResourceType: "catalog", Outcome: audit.Allowed}); err != nil {
+		if err := q.InsertAuditEvent(ctx, db.InsertAuditEventParams{
+			ActorKind: "service", Action: string(audit.CatalogUpdate),
+			ResourceType: "catalog", Outcome: string(audit.Allowed),
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -18,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Tokens persists refresh tokens; *db.Queries implements it.
+// Tokens persists refresh tokens; *repo.Repo implements it.
 type Tokens interface {
 	CreateRefreshToken(ctx context.Context, arg db.CreateRefreshTokenParams) (db.RefreshToken, error)
 	ConsumeRefreshToken(ctx context.Context, tokenHash string) (db.ConsumeRefreshTokenRow, error)
@@ -27,7 +27,7 @@ type Tokens interface {
 	RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error
 }
 
-// Users loads the account a refresh token belongs to; *db.Queries implements it.
+// Users loads the account a refresh token belongs to; *repo.Repo implements it.
 type Users interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
 }

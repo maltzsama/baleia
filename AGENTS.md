@@ -10,7 +10,7 @@ the phase-3 issues reference as **FD1–FD16**.
 |---|---|
 | `make dev` / `make worker` | Run the API / Temporal worker locally. |
 | `make up` / `make down` | Start / stop the compose stack. |
-| `make generate` / `make sqlc` | Regenerate OpenAPI handlers / SQL code. |
+| `make generate` | Regenerate OpenAPI handlers. |
 | `make lint` / `make lint-all` | `golangci-lint` on what is new since `origin/main` / on everything. |
 | `make vuln` | `govulncheck`. |
 | `cd website && npm ci && npm run build` | Build the documentation site (Docusaurus over `docs/`); `npm start` serves it with reload. |
@@ -20,7 +20,7 @@ the phase-3 issues reference as **FD1–FD16**.
 
 Backend definition of done (`DoD-standard`): `go vet ./...`, `go test -race
 ./...` (with `BALEIA_TEST_DATABASE_URL` for the DB-backed tests), `make lint`,
-`make vuln`, regenerated OpenAPI/sqlc when the contract changes, and a Bruno
+`make vuln`, regenerated OpenAPI when the contract changes, and a Bruno
 case for every new endpoint. CI (`.github/workflows/ci.yml`) runs the same:
 `Test` with Postgres and `-race`, `Lint` (golangci-lint, `.golangci.yml`, new
 issues only) and `Vulnerabilities` (govulncheck).
@@ -203,7 +203,9 @@ server.use(http.get('/workspaces', ({ response }) => response(200).json([makeWor
 ## Backend conventions
 
 - The OpenAPI spec (`api/swagger.yaml`) is the source of truth; regenerate
-  with `make generate` and `make sqlc`.
+  with `make generate`. The database schema is not generated: the GORM store
+  (`internal/store`) owns versioned Go migrations, applied by `store.Runner`
+  (`make store-migrate`).
 - `internal/api.API` composes one handler group per domain (`AuthHandlers`,
   `WorkspaceHandlers`, `CatalogHandlers`, `QueryHandlers`, `SemanticHandlers`,
   `AgentHandlers`, `OpsHandlers`) over a shared `core` (database, engines,
@@ -213,7 +215,8 @@ server.use(http.get('/workspaces', ({ response }) => response(200).json([makeWor
 - Every credential write goes through the keyring; decrypt fails closed.
 - Every outbound connection goes through `connections.Dialer`.
 - Audit events are best-effort and append-only; versions are transactional.
-- No raw SQL in commands: use the generated queries or the service layer.
+- No raw SQL in commands: use the store (`internal/store/repo`) or the
+  service layer.
 - API errors use the closed `ErrorCode` enum in `api/swagger.yaml`. A new code
   must be added there and as `error_<code>` in `web/messages/{en,pt-BR}.json`;
   `TestErrorCodesClosed` fails otherwise. Field errors use `FieldCode`

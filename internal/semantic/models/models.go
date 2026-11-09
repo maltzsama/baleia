@@ -22,7 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store reads models and records their certification; *db.Queries
+// Store reads models and records their certification; *repo.Repo
 // implements it.
 type Store interface {
 	ListVisibleSemanticModels(ctx context.Context, arg db.ListVisibleSemanticModelsParams) ([]db.SemanticModel, error)

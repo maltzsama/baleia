@@ -14,7 +14,7 @@ import (
 )
 
 // Store reads and writes connections, and lists engines to tell which
-// connections back one; *db.Queries implements it.
+// connections back one; *repo.Repo implements it.
 type Store interface {
 	ListVisibleCatalogConnections(ctx context.Context, arg db.ListVisibleCatalogConnectionsParams) ([]db.CatalogConnection, error)
 	ListEngines(ctx context.Context) ([]db.Engine, error)

@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store is the persistence of a statement's references and joins; *db.Queries
+// Store is the persistence of a statement's references and joins; *repo.Repo
 // and *repo.Repo implement it.
 type Store interface {
 	DeleteStatementReferences(ctx context.Context, statementID pgtype.UUID) error

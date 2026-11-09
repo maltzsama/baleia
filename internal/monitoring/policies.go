@@ -15,7 +15,7 @@ import (
 )
 
 // Policies reads and writes per-table maintenance parameters (#500);
-// *db.Queries implements it.
+// *repo.Repo implements it.
 type Policies interface {
 	GetTableMaintenancePolicy(ctx context.Context, arg db.GetTableMaintenancePolicyParams) (db.TableMaintenancePolicy, error)
 	CreateTableMaintenancePolicy(ctx context.Context, arg db.CreateTableMaintenancePolicyParams) (db.TableMaintenancePolicy, error)

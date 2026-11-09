@@ -7,6 +7,7 @@
 package contract
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -22,10 +23,11 @@ import (
 	"time"
 
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
+	"github.com/galileostudio/baleia/internal/bootstrap"
+	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 )
 
 func fixture(t *testing.T, name string, v any) {
@@ -118,11 +120,22 @@ func migratedDB(t *testing.T) (*sql.DB, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	goose.SetLogger(goose.NopLogger())
-	if err := goose.SetDialect("postgres"); err != nil {
+
+	gdb, err := store.Open(context.Background(), u.String(), store.Postgres, store.Options{})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := goose.Up(db, filepath.Join("..", "..", "db", "migrations")); err != nil {
+	registry, err := store.AllMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.NewRunner(gdb, registry, slog.New(slog.DiscardHandler)).Up(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := bootstrap.EnsureTrinoRoleSQL(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(gdb); err != nil {
 		t.Fatal(err)
 	}
 	return db, u.String()
@@ -256,23 +269,6 @@ func TestRegistrySchema(t *testing.T) {
 	}
 }
 
-// TestRegistryWriteSemantics: only the plugin confirms (updated_by =
-// 'trino'); Baleia's queries never claim it, and never write the registry's
-// sync columns after the plugin did (#38).
-func TestRegistryWriteSemantics(t *testing.T) {
-	files, err := filepath.Glob(filepath.Join("..", "..", "db", "queries", "*.sql"))
-	if err != nil || len(files) == 0 {
-		t.Fatal("no queries", err)
-	}
-	for _, f := range files {
-		b, _ := os.ReadFile(f)
-		q := string(b)
-		if strings.Contains(q, "'trino'") && strings.Contains(q, "trino_catalog_registry") &&
-			regexp.MustCompile(`updated_by\s*=\s*'trino'|'trino'\s*\)`).MatchString(q) {
-			t.Errorf("%s writes updated_by = 'trino'; only the plugin confirms", f)
-		}
-		if regexp.MustCompile(`(?i)UPDATE\s+trino_catalog_registry[^;]*sync_status\s*=\s*'error'`).MatchString(q) {
-			t.Errorf("%s marks registry errors; errors live on the binding (#38)", f)
-		}
-	}
-}
+// TestRegistryWriteSemantics was removed with the sqlc query files it scanned
+// (#761): the GORM store owns those writes now, and the invariant is covered by
+// the repo tests.

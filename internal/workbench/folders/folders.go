@@ -14,21 +14,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Reader reads folders; *db.Queries implements it.
+// Reader reads folders; *repo.Repo implements it.
 type Reader interface {
 	ListVisibleQueryFolders(ctx context.Context, arg db.ListVisibleQueryFoldersParams) ([]db.QueryFolder, error)
 	ListAllVisibleQueryFolders(ctx context.Context, arg db.ListAllVisibleQueryFoldersParams) ([]db.QueryFolder, error)
 	GetQueryFolderByID(ctx context.Context, arg db.GetQueryFolderByIDParams) (db.QueryFolder, error)
 }
 
-// Writer creates and deletes folders; *db.Queries implements it.
+// Writer creates and deletes folders; *repo.Repo implements it.
 type Writer interface {
 	FolderSlugExists(ctx context.Context, arg db.FolderSlugExistsParams) (bool, error)
 	CreateQueryFolder(ctx context.Context, arg db.CreateQueryFolderParams) (db.QueryFolder, error)
 	DeleteQueryFolder(ctx context.Context, arg db.DeleteQueryFolderParams) (int64, error)
 }
 
-// Mover renames and moves folders, with their subtree; *db.Queries
+// Mover renames and moves folders, with their subtree; *repo.Repo
 // implements it.
 type Mover interface {
 	UpdateQueryFolder(ctx context.Context, arg db.UpdateQueryFolderParams) (db.QueryFolder, error)

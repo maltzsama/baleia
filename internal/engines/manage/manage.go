@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Reader reads engines and bindings; *db.Queries implements it.
+// Reader reads engines and bindings; *repo.Repo implements it.
 type Reader interface {
 	ListEngines(ctx context.Context) ([]db.Engine, error)
 	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]db.Engine, error)
@@ -26,12 +26,12 @@ type Reader interface {
 	CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (db.CountEngineBlockersRow, error)
 }
 
-// Writer changes an engine; *db.Queries implements it.
+// Writer changes an engine; *repo.Repo implements it.
 type Writer interface {
 	UpdateEngine(ctx context.Context, arg db.UpdateEngineParams) (db.Engine, error)
 }
 
-// Ops reads what an engine reports and its reconcile runs; *db.Queries
+// Ops reads what an engine reports and its reconcile runs; *repo.Repo
 // implements it.
 type Ops interface {
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)

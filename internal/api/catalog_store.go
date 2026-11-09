@@ -9,8 +9,7 @@ import (
 )
 
 // catalogWriteStore is the persistence the catalog and grant write flows need
-// in one transaction. *db.Queries and *repo.Repo both implement it, so the
-// handlers keep the sqlc path in tests and run GORM at runtime (#771).
+// in one transaction. *repo.Repo implements it over the GORM store (#771).
 type catalogWriteStore interface {
 	CreateCatalog(ctx context.Context, arg db.CreateCatalogParams) (db.Catalog, error)
 	UpdateCatalog(ctx context.Context, arg db.UpdateCatalogParams) (db.Catalog, error)

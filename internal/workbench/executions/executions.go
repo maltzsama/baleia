@@ -27,7 +27,7 @@ import (
 	"go.temporal.io/sdk/temporal"
 )
 
-// Runs persists executions; *db.Queries implements it.
+// Runs persists executions; *repo.Repo implements it.
 type Runs interface {
 	CreateQueryExecution(ctx context.Context, arg db.CreateQueryExecutionParams) (db.QueryExecution, error)
 	UpdateQueryExecution(ctx context.Context, arg db.UpdateQueryExecutionParams) (db.QueryExecution, error)
@@ -37,7 +37,7 @@ type Runs interface {
 	ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]db.ListRunningStatementHandlesRow, error)
 }
 
-// History reads past executions and their statements; *db.Queries
+// History reads past executions and their statements; *repo.Repo
 // implements it.
 type History interface {
 	ListExecutionHistory(ctx context.Context, arg db.ListExecutionHistoryParams) ([]db.ListExecutionHistoryRow, error)
@@ -55,7 +55,7 @@ type Store interface {
 }
 
 // Queues reads the per-engine workload capacities and the workload rules
-// (#399); *db.Queries implements it.
+// (#399); *repo.Repo implements it.
 type Queues interface {
 	ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]db.EngineQueueCapacity, error)
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
@@ -63,7 +63,7 @@ type Queues interface {
 }
 
 // Scope reads the workspace catalog scope a session may reach (ADR 0018 §5);
-// *db.Queries implements it.
+// *repo.Repo implements it.
 type Scope interface {
 	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)
 }

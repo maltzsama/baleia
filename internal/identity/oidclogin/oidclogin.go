@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store keeps providers and login attempts; *db.Queries implements it.
+// Store keeps providers and login attempts; *repo.Repo implements it.
 type Store interface {
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error)
 	CreateOIDCLoginAttempt(ctx context.Context, arg db.CreateOIDCLoginAttemptParams) error
