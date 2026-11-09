@@ -22,7 +22,7 @@ to substitute a fake in tests or add a second engine without editing those call 
   worker activities and the content import. The api resolves a query's dialect and passes it to
   `QueryExecutionWorkflowV3`. There is no package-level dialect lookup: the deprecated
   `dialect.ForEngineKind` went away with `QueryExecutionWorkflowV2` once its runs drained (#414).
-- `cmd/e2e-seed/main.go` (build tag `e2e`, never in the release image) is a third, test-only
+- `cmd/e2e-seed` (build tag `e2e`, never in the release image) is a third, test-only
   composition root: it registers the Playwright smoke's Trino catalog the way a binding does (#121).
 - Kind registries (the engine kind registry, the provider registry, the binder registry) are
   consumed only at the wiring sites and in the packages that implement the kinds. Since #364 engine
