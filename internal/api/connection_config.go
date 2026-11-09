@@ -237,6 +237,24 @@ func (h *CatalogHandlers) ListConnectionProviders(ctx context.Context, _ ListCon
 	return ListConnectionProviders200JSONResponse(out), nil
 }
 
+// ListConnectionCategories returns the categories in presentation order, with
+// their display names and descriptions (ADR 0021 D.10 / CR-13). Static
+// metadata: any authenticated caller may read it.
+func (h *CatalogHandlers) ListConnectionCategories(ctx context.Context, _ ListConnectionCategoriesRequestObject) (ListConnectionCategoriesResponseObject, error) {
+	metas := connections.Categories()
+	out := make([]ConnectionCategory, 0, len(metas))
+	for i, meta := range metas {
+		desc := meta.Description
+		out = append(out, ConnectionCategory{
+			Category:    ConnectionCategoryCategory(meta.Category),
+			Label:       meta.Label,
+			Description: &desc,
+			Order:       i,
+		})
+	}
+	return ListConnectionCategories200JSONResponse(out), nil
+}
+
 func providerToPublic(p connections.Provider) ConnectionProvider {
 	meta := p.Meta()
 	cp := ConnectionProvider{

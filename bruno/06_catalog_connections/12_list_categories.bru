@@ -1,0 +1,40 @@
+meta {
+  name: List Connection Categories
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{base_url}}/connection-categories
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+tests {
+  test("categories are ordered with labels and descriptions", function() {
+    const list = res.getBody();
+    expect(list.length).to.equal(15);
+    for (const c of list) {
+      expect(c.category).to.be.a("string");
+      expect(c.label).to.be.a("string").and.not.empty;
+      expect(c.description).to.be.a("string").and.not.empty;
+      expect(c.order).to.be.a("number");
+    }
+    expect(list[0].category).to.equal("relational");
+    expect(list[list.length - 1].category).to.equal("engine");
+  });
+}
+
+docs {
+  Presentation categories in display order (ADR 0021 D.10). The wizard groups
+  connection types by these categories instead of hard-coding family labels.
+}

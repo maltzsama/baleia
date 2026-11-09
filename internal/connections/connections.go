@@ -132,6 +132,38 @@ const (
 	CategoryEngine         Category = "engine"
 )
 
+// CategoryMeta is a category's presentation metadata: its display name and a
+// one-line description (ADR 0021 D.10 / CR-13). The order of Categories() is
+// the UI order; it never determines access mode or compatibility.
+type CategoryMeta struct {
+	Category    Category
+	Label       string
+	Description string
+}
+
+// Categories returns every category in presentation order. It is the registry's
+// single source of truth for category display names, descriptions and ordering
+// (CR-13), so the frontend hard-codes none of them.
+func Categories() []CategoryMeta {
+	return []CategoryMeta{
+		{CategoryRelational, "Relational databases", "SQL databases Baleia queries directly or exposes through Trino."},
+		{CategoryAnalytical, "Analytical databases", "Columnar and analytical stores."},
+		{CategoryCloudPlatform, "Cloud data platforms", "Managed cloud data warehouses."},
+		{CategoryCatalogManager, "Catalog managers", "Iceberg REST catalogs and catalog managers."},
+		{CategoryMetastore, "Metastores", "Hive Metastore and Glue catalog services."},
+		{CategoryLakehouse, "Lakehouse table formats", "Delta Lake and Hudi table formats."},
+		{CategoryNoSQL, "NoSQL and key-value", "Document, column-family and key-value stores."},
+		{CategorySearch, "Search", "Search engines."},
+		{CategoryAnalytics, "Analytics engines", "Real-time analytics engines."},
+		{CategoryStreaming, "Streaming", "Streaming and event stores."},
+		{CategoryObservability, "Observability", "Logs and metrics stores."},
+		{CategoryExternal, "External services", "SaaS services and spreadsheets."},
+		{CategorySynthetic, "Synthetic data", "Generated data sources."},
+		{CategoryInternal, "Internal catalogs", "Engine-internal catalogs."},
+		{CategoryEngine, "Engines", "Query engines Baleia runs SQL on."},
+	}
+}
+
 // Capability is an operation a connection type may declare (ADR 0021 D.6).
 type Capability string
 

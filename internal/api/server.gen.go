@@ -294,6 +294,9 @@ type ServerInterface interface {
 	// Bind a source catalog into a federated engine
 	// (POST /catalogs/{id}/bindings)
 	CreateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
+	// Connection categories in presentation order (ADR 0021 D.10)
+	// (GET /connection-categories)
+	ListConnectionCategories(w http.ResponseWriter, r *http.Request)
 	// Connection kinds, their roles and config schemas (drives the connection forms)
 	// (GET /connection-providers)
 	ListConnectionProviders(w http.ResponseWriter, r *http.Request)
@@ -1347,6 +1350,12 @@ func (_ Unimplemented) ListCatalogBindings(w http.ResponseWriter, r *http.Reques
 // Bind a source catalog into a federated engine
 // (POST /catalogs/{id}/bindings)
 func (_ Unimplemented) CreateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Connection categories in presentation order (ADR 0021 D.10)
+// (GET /connection-categories)
+func (_ Unimplemented) ListConnectionCategories(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5606,6 +5615,28 @@ func (siw *ServerInterfaceWrapper) CreateCatalogBinding(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateCatalogBinding(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConnectionCategories operation middleware
+func (siw *ServerInterfaceWrapper) ListConnectionCategories(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConnectionCategories(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12910,6 +12941,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalogs/{id}/bindings", wrapper.CreateCatalogBinding)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/connection-categories", wrapper.ListConnectionCategories)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/connection-providers", wrapper.ListConnectionProviders)
 	})
 	r.Group(func(r chi.Router) {
@@ -17328,6 +17362,31 @@ type CreateCatalogBinding422JSONResponse struct {
 func (response CreateCatalogBinding422JSONResponse) VisitCreateCatalogBindingResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListConnectionCategoriesRequestObject struct {
+}
+
+type ListConnectionCategoriesResponseObject interface {
+	VisitListConnectionCategoriesResponse(w http.ResponseWriter) error
+}
+
+type ListConnectionCategories200JSONResponse []ConnectionCategory
+
+func (response ListConnectionCategories200JSONResponse) VisitListConnectionCategoriesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListConnectionCategories401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListConnectionCategories401JSONResponse) VisitListConnectionCategoriesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -25081,6 +25140,9 @@ type StrictServerInterface interface {
 	// Bind a source catalog into a federated engine
 	// (POST /catalogs/{id}/bindings)
 	CreateCatalogBinding(ctx context.Context, request CreateCatalogBindingRequestObject) (CreateCatalogBindingResponseObject, error)
+	// Connection categories in presentation order (ADR 0021 D.10)
+	// (GET /connection-categories)
+	ListConnectionCategories(ctx context.Context, request ListConnectionCategoriesRequestObject) (ListConnectionCategoriesResponseObject, error)
 	// Connection kinds, their roles and config schemas (drives the connection forms)
 	// (GET /connection-providers)
 	ListConnectionProviders(ctx context.Context, request ListConnectionProvidersRequestObject) (ListConnectionProvidersResponseObject, error)
@@ -28166,6 +28228,30 @@ func (sh *strictHandler) CreateCatalogBinding(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateCatalogBindingResponseObject); ok {
 		if err := validResponse.VisitCreateCatalogBindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListConnectionCategories operation middleware
+func (sh *strictHandler) ListConnectionCategories(w http.ResponseWriter, r *http.Request) {
+	var request ListConnectionCategoriesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConnectionCategories(ctx, request.(ListConnectionCategoriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConnectionCategories")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConnectionCategoriesResponseObject); ok {
+		if err := validResponse.VisitListConnectionCategoriesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
