@@ -53,6 +53,45 @@ jobs:
   # Existing findings are a baseline: only new issues fail the job (#369). A
   # pull request is compared with its merge base on main; a push with the
   # commit before it (a branch's first push has none and falls back).
+  # The store supports MySQL and MariaDB through the same single
+  # DATABASE_URL contract: the DSN picks the dialector. This job points that
+  # one variable at each server, so the migrations and the runner stay covered
+  # there without a second store configuration.
+  store-mysql:
+    name: Store on MySQL/MariaDB
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: baleia_dev
+          MYSQL_ROOT_HOST: "%"
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pbaleia_dev" --health-interval 5s --health-timeout 5s --health-retries 20
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: baleia_dev
+          MARIADB_ROOT_HOST: "%"
+        ports: ["3307:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: MySQL
+        env:
+          BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3306)/
+        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate' ./internal/store ./internal/store/model
+      - name: MariaDB
+        env:
+          BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3307)/
+        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate' ./internal/store ./internal/store/model
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

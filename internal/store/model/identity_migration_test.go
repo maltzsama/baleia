@@ -3,7 +3,6 @@ package model_test
 import (
 	"context"
 	"crypto/rand"
-	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
@@ -48,7 +47,7 @@ func TestIdentityModelsMigrate(t *testing.T) {
 		t.Parallel()
 		models := identityModels()
 		if backend == store.MySQL {
-			checkMigration(t, openMySQL(t, "BALEIA_TEST_DATABASE_URL"), models)
+			checkMigration(t, openMySQL(t), models)
 			return
 		}
 		checkMigration(t, openPostgres(t), models)
@@ -105,21 +104,23 @@ func openPostgres(t *testing.T) *gorm.DB {
 	return db
 }
 
-func openMySQL(t *testing.T, env string) *gorm.DB {
+func openMySQL(t *testing.T) *gorm.DB {
 	t.Helper()
-	raw := os.Getenv(env)
-	if raw == "" {
-		t.Skipf("%s not set", env)
+	dsn := os.Getenv("BALEIA_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("BALEIA_TEST_DATABASE_URL not set")
 	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		t.Fatalf("parse %s: %v", env, err)
+	idx := strings.LastIndex(dsn, ")/")
+	if idx < 0 {
+		t.Fatalf("BALEIA_TEST_DATABASE_URL must be a go-sql-driver DSN: %q", dsn)
 	}
-	if u.User == nil || u.Host == "" {
-		t.Fatalf("%s must be mysql://user:pass@host:port", env)
+	prefix, rest := dsn[:idx+2], dsn[idx+2:]
+	_, params, hasParams := strings.Cut(rest, "?")
+	sep := ""
+	if hasParams {
+		sep = "?" + params
 	}
-	pass, _ := u.User.Password()
-	serverDSN := fmt.Sprintf("%s:%s@tcp(%s)/", u.User.Username(), pass, u.Host)
+	serverDSN := prefix + sep
 
 	ctx := context.Background()
 	admin, err := store.Open(ctx, serverDSN, store.MySQL, store.Options{Logger: slog.New(slog.DiscardHandler)})
@@ -134,7 +135,7 @@ func openMySQL(t *testing.T, env string) *gorm.DB {
 	}
 	t.Cleanup(func() { _ = admin.Exec("DROP DATABASE IF EXISTS `" + name + "`").Error })
 
-	db, err := store.Open(ctx, serverDSN+name, store.MySQL, store.Options{Logger: slog.New(slog.DiscardHandler)})
+	db, err := store.Open(ctx, prefix+name+sep, store.MySQL, store.Options{Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
