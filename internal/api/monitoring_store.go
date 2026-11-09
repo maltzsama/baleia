@@ -10,8 +10,7 @@ import (
 
 // opsReads are the operational reads and writes with a GORM path (#773):
 // table health, maintenance parameters and runs, bindings for maintenance,
-// the Iceberg catalog list and query classes. *db.Queries and *repo.Repo both
-// implement it.
+// the Iceberg catalog list and query classes. *repo.Repo implements it.
 type opsReads interface {
 	GetTableHealthByTable(ctx context.Context, arg db.GetTableHealthByTableParams) (db.TableHealthSnapshot, error)
 	ListTableMaintenancePolicies(ctx context.Context, catalogID pgtype.UUID) ([]db.TableMaintenancePolicy, error)
@@ -23,7 +22,7 @@ type opsReads interface {
 }
 
 // workloadRuleStore is the ordered workload-rule persistence (#539, #773).
-// *db.Queries and *repo.Repo both implement it.
+// *repo.Repo implements it.
 type workloadRuleStore interface {
 	ListWorkloadRules(ctx context.Context) ([]db.WorkloadRule, error)
 	GetWorkloadRule(ctx context.Context, id pgtype.UUID) (db.WorkloadRule, error)

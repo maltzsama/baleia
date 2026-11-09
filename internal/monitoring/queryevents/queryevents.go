@@ -26,7 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Store writes query snapshots; *db.Queries implements it.
+// Store writes query snapshots; *repo.Repo implements it.
 type Store interface {
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg db.UpsertTrinoQuerySnapshotParams) (db.TrinoQuerySnapshot, error)
 }

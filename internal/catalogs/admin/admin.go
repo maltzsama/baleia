@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Reader counts what depends on catalogs and connections; *db.Queries
+// Reader counts what depends on catalogs and connections; *repo.Repo
 // implements it.
 type Reader interface {
 	CountNamespacesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
@@ -24,7 +24,7 @@ type Reader interface {
 	ListEngines(ctx context.Context) ([]db.Engine, error)
 }
 
-// Writer renames a catalog; *db.Queries implements it.
+// Writer renames a catalog; *repo.Repo implements it.
 type Writer interface {
 	UpdateCatalogMeta(ctx context.Context, arg db.UpdateCatalogMetaParams) (db.Catalog, error)
 }

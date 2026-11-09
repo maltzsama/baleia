@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Reader reads agents, their workspaces and tokens; *db.Queries implements
+// Reader reads agents, their workspaces and tokens; *repo.Repo implements
 // it.
 type Reader interface {
 	GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, error)
@@ -30,7 +30,7 @@ type Reader interface {
 }
 
 // Reach reads what an agent can reach through its workspaces, and the
-// executions it ran; *db.Queries implements it.
+// executions it ran; *repo.Repo implements it.
 type Reach interface {
 	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error)
 	ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error)
@@ -38,7 +38,7 @@ type Reach interface {
 	GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg db.GetQueryExecutionByIDAndWorkspaceParams) (db.QueryExecution, error)
 }
 
-// Writer changes agents and tokens outside a transaction; *db.Queries
+// Writer changes agents and tokens outside a transaction; *repo.Repo
 // implements it.
 type Writer interface {
 	DeleteAgent(ctx context.Context, id pgtype.UUID) error

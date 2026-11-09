@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Status reads what the status page shows; *db.Queries implements it.
+// Status reads what the status page shows; *repo.Repo implements it.
 type Status interface {
 	ListEngines(ctx context.Context) ([]db.Engine, error)
 	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]db.Engine, error)
@@ -23,7 +23,7 @@ type Status interface {
 	PluginLastConfirmation(ctx context.Context, updatedBy string) (pgtype.Timestamptz, error)
 }
 
-// Attention reads the rows that need attention; *db.Queries implements it.
+// Attention reads the rows that need attention; *repo.Repo implements it.
 type Attention interface {
 	ListAttentionBindingErrors(ctx context.Context) ([]db.ListAttentionBindingErrorsRow, error)
 	ListAttentionMetadataSyncFailed(ctx context.Context) ([]db.ListAttentionMetadataSyncFailedRow, error)

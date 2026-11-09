@@ -611,20 +611,18 @@ func TestSessionScopeFromExecscope(t *testing.T) {
 	})
 }
 
-// catalogScopeGrants lists the db/queries queries that may name
+// catalogScopeFiles are the GORM store files that may name
 // workspace_catalog_grants directly: grant CRUD, the agent's workspace-scoped
 // check, the workspace target/listing reads, and the impact counts. Everything
-// else must go through baleia_workspace_catalog_ids (ADR 0018 §4.2).
-var catalogScopeGrants = map[string]bool{
-	"UpsertWorkspaceCatalogGrant":    true,
-	"ListWorkspaceCatalogGrants":     true,
-	"DeleteWorkspaceCatalogGrant":    true,
-	"ListCatalogGrants":              true,
-	"CatalogGrantedToAgent":          true,
-	"ListWorkspaceTargets":           true,
-	"ListGrantedCatalogsOfWorkspace": true,
-	"CountCatalogImpact":             true,
-	"CountEngineImpact":              true,
+// else must read the scope through baleia_workspace_catalog_ids (ADR 0018
+// §4.2). The queries moved from db/queries to the GORM store; a new file that
+// names the table must be added here deliberately.
+var catalogScopeFiles = map[string]bool{
+	"grants.go":         true,
+	"access.go":         true,
+	"catalogs.go":       true,
+	"workspaces.go":     true,
+	"querier_compat.go": true,
 }
 
 // TestCatalogScopeSingleSource: the workspace catalog scope is read in one SQL
@@ -638,33 +636,24 @@ func TestCatalogScopeSingleSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(root, "db", "queries")
+	dir := filepath.Join(root, "internal", "store", "repo")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	queryRe := regexp.MustCompile(`-- name: (\w+)`)
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
-		lines := strings.Split(string(data), "\n")
-		current := ""
-		for _, line := range lines {
-			if m := queryRe.FindStringSubmatch(line); m != nil {
-				current = m[1]
-				continue
-			}
-			if !strings.Contains(line, "workspace_catalog_grants") {
-				continue
-			}
-			if !catalogScopeGrants[current] {
-				t.Errorf("%s: query %q names workspace_catalog_grants; read the scope through baleia_workspace_catalog_ids", e.Name(), current)
-			}
+		if !strings.Contains(string(data), "workspace_catalog_grants") {
+			continue
+		}
+		if !catalogScopeFiles[e.Name()] {
+			t.Errorf("%s names workspace_catalog_grants; read the scope through baleia_workspace_catalog_ids", e.Name())
 		}
 	}
 }

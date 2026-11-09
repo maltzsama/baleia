@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store reads and updates accounts; *db.Queries implements it.
+// Store reads and updates accounts; *repo.Repo implements it.
 type Store interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
 	UpdateUser(ctx context.Context, arg db.UpdateUserParams) (db.User, error)

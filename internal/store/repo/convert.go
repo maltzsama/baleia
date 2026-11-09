@@ -1,6 +1,6 @@
 // Package repo is the GORM-backed persistence for Baleia's store (ADR 0020).
-// Each type implements the narrow Store interface of one domain service while
-// the rest of the store still runs through sqlc (#769–#774).
+// Each type implements the narrow Store interface of one domain service
+// (#769–#774).
 package repo
 
 import (
@@ -34,7 +34,7 @@ func asUniqueViolation(err error, constraint string) error {
 	}
 }
 
-// UUIDString renders a sqlc pgtype.UUID as text.
+// UUIDString renders a pgtype.UUID as text.
 func UUIDString(u pgtype.UUID) string {
 	if !u.Valid {
 		return ""
@@ -43,7 +43,8 @@ func UUIDString(u pgtype.UUID) string {
 }
 
 // uuidText renders a UUID for a query, using the zero UUID when unset so a
-// comparison stays well-typed (sqlc passed the zero value the same way).
+// comparison stays well-typed (the previous query layer passed the zero value
+// the same way).
 func uuidText(u pgtype.UUID) string {
 	if !u.Valid {
 		return "00000000-0000-0000-0000-000000000000"
@@ -59,7 +60,7 @@ func jsonOrDefault(b []byte) model.JSON {
 	return model.JSON(b)
 }
 
-// PGUUID parses a text UUID into the sqlc type.
+// PGUUID parses a text UUID into the pgtype shape.
 func PGUUID(s string) pgtype.UUID {
 	parsed, err := uuid.Parse(s)
 	if err != nil {

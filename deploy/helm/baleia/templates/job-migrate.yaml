@@ -23,7 +23,7 @@ spec:
         - name: migrate
           image: {{ include "baleia.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["/migrate", "-cmd=up"]
+          command: ["/migrate", "-cmd=store-up"]
           {{- include "baleia.containerSecurityContext" . | nindent 10 }}
           env:
             - name: DATABASE_URL

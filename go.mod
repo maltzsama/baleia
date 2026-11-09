@@ -15,7 +15,6 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/microsoft/go-mssqldb v1.11.2
 	github.com/oapi-codegen/runtime v1.6.0
-	github.com/pressly/goose/v3 v3.27.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/uber-go/tally/v4 v4.1.17
@@ -119,7 +118,6 @@ require (
 	github.com/klauspost/compress v1.20.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/klauspost/crc32 v1.3.0 // indirect
-	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/minio-go/v7 v7.4.1
@@ -128,13 +126,11 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.29 // indirect
 	github.com/robfig/cron v1.2.0
 	github.com/rs/xid v1.6.0 // indirect
-	github.com/sethvargo/go-retry v0.3.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/stretchr/testify v1.12.1
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.temporal.io/api v1.63.0
-	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
 	golang.org/x/net v0.60.0 // indirect

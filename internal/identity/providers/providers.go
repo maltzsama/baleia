@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store reads providers and updates one; *db.Queries implements it.
+// Store reads providers and updates one; *repo.Repo implements it.
 type Store interface {
 	ListAllAuthProviders(ctx context.Context) ([]db.AuthProvider, error)
 	ListAuthProviders(ctx context.Context) ([]db.AuthProvider, error)
@@ -23,13 +23,13 @@ type Store interface {
 	UpdateAuthProvider(ctx context.Context, arg db.UpdateAuthProviderParams) (db.AuthProvider, error)
 }
 
-// Creator writes a new provider; *db.Queries implements it.
+// Creator writes a new provider; *repo.Repo implements it.
 type Creator interface {
 	CreateAuthProvider(ctx context.Context, arg db.CreateAuthProviderParams) (db.AuthProvider, error)
 	UpdateAuthProvider(ctx context.Context, arg db.UpdateAuthProviderParams) (db.AuthProvider, error)
 }
 
-// Remover detaches a provider's users and deletes it; *db.Queries implements it.
+// Remover detaches a provider's users and deletes it; *repo.Repo implements it.
 type Remover interface {
 	CountUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) (int64, error)
 	RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error

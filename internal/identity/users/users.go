@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Reader reads accounts and reconciliation runs; *db.Queries implements it.
+// Reader reads accounts and reconciliation runs; *repo.Repo implements it.
 type Reader interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
 	GetUserByEmail(ctx context.Context, email string) (db.User, error)
@@ -29,7 +29,7 @@ type Reader interface {
 	ListDirectoryReconcileRuns(ctx context.Context, arg db.ListDirectoryReconcileRunsParams) ([]db.DirectoryReconcileRun, error)
 }
 
-// Writer changes one account; *db.Queries implements it.
+// Writer changes one account; *repo.Repo implements it.
 type Writer interface {
 	UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
@@ -42,7 +42,7 @@ type Store interface {
 	Writer
 }
 
-// TxStore holds the writes that must commit together; *db.Queries implements it.
+// TxStore holds the writes that must commit together; *repo.Repo implements it.
 type TxStore interface {
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
 	CreatePasswordResetToken(ctx context.Context, arg db.CreatePasswordResetTokenParams) error

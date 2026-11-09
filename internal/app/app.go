@@ -129,7 +129,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	})
 
 	c.Metrics = metrics.New(opts.Service)
-	// The sqlc pgx pool and the GORM store share one per-process connection
+	// The pgx pool and the GORM store share one per-process connection
 	// budget: the store gets a quarter and the pgx pool the rest.
 	totalConns := int(cfg.PoolSize(opts.PoolSize))
 	storeConns := totalConns / 4

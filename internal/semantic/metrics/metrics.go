@@ -20,7 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store reads metrics and records their certification; *db.Queries
+// Store reads metrics and records their certification; *repo.Repo
 // implements it.
 type Store interface {
 	ListVisibleSemanticMetrics(ctx context.Context, arg db.ListVisibleSemanticMetricsParams) ([]db.SemanticMetric, error)

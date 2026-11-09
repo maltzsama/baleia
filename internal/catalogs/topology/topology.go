@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Engines reads engines and Trino clusters; *db.Queries implements it.
+// Engines reads engines and Trino clusters; *repo.Repo implements it.
 type Engines interface {
 	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
 	GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (db.TrinoCluster, error)
@@ -21,7 +21,7 @@ type Engines interface {
 	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
 }
 
-// Bindings reads and removes bindings; *db.Queries implements it.
+// Bindings reads and removes bindings; *repo.Repo implements it.
 type Bindings interface {
 	GetBinding(ctx context.Context, id pgtype.UUID) (db.CatalogBinding, error)
 	GetManagedBindingOfCatalog(ctx context.Context, arg db.GetManagedBindingOfCatalogParams) (db.CatalogBinding, error)
@@ -32,7 +32,7 @@ type Bindings interface {
 	DeleteBinding(ctx context.Context, id pgtype.UUID) error
 }
 
-// Catalogs reads and edits catalogs; *db.Queries implements it.
+// Catalogs reads and edits catalogs; *repo.Repo implements it.
 type Catalogs interface {
 	ListVisibleCatalogs(ctx context.Context, arg db.ListVisibleCatalogsParams) ([]db.Catalog, error)
 	ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogGrantsRow, error)

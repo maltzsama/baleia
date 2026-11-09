@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Versions reads content versions; *db.Queries implements it.
+// Versions reads content versions; *repo.Repo implements it.
 type Versions interface {
 	LatestContentVersion(ctx context.Context, arg db.LatestContentVersionParams) (db.ContentVersion, error)
 	ListContentVersions(ctx context.Context, arg db.ListContentVersionsParams) ([]db.ListContentVersionsRow, error)
@@ -21,7 +21,7 @@ type Versions interface {
 	ListDeletedContent(ctx context.Context, arg db.ListDeletedContentParams) ([]db.ListDeletedContentRow, error)
 }
 
-// Entities finds the live entity a history belongs to; *db.Queries
+// Entities finds the live entity a history belongs to; *repo.Repo
 // implements it.
 type Entities interface {
 	GetSavedQueryByID(ctx context.Context, arg db.GetSavedQueryByIDParams) (db.SavedQuery, error)

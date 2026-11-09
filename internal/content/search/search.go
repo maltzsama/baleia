@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store reads the visible content and the space names; *db.Queries
+// Store reads the visible content and the space names; *repo.Repo
 // implements it.
 type Store interface {
 	ListSpacesForPrincipal(ctx context.Context, arg db.ListSpacesForPrincipalParams) ([]db.ListSpacesForPrincipalRow, error)

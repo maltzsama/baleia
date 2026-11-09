@@ -18,7 +18,7 @@ import (
 )
 
 // Reader reads spaces, their members and content counts, and the principals
-// members name; *db.Queries implements it.
+// members name; *repo.Repo implements it.
 type Reader interface {
 	ListSpacesForPrincipal(ctx context.Context, arg db.ListSpacesForPrincipalParams) ([]db.ListSpacesForPrincipalRow, error)
 	GetSpace(ctx context.Context, arg db.GetSpaceParams) (db.Space, error)
@@ -31,7 +31,7 @@ type Reader interface {
 	GetTeamByID(ctx context.Context, id pgtype.UUID) (db.Team, error)
 }
 
-// Writer changes spaces and their members; *db.Queries implements it.
+// Writer changes spaces and their members; *repo.Repo implements it.
 type Writer interface {
 	UpdateSpace(ctx context.Context, arg db.UpdateSpaceParams) (db.Space, error)
 	DeleteSpace(ctx context.Context, arg db.DeleteSpaceParams) (int64, error)

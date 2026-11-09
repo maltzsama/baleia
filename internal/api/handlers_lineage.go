@@ -28,8 +28,7 @@ const (
 )
 
 // lineageReads reads the rows the lineage graph and the broken-lineage
-// attention item need. *db.Queries implements it on the sqlc path and
-// *repo.Repo on the GORM path (ADR 0020, #772).
+// attention item need. *repo.Repo implements it over the GORM store (ADR 0020, #772).
 type lineageReads interface {
 	GetMetadataTableByRef(ctx context.Context, arg db.GetMetadataTableByRefParams) (db.GetMetadataTableByRefRow, error)
 	ListMetadataColumns(ctx context.Context, tableID pgtype.UUID) ([]db.ListMetadataColumnsRow, error)

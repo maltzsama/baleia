@@ -10,7 +10,7 @@ import (
 
 // workbenchReads are the workbench reads that have a GORM path (#770): the
 // agent lookup of a run, the Trino profile of a statement, and the join
-// suggestions of two tables. *db.Queries and *repo.Repo both implement it.
+// suggestions of two tables. *repo.Repo implements it.
 type workbenchReads interface {
 	GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, error)
 	GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string) (db.TrinoQuerySnapshot, error)

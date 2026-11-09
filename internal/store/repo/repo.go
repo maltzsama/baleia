@@ -1,10 +1,15 @@
 package repo
 
-import "gorm.io/gorm"
+import (
+	"github.com/galileostudio/baleia/internal/db"
+	"gorm.io/gorm"
+)
 
 // Repo is the GORM-backed store for the domains migrated off sqlc. Embedding
 // the per-domain stores lets one value satisfy the narrow interfaces of the
 // services that need several of them.
+var _ db.Querier = (*Repo)(nil)
+
 type Repo struct {
 	*Users
 	*Providers

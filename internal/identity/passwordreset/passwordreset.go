@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Store persists reset tokens and passwords; *db.Queries implements it.
+// Store persists reset tokens and passwords; *repo.Repo implements it.
 type Store interface {
 	GetUserByEmail(ctx context.Context, email string) (db.User, error)
 	CreatePasswordResetToken(ctx context.Context, arg db.CreatePasswordResetTokenParams) error

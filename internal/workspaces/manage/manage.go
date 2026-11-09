@@ -18,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Reader reads workspaces, grants and what depends on them; *db.Queries
+// Reader reads workspaces, grants and what depends on them; *repo.Repo
 // implements it.
 type Reader interface {
 	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]db.Workspace, error)
@@ -29,7 +29,7 @@ type Reader interface {
 	CountCatalogAccessImpact(ctx context.Context, arg db.CountCatalogAccessImpactParams) (db.CountCatalogAccessImpactRow, error)
 }
 
-// Writer changes workspaces and grants outside a transaction; *db.Queries
+// Writer changes workspaces and grants outside a transaction; *repo.Repo
 // implements it.
 type Writer interface {
 	CreateWorkspace(ctx context.Context, arg db.CreateWorkspaceParams) (db.Workspace, error)

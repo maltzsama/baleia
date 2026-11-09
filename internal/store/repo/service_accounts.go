@@ -18,7 +18,8 @@ import (
 
 // ServiceAccounts persists non-human principals (#653) and their workspace
 // membership. It is the GORM replacement for the service_accounts.sql queries
-// (ADR 0020); db.Querier remains the sqlc fallback while other domains migrate.
+// (ADR 0020); db.Querier remains the interface fallback while other domains
+// migrate.
 type ServiceAccounts struct{ db *gorm.DB }
 
 // ServiceAccountWrites is the transactional surface creating a service

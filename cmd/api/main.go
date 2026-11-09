@@ -15,9 +15,9 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/server"
+	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
@@ -65,7 +65,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	defer cancel()
 
 	// Migrations run on their own connection, before the pool opens.
-	if err := migrate.Up(ctx, logger, cfg.DatabaseURL); err != nil {
+	if err := runStoreMigrations(ctx, cfg, logger); err != nil {
 		return fmt.Errorf("migration: %w", err)
 	}
 
@@ -98,6 +98,31 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("server setup: %w", err)
 	}
 	return srv.Run(ctx)
+}
+
+// runStoreMigrations applies the GORM store migrations on a dedicated
+// connection. The API no longer shells out to a generated migration runner.
+func runStoreMigrations(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
+	backend, err := store.ResolveBackend(cfg.StoreBackend, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	db, err := store.Open(ctx, cfg.DatabaseURL, backend, store.Options{Logger: logger})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = store.Close(db) }()
+
+	registry, err := store.AllMigrations()
+	if err != nil {
+		return err
+	}
+	applied, err := store.NewRunner(db, registry, logger).Up(ctx)
+	if err != nil {
+		return err
+	}
+	logger.InfoContext(ctx, "store migrations applied", "applied", len(applied))
+	return nil
 }
 
 // sealCredentials seals a connection's credentials with the keyring; nil when

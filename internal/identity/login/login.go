@@ -22,7 +22,7 @@ import (
 )
 
 // Store reads accounts and providers and applies a directory login's role
-// and teams; *db.Queries implements it.
+// and teams; *repo.Repo implements it.
 type Store interface {
 	GetUserByEmail(ctx context.Context, email string) (db.User, error)
 	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error)
