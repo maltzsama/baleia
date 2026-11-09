@@ -387,14 +387,18 @@ func (r *Registry) Get(kind Kind) (Provider, error) {
 // kind declares no Trino access mode or no mapping.
 func (r *Registry) CatalogTypes(kind Kind) []string {
 	p, err := r.Get(kind)
-	if err != nil {
+	if err != nil || !TrinoBindable(p) {
 		return nil
 	}
+	return slices.Clone(p.Meta().TrinoCatalogTypes)
+}
+
+// TrinoBindable reports whether p declares the Trino access mode with at least
+// one catalog mapping (ADR 0021 D.3). It is the single predicate the registry,
+// the Trino binder and the API share for connection-to-Trino compatibility.
+func TrinoBindable(p Provider) bool {
 	m := p.Meta()
-	if !slices.Contains(m.AccessModes, AccessModeTrino) || len(m.TrinoCatalogTypes) == 0 {
-		return nil
-	}
-	return slices.Clone(m.TrinoCatalogTypes)
+	return slices.Contains(m.AccessModes, AccessModeTrino) && len(m.TrinoCatalogTypes) > 0
 }
 
 // All returns every provider ordered by kind.

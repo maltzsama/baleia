@@ -63,6 +63,9 @@ func TestEveryProviderIsComplete(t *testing.T) {
 			if slices.Contains(meta.AccessModes, connections.AccessModeDirect) && p.EngineKind() == "" {
 				t.Error("direct access requires an engine kind")
 			}
+			if len(meta.TrinoCatalogTypes) > 0 && !slices.Contains(meta.AccessModes, connections.AccessModeTrino) {
+				t.Error("Trino catalog types require the Trino access mode (ADR 0021 D.3)")
+			}
 			// Roles may be empty: a metastore that is only a bindable source
 			// (Hive Metastore, #86) declares none — "bindable" is declared by
 			// binders, not providers.

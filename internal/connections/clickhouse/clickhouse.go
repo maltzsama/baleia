@@ -49,11 +49,10 @@ func (*Provider) EngineKind() string { return "clickhouse" }
 func (*Provider) Meta() connections.TypeMeta {
 	modes := []connections.AccessMode{connections.AccessModeDirect}
 	return connections.TypeMeta{
-		Description:       "ClickHouse analytical database; direct access is supported and Trino access is planned.",
-		Category:          connections.CategoryAnalytical,
-		AccessModes:       modes,
-		TrinoCatalogTypes: []string{"clickhouse"},
-		Capabilities:      connections.CapabilitiesFor(modes, true),
+		Description:  "ClickHouse analytical database; direct access is supported and Trino access is planned.",
+		Category:     connections.CategoryAnalytical,
+		AccessModes:  modes,
+		Capabilities: connections.CapabilitiesFor(modes, true),
 	}
 }
 

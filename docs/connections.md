@@ -14,7 +14,7 @@ user-facing connector selection.
 
 | Kind | Label | Category | Access modes | Roles | Engine kind | Trino catalog types | Status |
 |---|---|---|---|---|---|---|---|
-| `clickhouse` | ClickHouse | analytical | direct | metadata, direct_engine | clickhouse | clickhouse | supported |
+| `clickhouse` | ClickHouse | analytical | direct | metadata, direct_engine | clickhouse | — | supported |
 | `doris` | Apache Doris | engine | — | federated_engine | doris | — | unsupported (planned after v1 (#21)) |
 | `flightsql` | Arrow Flight SQL | engine | direct | metadata, direct_engine | flightsql | — | supported |
 | `glue` | AWS Glue Data Catalog | metastore | trino | metadata | — | iceberg, hive, delta_lake | supported |

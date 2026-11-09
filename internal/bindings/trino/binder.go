@@ -106,11 +106,10 @@ func (b *Binder) Supports() map[connections.Kind][]string {
 	}
 	out := make(map[connections.Kind][]string)
 	for _, p := range b.providers.All() {
-		m := p.Meta()
-		if !slices.Contains(m.AccessModes, connections.AccessModeTrino) || len(m.TrinoCatalogTypes) == 0 {
+		if !connections.TrinoBindable(p) {
 			continue
 		}
-		out[p.Kind()] = slices.Clone(m.TrinoCatalogTypes)
+		out[p.Kind()] = slices.Clone(p.Meta().TrinoCatalogTypes)
 	}
 	return out
 }
