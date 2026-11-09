@@ -118,7 +118,50 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.MonitoringEvent{})
 			},
 		},
+		Migration{
+			Version: 8,
+			Name:    "backfill connection access mode",
+			Up:      backfillAccessMode,
+		},
 	)
+}
+
+// backfillAccessMode sets access_mode on single-path connections (ADR 0021
+// CR-17): a connection with a direct engine and no catalogs is direct, and one
+// with catalogs and no direct engine is trino. Dual-path connections stay NULL
+// until bootstrap.SplitDualPathConnections splits them; engine-family and
+// unused connections have no data access mode.
+func backfillAccessMode(db *gorm.DB) error {
+	var rows []model.CatalogConnection
+	if err := db.Where("access_mode IS NULL").Find(&rows).Error; err != nil {
+		return fmt.Errorf("list connections to backfill: %w", err)
+	}
+	for _, c := range rows {
+		var direct, trino int64
+		if err := db.Model(&model.Engine{}).
+			Where("connection_id = ? AND class = 'direct'", c.ID).Count(&direct).Error; err != nil {
+			return fmt.Errorf("count direct engines of %s: %w", c.ID, err)
+		}
+		if err := db.Model(&model.Catalog{}).
+			Where("connection_id = ? AND origin = 'source'", c.ID).Count(&trino).Error; err != nil {
+			return fmt.Errorf("count catalogs of %s: %w", c.ID, err)
+		}
+		mode := ""
+		switch {
+		case direct > 0 && trino == 0:
+			mode = "direct"
+		case direct == 0 && trino > 0:
+			mode = "trino"
+		}
+		if mode == "" {
+			continue
+		}
+		if err := db.Model(&model.CatalogConnection{}).
+			Where("id = ?", c.ID).Update("access_mode", mode).Error; err != nil {
+			return fmt.Errorf("set access mode of %s: %w", c.ID, err)
+		}
+	}
+	return nil
 }
 
 // seedDefaults creates the rows a fresh database used to seed: the
