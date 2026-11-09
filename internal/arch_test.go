@@ -37,7 +37,7 @@ type constructionRule struct {
 // worker adds its Lens monitor. The e2e seed (build tag e2e, never shipped) is
 // a test-only composition root: it registers the smoke's Trino catalog the way
 // a binding does.
-var wiringSites = []string{"internal/app/app.go", "cmd/worker/main.go", "cmd/e2e-seed/main.go"}
+var wiringSites = []string{"internal/app/app.go", "cmd/worker/main.go", "cmd/e2e-seed/"}
 
 var constructionRules = []constructionRule{
 	{
