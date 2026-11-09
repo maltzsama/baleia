@@ -73,8 +73,7 @@
 	let credentialsReadOnly = $state(false);
 	let direct = $state(false);
 	let bindEngineIds = $state<string[]>([]);
-	let catalogNames = $state<string[]>(['']);
-	let connector = $state('');
+	let catalogName = $state('');
 
 	let testing = $state(false);
 	let testResult = $state<TestResult | null>(null);
@@ -140,6 +139,13 @@
 	const connectors = $derived(selectedSupport?.connectors ?? []);
 	const reservedNames = $derived(selectedSupport?.reserved_names ?? []);
 	const isDatabase = $derived(provider?.family === 'database');
+	const catalogOutputs = $derived(
+		connectors.map((connector, i) => {
+			const base = catalogName.trim() || name;
+			const raw = i === 0 ? base : `${base}_${connector}`;
+			return { name: raw, trino_catalog_name: normalizeCatalogName(raw), connector };
+		})
+	);
 	const missing = $derived(provider ? missingFields(provider, values, secrets) : []);
 	const snapshot = $derived(
 		JSON.stringify({
@@ -149,17 +155,10 @@
 			credentialsReadOnly,
 			direct,
 			bindEngineIds,
-			catalogNames,
-			connector
+			catalogName
 		})
 	);
 	const tested = $derived(testedSnapshot !== '' && testedSnapshot === snapshot);
-
-	$effect(() => {
-		if (connectors.length > 0 && !connectors.includes(connector)) {
-			connector = connectors[0];
-		}
-	});
 
 	function choose(next: ConnectionProvider) {
 		if (!isUsable(next)) return;
@@ -170,8 +169,7 @@
 		credentialsReadOnly = false;
 		direct = false;
 		bindEngineIds = [];
-		catalogNames = [''];
-		connector = '';
+		catalogName = '';
 		testResult = null;
 		testError = '';
 		testedSnapshot = '';
@@ -184,11 +182,10 @@
 		if (isDatabase) {
 			const db = databaseName(values);
 			if (db) {
-				catalogNames = [db];
+				catalogName = db;
 				name = name || db;
 			}
 		}
-		if (catalogNames.length === 0) catalogNames = [''];
 		step = 3;
 	}
 
@@ -198,18 +195,6 @@
 		} else {
 			bindEngineIds = bindEngineIds.filter((id) => id !== engineId);
 		}
-	}
-
-	function addCatalog() {
-		catalogNames = [...catalogNames, ''];
-	}
-
-	function setCatalog(index: number, value: string) {
-		catalogNames = catalogNames.map((item, i) => (i === index ? value : item));
-	}
-
-	function removeCatalog(index: number) {
-		catalogNames = catalogNames.filter((_, i) => i !== index);
 	}
 
 	function usage(): Usage {
@@ -262,7 +247,7 @@
 				created = { connection, engine, catalogs };
 			}
 			if (bindEngineIds.length > 0) {
-				const base = catalogNames.map((item) => item.trim()).find(Boolean) || connection.name;
+				const base = catalogName.trim() || connection.name;
 				const outputs = connectors.map((item, i) => {
 					const raw = i === 0 ? base : `${base}_${item}`;
 					return { name: raw, trino_catalog_name: normalizeCatalogName(raw) };
@@ -518,38 +503,22 @@
 							? m.connections_connectionwizard_each_database_becomes_one_catalog()
 							: m.connections_connectionwizard_each_warehouse_or_catalog_name_from_the_so()}
 					</p>
-					{#each catalogNames as catalogName, index (index)}
-						<div class="mb-2 flex items-end gap-2">
-							<div class="flex-1">
-								<Input
-									label={isDatabase
-										? m.connections_connectionwizard_database_name()
-										: m.connections_connectionwizard_warehouse_or_catalog_name()}
-									value={catalogName}
-									placeholder={isDatabase ? 'postgres' : 'warehouse'}
-									oninput={(e) => setCatalog(index, (e.target as HTMLInputElement).value)}
-								/>
-							</div>
-							{#if catalogNames.length > 1}
-								<Button variant="ghost" size="sm" onclick={() => removeCatalog(index)}
-									>{m.connections_connectionwizard_remove()}</Button
-								>
-							{/if}
-						</div>
-					{/each}
-					{#if !isDatabase}
-						<Button size="sm" onclick={addCatalog}
-							>{m.connections_connectionwizard_add_catalog()}</Button
-						>
-					{/if}
-					{#if connectors.length > 1}
-						<div class="mt-2">
-							<Select
-								label={m.connections_connectionwizard_connector()}
-								bind:value={connector}
-								options={connectors.map((item) => ({ value: item, label: item }))}
-							/>
-						</div>
+					<Input
+						label={isDatabase
+							? m.connections_connectionwizard_database_name()
+							: m.connections_connectionwizard_warehouse_or_catalog_name()}
+						bind:value={catalogName}
+						placeholder={isDatabase ? 'postgres' : 'warehouse'}
+					/>
+					{#if catalogOutputs.length > 0}
+						<ul class="mt-2 flex flex-col gap-1 text-[11px] text-slate-600 dark:text-slate-300">
+							{#each catalogOutputs as output (output.trino_catalog_name)}
+								<li class="font-mono">
+									{output.trino_catalog_name || output.name}
+									<span class="text-slate-400 dark:text-slate-500"> · {output.connector}</span>
+								</li>
+							{/each}
+						</ul>
 					{/if}
 				</div>
 			{/if}

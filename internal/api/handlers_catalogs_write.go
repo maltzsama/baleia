@@ -111,11 +111,18 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: fmt.Sprintf("this connection type exposes %d catalog outputs", len(connectors))}}, nil
 	}
+	seenName := map[string]bool{}
+	seenTrino := map[string]bool{}
 	for _, c := range body.Catalogs {
 		if c.Name == "" {
 			h.audited(ctx, ev.Failed(audit.ReasonValidation))
 			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("name is required", FieldError{Field: "name", Code: FieldCodeRequired})}, nil
 		}
+		if seenName[c.Name] {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("catalog names must be unique", FieldError{Field: "name", Code: FieldCodeInvalidFormat})}, nil
+		}
+		seenName[c.Name] = true
 		if !validEngineCatalogName(c.TrinoCatalogName) {
 			h.audited(ctx, ev.Failed(audit.ReasonValidation))
 			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
@@ -123,6 +130,11 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 				FieldError{Field: "trino_catalog_name", Code: FieldCodeInvalidFormat},
 			)}, nil
 		}
+		if seenTrino[c.TrinoCatalogName] {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("trino catalog names must be unique", FieldError{Field: "trino_catalog_name", Code: FieldCodeInvalidFormat})}, nil
+		}
+		seenTrino[c.TrinoCatalogName] = true
 	}
 	// The warehouse is optional: the binder requires it only for the catalog
 	// types that address a warehouse (ADR 0021 D.7, CR-10).
@@ -146,6 +158,12 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	if err != nil {
 		return nil, err
 	}
+	// A partial multi-create must not leave cached catalog lists stale.
+	defer func() {
+		if h.catalogCache != nil {
+			h.catalogCache.Clear()
+		}
+	}()
 
 	// Share with: an active grant to the chosen workspace (ADR 0018 §3).
 	var shareWith db.UUID
@@ -176,7 +194,14 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		}
 	}
 
-	created := make([]Catalog, 0, len(ordered))
+	// Project every output up front so a validation failure surfaces before any
+	// catalog row is written. The hive projection is re-done after its siblings
+	// are provisioned, when table redirection can name them.
+	type plan struct {
+		out  output
+		proj bindings.Projection
+	}
+	plans := make([]plan, 0, len(ordered))
 	for _, out := range ordered {
 		spec := bindings.BindingSpec{EngineCatalog: out.trinoName, Connector: out.connector, SourceRef: warehouse, ExtraProps: extra}
 		proj, err := h.projectBinding(ctx, conn, cluster.EngineID, db.UUID{}, spec)
@@ -187,6 +212,23 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		if err != nil {
 			return nil, err
 		}
+		plans = append(plans, plan{out, proj})
+	}
+
+	created := make([]Catalog, 0, len(plans))
+	for _, pl := range plans {
+		proj := pl.proj
+		if pl.out.connector == "hive" {
+			spec := bindings.BindingSpec{EngineCatalog: pl.out.trinoName, Connector: pl.out.connector, SourceRef: warehouse, ExtraProps: extra}
+			proj, err = h.projectBinding(ctx, conn, cluster.EngineID, db.UUID{}, spec)
+			if bindingInvalid(err) {
+				h.audited(ctx, ev.Failed(audit.ReasonValidation))
+				return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
 		extraProps, _ := json.Marshal(extra)
 
 		var cat db.Catalog
@@ -194,9 +236,9 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		txErr := h.inCatalogTx(ctx, func(q catalogWriteStore) error {
 			c, err := q.CreateCatalog(ctx, db.CreateCatalogParams{
 				ConnectionID:     connID,
-				Name:             out.name,
+				Name:             pl.out.name,
 				Description:      body.Description,
-				TrinoCatalogName: &out.trinoName,
+				TrinoCatalogName: &pl.out.trinoName,
 				ClusterID:        cluster.ID,
 				Warehouse:        &warehouse,
 				Connector:        &proj.Connector,
@@ -235,7 +277,6 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		h.startMetadataSync(ctx, cat.ID)
 		created = append(created, h.catalogResponse(ctx, cat, binding, proj.Version))
 	}
-	h.catalogCache.Clear()
 	ev.Changes = map[string]audit.Change{"catalogs": {To: fmt.Sprint(len(created))}}
 	h.audited(ctx, ev.Allowed())
 	return CreateCatalog201JSONResponse(created), nil
