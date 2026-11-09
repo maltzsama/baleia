@@ -72,6 +72,7 @@ func prepareModels(db *gorm.DB, models []any) error {
 			if field.DefaultValue == "gen_random_uuid()" {
 				field.DefaultValue = ""
 				field.HasDefaultValue = false
+				field.DefaultValueInterface = nil
 			}
 			if chk := field.TagSettings["CHECK"]; chk != "" {
 				translated := translateMySQLCheck(chk)
@@ -87,6 +88,18 @@ func prepareModels(db *gorm.DB, models []any) error {
 				}
 			}
 		}
+		// FieldsWithDefaultDBValue was computed during Parse. A field whose
+		// default was just removed must leave it too, or GORM emits the column
+		// twice in INSERT (once as a regular column and once as a
+		// DEFAULT-returning one) and MySQL rejects it with "Column specified
+		// twice".
+		kept := stmt.Schema.FieldsWithDefaultDBValue[:0]
+		for _, field := range stmt.Schema.FieldsWithDefaultDBValue {
+			if field.HasDefaultValue || field.DefaultValueInterface != nil {
+				kept = append(kept, field)
+			}
+		}
+		stmt.Schema.FieldsWithDefaultDBValue = kept
 	}
 	return nil
 }
@@ -118,7 +131,7 @@ func referencesAny(expr string, cols map[string]bool) bool {
 }
 
 var (
-	castRE    = regexp.MustCompile(`::[a-zA-Z_][\w\[\]"]*`)
+	castRE    = regexp.MustCompile(`::[a-zA-Z_][\w"]*`)
 	anyRE     = regexp.MustCompile(`([\w.]+)\s*=\s*ANY\s*\(\s*ARRAY\[([^\]]*)\]\s*\)`)
 	allRE     = regexp.MustCompile(`([\w.]+)\s*<>\s*ALL\s*\(\s*ARRAY\[([^\]]*)\]\s*\)`)
 	triggerRE = regexp.MustCompile(`\btrigger\b`)
@@ -159,6 +172,10 @@ func translateMySQLCheck(chk string) string {
 		return ""
 	}
 	// MySQL reserves these words, and the check expressions name columns raw.
+	// Normalize existing quoting first: prepareModels runs again on the cached
+	// schema, and re-quoting an already quoted word yields ``role``.
+	expr = strings.ReplaceAll(expr, "`trigger`", "trigger")
+	expr = strings.ReplaceAll(expr, "`role`", "role")
 	expr = triggerRE.ReplaceAllString(expr, "`trigger`")
 	expr = roleRE.ReplaceAllString(expr, "`role`")
 	return name + "," + expr
@@ -280,7 +297,10 @@ func seedDefaults(db *gorm.DB) error {
 		CoordinatorURL: "http://trino:8080",
 		CreatedAt:      now,
 	}
-	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&cluster).Error; err != nil {
+	// Create without ON CONFLICT: MySQL's DoNothing translation re-emits the
+	// primary key in the column list ("Column 'id' specified twice"). The
+	// migration lock serializes runners, so counting first cannot race.
+	if err := createIfAbsent(db, &model.TrinoCluster{}, &cluster, "name = ?", "default"); err != nil {
 		return fmt.Errorf("seed default trino cluster: %w", err)
 	}
 	if err := db.Where("name = ?", "default").First(&cluster).Error; err != nil {
@@ -296,7 +316,7 @@ func seedDefaults(db *gorm.DB) error {
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
-		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&conn).Error; err != nil {
+		if err := createIfAbsent(db, &model.CatalogConnection{}, &conn, "name = ?", "trino-default"); err != nil {
 			return fmt.Errorf("seed trino connection: %w", err)
 		}
 		if err := db.Where("name = ?", "trino-default").First(&conn).Error; err != nil {
@@ -313,7 +333,7 @@ func seedDefaults(db *gorm.DB) error {
 			CreatedAt:    now,
 			UpdatedAt:    now,
 		}
-		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&engine).Error; err != nil {
+		if err := createIfAbsent(db, &model.Engine{}, &engine, "name = ?", "default"); err != nil {
 			return fmt.Errorf("seed trino engine: %w", err)
 		}
 		if err := db.Where("name = ?", "default").First(&engine).Error; err != nil {
@@ -324,9 +344,21 @@ func seedDefaults(db *gorm.DB) error {
 			return fmt.Errorf("link default trino engine: %w", err)
 		}
 	}
-	settings := model.AssistantSetting{ID: true}
-	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&settings).Error; err != nil {
+	if err := createIfAbsent(db, &model.AssistantSetting{}, &model.AssistantSetting{ID: true}, "1 = 1"); err != nil {
 		return fmt.Errorf("seed assistant settings: %w", err)
 	}
 	return nil
+}
+
+// createIfAbsent creates row when no row of table matches where. Callers hold
+// the migration lock, so the check and the insert cannot race.
+func createIfAbsent(db *gorm.DB, table, row any, where string, args ...any) error {
+	var count int64
+	if err := db.Model(table).Where(where, args...).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	return db.Create(row).Error
 }
