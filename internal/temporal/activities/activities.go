@@ -21,7 +21,6 @@ import (
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -45,10 +44,10 @@ type Activities struct {
 	// dialects split and gate scripts by the target engine's dialect.
 	dialects *dialect.Registry
 	metrics  workerMetrics
-	queries  db.Querier
-	// store is the GORM store for the query workbench, statement references
-	// and joins (#770); nil in tests and when the store is not configured.
-	store   *repo.Repo
+	// store is the GORM store every activity persists through (ADR 0020).
+	// The field keeps the sqlc-shaped interface so unit tests can inject a
+	// fake; production always holds *repo.Repo.
+	store   db.Querier
 	pool    *pgxpool.Pool
 	engines engineSource
 	monitor lensMonitor
@@ -91,11 +90,11 @@ type s3Client interface {
 	PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error)
 }
 
-func New(logger *slog.Logger, pool *pgxpool.Pool, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client, dialects *dialect.Registry) *Activities {
+func New(logger *slog.Logger, pool *pgxpool.Pool, store db.Querier, cfg *config.Config, keyring *crypto.Keyring, conns *connections.Registry, engines engineSource, mon lensMonitor, s3 *storage.S3Client, dialects *dialect.Registry) *Activities {
 	a := &Activities{
 		logger:      cmp.Or(logger, slog.New(slog.DiscardHandler)),
 		dialects:    dialects,
-		queries:     db.New(pool),
+		store:       store,
 		pool:        pool,
 		engines:     engines,
 		monitor:     mon,

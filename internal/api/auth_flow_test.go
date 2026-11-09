@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mail"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -85,7 +86,7 @@ func refreshToken(t *testing.T, h *API, token string) string {
 func TestGetMe_IncludesStatus(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	ctx := context.Background()
 	hash, err := auth.HashPassword("correct horse")
 	if err != nil {
@@ -250,7 +251,7 @@ func TestLogout_CookieRevokesFamily(t *testing.T) {
 func TestCreateFirstAdmin_RejectsShortPassword(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	h := testAPI(handlerFields{queries: db.New(pool), settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
+	h := testAPI(handlerFields{queries: repo.New(testdb.GORM(t, pool)), settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
 	resp, err := h.CreateFirstAdmin(context.Background(), CreateFirstAdminRequestObject{
 		Body: &CreateAdminRequest{Name: "Admin", Email: "admin@example.test", Password: "short"},
 	})
@@ -542,7 +543,7 @@ func TestRefresh_ReuseRevokeFailureIsAnError(t *testing.T) {
 func TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	h := testAPI(handlerFields{queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
+	h := testAPI(handlerFields{queries: repo.New(testdb.GORM(t, pool)), pool: pool, tx: poolTx{pool: pool}, settings: SettingsFromConfig(&config.Config{BcryptCost: testBcryptCost})})
 	const n = 8
 	var wg sync.WaitGroup
 	created := make(chan bool, n)
@@ -571,7 +572,7 @@ func TestCreateFirstAdmin_ConcurrentSetupMakesOneAdmin(t *testing.T) {
 	if len(created) != 1 {
 		t.Fatalf("%d setups succeeded, want 1", len(created))
 	}
-	users, err := db.New(pool).ListUsers(context.Background())
+	users, err := repo.New(testdb.GORM(t, pool)).ListUsers(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -103,7 +103,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	// Lens reads the Trino coordinator's runtime state as the service identity.
 	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, core.TrinoHTTP))
 
-	act := activities.New(logger, pool, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
+	act := activities.New(logger, pool, core.StoreRepo, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
 	act.SetStore(core.StoreRepo)
 	act.SetMetrics(reg)
 	act.SetTemporal(core.Temporal)
@@ -115,7 +115,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	// Baleia did not create) with the binder, as the catalog DDL identity.
 	binder := core.Binder
 	act.SetEngineObserver(func(ctx context.Context, eng db.Engine, clusterID pgtype.UUID) error {
-		q := db.New(pool)
+		q := core.StoreRepo
 		l := bindings.Lifecycle{Store: q, Binder: binder.WithStore(q), Engine: bindings.EngineRef{ID: eng.ID, ClusterID: clusterID}, ConnectionID: eng.ConnectionID}
 		if _, err := l.Observe(ctx); err != nil {
 			return err
@@ -129,7 +129,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	act.SetEphemeralSweeper(func(ctx context.Context) (int, error) { return binder.SweepEphemeral(ctx, core.Queries) })
 	projector := stored.Projector{Store: core.Queries, Keyring: core.Keyring, Providers: core.Connections, Binder: binder}
 	act.SetEngineReconciler(func(ctx context.Context, eng db.Engine, clusterID pgtype.UUID, dryRun bool, onAction func(context.Context, bindings.Action)) (bindings.Report, error) {
-		q := db.New(pool)
+		q := core.StoreRepo
 		r := bindings.Reconciler{
 			Lifecycle:  bindings.Lifecycle{Store: q, Binder: binder.WithStore(q), Engine: bindings.EngineRef{ID: eng.ID, ClusterID: clusterID}, ConnectionID: eng.ConnectionID},
 			Store:      q,

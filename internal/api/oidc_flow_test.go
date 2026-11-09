@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	"github.com/galileostudio/baleia/internal/oidctest"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -40,10 +41,10 @@ func TestSafeRelativePath(t *testing.T) {
 	}
 }
 
-func oidcAttemptFixture(t *testing.T) (*db.Queries, db.AuthProvider) {
+func oidcAttemptFixture(t *testing.T) (db.Querier, db.AuthProvider) {
 	t.Helper()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	provider, err := q.CreateAuthProvider(context.Background(), db.CreateAuthProviderParams{
 		Name:      "test",
 		Type:      "oidc",
@@ -132,7 +133,7 @@ func oidcConfig(issuer string) auth.OIDCProviderConfig {
 	}
 }
 
-func oidcProviderWithConfig(t *testing.T, q *db.Queries, cfg auth.OIDCProviderConfig) db.AuthProvider {
+func oidcProviderWithConfig(t *testing.T, q db.Querier, cfg auth.OIDCProviderConfig) db.AuthProvider {
 	t.Helper()
 	ctx := context.Background()
 	provider, err := q.CreateAuthProvider(ctx, db.CreateAuthProviderParams{
@@ -154,12 +155,12 @@ func oidcProviderWithConfig(t *testing.T, q *db.Queries, cfg auth.OIDCProviderCo
 	return provider
 }
 
-func oidcProvider(t *testing.T, q *db.Queries, issuer string) db.AuthProvider {
+func oidcProvider(t *testing.T, q db.Querier, issuer string) db.AuthProvider {
 	t.Helper()
 	return oidcProviderWithConfig(t, q, oidcConfig(issuer))
 }
 
-func oidcHandlers(t *testing.T, q *db.Queries) *API {
+func oidcHandlers(t *testing.T, q db.Querier) *API {
 	t.Helper()
 	return testAPI(handlerFields{
 		queries: q, tx: directTx{q: q},
@@ -170,7 +171,7 @@ func oidcHandlers(t *testing.T, q *db.Queries) *API {
 
 type oidcFlowFixture struct {
 	pool     *pgxpool.Pool
-	q        *db.Queries
+	q        db.Querier
 	h        *API
 	idp      *oidctest.StubIDP
 	provider db.AuthProvider
@@ -184,7 +185,7 @@ func newOIDCFlow(t *testing.T) *oidcFlowFixture {
 func newOIDCFlowWithConfig(t *testing.T, config func(issuer string) auth.OIDCProviderConfig) *oidcFlowFixture {
 	t.Helper()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	idp, err := oidctest.New("", "client")
 	if err != nil {
 		t.Fatal(err)
@@ -359,7 +360,7 @@ func TestOIDC_FailureRedirects(t *testing.T) {
 	}
 
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	h := oidcHandlers(t, q)
 
 	// An unreachable issuer is a 503 IdP outage.
@@ -406,7 +407,7 @@ func TestOIDC_FailureRedirects(t *testing.T) {
 // bound to the provider id (#278).
 func TestOIDC_ConfigEncrypted(t *testing.T) {
 	t.Parallel()
-	q := db.New(testdb.New(t))
+	q := repo.New(testdb.GORM(t, testdb.New(t)))
 	provider := oidcProvider(t, q, "http://issuer.example")
 	stored, err := q.GetAuthProviderByID(context.Background(), provider.ID)
 	if err != nil {
@@ -424,7 +425,7 @@ func TestOIDC_ConfigEncrypted(t *testing.T) {
 // parsed as JSON (#278).
 func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
 	t.Parallel()
-	q := db.New(testdb.New(t))
+	q := repo.New(testdb.GORM(t, testdb.New(t)))
 	plaintext := `{"issuer_url":"http://issuer.example","client_id":"client","client_secret":"secret"}`
 	provider, err := q.CreateAuthProvider(context.Background(), db.CreateAuthProviderParams{
 		Name: "plain", Type: "oidc", ConfigEnc: plaintext, Enabled: true,
@@ -443,7 +444,7 @@ func TestOIDC_ConfigDecryptFailsClosed(t *testing.T) {
 func TestOIDC_ProviderCache(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	idp, err := oidctest.New("", "client")
 	if err != nil {
 		t.Fatal(err)
@@ -642,7 +643,7 @@ func TestOIDC_ConfigurableClaims(t *testing.T) {
 func TestOIDC_TeamMapping(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	idp, err := oidctest.New("", "client")
 	if err != nil {
 		t.Fatal(err)

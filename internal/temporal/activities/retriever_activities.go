@@ -34,7 +34,7 @@ func RetrieverDispatch(ctx context.Context, params RetrieverDispatchParams) ([]R
 }
 
 func (a *Activities) retrieverDispatch(ctx context.Context) ([]RetrieverDue, error) {
-	due, err := a.queries.ListRetrieversDue(ctx)
+	due, err := a.store.ListRetrieversDue(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list due retrievers: %w", err)
 	}
@@ -66,7 +66,7 @@ func (a *Activities) advanceRetrieverSchedule(ctx context.Context, params Advanc
 		return err
 	}
 
-	retriever, err := a.queries.GetRetrieverForRefresh(ctx, retrieverID)
+	retriever, err := a.store.GetRetrieverForRefresh(ctx, retrieverID)
 	if err != nil {
 		return fmt.Errorf("get retriever: %w", err)
 	}
@@ -78,7 +78,7 @@ func (a *Activities) advanceRetrieverSchedule(ctx context.Context, params Advanc
 	}
 	next := schedule.Next(time.Now().In(loc))
 
-	return a.queries.AdvanceRetrieverSchedule(ctx, db.AdvanceRetrieverScheduleParams{
+	return a.store.AdvanceRetrieverSchedule(ctx, db.AdvanceRetrieverScheduleParams{
 		ID:            retrieverID,
 		NextRefreshAt: pgtype.Timestamptz{Time: next, Valid: true},
 	})
@@ -101,7 +101,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		return err
 	}
 
-	retriever, err := a.queries.GetRetrieverForRefresh(ctx, retrieverID)
+	retriever, err := a.store.GetRetrieverForRefresh(ctx, retrieverID)
 	if err != nil {
 		return fmt.Errorf("get retriever: %w", err)
 	}
@@ -109,7 +109,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	// Record the run as started before executing; any failure after this point
 	// is reflected by the failed-status update below (or Temporal retries with
 	// MaximumAttempts=1, leaving a visible running row).
-	history, err := a.queries.CreateRetrieverRefreshHistory(ctx, db.CreateRetrieverRefreshHistoryParams{
+	history, err := a.store.CreateRetrieverRefreshHistory(ctx, db.CreateRetrieverRefreshHistoryParams{
 		RetrieverID:        retrieverID,
 		TemporalWorkflowID: activity.GetInfo(ctx).WorkflowExecution.ID,
 		RefreshType:        params.RefreshType,
@@ -125,7 +125,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	var engineID pgtype.UUID
 	destCatalog := retriever.DestCatalog
 	if retriever.DestBindingID.Valid {
-		binding, err := a.queries.GetBinding(ctx, retriever.DestBindingID)
+		binding, err := a.store.GetBinding(ctx, retriever.DestBindingID)
 		if err != nil {
 			return a.failRefresh(ctx, retrieverID, history.ID, fmt.Errorf("retriever %s: destination binding unavailable: %w", retriever.ID, err))
 		}
@@ -136,7 +136,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 			return a.failRefresh(ctx, retrieverID, history.ID, fmt.Errorf("retriever %s: destination engine unavailable: %w", retriever.ID, err))
 		}
 	} else {
-		row, err := a.queries.GetDefaultTrinoEngine(ctx)
+		row, err := a.store.GetDefaultTrinoEngine(ctx)
 		if err != nil {
 			return a.failRefresh(ctx, retrieverID, history.ID, fmt.Errorf("retriever %s: default engine unavailable: %w", retriever.ID, err))
 		}
@@ -172,7 +172,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		mode = a.cfg.TrinoUserIdentity
 	}
 	var result [][]string
-	identity, idErr := trinoidentity.For(ctx, a.queries, mode, retriever.CreatedBy)
+	identity, idErr := trinoidentity.For(ctx, a.store, mode, retriever.CreatedBy)
 	if idErr != nil {
 		err = fmt.Errorf("retriever owner unavailable: %w", idErr)
 	} else {
@@ -185,7 +185,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 			Tags:     queryengine.Tags{Source: "retriever"},
 			// The owner's workspace catalog scope on the destination engine
 			// (ADR 0018 §5).
-			AllowedCatalogsSource: execscope.For(a.queries, retriever.WorkspaceID, engineID),
+			AllowedCatalogsSource: execscope.For(a.store, retriever.WorkspaceID, engineID),
 		}
 		result, err = queryengine.CollectStringsWith(ctx, eng, spec, sql, retrieverMaxResultRows, cb)
 	}
@@ -216,7 +216,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 	if errorMsg != nil {
 		retrieverStatus = "error"
 	}
-	if err := a.queries.UpdateRetrieverAfterRefresh(ctx, db.UpdateRetrieverAfterRefreshParams{
+	if err := a.store.UpdateRetrieverAfterRefresh(ctx, db.UpdateRetrieverAfterRefreshParams{
 		ID:        retrieverID,
 		Status:    retrieverStatus,
 		ErrorCode: errorCode,
@@ -224,7 +224,7 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 		return fmt.Errorf("update retriever after refresh: %w", err)
 	}
 
-	if err := a.queries.UpdateRetrieverRefreshHistory(ctx, db.UpdateRetrieverRefreshHistoryParams{
+	if err := a.store.UpdateRetrieverRefreshHistory(ctx, db.UpdateRetrieverRefreshHistoryParams{
 		ID:            history.ID,
 		Status:        status,
 		RowsProcessed: rowsProcessed,
@@ -247,14 +247,14 @@ func (a *Activities) retrieverRefresh(ctx context.Context, params RetrieverRefre
 func (a *Activities) failRefresh(ctx context.Context, retrieverID, historyID pgtype.UUID, err error) error {
 	msg := err.Error()
 	code := retrieverErrorCode(err)
-	if uerr := a.queries.UpdateRetrieverAfterRefresh(ctx, db.UpdateRetrieverAfterRefreshParams{
+	if uerr := a.store.UpdateRetrieverAfterRefresh(ctx, db.UpdateRetrieverAfterRefreshParams{
 		ID:        retrieverID,
 		Status:    "error",
 		ErrorCode: &code,
 	}); uerr != nil {
 		return fmt.Errorf("update retriever after refresh: %w", uerr)
 	}
-	if uerr := a.queries.UpdateRetrieverRefreshHistory(ctx, db.UpdateRetrieverRefreshHistoryParams{
+	if uerr := a.store.UpdateRetrieverRefreshHistory(ctx, db.UpdateRetrieverRefreshHistoryParams{
 		ID:           historyID,
 		Status:       "failed",
 		ErrorMessage: &msg,

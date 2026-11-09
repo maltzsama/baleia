@@ -42,7 +42,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"github.com/galileostudio/baleia/internal/trino"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 	"gorm.io/gorm"
@@ -65,9 +64,10 @@ type Core struct {
 	Logger  *slog.Logger
 	Metrics *metrics.Registry
 	Pool    *pgxpool.Pool
-	Queries *db.Queries
-	// Store is the GORM connection for the domains migrated off sqlc
-	// (#769–#774).
+	// Queries is the GORM-backed store, kept under the sqlc-shaped interface
+	// the services still consume (stage A of #761, ADR 0020).
+	Queries db.Querier
+	// Store is the GORM connection every domain persists through (ADR 0020).
 	Store *gorm.DB
 	// StoreRepo is the GORM-backed store shared by the migrated domains.
 	StoreRepo *repo.Repo
@@ -159,7 +159,6 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	}
 	c.onClose(c.Pool.Close)
 	c.Metrics.WatchPool(c.Pool)
-	c.Queries = db.New(c.Pool)
 
 	backend, err := store.ResolveBackend(cfg.StoreBackend, cfg.DatabaseURL)
 	if err != nil {
@@ -177,6 +176,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	}
 	c.onClose(func() { _ = store.Close(c.Store) })
 	c.StoreRepo = repo.New(c.Store)
+	c.Queries = c.StoreRepo
 
 	// Credentials are sealed with BALEIA_ENCRYPTION_KEY (never JWT_SECRET).
 	// With stored credentials and no key, refuse to start rather than serve
@@ -227,15 +227,9 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.Engines = queryengine.NewManager(c.Queries, c.Keyring, c.Connections, c.Dialer, kinds)
 	// Catalog managers set to per-user identity authorize each user with
 	// their identity-provider token, carried by every query session (#648).
-	var oidcStore oidclogin.Store = c.Queries
-	var tokenStore idptoken.Store = c.Queries
-	tokenTx := func(ctx context.Context, fn func(idptoken.Store) error) error {
-		return pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error { return fn(db.New(tx)) })
-	}
-	if c.Store != nil {
-		r := repo.New(c.Store)
-		oidcStore, tokenStore, tokenTx = r, r, r.TxIDPToken
-	}
+	oidcStore := oidclogin.Store(c.StoreRepo)
+	tokenStore := idptoken.Store(c.StoreRepo)
+	tokenTx := c.StoreRepo.TxIDPToken
 	c.OIDC = oidclogin.New(oidcStore, c.Queries, c.Keyring, oidclogin.DiscoverIssuer, oidclogin.Config{
 		PublicURL: cfg.PublicURL,
 		CacheTTL:  time.Hour,

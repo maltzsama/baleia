@@ -6,7 +6,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/workload"
-	"github.com/galileostudio/baleia/internal/workload/resourcegroups"
+	"github.com/galileostudio/baleia/internal/workload/resourcegroups/publish"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -35,7 +35,7 @@ type engineQueueTxStore interface {
 type sqlEngineQueueTxStore struct{ db.Querier }
 
 func (s sqlEngineQueueTxStore) PublishTrinoResourceGroups(ctx context.Context, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
-	return resourcegroups.Publish(ctx, s.Querier, engineID, environment, doc)
+	return publish.Publish(ctx, s.Querier, engineID, environment, doc)
 }
 
 // capacityStore returns the capacity reader: GORM when configured, sqlc

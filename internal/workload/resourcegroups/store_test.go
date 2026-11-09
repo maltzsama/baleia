@@ -21,7 +21,7 @@ func TestStore_WriteAndRollback(t *testing.T) {
 	ctx := context.Background()
 	engineID := insertEngine(t, pool)
 
-	store := New(pool)
+	store := New(testdb.GORM(t, pool))
 
 	doc := workload.Generate(map[queryengine.WorkloadClass]workload.Capacity{}, nil)
 	rev1, err := store.Write(ctx, engineID, "production", doc)
@@ -67,7 +67,7 @@ func TestStore_RollbackUnknownRevision(t *testing.T) {
 	ctx := context.Background()
 	engineID := insertEngine(t, pool)
 
-	store := New(pool)
+	store := New(testdb.GORM(t, pool))
 	if err := store.Rollback(ctx, engineID, "production", 99); !errors.Is(err, ErrRevisionNotFound) {
 		t.Fatalf("rollback = %v, want ErrRevisionNotFound", err)
 	}
@@ -80,7 +80,7 @@ func TestStore_WriteInvalid(t *testing.T) {
 	ctx := context.Background()
 	engineID := insertEngine(t, pool)
 
-	store := New(pool)
+	store := New(testdb.GORM(t, pool))
 	_, err := store.Write(ctx, engineID, "production", workload.ResourceGroups{})
 	if err == nil {
 		t.Fatal("Write accepted an invalid document")
@@ -101,7 +101,7 @@ func TestStore_WriteClampsRootSums(t *testing.T) {
 		queryengine.ClassHeavy:       huge,
 		queryengine.ClassBackground:  huge,
 	}, nil)
-	if _, err := New(pool).Write(ctx, engineID, "production", doc); err != nil {
+	if _, err := New(testdb.GORM(t, pool)).Write(ctx, engineID, "production", doc); err != nil {
 		t.Fatalf("write = %v", err)
 	}
 	var maxQueued, limit int64

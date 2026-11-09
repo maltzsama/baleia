@@ -15,12 +15,12 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/server"
-	"github.com/jackc/pgx/v5"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/jackc/pgx/v5/pgtype"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -84,8 +84,8 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 
 	// Engine endpoints live in the database; TRINO_URL only seeds and updates
 	// the default Trino engine Baleia created itself.
-	if err := pgx.BeginFunc(ctx, core.Pool, func(tx pgx.Tx) error {
-		return bootstrap.EnsureDefaultTrinoEngine(ctx, logger, db.New(tx), bootstrap.DefaultTrinoEngine{
+	if err := core.Store.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return bootstrap.EnsureDefaultTrinoEngine(ctx, logger, repo.New(tx), bootstrap.DefaultTrinoEngine{
 			URL: cfg.TrinoURL, ServiceUser: cfg.TrinoServiceUser, AdminUser: cfg.TrinoAdminUser,
 			Password: cfg.TrinoPassword != "", CA: core.TrinoCA, Seal: sealCredentials(core.Keyring),
 		})

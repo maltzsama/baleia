@@ -6,7 +6,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 )
 
@@ -19,7 +19,7 @@ func workloadRuleCtx(role string) context.Context {
 func TestWorkloadRulesCRUDAndTest(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	mem := &memAudit{}
 	h := testAPI(handlerFields{queries: q, tx: directTx{q: q}, audit: mem})
 	admin := workloadRuleCtx(authzRoleAdmin)

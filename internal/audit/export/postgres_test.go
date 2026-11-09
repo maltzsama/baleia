@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 )
 
@@ -15,7 +15,7 @@ import (
 // with empty strings for NULLs, and the cursor round-trips.
 func TestPostgres_EventsAndCursor(t *testing.T) {
 	t.Parallel()
-	q := db.New(testdb.New(t))
+	q := repo.New(testdb.GORM(t, testdb.New(t)))
 	ctx := context.Background()
 	rec := audit.NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
 	for range 2 {

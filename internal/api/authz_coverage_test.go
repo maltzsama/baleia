@@ -343,15 +343,15 @@ var operationAccess = map[string]access{
 	"ValidateSemanticMetricDefinition": checked("metadataWorkspace", "validateSemanticMetric"),
 	"ListSemanticTags":                 checked("metadataWorkspace", "docs.Tags"),
 	// Engine-aware monitoring (#117).
-	"ListMonitoringEngines": checked("PrincipalFromContext", "Engine"),
-	"GetEngineCluster":      checked("PrincipalFromContext", "engineForMonitoring"),
+	"ListMonitoringEngines":  checked("PrincipalFromContext", "Engine"),
+	"GetEngineCluster":       checked("PrincipalFromContext", "engineForMonitoring"),
 	"ListMonitoringQueries":  checked("PrincipalFromContext", "engineForMonitoring"),
 	"GetMonitoringQuery":     checked("PrincipalFromContext", "engineForMonitoring"),
 	"StreamMonitoringEvents": checked("PrincipalFromContext", "engineForMonitoring"),
-	"KillMonitoringQuery":   checked("PrincipalFromContext", "engineForMonitoring"),
-	"ListTableHealth":       checked("PrincipalFromContext", "catalogForMonitoring"),
-	"CreateMaintenanceRun":  checked("PrincipalFromContext", "catalogForMonitoring"),
-	"ListMaintenanceRuns":   checked("PrincipalFromContext", "catalogForMonitoring"),
+	"KillMonitoringQuery":    checked("PrincipalFromContext", "engineForMonitoring"),
+	"ListTableHealth":        checked("PrincipalFromContext", "catalogForMonitoring"),
+	"CreateMaintenanceRun":   checked("PrincipalFromContext", "catalogForMonitoring"),
+	"ListMaintenanceRuns":    checked("PrincipalFromContext", "catalogForMonitoring"),
 	// Per-table maintenance (#500): maintenanceTable resolves the principal
 	// and checks the catalog through catalogForMonitoring (view or write).
 	"GetTableMaintenance":       checked("maintenanceTable"),
@@ -397,7 +397,7 @@ var routeAccess = map[string]access{
 	// POST /ws-tickets; the JWT never appears in the URL (#26).
 	"GET /api/v1/ws/workspaces/{id}/executions/{execution_id}": {kind: kindChecked, pkg: "../ws", calls: []string{"Consume", "CheckWorkspaceAccess"}},
 
-	"GET /workspaces/{id}/catalogs":                                                                          checked("Workspace"),
+	"GET /workspaces/{id}/catalogs": checked("Workspace"),
 }
 
 // ── source model ─────────────────────────────────────────────────────────────

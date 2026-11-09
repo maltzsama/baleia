@@ -290,19 +290,13 @@ func orderCandidates(c []roundCandidate) {
 // catalog rounds take turns instead of each filling the free capacity they
 // read.
 func (a *Activities) reserveRuns(ctx context.Context, binding db.CatalogBinding, candidates []roundCandidate) ([]PlannedRun, error) {
-	if a.store != nil {
-		return a.reserveRunsStore(ctx, binding, candidates)
+	r, ok := a.store.(*repo.Repo)
+	if !ok {
+		return nil, errors.New("maintenance runs need the GORM store")
 	}
-	return a.reserveRunsSQLC(ctx, binding, candidates)
-}
-
-// reserveRunsStore is the GORM reservation: the engine rows are locked for
-// update so concurrent rounds serialize, and each insert runs in a savepoint
-// so a table's one-running index refusing it does not abort the transaction.
-func (a *Activities) reserveRunsStore(ctx context.Context, binding db.CatalogBinding, candidates []roundCandidate) ([]PlannedRun, error) {
 	limit := a.cfg.MaintenanceConcurrency()
 	var out []PlannedRun
-	err := a.store.TxOps(ctx, func(tx *repo.Repo) error {
+	err := r.TxOps(ctx, func(tx *repo.Repo) error {
 		if err := tx.LockMaintenanceCapacity(ctx); err != nil {
 			return err
 		}
@@ -336,56 +330,6 @@ func (a *Activities) reserveRunsStore(ctx context.Context, binding db.CatalogBin
 		return nil
 	})
 	return out, err
-}
-
-// reserveRunsSQLC is the fallback for tests that build the activities without
-// the GORM store.
-func (a *Activities) reserveRunsSQLC(ctx context.Context, binding db.CatalogBinding, candidates []roundCandidate) ([]PlannedRun, error) {
-	tx, err := a.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	q := db.New(tx)
-	if err := q.LockMaintenanceCapacity(ctx); err != nil {
-		return nil, err
-	}
-	running, err := q.CountRunningMaintenanceRuns(ctx)
-	if err != nil {
-		return nil, err
-	}
-	limit := a.cfg.MaintenanceConcurrency()
-	var out []PlannedRun
-	for _, c := range candidates {
-		if int(running) >= limit {
-			break
-		}
-		// A savepoint keeps the transaction usable when the table's
-		// one-running index refuses the insert.
-		sp, err := tx.Begin(ctx)
-		if err != nil {
-			return nil, err
-		}
-		run, err := RecordMaintenanceRun(ctx, db.New(sp), c.key, binding, c.row, c.step, c.settings, string(maintenance.Automatic), pgtype.UUID{})
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			_ = sp.Rollback(ctx)
-			continue // a run started on the table meanwhile
-		}
-		if err != nil {
-			_ = sp.Rollback(ctx)
-			return nil, err
-		}
-		if err := sp.Commit(ctx); err != nil {
-			return nil, err
-		}
-		running++
-		out = append(out, PlannedRun{RunID: uuid.UUID(run.ID.Bytes).String(), WorkflowID: run.WorkflowID, TimeoutSeconds: c.settings.TimeoutSeconds})
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 // maintenanceRunRecorder stores one planned run; the sqlc querier and the

@@ -10,7 +10,6 @@ import (
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/storage"
@@ -31,7 +30,7 @@ func testDeps(t *testing.T) Deps {
 		t.Fatal(err)
 	}
 	return Deps{
-		Data:     DataDeps{Queries: db.New(pool), Pool: pool, Store: openTestStore(t, pool)},
+		Data:     DataDeps{Pool: pool, Store: openTestStore(t, pool)},
 		Engines:  EngineDeps{Connections: testRegistry(t), Engines: testEngines(), Kinds: testKinds(t, nil), Dialects: dialect.NewRegistry(), Binder: bindtrino.New(slog.New(slog.DiscardHandler), nil, nil), Dialer: d},
 		Settings: SettingsFromConfig(&config.Config{}),
 		Temporal: &fakeTemporalClient{},
@@ -47,7 +46,7 @@ func TestNewAPI_RequiresDependencies(t *testing.T) {
 	if err == nil {
 		t.Fatal("NewAPI with missing dependencies returned no error")
 	}
-	for _, want := range []string{"Data.Pool", "Data.Queries", "Engines.Binder", "Engines.Dialer", "Storage", "Temporal"} {
+	for _, want := range []string{"Data.Pool", "Data.Store", "Engines.Binder", "Engines.Dialer", "Storage", "Temporal"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not name %s", err, want)
 		}

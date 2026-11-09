@@ -3,7 +3,6 @@ package activities
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"go.temporal.io/sdk/activity"
 )
@@ -18,26 +17,13 @@ func RefreshTablePopularity(ctx context.Context, _ struct{}) error {
 }
 
 func (a *Activities) refreshTablePopularity(ctx context.Context) error {
-	if a.store != nil {
-		if err := a.store.RefreshTablePopularity(ctx); err != nil {
-			return err
-		}
-		activity.GetLogger(ctx).Info("popular tables refreshed")
+	refresher, ok := a.store.(interface {
+		RefreshTablePopularity(context.Context) error
+	})
+	if !ok {
 		return nil
 	}
-	tx, err := a.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
-	q := db.New(tx)
-	if err := q.DeleteTablePopularity(ctx); err != nil {
-		return err
-	}
-	if err := q.InsertTablePopularity(ctx); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := refresher.RefreshTablePopularity(ctx); err != nil {
 		return err
 	}
 	activity.GetLogger(ctx).Info("popular tables refreshed")

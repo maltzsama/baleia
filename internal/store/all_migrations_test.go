@@ -143,8 +143,8 @@ func TestAllMigrationsUpgradeFromVersionOne(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
-	if len(applied) != 2 || applied[0].Version != 2 || applied[1].Version != 3 {
-		t.Fatalf("applied = %+v, want versions 2 and 3", applied)
+	if len(applied) != 3 || applied[0].Version != 2 || applied[1].Version != 3 || applied[2].Version != 4 {
+		t.Fatalf("applied = %+v, want versions 2, 3 and 4", applied)
 	}
 	if !db.Migrator().HasTable(&model.SetupLock{}) {
 		t.Fatal("setup_locks was not created by migration 2")
@@ -156,7 +156,7 @@ func TestAllMigrationsUpgradeFromVersionOne(t *testing.T) {
 	if err := db.Model(&SchemaMigration{}).Order("version").Pluck("version", &versions).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(versions) != 3 || versions[0] != 1 || versions[1] != 2 || versions[2] != 3 {
-		t.Fatalf("ledger versions = %v, want 1, 2, 3", versions)
+	if len(versions) != 4 || versions[0] != 1 || versions[1] != 2 || versions[2] != 3 || versions[3] != 4 {
+		t.Fatalf("ledger versions = %v, want 1, 2, 3, 4", versions)
 	}
 }

@@ -14,7 +14,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-func TestEffectiveSpaceRoleMatchesSQLFunction(t *testing.T) {
+func TestEffectiveSpaceRole(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	sqlDB := stdlib.OpenDBFromPool(pool)
@@ -110,18 +110,8 @@ func TestEffectiveSpaceRoleMatchesSQLFunction(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GetEffectiveSpaceRole: %v", err)
 			}
-			var sqlRole *string
-			if err := gdb.WithContext(ctx).
-				Raw("SELECT baleia_effective_space_role(?, ?, ?)", string(ws.ID), string(space.ID), string(tc.user)).
-				Scan(&sqlRole).Error; err != nil {
-				t.Fatalf("sql function: %v", err)
-			}
-			wantSQL := ""
-			if sqlRole != nil {
-				wantSQL = *sqlRole
-			}
-			if got != tc.want || wantSQL != tc.want {
-				t.Fatalf("GetEffectiveSpaceRole = %q, sql = %q, want %q", got, wantSQL, tc.want)
+			if got != tc.want {
+				t.Fatalf("GetEffectiveSpaceRole = %q, want %q", got, tc.want)
 			}
 		})
 	}

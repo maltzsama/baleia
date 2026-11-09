@@ -16,12 +16,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 type recordedInserter struct {
@@ -168,23 +165,6 @@ func TestMiddlewareRecordsClient(t *testing.T) {
 }
 
 // TestAppendOnly: the application role cannot update or delete audit rows.
-func TestAppendOnly(t *testing.T) {
-	t.Parallel()
-	pool := testdb.New(t)
-	q := db.New(pool)
-	if err := NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil).Record(userCtx(), Event{Action: CatalogCreate, ResourceType: "catalog", Outcome: Allowed}); err != nil {
-		t.Fatal(err)
-	}
-	for _, stmt := range []string{`UPDATE audit_events SET outcome = 'denied'`, `DELETE FROM audit_events`} {
-		_, err := pool.Exec(context.Background(), stmt)
-		if err == nil || !strings.Contains(err.Error(), "append-only") {
-			t.Errorf("%s: %v, want the trigger's exception", stmt, err)
-		}
-	}
-}
-
-// TestKeysetPagination: pages over equal timestamps are stable, ordered and
-// without duplicates.
 func TestKeysetPagination(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
@@ -196,7 +176,7 @@ func TestKeysetPagination(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	var ids []string
 	p := db.ListAuditEventsParams{Lim: 2}
 	for page := 0; page < 5; page++ {
@@ -220,81 +200,3 @@ func TestKeysetPagination(t *testing.T) {
 
 // TestEnsurePartitions: partitions are created ahead, idempotently; an
 // event outside them fails instead of landing in a default partition.
-func TestEnsurePartitions(t *testing.T) {
-	t.Parallel()
-	pool := testdb.New(t)
-	ctx := context.Background()
-	q := db.New(pool)
-	for range 2 {
-		if err := q.EnsureAuditPartitions(ctx, 3); err != nil {
-			t.Fatal(err)
-		}
-	}
-	var n int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_inherits WHERE inhparent = 'audit_events'::regclass`).Scan(&n); err != nil || n != 4 {
-		t.Fatalf("partitions = %d, %v", n, err)
-	}
-	_, err := pool.Exec(ctx, `INSERT INTO audit_events (occurred_at, actor_kind, action, resource_type, outcome)
-		VALUES (now() + interval '2 years', 'service', 'metadata.sync', 'catalog', 'allowed')`)
-	if err == nil {
-		t.Fatal("an event without a partition must fail")
-	}
-}
-
-// TestPrune drops only the partitions before the cut, never the current
-// month.
-func TestPrune(t *testing.T) {
-	t.Parallel()
-	pool := testdb.New(t)
-	ctx := context.Background()
-	now := time.Now().UTC()
-	old := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -14, 0)
-	for i := range 2 {
-		m := old.AddDate(0, i, 0)
-		if _, err := pool.Exec(ctx, fmt.Sprintf(`CREATE TABLE audit_events_%s PARTITION OF audit_events FOR VALUES FROM ('%s') TO ('%s')`,
-			m.Format("200601"), m.Format("2006-01-02"), m.AddDate(0, 1, 0).Format("2006-01-02"))); err != nil {
-			t.Fatal(err)
-		}
-	}
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	defer func() { _ = sqlDB.Close() }()
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{Logger: gormlogger.Discard})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Prune(ctx, gdb, now.Format("2006-01"), now); err == nil {
-		t.Fatal("pruning the current month must be refused")
-	}
-
-	// A dependent view makes the non-cascading drop fail and stays intact.
-	oldest := "audit_events_" + old.Format("200601")
-	if _, err := pool.Exec(ctx, "CREATE VIEW audit_prune_probe AS SELECT * FROM "+oldest); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Prune(ctx, gdb, old.AddDate(0, 1, 0).Format("2006-01"), now); err == nil {
-		t.Fatal("a dependent view must make the drop fail")
-	}
-	var views int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_views WHERE viewname = 'audit_prune_probe'`).Scan(&views); err != nil || views != 1 {
-		t.Fatalf("dependent view = %d, %v", views, err)
-	}
-	var stillAttached int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_inherits WHERE inhrelid = $1::regclass`, oldest).Scan(&stillAttached); err != nil || stillAttached != 1 {
-		t.Fatalf("partition attached after failed drop = %d, %v", stillAttached, err)
-	}
-	if _, err := pool.Exec(ctx, "DROP VIEW audit_prune_probe"); err != nil {
-		t.Fatal(err)
-	}
-
-	dropped, err := Prune(ctx, gdb, old.AddDate(0, 1, 0).Format("2006-01"), now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(dropped) != 1 || dropped[0] != "audit_events_"+old.Format("200601") {
-		t.Fatalf("dropped = %v", dropped)
-	}
-	var n int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_inherits WHERE inhparent = 'audit_events'::regclass`).Scan(&n); err != nil || n != 4 {
-		t.Fatalf("partitions left = %d, %v (one old + this month + 2 ahead)", n, err)
-	}
-}

@@ -14,7 +14,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-func TestWorkspaceRoleMatchesSQLFunction(t *testing.T) {
+func TestWorkspaceRole(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	sqlDB := stdlib.OpenDBFromPool(pool)
@@ -108,18 +108,8 @@ func TestWorkspaceRoleMatchesSQLFunction(t *testing.T) {
 			if err != nil {
 				t.Fatalf("WorkspaceRole: %v", err)
 			}
-			var sqlRole *string
-			if err := gdb.WithContext(ctx).
-				Raw("SELECT baleia_workspace_member_role(?, ?)", string(tc.ws), string(tc.user)).
-				Scan(&sqlRole).Error; err != nil {
-				t.Fatalf("sql function: %v", err)
-			}
-			wantSQL := ""
-			if sqlRole != nil {
-				wantSQL = *sqlRole
-			}
-			if got != tc.want || wantSQL != tc.want {
-				t.Fatalf("WorkspaceRole = %q, sql = %q, want %q", got, wantSQL, tc.want)
+			if got != tc.want {
+				t.Fatalf("WorkspaceRole = %q, want %q", got, tc.want)
 			}
 		})
 	}

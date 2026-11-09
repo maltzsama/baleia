@@ -1,14 +1,21 @@
-package idptoken
+package idptoken_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/identity/idptoken"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestTokens_Postgres runs the token store on the real schema: the sign-in
@@ -19,12 +26,10 @@ func TestTokens_Postgres(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	pool := testdb.New(t)
-	q := db.New(pool)
-	tx := func(ctx context.Context, fn func(Store) error) error {
-		return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error { return fn(db.New(tx)) })
-	}
-	r := &rotatingRefresher{valid: "rt-0"}
-	tk := New(q, tx, keyring(t), r, nil)
+	q := repo.New(testdb.GORM(t, pool))
+	tx := q.TxIDPToken
+	r := &dbRotatingRefresher{valid: "rt-0"}
+	tk := idptoken.New(q, tx, dbTestKeyring(t), r, nil)
 
 	ap, err := q.CreateAuthProvider(ctx, db.CreateAuthProviderParams{Name: "corp", Type: "oidc", ConfigEnc: "x", Enabled: true})
 	if err != nil {
@@ -71,4 +76,38 @@ func TestTokens_Postgres(t *testing.T) {
 	if got, _ := tk.Access(ctx, carol.ID); got != "" {
 		t.Error("a disabled provider's sign-in kept identity-provider tokens")
 	}
+}
+
+// dbRotatingRefresher accepts each refresh token once and issues the next, as
+// a provider with refresh-token rotation does.
+type dbRotatingRefresher struct {
+	mu    sync.Mutex
+	valid string
+	n     int
+	calls atomic.Int32
+	err   error
+}
+
+func (r *dbRotatingRefresher) Refresh(_ context.Context, _ pgtype.UUID, rt string) (auth.IDPTokens, error) {
+	r.calls.Add(1)
+	if r.err != nil {
+		return auth.IDPTokens{}, r.err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if rt != r.valid {
+		return auth.IDPTokens{}, errors.New("invalid_grant: refresh token reused")
+	}
+	r.n++
+	r.valid = fmt.Sprintf("rt-%d", r.n)
+	return auth.IDPTokens{AccessToken: fmt.Sprintf("access-%d", r.n), RefreshToken: r.valid, Expiry: time.Now().Add(time.Hour)}, nil
+}
+
+func dbTestKeyring(t *testing.T) *crypto.Keyring {
+	t.Helper()
+	kr, err := crypto.NewKeyring("test-secret-0123456789abcdef-0123456789", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return kr
 }

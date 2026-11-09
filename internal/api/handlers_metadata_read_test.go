@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -53,6 +53,8 @@ func newMetaFixture(t *testing.T) *metaFixture {
 	f.owner, f.stranger = ownerID.String(), strangerID.String()
 	scan(&f.ws, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ('w', 'personal', 'p', $1) RETURNING id`, ownerID)
 	scan(&f.strangerWS, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ('w2', 'personal', 'p2', $1) RETURNING id`, strangerID)
+	addDefaultSpace(t, pool, f.ws)
+	addDefaultSpace(t, pool, f.strangerWS)
 
 	var conn, trinoConn, engine openapi_types.UUID
 	scan(&conn, `INSERT INTO catalog_connections (name, type, url) VALUES ('pol', 'polaris', 'http://p') RETURNING id`)
@@ -86,7 +88,7 @@ func newMetaFixture(t *testing.T) *metaFixture {
 	var deep openapi_types.UUID
 	table(&deep, f.lake, `{ops,"b.c"}`, "deep", false)
 
-	f.h = testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: db.New(pool), store: openTestStore(t, pool), tx: poolTx{pool: pool}}) // no engines: reads never call one
+	f.h = testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: repo.New(testdb.GORM(t, pool)), store: openTestStore(t, pool), tx: poolTx{pool: pool}}) // no engines: reads never call one
 	return f
 }
 

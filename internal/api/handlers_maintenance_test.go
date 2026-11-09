@@ -11,9 +11,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/fake"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -119,12 +119,12 @@ func newMaintenanceFixture(t *testing.T, bindingMode string) *maintenanceFixture
 	}
 	f.setApplied(t, `{"iceberg.expire-snapshots.min-retention": "1h", "iceberg.remove-orphan-files.min-retention": "1h"}`, "trino")
 	f.h = testAPI(handlerFields{
-		queries:  db.New(pool),
-		pool:     pool,
-		tx:       poolTx{pool: pool},
-		engines:  maintEngines{},
-		audit:    f.audit,
-		settings: SettingsFromConfig(&config.Config{IcebergMaintenanceMinRetention: time.Hour}),
+		queries:        repo.New(testdb.GORM(t, pool)),
+		pool:           pool,
+		tx:             poolTx{pool: pool},
+		engines:        maintEngines{},
+		audit:          f.audit,
+		settings:       SettingsFromConfig(&config.Config{IcebergMaintenanceMinRetention: time.Hour}),
 		temporalClient: &fakeTemporalClient{},
 	})
 	return f

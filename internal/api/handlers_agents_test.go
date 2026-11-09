@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
@@ -58,9 +59,10 @@ func newAgentsFixture(t *testing.T, enabled bool) *agentsFixture {
 		 VALUES ('agents-ws', 'personal', 'agents_polaris', $1) RETURNING id`, f.ownerID).Scan(&f.wsID); err != nil {
 		t.Fatal(err)
 	}
+	addDefaultSpace(t, pool, f.wsID)
 
 	f.h = testAPI(handlerFields{
-		queries:  db.New(pool),
+		queries:  repo.New(testdb.GORM(t, pool)),
 		pool:     pool,
 		tx:       poolTx{pool: pool},
 		settings: SettingsFromConfig(&config.Config{AgentsEnabled: enabled}),
@@ -220,6 +222,7 @@ func TestUpdateAgent_InvalidWorkspaceLeavesNoWrite(t *testing.T) {
 		 VALUES ('foreign-ws', 'personal', 'foreign_polaris', $1) RETURNING id`, f.otherID).Scan(&foreign); err != nil {
 		t.Fatal(err)
 	}
+	addDefaultSpace(t, f.pool, foreign)
 
 	name := "renamed"
 	got, err := f.h.UpdateAgent(f.owner, UpdateAgentRequestObject{

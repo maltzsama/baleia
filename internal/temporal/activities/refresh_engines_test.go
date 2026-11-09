@@ -107,7 +107,7 @@ func TestRefreshEngineCatalogs(t *testing.T) {
 		trinoRow,
 	}}
 	var observed []pgtype.UUID
-	a := &Activities{dialects: dialect.NewRegistry(), queries: q, connections: reg}
+	a := &Activities{dialects: dialect.NewRegistry(), store: q, connections: reg}
 	a.SetEngineObserver(func(_ context.Context, eng db.Engine, cluster pgtype.UUID) error {
 		observed = append(observed, eng.ID, cluster)
 		return nil

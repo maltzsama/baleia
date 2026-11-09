@@ -14,7 +14,7 @@ const auditMonthsAhead = 3
 // auditMonthsAhead months ahead; it never drops one (retention is the
 // operator's `migrate -cmd=audit-prune`). Idempotent.
 func EnsureAuditPartitions(ctx context.Context) error {
-	err := defaultActivities.queries.EnsureAuditPartitions(ctx, auditMonthsAhead)
+	err := defaultActivities.store.EnsureAuditPartitions(ctx, auditMonthsAhead)
 	defaultActivities.passDone(schedules.AuditPartitions, err)
 	return err
 }

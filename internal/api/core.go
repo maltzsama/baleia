@@ -31,10 +31,12 @@ import (
 // group embeds the same *core and owns the rest of its state.
 type core struct {
 	// logger is the process logger (#379); every group logs through it.
-	logger  *slog.Logger
+	logger *slog.Logger
+	// queries is the GORM store under the sqlc-shaped interface the services
+	// consume. Tests may inject a fake; production always holds *repo.Repo.
 	queries db.Querier
-	// store is the GORM connection for domains migrated off sqlc (#769–#774);
-	// nil in tests, which keep using queries.
+	// store is the GORM connection. Production always sets it; fake-only
+	// unit tests may leave it nil and inject their querier through queries.
 	store *gorm.DB
 	// serviceAccounts persists service accounts (#653): GORM when store is
 	// configured, sqlc otherwise (#769).

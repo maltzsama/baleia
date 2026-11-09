@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -17,7 +18,7 @@ import (
 func TestApplyWorkspaces_Postgres(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	q := db.New(testdb.New(t))
+	q := repo.New(testdb.GORM(t, testdb.New(t)))
 	pw := "x"
 	newUser := func(email string) db.User {
 		u, err := q.CreateUser(ctx, db.CreateUserParams{Name: email, Email: email, PasswordHash: &pw, Role: "member", AuthProvider: "local"})

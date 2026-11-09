@@ -312,10 +312,11 @@ type directoryReads interface {
 }
 
 func (a *Activities) directoryReads() directoryReads {
-	if a.store != nil {
-		return a.store
+	r, ok := a.store.(directoryReads)
+	if !ok {
+		return nil
 	}
-	return a.queries
+	return r
 }
 
 // directoryWrites is the write side of one pass.
@@ -329,21 +330,16 @@ type directoryWrites interface {
 	MarkDirectorySynced(ctx context.Context, id pgtype.UUID) error
 }
 
-// directoryWrites runs fn in one transaction over the directory store: the
-// GORM store when configured, the pgx querier otherwise.
+// directoryWrites runs fn in one transaction over the GORM directory store.
 func (a *Activities) directoryWrites(ctx context.Context, fn func(directoryWrites) error) error {
-	if a.store != nil {
-		return a.store.TxDirectory(ctx, func(r *repo.Repo) error { return fn(r) })
+	if r, ok := a.store.(*repo.Repo); ok {
+		return r.TxDirectory(ctx, func(tx *repo.Repo) error { return fn(tx) })
 	}
-	tx, err := a.pool.Begin(ctx)
-	if err != nil {
-		return err
+	writes, ok := a.store.(directoryWrites)
+	if !ok {
+		return errors.New("directory reconciliation needs the GORM store")
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := fn(db.New(tx)); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return fn(writes)
 }
 
 func (a *Activities) finishReconcileRun(ctx context.Context, run db.DirectoryReconcileRun, outcome string, seen, suspended, reinstated int, runErr error, actions []reconcileAction) {

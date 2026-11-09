@@ -21,6 +21,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/icebergrest"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -320,7 +321,7 @@ func TestSweeper_DropsExpired(t *testing.T) {
 	if err := pool.QueryRow(ctx, `INSERT INTO trino_clusters (name, coordinator_url) VALUES ('sweeper-test', 'http://t') RETURNING id`).Scan(&cluster); err != nil {
 		t.Fatal(err)
 	}
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	ins := func(name string, ttl time.Duration) {
 		if err := q.InsertEphemeralRegistryRow(ctx, db.InsertEphemeralRegistryRowParams{ClusterID: cluster, CatalogName: name, ConnectorName: "postgresql",
 			Column4: []byte("{}"), Ttl: pgtype.Interval{Microseconds: ttl.Microseconds(), Valid: true}}); err != nil {

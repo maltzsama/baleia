@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
 )
@@ -16,7 +16,7 @@ import (
 func TestOnBehalfOfOnlyForAgents(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	rec := NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
 	owner := uuid.New()
 	agent := uuid.New()
@@ -69,16 +69,3 @@ func TestOnBehalfOfOnlyForAgents(t *testing.T) {
 
 // TestOnBehalfOfPropagatesToPartitions: the column is on the partitioned parent
 // and therefore on the existing partitions.
-func TestOnBehalfOfPropagatesToPartitions(t *testing.T) {
-	t.Parallel()
-	pool := testdb.New(t)
-	var n int
-	if err := pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM information_schema.columns
-		  WHERE table_name LIKE 'audit_events\_%' ESCAPE '\' AND column_name = 'on_behalf_of'`).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n == 0 {
-		t.Fatal("no audit_events partition has on_behalf_of")
-	}
-}

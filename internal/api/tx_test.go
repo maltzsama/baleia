@@ -5,7 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -36,7 +37,7 @@ func TestInviteUser_TokenFailureLeavesNoUser(t *testing.T) {
 	if _, err := f.h.InviteUser(ctxAs(f.admin, "admin"), InviteUserRequestObject{Body: &InviteUserRequest{Email: "new@x.io", Role: "member"}}); err == nil {
 		t.Fatal("invite with a failed token write returned no error")
 	}
-	if _, err := db.New(f.pool).GetUserByEmail(context.Background(), "new@x.io"); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := repo.New(testdb.GORM(t, f.pool)).GetUserByEmail(context.Background(), "new@x.io"); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("user after a failed invite: err = %v, want no rows", err)
 	}
 }
@@ -59,7 +60,7 @@ func TestUpdateAgent_StatusFailureKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := db.New(f.pool).GetAgentByID(context.Background(), id)
+	got, err := repo.New(testdb.GORM(t, f.pool)).GetAgentByID(context.Background(), id)
 	if err != nil {
 		t.Fatal(err)
 	}

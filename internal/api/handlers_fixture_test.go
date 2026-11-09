@@ -72,15 +72,17 @@ func testAPI(f handlerFields) *API {
 	c.history = history.New(c.queries)
 	if c.store != nil {
 		contentStore := repo.New(c.store)
+		c.queries = contentStore
 		c.content = content.New(contentStore, contentStore.TxContent)
 		c.history = history.New(contentStore)
 	}
 	c.spaces = spacesOver(c, c.queries)
 	c.access = wsaccess.New(c.queries)
 	if c.store != nil {
-		c.browse = browse.New(repo.New(c.store))
-		c.access = wsaccess.New(repo.New(c.store))
-		c.topology = topology.New(repo.New(c.store))
+		r := repo.New(c.store)
+		c.browse = browse.New(r)
+		c.access = wsaccess.New(r)
+		c.topology = topology.New(r)
 	} else {
 		c.browse = browse.New(c.queries)
 		c.topology = topology.New(c.queries)
@@ -114,6 +116,18 @@ func openTestStore(t *testing.T, pool *pgxpool.Pool) *gorm.DB {
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	return gdb
+}
+
+// addDefaultSpace creates the default space a workspace always has. Fixtures
+// that insert a workspace through SQL need it because ADR 0020 removed the
+// trigger that used to create it.
+func addDefaultSpace(t *testing.T, pool *pgxpool.Pool, workspaceID any) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO spaces (workspace_id, name, visibility, default_role, is_default, slug)
+		 VALUES ($1, 'General', 'workspace', 'editor', true, 'general')`, workspaceID); err != nil {
+		t.Fatalf("add default space: %v", err)
+	}
 }
 
 // directoryFunc and proberFunc adapt a test function to the auth seams.

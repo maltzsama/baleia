@@ -7,6 +7,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -48,6 +50,7 @@ func sharedWorkspace(t *testing.T, f *metaFixture) openapi_types.UUID {
 	if err := f.pool.QueryRow(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_team_id) VALUES ('shared', 'shared', 'shared', $1) RETURNING id`, team).Scan(&ws); err != nil {
 		t.Fatal(err)
 	}
+	addDefaultSpace(t, f.pool, ws)
 	if _, err := f.pool.Exec(ctx, `INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, granted_by) VALUES ($1, $2, $3)`, ws, pgUUIDOf(f.lake), owner); err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +306,7 @@ func TestSpaces_ForeignWorkspace404(t *testing.T) {
 }
 
 // brokenPrincipals fails every user and team lookup.
-type brokenPrincipals struct{ *db.Queries }
+type brokenPrincipals struct{ db.Querier }
 
 func (brokenPrincipals) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
 	return db.User{}, errors.New("connection reset")
@@ -321,7 +324,7 @@ func TestSetSpaceMember_LookupFailureIsAnError(t *testing.T) {
 	ws := sharedWorkspace(t, f)
 	owner := f.as(f.owner)
 	space := createSpaceIn(t, f, owner, ws, CreateSpaceRequest{Name: "Shared", Visibility: CreateSpaceRequestVisibilityWorkspace})
-	broken := brokenPrincipals{db.New(f.pool)}
+	broken := brokenPrincipals{repo.New(testdb.GORM(t, f.pool))}
 	f.h.queries = broken
 	f.h.store = nil // exercise the sqlc path this fixture deliberately breaks
 	f.h.access = wsaccess.New(f.h.queries)
