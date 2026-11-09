@@ -1734,6 +1734,10 @@ components:
         id:   { type: string, format: uuid }
         name: { type: string }
         type: { type: string, description: "Connection kind; one of the kinds listed by GET /connection-providers" }
+        access_mode:
+          type: string
+          enum: [direct, trino]
+          description: "The connection's data access mode (ADR 0021). Absent for engine-family resources, which are not a data access path"
         url:  { type: string, description: "Deprecated: read config. Kept while the Trino projection still reads it (#80)" }
         config:
           type: object
@@ -1758,6 +1762,13 @@ components:
       properties:
         name: { type: string }
         type: { type: string, description: "A kind listed by GET /connection-providers" }
+        access_mode:
+          type: string
+          enum: [direct, trino]
+          description: >
+            Data access mode (ADR 0021). Required when the type declares both
+            direct and Trino access, auto-selected when it declares one, and
+            omitted for engine-family types.
         url: { type: string, description: "Older shape: the endpoint URL (a JDBC URL for databases). Prefer config" }
         config:
           type: object
@@ -2659,7 +2670,34 @@ components:
       properties:
         kind: { type: string }
         label: { type: string }
+        description: { type: string, description: "User-facing explanation of the connection type (ADR 0021 D.1)" }
         family: { type: string, enum: [iceberg, metastore, database, engine] }
+        category:
+          type: string
+          enum: [relational, analytical, catalog_manager, metastore, lakehouse, cloud_platform, nosql, search, analytics, streaming, observability, external_service, synthetic, internal_catalog, engine]
+          description: "Presentation grouping; it does not determine access mode or compatibility (ADR 0021 D.10)"
+        access_modes:
+          type: array
+          description: "Data access paths the type supports (ADR 0021 D.2); empty for engine-family resources"
+          items: { type: string, enum: [direct, trino] }
+        trino_catalog_types:
+          type: array
+          description: "Internal Trino catalog implementations the type is exposed through (ADR 0021 D.3)"
+          items: { type: string }
+        capabilities:
+          type: object
+          description: "Declared capabilities per access mode (ADR 0021 D.6)"
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: string
+              enum: [supported, unknown, unsupported]
+        version_requirements:
+          type: object
+          description: "Validated engine and Trino version floors (ADR 0021 D.1)"
+          properties:
+            min_engine_version: { type: string }
+            min_trino_version: { type: string }
         roles:
           type: array
           items: { type: string, enum: [metadata, direct_engine, federated_engine] }
@@ -2668,7 +2706,7 @@ components:
           type: object
           required: [state]
           properties:
-            state: { type: string, enum: [supported, preview, unsupported] }
+            state: { type: string, enum: [supported, experimental, planned, unsupported, not_applicable] }
             reason: { type: string }
         config_schema:
           type: array

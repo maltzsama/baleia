@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -40,13 +41,13 @@ type recordingConnQuerier struct {
 
 func (f *recordingConnQuerier) CreateCatalogConnection(_ context.Context, p db.CreateCatalogConnectionParams) (db.CatalogConnection, error) {
 	f.created = append(f.created, p)
-	return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy}, nil
+	return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, AccessMode: p.AccessMode, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy}, nil
 }
 
 func (f *recordingConnQuerier) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
 	for _, p := range f.created {
 		if p.ID == id {
-			return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy}, nil
+			return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, AccessMode: p.AccessMode, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy}, nil
 		}
 	}
 	return db.CatalogConnection{ID: id}, nil
@@ -72,15 +73,16 @@ func anyMap(kv ...string) *map[string]any {
 // and the older url + credentials shape the UI still sends.
 func validCreateRequests() map[string]*CreateCatalogConnectionRequest {
 	url := func(s string) *string { return &s }
+	mode := func(m CreateCatalogConnectionRequestAccessMode) *CreateCatalogConnectionRequestAccessMode { return &m }
 	return map[string]*CreateCatalogConnectionRequest{
 		"polaris": {Name: "p", Type: "polaris", Config: strMap("url", "http://polaris:8181", "client_id", "cid"), Credentials: anyMap("client_secret", "p-s3cr3t")},
 		// The setup wizard sends client_id/client_secret for every Iceberg kind,
 		// empty when the user leaves them blank.
 		"nessie":  {Name: "n", Type: "nessie", Url: url("http://nessie:19120"), Credentials: anyMap("token", "p-s3cr3t", "client_id", "", "client_secret", "")},
 		"iceberg": {Name: "i", Type: "iceberg", Config: strMap("url", "http://rest:8181/catalog"), Credentials: anyMap("token", "p-s3cr3t")},
-		"postgresql": {Name: "pg", Type: "postgresql", Url: url("jdbc:postgresql://db:5432/sales"),
+		"postgresql": {Name: "pg", Type: "postgresql", AccessMode: mode(CreateCatalogConnectionRequestAccessModeDirect), Url: url("jdbc:postgresql://db:5432/sales"),
 			PostgresqlCredentials: &SqlCredentials{Username: url("u"), Password: url("p-s3cr3t")}},
-		"mysql": {Name: "my", Type: "mysql", Config: strMap("host", "db", "username", "u"), Credentials: anyMap("password", "p-s3cr3t")},
+		"mysql": {Name: "my", Type: "mysql", AccessMode: mode(CreateCatalogConnectionRequestAccessModeDirect), Config: strMap("host", "db", "username", "u"), Credentials: anyMap("password", "p-s3cr3t")},
 	}
 }
 
@@ -133,6 +135,13 @@ func TestCreateConnection_SplitsConfigAndSecrets(t *testing.T) {
 		"postgresql": "jdbc:postgresql://db:5432/sales",
 		"mysql":      "jdbc:mysql://db:3306",
 	}
+	wantMode := map[string]string{
+		"polaris":    "trino",
+		"nessie":     "trino",
+		"iceberg":    "trino",
+		"postgresql": "direct",
+		"mysql":      "direct",
+	}
 	for kind, body := range validCreateRequests() {
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()
@@ -148,6 +157,9 @@ func TestCreateConnection_SplitsConfigAndSecrets(t *testing.T) {
 			if !p.ID.Valid || p.Type != kind || p.Url != wantURL[kind] {
 				t.Fatalf("row = id %v type %q url %q", p.ID.Valid, p.Type, p.Url)
 			}
+			if p.AccessMode == nil || *p.AccessMode != wantMode[kind] {
+				t.Fatalf("access_mode = %v, want %q", p.AccessMode, wantMode[kind])
+			}
 			if strings.Contains(string(p.Config), "p-s3cr3t") {
 				t.Fatalf("config holds a secret: %s", p.Config)
 			}
@@ -161,6 +173,83 @@ func TestCreateConnection_SplitsConfigAndSecrets(t *testing.T) {
 			var secrets map[string]string
 			if err := json.Unmarshal(plain, &secrets); err != nil || len(secrets) != 1 {
 				t.Fatalf("sealed = %s, want exactly the one secret", plain)
+			}
+		})
+	}
+}
+
+// TestCreateConnection_AccessModeRequired: a type declaring both direct and
+// Trino access requires an explicit, exclusive choice (ADR 0021 D.2, CR-02).
+func TestCreateConnection_AccessModeRequired(t *testing.T) {
+	t.Parallel()
+	q := &recordingConnQuerier{}
+	body := &CreateCatalogConnectionRequest{
+		Name: "pg", Type: "postgresql",
+		Config:      strMap("host", "db", "username", "u"),
+		Credentials: anyMap("password", "p"),
+	}
+	resp, err := createHandlers(t, q, testKeyring(t)).CreateCatalogConnection(testContext(), CreateCatalogConnectionRequestObject{Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := visitCreate(t, resp); rec.Code != 422 || !strings.Contains(rec.Body.String(), `"access_mode"`) {
+		t.Fatalf("response = %d %s, want 422 access_mode", rec.Code, rec.Body)
+	}
+	if len(q.created) != 0 {
+		t.Fatal("a row was stored without an access mode")
+	}
+}
+
+// TestAccessMode pins the resolution rule: engine-family types have none, a
+// one-mode type is auto-selected, and a two-mode type must choose exactly one.
+func TestAccessMode(t *testing.T) {
+	t.Parallel()
+	reg := testRegistry(t)
+	get := func(k connections.Kind) connections.Provider {
+		p, err := reg.Get(k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	cases := []struct {
+		name      string
+		provider  connections.Provider
+		requested string
+		want      string
+		wantErr   bool
+	}{
+		{"engine family has no mode", get(connections.KindTrino), "", "", false},
+		{"engine family rejects a mode", get(connections.KindTrino), "direct", "", true},
+		{"one mode is auto-selected", get(connections.KindPolaris), "", "trino", false},
+		{"one mode accepts itself", get(connections.KindPolaris), "trino", "trino", false},
+		{"one mode rejects another", get(connections.KindPolaris), "direct", "", true},
+		{"two modes require a choice", get(connections.KindPostgreSQL), "", "", true},
+		{"two modes choose direct", get(connections.KindPostgreSQL), "direct", "direct", false},
+		{"two modes choose trino", get(connections.KindPostgreSQL), "trino", "trino", false},
+		{"two modes reject an unknown", get(connections.KindPostgreSQL), "gopher", "", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := accessMode(c.provider, c.requested)
+			if c.wantErr {
+				if err == nil {
+					t.Fatalf("accessMode = %v, want an error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.want == "" {
+				if got != nil {
+					t.Errorf("accessMode = %q, want nil", *got)
+				}
+				return
+			}
+			if got == nil || *got != c.want {
+				t.Errorf("accessMode = %v, want %q", got, c.want)
 			}
 		})
 	}
@@ -406,6 +495,10 @@ func TestCreateConnection_CredentialsReadOnly(t *testing.T) {
 	readOnly := true
 	body := &CreateCatalogConnectionRequest{
 		Name: "pg", Type: "postgresql",
+		AccessMode: func() *CreateCatalogConnectionRequestAccessMode {
+			m := CreateCatalogConnectionRequestAccessModeDirect
+			return &m
+		}(),
 		Config:              strMap("host", "db", "username", "u"),
 		Credentials:         anyMap("password", "p"),
 		CredentialsReadOnly: &readOnly,
@@ -456,6 +549,31 @@ func TestListConnectionProviders(t *testing.T) {
 	pg := kinds["postgresql"]
 	if pg.EngineKind == nil || *pg.EngineKind != "postgresql" || pg.Family != "database" {
 		t.Errorf("postgresql = %+v", pg)
+	}
+	if pg.AccessModes == nil || !slices.Equal(*pg.AccessModes, []ConnectionProviderAccessModes{ConnectionProviderAccessModesDirect, ConnectionProviderAccessModesTrino}) {
+		t.Errorf("postgresql access modes = %v", pg.AccessModes)
+	}
+	if pg.TrinoCatalogTypes == nil || !slices.Equal(*pg.TrinoCatalogTypes, []string{"postgresql"}) {
+		t.Errorf("postgresql trino catalog types = %v", pg.TrinoCatalogTypes)
+	}
+	if pg.Category == nil || *pg.Category != ConnectionProviderCategoryRelational {
+		t.Errorf("postgresql category = %v", pg.Category)
+	}
+	if pg.Description == nil || *pg.Description == "" {
+		t.Error("postgresql description is empty")
+	}
+	if pg.Capabilities == nil || (*pg.Capabilities)[string(connections.AccessModeDirect)] == nil {
+		t.Errorf("postgresql capabilities = %v", pg.Capabilities)
+	}
+	if pg.Status.State != ConnectionProviderStatusStateSupported {
+		t.Errorf("postgresql status = %q", pg.Status.State)
+	}
+	trino := kinds["trino"]
+	if trino.AccessModes != nil || trino.TrinoCatalogTypes != nil {
+		t.Errorf("the Trino engine-family type must declare no access mode: %+v", trino)
+	}
+	if trino.Category == nil || *trino.Category != ConnectionProviderCategoryEngine {
+		t.Errorf("trino category = %v", trino.Category)
 	}
 	secret := map[string]bool{}
 	for _, f := range pg.ConfigSchema {

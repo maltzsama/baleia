@@ -176,6 +176,7 @@ type CatalogConnection struct {
 	ID                  pgtype.UUID        `json:"id"`
 	Name                string             `json:"name"`
 	Type                string             `json:"type"`
+	AccessMode          *string            `json:"access_mode"`
 	Url                 string             `json:"url"`
 	CredentialsEnc      *string            `json:"credentials_enc"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
