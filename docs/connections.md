@@ -54,7 +54,7 @@ user-facing connector selection.
 | `sqlite` | SQLite | relational | direct | metadata, direct_engine | sqlite | — | unsupported (BALEIA_SQLITE_ROOT not set) |
 | `sqlserver` | SQL Server | relational | direct, trino | metadata, direct_engine | sqlserver | sqlserver | supported |
 | `starrocks` | StarRocks | engine | — | federated_engine | starrocks | — | planned (planned after v1 (#30)) |
-| `system` | System | internal_catalog | — | — | — | — | not_applicable |
+| `system` | System | internal_catalog | — | — | — | — | not_applicable (reserved system catalog; not user-creatable) |
 | `tpcds` | TPC-DS | synthetic | trino | — | — | tpcds | planned |
 | `tpch` | TPC-H | synthetic | trino | — | — | tpch | planned |
 | `trino` | Trino | engine | — | metadata, federated_engine | trino | — | supported |

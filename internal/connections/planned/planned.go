@@ -144,7 +144,7 @@ func All() []connections.Provider {
 			kind: connections.KindSystem, label: "System",
 			description: "Trino system catalog, reserved and not user-creatable.",
 			category:    connections.CategoryInternal, family: connections.FamilyDatabase,
-			status: connections.Status{State: connections.StateNotApplicable},
+			status: connections.Status{State: connections.StateNotApplicable, Reason: "reserved system catalog; not user-creatable"},
 		},
 		// Engine-family types planned after v1.
 		engine(connections.KindDoris, "Apache Doris", "Apache Doris federated query engine.", "planned after v1 (#21)"),
