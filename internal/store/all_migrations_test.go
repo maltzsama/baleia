@@ -138,6 +138,10 @@ func TestAllMigrationsUpgradeFromVersionOne(t *testing.T) {
 	if err := db.Exec("ALTER TABLE catalog_connections ADD CONSTRAINT catalog_connections_type_check CHECK (" + oldCheck + ")").Error; err != nil {
 		t.Fatalf("add old type check: %v", err)
 	}
+	// The old constraint must reject a kind that only migration 6 adds.
+	if err := db.Exec("INSERT INTO catalog_connections (id, name, type, url, config) VALUES (gen_random_uuid(), 'probe-before', 'bigquery', '', '{}')").Error; err == nil {
+		t.Fatal("the old constraint accepted a kind added by migration 6")
+	}
 
 	reg, err := AllMigrations()
 	if err != nil {
@@ -173,6 +177,10 @@ func TestAllMigrationsUpgradeFromVersionOne(t *testing.T) {
 	}
 	if !strings.Contains(constraint, "'bigquery'") || !strings.Contains(constraint, "'system'") {
 		t.Fatalf("connection type check was not expanded by migration 6: %s", constraint)
+	}
+	// The expanded constraint accepts the kind the old one rejected.
+	if err := db.Exec("INSERT INTO catalog_connections (id, name, type, url, config) VALUES (gen_random_uuid(), 'probe-after', 'bigquery', '', '{}')").Error; err != nil {
+		t.Fatalf("the expanded constraint rejected a declared kind: %v", err)
 	}
 	var versions []int64
 	if err := db.Model(&SchemaMigration{}).Order("version").Pluck("version", &versions).Error; err != nil {

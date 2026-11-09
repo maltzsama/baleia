@@ -158,6 +158,13 @@ func testMySQLAllMigrations(t *testing.T, env string) {
 	if err := db.Exec("ALTER TABLE catalog_connections ADD CONSTRAINT catalog_connections_type_check CHECK (" + oldCheck + ")").Error; err != nil {
 		t.Fatalf("install old type check: %v", err)
 	}
+	before := model.CatalogConnection{
+		ID: model.UUID(uuid.NewString()), Name: model.Text("probe-before"),
+		Type: "bigquery", URL: "", Config: model.JSON(`{}`), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	if err := db.Create(&before).Error; err == nil {
+		t.Fatal("the old constraint accepted a kind added by migration 6")
+	}
 	if _, err := NewRunner(db, all, slog.New(slog.DiscardHandler)).Up(ctx); err != nil {
 		t.Fatalf("Up: %v", err)
 	}
