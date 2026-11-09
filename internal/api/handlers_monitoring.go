@@ -613,9 +613,11 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 		return nil, err
 	}
 	if h.temporalClient != nil {
+		// The activity closes the run by this id, so it must be the recorded
+		// row's id, not the workflow id's uuid (#883).
 		_, err = h.temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 			ID: workflowID, TaskQueue: "baleia-task-queue",
-		}, workflows.MaintenanceRunWorkflow, runID.String(), uuid.UUID(plan.Binding.EngineID.Bytes).String(),
+		}, workflows.MaintenanceRunWorkflow, uuid.UUID(run.ID.Bytes).String(), uuid.UUID(plan.Binding.EngineID.Bytes).String(),
 			plan.Binding.EngineCatalogName, plan.Namespace, plan.Table, plan.Retention, plan.Operations)
 		if err != nil {
 			h.monitor.Fail(ctx, run.ID, err)
