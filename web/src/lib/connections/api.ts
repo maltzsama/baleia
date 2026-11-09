@@ -3,8 +3,10 @@
 // Every provider/engine kind comes from the API; this module never names one.
 import { apiErrorMessage, client } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
+import type { AccessMode } from './accessModes';
 
 export type ConnectionProvider = components['schemas']['ConnectionProvider'];
+export type ConnectionCategory = components['schemas']['ConnectionCategory'];
 export type CatalogConnection = components['schemas']['CatalogConnection'];
 export type Engine = components['schemas']['Engine'];
 export type Catalog = components['schemas']['Catalog'];
@@ -23,6 +25,7 @@ export type CatalogConnectionImpact = components['schemas']['CatalogConnectionIm
 export type ConnectionDraft = {
 	name: string;
 	type: string;
+	access_mode?: AccessMode;
 	config: Record<string, string>;
 	credentials: Record<string, string>;
 	credentials_read_only?: boolean;
@@ -89,6 +92,14 @@ function toError(
 export async function loadProviders(): Promise<ConnectionProvider[]> {
 	const { data, error, response } = await client.GET('/connection-providers');
 	if (error || !data) throw toError(error, response?.status, 'Could not load connection providers');
+	return data;
+}
+
+/** Categories in presentation order (ADR 0021 D.10). */
+export async function loadCategories(): Promise<ConnectionCategory[]> {
+	const { data, error, response } = await client.GET('/connection-categories');
+	if (error || !data)
+		throw toError(error, response?.status, 'Could not load connection categories');
 	return data;
 }
 

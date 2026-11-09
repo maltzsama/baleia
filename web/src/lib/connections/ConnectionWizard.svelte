@@ -21,22 +21,23 @@
 		grantCatalogAccess,
 		listEngines,
 		listGrantableWorkspaces,
+		loadCategories,
 		loadProviders,
 		testDraft,
 		type BindingSupport,
 		type Catalog,
 		type CatalogConnection,
+		type ConnectionCategory,
 		type Engine,
 		type TestResult,
 		type Workspace
 	} from './api';
 	import ProviderForm from './ProviderForm.svelte';
+	import { DIRECT, TRINO, type AccessMode } from './accessModes';
 	import {
-		canQueryDirectly,
+		canDirect,
+		canTrino,
 		databaseName,
-		familyDescription,
-		familyLabel,
-		familyOrder,
 		initialValues,
 		intentsFor,
 		missingFields,
@@ -45,6 +46,7 @@
 		readsMetadata,
 		isUsable,
 		roleLabel,
+		statusLabel,
 		type ConnectionProvider,
 		type Usage
 	} from './providers';
@@ -60,6 +62,7 @@
 	} = $props();
 
 	let providers = $state<ConnectionProvider[]>([]);
+	let categories = $state<ConnectionCategory[]>([]);
 	let engines = $state<Engine[]>([]);
 	let support = $state<Record<string, Record<string, BindingSupport>>>({});
 	let loading = $state(true);
@@ -71,7 +74,7 @@
 	let values = $state<Record<string, string>>({});
 	let secrets = $state<Record<string, string>>({});
 	let credentialsReadOnly = $state(false);
-	let direct = $state(false);
+	let accessMode = $state<AccessMode | null>(null);
 	let bindEngineIds = $state<string[]>([]);
 	let catalogName = $state('');
 
@@ -97,8 +100,13 @@
 
 	onMount(async () => {
 		try {
-			const [providerList, engineList] = await Promise.all([loadProviders(), listEngines()]);
+			const [providerList, categoryList, engineList] = await Promise.all([
+				loadProviders(),
+				loadCategories(),
+				listEngines()
+			]);
 			providers = providerList;
+			categories = categoryList;
 			engines = engineList;
 			const loaded = await Promise.all(
 				engineList.map(async (engine) => {
@@ -117,28 +125,61 @@
 		}
 	});
 
-	const groups = $derived(
-		familyOrder()
-			.map((family) => ({
-				family,
-				label: familyLabel(family),
-				description: familyDescription(family),
-				providers: providers.filter((p) => p.family === family)
-			}))
-			.filter((group) => group.providers.length > 0)
-	);
+	// Categories come from the registry, ordered for display (ADR 0021 D.10 /
+	// CR-13). A provider with an unknown or empty category is grouped last.
+	const groups = $derived.by(() => {
+		const out: {
+			category: string;
+			label: string;
+			description: string;
+			order: number;
+			providers: ConnectionProvider[];
+		}[] = [];
+		for (const [index, category] of categories.entries()) {
+			const inCategory = providers.filter((p) => p.category === category.category);
+			if (inCategory.length === 0) continue;
+			out.push({
+				category: category.category,
+				label: category.label,
+				description: category.description ?? '',
+				order: category.order ?? index,
+				providers: inCategory
+			});
+		}
+		const uncategorized = providers.filter(
+			(p) => !categories.some((c) => c.category === p.category)
+		);
+		if (uncategorized.length > 0) {
+			out.push({
+				category: '',
+				label: '',
+				description: '',
+				order: categories.length,
+				providers: uncategorized
+			});
+		}
+		out.sort((a, b) => a.order - b.order);
+		return out;
+	});
 
 	const compatibleEngines = $derived(
 		provider ? engines.filter((engine) => Boolean(support[engine.id]?.[provider!.kind])) : []
 	);
 
+	/** The data access modes the type declares, in registry order (D.2). */
+	const modes = $derived(provider?.access_modes ?? []);
+
 	const selectedSupport = $derived(
-		provider && bindEngineIds.length > 0 ? support[bindEngineIds[0]]?.[provider.kind] : undefined
+		provider && accessMode === TRINO && bindEngineIds.length > 0
+			? support[bindEngineIds[0]]?.[provider.kind]
+			: undefined
 	);
 
 	const connectors = $derived(selectedSupport?.connectors ?? []);
 	const reservedNames = $derived(selectedSupport?.reserved_names ?? []);
-	const isDatabase = $derived(provider?.family === 'database');
+	const isDatabase = $derived(
+		provider ? provider.config_schema.some((f) => f.key === 'database') : false
+	);
 	const catalogOutputs = $derived(
 		connectors.map((connector, i) => {
 			const base = catalogName.trim() || name;
@@ -153,7 +194,7 @@
 			values,
 			secrets,
 			credentialsReadOnly,
-			direct,
+			accessMode,
 			bindEngineIds,
 			catalogName
 		})
@@ -167,7 +208,9 @@
 		values = initialValues(next);
 		secrets = {};
 		credentialsReadOnly = false;
-		direct = false;
+		// One declared mode is auto-selected; two are an explicit choice.
+		const nextModes = next.access_modes ?? [];
+		accessMode = nextModes.length === 1 ? nextModes[0] : null;
 		bindEngineIds = [];
 		catalogName = '';
 		testResult = null;
@@ -198,7 +241,7 @@
 	}
 
 	function usage(): Usage {
-		return { direct, bindEngineIds };
+		return { accessMode, bindEngineIds };
 	}
 
 	async function runTest() {
@@ -229,10 +272,23 @@
 		if (!provider || !tested) return;
 		creating = true;
 		createError = '';
+		// Validate the engine name before saving: a direct connection must never
+		// be persisted without its engine, so the user corrects the name here
+		// instead of discovering the failure after the connection was created.
+		let engineName = '';
+		if (accessMode === DIRECT) {
+			engineName = normalizeEngineName(name);
+			if (!engineName) {
+				createError = m.connections_connectionwizard_connection_name_not_usable_as_engine();
+				creating = false;
+				return;
+			}
+		}
 		try {
 			const connection = await createConnection({
 				name,
 				type: provider.kind,
+				access_mode: accessMode ?? undefined,
 				config: values,
 				credentials: secrets,
 				credentials_read_only: credentialsReadOnly
@@ -240,13 +296,13 @@
 			let engine: Engine | undefined;
 			const catalogs: Catalog[] = [];
 			created = { connection, engine, catalogs };
-			if (direct) {
-				const engineName = normalizeEngineName(name);
-				if (!engineName) throw new Error('The connection name cannot be used as an engine name.');
+			// Direct mode creates the native engine and never a Trino catalog;
+			// Trino mode creates the catalog registrations and never an engine.
+			if (accessMode === DIRECT) {
 				engine = await createEngine({ name: engineName, connection_id: connection.id });
 				created = { connection, engine, catalogs };
 			}
-			if (bindEngineIds.length > 0) {
+			if (accessMode === TRINO && bindEngineIds.length > 0) {
 				const base = catalogName.trim() || connection.name;
 				const outputs = connectors.map((item, i) => {
 					const raw = i === 0 ? base : `${base}_${item}`;
@@ -314,9 +370,21 @@
 	}
 
 	function providerBadge(p: ConnectionProvider) {
-		if (p.status.state === 'experimental') return m.identity_identityproviderform_preview();
-		if (p.status.state === 'unsupported') return 'Unsupported';
-		return '';
+		return statusLabel(p);
+	}
+
+	function providerBadgeTone(state: ConnectionProvider['status']['state']) {
+		switch (state) {
+			case 'experimental':
+				return 'warning';
+			case 'planned':
+				return 'info';
+			case 'unsupported':
+			case 'not_applicable':
+				return 'neutral';
+			default:
+				return 'neutral';
+		}
 	}
 </script>
 
@@ -342,7 +410,7 @@
 			</p>
 		</header>
 
-		{#each groups as group (group.family)}
+		{#each groups as group (group.category)}
 			<section class="flex flex-col gap-2">
 				<div>
 					<h2
@@ -366,7 +434,7 @@
 								<KindIcon kind={p.kind} family={p.family} size={18} />
 								<span class="flex-1 text-[13px] font-semibold">{p.label}</span>
 								{#if providerBadge(p)}
-									<Badge tone={p.status.state === 'experimental' ? 'warning' : 'neutral'}>
+									<Badge tone={providerBadgeTone(p.status.state)}>
 										{providerBadge(p)}
 									</Badge>
 								{/if}
@@ -452,82 +520,126 @@
 				</div>
 			{/if}
 
-			{#if canQueryDirectly(provider)}
-				<label class="flex items-start gap-2 rounded-lg border border-border bg-bg-panel p-3">
-					<input type="checkbox" class="mt-0.5 h-4 w-4 accent-primary" bind:checked={direct} />
-					<span>
-						<span class="block text-[13px] font-semibold"
-							>{m.connections_connectionwizard_query_it_directly()}</span
+			{#if modes.length === 2}
+				<fieldset class="flex flex-col gap-2">
+					<legend class="sr-only">{m.connections_connectionwizard_how_will_you_use_it()}</legend>
+					{#if canDirect(provider)}
+						<label
+							class="flex items-start gap-2 rounded-lg border bg-bg-panel p-3 {accessMode === DIRECT
+								? 'border-primary'
+								: 'border-border'}"
 						>
-						<span class="block text-[11px] text-slate-600 dark:text-slate-300">
-							{m.connections_connectionwizard_register_it_as_a_query_engine()}
-						</span>
-					</span>
-				</label>
-			{/if}
-
-			{#if compatibleEngines.length > 0}
-				<div class="rounded-lg border border-border bg-bg-panel p-3">
-					<p class="text-[13px] font-semibold">
-						{m.connections_connectionwizard_expose_through_a_federated_engine()}
-					</p>
-					<p class="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
-						{m.connections_connectionwizard_bind_this_source_into_an_engine()}
-					</p>
-					{#each compatibleEngines as engine (engine.id)}
-						<label class="flex items-center gap-2 py-1">
 							<input
-								type="checkbox"
-								class="h-4 w-4 accent-primary"
-								checked={bindEngineIds.includes(engine.id)}
-								onchange={(e) => toggleEngine(engine.id, e.currentTarget.checked)}
+								type="radio"
+								name="access_mode"
+								value="direct"
+								class="mt-0.5 h-4 w-4 accent-primary"
+								checked={accessMode === DIRECT}
+								onchange={() => (accessMode = DIRECT)}
 							/>
-							<KindIcon kind={engine.kind} family="engine" size={15} />
-							<span class="text-[12px]">{engine.name}</span>
+							<span>
+								<span class="block text-[13px] font-semibold"
+									>{m.connections_connectionwizard_query_it_directly()}</span
+								>
+								<span class="block text-[11px] text-slate-600 dark:text-slate-300">
+									{m.connections_connectionwizard_register_it_as_a_query_engine()}
+								</span>
+							</span>
 						</label>
-					{/each}
-				</div>
-			{:else}
-				<p class="text-[11px] text-slate-600 dark:text-slate-300">
-					{m.connections_connectionwizard_no_federated_engine_can_bind_this()}
-				</p>
+					{/if}
+					{#if canTrino(provider)}
+						<label
+							class="flex items-start gap-2 rounded-lg border bg-bg-panel p-3 {accessMode === TRINO
+								? 'border-primary'
+								: 'border-border'}"
+						>
+							<input
+								type="radio"
+								name="access_mode"
+								value="trino"
+								class="mt-0.5 h-4 w-4 accent-primary"
+								checked={accessMode === TRINO}
+								onchange={() => (accessMode = TRINO)}
+							/>
+							<span>
+								<span class="block text-[13px] font-semibold"
+									>{m.connections_connectionwizard_expose_through_a_federated_engine()}</span
+								>
+								<span class="block text-[11px] text-slate-600 dark:text-slate-300">
+									{m.connections_connectionwizard_bind_this_source_into_an_engine()}
+								</span>
+							</span>
+						</label>
+					{/if}
+				</fieldset>
 			{/if}
 
-			{#if bindEngineIds.length > 0}
-				<div class="rounded-lg border border-border bg-bg-panel p-3">
-					<p class="text-[13px] font-semibold">
-						{m.connections_connectionwizard_catalogs_to_create()}
+			{#if accessMode === TRINO}
+				{#if compatibleEngines.length > 0}
+					<div class="rounded-lg border border-border bg-bg-panel p-3">
+						<p class="text-[13px] font-semibold">
+							{m.connections_connectionwizard_expose_through_a_federated_engine()}
+						</p>
+						<p class="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
+							{m.connections_connectionwizard_bind_this_source_into_an_engine()}
+						</p>
+						{#each compatibleEngines as engine (engine.id)}
+							<label class="flex items-center gap-2 py-1">
+								<input
+									type="checkbox"
+									class="h-4 w-4 accent-primary"
+									checked={bindEngineIds.includes(engine.id)}
+									onchange={(e) => toggleEngine(engine.id, e.currentTarget.checked)}
+								/>
+								<KindIcon kind={engine.kind} family="engine" size={15} />
+								<span class="text-[12px]">{engine.name}</span>
+							</label>
+						{/each}
+					</div>
+				{:else}
+					<p class="text-[11px] text-slate-600 dark:text-slate-300">
+						{m.connections_connectionwizard_no_federated_engine_can_bind_this()}
 					</p>
-					<p class="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
-						{isDatabase
-							? m.connections_connectionwizard_each_database_becomes_one_catalog()
-							: m.connections_connectionwizard_each_warehouse_or_catalog_name_from_the_so()}
-					</p>
-					<Input
-						label={isDatabase
-							? m.connections_connectionwizard_database_name()
-							: m.connections_connectionwizard_warehouse_or_catalog_name()}
-						bind:value={catalogName}
-						placeholder={isDatabase ? 'postgres' : 'warehouse'}
-					/>
-					{#if catalogOutputs.length > 0}
-						<ul class="mt-2 flex flex-col gap-1 text-[11px] text-slate-600 dark:text-slate-300">
-							{#each catalogOutputs as output (output.trino_catalog_name)}
-								<li class="font-mono">
-									{output.trino_catalog_name || output.name}
-									<span class="text-slate-400 dark:text-slate-500"> · {output.connector}</span>
-								</li>
-							{/each}
-						</ul>
-					{/if}
-				</div>
+				{/if}
+
+				{#if bindEngineIds.length > 0}
+					<div class="rounded-lg border border-border bg-bg-panel p-3">
+						<p class="text-[13px] font-semibold">
+							{m.connections_connectionwizard_catalogs_to_create()}
+						</p>
+						<p class="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
+							{isDatabase
+								? m.connections_connectionwizard_each_database_becomes_one_catalog()
+								: m.connections_connectionwizard_each_warehouse_or_catalog_name_from_the_so()}
+						</p>
+						<Input
+							label={isDatabase
+								? m.connections_connectionwizard_database_name()
+								: m.connections_connectionwizard_warehouse_or_catalog_name()}
+							bind:value={catalogName}
+							placeholder={isDatabase ? 'postgres' : 'warehouse'}
+						/>
+						{#if catalogOutputs.length > 0}
+							<ul class="mt-2 flex flex-col gap-1 text-[11px] text-slate-600 dark:text-slate-300">
+								{#each catalogOutputs as output (output.trino_catalog_name)}
+									<li class="font-mono">
+										{output.trino_catalog_name || output.name}
+										<span class="text-slate-400 dark:text-slate-500"> · {output.connector}</span>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+				{/if}
 			{/if}
 		</div>
 
 		<div class="flex justify-between">
 			<Button onclick={() => (step = 2)}>{m.connections_connectionwizard_back()}</Button>
-			<Button variant="primary" onclick={() => (step = 4)}
-				>{m.connections_connectionwizard_continue()}</Button
+			<Button
+				variant="primary"
+				disabled={modes.length === 2 && accessMode === null}
+				onclick={() => (step = 4)}>{m.connections_connectionwizard_continue()}</Button
 			>
 		</div>
 	{:else if step === 4 && provider}

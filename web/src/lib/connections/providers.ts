@@ -5,39 +5,20 @@
 // kind-shaped value is `provider.kind`, which is used to look up the binder's
 // `binding-support` for an engine — never compared to a literal.
 import type { components } from '$lib/api/schema';
+import { m } from '$lib/paraglide/messages';
+import { DIRECT, TRINO, type AccessMode } from './accessModes';
 
 export type ConnectionProvider = components['schemas']['ConnectionProvider'];
-export type ProviderFamily = ConnectionProvider['family'];
+export type ConnectionCategory = components['schemas']['ConnectionCategory'];
 export type ProviderRole = ConnectionProvider['roles'][number];
+export type { AccessMode };
 
 /** How the user wants to use the connection. */
 export type Usage = {
-	/** Register the connection as a direct engine. */
-	direct: boolean;
-	/** Federated engines to expose the source through. */
+	/** The exclusive data access mode (ADR 0021 D.2), or null for engine-family types. */
+	accessMode: AccessMode | null;
+	/** Federated engines to expose the source through, when the mode is trino. */
 	bindEngineIds: string[];
-};
-
-// Identifiers (not string literals) so the kind literal lint stays clean.
-const familyRank: Record<ProviderFamily, number> = {
-	iceberg: 0,
-	metastore: 1,
-	database: 2,
-	engine: 3
-};
-
-const familyLabels: Record<ProviderFamily, string> = {
-	iceberg: 'Iceberg catalogs',
-	metastore: 'Metastores',
-	database: 'Databases',
-	engine: 'Engines'
-};
-
-const familyDescriptions: Record<ProviderFamily, string> = {
-	iceberg: 'Catalog managers and Iceberg REST catalogs.',
-	metastore: 'Hive Metastore and AWS Glue catalog services.',
-	database: 'Databases Baleia can query directly or expose through Trino.',
-	engine: 'Query engines Baleia can run SQL on.'
 };
 
 const roleLabels: Record<ProviderRole, string> = {
@@ -52,20 +33,6 @@ const roleDescriptions: Record<ProviderRole, string> = {
 	federated_engine: 'Baleia runs queries on it for federated catalogs.'
 };
 
-export function familyOrder(): ProviderFamily[] {
-	return (Object.keys(familyRank) as ProviderFamily[]).sort(
-		(a, b) => familyRank[a] - familyRank[b]
-	);
-}
-
-export function familyLabel(family: ProviderFamily): string {
-	return familyLabels[family];
-}
-
-export function familyDescription(family: ProviderFamily): string {
-	return familyDescriptions[family];
-}
-
 export function roleLabel(role: ProviderRole): string {
 	return roleLabels[role];
 }
@@ -74,12 +41,35 @@ export function roleDescription(role: ProviderRole): string {
 	return roleDescriptions[role];
 }
 
+/** Statuses that cannot be created (ADR 0021 D.9 / CR-12). */
 export function isUsable(provider: ConnectionProvider): boolean {
 	return provider.status.state === 'supported' || provider.status.state === 'experimental';
 }
 
-export function canQueryDirectly(provider: ConnectionProvider): boolean {
-	return provider.roles.includes('direct_engine');
+/** A short badge label for the five implementation statuses. */
+export function statusLabel(provider: ConnectionProvider): string {
+	switch (provider.status.state) {
+		case 'experimental':
+			return m.connections_status_experimental();
+		case 'planned':
+			return m.connections_status_planned();
+		case 'unsupported':
+			return m.connections_status_unsupported();
+		case 'not_applicable':
+			return m.connections_status_not_applicable();
+		default:
+			return '';
+	}
+}
+
+/** The type declares the direct access mode (ADR 0021 D.2). */
+export function canDirect(provider: ConnectionProvider): boolean {
+	return (provider.access_modes ?? []).includes(DIRECT);
+}
+
+/** The type declares the Trino access mode (ADR 0021 D.2). */
+export function canTrino(provider: ConnectionProvider): boolean {
+	return (provider.access_modes ?? []).includes(TRINO);
 }
 
 export function readsMetadata(provider: ConnectionProvider): boolean {
@@ -89,25 +79,23 @@ export function readsMetadata(provider: ConnectionProvider): boolean {
 /** The config key of a catalog manager that can authorize each user (#648). */
 const userIdentityKey = 'user_identity';
 
-/** Families whose connections are catalog managers. */
-const catalogManagerFamily: Record<ProviderFamily, boolean> = {
-	iceberg: true,
-	metastore: true,
-	database: false,
-	engine: false
+/** Categories whose connections are catalog managers (ADR 0021 D.10). */
+const catalogManagerCategory: Record<string, boolean> = {
+	catalog_manager: true,
+	metastore: true
 };
 
 /**
  * Who a catalog manager sees for the users of a connection (#648): each
  * Baleia user (`per_user`), or the connection's own account for every user
  * (`connection`, also every catalog manager that cannot authorize users).
- * `null` for databases and engines, which are not catalog managers.
+ * `null` for connections that are not catalog managers.
  */
 export function catalogIdentity(
 	provider: ConnectionProvider | undefined,
 	config: Record<string, unknown> | undefined
 ): 'per_user' | 'connection' | null {
-	if (!provider || !catalogManagerFamily[provider.family]) return null;
+	if (!provider || !provider.category || !catalogManagerCategory[provider.category]) return null;
 	const supported = provider.config_schema.some((f) => f.key === userIdentityKey);
 	return supported && config?.[userIdentityKey] === 'true' ? 'per_user' : 'connection';
 }
@@ -148,14 +136,14 @@ export function missingFields(
 export function intentsFor(provider: ConnectionProvider, usage: Usage): string[] {
 	const intents: string[] = [];
 	if (readsMetadata(provider)) intents.push('metadata');
-	if (usage.direct) intents.push('direct_engine');
+	if (usage.accessMode === DIRECT) intents.push('direct_engine');
 	for (const engineId of usage.bindEngineIds) intents.push(`bind:${engineId}`);
 	return intents;
 }
 
 /** Whether the usage means "create at least one logical catalog". */
 export function needsCatalogs(usage: Usage): boolean {
-	return usage.bindEngineIds.length > 0;
+	return usage.accessMode === TRINO && usage.bindEngineIds.length > 0;
 }
 
 const engineNamePattern = /^[a-z][a-z0-9_-]{0,62}$/;

@@ -16,6 +16,7 @@ type MetadataCatalogBinding = components['schemas']['MetadataCatalogBinding'];
 type MetadataTableDetail = components['schemas']['MetadataTableDetail'];
 type MetadataSearchResult = components['schemas']['MetadataSearchResult'];
 type ConnectionProvider = components['schemas']['ConnectionProvider'];
+type ConnectionCategory = components['schemas']['ConnectionCategory'];
 type CatalogConnection = components['schemas']['CatalogConnection'];
 type Catalog = components['schemas']['Catalog'];
 type CatalogBinding = components['schemas']['CatalogBinding'];
@@ -239,7 +240,9 @@ export function makeProvider(overrides: Partial<ConnectionProvider> = {}): Conne
 		kind: 'testdb',
 		label: 'Test Database',
 		family: 'database',
-		roles: ['metadata', 'direct_engine'],
+		category: 'relational',
+		access_modes: ['direct', 'trino'],
+		roles: ['metadata', 'direct_engine', 'federated_engine'],
 		status: { state: 'supported' },
 		config_schema: [
 			{ key: 'host', label: 'Host', type: 'text', required: true, secret: false },
@@ -247,6 +250,16 @@ export function makeProvider(overrides: Partial<ConnectionProvider> = {}): Conne
 			{ key: 'database', label: 'Database', type: 'text', required: true, secret: false },
 			{ key: 'password', label: 'Password', type: 'secret', required: true, secret: true }
 		],
+		...overrides
+	};
+}
+
+export function makeCategory(overrides: Partial<ConnectionCategory> = {}): ConnectionCategory {
+	return {
+		category: 'relational',
+		label: 'Relational databases',
+		description: 'SQL databases.',
+		order: 0,
 		...overrides
 	};
 }
