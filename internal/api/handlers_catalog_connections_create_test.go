@@ -200,6 +200,29 @@ func TestCreateConnection_AccessModeRequired(t *testing.T) {
 	}
 }
 
+// TestCreateConnection_PlannedTypeRejected: a planned or not-applicable type
+// is declared in the inventory but cannot be created (ADR 0021 CR-12, D.9).
+func TestCreateConnection_PlannedTypeRejected(t *testing.T) {
+	t.Parallel()
+	for _, kind := range []string{"bigquery", "system"} {
+		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+			q := &recordingConnQuerier{}
+			body := &CreateCatalogConnectionRequest{Name: "x", Type: kind}
+			resp, err := createHandlers(t, q, testKeyring(t)).CreateCatalogConnection(testContext(), CreateCatalogConnectionRequestObject{Body: body})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rec := visitCreate(t, resp); rec.Code != 422 || !strings.Contains(rec.Body.String(), "provider_unsupported") {
+				t.Fatalf("response = %d %s, want 422 provider_unsupported", rec.Code, rec.Body)
+			}
+			if len(q.created) != 0 {
+				t.Fatal("a non-creatable type was stored")
+			}
+		})
+	}
+}
+
 // TestAccessMode pins the resolution rule: engine-family types have none, a
 // one-mode type is auto-selected, and a two-mode type must choose exactly one.
 func TestAccessMode(t *testing.T) {
