@@ -105,6 +105,28 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 	if err != nil {
 		return nil, err
 	}
+	prov, err := h.provider(string(cfg.Kind))
+	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		var ce *configError
+		if errors.As(err, &ce) {
+			return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
+		}
+		return nil, err
+	}
+	requestedMode := ""
+	if request.Body.AccessMode != nil {
+		requestedMode = string(*request.Body.AccessMode)
+	}
+	mode, err := accessMode(prov, requestedMode)
+	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		var ce *configError
+		if errors.As(err, &ce) {
+			return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
+		}
+		return nil, err
+	}
 	config, connURL, credsEnc, err := storedColumns(h.core, cfg)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "encrypt connection credentials", "err", err)
@@ -120,6 +142,7 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 		ID:                  connID,
 		Name:                request.Body.Name,
 		Type:                string(cfg.Kind),
+		AccessMode:          mode,
 		Url:                 connURL,
 		Config:              config,
 		CredentialsEnc:      credsEnc,
@@ -137,6 +160,9 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 
 	h.catalogCache.Clear()
 	ev.Changes = map[string]audit.Change{"name": {To: conn.Name}, "type": {To: conn.Type}, "url": {To: conn.Url}}
+	if conn.AccessMode != nil {
+		ev.Changes["access_mode"] = audit.Change{To: *conn.AccessMode}
+	}
 	h.audited(ctx, ev.Allowed())
 	return CreateCatalogConnection201JSONResponse(h.withConnectionActions(ctx, conn)), nil
 }
@@ -426,10 +452,16 @@ func (h *core) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UUID) 
 
 func dbCatalogConnectionToPublic(logger *slog.Logger, c db.CatalogConnection) CatalogConnection {
 	id := openapi_types.UUID(c.ID.Bytes)
+	var accessMode *CatalogConnectionAccessMode
+	if c.AccessMode != nil {
+		mode := CatalogConnectionAccessMode(*c.AccessMode)
+		accessMode = &mode
+	}
 	return CatalogConnection{
 		Id:                  id,
 		Name:                c.Name,
 		Type:                c.Type,
+		AccessMode:          accessMode,
 		Url:                 redactURLSecrets(c.Url),
 		Config:              publicConfig(logger, c.Config),
 		HasCredentials:      c.CredentialsEnc != nil && *c.CredentialsEnc != "",

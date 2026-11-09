@@ -43,6 +43,7 @@
 		normalizeCatalogName,
 		normalizeEngineName,
 		readsMetadata,
+		isUsable,
 		roleLabel,
 		type ConnectionProvider,
 		type Usage
@@ -161,7 +162,7 @@
 	});
 
 	function choose(next: ConnectionProvider) {
-		if (next.status.state === 'unsupported') return;
+		if (!isUsable(next)) return;
 		provider = next;
 		name = '';
 		values = initialValues(next);
@@ -328,7 +329,7 @@
 	}
 
 	function providerBadge(p: ConnectionProvider) {
-		if (p.status.state === 'preview') return m.identity_identityproviderform_preview();
+		if (p.status.state === 'experimental') return m.identity_identityproviderform_preview();
 		if (p.status.state === 'unsupported') return 'Unsupported';
 		return '';
 	}
@@ -368,7 +369,7 @@
 				</div>
 				<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
 					{#each group.providers as p (p.kind)}
-						{@const disabled = p.status.state === 'unsupported'}
+						{@const disabled = !isUsable(p)}
 						<button
 							type="button"
 							data-testid="provider-card"
@@ -380,7 +381,7 @@
 								<KindIcon kind={p.kind} family={p.family} size={18} />
 								<span class="flex-1 text-[13px] font-semibold">{p.label}</span>
 								{#if providerBadge(p)}
-									<Badge tone={p.status.state === 'preview' ? 'warning' : 'neutral'}>
+									<Badge tone={p.status.state === 'experimental' ? 'warning' : 'neutral'}>
 										{providerBadge(p)}
 									</Badge>
 								{/if}

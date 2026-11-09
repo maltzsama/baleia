@@ -7,6 +7,7 @@ type CatalogConnection struct {
 	ID                  UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:catalog_connections_type_check,((type = ANY (ARRAY['polaris'::text, 'nessie'::text, 'iceberg'::text, 'lakekeeper'::text, 'unity'::text, 'hive'::text, 'glue'::text, 'postgresql'::text, 'mysql'::text, 'mariadb'::text, 'sqlserver'::text, 'oracle'::text, 'sqlite'::text, 'clickhouse'::text, 'flightsql'::text, 'trino'::text, 'doris'::text, 'starrocks'::text])))"`
 	Name                Text      `gorm:"column:name;not null;size:128;uniqueIndex:catalog_connections_name_key,priority:1"`
 	Type                string    `gorm:"column:type;not null"`
+	AccessMode          *string   `gorm:"column:access_mode;check:catalog_connections_access_mode_check,(((access_mode IS NULL) OR (access_mode = ANY (ARRAY['direct'::text, 'trino'::text]))))"`
 	URL                 string    `gorm:"column:url;not null"`
 	CredentialsEnc      *string   `gorm:"column:credentials_enc"`
 	CreatedAt           time.Time `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`

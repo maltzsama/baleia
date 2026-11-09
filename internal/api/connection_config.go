@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"maps"
 	"sort"
+	"strings"
 
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -60,10 +61,53 @@ func (h *core) provider(kind string) (connections.Provider, error) {
 	if err != nil {
 		return nil, &configError{code: ErrorCodeProviderUnsupported, fields: []connections.FieldError{{Key: "type", Message: fmt.Sprintf("%q has no provider", kind)}}}
 	}
-	if st := p.Status(); st.State == connections.StateUnsupported {
-		return nil, &configError{code: ErrorCodeProviderUnsupported, fields: []connections.FieldError{{Key: "type", Message: st.Reason}}}
+	// Only implemented types are creatable (ADR 0021 CR-12): planned,
+	// unsupported and not-applicable types are declared in the registry with an
+	// explicit status, but creation is rejected here.
+	if st := p.Status(); st.State != connections.StateSupported && st.State != connections.StateExperimental {
+		msg := st.Reason
+		if msg == "" {
+			msg = fmt.Sprintf("%q is %s and cannot be created", kind, st.State)
+		}
+		return nil, &configError{code: ErrorCodeProviderUnsupported, fields: []connections.FieldError{{Key: "type", Message: msg}}}
 	}
 	return p, nil
+}
+
+// accessMode resolves the data access mode of a new connection against the
+// provider's declared modes (ADR 0021 D.2, CR-02): required when the type
+// declares two, auto-selected when it declares one, and nil for engine-family
+// types, which are not a data access path.
+func accessMode(p connections.Provider, requested string) (*string, error) {
+	modes := p.Meta().AccessModes
+	if len(modes) == 0 {
+		if requested != "" {
+			return nil, &configError{code: ErrorCodeValidationError, fields: []connections.FieldError{{Key: "access_mode", Message: "this connection type has no data access mode"}}}
+		}
+		return nil, nil
+	}
+	if requested != "" {
+		for _, m := range modes {
+			if requested == string(m) {
+				mode := requested
+				return &mode, nil
+			}
+		}
+		return nil, &configError{code: ErrorCodeValidationError, fields: []connections.FieldError{{Key: "access_mode", Message: "must be " + accessModeList(modes)}}}
+	}
+	if len(modes) > 1 {
+		return nil, &configError{code: ErrorCodeValidationError, fields: []connections.FieldError{{Key: "access_mode", Message: "required; choose " + accessModeList(modes)}}}
+	}
+	mode := string(modes[0])
+	return &mode, nil
+}
+
+func accessModeList(modes []connections.AccessMode) string {
+	names := make([]string, len(modes))
+	for i, m := range modes {
+		names[i] = string(m)
+	}
+	return strings.Join(names, " or ")
 }
 
 // validate runs the provider's validation and maps its failure to a 422.
@@ -195,12 +239,56 @@ func (h *CatalogHandlers) ListConnectionProviders(ctx context.Context, _ ListCon
 }
 
 func providerToPublic(p connections.Provider) ConnectionProvider {
+	meta := p.Meta()
 	cp := ConnectionProvider{
 		Kind:         string(p.Kind()),
 		Label:        p.Label(),
 		Family:       ConnectionProviderFamily(p.Family()),
 		Roles:        []ConnectionProviderRoles{},
 		ConfigSchema: []ConnectionProviderField{},
+	}
+	if meta.Description != "" {
+		d := meta.Description
+		cp.Description = &d
+	}
+	if meta.Category != "" {
+		c := ConnectionProviderCategory(meta.Category)
+		cp.Category = &c
+	}
+	if len(meta.AccessModes) > 0 {
+		modes := make([]ConnectionProviderAccessModes, 0, len(meta.AccessModes))
+		for _, m := range meta.AccessModes {
+			modes = append(modes, ConnectionProviderAccessModes(m))
+		}
+		cp.AccessModes = &modes
+	}
+	if len(meta.TrinoCatalogTypes) > 0 {
+		types := append([]string(nil), meta.TrinoCatalogTypes...)
+		cp.TrinoCatalogTypes = &types
+	}
+	if len(meta.Capabilities) > 0 {
+		caps := make(map[string]map[string]ConnectionProviderCapabilities, len(meta.Capabilities))
+		for mode, declared := range meta.Capabilities {
+			inner := make(map[string]ConnectionProviderCapabilities, len(declared))
+			for capability, state := range declared {
+				inner[string(capability)] = ConnectionProviderCapabilities(state)
+			}
+			caps[string(mode)] = inner
+		}
+		cp.Capabilities = &caps
+	}
+	if meta.VersionRequirements.MinEngineVersion != "" || meta.VersionRequirements.MinTrinoVersion != "" {
+		vr := &struct {
+			MinEngineVersion *string `json:"min_engine_version,omitempty"`
+			MinTrinoVersion  *string `json:"min_trino_version,omitempty"`
+		}{}
+		if v := meta.VersionRequirements.MinEngineVersion; v != "" {
+			vr.MinEngineVersion = &v
+		}
+		if v := meta.VersionRequirements.MinTrinoVersion; v != "" {
+			vr.MinTrinoVersion = &v
+		}
+		cp.VersionRequirements = vr
 	}
 	for _, r := range p.Roles() {
 		cp.Roles = append(cp.Roles, ConnectionProviderRoles(r))

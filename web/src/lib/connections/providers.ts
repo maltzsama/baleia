@@ -75,7 +75,7 @@ export function roleDescription(role: ProviderRole): string {
 }
 
 export function isUsable(provider: ConnectionProvider): boolean {
-	return provider.status.state !== 'unsupported';
+	return provider.status.state === 'supported' || provider.status.state === 'experimental';
 }
 
 export function canQueryDirectly(provider: ConnectionProvider): boolean {
