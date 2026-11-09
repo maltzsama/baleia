@@ -135,6 +135,7 @@
 	"history_cancelled": "Cancelled",
 	"common_catalog": "Catalog",
 	"connections_catalog_or_warehouse_name": "Catalog or warehouse name",
+	"connections_connectionwizard_connection_name_not_usable_as_engine": "This connection name cannot be used as an engine name. Choose a name that can be used as a SQL identifier.",
 	"connections_status_experimental": "Preview",
 	"connections_status_planned": "Planned",
 	"connections_status_unsupported": "Unsupported",

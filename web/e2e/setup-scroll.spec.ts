@@ -22,6 +22,7 @@ test('@issue-674 setup step 2 scrolls to the last field of a tall form', async (
 		route.fulfill({ status: 201, json: { token: 'test-token' } })
 	);
 	await page.route('**/api/v1/engines', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/connection-categories', (route) => route.fulfill({ json: [] }));
 	await page.route('**/api/v1/connection-providers', (route) =>
 		route.fulfill({
 			json: [

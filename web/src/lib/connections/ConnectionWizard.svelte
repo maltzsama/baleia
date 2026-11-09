@@ -272,6 +272,18 @@
 		if (!provider || !tested) return;
 		creating = true;
 		createError = '';
+		// Validate the engine name before saving: a direct connection must never
+		// be persisted without its engine, so the user corrects the name here
+		// instead of discovering the failure after the connection was created.
+		let engineName = '';
+		if (accessMode === DIRECT) {
+			engineName = normalizeEngineName(name);
+			if (!engineName) {
+				createError = m.connections_connectionwizard_connection_name_not_usable_as_engine();
+				creating = false;
+				return;
+			}
+		}
 		try {
 			const connection = await createConnection({
 				name,
@@ -287,8 +299,6 @@
 			// Direct mode creates the native engine and never a Trino catalog;
 			// Trino mode creates the catalog registrations and never an engine.
 			if (accessMode === DIRECT) {
-				const engineName = normalizeEngineName(name);
-				if (!engineName) throw new Error('The connection name cannot be used as an engine name.');
 				engine = await createEngine({ name: engineName, connection_id: connection.id });
 				created = { connection, engine, catalogs };
 			}
