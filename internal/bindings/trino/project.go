@@ -75,7 +75,7 @@ func secretProp(p *projection, prop, field string, src connections.Config) {
 func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, connector string) (projection, error) {
 	switch src.Kind {
 	case connections.KindPolaris:
-		return polarisProjection(spec, src), nil
+		return polarisProjection(spec, src)
 	case connections.KindNessie:
 		return nessieProjection(spec, src)
 	case connections.KindIcebergREST:
@@ -98,6 +98,11 @@ func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, conn
 		return sqlserverProjection(spec, src)
 	case connections.KindOracle:
 		return oracleProjection(spec, src)
+	case connections.KindFaker, connections.KindMemory, connections.KindBlackhole,
+		connections.KindJMX, connections.KindTPCH, connections.KindTPCDS:
+		// Endpointless synthetic catalogs need no properties: the connector
+		// name the DDL carries is enough (ADR 0021 D.7).
+		return projection{props: map[string]string{}}, nil
 	}
 	return projection{}, fmt.Errorf("%w: %s", bindings.ErrUnsupportedSource, src.Kind)
 }
@@ -105,7 +110,10 @@ func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, conn
 // polarisProjection is byte-identical to the projection before #80 (golden
 // version d0e1bd09…): changing it would force every Polaris catalog to
 // resync.
-func polarisProjection(spec bindings.BindingSpec, src connections.Config) projection {
+func polarisProjection(spec bindings.BindingSpec, src connections.Config) (projection, error) {
+	if spec.SourceRef == "" {
+		return projection{}, fmt.Errorf("%w: warehouse is required", bindings.ErrInvalid)
+	}
 	p := projection{
 		props: map[string]string{
 			"iceberg.catalog.type":                            "rest",
@@ -121,7 +129,7 @@ func polarisProjection(spec bindings.BindingSpec, src connections.Config) projec
 	}
 	restStorage(&p, src)
 	userSession(&p, src)
-	return p
+	return p, nil
 }
 
 // userSession makes Trino open the REST session as the query's user (#648)

@@ -15,7 +15,7 @@ user-facing connector selection.
 | Kind | Label | Category | Access modes | Roles | Engine kind | Trino catalog types | Status |
 |---|---|---|---|---|---|---|---|
 | `bigquery` | BigQuery | cloud_platform | trino | — | — | bigquery | planned |
-| `blackhole` | Black Hole | internal_catalog | trino | — | — | blackhole | planned |
+| `blackhole` | Black Hole | internal_catalog | trino | — | — | blackhole | experimental |
 | `cassandra` | Apache Cassandra | nosql | trino | — | — | cassandra | planned |
 | `clickhouse` | ClickHouse | analytical | direct | metadata, direct_engine | clickhouse | — | supported |
 | `delta` | Delta Lake | lakehouse | trino | — | — | delta_lake | planned |
@@ -24,7 +24,7 @@ user-facing connector selection.
 | `duckdb` | DuckDB | analytical | trino | — | — | duckdb | planned |
 | `elasticsearch` | Elasticsearch | search | trino | — | — | elasticsearch | planned |
 | `exasol` | Exasol | relational | trino | — | — | exasol | planned |
-| `faker` | Faker | synthetic | trino | — | — | faker | planned |
+| `faker` | Faker | synthetic | trino | — | — | faker | experimental |
 | `flightsql` | Arrow Flight SQL | engine | direct | metadata, direct_engine | flightsql | — | supported |
 | `glue` | AWS Glue Data Catalog | metastore | trino | metadata | — | iceberg, hive, delta_lake | supported |
 | `gsheets` | Google Sheets | external_service | trino | — | — | gsheets | planned |
@@ -32,12 +32,12 @@ user-facing connector selection.
 | `hudi` | Apache Hudi | lakehouse | trino | — | — | hudi | planned |
 | `iceberg` | Iceberg REST catalog | catalog_manager | trino | metadata | — | iceberg | supported |
 | `ignite` | Apache Ignite | relational | trino | — | — | ignite | planned |
-| `jmx` | JMX | internal_catalog | trino | — | — | jmx | planned |
+| `jmx` | JMX | internal_catalog | trino | — | — | jmx | experimental |
 | `kafka` | Apache Kafka | streaming | trino | — | — | kafka | planned |
 | `lakekeeper` | Lakekeeper | catalog_manager | trino | metadata | — | iceberg | supported |
 | `loki` | Grafana Loki | observability | trino | — | — | loki | planned |
 | `mariadb` | MariaDB | relational | direct, trino | metadata, direct_engine | mariadb | mariadb | supported |
-| `memory` | Memory | internal_catalog | trino | — | — | memory | planned |
+| `memory` | Memory | internal_catalog | trino | — | — | memory | experimental |
 | `mongodb` | MongoDB | nosql | trino | — | — | mongodb | planned |
 | `mysql` | MySQL | relational | direct, trino | metadata, direct_engine | mysql | mysql | supported |
 | `nessie` | Project Nessie | catalog_manager | trino | metadata | — | iceberg | supported |
@@ -55,8 +55,8 @@ user-facing connector selection.
 | `sqlserver` | SQL Server | relational | direct, trino | metadata, direct_engine | sqlserver | sqlserver | supported |
 | `starrocks` | StarRocks | engine | — | federated_engine | starrocks | — | planned (planned after v1 (#30)) |
 | `system` | System | internal_catalog | — | — | — | — | not_applicable (reserved system catalog; not user-creatable) |
-| `tpcds` | TPC-DS | synthetic | trino | — | — | tpcds | planned |
-| `tpch` | TPC-H | synthetic | trino | — | — | tpch | planned |
+| `tpcds` | TPC-DS | synthetic | trino | — | — | tpcds | experimental |
+| `tpch` | TPC-H | synthetic | trino | — | — | tpch | experimental |
 | `trino` | Trino | engine | — | metadata, federated_engine | trino | — | supported |
 | `unity` | Unity Catalog | catalog_manager | trino | metadata | — | iceberg | supported |
 
