@@ -3,6 +3,18 @@
 How to monitor Baleia: what it exposes, how to scrape it, and what to do when an alert fires.
 The metrics catalog and its rules come from #87.
 
+## Store migrations (ADR 0020)
+
+Baleia's own schema is defined by GORM models and evolved by versioned Go migrations in `internal/store`; there are no SQL migration files.
+
+- `make store-migrate` (or `/migrate -cmd=store-up` in the image) applies the pending migrations. The API also applies them on start; the worker does not wait for them, so its first jobs may fail against the old schema until the API is up, and Temporal retries them.
+- `make store-migrate-status` (`-cmd=store-status`) prints the applied and pending versions; `make store-migrate-down` rolls back the last safe migration.
+- A store created by the former goose migrations is adopted as the baseline on the first `store-up`: the existing schema is recorded and only newer Go migrations run.
+
+`BALEIA_STORE_BACKEND` selects the backend, `postgres` (default) or `mysql` (MySQL 8 / MariaDB); see [Store backend](configuration.md#store-backend) for the DSNs and caveats. The query-execution path (Trino and the direct engines) is unaffected.
+
+The migration numbers in the upgrade notes below (`00060`, `00062`–`00077`, …) are historical: they describe the goose schema at those releases. Upgrades from a goose-managed version run through the baseline adoption above; no manual SQL step is needed.
+
 ## Upgrading to 0.6.5
 
 Read this before `helm upgrade` from 0.6.x. The connections dialer no longer
