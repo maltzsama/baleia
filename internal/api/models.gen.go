@@ -256,6 +256,25 @@ const (
 	CatalogSummarySyncStatusSynced   CatalogSummarySyncStatus = "synced"
 )
 
+// Defines values for ConnectionCategoryCategory.
+const (
+	ConnectionCategoryCategoryAnalytical      ConnectionCategoryCategory = "analytical"
+	ConnectionCategoryCategoryAnalytics       ConnectionCategoryCategory = "analytics"
+	ConnectionCategoryCategoryCatalogManager  ConnectionCategoryCategory = "catalog_manager"
+	ConnectionCategoryCategoryCloudPlatform   ConnectionCategoryCategory = "cloud_platform"
+	ConnectionCategoryCategoryEngine          ConnectionCategoryCategory = "engine"
+	ConnectionCategoryCategoryExternalService ConnectionCategoryCategory = "external_service"
+	ConnectionCategoryCategoryInternalCatalog ConnectionCategoryCategory = "internal_catalog"
+	ConnectionCategoryCategoryLakehouse       ConnectionCategoryCategory = "lakehouse"
+	ConnectionCategoryCategoryMetastore       ConnectionCategoryCategory = "metastore"
+	ConnectionCategoryCategoryNosql           ConnectionCategoryCategory = "nosql"
+	ConnectionCategoryCategoryObservability   ConnectionCategoryCategory = "observability"
+	ConnectionCategoryCategoryRelational      ConnectionCategoryCategory = "relational"
+	ConnectionCategoryCategorySearch          ConnectionCategoryCategory = "search"
+	ConnectionCategoryCategoryStreaming       ConnectionCategoryCategory = "streaming"
+	ConnectionCategoryCategorySynthetic       ConnectionCategoryCategory = "synthetic"
+)
+
 // Defines values for ConnectionProviderAccessModes.
 const (
 	ConnectionProviderAccessModesDirect ConnectionProviderAccessModes = "direct"
@@ -2058,6 +2077,23 @@ type ClusterSeries struct {
 	Latest *ClusterPoint  `json:"latest"`
 	Series []ClusterPoint `json:"series"`
 }
+
+// ConnectionCategory defines model for ConnectionCategory.
+type ConnectionCategory struct {
+	Category ConnectionCategoryCategory `json:"category"`
+
+	// Description One-line explanation of the category
+	Description *string `json:"description,omitempty"`
+
+	// Label Display name of the category (ADR 0021 D.10)
+	Label string `json:"label"`
+
+	// Order Presentation order, ascending
+	Order int `json:"order"`
+}
+
+// ConnectionCategoryCategory defines model for ConnectionCategory.Category.
+type ConnectionCategoryCategory string
 
 // ConnectionCheck defines model for ConnectionCheck.
 type ConnectionCheck struct {

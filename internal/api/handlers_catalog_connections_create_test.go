@@ -605,6 +605,33 @@ func TestListConnectionProviders(t *testing.T) {
 	}
 }
 
+func TestListConnectionCategories(t *testing.T) {
+	t.Parallel()
+	h := createHandlers(t, nil, nil)
+	resp, err := h.ListConnectionCategories(testContext(), ListConnectionCategoriesRequestObject{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := resp.(ListConnectionCategories200JSONResponse)
+	if len(list) != 15 {
+		t.Fatalf("categories = %d, want 15", len(list))
+	}
+	for i, c := range list {
+		if c.Order != i {
+			t.Errorf("category %q order = %d, want %d", c.Category, c.Order, i)
+		}
+		if c.Label == "" || c.Description == nil || *c.Description == "" {
+			t.Errorf("category %q missing label/description: %+v", c.Category, c)
+		}
+	}
+	if list[0].Category != ConnectionCategoryCategoryRelational {
+		t.Errorf("first category = %q, want relational", list[0].Category)
+	}
+	if list[len(list)-1].Category != ConnectionCategoryCategoryEngine {
+		t.Errorf("last category = %q, want engine", list[len(list)-1].Category)
+	}
+}
+
 // ── who may manage connections (#512) ────────────────────────────────────────
 
 func adminsOnlyHandlers(t *testing.T, q db.Querier, kr *crypto.Keyring) *API {

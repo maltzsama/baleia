@@ -2222,6 +2222,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/connection-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Connection categories in presentation order (ADR 0021 D.10) */
+        get: operations["listConnectionCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/catalog-connections": {
         parameters: {
             query?: never;
@@ -5857,6 +5874,16 @@ export interface components {
             /** @description Glob patterns (case-insensitive) of extra-property keys that cannot be overridden */
             protected_key_patterns: string[];
             reserved_names: string[];
+        };
+        ConnectionCategory: {
+            /** @enum {string} */
+            category: "relational" | "analytical" | "catalog_manager" | "metastore" | "lakehouse" | "cloud_platform" | "nosql" | "search" | "analytics" | "streaming" | "observability" | "external_service" | "synthetic" | "internal_catalog" | "engine";
+            /** @description Display name of the category (ADR 0021 D.10) */
+            label: string;
+            /** @description One-line explanation of the category */
+            description?: string;
+            /** @description Presentation order, ascending */
+            order: number;
         };
         ConnectionProviderField: {
             key: string;
@@ -11143,6 +11170,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConnectionProvider"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listConnectionCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Categories, ordered for display */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionCategory"][];
                 };
             };
             401: components["responses"]["Unauthorized"];

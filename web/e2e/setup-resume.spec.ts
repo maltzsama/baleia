@@ -19,6 +19,7 @@ test('@issue-676 a refresh stays on the setup step; only Skip moves on', async (
 		})
 	);
 	await page.route('**/api/v1/engines', (route) => route.fulfill({ json: [] }));
+	await page.route('**/api/v1/connection-categories', (route) => route.fulfill({ json: [] }));
 	await page.route('**/api/v1/connection-providers', (route) =>
 		route.fulfill({
 			json: [

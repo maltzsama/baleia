@@ -54,6 +54,7 @@ export default ts.config(
 		files: ['src/**/*.{ts,svelte}'],
 		ignores: [
 			'src/lib/ui/patterns/kindIcon.ts',
+			'src/lib/connections/accessModes.ts',
 			'src/lib/api/schema.d.ts',
 			'src/**/*.spec.ts',
 			'src/**/*.examples.svelte',

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
 	makeBindingSupport,
 	makeCatalog,
+	makeCategory,
 	makeConnection,
 	makeEngine,
 	makeProvider,
@@ -18,6 +19,7 @@ const OTHER_CONNECTION = '00000000-0000-0000-0000-000000000009';
 function mockApi() {
 	server.use(
 		http.get('/connection-providers', ({ response }) => response(200).json([makeProvider()])),
+		http.get('/connection-categories', ({ response }) => response(200).json([makeCategory()])),
 		http.get('/engines', ({ response }) =>
 			response(200).json([
 				makeEngine({
@@ -62,7 +64,7 @@ async function fillConfiguration() {
 async function reachTestStep() {
 	await fillConfiguration();
 	await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-	await fireEvent.click(screen.getByRole('checkbox', { name: /Query it directly/ }));
+	await fireEvent.click(screen.getByRole('radio', { name: /Query it directly/ }));
 	await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 }
 
