@@ -219,6 +219,7 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 		return nil, err
 	}
 	h.observe(ctx, l)
+	h.resyncHiveSiblings(ctx, p, t.conn.ID, t.conn.Type, t.engine.ID)
 	h.catalogCache.Clear()
 	h.audited(ctx, withID(ev, created.ID).Allowed())
 	return CreateCatalogBinding201JSONResponse(h.bindingResponse(ctx, created, proj.Version)), nil
@@ -363,6 +364,7 @@ func (h *CatalogHandlers) UpdateCatalogBinding(ctx context.Context, request Upda
 		return nil, err
 	}
 	h.observe(ctx, l)
+	h.resyncHiveSiblings(ctx, p, t.conn.ID, t.conn.Type, t.engine.ID)
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())
 	return UpdateCatalogBinding200JSONResponse(h.bindingResponse(ctx, updated, proj.Version)), nil
@@ -417,6 +419,7 @@ func (h *CatalogHandlers) DeleteCatalogBinding(ctx context.Context, request Dele
 	if err := h.topology.DeleteBinding(ctx, cur.ID); err != nil {
 		return nil, err
 	}
+	h.resyncHiveSiblings(ctx, p, t.conn.ID, t.conn.Type, t.engine.ID)
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())
 	return DeleteCatalogBinding204Response{}, nil

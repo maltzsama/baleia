@@ -264,6 +264,26 @@ func (r *Repo) ListBindingsByEngine(ctx context.Context, engineID db.UUID) ([]db
 	return toDBCatalogBindings(rows), nil
 }
 
+// ListHiveBindingsToResync lists the active hive bindings of a connection on an
+// engine. Hive table redirection (#86) names only siblings active when the hive
+// binding is projected, so a catalog change must re-apply these.
+func (r *Repo) ListHiveBindingsToResync(ctx context.Context, connID, engineID db.UUID) ([]db.UUID, error) {
+	var ids []string
+	if err := r.Users.db.WithContext(ctx).
+		Table("catalog_bindings AS b").
+		Joins("JOIN catalogs AS c ON c.id = b.catalog_id").
+		Where("b.engine_id = ? AND b.connector = ? AND b.enabled = ? AND b.lifecycle_state = ? AND c.connection_id = ?",
+			UUIDString(engineID), "hive", true, "active", UUIDString(connID)).
+		Pluck("b.id", &ids).Error; err != nil {
+		return nil, err
+	}
+	out := make([]db.UUID, len(ids))
+	for i, id := range ids {
+		out[i] = PGUUID(id)
+	}
+	return out, nil
+}
+
 // GetManagedBindingOfCatalog returns a catalog's managed binding on an engine.
 func (r *Repo) GetManagedBindingOfCatalog(ctx context.Context, arg db.GetManagedBindingOfCatalogParams) (db.CatalogBinding, error) {
 	var row model.CatalogBinding

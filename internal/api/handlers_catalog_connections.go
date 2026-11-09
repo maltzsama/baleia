@@ -339,6 +339,37 @@ func (h *CatalogHandlers) resyncBinding(ctx context.Context, p authz.Principal, 
 	h.audited(ctx, ev.Allowed())
 }
 
+// hiveResyncStore is the GORM repo query the catalog handlers need to re-apply
+// Hive redirection. It is optional: the in-memory stores used by tests do not
+// implement it, and then no resync is needed.
+type hiveResyncStore interface {
+	ListHiveBindingsToResync(ctx context.Context, connID, engineID db.UUID) ([]db.UUID, error)
+}
+
+// resyncHiveSiblings re-applies the hive-connector bindings of a Hive/Glue
+// connection on engineID after a sibling changed. Table redirection (#86) names
+// only siblings that are active when the hive binding is projected, so creating
+// or deleting an Iceberg or Delta catalog must reapply the Hive catalog.
+func (h *CatalogHandlers) resyncHiveSiblings(ctx context.Context, p authz.Principal, connID db.UUID, kind string, engineID db.UUID) {
+	if kind != string(connections.KindHiveMetastore) && kind != string(connections.KindGlue) {
+		return
+	}
+	store, ok := h.stores.redirect.(hiveResyncStore)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resyncTimeout)
+	defer cancel()
+	ids, err := store.ListHiveBindingsToResync(ctx, connID, engineID)
+	if err != nil {
+		h.logger.WarnContext(ctx, "list Hive siblings to re-apply redirection", "engine_id", idString(engineID), "err", err)
+		return
+	}
+	for _, id := range ids {
+		h.resyncBinding(ctx, p, id)
+	}
+}
+
 func (h *CatalogHandlers) DeleteCatalogConnection(ctx context.Context, request DeleteCatalogConnectionRequestObject) (DeleteCatalogConnectionResponseObject, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {

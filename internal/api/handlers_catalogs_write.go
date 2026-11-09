@@ -214,6 +214,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		return nil, err
 	}
 	h.observe(ctx, l)
+	h.resyncHiveSiblings(ctx, p, conn.ID, conn.Type, cluster.EngineID)
 	h.catalogCache.Clear()
 	h.startMetadataSync(ctx, cat.ID)
 	ev = withID(ev, cat.ID)
@@ -474,6 +475,7 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 		return nil, err
 	}
 	h.observe(ctx, l)
+	h.resyncHiveSiblings(ctx, p, conn.ID, conn.Type, eng.ID)
 	h.catalogCache.Clear()
 	h.startMetadataSync(ctx, updated.ID)
 	h.audited(ctx, ev.Allowed())
@@ -491,7 +493,7 @@ func (h *CatalogHandlers) DeleteCatalog(ctx context.Context, request DeleteCatal
 	id := db.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.CatalogDelete, ResourceType: "catalog", ResourceID: idString(id)}
 	ctx = audit.WithAction(ctx, ev.Action)
-	cat, _, err := h.authz().CatalogOfConnection(ctx, p, connID, id, authz.ActWrite)
+	cat, conn, err := h.authz().CatalogOfConnection(ctx, p, connID, id, authz.ActWrite)
 	if err != nil {
 		nf, fb := catalogAccessError(err)
 		switch {
@@ -530,6 +532,7 @@ func (h *CatalogHandlers) DeleteCatalog(ctx context.Context, request DeleteCatal
 		return nil, err
 	}
 	h.observe(ctx, l)
+	h.resyncHiveSiblings(ctx, p, conn.ID, conn.Type, eng.ID)
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())
 	return DeleteCatalog204Response{}, nil
