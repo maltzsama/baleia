@@ -4958,7 +4958,8 @@ export interface components {
         CreateCatalogRequest: {
             name: string;
             trino_catalog_name: string;
-            warehouse: string;
+            /** @description Warehouse or logical source the connector addresses. Required for catalog managers and Iceberg REST catalogs; omitted for databases (their catalog falls back to the connection's database) and for endpointless catalogs (memory, blackhole, faker, jmx, tpch, tpcds). */
+            warehouse?: string;
             /** @default iceberg */
             connector: string;
             description?: string;

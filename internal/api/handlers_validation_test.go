@@ -75,7 +75,7 @@ func TestCreateCatalog_RejectsInvalidIdentifier(t *testing.T) {
 	h, q, _ := newAuthzHandlers(t)
 	conn, _ := reqIDs(q)
 	resp, err := h.CreateCatalog(ctxAs(ownerID, "member"), CreateCatalogRequestObject{ConnectionId: conn, Body: &CreateCatalogRequest{
-		Name: "x", TrinoCatalogName: "Bad-Name", Warehouse: "x",
+		Name: "x", TrinoCatalogName: "Bad-Name", Warehouse: strp("x"),
 	}})
 	if err != nil {
 		t.Fatal(err)

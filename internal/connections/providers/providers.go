@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/postgresql"
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/connections/sqlserver"
+	"github.com/galileostudio/baleia/internal/connections/synthetic"
 	"github.com/galileostudio/baleia/internal/connections/trino"
 	"github.com/galileostudio/baleia/internal/connections/unity"
 	"github.com/galileostudio/baleia/internal/dialect"
@@ -63,6 +64,7 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 		trino.New(d, o.Dialects.MustGet(dialect.Trino)),
 	}
 	all = append(all, planned.All()...)
+	all = append(all, synthetic.All()...)
 	reg, err := connections.NewRegistry(all...)
 	if err != nil {
 		return nil, err

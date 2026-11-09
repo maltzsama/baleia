@@ -54,11 +54,8 @@ func TestEveryProviderIsComplete(t *testing.T) {
 			if p.Label() == "" || p.Family() == "" {
 				t.Fatal("label and family are required")
 			}
-			// Planned and not-applicable types may have an empty schema (ADR
-			// 0021 D.9); a creatable type must declare its config fields.
-			if len(p.ConfigSchema()) == 0 && (p.Status().State == connections.StateSupported || p.Status().State == connections.StateExperimental) {
-				t.Fatal("a creatable type needs a config schema")
-			}
+			// An endpointless type (ADR 0021 D.7) has an empty schema, so a
+			// creatable type need not declare config fields.
 			meta := p.Meta()
 			if meta.Description == "" || meta.Category == "" {
 				t.Error("description and category are required (ADR 0021 D.1)")
@@ -339,7 +336,12 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 	}
 	// SQLite opens no network connection (TestSQLiteRootConfinement guards
 	// it); planned, unsupported and not-applicable kinds never connect.
-	noNetwork := map[connections.Kind]bool{connections.KindSQLite: true}
+	noNetwork := map[connections.Kind]bool{
+		connections.KindSQLite: true,
+		// Endpointless synthetic catalogs never open a network connection.
+		connections.KindFaker: true, connections.KindMemory: true, connections.KindBlackhole: true,
+		connections.KindJMX: true, connections.KindTPCH: true, connections.KindTPCDS: true,
+	}
 	for _, p := range reg.All() {
 		if p.Kind() == connections.KindSQLite {
 			continue
@@ -500,6 +502,7 @@ func TestLegacyURL(t *testing.T) {
 		{connections.Config{Kind: connections.KindPolaris, Values: map[string]string{"url": "http://p"}}, "http://p"},
 		{connections.Config{Kind: connections.KindPostgreSQL, Values: map[string]string{"host": "db", "port": "5432", "database": "s"}}, "jdbc:postgresql://db:5432/s"},
 		{connections.Config{Kind: connections.KindMySQL, Values: map[string]string{"host": "::1", "port": "3306"}}, "jdbc:mysql://[::1]:3306"},
+		{connections.Config{Kind: connections.KindMemory, Values: map[string]string{}}, ""},
 	} {
 		if got := LegacyURL(c.cfg); got != c.want {
 			t.Errorf("%s: %q, want %q", c.cfg.Kind, got, c.want)

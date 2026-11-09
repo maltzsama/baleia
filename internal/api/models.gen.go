@@ -2290,7 +2290,9 @@ type CreateCatalogRequest struct {
 	// ShareWithWorkspaceId Workspace to grant the new catalog to as an active grant (the connection wizard's "Share with", preselected to the current workspace). Omitted, the catalog is created unshared; the owner shares it later from the catalog's Access screen.
 	ShareWithWorkspaceId *openapi_types.UUID `json:"share_with_workspace_id,omitempty"`
 	TrinoCatalogName     string              `json:"trino_catalog_name"`
-	Warehouse            string              `json:"warehouse"`
+
+	// Warehouse Warehouse or logical source the connector addresses. Required for catalog managers and Iceberg REST catalogs; omitted for databases (their catalog falls back to the connection's database) and for endpointless catalogs (memory, blackhole, faker, jmx, tpch, tpcds).
+	Warehouse *string `json:"warehouse,omitempty"`
 }
 
 // CreateEngineRequest defines model for CreateEngineRequest.
