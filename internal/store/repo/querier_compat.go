@@ -364,13 +364,13 @@ func (r *Repo) ListBindingStatusByCatalog(ctx context.Context, catalogID pgtype.
 		Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	set, err := r.loadBindingStatusSet(r.Users.db.WithContext(ctx), rows)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]db.BindingStatusV, 0, len(rows))
 	for _, row := range rows {
-		status, err := r.bindingStatus(ctx, row)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, status)
+		out = append(out, set.status(row))
 	}
 	return out, nil
 }
@@ -880,23 +880,46 @@ func (r *Repo) MaxMetadataStalenessSeconds(ctx context.Context) (float64, error)
 	if err != nil {
 		return 0, err
 	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	catalogIDs := make([]string, len(ids))
+	for i, id := range ids {
+		catalogIDs[i] = UUIDString(id)
+	}
+	var catalogs []model.Catalog
+	if err := r.Users.db.WithContext(ctx).Where("id IN ?", catalogIDs).Find(&catalogs).Error; err != nil {
+		return 0, err
+	}
+	lastByCatalog := make(map[string]time.Time, len(catalogs))
+	for _, c := range catalogs {
+		lastByCatalog[string(c.ID)] = c.CreatedAt
+	}
+	var runs []model.MetadataSyncRun
+	if err := r.Users.db.WithContext(ctx).
+		Where("catalog_id IN ? AND status = ? AND finished_at IS NOT NULL", catalogIDs, "finished").
+		Order("finished_at DESC").
+		Find(&runs).Error; err != nil {
+		return 0, err
+	}
+	// The first run of a catalog (runs are ordered by finished_at DESC) is its
+	// latest finished run and wins over the catalog's created_at, mirroring
+	// the previous per-catalog lookup.
+	finished := make(map[string]bool, len(catalogs))
+	for _, run := range runs {
+		if run.FinishedAt == nil {
+			continue
+		}
+		key := string(run.CatalogID)
+		if _, ok := lastByCatalog[key]; !ok || finished[key] {
+			continue
+		}
+		lastByCatalog[key] = *run.FinishedAt
+		finished[key] = true
+	}
 	now := time.Now().UTC()
 	var maxAge float64
-	for _, id := range ids {
-		var catalog model.Catalog
-		if err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&catalog).Error; err != nil {
-			return 0, err
-		}
-		last := catalog.CreatedAt
-		var run model.MetadataSyncRun
-		err := r.Users.db.WithContext(ctx).
-			Where("catalog_id = ? AND status = ? AND finished_at IS NOT NULL", UUIDString(id), "finished").
-			Order("finished_at DESC").First(&run).Error
-		if err == nil && run.FinishedAt != nil {
-			last = *run.FinishedAt
-		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return 0, err
-		}
+	for _, last := range lastByCatalog {
 		if age := now.Sub(last).Seconds(); age > maxAge {
 			maxAge = age
 		}

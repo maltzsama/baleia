@@ -861,7 +861,6 @@ func (r *Repo) getBinding(ctx context.Context, id pgtype.UUID) (model.CatalogBin
 
 // bindingStatus reproduces binding_status_v in Go (ADR 0020 removes the view).
 func (r *Repo) bindingStatus(ctx context.Context, b model.CatalogBinding) (db.BindingStatusV, error) {
-	status := db.BindingStatusV{BindingID: PGUUID(string(b.ID)), LifecycleState: string(b.LifecycleState)}
 	registry, registryFound, err := r.registryState(ctx, b.EngineID, string(b.EngineCatalogName))
 	if err != nil {
 		return db.BindingStatusV{}, err
@@ -870,6 +869,14 @@ func (r *Repo) bindingStatus(ctx context.Context, b model.CatalogBinding) (db.Bi
 	if err != nil {
 		return db.BindingStatusV{}, err
 	}
+	return bindingStatusFrom(b, registry, registryFound, observation, observationFound), nil
+}
+
+// bindingStatusFrom derives the sync status the API shows for a binding from
+// already-loaded registry and observation state. It is shared by the
+// single-binding path and the batched list path so the logic has one source.
+func bindingStatusFrom(b model.CatalogBinding, registry model.TrinoCatalogRegistry, registryFound bool, observation model.EngineCatalogObservation, observationFound bool) db.BindingStatusV {
+	status := db.BindingStatusV{BindingID: PGUUID(string(b.ID)), LifecycleState: string(b.LifecycleState)}
 	switch {
 	case b.LifecycleState == "error":
 		status.SyncStatus = "error"
@@ -894,7 +901,7 @@ func (r *Repo) bindingStatus(ctx context.Context, b model.CatalogBinding) (db.Bi
 			status.EngineError = "the engine could not load the catalog"
 		}
 	}
-	return status, nil
+	return status
 }
 
 func equalStringPtr(a, b *string) bool {
@@ -902,6 +909,111 @@ func equalStringPtr(a, b *string) bool {
 		return false
 	}
 	return *a == *b
+}
+
+// bindingStatusSet holds the rows needed to derive binding status for many
+// bindings in a constant number of queries. See loadBindingStatusSet.
+type bindingStatusSet struct {
+	engines      map[model.UUID]model.Engine
+	clusters     map[model.UUID]model.TrinoCluster
+	registries   map[string]model.TrinoCatalogRegistry
+	observations map[string]model.EngineCatalogObservation
+}
+
+func clusterRegistryKey(clusterID model.UUID, catalogName string) string {
+	return string(clusterID) + "\x00" + catalogName
+}
+
+func observationKey(engineID model.UUID, catalogName string) string {
+	return string(engineID) + "\x00" + catalogName
+}
+
+// loadBindingStatusSet loads, in four queries, the engines, Trino clusters,
+// registries and observations behind the given bindings. It mirrors the
+// per-binding registryState and observationState lookups, batched.
+func (r *Repo) loadBindingStatusSet(scope *gorm.DB, bindings []model.CatalogBinding) (*bindingStatusSet, error) {
+	s := &bindingStatusSet{
+		engines:      make(map[model.UUID]model.Engine),
+		clusters:     make(map[model.UUID]model.TrinoCluster),
+		registries:   make(map[string]model.TrinoCatalogRegistry),
+		observations: make(map[string]model.EngineCatalogObservation),
+	}
+	if len(bindings) == 0 {
+		return s, nil
+	}
+	engineIDs := make([]model.UUID, 0, len(bindings))
+	seenEngines := make(map[model.UUID]struct{}, len(bindings))
+	catalogNames := make([]string, 0, len(bindings))
+	seenNames := make(map[string]struct{}, len(bindings))
+	for _, b := range bindings {
+		if _, ok := seenEngines[b.EngineID]; !ok {
+			seenEngines[b.EngineID] = struct{}{}
+			engineIDs = append(engineIDs, b.EngineID)
+		}
+		name := string(b.EngineCatalogName)
+		if _, ok := seenNames[name]; !ok {
+			seenNames[name] = struct{}{}
+			catalogNames = append(catalogNames, name)
+		}
+	}
+
+	var engines []model.Engine
+	if err := scope.Select("id", "name", "kind", "enabled").Where("id IN ?", engineIDs).Find(&engines).Error; err != nil {
+		return nil, err
+	}
+	for _, e := range engines {
+		s.engines[e.ID] = e
+	}
+
+	var clusters []model.TrinoCluster
+	if err := scope.Where("engine_id IN ?", engineIDs).Find(&clusters).Error; err != nil {
+		return nil, err
+	}
+	clusterIDs := make([]model.UUID, 0, len(clusters))
+	for _, c := range clusters {
+		if c.EngineID == nil {
+			continue
+		}
+		s.clusters[*c.EngineID] = c
+		clusterIDs = append(clusterIDs, c.ID)
+	}
+
+	if len(clusterIDs) > 0 {
+		var registries []model.TrinoCatalogRegistry
+		if err := scope.Where("cluster_id IN ? AND catalog_name IN ?", clusterIDs, catalogNames).Find(&registries).Error; err != nil {
+			return nil, err
+		}
+		for _, reg := range registries {
+			s.registries[clusterRegistryKey(reg.ClusterID, string(reg.CatalogName))] = reg
+		}
+	}
+
+	var observations []model.EngineCatalogObservation
+	if err := scope.Where("engine_id IN ? AND catalog_name IN ?", engineIDs, catalogNames).Find(&observations).Error; err != nil {
+		return nil, err
+	}
+	for _, o := range observations {
+		s.observations[observationKey(o.EngineID, string(o.CatalogName))] = o
+	}
+	return s, nil
+}
+
+// registryFor mirrors registryState for a binding against a preloaded set.
+func (s *bindingStatusSet) registryFor(b model.CatalogBinding) (model.TrinoCatalogRegistry, bool) {
+	cluster, ok := s.clusters[b.EngineID]
+	if !ok {
+		return model.TrinoCatalogRegistry{}, false
+	}
+	registry, ok := s.registries[clusterRegistryKey(cluster.ID, string(b.EngineCatalogName))]
+	return registry, ok
+}
+
+// status derives a binding's status from a preloaded set, matching
+// bindingStatusFrom without touching the database.
+func (s *bindingStatusSet) status(b model.CatalogBinding) db.BindingStatusV {
+	registry, registryFound := s.registryFor(b)
+	observation, observationFound := s.observations[observationKey(b.EngineID, string(b.EngineCatalogName))]
+	return bindingStatusFrom(b, registry, registryFound, observation, observationFound)
 }
 
 func toDBCatalogs(rows []model.Catalog) []db.Catalog {
