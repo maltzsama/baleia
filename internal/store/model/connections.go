@@ -4,10 +4,10 @@ import "time"
 
 // CatalogConnection is the catalog_connections table.
 type CatalogConnection struct {
-	ID                  UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:catalog_connections_type_check,((type = ANY (ARRAY['polaris'::text, 'nessie'::text, 'iceberg'::text, 'lakekeeper'::text, 'unity'::text, 'hive'::text, 'glue'::text, 'postgresql'::text, 'mysql'::text, 'mariadb'::text, 'sqlserver'::text, 'oracle'::text, 'sqlite'::text, 'clickhouse'::text, 'flightsql'::text, 'trino'::text, 'doris'::text, 'starrocks'::text])))"`
+	ID                  UUID      `gorm:"column:id;primaryKey;not null;check:catalog_connections_type_check,((type IN ('polaris', 'nessie', 'iceberg', 'lakekeeper', 'unity', 'hive', 'glue', 'postgresql', 'mysql', 'mariadb', 'sqlserver', 'oracle', 'sqlite', 'clickhouse', 'flightsql', 'trino', 'doris', 'starrocks')))"`
 	Name                Text      `gorm:"column:name;not null;size:128;uniqueIndex:catalog_connections_name_key,priority:1"`
 	Type                string    `gorm:"column:type;not null"`
-	AccessMode          *string   `gorm:"column:access_mode;check:catalog_connections_access_mode_check,(((access_mode IS NULL) OR (access_mode = ANY (ARRAY['direct'::text, 'trino'::text]))))"`
+	AccessMode          *string   `gorm:"column:access_mode;check:catalog_connections_access_mode_check,(((access_mode IS NULL) OR (access_mode IN ('direct', 'trino'))))"`
 	URL                 string    `gorm:"column:url;not null"`
 	CredentialsEnc      *string   `gorm:"column:credentials_enc"`
 	CreatedAt           time.Time `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
@@ -24,9 +24,9 @@ func (CatalogConnection) TableName() string { return "catalog_connections" }
 
 // Engine is the engines table.
 type Engine struct {
-	ID                         UUID               `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:engines_name_check,((name ~ '^[a-z][a-z0-9_-]{0,62}$'::text))"`
-	Name                       Text               `gorm:"column:name;not null;size:128;uniqueIndex:engines_name_key,priority:1;check:engines_class_check,((class = ANY (ARRAY['federated'::text, 'direct'::text])))"`
-	Kind                       string             `gorm:"column:kind;not null;check:engines_identity_mode_check,((identity_mode = ANY (ARRAY['impersonation'::text, 'connection'::text, 'per_user'::text])))"`
+	ID                         UUID               `gorm:"column:id;primaryKey;not null"`
+	Name                       Text               `gorm:"column:name;not null;size:128;uniqueIndex:engines_name_key,priority:1;check:engines_class_check,((class IN ('federated', 'direct')))"`
+	Kind                       string             `gorm:"column:kind;not null;check:engines_identity_mode_check,((identity_mode IN ('impersonation', 'connection', 'per_user')))"`
 	Class                      string             `gorm:"column:class;not null;check:engines_max_running_total_check,(((max_running_total IS NULL) OR (max_running_total >= 0)))"`
 	ConnectionID               UUID               `gorm:"column:connection_id;not null;uniqueIndex:engines_connection_id_key,priority:1;check:engines_cost_threshold_bytes_check,(((cost_threshold_bytes IS NULL) OR (cost_threshold_bytes > 0)))"`
 	IdentityMode               Text               `gorm:"column:identity_mode;not null;size:255;default:'connection'"`
@@ -47,11 +47,11 @@ func (Engine) TableName() string { return "engines" }
 
 // Catalog is the catalogs table.
 type Catalog struct {
-	ID               UUID               `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:catalogs_trino_name_format,((trino_catalog_name ~ '^[a-z][a-z0-9_]{0,62}$'::text))"`
-	ConnectionID     UUID               `gorm:"column:connection_id;not null;uniqueIndex:catalogs_connection_id_name_key,priority:1;check:catalogs_trino_name_not_reserved,((trino_catalog_name <> ALL (ARRAY['system'::text, 'jmx'::text, 'tpch'::text, 'tpcds'::text, 'memory'::text, 'env'::text, 'file'::text])))"`
-	Name             Text               `gorm:"column:name;not null;size:128;uniqueIndex:catalogs_connection_id_name_key,priority:2;check:catalogs_connector_format,((connector ~ '^[a-z][a-z0-9_]{0,62}$'::text))"`
-	Description      *string            `gorm:"column:description;check:catalogs_origin_check,((origin = ANY (ARRAY['source'::text, 'native'::text])))"`
-	TrinoCatalogName *Text              `gorm:"column:trino_catalog_name;size:128;uniqueIndex:catalogs_cluster_id_trino_catalog_name_key,priority:2;check:catalogs_source_has_trino_columns,(((origin = 'native'::text) OR ((trino_catalog_name IS NOT NULL) AND (cluster_id IS NOT NULL) AND (warehouse IS NOT NULL) AND (connector IS NOT NULL))))"`
+	ID               UUID               `gorm:"column:id;primaryKey;not null"`
+	ConnectionID     UUID               `gorm:"column:connection_id;not null;uniqueIndex:catalogs_connection_id_name_key,priority:1;check:catalogs_trino_name_not_reserved,((trino_catalog_name NOT IN ('system', 'jmx', 'tpch', 'tpcds', 'memory', 'env', 'file')))"`
+	Name             Text               `gorm:"column:name;not null;size:128;uniqueIndex:catalogs_connection_id_name_key,priority:2"`
+	Description      *string            `gorm:"column:description;check:catalogs_origin_check,((origin IN ('source', 'native')))"`
+	TrinoCatalogName *Text              `gorm:"column:trino_catalog_name;size:128;uniqueIndex:catalogs_cluster_id_trino_catalog_name_key,priority:2;check:catalogs_source_has_trino_columns,(((origin = 'native') OR ((trino_catalog_name IS NOT NULL) AND (cluster_id IS NOT NULL) AND (warehouse IS NOT NULL) AND (connector IS NOT NULL))))"`
 	ClusterID        *UUID              `gorm:"column:cluster_id;uniqueIndex:catalogs_cluster_id_trino_catalog_name_key,priority:1"`
 	Warehouse        *string            `gorm:"column:warehouse"`
 	Connector        *Text              `gorm:"column:connector;size:255;default:'iceberg'"`
@@ -70,8 +70,8 @@ func (Catalog) TableName() string { return "catalogs" }
 
 // CatalogBinding is the catalog_bindings table.
 type CatalogBinding struct {
-	ID                UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:catalog_bindings_mode_check,((mode = ANY (ARRAY['managed'::text, 'adopted'::text, 'native'::text])))"`
-	CatalogID         UUID      `gorm:"column:catalog_id;not null;uniqueIndex:catalog_bindings_catalog_id_engine_id_key,priority:1;index:catalog_bindings_catalog_idx,priority:1;check:catalog_bindings_lifecycle_state_check,((lifecycle_state = ANY (ARRAY['provisioning'::text, 'active'::text, 'updating'::text, 'error'::text, 'deprovisioning'::text, 'disabled'::text])))"`
+	ID                UUID      `gorm:"column:id;primaryKey;not null;check:catalog_bindings_mode_check,((mode IN ('managed', 'adopted', 'native')))"`
+	CatalogID         UUID      `gorm:"column:catalog_id;not null;uniqueIndex:catalog_bindings_catalog_id_engine_id_key,priority:1;index:catalog_bindings_catalog_idx,priority:1;check:catalog_bindings_lifecycle_state_check,((lifecycle_state IN ('provisioning', 'active', 'updating', 'error', 'deprovisioning', 'disabled')))"`
 	EngineID          UUID      `gorm:"column:engine_id;not null;uniqueIndex:catalog_bindings_engine_id_engine_catalog_name_key,priority:1;uniqueIndex:catalog_bindings_catalog_id_engine_id_key,priority:2"`
 	EngineCatalogName Text      `gorm:"column:engine_catalog_name;not null;size:128;uniqueIndex:catalog_bindings_engine_id_engine_catalog_name_key,priority:2"`
 	Connector         *string   `gorm:"column:connector"`
@@ -93,7 +93,7 @@ func (CatalogBinding) TableName() string { return "catalog_bindings" }
 
 // EngineCatalogObservation is the engine_catalog_observations table.
 type EngineCatalogObservation struct {
-	EngineID    UUID      `gorm:"column:engine_id;primaryKey;not null;check:engine_catalog_observations_mode_check,((mode = ANY (ARRAY['managed'::text, 'adopted'::text, 'native'::text])))"`
+	EngineID    UUID      `gorm:"column:engine_id;primaryKey;not null;check:engine_catalog_observations_mode_check,((mode IN ('managed', 'adopted', 'native')))"`
 	CatalogName Text      `gorm:"column:catalog_name;primaryKey;not null;size:128"`
 	Present     bool      `gorm:"column:present;not null"`
 	Mode        string    `gorm:"column:mode;not null"`
@@ -107,7 +107,7 @@ func (EngineCatalogObservation) TableName() string { return "engine_catalog_obse
 
 // EngineQueueCapacity is the engine_queue_capacity table.
 type EngineQueueCapacity struct {
-	EngineID         UUID      `gorm:"column:engine_id;primaryKey;not null;check:engine_queue_capacity_class_check,((class = ANY (ARRAY['interactive'::text, 'heavy'::text, 'background'::text])))"`
+	EngineID         UUID      `gorm:"column:engine_id;primaryKey;not null;check:engine_queue_capacity_class_check,((class IN ('interactive', 'heavy', 'background')))"`
 	Class            Text      `gorm:"column:class;primaryKey;not null;size:128;check:engine_queue_capacity_max_running_check,((max_running >= 0))"`
 	MaxRunning       int32     `gorm:"column:max_running;not null;check:engine_queue_capacity_max_queued_check,((max_queued >= 0))"`
 	MaxQueued        int32     `gorm:"column:max_queued;not null;check:engine_queue_capacity_queue_timeout_ms_check,((queue_timeout_ms > 0))"`
@@ -122,11 +122,11 @@ func (EngineQueueCapacity) TableName() string { return "engine_queue_capacity" }
 
 // TrinoCatalogRegistry is the trino_catalog_registry table.
 type TrinoCatalogRegistry struct {
-	ClusterID      UUID          `gorm:"column:cluster_id;primaryKey;not null;index:trino_catalog_registry_enabled_idx,priority:1,where:enabled;check:registry_catalog_name_format,((catalog_name ~ '^[a-z][a-z0-9_]{0,62}$'::text))"`
-	CatalogName    Text          `gorm:"column:catalog_name;primaryKey;not null;size:128;check:registry_connector_name_format,((connector_name ~ '^[a-z][a-z0-9_]{0,62}$'::text))"`
-	ConnectorName  string        `gorm:"column:connector_name;not null;check:registry_sync_status_valid,((sync_status = ANY (ARRAY['pending'::text, 'synced'::text, 'error'::text])))"`
-	Properties     JSON          `gorm:"column:properties;not null;check:registry_updated_by_valid,((updated_by = ANY (ARRAY['baleia'::text, 'trino'::text])))"`
-	CatalogVersion *string       `gorm:"column:catalog_version;check:registry_catalog_name_not_reserved,((catalog_name <> ALL (ARRAY['system'::text, 'jmx'::text, 'tpch'::text, 'tpcds'::text, 'memory'::text, 'env'::text, 'file'::text])))"`
+	ClusterID      UUID          `gorm:"column:cluster_id;primaryKey;not null;index:trino_catalog_registry_enabled_idx,priority:1,where:enabled"`
+	CatalogName    Text          `gorm:"column:catalog_name;primaryKey;not null;size:128"`
+	ConnectorName  string        `gorm:"column:connector_name;not null;check:registry_sync_status_valid,((sync_status IN ('pending', 'synced', 'error')))"`
+	Properties     JSON          `gorm:"column:properties;not null;check:registry_updated_by_valid,((updated_by IN ('baleia', 'trino')))"`
+	CatalogVersion *string       `gorm:"column:catalog_version;check:registry_catalog_name_not_reserved,((catalog_name NOT IN ('system', 'jmx', 'tpch', 'tpcds', 'memory', 'env', 'file')))"`
 	Enabled        bool          `gorm:"column:enabled;not null;default:true"`
 	SyncStatus     Text          `gorm:"column:sync_status;not null;size:255;default:'pending'"`
 	SyncError      *string       `gorm:"column:sync_error"`
@@ -140,7 +140,7 @@ func (TrinoCatalogRegistry) TableName() string { return "trino_catalog_registry"
 
 // CatalogGrantRequest is the catalog_grant_requests table.
 type CatalogGrantRequest struct {
-	WorkspaceID     UUID       `gorm:"column:workspace_id;primaryKey;not null;check:catalog_grant_requests_initiated_by_side_check,((initiated_by_side = ANY (ARRAY['catalog'::text, 'workspace'::text])))"`
+	WorkspaceID     UUID       `gorm:"column:workspace_id;primaryKey;not null;check:catalog_grant_requests_initiated_by_side_check,((initiated_by_side IN ('catalog', 'workspace')))"`
 	CatalogID       UUID       `gorm:"column:catalog_id;primaryKey;not null"`
 	InitiatedBySide string     `gorm:"column:initiated_by_side;not null"`
 	RequestedBy     *UUID      `gorm:"column:requested_by"`

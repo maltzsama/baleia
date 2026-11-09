@@ -4,7 +4,7 @@ import "time"
 
 // AgentToken is the agent_tokens table.
 type AgentToken struct {
-	ID           UUID       `gorm:"column:id;primaryKey;not null;default:gen_random_uuid()"`
+	ID           UUID       `gorm:"column:id;primaryKey;not null"`
 	AgentID      UUID       `gorm:"column:agent_id;not null;index:idx_agent_tokens_agent,priority:1"`
 	Name         string     `gorm:"column:name;not null"`
 	TokenHash    Text       `gorm:"column:token_hash;not null;size:128;uniqueIndex:agent_tokens_token_hash_key,priority:1"`
@@ -32,8 +32,8 @@ func (AgentWorkspace) TableName() string { return "agent_workspaces" }
 
 // Agent is the agents table.
 type Agent struct {
-	ID                 UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:agents_kind_check,((kind = ANY (ARRAY['external'::text, 'assistant'::text])))"`
-	OwnerID            UUID      `gorm:"column:owner_id;not null;index:idx_agents_owner,priority:1;check:agents_status_check,((status = ANY (ARRAY['active'::text, 'disabled'::text])))"`
+	ID                 UUID      `gorm:"column:id;primaryKey;not null;check:agents_kind_check,((kind IN ('external', 'assistant')))"`
+	OwnerID            UUID      `gorm:"column:owner_id;not null;index:idx_agents_owner,priority:1;check:agents_status_check,((status IN ('active', 'disabled')))"`
 	Kind               Text      `gorm:"column:kind;not null;size:128;default:'external';index:idx_agents_kind,priority:1"`
 	Name               string    `gorm:"column:name;not null"`
 	Description        Text      `gorm:"column:description;not null;size:1024;default:''"`
@@ -51,7 +51,7 @@ func (Agent) TableName() string { return "agents" }
 
 // APIKey is the api_keys table.
 type APIKey struct {
-	ID         UUID        `gorm:"column:id;primaryKey;not null;default:gen_random_uuid()"`
+	ID         UUID        `gorm:"column:id;primaryKey;not null"`
 	UserID     UUID        `gorm:"column:user_id;not null;index:idx_api_keys_user_id,priority:1"`
 	Name       string      `gorm:"column:name;not null"`
 	KeyHash    Text        `gorm:"column:key_hash;not null;size:128;uniqueIndex:api_keys_key_hash_key,priority:1;index:idx_api_keys_key_hash,priority:1"`
@@ -67,7 +67,7 @@ func (APIKey) TableName() string { return "api_keys" }
 
 // AuthProvider is the auth_providers table.
 type AuthProvider struct {
-	ID        UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:auth_providers_type_check,((type = ANY (ARRAY['oidc'::text, 'ldap'::text])))"`
+	ID        UUID      `gorm:"column:id;primaryKey;not null;check:auth_providers_type_check,((type IN ('oidc', 'ldap')))"`
 	Name      string    `gorm:"column:name;not null"`
 	Type      string    `gorm:"column:type;not null"`
 	ConfigEnc string    `gorm:"column:config_enc;not null"`
@@ -80,7 +80,7 @@ func (AuthProvider) TableName() string { return "auth_providers" }
 
 // OIDCLoginAttempt is the oidc_login_attempts table.
 type OIDCLoginAttempt struct {
-	State        Text          `gorm:"column:state;primaryKey;not null;size:128;check:oidc_login_attempts_redirect_check,(((redirect IS NULL) OR ((redirect ~~ '/%'::text) AND (redirect !~~ '//%'::text) AND (redirect !~ '\\\\'::text) AND (redirect !~ '[\\r\\n\\t]'::text))))"`
+	State        Text          `gorm:"column:state;primaryKey;not null;size:128"`
 	ProviderID   UUID          `gorm:"column:provider_id;not null"`
 	Nonce        *string       `gorm:"column:nonce"`
 	CodeVerifier string        `gorm:"column:code_verifier;not null"`
@@ -106,7 +106,7 @@ func (PasswordResetToken) TableName() string { return "password_reset_tokens" }
 
 // RefreshToken is the refresh_tokens table.
 type RefreshToken struct {
-	ID        UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid()"`
+	ID        UUID      `gorm:"column:id;primaryKey;not null"`
 	UserID    UUID      `gorm:"column:user_id;not null;index:idx_refresh_tokens_user_id,priority:1"`
 	TokenHash Text      `gorm:"column:token_hash;not null;size:128;uniqueIndex:refresh_tokens_token_hash_key,priority:1"`
 	ExpiresAt time.Time `gorm:"column:expires_at;not null;index:idx_refresh_tokens_expires_at,priority:1"`
@@ -120,7 +120,7 @@ func (RefreshToken) TableName() string { return "refresh_tokens" }
 
 // Team is the teams table.
 type Team struct {
-	ID           UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid()"`
+	ID           UUID      `gorm:"column:id;primaryKey;not null"`
 	Name         string    `gorm:"column:name;not null"`
 	Description  *string   `gorm:"column:description"`
 	CreatedBy    UUID      `gorm:"column:created_by;not null;index:idx_teams_created_by,priority:1"`
@@ -133,7 +133,7 @@ func (Team) TableName() string { return "teams" }
 
 // TeamMember is the team_members table.
 type TeamMember struct {
-	ID       UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:team_members_role_check,((role = ANY (ARRAY['owner'::text, 'member'::text])))"`
+	ID       UUID      `gorm:"column:id;primaryKey;not null;check:team_members_role_check,((role IN ('owner', 'member')))"`
 	TeamID   UUID      `gorm:"column:team_id;not null;uniqueIndex:team_members_team_id_user_id_key,priority:1;index:idx_team_members_team_id,priority:1"`
 	UserID   UUID      `gorm:"column:user_id;not null;uniqueIndex:team_members_team_id_user_id_key,priority:2;index:idx_team_members_user_id,priority:1"`
 	Role     Text      `gorm:"column:role;not null;size:255;default:'member'"`
@@ -160,16 +160,16 @@ func (UserIDPToken) TableName() string { return "user_idp_tokens" }
 
 // User is the users table.
 type User struct {
-	ID                  UUID          `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:users_role_check,((role = ANY (ARRAY['admin'::text, 'member'::text])))"`
-	Name                string        `gorm:"column:name;not null;check:chk_local_auth,(((auth_provider <> 'local'::text) OR (password_hash IS NOT NULL)))"`
-	Email               Text          `gorm:"column:email;not null;size:320;uniqueIndex:users_email_key,priority:1;index:idx_users_email,priority:1;check:chk_oidc_auth,(((auth_provider <> 'oidc'::text) OR ((auth_provider_id IS NOT NULL) AND (external_id IS NOT NULL))))"`
-	PasswordHash        *string       `gorm:"column:password_hash;check:chk_ldap_auth,(((auth_provider <> 'ldap'::text) OR ((auth_provider_id IS NOT NULL) AND (external_id IS NOT NULL))))"`
-	Role                Text          `gorm:"column:role;not null;size:255;default:'member';check:users_status_check,((status = ANY (ARRAY['active'::text, 'suspended'::text])))"`
-	AuthProvider        Text          `gorm:"column:auth_provider;not null;size:255;default:'local';check:users_locale_check,((locale = ANY (ARRAY['en'::text, 'pt-BR'::text])))"`
-	AuthProviderID      *UUID         `gorm:"column:auth_provider_id;uniqueIndex:users_auth_provider_id_external_id_key,priority:1;index:idx_users_external_id,priority:1;check:users_kind_check,((kind = ANY (ARRAY['human'::text, 'service_account'::text])))"`
-	ExternalID          *Text         `gorm:"column:external_id;size:255;uniqueIndex:users_auth_provider_id_external_id_key,priority:2;index:idx_users_external_id,priority:2;check:users_auth_provider_check,((auth_provider = ANY (ARRAY['local'::text, 'oidc'::text, 'ldap'::text, 'service'::text])))"`
-	PersonalWorkspaceID *UUID         `gorm:"column:personal_workspace_id;check:chk_service_auth,(((auth_provider <> 'service'::text) OR (kind = 'service_account'::text)))"`
-	CreatedAt           time.Time     `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3);check:chk_service_account,(((kind <> 'service_account'::text) OR ((role = 'member'::text) AND (password_hash IS NULL) AND (auth_provider = ANY (ARRAY['service'::text, 'oidc'::text])))))"`
+	ID                  UUID          `gorm:"column:id;primaryKey;not null;check:users_role_check,((role IN ('admin', 'member')))"`
+	Name                string        `gorm:"column:name;not null;check:chk_local_auth,(((auth_provider <> 'local') OR (password_hash IS NOT NULL)))"`
+	Email               Text          `gorm:"column:email;not null;size:320;uniqueIndex:users_email_key,priority:1;index:idx_users_email,priority:1"`
+	PasswordHash        *string       `gorm:"column:password_hash"`
+	Role                Text          `gorm:"column:role;not null;size:255;default:'member';check:users_status_check,((status IN ('active', 'suspended')))"`
+	AuthProvider        Text          `gorm:"column:auth_provider;not null;size:255;default:'local';check:users_locale_check,((locale IN ('en', 'pt-BR')))"`
+	AuthProviderID      *UUID         `gorm:"column:auth_provider_id;uniqueIndex:users_auth_provider_id_external_id_key,priority:1;index:idx_users_external_id,priority:1;check:users_kind_check,((kind IN ('human', 'service_account')))"`
+	ExternalID          *Text         `gorm:"column:external_id;size:255;uniqueIndex:users_auth_provider_id_external_id_key,priority:2;index:idx_users_external_id,priority:2;check:users_auth_provider_check,((auth_provider IN ('local', 'oidc', 'ldap', 'service')))"`
+	PersonalWorkspaceID *UUID         `gorm:"column:personal_workspace_id;check:chk_service_auth,(((auth_provider <> 'service') OR (kind = 'service_account')))"`
+	CreatedAt           time.Time     `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
 	UpdatedAt           time.Time     `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3)"`
 	Status              Text          `gorm:"column:status;not null;size:255;default:'active'"`
 	SuspendedAt         *time.Time    `gorm:"column:suspended_at"`
@@ -188,8 +188,8 @@ func (User) TableName() string { return "users" }
 
 // WorkspaceMember is the workspace_members table.
 type WorkspaceMember struct {
-	WorkspaceID  UUID       `gorm:"column:workspace_id;primaryKey;not null;check:workspace_members_role_check,((role = ANY (ARRAY['admin'::text, 'editor'::text, 'viewer'::text])))"`
-	UserID       UUID       `gorm:"column:user_id;primaryKey;not null;index:workspace_members_user,priority:1;check:workspace_members_source_check,((source = ANY (ARRAY['manual'::text, 'idp_group'::text])))"`
+	WorkspaceID  UUID       `gorm:"column:workspace_id;primaryKey;not null;check:workspace_members_role_check,((role IN ('admin', 'editor', 'viewer')))"`
+	UserID       UUID       `gorm:"column:user_id;primaryKey;not null;index:workspace_members_user,priority:1;check:workspace_members_source_check,((source IN ('manual', 'idp_group')))"`
 	Role         string     `gorm:"column:role;not null"`
 	GrantedBy    *UUID      `gorm:"column:granted_by"`
 	GrantedAt    time.Time  `gorm:"column:granted_at;not null;default:CURRENT_TIMESTAMP(3)"`
@@ -203,8 +203,8 @@ func (WorkspaceMember) TableName() string { return "workspace_members" }
 
 // Workspace is the workspaces table.
 type Workspace struct {
-	ID                 UUID            `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:workspaces_type_check,((type = ANY (ARRAY['personal'::text, 'shared'::text])))"`
-	Name               string          `gorm:"column:name;not null;check:chk_workspace_owner,((((type = 'personal'::text) AND (owner_user_id IS NOT NULL) AND (owner_team_id IS NULL)) OR ((type = 'shared'::text) AND (owner_team_id IS NOT NULL) AND (owner_user_id IS NULL))))"`
+	ID                 UUID            `gorm:"column:id;primaryKey;not null;check:workspaces_type_check,((type IN ('personal', 'shared')))"`
+	Name               string          `gorm:"column:name;not null;check:chk_workspace_owner,((((type = 'personal') AND (owner_user_id IS NOT NULL) AND (owner_team_id IS NULL)) OR ((type = 'shared') AND (owner_team_id IS NOT NULL) AND (owner_user_id IS NULL))))"`
 	Description        *string         `gorm:"column:description"`
 	Type               string          `gorm:"column:type;not null"`
 	PolarisCatalogName Text            `gorm:"column:polaris_catalog_name;not null;size:128;uniqueIndex:workspaces_polaris_catalog_name_key,priority:1"`
