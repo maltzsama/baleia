@@ -55,6 +55,18 @@ func (*Provider) Label() string              { return "Unity Catalog" }
 func (*Provider) Family() connections.Family { return connections.FamilyIceberg }
 func (*Provider) Roles() []connections.Role  { return []connections.Role{connections.RoleMetadata} }
 func (*Provider) EngineKind() string         { return "" }
+
+// Meta implements connections.Provider (ADR 0021).
+func (*Provider) Meta() connections.TypeMeta {
+	modes := []connections.AccessMode{connections.AccessModeTrino}
+	return connections.TypeMeta{
+		Description:       "Unity Catalog, exposed through Trino.",
+		Category:          connections.CategoryCatalogManager,
+		AccessModes:       modes,
+		TrinoCatalogTypes: []string{"iceberg"},
+		Capabilities:      connections.CapabilitiesFor(modes, true),
+	}
+}
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }

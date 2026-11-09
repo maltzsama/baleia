@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -55,6 +56,10 @@ const (
 )
 
 // Family groups kinds for forms and docs.
+//
+// Deprecated: Family is presentation metadata kept for compatibility while the
+// API moves to Category (ADR 0021 D.10). Category is the single source of
+// truth for grouping and ordering.
 type Family string
 
 const (
@@ -63,6 +68,122 @@ const (
 	FamilyDatabase  Family = "database"
 	FamilyEngine    Family = "engine"
 )
+
+// AccessMode is a way a connection reaches its data (ADR 0021 D.2). A
+// connection has exactly one when it represents a data source, and none when
+// it is an engine-family resource.
+type AccessMode string
+
+const (
+	// AccessModeDirect runs queries through a native query-engine adapter.
+	AccessModeDirect AccessMode = "direct"
+	// AccessModeTrino exposes the source through a Trino engine.
+	AccessModeTrino AccessMode = "trino"
+)
+
+// Category groups connection types for presentation only (ADR 0021 D.10); it
+// never determines access mode, engine compatibility or catalog mapping.
+type Category string
+
+const (
+	CategoryRelational     Category = "relational"
+	CategoryAnalytical     Category = "analytical"
+	CategoryCatalogManager Category = "catalog_manager"
+	CategoryMetastore      Category = "metastore"
+	CategoryLakehouse      Category = "lakehouse"
+	CategoryCloudPlatform  Category = "cloud_platform"
+	CategoryNoSQL          Category = "nosql"
+	CategorySearch         Category = "search"
+	CategoryAnalytics      Category = "analytics"
+	CategoryStreaming      Category = "streaming"
+	CategoryObservability  Category = "observability"
+	CategoryExternal       Category = "external_service"
+	CategorySynthetic      Category = "synthetic"
+	CategoryInternal       Category = "internal_catalog"
+	CategoryEngine         Category = "engine"
+)
+
+// Capability is an operation a connection type may declare (ADR 0021 D.6).
+type Capability string
+
+const (
+	CapabilityConnect        Capability = "connect"
+	CapabilityTestConnection Capability = "test_connection"
+	CapabilityListCatalogs   Capability = "list_catalogs"
+	CapabilityListSchemas    Capability = "list_schemas"
+	CapabilityListTables     Capability = "list_tables"
+	CapabilityRead           Capability = "read"
+	CapabilityInsert         Capability = "insert"
+	CapabilityUpdate         Capability = "update"
+	CapabilityDelete         Capability = "delete"
+	CapabilityCreateTable    Capability = "create_table"
+	CapabilityDropTable      Capability = "drop_table"
+	CapabilityAlterTable     Capability = "alter_table"
+	CapabilityMetadata       Capability = "metadata"
+	CapabilityTransactions   Capability = "transactions"
+	CapabilityViews          Capability = "views"
+)
+
+// CapabilityState is one capability's support state. Anything not validated
+// stays CapabilityUnknown (ADR 0021 D.6).
+type CapabilityState string
+
+const (
+	CapabilitySupported   CapabilityState = "supported"
+	CapabilityUnknown     CapabilityState = "unknown"
+	CapabilityUnsupported CapabilityState = "unsupported"
+)
+
+// Capabilities maps an access mode to its declared capabilities.
+type Capabilities map[AccessMode]map[Capability]CapabilityState
+
+// VersionRequirements are the validated engine and Trino version floors of a
+// connection type. An empty value means no floor has been validated yet.
+type VersionRequirements struct {
+	MinEngineVersion string
+	MinTrinoVersion  string
+}
+
+// TypeMeta is the static metadata a connection type declares (ADR 0021 D.1).
+type TypeMeta struct {
+	// Description is the user-facing explanation of the type.
+	Description string
+	// Category groups the type for presentation only (D.10).
+	Category Category
+	// AccessModes lists the supported data access paths (D.2).
+	AccessModes []AccessMode
+	// TrinoCatalogTypes is the internal set of Trino catalog implementations
+	// required to expose the type (D.3). Empty when it is not Trino-bindable.
+	TrinoCatalogTypes []string
+	// Capabilities declares, per access mode, what the type can do (D.6).
+	Capabilities Capabilities
+	// VersionRequirements are the validated version floors.
+	VersionRequirements VersionRequirements
+}
+
+// DefaultCapabilities is the capability set every implemented type can claim
+// without per-connector validation: it validates and tests its configuration,
+// and reads metadata when the type has a metadata reader. Everything else stays
+// Unknown until validated (ADR 0021 D.6).
+func DefaultCapabilities(metadata bool) map[Capability]CapabilityState {
+	c := map[Capability]CapabilityState{
+		CapabilityConnect:        CapabilitySupported,
+		CapabilityTestConnection: CapabilitySupported,
+	}
+	if metadata {
+		c[CapabilityMetadata] = CapabilitySupported
+	}
+	return c
+}
+
+// CapabilitiesFor builds the capability map of a type over its access modes.
+func CapabilitiesFor(modes []AccessMode, metadata bool) Capabilities {
+	out := make(Capabilities, len(modes))
+	for _, m := range modes {
+		out[m] = DefaultCapabilities(metadata)
+	}
+	return out
+}
 
 // Field types used by ConfigSchema.
 const (
@@ -134,13 +255,16 @@ func (c Config) Reference(key string) string {
 	return ""
 }
 
-// State is a provider's support level.
+// State is a provider's static implementation status (ADR 0021 CR-12). Runtime
+// availability is a separate layer (D.5) and never changes this value.
 type State string
 
 const (
-	StateSupported   State = "supported"
-	StatePreview     State = "preview"
-	StateUnsupported State = "unsupported"
+	StateSupported     State = "supported"
+	StateExperimental  State = "experimental"
+	StatePlanned       State = "planned"
+	StateUnsupported   State = "unsupported"
+	StateNotApplicable State = "not_applicable"
 )
 
 // Status is a provider's support level and, when not supported, why.
@@ -154,6 +278,10 @@ type Provider interface {
 	Kind() Kind
 	Label() string
 	Family() Family
+	// Meta is the static type metadata the registry is the single source of
+	// truth for: access modes, Trino catalog mappings, capabilities, category,
+	// description and version requirements (ADR 0021 CR-01).
+	Meta() TypeMeta
 	Roles() []Role
 	// ConfigSchema lists the non-secret values and the secrets, for forms and
 	// validation.
@@ -252,6 +380,25 @@ func (r *Registry) Get(kind Kind) (Provider, error) {
 		return nil, fmt.Errorf("%w: %q", ErrUnknownKind, kind)
 	}
 	return p, nil
+}
+
+// CatalogTypes returns the Trino catalog types a kind is exposed through,
+// derived from the connection type registry (ADR 0021 D.3). Empty when the
+// kind declares no Trino access mode or no mapping.
+func (r *Registry) CatalogTypes(kind Kind) []string {
+	p, err := r.Get(kind)
+	if err != nil || !TrinoBindable(p) {
+		return nil
+	}
+	return slices.Clone(p.Meta().TrinoCatalogTypes)
+}
+
+// TrinoBindable reports whether p declares the Trino access mode with at least
+// one catalog mapping (ADR 0021 D.3). It is the single predicate the registry,
+// the Trino binder and the API share for connection-to-Trino compatibility.
+func TrinoBindable(p Provider) bool {
+	m := p.Meta()
+	return slices.Contains(m.AccessModes, AccessModeTrino) && len(m.TrinoCatalogTypes) > 0
 }
 
 // All returns every provider ordered by kind.

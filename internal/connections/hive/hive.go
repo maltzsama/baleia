@@ -33,6 +33,19 @@ func (*Provider) Family() connections.Family { return connections.FamilyMetastor
 func (*Provider) Roles() []connections.Role { return nil }
 
 func (*Provider) EngineKind() string { return "" }
+
+// Meta implements connections.Provider (ADR 0021).
+func (*Provider) Meta() connections.TypeMeta {
+	modes := []connections.AccessMode{connections.AccessModeTrino}
+	return connections.TypeMeta{
+		Description:       "Hive Metastore (Thrift) holding Iceberg, Hive and Delta Lake tables, exposed through Trino.",
+		Category:          connections.CategoryMetastore,
+		AccessModes:       modes,
+		TrinoCatalogTypes: []string{"iceberg", "hive", "delta_lake"},
+		Capabilities:      connections.CapabilitiesFor(modes, false),
+	}
+}
+
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }

@@ -35,6 +35,18 @@ func (*Provider) Roles() []connections.Role {
 }
 func (*Provider) EngineKind() string { return "oracle" }
 
+// Meta implements connections.Provider (ADR 0021).
+func (*Provider) Meta() connections.TypeMeta {
+	modes := []connections.AccessMode{connections.AccessModeDirect, connections.AccessModeTrino}
+	return connections.TypeMeta{
+		Description:       "Oracle Database, queried directly or exposed through Trino.",
+		Category:          connections.CategoryRelational,
+		AccessModes:       modes,
+		TrinoCatalogTypes: []string{"oracle"},
+		Capabilities:      connections.CapabilitiesFor(modes, true),
+	}
+}
+
 // WalksCatalogs: the reader reads a whole catalog in one query (#15).
 func (*Provider) WalksCatalogs() bool { return true }
 

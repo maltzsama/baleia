@@ -8,11 +8,20 @@ import (
 	"github.com/galileostudio/baleia/internal/bindings"
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/providers"
 )
 
 func TestRegistryAndConnector(t *testing.T) {
 	t.Parallel()
-	b := bindtrino.New(slog.New(slog.DiscardHandler), nil, nil)
+	d, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, err := providers.New(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := bindtrino.New(slog.New(slog.DiscardHandler), nil, nil).WithProviders(reg)
 	bindings.Register(b)
 	got, ok := bindings.For("trino")
 	if !ok || got != b {

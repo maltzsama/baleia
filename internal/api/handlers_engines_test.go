@@ -33,6 +33,7 @@ type fakeEngineProvider struct {
 func (f *fakeEngineProvider) Kind() connections.Kind     { return f.kind }
 func (f *fakeEngineProvider) Label() string              { return string(f.kind) }
 func (f *fakeEngineProvider) Family() connections.Family { return connections.FamilyDatabase }
+func (f *fakeEngineProvider) Meta() connections.TypeMeta { return connections.TypeMeta{} }
 func (f *fakeEngineProvider) Roles() []connections.Role  { return f.roles }
 func (f *fakeEngineProvider) ConfigSchema() []connections.Field {
 	return []connections.Field{{Key: "url", Type: connections.FieldText}, {Key: "database", Type: connections.FieldText}}
