@@ -5,7 +5,8 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `8080` | HTTP listen port |
-| `DATABASE_URL` | `postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable` | PostgreSQL connection string |
+| `DATABASE_URL` | `postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable` | Connection string of Baleia's own store (PostgreSQL, or the MySQL/MariaDB DSN with `BALEIA_STORE_BACKEND=mysql`) |
+| `BALEIA_STORE_BACKEND` | inferred from `DATABASE_URL` | Store backend: `postgres` (default) or `mysql` (MySQL 8 / MariaDB). Set it explicitly; the DSN alone is only a fallback |
 | `JWT_SECRET` | `change-me-in-production` | Key for signing JWTs |
 | `BALEIA_ENCRYPTION_KEY` | _(unset)_ | Key that encrypts stored connection credentials (≥ 32 characters, must differ from `JWT_SECRET`). Required once any credential is stored; the API refuses to start without it. Derived with HKDF-SHA256; each value is bound to its connection row |
 | `BALEIA_ENCRYPTION_KEY_PREVIOUS` | _(unset)_ | Previous encryption key, set only during rotation: values are read with the current or previous key and always written with the current one |
@@ -89,6 +90,25 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_AGENT_MAX_QUERIES_PER_HOUR` | `2000` | Ceiling for `max_queries_per_hour` |
 | `BALEIA_AGENT_MAX_TOOL_CALLS_PER_MINUTE` | `600` | Ceiling for `max_tool_calls_per_minute` |
 | `BALEIA_MCP_ALLOWED_ORIGINS` | _(unset)_ | Comma-separated `Origin` allow-list for `/mcp`; empty rejects any request that carries one |
+
+## Store backend
+
+Baleia's own metadata (users, workspaces, content, models, connections, catalogs, audit, snapshots) lives in PostgreSQL by default. MySQL 8 and MariaDB are supported through GORM's MySQL dialector: set `BALEIA_STORE_BACKEND=mysql` and point `DATABASE_URL` at the MySQL DSN.
+
+| Backend | `BALEIA_STORE_BACKEND` | `DATABASE_URL` example |
+|---|---|---|
+| PostgreSQL | `postgres` (default) | `postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable` |
+| MySQL 8 / MariaDB | `mysql` | `baleia:baleia@tcp(localhost:3306)/baleia?parseTime=true` |
+
+The backend is chosen explicitly so a connection string never picks a dialector by accident. When unset, Baleia infers it (`postgres://`/`postgresql://` → PostgreSQL, `@tcp(`/`@unix(` → MySQL), but the explicit value is recommended.
+
+The schema is created and evolved by the versioned Go migrations in `internal/store` (`store-up`, also applied at API start). Both backends are exercised by the test suite.
+
+Caveats:
+
+- ADR 0020 removed or redesigned what GORM cannot express without handwritten SQL: no PL/pgSQL functions or triggers (effective roles are computed in Go), no table partitions (audit retention uses plain tables), no `pg_trgm` (search is a portable Go implementation), and no advisory locks (transactions and row locks instead).
+- The bundled Trino catalog-store plugin reads its registry over PostgreSQL and logs in as the `baleia_trino` role, which the API and `store-up` bootstrap on PostgreSQL. A MySQL/MariaDB store serves the API and worker, but does not provide that plugin's registry path.
+- **The query-execution path is unchanged.** User SQL, Trino and the direct engines keep their own dialect layer and never go through the store; only Baleia's own metadata does.
 
 ## Credential encryption
 

@@ -5,7 +5,7 @@
 - Docker (with Compose) and, for the Kubernetes environment, minikube, kubectl and Helm
 - Go (the version in `go.mod`)
 - Node.js 22+
-- `sqlc` and `oapi-codegen` are pinned and run through `go run` by `make sqlc` / `make generate`
+- `oapi-codegen` is pinned and run through `go run` by `make generate`
 
 ## Environments
 
@@ -48,8 +48,8 @@ and `go.temporal.io/sdk` together, in one change (#525).
 | `make dev` / `make worker` | Run the API (:9000) / the Temporal worker on the host |
 | `make up` / `down` / `down-v` / `logs` | Compose stack |
 | `make k8s-up` / `k8s-forward` / `k8s-logs` / `k8s-down` | minikube environment |
-| `make migrate` / `migrate-down` / `migrate-status` / `migrate-reset` | Database migrations (also applied at API start) |
-| `make generate` / `make sqlc` | Regenerate the API handlers from `api/swagger.yaml` / the database code from `db/queries` |
+| `make store-migrate` / `store-migrate-down` / `store-migrate-status` | GORM store migrations (also applied at API start) |
+| `make generate` | Regenerate the API handlers from `api/swagger.yaml` |
 | `make lint` | golangci-lint |
 | `make build` / `build-web` / `build-all` | Go binaries / web app / both |
 | `make e2e` / `make e2e-down` | minikube, the e2e seed and the Playwright suite / tear the cluster down |
@@ -67,7 +67,7 @@ and `go.temporal.io/sdk` together, in one change (#525).
 |---|---|
 | `api/swagger.yaml` | The OpenAPI contract, source of truth for the API |
 | `cmd/` | Entry points: `api`, `worker`, `migrate`, and `e2e-seed` (test data, build tag `e2e`) |
-| `db/migrations`, `db/queries` | Goose migrations and the named queries sqlc compiles |
+| `internal/store` | GORM models, the domain repositories and the versioned Go migrations |
 | `internal/api`, `internal/server` | Handlers (and the generated server), HTTP bootstrap and middleware |
 | `internal/auth`, `authz`, `identity`, `policy` | Sign-in, authorization, directory mapping, what users may do |
 | `internal/connections`, `catalogs`, `bindings`, `metadata` | Connection providers and the network dialer, catalogs, engine bindings, metadata snapshots |

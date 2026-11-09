@@ -58,18 +58,17 @@ The query-execution path (Trino and the direct engines) runs user SQL against ex
 
 ## Current compliance
 
-Not implemented yet: the store still uses goose, sqlc and `pgx`.
+Implemented. The store is GORM-only: the models are the schema, the versioned Go migrations in `internal/store` create and evolve it, and every persistence operation goes through the GORM store. `sqlc`, goose, `db/queries`, `db/migrations` and the direct `pgx` API are gone from the store path; `internal/db` keeps only hand-maintained DTO/contract types.
 
-This ADR is implemented by:
+The query-execution path (Trino and the direct engines) still keeps its own dialect layer and is intentionally outside the store, as stated above.
+
+This ADR was implemented by:
 
 - **#759:** GORM models, database initialization, versioned Go migration infrastructure and model-driven schema creation.
-- **#769–#774:** each domain's persistence operations migrated to GORM.
+- **#769–#774:** each domain's persistence operations migrated to GORM (accounts, service accounts, directory provisioning, content, workbench, connections/engines/catalogs, semantic/metadata/lineage, monitoring/ops, audit/agents/retrievers, assistant).
+- **#761:** the cut: generated sqlc code, goose, SQL queries and SQL migrations removed; the runtime and DB-backed tests run on GORM only.
 
-The migration infrastructure must support ordered execution, migration tracking, failure reporting and explicit rollback implementations where rollback is safe.
-
-Existing schema constraints and indexes must be inventoried before migration. Their removal must be an explicit architectural decision, not an accidental consequence of changing ORM.
-
-The earlier attempt that retained DDL strings and a handwritten MySQL translator is discarded. It preserved SQL as an application responsibility and created a second schema representation, which this decision forbids.
+PostgreSQL, MySQL and MariaDB are supported through GORM's dialectors. Features GORM cannot express without handwritten SQL were removed or redesigned: PL/pgSQL functions and triggers (roles and effective membership computed in Go), table partitions (audit retention uses plain tables), `pg_trgm` (a portable Go search), and advisory locks (transaction/row locks instead).
 
 ## Alternatives considered
 
