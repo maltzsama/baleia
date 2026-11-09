@@ -2,21 +2,13 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
-	"github.com/galileostudio/baleia/internal/store"
-	"gorm.io/gorm"
 )
 
 func main() {
@@ -31,13 +23,7 @@ func main() {
 	slog.SetDefault(logger)
 	ctx := context.Background()
 
-	db, closeDB, err := openSQLDB(ctx, logger, cfg)
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to open database", "err", err)
-		os.Exit(1)
-	}
-	defer func() { _ = closeDB() }()
-
+	var err error
 	switch command {
 	case "store-up":
 		err = runStoreUp(ctx, logger, cfg)
@@ -46,26 +32,11 @@ func main() {
 	case "store-status":
 		err = runStoreStatus(ctx, logger, cfg)
 	case "credentials":
-		err = migrateCredentials(ctx, logger, db, cfg)
+		err = migrateCredentials(ctx, logger, cfg)
 	case "oidc-providers":
-		err = migrateOIDCProviders(ctx, logger, db, cfg)
+		err = migrateOIDCProviders(ctx, logger, cfg)
 	case "audit-prune":
-		backend, berr := store.BackendFromDSN(cfg.DatabaseURL)
-		if berr != nil {
-			err = berr
-			break
-		}
-		var gdb *gorm.DB
-		gdb, err = store.Open(ctx, cfg.DatabaseURL, backend, store.Options{})
-		if err != nil {
-			break
-		}
-		defer func() { _ = store.Close(gdb) }()
-		var dropped []string
-		dropped, err = audit.Prune(ctx, gdb, before, time.Now().UTC())
-		for _, name := range dropped {
-			logger.InfoContext(ctx, "audit partition dropped", "partition", name)
-		}
+		err = pruneAudit(ctx, logger, cfg, before)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", command)
 		os.Exit(1)
@@ -75,207 +46,4 @@ func main() {
 		logger.ErrorContext(ctx, "migration error", "cmd", command, "err", err)
 		os.Exit(1)
 	}
-}
-
-// migrateCredentials re-seals legacy connection credentials (encrypted under
-// JWT_SECRET) as v1 envelopes under BALEIA_ENCRYPTION_KEY, in one transaction.
-func migrateCredentials(ctx context.Context, logger *slog.Logger, db *sql.DB, cfg *config.Config) error {
-	if cfg.EncryptionKey == "" {
-		return fmt.Errorf("BALEIA_ENCRYPTION_KEY must be set")
-	}
-	// Legacy values are opened with JWT_SECRET; a missing or default one would
-	// silently fail every row.
-	if err := config.ValidateSecret(cfg.JWTSecret); err != nil {
-		return err
-	}
-	kr, err := crypto.NewKeyring(cfg.EncryptionKey, cfg.EncryptionKeyPrevious)
-	if err != nil {
-		return err
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback() //nolint:errcheck // no-op after Commit
-
-	res, err := migrate.MigrateCredentials(ctx, sqlCredentialStore{tx}, kr, cfg.JWTSecret)
-	if err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	logger.InfoContext(ctx, "credentials migrated", "migrated", res.Migrated, "resealed", res.Resealed, "already_v1", res.Skipped, "failed", len(res.Failed))
-	for _, id := range res.Failed {
-		logger.WarnContext(ctx, "credentials left untouched: could not be decrypted with JWT_SECRET, re-enter them", "connection_id", id)
-	}
-	return nil
-}
-
-// migrateOIDCProviders seals legacy plaintext auth_providers.config_enc values
-// and re-seals rows under the current key, in one transaction (#278).
-func migrateOIDCProviders(ctx context.Context, logger *slog.Logger, db *sql.DB, cfg *config.Config) error {
-	if cfg.EncryptionKey == "" {
-		return fmt.Errorf("BALEIA_ENCRYPTION_KEY must be set")
-	}
-	kr, err := crypto.NewKeyring(cfg.EncryptionKey, cfg.EncryptionKeyPrevious)
-	if err != nil {
-		return err
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback() //nolint:errcheck // no-op after Commit
-
-	res, err := migrate.MigrateOIDCProviders(ctx, sqlProviderStore{tx}, kr)
-	if err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	logger.InfoContext(ctx, "oidc providers migrated", "migrated", res.Migrated, "resealed", res.Resealed, "already_v1", res.Skipped, "failed", len(res.Failed))
-	for _, id := range res.Failed {
-		logger.WarnContext(ctx, "oidc provider left untouched: not valid plaintext or a known key envelope", "provider_id", id)
-	}
-	return nil
-}
-
-type sqlProviderStore struct{ tx *sql.Tx }
-
-func (s sqlProviderStore) ListProviders(ctx context.Context) ([]migrate.ProviderRow, error) {
-	rows, err := s.tx.QueryContext(ctx, "SELECT id::text, config_enc FROM auth_providers FOR UPDATE")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []migrate.ProviderRow
-	for rows.Next() {
-		var r migrate.ProviderRow
-		if err := rows.Scan(&r.ID, &r.Enc); err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
-}
-
-func (s sqlProviderStore) UpdateProvider(ctx context.Context, id, enc string) error {
-	_, err := s.tx.ExecContext(ctx, "UPDATE auth_providers SET config_enc = $1, updated_at = now() WHERE id = $2::uuid", enc, id)
-	return err
-}
-
-type sqlCredentialStore struct{ tx *sql.Tx }
-
-func (s sqlCredentialStore) ListCredentials(ctx context.Context) ([]migrate.CredentialRow, error) {
-	rows, err := s.tx.QueryContext(ctx, "SELECT id::text, credentials_enc FROM catalog_connections WHERE credentials_enc IS NOT NULL AND credentials_enc <> '' FOR UPDATE")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []migrate.CredentialRow
-	for rows.Next() {
-		var r migrate.CredentialRow
-		if err := rows.Scan(&r.ID, &r.Enc); err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
-}
-
-func (s sqlCredentialStore) UpdateCredentials(ctx context.Context, id, enc string) error {
-	_, err := s.tx.ExecContext(ctx, "UPDATE catalog_connections SET credentials_enc = $1 WHERE id = $2::uuid", enc, id)
-	return err
-}
-
-// openSQLDB opens the GORM store and hands back its database/sql handle for
-// the commands that backfill rows with explicit transactions. The driver is
-// whatever GORM's dialector uses; this command imports no driver directly.
-func openSQLDB(ctx context.Context, logger *slog.Logger, cfg *config.Config) (*sql.DB, func() error, error) {
-	gdb, err := openStore(ctx, logger, cfg)
-	if err != nil {
-		return nil, nil, err
-	}
-	sqlDB, err := gdb.DB()
-	if err != nil {
-		_ = store.Close(gdb)
-		return nil, nil, err
-	}
-	return sqlDB, func() error { return store.Close(gdb) }, nil
-}
-
-// openStore opens Baleia's own store through GORM (ADR 0020). The dialector is
-// selected by the configured backend, never by the DSN alone.
-func openStore(ctx context.Context, logger *slog.Logger, cfg *config.Config) (*gorm.DB, error) {
-	backend, err := store.BackendFromDSN(cfg.DatabaseURL)
-	if err != nil {
-		return nil, err
-	}
-	return store.Open(ctx, cfg.DatabaseURL, backend, store.Options{
-		MaxOpenConns: int(cfg.PoolSize(4)),
-		Logger:       logger,
-	})
-}
-
-func runStoreUp(ctx context.Context, logger *slog.Logger, cfg *config.Config) error {
-	db, err := openStore(ctx, logger, cfg)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = store.Close(db) }()
-
-	if err := store.ApplyMigrations(ctx, db, logger); err != nil {
-		return err
-	}
-	return bootstrap.EnsureTrinoRole(ctx, db)
-}
-
-func runStoreDown(ctx context.Context, logger *slog.Logger, cfg *config.Config) error {
-	db, err := openStore(ctx, logger, cfg)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = store.Close(db) }()
-
-	reg, err := store.AllMigrations()
-	if err != nil {
-		return err
-	}
-	m, err := store.NewRunner(db, reg, logger).Down(ctx)
-	if err != nil {
-		return err
-	}
-	if m == nil {
-		logger.InfoContext(ctx, "no reversible store migration to roll back")
-		return nil
-	}
-	logger.InfoContext(ctx, "store migration rolled back", "version", m.Version, "name", m.Name)
-	return nil
-}
-
-func runStoreStatus(ctx context.Context, logger *slog.Logger, cfg *config.Config) error {
-	db, err := openStore(ctx, logger, cfg)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = store.Close(db) }()
-
-	reg, err := store.AllMigrations()
-	if err != nil {
-		return err
-	}
-	statuses, err := store.NewRunner(db, reg, logger).Status(ctx)
-	if err != nil {
-		return err
-	}
-	for _, st := range statuses {
-		state := "pending"
-		if st.Applied {
-			state = "applied"
-		}
-		logger.InfoContext(ctx, "store migration", "version", st.Version, "name", st.Name, "state", state, "dirty", st.Dirty, "applied_at", st.AppliedAt)
-	}
-	return nil
 }
