@@ -6,12 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/bindings"
-	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -504,14 +502,16 @@ func (h *CatalogHandlers) GetEngineBindingSupport(ctx context.Context, request G
 	if h.binder == nil || eng.Kind != h.binder.EngineKind() {
 		return out, nil
 	}
+	// Compatibility data comes from the connection type registry; the binder
+	// only contributes engine-specific reserved names and protected keys
+	// (ADR 0021 CR-05).
 	protected, reserved := h.binder.ProtectedKeyPatterns(), h.binder.ReservedNames()
-	kinds := make([]connections.Kind, 0)
-	for k := range h.binder.Supports() {
-		kinds = append(kinds, k)
-	}
-	slices.Sort(kinds)
-	for _, k := range kinds {
-		out[string(k)] = BindingSupport{Connectors: h.binder.Supports()[k], ProtectedKeyPatterns: protected, ReservedNames: reserved}
+	for _, p := range h.connections.All() {
+		connectors := h.connections.CatalogTypes(p.Kind())
+		if len(connectors) == 0 {
+			continue
+		}
+		out[string(p.Kind())] = BindingSupport{Connectors: connectors, ProtectedKeyPatterns: protected, ReservedNames: reserved}
 	}
 	return out, nil
 }

@@ -77,6 +77,22 @@ func (*Provider) Roles() []connections.Role {
 }
 func (p *Provider) EngineKind() string { return string(p.Kind()) }
 
+// Meta implements connections.Provider (ADR 0021).
+func (p *Provider) Meta() connections.TypeMeta {
+	modes := []connections.AccessMode{connections.AccessModeDirect, connections.AccessModeTrino}
+	catalogType, description := "mysql", "MySQL relational database, queried directly or exposed through Trino."
+	if p.mariadb {
+		catalogType, description = "mariadb", "MariaDB relational database, queried directly or exposed through Trino."
+	}
+	return connections.TypeMeta{
+		Description:       description,
+		Category:          connections.CategoryRelational,
+		AccessModes:       modes,
+		TrinoCatalogTypes: []string{catalogType},
+		Capabilities:      connections.CapabilitiesFor(modes, true),
+	}
+}
+
 // WalksCatalogs: the reader reads a whole catalog in one query (#15).
 func (*Provider) WalksCatalogs() bool { return true }
 

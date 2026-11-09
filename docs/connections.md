@@ -4,34 +4,38 @@
      BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/ -->
 
 Every connection kind Baleia knows, what it can be used for, and its configuration.
-See [ADR 0002](adr/0002-connections-engines-catalogs-bindings.md) for the model and
-[ADR 0011](adr/0011-direct-connections-security.md) for network safety.
+See [ADR 0002](adr/0002-connections-engines-catalogs-bindings.md) for the model,
+[ADR 0011](adr/0011-direct-connections-security.md) for network safety and
+[ADR 0021](adr/0021-unified-connection-model.md) for access modes and categories.
 
-*Bindable into* lists the federated engines whose binder can bind the kind, with the
-connectors it may use (the first is the default; `internal/bindings`).
+*Access modes* lists how the connection reaches its data; *Trino catalog types*
+lists the internal catalog implementations it is exposed through. Neither is a
+user-facing connector selection.
 
-| Kind | Label | Family | Roles | Engine kind | Bindable into | Status |
-|---|---|---|---|---|---|---|
-| `clickhouse` | ClickHouse | database | metadata, direct_engine | clickhouse | — | supported |
-| `doris` | Apache Doris | engine | federated_engine | doris | — | unsupported (planned after v1 (#21)) |
-| `flightsql` | Arrow Flight SQL | engine | metadata, direct_engine | flightsql | — | supported |
-| `glue` | AWS Glue Data Catalog | metastore | metadata | — | trino (iceberg, hive, delta_lake) | supported |
-| `hive` | Hive Metastore | metastore |  | — | trino (iceberg, hive, delta_lake) | supported |
-| `iceberg` | Iceberg REST catalog | iceberg | metadata | — | trino (iceberg) | supported |
-| `lakekeeper` | Lakekeeper | iceberg | metadata | — | trino (iceberg) | supported |
-| `mariadb` | MariaDB | database | metadata, direct_engine | mariadb | trino (mariadb) | supported |
-| `mysql` | MySQL | database | metadata, direct_engine | mysql | trino (mysql) | supported |
-| `nessie` | Project Nessie | iceberg | metadata | — | trino (iceberg) | supported |
-| `oracle` | Oracle Database | database | metadata, direct_engine | oracle | trino (oracle) | supported |
-| `polaris` | Apache Polaris | iceberg | metadata | — | trino (iceberg) | supported |
-| `postgresql` | PostgreSQL | database | metadata, direct_engine | postgresql | trino (postgresql) | supported |
-| `sqlite` | SQLite | database | metadata, direct_engine | sqlite | — | unsupported (BALEIA_SQLITE_ROOT not set) |
-| `sqlserver` | SQL Server | database | metadata, direct_engine | sqlserver | trino (sqlserver) | supported |
-| `starrocks` | StarRocks | engine | federated_engine | starrocks | — | unsupported (planned after v1 (#30)) |
-| `trino` | Trino | engine | metadata, federated_engine | trino | — | supported |
-| `unity` | Unity Catalog | iceberg | metadata | — | trino (iceberg) | supported |
+| Kind | Label | Category | Access modes | Roles | Engine kind | Trino catalog types | Status |
+|---|---|---|---|---|---|---|---|
+| `clickhouse` | ClickHouse | analytical | direct | metadata, direct_engine | clickhouse | clickhouse | supported |
+| `doris` | Apache Doris | engine | — | federated_engine | doris | — | unsupported (planned after v1 (#21)) |
+| `flightsql` | Arrow Flight SQL | engine | direct | metadata, direct_engine | flightsql | — | supported |
+| `glue` | AWS Glue Data Catalog | metastore | trino | metadata | — | iceberg, hive, delta_lake | supported |
+| `hive` | Hive Metastore | metastore | trino | — | — | iceberg, hive, delta_lake | supported |
+| `iceberg` | Iceberg REST catalog | catalog_manager | trino | metadata | — | iceberg | supported |
+| `lakekeeper` | Lakekeeper | catalog_manager | trino | metadata | — | iceberg | supported |
+| `mariadb` | MariaDB | relational | direct, trino | metadata, direct_engine | mariadb | mariadb | supported |
+| `mysql` | MySQL | relational | direct, trino | metadata, direct_engine | mysql | mysql | supported |
+| `nessie` | Project Nessie | catalog_manager | trino | metadata | — | iceberg | supported |
+| `oracle` | Oracle Database | relational | direct, trino | metadata, direct_engine | oracle | oracle | supported |
+| `polaris` | Apache Polaris | catalog_manager | trino | metadata | — | iceberg | supported |
+| `postgresql` | PostgreSQL | relational | direct, trino | metadata, direct_engine | postgresql | postgresql | supported |
+| `sqlite` | SQLite | relational | direct | metadata, direct_engine | sqlite | — | unsupported (BALEIA_SQLITE_ROOT not set) |
+| `sqlserver` | SQL Server | relational | direct, trino | metadata, direct_engine | sqlserver | sqlserver | supported |
+| `starrocks` | StarRocks | engine | — | federated_engine | starrocks | — | unsupported (planned after v1 (#30)) |
+| `trino` | Trino | engine | — | metadata, federated_engine | trino | — | supported |
+| `unity` | Unity Catalog | catalog_manager | trino | metadata | — | iceberg | supported |
 
 ## `clickhouse` — ClickHouse
+
+ClickHouse analytical database; direct access is supported and Trino access is planned.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -44,6 +48,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 
 ## `doris` — Apache Doris
 
+Apache Doris federated query engine (planned).
+
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `host` | text | yes |  |  |
@@ -52,6 +58,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `password` | secret |  |  |  |
 
 ## `flightsql` — Arrow Flight SQL
+
+Arrow Flight SQL endpoint, queried directly.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -64,6 +72,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `token` | secret |  |  | Token authentication |
 
 ## `glue` — AWS Glue Data Catalog
+
+AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -83,6 +93,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 
 ## `hive` — Hive Metastore
 
+Hive Metastore (Thrift) holding Iceberg, Hive and Delta Lake tables, exposed through Trino.
+
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `metastore_uri` | text | yes |  | Thrift URI of the Hive Metastore, e.g. thrift://hms:9083 |
@@ -94,6 +106,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `storage.secret_key` | secret |  |  |  |
 
 ## `iceberg` — Iceberg REST catalog
+
+Iceberg REST catalog, exposed through Trino.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -113,6 +127,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 
 ## `lakekeeper` — Lakekeeper
 
+Lakekeeper Iceberg REST catalog, exposed through Trino.
+
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `url` | url | yes |  | Server root, e.g. http://lakekeeper:8181 (without /catalog) |
@@ -130,6 +146,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 
 ## `mariadb` — MariaDB
 
+MariaDB relational database, queried directly or exposed through Trino.
+
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `host` | text | yes |  |  |
@@ -141,6 +159,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 
 ## `mysql` — MySQL
 
+MySQL relational database, queried directly or exposed through Trino.
+
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `host` | text | yes |  |  |
@@ -151,6 +171,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `password` | secret |  |  |  |
 
 ## `nessie` — Project Nessie
+
+Project Nessie catalog manager, exposed through Trino.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -165,6 +187,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 
 ## `oracle` — Oracle Database
 
+Oracle Database, queried directly or exposed through Trino.
+
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `host` | text | yes |  |  |
@@ -175,6 +199,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `password` | secret |  |  |  |
 
 ## `polaris` — Apache Polaris
+
+Apache Polaris Iceberg REST catalog, exposed through Trino.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -191,6 +217,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 
 ## `postgresql` — PostgreSQL
 
+PostgreSQL relational database, queried directly or exposed through Trino.
+
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `host` | text | yes |  |  |
@@ -202,12 +230,16 @@ connectors it may use (the first is the default; `internal/bindings`).
 
 ## `sqlite` — SQLite
 
+SQLite database, queried directly.
+
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `path` | file_path | yes |  | Path inside BALEIA_SQLITE_ROOT (relative to it, or absolute) |
 | `read_write` | bool |  | `false` | Takes effect only when the server sets BALEIA_SQLITE_ALLOW_WRITE=true |
 
 ## `sqlserver` — SQL Server
+
+Microsoft SQL Server relational database, queried directly or exposed through Trino.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -222,6 +254,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 
 ## `starrocks` — StarRocks
 
+StarRocks federated query engine (planned).
+
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `host` | text | yes |  |  |
@@ -230,6 +264,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `password` | secret |  |  |  |
 
 ## `trino` — Trino
+
+Trino federated query engine.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -241,6 +277,8 @@ connectors it may use (the first is the default; `internal/bindings`).
 | `ca_cert` | text |  |  | PEM bundle trusted for the coordinator's certificate, besides the system roots |
 
 ## `unity` — Unity Catalog
+
+Unity Catalog, exposed through Trino.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|

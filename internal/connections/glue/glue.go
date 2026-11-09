@@ -61,6 +61,18 @@ func (*Provider) Roles() []connections.Role {
 }
 func (*Provider) EngineKind() string { return "" }
 
+// Meta implements connections.Provider (ADR 0021).
+func (*Provider) Meta() connections.TypeMeta {
+	modes := []connections.AccessMode{connections.AccessModeTrino}
+	return connections.TypeMeta{
+		Description:       "AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino.",
+		Category:          connections.CategoryMetastore,
+		AccessModes:       modes,
+		TrinoCatalogTypes: []string{"iceberg", "hive", "delta_lake"},
+		Capabilities:      connections.CapabilitiesFor(modes, true),
+	}
+}
+
 // WalksCatalogs: the reader reads the whole Data Catalog in the walk (#15).
 func (*Provider) WalksCatalogs() bool { return true }
 

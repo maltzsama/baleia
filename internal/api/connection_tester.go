@@ -299,7 +299,9 @@ func (h *CatalogHandlers) planTest(ctx context.Context, p authz.Principal, provi
 	if intents == nil || len(*intents) == 0 {
 		t.metadata = true
 		t.direct = slices.Contains(roles, connections.RoleDirect)
-		if (provider.Family() == connections.FamilyDatabase || provider.Family() == connections.FamilyMetastore) && h.binder != nil && len(h.binder.Supports()[provider.Kind()]) > 0 {
+		meta := provider.Meta()
+		bindable := slices.Contains(meta.AccessModes, connections.AccessModeTrino) && len(meta.TrinoCatalogTypes) > 0
+		if (provider.Family() == connections.FamilyDatabase || provider.Family() == connections.FamilyMetastore) && h.binder != nil && bindable {
 			if cluster, err := h.topology.DefaultCluster(ctx); err == nil && cluster.EngineID.Valid {
 				if eng, err := h.topology.Engine(ctx, cluster.EngineID); err == nil && eng.Enabled {
 					t.binds = append(t.binds, testBind{engine: eng, cluster: cluster})

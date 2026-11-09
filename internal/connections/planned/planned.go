@@ -29,7 +29,17 @@ func StarRocks() *Provider {
 func (p *Provider) Kind() connections.Kind   { return p.kind }
 func (p *Provider) Label() string            { return p.label }
 func (*Provider) Family() connections.Family { return connections.FamilyEngine }
-func (p *Provider) EngineKind() string       { return string(p.kind) }
+
+// Meta implements connections.Provider (ADR 0021). Doris and StarRocks are
+// engine-family resources: they have no data access mode (D.2).
+func (p *Provider) Meta() connections.TypeMeta {
+	return connections.TypeMeta{
+		Description: p.label + " federated query engine (planned).",
+		Category:    connections.CategoryEngine,
+	}
+}
+
+func (p *Provider) EngineKind() string { return string(p.kind) }
 func (p *Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateUnsupported, Reason: p.reason}
 }

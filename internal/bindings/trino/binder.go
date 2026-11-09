@@ -43,6 +43,16 @@ type Binder struct {
 	// retention for expire_snapshots and remove_orphan_files (#500); zero
 	// leaves Trino's default.
 	minRetention time.Duration
+	// providers is the connection type registry the kind→Trino-catalog mapping
+	// is derived from (ADR 0021 D.3). Nil until wired; the binder never owns a
+	// hand-held mapping. *connections.Registry satisfies ProviderSource.
+	providers ProviderSource
+}
+
+// ProviderSource is the connection type registry the binder derives its
+// kind→Trino-catalog mapping from (ADR 0021 D.3).
+type ProviderSource interface {
+	All() []connections.Provider
 }
 
 var _ bindings.Binder = (*Binder)(nil)
@@ -77,23 +87,32 @@ func (b *Binder) WithStore(store RegistryStore) *Binder {
 	return &c
 }
 
+// WithProviders makes the binder derive its kind→Trino-catalog mapping from the
+// connection type registry instead of a hand-held table (ADR 0021 D.3).
+func (b *Binder) WithProviders(p ProviderSource) *Binder {
+	c := *b
+	c.providers = p
+	return &c
+}
+
 func (*Binder) EngineKind() string { return "trino" }
 
-func (*Binder) Supports() map[connections.Kind][]string {
-	return map[connections.Kind][]string{
-		connections.KindPolaris:       {"iceberg"},
-		connections.KindNessie:        {"iceberg"},
-		connections.KindIcebergREST:   {"iceberg"},
-		connections.KindHiveMetastore: {"iceberg", "hive", "delta_lake"},
-		connections.KindGlue:          {"iceberg", "hive", "delta_lake"},
-		connections.KindLakekeeper:    {"iceberg"},
-		connections.KindUnity:         {"iceberg"},
-		connections.KindPostgreSQL:    {"postgresql"},
-		connections.KindMySQL:         {"mysql"},
-		connections.KindMariaDB:       {"mariadb"},
-		connections.KindSQLServer:     {"sqlserver"},
-		connections.KindOracle:        {"oracle"},
+// Supports lists the source kinds the binder binds and their Trino catalog
+// types, derived from the connection type registry (ADR 0021 D.3). A kind is
+// bindable when its type declares the Trino access mode with a mapping.
+func (b *Binder) Supports() map[connections.Kind][]string {
+	if b.providers == nil {
+		return nil
 	}
+	out := make(map[connections.Kind][]string)
+	for _, p := range b.providers.All() {
+		m := p.Meta()
+		if !slices.Contains(m.AccessModes, connections.AccessModeTrino) || len(m.TrinoCatalogTypes) == 0 {
+			continue
+		}
+		out[p.Kind()] = slices.Clone(m.TrinoCatalogTypes)
+	}
+	return out
 }
 
 func (*Binder) ProtectedKeyPatterns() []string { return slices.Clone(protectedPatterns) }
