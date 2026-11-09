@@ -23,8 +23,9 @@ type APIState struct {
 }
 
 // PrepareAPI applies the API's deploy-time state in order: the baleia_trino
-// role and its password, then the default Trino engine seeded from TRINO_URL.
-// It is idempotent and runs before the server starts serving.
+// role and its password, the default Trino engine seeded from TRINO_URL, then
+// the one-time split of dual-path connections (ADR 0021 CR-17). It is
+// idempotent and runs before the server starts serving.
 func PrepareAPI(ctx context.Context, logger *slog.Logger, cfg *config.Config, st APIState) error {
 	// Set the baleia_trino password from BALEIA_TRINO_DB_PASSWORD so the role and
 	// the Trino plugin's connection stay in sync (no secret in a migration).
@@ -44,6 +45,13 @@ func PrepareAPI(ctx context.Context, logger *slog.Logger, cfg *config.Config, st
 		})
 	}); err != nil {
 		return fmt.Errorf("default trino engine: %w", err)
+	}
+
+	// Split connections that today carry both a direct engine and Trino
+	// catalogs into one connection per access path (ADR 0021 CR-17). The store
+	// migration backfilled single-path connections; this handles the rest.
+	if err := SplitDualPathConnections(ctx, st.Store, st.Keyring, logger); err != nil {
+		return fmt.Errorf("split dual-path connections: %w", err)
 	}
 	return nil
 }
