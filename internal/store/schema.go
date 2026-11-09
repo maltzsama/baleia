@@ -202,6 +202,24 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.CatalogConnection{})
 			},
 		},
+		Migration{
+			Version: 6,
+			Name:    "expand connection type check",
+			Up: func(db *gorm.DB) error {
+				// Reconcile the column first (on MySQL this also translates the
+				// check), then replace the old constraint with the expanded list.
+				if err := AutoMigrate(db, &model.CatalogConnection{}); err != nil {
+					return err
+				}
+				if err := db.Migrator().DropConstraint(&model.CatalogConnection{}, "catalog_connections_type_check"); err != nil {
+					return fmt.Errorf("drop connection type check: %w", err)
+				}
+				if err := db.Migrator().CreateConstraint(&model.CatalogConnection{}, "catalog_connections_type_check"); err != nil {
+					return fmt.Errorf("recreate connection type check: %w", err)
+				}
+				return nil
+			},
+		},
 	)
 }
 

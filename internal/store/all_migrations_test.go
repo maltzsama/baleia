@@ -146,8 +146,8 @@ func TestAllMigrationsUpgradeFromVersionOne(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
-	if len(applied) != 4 || applied[0].Version != 2 || applied[1].Version != 3 || applied[2].Version != 4 || applied[3].Version != 5 {
-		t.Fatalf("applied = %+v, want versions 2, 3, 4 and 5", applied)
+	if len(applied) != 5 || applied[0].Version != 2 || applied[1].Version != 3 || applied[2].Version != 4 || applied[3].Version != 5 || applied[4].Version != 6 {
+		t.Fatalf("applied = %+v, want versions 2, 3, 4, 5 and 6", applied)
 	}
 	if !db.Migrator().HasTable(&model.SetupLock{}) {
 		t.Fatal("setup_locks was not created by migration 2")
@@ -158,11 +158,18 @@ func TestAllMigrationsUpgradeFromVersionOne(t *testing.T) {
 	if !db.Migrator().HasColumn(&model.CatalogConnection{}, "access_mode") {
 		t.Fatal("access_mode was not created by migration 5")
 	}
+	var constraint string
+	if err := db.Raw("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'catalog_connections_type_check'").Scan(&constraint).Error; err != nil {
+		t.Fatalf("read connection type check: %v", err)
+	}
+	if !strings.Contains(constraint, "'bigquery'") || !strings.Contains(constraint, "'system'") {
+		t.Fatalf("connection type check was not expanded by migration 6: %s", constraint)
+	}
 	var versions []int64
 	if err := db.Model(&SchemaMigration{}).Order("version").Pluck("version", &versions).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(versions) != 5 || versions[0] != 1 || versions[1] != 2 || versions[2] != 3 || versions[3] != 4 || versions[4] != 5 {
-		t.Fatalf("ledger versions = %v, want 1, 2, 3, 4, 5", versions)
+	if len(versions) != 6 || versions[0] != 1 || versions[1] != 2 || versions[2] != 3 || versions[3] != 4 || versions[4] != 5 || versions[5] != 6 {
+		t.Fatalf("ledger versions = %v, want 1, 2, 3, 4, 5, 6", versions)
 	}
 }
