@@ -42,7 +42,7 @@
 	import EditConnectionDialog from '$lib/connections/EditConnectionDialog.svelte';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import {
-		canQueryDirectly,
+		canDirect,
 		catalogIdentity,
 		normalizeCatalogName,
 		normalizeEngineName
@@ -451,7 +451,7 @@
 						>
 							{m.connections_test()}
 						</Button>
-						{#if provider && canQueryDirectly(provider) && ownEngines.length === 0}
+						{#if provider && canDirect(provider) && ownEngines.length === 0}
 							<Button
 								size="sm"
 								loading={registeringId === connection.id}

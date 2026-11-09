@@ -2685,6 +2685,17 @@ components:
         protected_key_patterns: { type: array, items: { type: string }, description: "Glob patterns (case-insensitive) of extra-property keys that cannot be overridden" }
         reserved_names: { type: array, items: { type: string } }
 
+    ConnectionCategory:
+      type: object
+      required: [category, label, order]
+      properties:
+        category:
+          type: string
+          enum: [relational, analytical, catalog_manager, metastore, lakehouse, cloud_platform, nosql, search, analytics, streaming, observability, external_service, synthetic, internal_catalog, engine]
+        label: { type: string, description: "Display name of the category (ADR 0021 D.10)" }
+        description: { type: string, description: "One-line explanation of the category" }
+        order: { type: integer, description: "Presentation order, ascending" }
+
     ConnectionProviderField:
       type: object
       required: [key, label, type, required, secret]
@@ -7236,6 +7247,21 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/ConnectionProvider" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /connection-categories:
+    get:
+      tags: [CatalogConnections]
+      operationId: listConnectionCategories
+      summary: "Connection categories in presentation order (ADR 0021 D.10)"
+      responses:
+        "200":
+          description: "Categories, ordered for display"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ConnectionCategory" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /catalog-connections:
