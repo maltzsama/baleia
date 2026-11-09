@@ -262,24 +262,24 @@
 				created = { connection, engine, catalogs };
 			}
 			if (bindEngineIds.length > 0) {
-				const names = [...new Set(catalogNames.map((item) => item.trim()).filter(Boolean))];
-				if (names.length === 0) throw new Error('Choose at least one catalog to create.');
-				for (const raw of names) {
-					const catalogName = normalizeCatalogName(raw);
-					if (!catalogName) throw new Error(`“${raw}” cannot be used as a catalog name.`);
-					if (reservedNames.includes(catalogName)) {
-						throw new Error(`“${catalogName}” is reserved by the engine. Choose another name.`);
-					}
-					catalogs.push(
-						await createCatalog(connection.id, {
-							name: raw,
-							trino_catalog_name: catalogName,
-							warehouse: raw,
-							connector: connector || connectors[0] || '',
-							description: ''
-						})
-					);
+				const base = catalogNames.map((item) => item.trim()).find(Boolean) || connection.name;
+				const outputs = connectors.map((item, i) => {
+					const raw = i === 0 ? base : `${base}_${item}`;
+					return { name: raw, trino_catalog_name: normalizeCatalogName(raw) };
+				});
+				if (outputs.some((o) => !o.trino_catalog_name)) {
+					throw new Error('A catalog name cannot be normalized.');
 				}
+				if (outputs.some((o) => reservedNames.includes(o.trino_catalog_name))) {
+					throw new Error('A catalog name is reserved by the engine. Choose another name.');
+				}
+				catalogs.push(
+					...(await createCatalog(connection.id, {
+						catalogs: outputs,
+						warehouse: base,
+						description: ''
+					}))
+				);
 				created = { connection, engine, catalogs };
 			}
 			try {

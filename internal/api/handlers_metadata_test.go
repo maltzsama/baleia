@@ -117,7 +117,7 @@ func TestUpdateCatalog_StartsSync(t *testing.T) {
 	tc := &metadataTemporal{}
 	h.temporalClient = tc
 	conn, cat := reqIDs(q)
-	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: strp("wh2")}})
+	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &UpdateCatalogRequest{Warehouse: strp("wh2")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestUpdateCatalog_StartsSync(t *testing.T) {
 
 	// A Temporal failure never fails the request.
 	tc.err = errors.New("temporal down")
-	resp, err = h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: strp("wh3")}})
+	resp, err = h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &UpdateCatalogRequest{Warehouse: strp("wh3")}})
 	if err != nil || visitCode(t, resp) != 200 {
 		t.Fatalf("update with temporal down: %v", err)
 	}

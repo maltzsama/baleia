@@ -2277,19 +2277,20 @@ type CreateCatalogConnectionRequest struct {
 // CreateCatalogConnectionRequestAccessMode Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
 type CreateCatalogConnectionRequestAccessMode string
 
-// CreateCatalogRequest defines model for CreateCatalogRequest.
+// CreateCatalogRequest Registers the connection's logical catalog outputs. Each entry names one of the connection type's Trino catalog types, in the order GET /connection-providers lists them; the backend derives the connector.
 type CreateCatalogRequest struct {
-	Connector   *string `json:"connector,omitempty"`
+	Catalogs []struct {
+		Name             string `json:"name"`
+		TrinoCatalogName string `json:"trino_catalog_name"`
+	} `json:"catalogs"`
 	Description *string `json:"description,omitempty"`
 	Enabled     *bool   `json:"enabled,omitempty"`
 
 	// ExtraProps Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties.
 	ExtraProps *map[string]string `json:"extra_props,omitempty"`
-	Name       string             `json:"name"`
 
-	// ShareWithWorkspaceId Workspace to grant the new catalog to as an active grant (the connection wizard's "Share with", preselected to the current workspace). Omitted, the catalog is created unshared; the owner shares it later from the catalog's Access screen.
+	// ShareWithWorkspaceId Workspace to grant the new catalogs to as active grants (the connection wizard's "Share with", preselected to the current workspace). Omitted, the catalogs are created unshared; the owner shares them later from each catalog's Access screen.
 	ShareWithWorkspaceId *openapi_types.UUID `json:"share_with_workspace_id,omitempty"`
-	TrinoCatalogName     string              `json:"trino_catalog_name"`
 
 	// Warehouse Warehouse or logical source the connector addresses. Required for catalog managers and Iceberg REST catalogs; omitted for databases (their catalog falls back to the connection's database) and for endpointless catalogs (memory, blackhole, faker, jmx, tpch, tpcds).
 	Warehouse *string `json:"warehouse,omitempty"`
@@ -4788,6 +4789,18 @@ type UpdateCatalogDetailRequest struct {
 	Name        *string `json:"name,omitempty"`
 }
 
+// UpdateCatalogRequest Partial update. `name` renames the catalog, `trino_catalog_name` renames its Trino catalog identifier, and the other fields replace their stored value.
+type UpdateCatalogRequest struct {
+	Connector   *string `json:"connector,omitempty"`
+	Description *string `json:"description,omitempty"`
+
+	// ExtraProps Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties.
+	ExtraProps       *map[string]string `json:"extra_props,omitempty"`
+	Name             *string            `json:"name,omitempty"`
+	TrinoCatalogName *string            `json:"trino_catalog_name,omitempty"`
+	Warehouse        *string            `json:"warehouse,omitempty"`
+}
+
 // UpdateEngineQueue defines model for UpdateEngineQueue.
 type UpdateEngineQueue struct {
 	Class          UpdateEngineQueueClass `json:"class"`
@@ -5848,7 +5861,7 @@ type CreateCatalogBindingJSONRequestBody = CreateBindingRequest
 type CreateCatalogJSONRequestBody = CreateCatalogRequest
 
 // UpdateCatalogJSONRequestBody defines body for UpdateCatalog for application/json ContentType.
-type UpdateCatalogJSONRequestBody = CreateCatalogRequest
+type UpdateCatalogJSONRequestBody = UpdateCatalogRequest
 
 // PreviewCronJSONRequestBody defines body for PreviewCron for application/json ContentType.
 type PreviewCronJSONRequestBody = CronPreviewRequest

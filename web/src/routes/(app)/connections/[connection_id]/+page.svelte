@@ -28,6 +28,7 @@
 	import Modal from '$lib/ui/Modal.svelte';
 	import Select from '$lib/ui/Select.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
+	import { normalizeCatalogName } from '$lib/connections/providers';
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
 	import EngineBadge from '$lib/ui/patterns/EngineBadge.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
@@ -144,19 +145,19 @@
 	}
 
 	async function submitCatalog() {
-		if (!catalogName || !catalogTrinoName || !catalogWarehouse) {
+		if (!catalogName.trim()) {
 			catalogError = m.connections_name_engine_name_and_warehouse_are_require();
 			return;
 		}
 		catalogSaving = true;
 		catalogError = '';
 		try {
-			await createCatalog(connectionId, {
-				name: catalogName,
-				trino_catalog_name: catalogTrinoName,
-				warehouse: catalogWarehouse,
-				connector: catalogConnector
+			const connectors = support?.connectors ?? [];
+			const outputs = connectors.map((connector, i) => {
+				const raw = i === 0 ? catalogName : `${catalogName}_${connector}`;
+				return { name: raw, trino_catalog_name: normalizeCatalogName(raw) };
 			});
+			await createCatalog(connectionId, { catalogs: outputs, warehouse: catalogName });
 			catalogs = await listConnectionCatalogs(connectionId);
 			catalogOpen = false;
 		} catch (e) {
