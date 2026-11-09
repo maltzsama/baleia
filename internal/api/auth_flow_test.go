@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mail"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
@@ -324,12 +325,11 @@ func TestReset_HashedSingleUse(t *testing.T) {
 	createResetToken(t, f, f.owner, raw, time.Now().Add(time.Hour))
 
 	// The database holds the hash, never the raw link token.
-	var stored string
-	if err := f.pool.QueryRow(context.Background(),
-		"SELECT token_hash FROM password_reset_tokens WHERE token_hash = $1", auth.HashToken(raw),
-	).Scan(&stored); err != nil {
+	var reset model.PasswordResetToken
+	if err := f.gdb.Where("token_hash = ?", auth.HashToken(raw)).First(&reset).Error; err != nil {
 		t.Fatal(err)
 	}
+	stored := string(reset.TokenHash)
 	if stored != auth.HashToken(raw) || stored == raw {
 		t.Fatalf("stored token = %q, want its hash only", stored)
 	}
@@ -430,18 +430,16 @@ func TestReset_RequestStoresHash(t *testing.T) {
 	if raw == "" {
 		t.Fatal("the e-mail link carried no token")
 	}
-	var n int
-	if err := f.pool.QueryRow(context.Background(),
-		"SELECT count(*) FROM password_reset_tokens WHERE token_hash = $1", auth.HashToken(raw),
-	).Scan(&n); err != nil {
+	var n int64
+	if err := f.gdb.Model(&model.PasswordResetToken{}).
+		Where("token_hash = ?", auth.HashToken(raw)).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 1 {
 		t.Errorf("stored rows for the hash = %d, want 1", n)
 	}
-	if err := f.pool.QueryRow(context.Background(),
-		"SELECT count(*) FROM password_reset_tokens WHERE token_hash = $1", raw,
-	).Scan(&n); err != nil {
+	if err := f.gdb.Model(&model.PasswordResetToken{}).
+		Where("token_hash = ?", raw).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

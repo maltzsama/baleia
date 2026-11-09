@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -191,7 +193,9 @@ func TestSemanticModels_MigrateV1NeedsPrimaryKey(t *testing.T) {
 	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
-	if _, err := f.pool.Exec(context.Background(), `UPDATE metadata_columns SET name = 'order_id' WHERE table_id = $1 AND name = 'id'`, f.orders); err != nil {
+	if err := f.gdb.Model(&model.MetadataColumn{}).
+		Where("table_id = ? AND name = ?", repo.UUIDString(pgUUIDOf(f.orders)), "id").
+		Update("name", "order_id").Error; err != nil {
 		t.Fatal(err)
 	}
 	createMetric(t, f, ctx, SemanticMetricCreate{Slug: "order_count", Label: "Orders", CatalogId: f.lake, Namespace: []string{"sales"}, Table: "orders", Definition: simpleDefinition("count", "")})

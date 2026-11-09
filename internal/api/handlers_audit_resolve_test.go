@@ -7,6 +7,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit/trail"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -19,22 +21,38 @@ import (
 func TestResolveAudit_UsersAreScopedToSharedWorkspaces(t *testing.T) {
 	t.Parallel()
 	f := newAuditFixture(t)
-	ctx := context.Background()
-	var peer, team string
-	if err := f.pool.QueryRow(ctx, `INSERT INTO users (name, email, role, password_hash) VALUES ('peer', 'peer@x.io', 'member', 'x') RETURNING id::text`).Scan(&peer); err != nil {
+	password := "x"
+	peerUser := model.User{
+		ID: model.UUID(repo.NewUUID()), Name: "peer", Email: "peer@x.io",
+		Role: "member", PasswordHash: &password,
+	}
+	if err := f.gdb.Create(&peerUser).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := f.pool.QueryRow(ctx, `INSERT INTO teams (name, created_by) VALUES ('t', $1) RETURNING id::text`, f.owner).Scan(&team); err != nil {
+	peer := string(peerUser.ID)
+	owner := model.UUID(f.owner)
+	team := model.Team{ID: model.UUID(repo.NewUUID()), Name: "t", CreatedBy: owner}
+	if err := f.gdb.Create(&team).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(ctx, `INSERT INTO team_members (team_id, user_id) VALUES ($1, $2), ($1, $3)`, team, f.owner, peer); err != nil {
+	for _, m := range []struct {
+		user model.UUID
+		role model.Text
+	}{{owner, "owner"}, {model.UUID(peer), "member"}} {
+		if err := f.gdb.Create(&model.TeamMember{
+			ID: model.UUID(repo.NewUUID()), TeamID: team.ID, UserID: m.user, Role: m.role,
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	ws := model.Workspace{
+		ID: model.UUID(repo.NewUUID()), Name: "shared", Type: "shared",
+		PolarisCatalogName: "s", OwnerTeamID: &team.ID,
+	}
+	if err := f.gdb.Create(&ws).Error; err != nil {
 		t.Fatal(err)
 	}
-	var ws pgtype.UUID
-	if err := f.pool.QueryRow(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_team_id) VALUES ('shared', 'shared', 's', $1) RETURNING id`, team).Scan(&ws); err != nil {
-		t.Fatal(err)
-	}
-	addDefaultSpace(t, f.pool, ws)
+	addDefaultSpace(t, f.gdb, ws.ID)
 
 	ids := []openapi_types.UUID{uuid.MustParse(f.owner), uuid.MustParse(peer), uuid.MustParse(f.stranger)}
 	resolve := func(ctx context.Context) map[string]AuditResolvedUser {

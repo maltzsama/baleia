@@ -16,6 +16,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/go-chi/chi/v5/middleware"
@@ -169,14 +170,19 @@ func TestKeysetPagination(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
+	gdb := testdb.GORM(t, pool)
 	at := time.Now().UTC().Truncate(time.Second)
 	for i := range 5 {
-		if _, err := pool.Exec(ctx, `INSERT INTO audit_events (occurred_at, actor_kind, action, resource_type, resource_id, outcome)
-			VALUES ($1, 'service', 'metadata.sync', 'catalog', $2, 'allowed')`, at, fmt.Sprint(i)); err != nil {
+		resource := model.Text(fmt.Sprint(i))
+		row := model.AuditEvent{
+			OccurredAt: at, ActorKind: "service", Action: "metadata.sync",
+			ResourceType: "catalog", ResourceID: &resource, Outcome: "allowed",
+		}
+		if err := gdb.Create(&row).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(gdb)
 	var ids []string
 	p := db.ListAuditEventsParams{Lim: 2}
 	for page := 0; page < 5; page++ {

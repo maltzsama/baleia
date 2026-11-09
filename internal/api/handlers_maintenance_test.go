@@ -11,13 +11,17 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/fake"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // maintEngine is a fake engine that supports Iceberg maintenance.
@@ -63,13 +67,16 @@ func (a *auditLog) actions() []audit.Action {
 }
 
 type maintenanceFixture struct {
-	pool      *pgxpool.Pool
-	h         *API
-	audit     *auditLog
-	catalogID pgtype.UUID
-	bindingID pgtype.UUID
-	admin     context.Context
-	stranger  context.Context
+	pool         *pgxpool.Pool
+	gdb          *gorm.DB
+	h            *API
+	audit        *auditLog
+	catalogID    pgtype.UUID
+	bindingID    pgtype.UUID
+	connectionID pgtype.UUID
+	clusterID    model.UUID
+	admin        context.Context
+	stranger     context.Context
 }
 
 // newMaintenanceFixture is one Iceberg (Polaris) catalog with a binding of
@@ -78,48 +85,82 @@ func newMaintenanceFixture(t *testing.T, bindingMode string) *maintenanceFixture
 	t.Helper()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	f := &maintenanceFixture{pool: pool, audit: &auditLog{}}
+	gdb := testdb.GORM(t, pool)
+	q := repo.New(gdb)
+	f := &maintenanceFixture{pool: pool, gdb: gdb, audit: &auditLog{}}
 	user := func(email, role string) string {
-		var id pgtype.UUID
-		if err := pool.QueryRow(ctx, `INSERT INTO users (name, email, role, password_hash) VALUES ($1, $1, $2, 'x') RETURNING id`,
-			email, role).Scan(&id); err != nil {
+		password := "x"
+		row := model.User{
+			ID: model.UUID(repo.NewUUID()), Name: email, Email: model.Text(email),
+			Role: model.Text(role), PasswordHash: &password,
+		}
+		if err := gdb.Create(&row).Error; err != nil {
 			t.Fatal(err)
 		}
-		return idString(id)
+		return string(row.ID)
 	}
 	adminID := user("admin@maint.test", "admin")
+	adminUUID := repo.PGUUID(adminID)
 	f.admin = ctxAs(adminID, "admin")
 	f.stranger = ctxAs(user("stranger@maint.test", "member"), "member")
-	var conn, engConn, engine pgtype.UUID
-	for _, c := range []struct {
-		name string
-		dst  *pgtype.UUID
-	}{{"maint-source", &conn}, {"maint-engine", &engConn}} {
-		if err := pool.QueryRow(ctx, `INSERT INTO catalog_connections (name, type, url, created_by) VALUES ($1, 'polaris', 'http://polaris.test', $2) RETURNING id`,
-			c.name, adminID).Scan(c.dst); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := pool.QueryRow(ctx, `INSERT INTO catalogs (connection_id, name, trino_catalog_name, cluster_id, warehouse, connector)
-		VALUES ($1, 'lake', 'lake', (SELECT id FROM trino_clusters LIMIT 1), 'wh', 'iceberg') RETURNING id`, conn).Scan(&f.catalogID); err != nil {
+	conn, err := q.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
+		ID: repo.PGUUID(repo.NewUUID()), Name: "maint-source", Type: "polaris",
+		Url: "http://polaris.test", CreatedBy: adminUUID,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO engines (name, kind, class, connection_id, identity_mode, created_by)
-		VALUES ('maint_engine', 'trino', 'federated', $1, 'connection', $2) RETURNING id`, engConn, adminID).Scan(&engine); err != nil {
+	engConn, err := q.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
+		ID: repo.PGUUID(repo.NewUUID()), Name: "maint-engine", Type: "polaris",
+		Url: "http://polaris.test", CreatedBy: adminUUID,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode, enabled, lifecycle_state)
-		VALUES ($1, $2, 'lake', $3, true, 'active') RETURNING id`, f.catalogID, engine, bindingMode).Scan(&f.bindingID); err != nil {
+	f.connectionID = conn.ID
+	var cluster model.TrinoCluster
+	if err := gdb.Order("name").First(&cluster).Error; err != nil {
 		t.Fatal(err)
 	}
+	f.clusterID = cluster.ID
+	trinoCatalog := model.Text("lake")
+	warehouse := "wh"
+	connector := model.Text("iceberg")
+	clusterID := cluster.ID
+	catalog := model.Catalog{
+		ID: model.UUID(repo.NewUUID()), ConnectionID: model.UUID(repo.UUIDString(conn.ID)),
+		Name: "lake", TrinoCatalogName: &trinoCatalog, ClusterID: &clusterID,
+		Warehouse: &warehouse, Connector: &connector, Origin: "source",
+	}
+	if err := gdb.Create(&catalog).Error; err != nil {
+		t.Fatal(err)
+	}
+	f.catalogID = repo.PGUUID(string(catalog.ID))
+	engine, err := q.CreateEngine(ctx, db.CreateEngineParams{
+		Name: "maint_engine", Kind: "trino", Class: "federated", ConnectionID: engConn.ID,
+		IdentityMode: "connection", CreatedBy: adminUUID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := model.CatalogBinding{
+		ID: model.UUID(repo.NewUUID()), CatalogID: catalog.ID,
+		EngineID: model.UUID(engine.ID.String()), EngineCatalogName: "lake",
+		Mode: bindingMode, Enabled: true, LifecycleState: "active",
+	}
+	if err := gdb.Create(&binding).Error; err != nil {
+		t.Fatal(err)
+	}
+	f.bindingID = repo.PGUUID(string(binding.ID))
 	// The engine's cluster has loaded the catalog with the projected 1h
 	// floor; an adopted binding's registry row is irrelevant.
-	if _, err := pool.Exec(ctx, `UPDATE trino_clusters SET engine_id = $1 WHERE id = (SELECT cluster_id FROM catalogs WHERE id = $2)`, engine, f.catalogID); err != nil {
+	if err := gdb.Model(&model.TrinoCluster{}).Where("id = ?", string(cluster.ID)).
+		Update("engine_id", engine.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	f.setApplied(t, `{"iceberg.expire-snapshots.min-retention": "1h", "iceberg.remove-orphan-files.min-retention": "1h"}`, "trino")
 	f.h = testAPI(handlerFields{
-		queries:        repo.New(testdb.GORM(t, pool)),
+		queries:        q,
 		pool:           pool,
 		tx:             poolTx{pool: pool},
 		engines:        maintEngines{},
@@ -133,10 +174,14 @@ func newMaintenanceFixture(t *testing.T, bindingMode string) *maintenanceFixture
 // setApplied writes what the engine's cluster holds for the catalog.
 func (f *maintenanceFixture) setApplied(t *testing.T, props, updatedBy string) {
 	t.Helper()
-	if _, err := f.pool.Exec(context.Background(), `INSERT INTO trino_catalog_registry (cluster_id, catalog_name, connector_name, properties, updated_by)
-		VALUES ((SELECT cluster_id FROM catalogs WHERE id = $1), 'lake', 'iceberg', $2::jsonb, $3)
-		ON CONFLICT (cluster_id, catalog_name) DO UPDATE SET properties = EXCLUDED.properties, updated_by = EXCLUDED.updated_by`,
-		f.catalogID, props, updatedBy); err != nil {
+	row := model.TrinoCatalogRegistry{
+		ClusterID: f.clusterID, CatalogName: "lake", ConnectorName: "iceberg",
+		Properties: model.JSON(props), UpdatedBy: model.Text(updatedBy),
+	}
+	if err := f.gdb.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "cluster_id"}, {Name: "catalog_name"}},
+		DoUpdates: clause.AssignmentColumns([]string{"properties", "updated_by"}),
+	}).Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
 }
@@ -281,10 +326,12 @@ func TestTableMaintenance_Access(t *testing.T) {
 func TestTableMaintenance_RunsAndPlans(t *testing.T) {
 	t.Parallel()
 	f := newMaintenanceFixture(t, "managed")
-	ctx := context.Background()
 	f.put(f.admin, t, expiryParams(3600), nil)
-	if _, err := f.pool.Exec(ctx, `INSERT INTO table_health_snapshots (catalog_id, catalog_connection_id, catalog, namespace, table_name, snapshot_count, health_score)
-		SELECT id, connection_id, 'lake', 'cdc', 'orders', 140, 70 FROM catalogs WHERE id = $1`, f.catalogID); err != nil {
+	if err := f.gdb.Create(&model.TableHealthSnapshot{
+		ID: model.UUID(repo.NewUUID()), CatalogConnectionID: model.UUID(repo.UUIDString(f.connectionID)),
+		Catalog: "lake", Namespace: "cdc", TableNameValue: "orders", SnapshotCount: 140,
+		HealthScore: 70, CatalogID: model.UUID(repo.UUIDString(f.catalogID)),
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 	table := func() (openapi_types.UUID, string, string) { return f.catalog(), "cdc", "orders" }
@@ -428,7 +475,8 @@ func TestTableMaintenance_Analyze(t *testing.T) {
 	if err != nil || !isType[AnalyzeTableHealth202JSONResponse](resp) {
 		t.Fatalf("analyze table = %T, %v", resp, err)
 	}
-	if _, err := f.pool.Exec(context.Background(), `UPDATE catalogs SET enabled = false WHERE id = $1`, f.catalogID); err != nil {
+	if err := f.gdb.Model(&model.Catalog{}).Where("id = ?", repo.UUIDString(f.catalogID)).
+		Update("enabled", false).Error; err != nil {
 		t.Fatal(err)
 	}
 	catalog, err := f.h.AnalyzeCatalogTableHealth(f.admin, AnalyzeCatalogTableHealthRequestObject{CatalogId: f.catalog()})

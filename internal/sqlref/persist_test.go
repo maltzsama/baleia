@@ -4,47 +4,71 @@ import (
 	"context"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"gorm.io/gorm"
 )
+
+// seedStatement stores a finished execution with one statement through the
+// GORM store, as production does.
+func seedStatement(t *testing.T, statement string) (*repo.Repo, *gorm.DB, pgtype.UUID, pgtype.UUID) {
+	t.Helper()
+	pool := testdb.New(t)
+	ctx := context.Background()
+	gdb := testdb.GORM(t, pool)
+	q := repo.New(gdb)
+
+	uid := uuid.New()
+	userID := pgtype.UUID{Bytes: uid, Valid: true}
+	password := "x"
+	if err := gdb.Create(&model.User{
+		ID: model.UUID(uid.String()), Name: "u", Email: "u@x", PasswordHash: &password,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	ws, err := q.CreateWorkspace(ctx, db.CreateWorkspaceParams{
+		Name: "w", Type: "personal", PolarisCatalogName: "p", OwnerUserID: userID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec, err := q.CreateQueryExecution(ctx, db.CreateQueryExecutionParams{
+		WorkspaceID: ws.ID, UserID: userID, Status: "finished", Sql: "SELECT 1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stmt, err := q.CreateQueryStatement(ctx, db.CreateQueryStatementParams{
+		ExecutionID: exec.ID, Position: 1, Sql: statement, Status: "finished",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return q, gdb, ws.ID, stmt.ID
+}
 
 // TestPersistIsIdempotent: re-running Persist replaces the statement's rows
 // instead of duplicating them (#538).
 func TestPersistIsIdempotent(t *testing.T) {
 	t.Parallel()
-	pool := testdb.New(t)
 	ctx := context.Background()
-	q := repo.New(testdb.GORM(t, pool))
-
-	var userID pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO users (name, email, password_hash) VALUES ('u','u@x','x') RETURNING id`).Scan(&userID); err != nil {
-		t.Fatal(err)
-	}
-	var wsID pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ('w','personal','p',$1) RETURNING id`, userID).Scan(&wsID); err != nil {
-		t.Fatal(err)
-	}
-	var execID pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO query_executions (workspace_id, user_id, status, sql) VALUES ($1,$2,'finished','SELECT 1') RETURNING id`, wsID, userID).Scan(&execID); err != nil {
-		t.Fatal(err)
-	}
 	const statement = `SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id`
-	var stmtID pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO query_statements (execution_id, position, sql, status) VALUES ($1,1,$2,'finished') RETURNING id`, execID, statement).Scan(&stmtID); err != nil {
-		t.Fatal(err)
-	}
+	q, gdb, wsID, stmtID := seedStatement(t, statement)
 
 	for i := 0; i < 2; i++ {
 		if err := Persist(ctx, q, stmtID, wsID, pgtype.UUID{}, "sales", statement); err != nil {
 			t.Fatalf("Persist %d: %v", i, err)
 		}
 	}
-	var refs, joins int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM statement_references WHERE statement_id=$1`, stmtID).Scan(&refs); err != nil {
+	var refs, joins int64
+	if err := gdb.Model(&model.StatementReference{}).Where("statement_id = ?", stmtID).Count(&refs).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM statement_joins WHERE statement_id=$1`, stmtID).Scan(&joins); err != nil {
+	if err := gdb.Model(&model.StatementJoin{}).Where("statement_id = ?", stmtID).Count(&joins).Error; err != nil {
 		t.Fatal(err)
 	}
 	if refs != 2 || joins != 1 {
@@ -56,26 +80,8 @@ func TestPersistIsIdempotent(t *testing.T) {
 // stores no rows, and an old row is cleared.
 func TestPersistUnparsableWritesNothing(t *testing.T) {
 	t.Parallel()
-	pool := testdb.New(t)
 	ctx := context.Background()
-	q := repo.New(testdb.GORM(t, pool))
-
-	var userID pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO users (name, email, password_hash) VALUES ('u','u@x','x') RETURNING id`).Scan(&userID); err != nil {
-		t.Fatal(err)
-	}
-	var wsID pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ('w','personal','p',$1) RETURNING id`, userID).Scan(&wsID); err != nil {
-		t.Fatal(err)
-	}
-	var execID pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO query_executions (workspace_id, user_id, status, sql) VALUES ($1,$2,'finished','SELECT 1') RETURNING id`, wsID, userID).Scan(&execID); err != nil {
-		t.Fatal(err)
-	}
-	var stmtID pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO query_statements (execution_id, position, sql, status) VALUES ($1,1,'SELECT 1','finished') RETURNING id`, execID).Scan(&stmtID); err != nil {
-		t.Fatal(err)
-	}
+	q, gdb, wsID, stmtID := seedStatement(t, "SELECT 1")
 
 	if err := Persist(ctx, q, stmtID, wsID, pgtype.UUID{}, "sales", "SELECT * FROM orders"); err != nil {
 		t.Fatal(err)
@@ -83,8 +89,8 @@ func TestPersistUnparsableWritesNothing(t *testing.T) {
 	if err := Persist(ctx, q, stmtID, wsID, pgtype.UUID{}, "sales", "SELECT FROM ((("); err != nil {
 		t.Fatal(err)
 	}
-	var refs int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM statement_references WHERE statement_id=$1`, stmtID).Scan(&refs); err != nil {
+	var refs int64
+	if err := gdb.Model(&model.StatementReference{}).Where("statement_id = ?", stmtID).Count(&refs).Error; err != nil {
 		t.Fatal(err)
 	}
 	if refs != 0 {

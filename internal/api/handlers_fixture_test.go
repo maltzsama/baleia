@@ -16,8 +16,10 @@ import (
 	"github.com/galileostudio/baleia/internal/dialect"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"go.temporal.io/sdk/client"
@@ -119,13 +121,26 @@ func openTestStore(t *testing.T, pool *pgxpool.Pool) *gorm.DB {
 }
 
 // addDefaultSpace creates the default space a workspace always has. Fixtures
-// that insert a workspace through SQL need it because ADR 0020 removed the
-// trigger that used to create it.
-func addDefaultSpace(t *testing.T, pool *pgxpool.Pool, workspaceID any) {
+// that create a workspace through the store need it because ADR 0020 removed
+// the trigger that used to create it.
+func addDefaultSpace(t *testing.T, gdb *gorm.DB, workspaceID any) {
 	t.Helper()
-	if _, err := pool.Exec(context.Background(),
-		`INSERT INTO spaces (workspace_id, name, visibility, default_role, is_default, slug)
-		 VALUES ($1, 'General', 'workspace', 'editor', true, 'general')`, workspaceID); err != nil {
+	var ws model.UUID
+	switch v := workspaceID.(type) {
+	case model.UUID:
+		ws = v
+	case pgtype.UUID:
+		ws = model.UUID(repo.UUIDString(v))
+	case string:
+		ws = model.UUID(v)
+	default:
+		t.Fatalf("add default space: unsupported workspace id %T", workspaceID)
+	}
+	space := model.Space{
+		ID: model.UUID(repo.NewUUID()), WorkspaceID: ws, Name: "General",
+		Visibility: "workspace", DefaultRole: "editor", IsDefault: true, Slug: "general",
+	}
+	if err := gdb.Create(&space).Error; err != nil {
 		t.Fatalf("add default space: %v", err)
 	}
 }

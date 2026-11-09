@@ -3,10 +3,10 @@ package api
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestPopularTables_Refresh counts two finished statements that read orders,
@@ -17,24 +17,32 @@ func TestPopularTables_Refresh(t *testing.T) {
 	f := newMetaFixture(t)
 	ctx := context.Background()
 	for range 2 {
-		var exec, stmt pgtype.UUID
-		if err := f.pool.QueryRow(ctx, `
-			INSERT INTO query_executions (workspace_id, user_id, status, sql, started_at, finished_at)
-			VALUES ($1, $2, 'finished', 'select 1', now(), now()) RETURNING id`, f.ws, f.owner).Scan(&exec); err != nil {
+		now := time.Now()
+		execution := model.QueryExecution{
+			ID: model.UUID(repo.NewUUID()), WorkspaceID: model.UUID(f.ws.String()),
+			UserID: model.UUID(f.owner), Status: "finished", SQL: "select 1",
+			StartedAt: now, FinishedAt: &now,
+		}
+		if err := f.gdb.Create(&execution).Error; err != nil {
 			t.Fatal(err)
 		}
-		if err := f.pool.QueryRow(ctx, `
-			INSERT INTO query_statements (execution_id, position, sql, status, started_at, finished_at)
-			VALUES ($1, 1, 'select 1', 'finished', now(), now()) RETURNING id`, exec).Scan(&stmt); err != nil {
+		statement := model.QueryStatement{
+			ID: model.UUID(repo.NewUUID()), ExecutionID: execution.ID, Position: 1,
+			SQL: "select 1", Status: "finished", StartedAt: now, FinishedAt: &now,
+			ResultSets: model.JSON(`[]`),
+		}
+		if err := f.gdb.Create(&statement).Error; err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.pool.Exec(ctx, `
-			INSERT INTO statement_references (statement_id, workspace_id, catalog_id, namespace, table_name, alias, kind)
-			VALUES ($1, $2, $3, 'sales', 'orders', 'o', 'read')`, stmt, f.ws, f.lake); err != nil {
+		catalog := model.UUID(repo.UUIDString(pgUUIDOf(f.lake)))
+		if err := f.gdb.Create(&model.StatementReference{
+			StatementID: statement.ID, WorkspaceID: model.UUID(f.ws.String()), CatalogID: &catalog,
+			Namespace: "sales", TableNameValue: "orders", Alias: "o", Kind: "read",
+		}).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	q := repo.New(testdb.GORM(t, f.pool))
+	q := repo.New(f.gdb)
 	if err := q.DeleteTablePopularity(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -58,9 +66,10 @@ func TestPopularTables_Refresh(t *testing.T) {
 	}
 
 	// A table of a catalog the workspace may not use never appears.
-	if _, err := f.pool.Exec(ctx, `
-		INSERT INTO table_popularity (workspace_id, catalog_id, namespace, table_name, uses, score, last_used_at)
-		VALUES ($1, $2, 'sales', 'orders_secret', 9, 9, now())`, f.ws, f.other); err != nil {
+	if err := f.gdb.Create(&model.TablePopularity{
+		WorkspaceID: model.UUID(f.ws.String()), CatalogID: model.UUID(repo.UUIDString(pgUUIDOf(f.other))),
+		Namespace: "sales", TableNameValue: "orders_secret", Uses: 9, Score: 9, LastUsedAt: time.Now(),
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 	resp, err = f.h.ListPopularTables(f.as(f.owner), ListPopularTablesRequestObject{Id: f.ws})

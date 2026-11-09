@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
@@ -16,7 +17,8 @@ import (
 func TestOnBehalfOfOnlyForAgents(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	gdb := testdb.GORM(t, pool)
+	q := repo.New(gdb)
 	rec := NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
 	owner := uuid.New()
 	agent := uuid.New()
@@ -32,14 +34,14 @@ func TestOnBehalfOfOnlyForAgents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var kind, actorID, method string
-	var onBehalf *string
-	row := pool.QueryRow(context.Background(),
-		`SELECT actor_kind, actor_id, auth_method, on_behalf_of::text
-		   FROM audit_events WHERE action = 'agent.tool_call' ORDER BY id DESC LIMIT 1`)
-	if err := row.Scan(&kind, &actorID, &method, &onBehalf); err != nil {
+	var agentEvent model.AuditEvent
+	if err := gdb.Where("action = ?", "agent.tool_call").Order("id DESC").First(&agentEvent).Error; err != nil {
 		t.Fatal(err)
 	}
+	kind := agentEvent.ActorKind
+	actorID := string(*agentEvent.ActorID)
+	method := *agentEvent.AuthMethod
+	onBehalf := agentEvent.OnBehalfOf
 	if kind != "agent" {
 		t.Errorf("actor_kind = %q, want agent", kind)
 	}
@@ -49,16 +51,16 @@ func TestOnBehalfOfOnlyForAgents(t *testing.T) {
 	if method != AuthAgentToken {
 		t.Errorf("auth_method = %q, want %q", method, AuthAgentToken)
 	}
-	if onBehalf == nil || *onBehalf != owner.String() {
+	if onBehalf == nil || string(*onBehalf) != owner.String() {
 		t.Errorf("on_behalf_of = %v, want %q", onBehalf, owner.String())
 	}
 
-	row = pool.QueryRow(context.Background(),
-		`SELECT actor_kind, on_behalf_of::text
-		   FROM audit_events WHERE action = 'catalog.update' ORDER BY id DESC LIMIT 1`)
-	if err := row.Scan(&kind, &onBehalf); err != nil {
+	var humanEvent model.AuditEvent
+	if err := gdb.Where("action = ?", "catalog.update").Order("id DESC").First(&humanEvent).Error; err != nil {
 		t.Fatal(err)
 	}
+	kind = humanEvent.ActorKind
+	onBehalf = humanEvent.OnBehalfOf
 	if kind != "user" {
 		t.Errorf("human actor_kind = %q, want user", kind)
 	}

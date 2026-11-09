@@ -1,26 +1,28 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/content"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 func newWorkspaceFor(t *testing.T, f *metaFixture, name string) openapi_types.UUID {
 	t.Helper()
-	var id pgtype.UUID
-	if err := f.pool.QueryRow(context.Background(),
-		`INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ($1, 'personal', $2, $3) RETURNING id`,
-		name, name, mustUUID(t, f.owner)).Scan(&id); err != nil {
+	owner := model.UUID(f.owner)
+	ws := model.Workspace{
+		ID: model.UUID(repo.NewUUID()), Name: name, Type: "personal",
+		PolarisCatalogName: model.Text(name), OwnerUserID: &owner,
+	}
+	if err := f.gdb.Create(&ws).Error; err != nil {
 		t.Fatal(err)
 	}
-	addDefaultSpace(t, f.pool, id)
-	return openapi_types.UUID(id.Bytes)
+	addDefaultSpace(t, f.gdb, ws.ID)
+	return openapi_types.UUID(repo.PGUUID(string(ws.ID)).Bytes)
 }
 
 func TestBundleExportImport(t *testing.T) {
@@ -29,9 +31,11 @@ func TestBundleExportImport(t *testing.T) {
 	ctx := f.as(f.owner)
 
 	source := createSpace(t, f, ctx, CreateSpaceRequest{Name: "Source", Visibility: CreateSpaceRequestVisibilityWorkspace})
-	if _, err := f.pool.Exec(context.Background(),
-		`INSERT INTO query_folders (workspace_id, space_id, name, slug) VALUES ($1, $2, 'Monthly', 'monthly')`,
-		pgUUIDOf(f.ws), pgUUIDOf(source.Id)); err != nil {
+	folder := model.QueryFolder{
+		ID: model.UUID(repo.NewUUID()), WorkspaceID: model.UUID(f.ws.String()),
+		SpaceID: model.UUID(source.Id.String()), Name: "Monthly", Slug: "monthly",
+	}
+	if err := f.gdb.Create(&folder).Error; err != nil {
 		t.Fatal(err)
 	}
 	if r, err := f.h.CreateSavedQuery(ctx, CreateSavedQueryRequestObject{

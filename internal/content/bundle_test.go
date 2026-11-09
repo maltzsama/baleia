@@ -10,6 +10,9 @@ import (
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -43,22 +46,30 @@ func (f *fixture) spaceNamed(t *testing.T, name, slug string) pgtype.UUID {
 func (f *fixture) grantedCatalog(t *testing.T, name string) pgtype.UUID {
 	t.Helper()
 	ctx := context.Background()
-	var conn, cat pgtype.UUID
-	if err := f.pool.QueryRow(ctx, `INSERT INTO catalog_connections (name, type, url, created_by) VALUES ('conn', 'polaris', 'http://p', $1) RETURNING id`, f.user).Scan(&conn); err != nil {
+	conn, err := f.q.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
+		ID: pgUUID(uuid.New()), Name: "conn", Type: "polaris", Url: "http://p", CreatedBy: f.user,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.pool.QueryRow(ctx, `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1, $2, 'native') RETURNING id`, conn, name).Scan(&cat); err != nil {
+	cat := model.Catalog{
+		ID: model.UUID(repo.NewUUID()), ConnectionID: model.UUID(repo.UUIDString(conn.ID)),
+		Name: model.Text(name), Origin: "native",
+	}
+	if err := f.gdb.Create(&cat).Error; err != nil {
 		t.Fatal(err)
 	}
 	// Catalog creation grants the creator's workspace (ADR 0018 §4): the
 	// personal auto-reach rule is gone, so a catalog is only reachable by grant.
-	f.grant(t, f.ws, cat)
-	return cat
+	f.grant(t, f.ws, repo.PGUUID(string(cat.ID)))
+	return repo.PGUUID(string(cat.ID))
 }
 
 func (f *fixture) grant(t *testing.T, ws, catalog pgtype.UUID) {
 	t.Helper()
-	if _, err := f.pool.Exec(context.Background(), `INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, granted_by) VALUES ($1, $2, $3)`, ws, catalog, f.user); err != nil {
+	if _, err := f.q.UpsertWorkspaceCatalogGrant(context.Background(), db.UpsertWorkspaceCatalogGrantParams{
+		WorkspaceID: ws, CatalogID: catalog, GrantedBy: f.user,
+	}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -299,8 +310,8 @@ func TestUnknownKindAndForbiddenSQL(t *testing.T) {
 			t.Fatalf("%s/%s = %s, want ERROR", it.Kind, it.Slug, it.Action)
 		}
 	}
-	var n int
-	if err := f.pool.QueryRow(context.Background(), `SELECT count(*) FROM saved_queries WHERE slug = 'ddl'`).Scan(&n); err != nil {
+	var n int64
+	if err := f.gdb.Model(&model.SavedQuery{}).Where("slug = ?", "ddl").Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {
@@ -325,11 +336,11 @@ func TestDryRunWritesNothing(t *testing.T) {
 	if !report.OK || report.Items[0].Action != content.ActionCreate {
 		t.Fatalf("dry run report = %+v", report)
 	}
-	var folders, queries int
-	if err := f.pool.QueryRow(context.Background(), `SELECT count(*) FROM query_folders WHERE space_id = $1`, dest).Scan(&folders); err != nil {
+	var folders, queries int64
+	if err := f.gdb.Model(&model.QueryFolder{}).Where("space_id = ?", repo.UUIDString(dest)).Count(&folders).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := f.pool.QueryRow(context.Background(), `SELECT count(*) FROM saved_queries WHERE space_id = $1`, dest).Scan(&queries); err != nil {
+	if err := f.gdb.Model(&model.SavedQuery{}).Where("space_id = ?", repo.UUIDString(dest)).Count(&queries).Error; err != nil {
 		t.Fatal(err)
 	}
 	if folders != 0 || queries != 0 {

@@ -5,12 +5,28 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 func fakeIDPProbe(_ context.Context, _ providerConfig, _ string) IdentityProviderTestResult {
 	return idpTestResult(idpCheck{name: "fake", status: idpCheckOK})
+}
+
+// addDirectoryUser links a directory user to the provider through the store.
+func addDirectoryUser(t *testing.T, h *API, apID openapi_types.UUID) {
+	t.Helper()
+	providerID := model.UUID(apID.String())
+	externalID := model.Text("ext-1")
+	if err := testdb.GORM(t, h.pool).Create(&model.User{
+		ID: model.UUID(repo.NewUUID()), Name: "dir user", Email: "dir@example.test",
+		AuthProvider: "oidc", AuthProviderID: &providerID, ExternalID: &externalID,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
 }
 
 func createOIDCProvider(t *testing.T, h *API) IdentityProviderDetail {
@@ -77,12 +93,7 @@ func TestIdP_DeleteWithUsers409(t *testing.T) {
 	t.Parallel()
 	h := idpTestHandlers(t)
 	detail := createOIDCProvider(t, h)
-	ctx := context.Background()
-	apID := mustUUID(t, detail.Id.String())
-	if _, err := h.pool.Exec(ctx, `INSERT INTO users (name, email, auth_provider, auth_provider_id, external_id)
-		VALUES ('dir user', 'dir@example.test', 'oidc', $1, 'ext-1')`, apID); err != nil {
-		t.Fatal(err)
-	}
+	addDirectoryUser(t, h, detail.Id)
 
 	// The admin list/detail reports how many users are linked (#265).
 	gotDetail, err := h.GetIdentityProvider(idpAdminCtx(), GetIdentityProviderRequestObject{Id: detail.Id})
@@ -108,12 +119,7 @@ func TestIdP_DeleteSuspends(t *testing.T) {
 	t.Parallel()
 	h := idpTestHandlers(t)
 	detail := createOIDCProvider(t, h)
-	ctx := context.Background()
-	apID := mustUUID(t, detail.Id.String())
-	if _, err := h.pool.Exec(ctx, `INSERT INTO users (name, email, auth_provider, auth_provider_id, external_id)
-		VALUES ('dir user', 'dir@example.test', 'oidc', $1, 'ext-1')`, apID); err != nil {
-		t.Fatal(err)
-	}
+	addDirectoryUser(t, h, detail.Id)
 
 	suspend := true
 	got, err := h.DeleteIdentityProvider(idpAdminCtx(), DeleteIdentityProviderRequestObject{
@@ -126,16 +132,17 @@ func TestIdP_DeleteSuspends(t *testing.T) {
 		t.Fatalf("delete = %T, want 204", got)
 	}
 
-	var status, provider string
-	if err := h.pool.QueryRow(ctx, `SELECT status, auth_provider FROM users WHERE email = 'dir@example.test'`).Scan(&status, &provider); err != nil {
+	gdb := testdb.GORM(t, h.pool)
+	var user model.User
+	if err := gdb.Where("email = ?", "dir@example.test").First(&user).Error; err != nil {
 		t.Fatal(err)
 	}
-	if status != auth.StatusSuspended || provider != "local" {
-		t.Errorf("user = %s/%s, want suspended/local", status, provider)
+	if string(user.Status) != auth.StatusSuspended || string(user.AuthProvider) != "local" {
+		t.Errorf("user = %s/%s, want suspended/local", user.Status, user.AuthProvider)
 	}
 
-	var n int
-	if err := h.pool.QueryRow(ctx, `SELECT count(*) FROM auth_providers`).Scan(&n); err != nil {
+	var n int64
+	if err := gdb.Model(&model.AuthProvider{}).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {
@@ -164,8 +171,8 @@ func TestIdP_TransientTestPersistsNothing(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 
-	var n int
-	if err := h.pool.QueryRow(context.Background(), `SELECT count(*) FROM auth_providers`).Scan(&n); err != nil {
+	var n int64
+	if err := testdb.GORM(t, h.pool).Model(&model.AuthProvider{}).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {
