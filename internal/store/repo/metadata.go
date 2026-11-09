@@ -50,30 +50,38 @@ func (r *Repo) ListMetadataCatalogs(ctx context.Context, workspaceID pgtype.UUID
 		for _, connection := range connections {
 			kinds[string(connection.ID)] = connection.Type
 		}
+		synced, err := r.syncTimes(tx, visible)
+		if err != nil {
+			return err
+		}
+		statuses, err := syncStatuses(tx, visible)
+		if err != nil {
+			return err
+		}
+		bindings, err := r.metadataBindings(tx, visible)
+		if err != nil {
+			return err
+		}
 		out = make([]db.ListMetadataCatalogsRow, 0, len(catalogs))
 		for _, catalog := range catalogs {
-			syncedAt, err := finishedSyncAt(tx, string(catalog.ID))
+			catalogBindings := bindings[string(catalog.ID)]
+			if catalogBindings == nil {
+				catalogBindings = []metadataBinding{}
+			}
+			encoded, err := json.Marshal(catalogBindings)
 			if err != nil {
 				return err
 			}
-			status, err := latestSyncStatus(tx, string(catalog.ID))
-			if err != nil {
-				return err
-			}
-			bindings, err := r.metadataBindings(ctx, tx, string(catalog.ID))
-			if err != nil {
-				return err
-			}
-			encoded, err := json.Marshal(bindings)
-			if err != nil {
-				return err
+			status := statuses[string(catalog.ID)]
+			if status == "" {
+				status = "never"
 			}
 			out = append(out, db.ListMetadataCatalogsRow{
 				ID:                 PGUUID(string(catalog.ID)),
 				Name:               string(catalog.Name),
 				Origin:             string(catalog.Origin),
 				ProviderKind:       kinds[string(catalog.ConnectionID)],
-				MetadataSyncedAt:   syncedAt,
+				MetadataSyncedAt:   synced[string(catalog.ID)],
 				MetadataSyncStatus: status,
 				Bindings:           encoded,
 			})
@@ -829,32 +837,38 @@ type metadataBinding struct {
 	Status            string `json:"status"`
 }
 
-func (r *Repo) metadataBindings(ctx context.Context, scope *gorm.DB, catalogID string) ([]metadataBinding, error) {
+// metadataBindings returns the enabled bindings of the given catalogs, keyed
+// by catalog ID, with their engine and sync status. It resolves the engines
+// and binding status in bulk so the call count does not grow with the number
+// of catalogs or bindings.
+func (r *Repo) metadataBindings(scope *gorm.DB, catalogIDs []string) (map[string][]metadataBinding, error) {
+	out := make(map[string][]metadataBinding)
+	if len(catalogIDs) == 0 {
+		return out, nil
+	}
 	var rows []model.CatalogBinding
-	if err := scope.Where("catalog_id = ? AND enabled", catalogID).
-		Order("created_at, id").
+	if err := scope.Where("catalog_id IN ? AND enabled", catalogIDs).
+		Order("catalog_id, created_at, id").
 		Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	out := make([]metadataBinding, 0, len(rows))
+	if len(rows) == 0 {
+		return out, nil
+	}
+	set, err := r.loadBindingStatusSet(scope, rows)
+	if err != nil {
+		return nil, err
+	}
 	for _, row := range rows {
-		var engine model.Engine
-		err := scope.Select("id", "name", "kind", "enabled").Where("id = ?", string(row.EngineID)).First(&engine).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && !engine.Enabled) {
+		engine, ok := set.engines[row.EngineID]
+		if !ok || !engine.Enabled {
 			continue
 		}
-		if err != nil {
-			return nil, err
-		}
-		status, err := r.bindingStatus(ctx, row)
-		if err != nil {
-			return nil, err
-		}
-		syncStatus := status.SyncStatus
+		syncStatus := set.status(row).SyncStatus
 		if syncStatus == "" {
 			syncStatus = "pending"
 		}
-		out = append(out, metadataBinding{
+		out[string(row.CatalogID)] = append(out[string(row.CatalogID)], metadataBinding{
 			BindingID:         string(row.ID),
 			EngineID:          string(engine.ID),
 			EngineName:        string(engine.Name),
@@ -881,16 +895,28 @@ func finishedSyncAt(scope *gorm.DB, catalogID string) (pgtype.Timestamptz, error
 	return PGTime(finished.Time), nil
 }
 
-func latestSyncStatus(scope *gorm.DB, catalogID string) (string, error) {
-	var run model.MetadataSyncRun
-	err := scope.Where("catalog_id = ?", catalogID).Order("started_at DESC").First(&run).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "never", nil
+// syncStatuses returns the status of the latest sync run of each catalog, in
+// a single query. A catalog without a run is absent from the result.
+func syncStatuses(scope *gorm.DB, catalogIDs []string) (map[string]string, error) {
+	out := make(map[string]string, len(catalogIDs))
+	if len(catalogIDs) == 0 {
+		return out, nil
 	}
-	if err != nil {
-		return "", err
+	var runs []model.MetadataSyncRun
+	if err := scope.Select("catalog_id", "status").
+		Where("catalog_id IN ?", catalogIDs).
+		Order("started_at DESC").
+		Find(&runs).Error; err != nil {
+		return nil, err
 	}
-	return run.Status, nil
+	// The newest run of a catalog is the first encountered.
+	for _, run := range runs {
+		key := string(run.CatalogID)
+		if _, ok := out[key]; !ok {
+			out[key] = run.Status
+		}
+	}
+	return out, nil
 }
 
 func (r *Repo) tableDocs(scope *gorm.DB, workspaceID pgtype.UUID, catalogIDs []string) (map[string]model.SemanticDoc, error) {
@@ -920,12 +946,25 @@ func (r *Repo) popularityByTable(scope *gorm.DB, workspaceID pgtype.UUID) (map[s
 
 func (r *Repo) syncTimes(scope *gorm.DB, catalogIDs []string) (map[string]pgtype.Timestamptz, error) {
 	out := make(map[string]pgtype.Timestamptz, len(catalogIDs))
-	for _, catalogID := range catalogIDs {
-		at, err := finishedSyncAt(scope, catalogID)
-		if err != nil {
-			return nil, err
+	if len(catalogIDs) == 0 {
+		return out, nil
+	}
+	type row struct {
+		CatalogID  model.UUID
+		FinishedAt *time.Time
+	}
+	var rows []row
+	if err := scope.Model(&model.MetadataSyncRun{}).
+		Select("catalog_id", "MAX(finished_at) AS finished_at").
+		Where("catalog_id IN ? AND status = ?", catalogIDs, "finished").
+		Group("catalog_id").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		if r.FinishedAt != nil {
+			out[string(r.CatalogID)] = PGTime(*r.FinishedAt)
 		}
-		out[catalogID] = at
 	}
 	return out, nil
 }
