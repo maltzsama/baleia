@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit"
+	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/migrate"
@@ -219,6 +220,11 @@ func runStoreUp(ctx context.Context, logger *slog.Logger, cfg *config.Config) er
 		return err
 	}
 	logger.InfoContext(ctx, "store migrations applied", "applied", len(applied))
+	if sqlDB, derr := db.DB(); derr == nil {
+		if err := bootstrap.EnsureTrinoRoleSQL(ctx, sqlDB); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

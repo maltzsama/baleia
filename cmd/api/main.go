@@ -78,6 +78,9 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 
 	// Set the baleia_trino password from BALEIA_TRINO_DB_PASSWORD so the role and
 	// the Trino plugin's connection stay in sync (no secret in a migration).
+	if err := bootstrap.EnsureTrinoRole(ctx, core.Pool); err != nil {
+		return fmt.Errorf("baleia_trino role: %w", err)
+	}
 	if err := bootstrap.SetTrinoRolePassword(ctx, core.Pool, cfg.TrinoDBPassword); err != nil {
 		return fmt.Errorf("baleia_trino password: %w", err)
 	}
