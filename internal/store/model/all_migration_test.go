@@ -23,7 +23,7 @@ func TestAllModelsMigrate(t *testing.T) {
 	t.Run(string(backend), func(t *testing.T) {
 		t.Parallel()
 		if backend == store.MySQL {
-			checkMigration(t, openMySQL(t, "BALEIA_TEST_DATABASE_URL"), model.All())
+			checkMigration(t, openMySQL(t), model.All())
 			return
 		}
 		checkMigration(t, openPostgres(t), model.All())
