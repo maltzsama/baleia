@@ -23,16 +23,10 @@ import (
 	trinobinding "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dbpool"
+	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/trino"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 type seedUser struct {
@@ -53,21 +47,15 @@ func main() {
 		password = "e2e-password"
 	}
 
-	pool, err := dbpool.Open(ctx, databaseURL, dbpool.Options{MaxConns: 2})
+	backend, err := store.BackendFromDSN(databaseURL)
+	if err != nil {
+		log.Fatalf("e2e-seed: store backend: %v", err)
+	}
+	gdb, err := store.Open(ctx, databaseURL, backend, store.Options{})
 	if err != nil {
 		log.Fatalf("e2e-seed: connect: %v", err)
 	}
-	defer pool.Close()
-
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	defer func() { _ = sqlDB.Close() }()
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		log.Fatalf("e2e-seed: open gorm: %v", err)
-	}
+	defer func() { _ = store.Close(gdb) }()
 	q := repo.New(gdb)
 
 	hash, err := auth.HashPassword(password)
@@ -127,7 +115,7 @@ func main() {
 			log.Fatalf("e2e-seed: trino catalog: %v", err)
 		}
 	}
-	contentSvc, err := newContentService(pool)
+	contentSvc, err := newContentService(gdb)
 	if err != nil {
 		log.Fatalf("e2e-seed: content store: %v", err)
 	}
@@ -149,7 +137,7 @@ func ensureUser(ctx context.Context, q db.Querier, u seedUser, hash string) (db.
 	if err == nil {
 		return existing, nil
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if !errors.Is(err, db.ErrNoRows) {
 		return db.User{}, err
 	}
 	return q.CreateUser(ctx, db.CreateUserParams{
@@ -186,7 +174,7 @@ func ensurePersonalWorkspace(ctx context.Context, q db.Querier, user db.User) er
 	})
 }
 
-func ensureTeam(ctx context.Context, q db.Querier, name string, createdBy pgtype.UUID) (db.Team, error) {
+func ensureTeam(ctx context.Context, q db.Querier, name string, createdBy db.UUID) (db.Team, error) {
 	teams, err := q.ListTeams(ctx)
 	if err == nil {
 		for _, team := range teams {
@@ -198,7 +186,7 @@ func ensureTeam(ctx context.Context, q db.Querier, name string, createdBy pgtype
 	return q.CreateTeam(ctx, db.CreateTeamParams{Name: name, CreatedBy: createdBy})
 }
 
-func ensureTeamMember(ctx context.Context, q db.Querier, teamID, userID pgtype.UUID, role string) error {
+func ensureTeamMember(ctx context.Context, q db.Querier, teamID, userID db.UUID, role string) error {
 	_, err := q.AddTeamMember(ctx, db.AddTeamMemberParams{
 		TeamID: teamID,
 		UserID: userID,
@@ -337,15 +325,7 @@ var seedModels = []struct {
 
 // newContentService builds the content writer over the GORM store (ADR 0020).
 // The seed writes saved content through the same path as the API.
-func newContentService(pool *pgxpool.Pool) (*content.Service, error) {
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		return nil, err
-	}
+func newContentService(gdb *gorm.DB) (*content.Service, error) {
 	r := repo.New(gdb)
 	return content.New(r, r.TxContent), nil
 }
@@ -366,7 +346,7 @@ func ensureModels(ctx context.Context, q db.Querier, svc *content.Service, membe
 		if err == nil {
 			continue
 		}
-		if !errors.Is(err, pgx.ErrNoRows) {
+		if !errors.Is(err, db.ErrNoRows) {
 			return err
 		}
 		if _, err := svc.CreateSemanticModel(ctx, member.ID, db.CreateSemanticModelParams{
@@ -390,7 +370,7 @@ func ensureV1Metric(ctx context.Context, q db.Querier, svc *content.Service, mem
 	}
 	if _, err := q.GetSemanticMetricBySlug(ctx, db.GetSemanticMetricBySlugParams{WorkspaceID: workspaceID, Slug: "e2e_nation_count"}); err == nil {
 		return nil
-	} else if !errors.Is(err, pgx.ErrNoRows) {
+	} else if !errors.Is(err, db.ErrNoRows) {
 		return err
 	}
 	space, err := q.GetDefaultSpace(ctx, workspaceID)
@@ -424,7 +404,7 @@ func ensureMetadata(ctx context.Context, q db.Querier, catalog db.Catalog) error
 	return nil
 }
 
-func ensureSharedWorkspace(ctx context.Context, q db.Querier, name string, teamID pgtype.UUID) (db.Workspace, error) {
+func ensureSharedWorkspace(ctx context.Context, q db.Querier, name string, teamID db.UUID) (db.Workspace, error) {
 	polarisName := "e2e_shared"
 	if ws, err := q.GetWorkspaceByPolarisName(ctx, polarisName); err == nil {
 		return ws, nil
@@ -439,7 +419,7 @@ func ensureSharedWorkspace(ctx context.Context, q db.Querier, name string, teamI
 
 // stableSuffix keeps the legacy polaris_catalog_name unique and stable across
 // repeated seed runs.
-func stableSuffix(id pgtype.UUID) string {
+func stableSuffix(id db.UUID) string {
 	if len(id.Bytes) == 0 {
 		return randomSuffix()
 	}

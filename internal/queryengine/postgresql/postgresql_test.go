@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func bigInt(s string) *big.Int {
@@ -70,15 +70,15 @@ func TestNumericString(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
-		n    pgtype.Numeric
+		n    db.Numeric
 		want string
 	}{
-		{"scale", pgtype.Numeric{Int: bigInt("1234"), Exp: -2, Valid: true}, "12.34"},
-		{"integer", pgtype.Numeric{Int: bigInt("42"), Exp: 0, Valid: true}, "42"},
-		{"padding", pgtype.Numeric{Int: bigInt("5"), Exp: -3, Valid: true}, "0.005"},
-		{"expand", pgtype.Numeric{Int: bigInt("7"), Exp: 2, Valid: true}, "700"},
-		{"negative", pgtype.Numeric{Int: bigInt("-1234"), Exp: -2, Valid: true}, "-12.34"},
-		{"unconstrained", pgtype.Numeric{Int: bigInt("12345678901234567890123456789"), Exp: -9, Valid: true}, "12345678901234567890.123456789"},
+		{"scale", db.Numeric{Int: bigInt("1234"), Exp: -2, Valid: true}, "12.34"},
+		{"integer", db.Numeric{Int: bigInt("42"), Exp: 0, Valid: true}, "42"},
+		{"padding", db.Numeric{Int: bigInt("5"), Exp: -3, Valid: true}, "0.005"},
+		{"expand", db.Numeric{Int: bigInt("7"), Exp: 2, Valid: true}, "700"},
+		{"negative", db.Numeric{Int: bigInt("-1234"), Exp: -2, Valid: true}, "-12.34"},
+		{"unconstrained", db.Numeric{Int: bigInt("12345678901234567890123456789"), Exp: -9, Valid: true}, "12345678901234567890.123456789"},
 	}
 	for _, c := range cases {
 		if got := numericString(c.n); got != c.want {
@@ -102,12 +102,12 @@ func TestIsoInterval(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
-		i    pgtype.Interval
+		i    db.Interval
 		want string
 	}{
-		{"day hour", pgtype.Interval{Months: 0, Days: 1, Microseconds: 7200000000, Valid: true}, "P1DT2H"},
-		{"minute second", pgtype.Interval{Microseconds: 90000000, Valid: true}, "PT1M30S"},
-		{"month", pgtype.Interval{Months: 2, Valid: true}, "P2M"},
+		{"day hour", db.Interval{Months: 0, Days: 1, Microseconds: 7200000000, Valid: true}, "P1DT2H"},
+		{"minute second", db.Interval{Microseconds: 90000000, Valid: true}, "PT1M30S"},
+		{"month", db.Interval{Months: 2, Valid: true}, "P2M"},
 	}
 	for _, c := range cases {
 		if got := isoInterval(c.i); got != c.want {

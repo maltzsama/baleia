@@ -7,8 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -18,12 +16,12 @@ type Agents struct{ db *gorm.DB }
 // NewAgents builds the agent store.
 func NewAgents(db *gorm.DB) *Agents { return &Agents{db: db} }
 
-// GetAgentTokenByHash returns the token row or pgx.ErrNoRows.
+// GetAgentTokenByHash returns the token row or db.ErrNoRows.
 func (s *Agents) GetAgentTokenByHash(ctx context.Context, tokenHash string) (db.AgentToken, error) {
 	var row model.AgentToken
 	err := s.db.WithContext(ctx).Where("token_hash = ?", tokenHash).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.AgentToken{}, pgx.ErrNoRows
+		return db.AgentToken{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.AgentToken{}, err
@@ -31,15 +29,15 @@ func (s *Agents) GetAgentTokenByHash(ctx context.Context, tokenHash string) (db.
 	return toDBAgentToken(row), nil
 }
 
-// GetAgentByID returns one agent or pgx.ErrNoRows.
-func (s *Agents) GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, error) {
+// GetAgentByID returns one agent or db.ErrNoRows.
+func (s *Agents) GetAgentByID(ctx context.Context, id db.UUID) (db.Agent, error) {
 	if !id.Valid {
-		return db.Agent{}, pgx.ErrNoRows
+		return db.Agent{}, db.ErrNoRows
 	}
 	var row model.Agent
 	err := s.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Agent{}, pgx.ErrNoRows
+		return db.Agent{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Agent{}, err
@@ -48,7 +46,7 @@ func (s *Agents) GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, er
 }
 
 // TouchAgentToken records that the token was just used.
-func (s *Agents) TouchAgentToken(ctx context.Context, id pgtype.UUID) error {
+func (s *Agents) TouchAgentToken(ctx context.Context, id db.UUID) error {
 	return s.db.WithContext(ctx).Model(&model.AgentToken{}).
 		Where("id = ?", UUIDString(id)).
 		Update("last_used_at", time.Now().UTC()).Error

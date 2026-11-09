@@ -8,7 +8,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // EphemeralPrefix names the short-lived catalogs connection tests bind
@@ -34,7 +33,7 @@ func (b *Binder) CreateEphemeral(ctx context.Context, store EphemeralStore, eng 
 	if err := store.InsertEphemeralRegistryRow(ctx, db.InsertEphemeralRegistryRowParams{
 		ClusterID: eng.ClusterID, CatalogName: p.EngineCatalog, ConnectorName: p.Connector,
 		Column4: props, CatalogVersion: &version,
-		Ttl: pgtype.Interval{Microseconds: ttl.Microseconds(), Valid: true},
+		Ttl: db.Interval{Microseconds: ttl.Microseconds(), Valid: true},
 	}); err != nil {
 		return fmt.Errorf("insert ephemeral registry row: %w", err)
 	}

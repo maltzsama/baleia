@@ -8,12 +8,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 // orders is a valid table model.
 var orders = map[string]any{
@@ -40,7 +37,7 @@ func (f *fakeStore) GetSemanticModel(_ context.Context, arg db.GetSemanticModelP
 	if m, ok := f.models[arg.ID.Bytes]; ok && m.WorkspaceID == arg.WorkspaceID {
 		return m, nil
 	}
-	return db.SemanticModel{}, pgx.ErrNoRows
+	return db.SemanticModel{}, db.ErrNoRows
 }
 
 func (f *fakeStore) GetSemanticModelBySlug(_ context.Context, arg db.GetSemanticModelBySlugParams) (db.SemanticModel, error) {
@@ -49,33 +46,33 @@ func (f *fakeStore) GetSemanticModelBySlug(_ context.Context, arg db.GetSemantic
 			return m, nil
 		}
 	}
-	return db.SemanticModel{}, pgx.ErrNoRows
+	return db.SemanticModel{}, db.ErrNoRows
 }
 
 func (f *fakeStore) SetSemanticModelCertification(_ context.Context, arg db.SetSemanticModelCertificationParams) (db.SemanticModel, error) {
 	m := f.models[arg.ID.Bytes]
-	m.Certified, m.CertifiedAt = arg.Certified, pgtype.Timestamptz{Valid: arg.Certified}
+	m.Certified, m.CertifiedAt = arg.Certified, db.Timestamptz{Valid: arg.Certified}
 	f.models[arg.ID.Bytes] = m
 	return m, nil
 }
 
-func (f *fakeStore) CreateSemanticModel(_ context.Context, _ pgtype.UUID, in db.CreateSemanticModelParams) (db.SemanticModel, error) {
+func (f *fakeStore) CreateSemanticModel(_ context.Context, _ db.UUID, in db.CreateSemanticModelParams) (db.SemanticModel, error) {
 	if f.slugTaken {
-		return db.SemanticModel{}, &pgconn.PgError{Code: "23505"}
+		return db.SemanticModel{}, &db.PGError{Code: "23505"}
 	}
 	m := db.SemanticModel{ID: newID(), WorkspaceID: in.WorkspaceID, Slug: in.Slug, Label: in.Label, Certified: in.Certified, CatalogID: in.CatalogID, Definition: in.Definition}
 	f.models[m.ID.Bytes] = m
 	return m, nil
 }
 
-func (f *fakeStore) UpdateSemanticModel(_ context.Context, _ pgtype.UUID, in db.UpdateSemanticModelParams, _ *int32) (db.SemanticModel, bool, error) {
+func (f *fakeStore) UpdateSemanticModel(_ context.Context, _ db.UUID, in db.UpdateSemanticModelParams, _ *int32) (db.SemanticModel, bool, error) {
 	m := f.models[in.ID.Bytes]
 	m.Slug, m.Label, m.Certified, m.Definition = in.Slug, in.Label, in.Certified, in.Definition
 	f.models[in.ID.Bytes] = m
 	return m, true, nil
 }
 
-func (f *fakeStore) DeleteSemanticModel(context.Context, pgtype.UUID, pgtype.UUID, pgtype.UUID) error {
+func (f *fakeStore) DeleteSemanticModel(context.Context, db.UUID, db.UUID, db.UUID) error {
 	return nil
 }
 

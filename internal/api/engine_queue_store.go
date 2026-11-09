@@ -7,12 +7,11 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/galileostudio/baleia/internal/workload/resourcegroups/publish"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // engineQueueReader reads one engine's configured capacities.
 type engineQueueReader interface {
-	ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]db.EngineQueueCapacity, error)
+	ListEngineQueueCapacities(ctx context.Context, engineID db.UUID) ([]db.EngineQueueCapacity, error)
 }
 
 // engineQueueTxStore is the save's persistence inside one transaction: the
@@ -20,13 +19,13 @@ type engineQueueReader interface {
 // (through the adapter below) and *repo.Repo both implement it (#771).
 type engineQueueTxStore interface {
 	LockTrinoResourceGroups(ctx context.Context) error
-	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
+	GetEngineByID(ctx context.Context, id db.UUID) (db.Engine, error)
 	ListEngines(ctx context.Context) ([]db.Engine, error)
-	DeleteEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) error
+	DeleteEngineQueueCapacities(ctx context.Context, engineID db.UUID) error
 	UpsertEngineQueueCapacity(ctx context.Context, arg db.UpsertEngineQueueCapacityParams) error
 	SetEngineMaxRunningTotal(ctx context.Context, arg db.SetEngineMaxRunningTotalParams) (db.Engine, error)
 	SetEngineTrinoResourceGroups(ctx context.Context, arg db.SetEngineTrinoResourceGroupsParams) (db.Engine, error)
-	PublishTrinoResourceGroups(ctx context.Context, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error)
+	PublishTrinoResourceGroups(ctx context.Context, engineID db.UUID, environment string, doc workload.ResourceGroups) (int, error)
 }
 
 // sqlEngineQueueTxStore adapts the sqlc querier to the save's store. Embedding
@@ -34,7 +33,7 @@ type engineQueueTxStore interface {
 // package (the authz coverage audit reads declarations by name).
 type sqlEngineQueueTxStore struct{ db.Querier }
 
-func (s sqlEngineQueueTxStore) PublishTrinoResourceGroups(ctx context.Context, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
+func (s sqlEngineQueueTxStore) PublishTrinoResourceGroups(ctx context.Context, engineID db.UUID, environment string, doc workload.ResourceGroups) (int, error) {
 	return publish.Publish(ctx, s.Querier, engineID, environment, doc)
 }
 

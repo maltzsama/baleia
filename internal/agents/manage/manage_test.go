@@ -9,18 +9,16 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 type fakeStore struct {
 	agents   map[[16]byte]db.Agent
-	bound    map[[16]byte][]pgtype.UUID
+	bound    map[[16]byte][]db.UUID
 	visible  map[[16]byte]bool
 	tokens   map[[16]byte]db.AgentToken
-	revoked  []pgtype.UUID
+	revoked  []db.UUID
 	bindFail error
 	grants   []db.ListWorkspaceCatalogGrantsRow
 	bindings []db.CatalogBinding
@@ -29,27 +27,27 @@ type fakeStore struct {
 }
 
 func newStore() *fakeStore {
-	return &fakeStore{agents: map[[16]byte]db.Agent{}, bound: map[[16]byte][]pgtype.UUID{}, visible: map[[16]byte]bool{}, tokens: map[[16]byte]db.AgentToken{}}
+	return &fakeStore{agents: map[[16]byte]db.Agent{}, bound: map[[16]byte][]db.UUID{}, visible: map[[16]byte]bool{}, tokens: map[[16]byte]db.AgentToken{}}
 }
 
-func (f *fakeStore) GetAgentByID(_ context.Context, id pgtype.UUID) (db.Agent, error) {
+func (f *fakeStore) GetAgentByID(_ context.Context, id db.UUID) (db.Agent, error) {
 	if a, ok := f.agents[id.Bytes]; ok {
 		return a, nil
 	}
-	return db.Agent{}, pgx.ErrNoRows
+	return db.Agent{}, db.ErrNoRows
 }
 
 func (f *fakeStore) ListAllAgents(context.Context) ([]db.Agent, error) { return nil, nil }
 
-func (f *fakeStore) ListAgentsByOwner(context.Context, pgtype.UUID) ([]db.Agent, error) {
+func (f *fakeStore) ListAgentsByOwner(context.Context, db.UUID) ([]db.Agent, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) ListAgentWorkspaces(context.Context, pgtype.UUID) ([]db.Workspace, error) {
+func (f *fakeStore) ListAgentWorkspaces(context.Context, db.UUID) ([]db.Workspace, error) {
 	return f.wsList, nil
 }
 
-func (f *fakeStore) ListAgentTokensByAgent(context.Context, pgtype.UUID) ([]db.AgentToken, error) {
+func (f *fakeStore) ListAgentTokensByAgent(context.Context, db.UUID) ([]db.AgentToken, error) {
 	return nil, nil
 }
 
@@ -57,37 +55,37 @@ func (f *fakeStore) GetAgentTokenByID(_ context.Context, arg db.GetAgentTokenByI
 	if t, ok := f.tokens[arg.ID.Bytes]; ok && t.AgentID == arg.AgentID {
 		return t, nil
 	}
-	return db.AgentToken{}, pgx.ErrNoRows
+	return db.AgentToken{}, db.ErrNoRows
 }
 
 func (f *fakeStore) CheckWorkspaceAccess(_ context.Context, arg db.CheckWorkspaceAccessParams) (bool, error) {
 	return f.visible[arg.ID.Bytes], nil
 }
 
-func (f *fakeStore) ListWorkspaceCatalogGrants(context.Context, pgtype.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
+func (f *fakeStore) ListWorkspaceCatalogGrants(context.Context, db.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
 	return f.grants, nil
 }
 
-func (f *fakeStore) ListBindingsByCatalog(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+func (f *fakeStore) ListBindingsByCatalog(context.Context, db.UUID) ([]db.CatalogBinding, error) {
 	return f.bindings, nil
 }
 
-func (f *fakeStore) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+func (f *fakeStore) GetEngineByID(_ context.Context, id db.UUID) (db.Engine, error) {
 	if e, ok := f.engines[id.Bytes]; ok {
 		return e, nil
 	}
-	return db.Engine{}, pgx.ErrNoRows
+	return db.Engine{}, db.ErrNoRows
 }
 
 func (f *fakeStore) GetQueryExecutionByIDAndWorkspace(context.Context, db.GetQueryExecutionByIDAndWorkspaceParams) (db.QueryExecution, error) {
-	return db.QueryExecution{}, pgx.ErrNoRows
+	return db.QueryExecution{}, db.ErrNoRows
 }
 
 func (f *fakeStore) UpdateAgentPolicy(_ context.Context, arg db.UpdateAgentPolicyParams) (db.Agent, error) {
 	return db.Agent{ID: arg.ID, Policy: arg.Policy}, nil
 }
 
-func (f *fakeStore) DeleteAgent(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) DeleteAgent(_ context.Context, id db.UUID) error {
 	delete(f.agents, id.Bytes)
 	return nil
 }
@@ -123,7 +121,7 @@ func (f *fakeStore) SetAgentStatus(_ context.Context, arg db.SetAgentStatusParam
 	return a, nil
 }
 
-func (f *fakeStore) ClearAgentWorkspaces(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) ClearAgentWorkspaces(_ context.Context, id db.UUID) error {
 	delete(f.bound, id.Bytes)
 	return nil
 }
@@ -196,10 +194,10 @@ func TestWorkspacesAndUpdate(t *testing.T) {
 	owner, ws, hidden := newID(), newID(), newID()
 	st.visible[ws.Bytes] = true
 
-	if _, err := s.CheckWorkspaces(ctx, owner, []pgtype.UUID{ws, hidden}); !errors.Is(err, ErrWorkspaceNotVisible) {
+	if _, err := s.CheckWorkspaces(ctx, owner, []db.UUID{ws, hidden}); !errors.Is(err, ErrWorkspaceNotVisible) {
 		t.Errorf("hidden workspace = %v", err)
 	}
-	ids, err := s.CheckWorkspaces(ctx, owner, []pgtype.UUID{ws, ws})
+	ids, err := s.CheckWorkspaces(ctx, owner, []db.UUID{ws, ws})
 	if err != nil || len(ids) != 1 {
 		t.Fatalf("dedupe = %v, %v", ids, err)
 	}
@@ -215,7 +213,7 @@ func TestWorkspacesAndUpdate(t *testing.T) {
 	}
 
 	st.bindFail = errors.New("connection reset")
-	none := []pgtype.UUID{ws}
+	none := []db.UUID{ws}
 	if _, err := s.Update(ctx, got, Edit{Name: "bot3", Workspaces: &none}); !errors.Is(err, st.bindFail) {
 		t.Fatalf("Update = %v, want the bind error", err)
 	}

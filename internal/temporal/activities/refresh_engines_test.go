@@ -9,7 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/testsuite"
 )
 
@@ -71,7 +70,7 @@ func (q *refreshQuerier) ListEnabledEnginesWithConnection(context.Context) ([]db
 }
 func (q *refreshQuerier) UpsertNativeCatalog(_ context.Context, p db.UpsertNativeCatalogParams) (db.Catalog, error) {
 	q.natives = append(q.natives, p.Name)
-	return db.Catalog{ID: pgtype.UUID{Bytes: [16]byte{byte(len(q.natives))}, Valid: true}, Name: p.Name}, nil
+	return db.Catalog{ID: db.UUID{Bytes: [16]byte{byte(len(q.natives))}, Valid: true}, Name: p.Name}, nil
 }
 func (q *refreshQuerier) UpsertNativeBinding(_ context.Context, p db.UpsertNativeBindingParams) (db.CatalogBinding, error) {
 	q.bindings = append(q.bindings, p)
@@ -84,8 +83,8 @@ func (q *refreshQuerier) DisableMissingNativeBindings(_ context.Context, p db.Di
 
 func engineRow(id byte, class, kind, connName string) db.ListEnabledEnginesWithConnectionRow {
 	return db.ListEnabledEnginesWithConnectionRow{
-		Engine:            db.Engine{ID: pgtype.UUID{Bytes: [16]byte{id}, Valid: true}, Name: connName, Class: class, Kind: kind, Enabled: true},
-		CatalogConnection: db.CatalogConnection{ID: pgtype.UUID{Bytes: [16]byte{0xC0, id}, Valid: true}, Name: connName, Type: kind, Config: []byte("{}")},
+		Engine:            db.Engine{ID: db.UUID{Bytes: [16]byte{id}, Valid: true}, Name: connName, Class: class, Kind: kind, Enabled: true},
+		CatalogConnection: db.CatalogConnection{ID: db.UUID{Bytes: [16]byte{0xC0, id}, Valid: true}, Name: connName, Type: kind, Config: []byte("{}")},
 	}
 }
 
@@ -101,15 +100,15 @@ func TestRefreshEngineCatalogs(t *testing.T) {
 		t.Fatal(err)
 	}
 	trinoRow := engineRow(3, "federated", "trino", "trino")
-	trinoRow.ClusterID = pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}
+	trinoRow.ClusterID = db.UUID{Bytes: [16]byte{0xCC}, Valid: true}
 	q := &refreshQuerier{engines: []db.ListEnabledEnginesWithConnectionRow{
 		engineRow(1, "direct", "sqlserver", "mssql"),
 		engineRow(2, "direct", "clickhouse", "ch"),
 		trinoRow,
 	}}
-	var observed []pgtype.UUID
+	var observed []db.UUID
 	a := &Activities{dialects: dialect.NewRegistry(), store: q, connections: reg}
-	a.SetEngineObserver(func(_ context.Context, eng db.Engine, cluster pgtype.UUID) error {
+	a.SetEngineObserver(func(_ context.Context, eng db.Engine, cluster db.UUID) error {
 		observed = append(observed, eng.ID, cluster)
 		return nil
 	})

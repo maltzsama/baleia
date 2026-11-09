@@ -18,9 +18,6 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 	"gorm.io/gorm"
 )
@@ -182,7 +179,7 @@ func (a *Activities) engineMetrics(ctx context.Context, eng queryengine.Engine, 
 }
 
 // capableEngine reports whether an engine supports Iceberg maintenance.
-func (a *Activities) capableEngine(ctx context.Context, engineID pgtype.UUID) bool {
+func (a *Activities) capableEngine(ctx context.Context, engineID db.UUID) bool {
 	eng, err := a.engines.Get(ctx, engineID)
 	return err == nil && eng.Capabilities().IcebergMaintenance
 }
@@ -311,14 +308,13 @@ func (a *Activities) reserveRuns(ctx context.Context, binding db.CatalogBinding,
 			var run db.MaintenanceRun
 			err := tx.TxOps(ctx, func(sp *repo.Repo) error {
 				var createErr error
-				run, createErr = RecordMaintenanceRun(ctx, sp, c.key, binding, c.row, c.step, c.settings, string(maintenance.Automatic), pgtype.UUID{})
+				run, createErr = RecordMaintenanceRun(ctx, sp, c.key, binding, c.row, c.step, c.settings, string(maintenance.Automatic), db.UUID{})
 				return createErr
 			})
 			if errors.Is(err, gorm.ErrDuplicatedKey) {
 				continue // a run started on the table meanwhile
 			}
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			if pgErr, ok := db.AsPGError(err); ok && pgErr.Code == "23505" {
 				continue
 			}
 			if err != nil {
@@ -341,7 +337,7 @@ type maintenanceRunRecorder interface {
 // RecordMaintenanceRun stores a run of one operation, shared by the round
 // and the API's manual run. The unique index on running runs refuses a
 // second run on the table (23505).
-func RecordMaintenanceRun(ctx context.Context, q maintenanceRunRecorder, k monitoring.TableKey, b db.CatalogBinding, row db.TableMaintenancePolicy, step maintenance.Step, s maintenance.Settings, trigger string, actor pgtype.UUID) (db.MaintenanceRun, error) {
+func RecordMaintenanceRun(ctx context.Context, q maintenanceRunRecorder, k monitoring.TableKey, b db.CatalogBinding, row db.TableMaintenancePolicy, step maintenance.Step, s maintenance.Settings, trigger string, actor db.UUID) (db.MaintenanceRun, error) {
 	params, err := json.Marshal(s)
 	if err != nil {
 		return db.MaintenanceRun{}, err
@@ -399,7 +395,7 @@ func (a *Activities) runMaintenanceOperation(ctx context.Context, params RunMain
 		return fail("maintenance_failed", err)
 	}
 	binding, err := a.monitoring().GetBinding(ctx, run.BindingID)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return fail("maintenance_failed", errors.New("the run's binding no longer exists"))
 	}
 	if err != nil {

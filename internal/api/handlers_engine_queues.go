@@ -16,7 +16,6 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/workbench/executions"
 	"github.com/galileostudio/baleia/internal/workload"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
 )
@@ -39,7 +38,7 @@ func (h *CatalogHandlers) GetEngineQueues(ctx context.Context, request GetEngine
 	if err != nil {
 		return GetEngineQueues401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	eng, _, err := h.authz().Engine(ctx, p, id, authz.ActRead)
 	switch {
 	case errors.Is(err, authz.ErrNotFound):
@@ -67,7 +66,7 @@ func (h *CatalogHandlers) PutEngineQueues(ctx context.Context, request PutEngine
 	if err != nil {
 		return PutEngineQueues401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	if _, _, err := h.authz().Engine(ctx, p, id, authz.ActWrite); errors.Is(err, authz.ErrNotFound) {
 		return PutEngineQueues404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
 	} else if errors.Is(err, authz.ErrForbidden) {
@@ -303,7 +302,7 @@ func (h *CatalogHandlers) signalAdmission(ctx context.Context, engineID string, 
 
 // queueCapacityUpdate validates the request and returns the rows to write and
 // the capacities to signal.
-func queueCapacityUpdate(id pgtype.UUID, body *PutEngineQueuesJSONRequestBody) ([]db.UpsertEngineQueueCapacityParams, workflows.AdmissionCapacities, error) {
+func queueCapacityUpdate(id db.UUID, body *PutEngineQueuesJSONRequestBody) ([]db.UpsertEngineQueueCapacityParams, workflows.AdmissionCapacities, error) {
 	if len(body.Classes) != len(workloadClasses) {
 		return nil, workflows.AdmissionCapacities{}, fmt.Errorf("every workload class must be set exactly once")
 	}

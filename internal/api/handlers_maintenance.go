@@ -17,8 +17,6 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
 )
@@ -31,7 +29,7 @@ import (
 type maintenanceTarget struct {
 	key     monitoring.TableKey
 	catalog db.Catalog
-	actor   pgtype.UUID
+	actor   db.UUID
 }
 
 // maintenanceTable resolves the request's table; ok is false when the
@@ -42,7 +40,7 @@ func (h *OpsHandlers) maintenanceTable(ctx context.Context, catalogID openapi_ty
 	if err != nil {
 		return maintenanceTarget{}, false, nil
 	}
-	id := pgtype.UUID{Bytes: catalogID, Valid: true}
+	id := db.UUID{Bytes: catalogID, Valid: true}
 	catalog, ok, err := h.catalogForMonitoring(ctx, p, id, act)
 	if err != nil || !ok {
 		return maintenanceTarget{}, ok, err
@@ -54,13 +52,13 @@ func (h *OpsHandlers) maintenanceTable(ctx context.Context, catalogID openapi_ty
 	}, true, nil
 }
 
-func (h *OpsHandlers) capableEngine(ctx context.Context, engineID pgtype.UUID) bool {
+func (h *OpsHandlers) capableEngine(ctx context.Context, engineID db.UUID) bool {
 	eng, err := h.engines.Get(ctx, engineID)
 	return err == nil && eng.Capabilities().IcebergMaintenance
 }
 
 // maintenanceBinding is the binding runs use and its retention floor.
-func (h *OpsHandlers) maintenanceBinding(ctx context.Context, catalogID pgtype.UUID) (db.CatalogBinding, time.Duration, bool, error) {
+func (h *OpsHandlers) maintenanceBinding(ctx context.Context, catalogID db.UUID) (db.CatalogBinding, time.Duration, bool, error) {
 	bindings, err := h.opsStore().ListBindingsByCatalog(ctx, catalogID)
 	if err != nil {
 		return db.CatalogBinding{}, 0, false, err
@@ -118,7 +116,7 @@ func (h *OpsHandlers) GetTableMaintenance(ctx context.Context, request GetTableM
 		if json.Unmarshal(health.TableProperties, &props) == nil && len(props) > 0 {
 			out.Properties = &props
 		}
-	case !errors.Is(err, pgx.ErrNoRows):
+	case !errors.Is(err, db.ErrNoRows):
 		return nil, err
 	}
 	runs, err := h.monitor.TableRuns(ctx, t.key)

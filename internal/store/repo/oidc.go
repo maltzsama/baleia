@@ -8,8 +8,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity/idptoken"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -44,7 +42,7 @@ func (r *Repo) ConsumeOIDCLoginAttempt(ctx context.Context, state string) (db.Oi
 			Where("state = ? AND expires_at > ?", state, time.Now().UTC()).
 			First(&row)
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if res.Error != nil {
 			return res.Error
@@ -99,17 +97,17 @@ func (r *Repo) SaveUserIDPTokenOnSignIn(ctx context.Context, arg db.SaveUserIDPT
 	return affected, err
 }
 
-// GetUserIDPToken returns the account's sealed tokens or pgx.ErrNoRows.
-func (r *Repo) GetUserIDPToken(ctx context.Context, userID pgtype.UUID) (db.UserIdpToken, error) {
+// GetUserIDPToken returns the account's sealed tokens or db.ErrNoRows.
+func (r *Repo) GetUserIDPToken(ctx context.Context, userID db.UUID) (db.UserIdpToken, error) {
 	return r.getUserIDPToken(ctx, userID, false)
 }
 
 // GetUserIDPTokenForUpdate locks the account's token row for a refresh.
-func (r *Repo) GetUserIDPTokenForUpdate(ctx context.Context, userID pgtype.UUID) (db.UserIdpToken, error) {
+func (r *Repo) GetUserIDPTokenForUpdate(ctx context.Context, userID db.UUID) (db.UserIdpToken, error) {
 	return r.getUserIDPToken(ctx, userID, true)
 }
 
-func (r *Repo) getUserIDPToken(ctx context.Context, userID pgtype.UUID, lock bool) (db.UserIdpToken, error) {
+func (r *Repo) getUserIDPToken(ctx context.Context, userID db.UUID, lock bool) (db.UserIdpToken, error) {
 	q := r.Users.db.WithContext(ctx)
 	if lock {
 		q = q.Clauses(clause.Locking{Strength: "UPDATE"})
@@ -117,7 +115,7 @@ func (r *Repo) getUserIDPToken(ctx context.Context, userID pgtype.UUID, lock boo
 	var row model.UserIDPToken
 	err := q.Where("user_id = ?", UUIDString(userID)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.UserIdpToken{}, pgx.ErrNoRows
+		return db.UserIdpToken{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.UserIdpToken{}, err
@@ -146,7 +144,7 @@ func (s *Users) GetServiceAccountByClient(ctx context.Context, arg db.GetService
 			"service_account", "oidc", UUIDString(arg.AuthProviderID), arg.ExternalID, "active").
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.User{}, err

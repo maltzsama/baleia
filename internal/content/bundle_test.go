@@ -13,10 +13,9 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func (f *fixture) workspace(t *testing.T, name, slug string) pgtype.UUID {
+func (f *fixture) workspace(t *testing.T, name, slug string) db.UUID {
 	t.Helper()
 	ws, err := f.q.CreateWorkspace(context.Background(), db.CreateWorkspaceParams{
 		Name: name, Type: "personal", PolarisCatalogName: slug, OwnerUserID: f.user,
@@ -27,7 +26,7 @@ func (f *fixture) workspace(t *testing.T, name, slug string) pgtype.UUID {
 	return ws.ID
 }
 
-func (f *fixture) spaceIn(t *testing.T, ws pgtype.UUID, name, slug string) pgtype.UUID {
+func (f *fixture) spaceIn(t *testing.T, ws db.UUID, name, slug string) db.UUID {
 	t.Helper()
 	s, err := f.q.CreateSpace(context.Background(), db.CreateSpaceParams{
 		WorkspaceID: ws, Name: name, Slug: slug, Visibility: "workspace",
@@ -39,11 +38,12 @@ func (f *fixture) spaceIn(t *testing.T, ws pgtype.UUID, name, slug string) pgtyp
 	return s.ID
 }
 
-func (f *fixture) spaceNamed(t *testing.T, name, slug string) pgtype.UUID {
+func (f *fixture) spaceNamed(t *testing.T, name, slug string) db.UUID {
+	t.Helper()
 	return f.spaceIn(t, f.ws, name, slug)
 }
 
-func (f *fixture) grantedCatalog(t *testing.T, name string) pgtype.UUID {
+func (f *fixture) grantedCatalog(t *testing.T, name string) db.UUID {
 	t.Helper()
 	ctx := context.Background()
 	conn, err := f.q.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
@@ -65,7 +65,7 @@ func (f *fixture) grantedCatalog(t *testing.T, name string) pgtype.UUID {
 	return repo.PGUUID(string(cat.ID))
 }
 
-func (f *fixture) grant(t *testing.T, ws, catalog pgtype.UUID) {
+func (f *fixture) grant(t *testing.T, ws, catalog db.UUID) {
 	t.Helper()
 	if _, err := f.q.UpsertWorkspaceCatalogGrant(context.Background(), db.UpsertWorkspaceCatalogGrantParams{
 		WorkspaceID: ws, CatalogID: catalog, GrantedBy: f.user,
@@ -74,7 +74,7 @@ func (f *fixture) grant(t *testing.T, ws, catalog pgtype.UUID) {
 	}
 }
 
-func (f *fixture) folder(t *testing.T, space pgtype.UUID, name, slug string, parent pgtype.UUID) db.QueryFolder {
+func (f *fixture) folder(t *testing.T, space db.UUID, name, slug string, parent db.UUID) db.QueryFolder {
 	t.Helper()
 	folder, err := f.q.CreateQueryFolder(context.Background(), db.CreateQueryFolderParams{
 		WorkspaceID: f.ws, SpaceID: space, ParentID: parent, Name: name, Slug: slug,
@@ -85,7 +85,7 @@ func (f *fixture) folder(t *testing.T, space pgtype.UUID, name, slug string, par
 	return folder
 }
 
-func (f *fixture) createIn(t *testing.T, ws, space pgtype.UUID, name, slug, sql string) db.SavedQuery {
+func (f *fixture) createIn(t *testing.T, ws, space db.UUID, name, slug, sql string) db.SavedQuery {
 	t.Helper()
 	q, err := f.s.CreateSavedQuery(context.Background(), f.user, db.CreateSavedQueryParams{
 		WorkspaceID: ws, SpaceID: space, CreatedBy: f.user, UpdatedBy: f.user,
@@ -97,7 +97,7 @@ func (f *fixture) createIn(t *testing.T, ws, space pgtype.UUID, name, slug, sql 
 	return q
 }
 
-func (f *fixture) metric(t *testing.T, space, catalog pgtype.UUID, slug, label string) db.SemanticMetric {
+func (f *fixture) metric(t *testing.T, space, catalog db.UUID, slug, label string) db.SemanticMetric {
 	t.Helper()
 	m, err := f.s.CreateSemanticMetric(context.Background(), f.user, db.CreateSemanticMetricParams{
 		WorkspaceID: f.ws, SpaceID: space, Slug: slug, Label: label, CatalogID: catalog,
@@ -110,9 +110,9 @@ func (f *fixture) metric(t *testing.T, space, catalog pgtype.UUID, slug, label s
 	return m
 }
 
-func (f *fixture) seed(t *testing.T, space, catalog pgtype.UUID) {
+func (f *fixture) seed(t *testing.T, space, catalog db.UUID) {
 	t.Helper()
-	monthly := f.folder(t, space, "Monthly", "monthly", pgtype.UUID{})
+	monthly := f.folder(t, space, "Monthly", "monthly", db.UUID{})
 	f.folder(t, space, "Weekly", "weekly", monthly.ID)
 	f.createIn(t, f.ws, space, "Revenue", "revenue", "SELECT 1")
 	f.metric(t, space, catalog, "net_revenue", "Net revenue")

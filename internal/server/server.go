@@ -34,8 +34,7 @@ import (
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 type Server struct {
@@ -45,7 +44,7 @@ type Server struct {
 	logger          *slog.Logger
 	cfg             *config.Config
 	mux             *chi.Mux
-	pool            *pgxpool.Pool
+	store           *gorm.DB
 	queries         db.Querier
 	metrics         *metrics.Registry
 
@@ -75,7 +74,7 @@ type drainer interface {
 // session and sweeper) ends with it.
 func New(ctx context.Context, core *app.Core) (*Server, error) {
 	cfg := core.Config
-	s := &Server{logger: core.Logger, cfg: cfg, mux: chi.NewRouter(), pool: core.Pool, queries: core.Queries, metrics: core.Metrics}
+	s := &Server{logger: core.Logger, cfg: cfg, mux: chi.NewRouter(), store: core.Store, queries: core.Queries, metrics: core.Metrics}
 
 	// Monitoring SSE: changes written by the worker reach this process through
 	// PostgreSQL LISTEN/NOTIFY, then fan out to connected clients (#733).
@@ -88,7 +87,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	// they get the slot now and the runner once it is built (#363).
 	runner := &assistant.RunnerSlot{}
 	h, err := api.NewAPI(api.Deps{
-		Data: api.DataDeps{Queries: core.Queries, Pool: core.Pool, Store: core.Store},
+		Data: api.DataDeps{Queries: core.Queries, Store: core.Store},
 		Engines: api.EngineDeps{
 			Connections: core.Connections,
 			Engines:     core.Engines,
@@ -117,7 +116,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		if core.StoreRepo != nil {
 			snapshotStore = core.StoreRepo
 		}
-		s.queryEvents = queryevents.New(s.logger, snapshotStore, defaultTrinoID(core.Engines), cfg.TrinoEventsToken, core.Pool)
+		s.queryEvents = queryevents.New(s.logger, snapshotStore, defaultTrinoID(core.Engines), cfg.TrinoEventsToken, core.Notifier)
 	}
 
 	authMetrics := h.AuthMetrics()
@@ -165,7 +164,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	}
 
 	s.routes()
-	go monitoringevents.Listen(ctx, s.logger, core.Pool, monitoringHub)
+	go monitoringevents.Listen(ctx, s.logger, core.Notifier, monitoringHub)
 	return s, nil
 }
 
@@ -228,7 +227,7 @@ func (s *Server) routes() {
 	s.mux.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
-		if err := s.pool.Ping(ctx); err != nil {
+		if err := pingStore(ctx, s.store); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"status":"unavailable"}`))
 			return
@@ -294,7 +293,7 @@ type staticUsers interface {
 // engineCapabilities adapts the API's engine registry to agentpolicy.
 type engineCapabilities struct{ h *api.API }
 
-func (e engineCapabilities) ReadOnly(ctx context.Context, id pgtype.UUID) (queryengine.ReadOnlySupport, error) {
+func (e engineCapabilities) ReadOnly(ctx context.Context, id db.UUID) (queryengine.ReadOnlySupport, error) {
 	return e.h.EngineReadOnly(ctx, id)
 }
 
@@ -607,6 +606,15 @@ func (s *Server) stopLimiters() {
 	}
 }
 
+// pingStore proves the store answers a ping for /readyz.
+func pingStore(ctx context.Context, store *gorm.DB) error {
+	sqlDB, err := store.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
+}
+
 func derefString(value *string) string {
 	if value == nil {
 		return ""
@@ -619,14 +627,14 @@ func derefString(value *string) string {
 func defaultTrinoID(engines interface {
 	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
 }) queryevents.Engine {
-	return func(ctx context.Context) (pgtype.UUID, error) {
+	return func(ctx context.Context) (db.UUID, error) {
 		eng, err := engines.DefaultTrino(ctx)
 		if err != nil {
-			return pgtype.UUID{}, err
+			return db.UUID{}, err
 		}
-		var id pgtype.UUID
+		var id db.UUID
 		if err := id.Scan(eng.ID()); err != nil {
-			return pgtype.UUID{}, fmt.Errorf("default trino engine id: %w", err)
+			return db.UUID{}, fmt.Errorf("default trino engine id: %w", err)
 		}
 		return id, nil
 	}

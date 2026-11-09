@@ -19,7 +19,6 @@ import (
 	"github.com/galileostudio/baleia/internal/semantic/compiler"
 	"github.com/galileostudio/baleia/internal/semantic/models"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -36,9 +35,9 @@ func (h *SemanticHandlers) ListSemanticModels(ctx context.Context, request ListS
 	if err != nil {
 		return nil, err
 	}
-	spaceID := pgtype.UUID{}
+	spaceID := db.UUID{}
 	if request.Params.SpaceId != nil {
-		spaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+		spaceID = db.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
 	rows, err := h.modelDefs.List(ctx, ws, userID, spaceID)
 	if err != nil {
@@ -63,7 +62,7 @@ func (h *SemanticHandlers) GetSemanticModel(ctx context.Context, request GetSema
 	if nf {
 		return GetSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	model, err := h.modelDefs.Get(ctx, ws, pgtype.UUID{Bytes: request.ModelId, Valid: true})
+	model, err := h.modelDefs.Get(ctx, ws, db.UUID{Bytes: request.ModelId, Valid: true})
 	if errors.Is(err, models.ErrNotFound) {
 		return GetSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
 	}
@@ -103,7 +102,7 @@ func (h *SemanticHandlers) CompileExploreQuery(ctx context.Context, request Comp
 	if err != nil {
 		return nil, err
 	}
-	rows, err := h.modelDefs.List(ctx, ws, userID, pgtype.UUID{})
+	rows, err := h.modelDefs.List(ctx, ws, userID, db.UUID{})
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +132,7 @@ func (h *SemanticHandlers) CompileExploreQuery(ctx context.Context, request Comp
 
 	bindingID := baseRow.BindingID
 	if request.Body.BindingId != nil {
-		bindingID = pgtype.UUID{Bytes: *request.Body.BindingId, Valid: true}
+		bindingID = db.UUID{Bytes: *request.Body.BindingId, Valid: true}
 	}
 	target, engine, err := h.semanticTarget(ctx, ws, baseRow.CatalogID, bindingID)
 	if err != nil {
@@ -168,11 +167,11 @@ func (h *SemanticHandlers) CompileExploreQuery(ctx context.Context, request Comp
 
 // semanticModelVersion returns the latest content version, or 0 when the model
 // has never been versioned (e.g. seeded outside the content service).
-func (h *core) semanticModelVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+func (h *core) semanticModelVersion(ctx context.Context, ws, id db.UUID) int32 {
 	return h.history.Latest(ctx, ws, content.EntitySemanticModel, id)
 }
 
-func (h *core) semanticModelActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
+func (h *core) semanticModelActions(ctx context.Context, ws, spaceID db.UUID) []string {
 	acts := []string{"view"}
 	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceEditor); err == nil && se == nil {
 		acts = append(acts, "update", "delete")
@@ -295,7 +294,7 @@ func (h *SemanticHandlers) CreateSemanticModel(ctx context.Context, request Crea
 	if request.Body == nil {
 		return nil, errors.New("semantic model: missing body")
 	}
-	catalogID := pgtype.UUID{Bytes: request.Body.CatalogId, Valid: true}
+	catalogID := db.UUID{Bytes: request.Body.CatalogId, Valid: true}
 	nf, err = h.semanticCatalog(ctx, ws, request.Body.CatalogId)
 	if err != nil {
 		return nil, err
@@ -398,7 +397,7 @@ func (h *SemanticHandlers) UpdateSemanticModel(ctx context.Context, request Upda
 	if request.Body == nil {
 		return nil, errors.New("semantic model: missing body")
 	}
-	modelID := pgtype.UUID{Bytes: request.ModelId, Valid: true}
+	modelID := db.UUID{Bytes: request.ModelId, Valid: true}
 	current, err := h.modelDefs.Get(ctx, ws, modelID)
 	if errors.Is(err, models.ErrNotFound) {
 		return UpdateSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
@@ -427,13 +426,13 @@ func (h *SemanticHandlers) UpdateSemanticModel(ctx context.Context, request Upda
 		ChangesDefinition: body.Definition != nil,
 	}
 	if body.CatalogId != nil {
-		change.CatalogID = &pgtype.UUID{Bytes: *body.CatalogId, Valid: true}
+		change.CatalogID = &db.UUID{Bytes: *body.CatalogId, Valid: true}
 	}
 	if body.BindingId != nil {
-		change.BindingID = &pgtype.UUID{Bytes: *body.BindingId, Valid: true}
+		change.BindingID = &db.UUID{Bytes: *body.BindingId, Valid: true}
 	}
 	if body.OwnerUserId != nil {
-		change.OwnerID = &pgtype.UUID{Bytes: *body.OwnerUserId, Valid: true}
+		change.OwnerID = &db.UUID{Bytes: *body.OwnerUserId, Valid: true}
 	}
 	fields, err := models.MergeFields(current, change, isManager)
 	var invalidField *models.InvalidFieldError
@@ -495,7 +494,7 @@ func (h *SemanticHandlers) DeleteSemanticModel(ctx context.Context, request Dele
 	if nf {
 		return DeleteSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	modelID := pgtype.UUID{Bytes: request.ModelId, Valid: true}
+	modelID := db.UUID{Bytes: request.ModelId, Valid: true}
 	current, err := h.modelDefs.Get(ctx, ws, modelID)
 	if errors.Is(err, models.ErrNotFound) {
 		return DeleteSemanticModel404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
@@ -532,7 +531,7 @@ func (h *SemanticHandlers) DeleteSemanticModel(ctx context.Context, request Dele
 // ListSemanticModelVersions — GET /workspaces/{id}/semantic/models/{model_id}/versions
 func (h *SemanticHandlers) ListSemanticModelVersions(ctx context.Context, request ListSemanticModelVersionsRequestObject) (ListSemanticModelVersionsResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
-	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
+	id := db.UUID{Bytes: request.ModelId, Valid: true}
 	spaceID, err := h.history.SpaceOf(ctx, ws, content.EntitySemanticModel, id)
 	if errors.Is(err, history.ErrNotFound) {
 		return ListSemanticModelVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("model not found")}, nil
@@ -568,7 +567,7 @@ func (h *SemanticHandlers) ListSemanticModelVersions(ctx context.Context, reques
 // GetSemanticModelVersion — GET /workspaces/{id}/semantic/models/{model_id}/versions/{version}
 func (h *SemanticHandlers) GetSemanticModelVersion(ctx context.Context, request GetSemanticModelVersionRequestObject) (GetSemanticModelVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
-	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
+	id := db.UUID{Bytes: request.ModelId, Valid: true}
 	v, err := h.history.Get(ctx, ws, content.EntitySemanticModel, id, versionArg(request.Version))
 	if errors.Is(err, history.ErrNotFound) {
 		return GetSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
@@ -599,7 +598,7 @@ func (h *SemanticHandlers) GetSemanticModelVersion(ctx context.Context, request 
 // RestoreSemanticModelVersion — POST /workspaces/{id}/semantic/models/{model_id}/versions/{version}/restore
 func (h *SemanticHandlers) RestoreSemanticModelVersion(ctx context.Context, request RestoreSemanticModelVersionRequestObject) (RestoreSemanticModelVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
-	id := pgtype.UUID{Bytes: request.ModelId, Valid: true}
+	id := db.UUID{Bytes: request.ModelId, Valid: true}
 	v, err := h.history.Get(ctx, ws, content.EntitySemanticModel, id, versionArg(request.Version))
 	if errors.Is(err, history.ErrNotFound) {
 		return RestoreSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
@@ -618,9 +617,9 @@ func (h *SemanticHandlers) RestoreSemanticModelVersion(ctx context.Context, requ
 		}
 		return RestoreSemanticModelVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
-	var spaceID *pgtype.UUID
+	var spaceID *db.UUID
 	if request.Body != nil && request.Body.SpaceId != nil {
-		dest := pgtype.UUID{Bytes: *request.Body.SpaceId, Valid: true}
+		dest := db.UUID{Bytes: *request.Body.SpaceId, Valid: true}
 		if se, err := h.contentSpace(ctx, ws, dest, authz.SpaceEditor); err != nil {
 			return nil, err
 		} else if se != nil {

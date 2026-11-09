@@ -6,7 +6,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func testKeyring(t *testing.T) *crypto.Keyring {
@@ -23,8 +22,8 @@ func testKeyring(t *testing.T) *crypto.Keyring {
 func TestDecodeCredentials_Unreadable(t *testing.T) {
 	t.Parallel()
 	kr := testKeyring(t)
-	id := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
-	other := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
+	id := db.UUID{Bytes: [16]byte{1}, Valid: true}
+	other := db.UUID{Bytes: [16]byte{2}, Valid: true}
 	sealed, err := kr.Seal([]byte(`{"client_secret":"s3cr3t"}`), CredentialsAAD(id))
 	if err != nil {
 		t.Fatal(err)

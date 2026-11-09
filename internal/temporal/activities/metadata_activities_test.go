@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metadata"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/temporal"
@@ -18,7 +18,7 @@ import (
 
 type fakeSyncer struct{ err error }
 
-func (f fakeSyncer) Sync(context.Context, pgtype.UUID, func(int)) (metadata.RunStats, error) {
+func (f fakeSyncer) Sync(context.Context, db.UUID, func(int)) (metadata.RunStats, error) {
 	return metadata.RunStats{Path: metadata.PathProvider, TablesSeen: 2}, f.err
 }
 
@@ -56,7 +56,7 @@ func TestSyncCatalogMetadata_Errors(t *testing.T) {
 // slowSyncer blocks like a walk whose first table takes a while.
 type slowSyncer struct{ d time.Duration }
 
-func (s slowSyncer) Sync(context.Context, pgtype.UUID, func(int)) (metadata.RunStats, error) {
+func (s slowSyncer) Sync(context.Context, db.UUID, func(int)) (metadata.RunStats, error) {
 	time.Sleep(s.d)
 	return metadata.RunStats{}, nil
 }

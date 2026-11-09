@@ -9,18 +9,17 @@ import (
 	"context"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Status reads what the status page shows; *repo.Repo implements it.
 type Status interface {
 	ListEngines(ctx context.Context) ([]db.Engine, error)
-	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]db.Engine, error)
+	ListEnginesVisibleToUser(ctx context.Context, userID db.UUID) ([]db.Engine, error)
 	CountManagedBindingsByState(ctx context.Context) ([]db.CountManagedBindingsByStateRow, error)
 	MetadataStatusCounts(ctx context.Context, staleSeconds int32) (db.MetadataStatusCountsRow, error)
 	LatestReconcileRuns(ctx context.Context) ([]db.LatestReconcileRunsRow, error)
 	AuditExportLagSeconds(ctx context.Context) (float64, error)
-	PluginLastConfirmation(ctx context.Context, updatedBy string) (pgtype.Timestamptz, error)
+	PluginLastConfirmation(ctx context.Context, updatedBy string) (db.Timestamptz, error)
 }
 
 // Attention reads the rows that need attention; *repo.Repo implements it.
@@ -30,7 +29,7 @@ type Attention interface {
 	ListAttentionMetadataStale(ctx context.Context, secs float64) ([]db.ListAttentionMetadataStaleRow, error)
 	ListAttentionRetrieverErrors(ctx context.Context) ([]db.ListAttentionRetrieverErrorsRow, error)
 	ListAttentionReconcileDrift(ctx context.Context) ([]db.ListAttentionReconcileDriftRow, error)
-	GetAttentionAuditExportLag(ctx context.Context) (pgtype.Timestamptz, error)
+	GetAttentionAuditExportLag(ctx context.Context) (db.Timestamptz, error)
 }
 
 // Store is Status and Attention.
@@ -50,7 +49,7 @@ func (s *Service) Available() bool { return s != nil && s.store != nil }
 
 // Engines returns every engine to an admin, and to anyone else the engines
 // they may see.
-func (s *Service) Engines(ctx context.Context, userID pgtype.UUID, admin bool) ([]db.Engine, error) {
+func (s *Service) Engines(ctx context.Context, userID db.UUID, admin bool) ([]db.Engine, error) {
 	if admin {
 		return s.store.ListEngines(ctx)
 	}
@@ -80,7 +79,7 @@ func (s *Service) AuditExportLag(ctx context.Context) (float64, error) {
 
 // PluginLastConfirmation is when the Trino plugin last confirmed its
 // configuration; invalid when it never did.
-func (s *Service) PluginLastConfirmation(ctx context.Context) (pgtype.Timestamptz, error) {
+func (s *Service) PluginLastConfirmation(ctx context.Context) (db.Timestamptz, error) {
 	return s.store.PluginLastConfirmation(ctx, "trino")
 }
 
@@ -111,6 +110,6 @@ func (s *Service) ReconcileDrift(ctx context.Context) ([]db.ListAttentionReconci
 
 // AuditExportSince is the oldest event the audit export has not shipped;
 // invalid when it is caught up.
-func (s *Service) AuditExportSince(ctx context.Context) (pgtype.Timestamptz, error) {
+func (s *Service) AuditExportSince(ctx context.Context) (db.Timestamptz, error) {
 	return s.store.GetAttentionAuditExportLag(ctx)
 }

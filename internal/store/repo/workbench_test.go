@@ -11,13 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 // workbenchFixture is a shared workspace with its default space, an owner, a
@@ -37,16 +31,7 @@ type workbenchFixture struct {
 
 func newWorkbenchFixture(t *testing.T) *workbenchFixture {
 	t.Helper()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 	r := New(gdb)
 	ctx := context.Background()
 
@@ -59,7 +44,7 @@ func newWorkbenchFixture(t *testing.T) *workbenchFixture {
 	if err != nil {
 		t.Fatalf("CreateTeam: %v", err)
 	}
-	for id, role := range map[pgtype.UUID]string{ownerID: "owner", memberID: "member"} {
+	for id, role := range map[db.UUID]string{ownerID: "owner", memberID: "member"} {
 		if _, err := NewTeams(gdb).AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: id, Role: role}); err != nil {
 			t.Fatalf("AddTeamMember: %v", err)
 		}
@@ -133,14 +118,14 @@ func newWorkbenchFixture(t *testing.T) *workbenchFixture {
 	}
 }
 
-func (f *workbenchFixture) wsID() pgtype.UUID      { return PGUUID(string(f.ws)) }
-func (f *workbenchFixture) spaceID() pgtype.UUID   { return PGUUID(string(f.space)) }
-func (f *workbenchFixture) privateID() pgtype.UUID { return PGUUID(string(f.private)) }
-func (f *workbenchFixture) ownerID() pgtype.UUID   { return PGUUID(string(f.owner)) }
-func (f *workbenchFixture) memberID() pgtype.UUID  { return PGUUID(string(f.member)) }
-func (f *workbenchFixture) catalogID() pgtype.UUID { return PGUUID(string(f.catalog)) }
-func (f *workbenchFixture) bindingID() pgtype.UUID { return PGUUID(string(f.binding)) }
-func (f *workbenchFixture) engineID() pgtype.UUID  { return PGUUID(string(f.engine)) }
+func (f *workbenchFixture) wsID() db.UUID      { return PGUUID(string(f.ws)) }
+func (f *workbenchFixture) spaceID() db.UUID   { return PGUUID(string(f.space)) }
+func (f *workbenchFixture) privateID() db.UUID { return PGUUID(string(f.private)) }
+func (f *workbenchFixture) ownerID() db.UUID   { return PGUUID(string(f.owner)) }
+func (f *workbenchFixture) memberID() db.UUID  { return PGUUID(string(f.member)) }
+func (f *workbenchFixture) catalogID() db.UUID { return PGUUID(string(f.catalog)) }
+func (f *workbenchFixture) bindingID() db.UUID { return PGUUID(string(f.binding)) }
+func (f *workbenchFixture) engineID() db.UUID  { return PGUUID(string(f.engine)) }
 
 // TestWorkbenchFolders covers folder creation, slug uniqueness, reads,
 // updates, a transactional subtree move with its saved queries, visibility
@@ -161,8 +146,8 @@ func TestWorkbenchFolders(t *testing.T) {
 	}); err == nil {
 		t.Fatal("duplicate folder slug must fail")
 	} else {
-		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
+		pgErr, ok := db.AsPGError(err)
+		if !ok || pgErr.Code != "23505" {
 			t.Fatalf("duplicate slug = %v, want a unique violation", err)
 		}
 	}
@@ -264,7 +249,7 @@ func TestWorkbenchFolders(t *testing.T) {
 	if err != nil || deleted != 1 {
 		t.Fatalf("DeleteQueryFolder = %d, %v", deleted, err)
 	}
-	if _, err := f.r.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: child.ID, WorkspaceID: f.wsID()}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: child.ID, WorkspaceID: f.wsID()}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("deleted folder lookup = %v, want ErrNoRows", err)
 	}
 }
@@ -350,7 +335,7 @@ func TestWorkbenchSavedQueries(t *testing.T) {
 	}
 
 	// Versions are reduced to the latest per entity in Go.
-	for version, id := range map[int32]pgtype.UUID{1: rootQuery.ID, 2: rootQuery.ID, 4: folderQuery.ID} {
+	for version, id := range map[int32]db.UUID{1: rootQuery.ID, 2: rootQuery.ID, 4: folderQuery.ID} {
 		if _, err := f.r.InsertContentVersion(ctx, db.InsertContentVersionParams{
 			WorkspaceID: f.wsID(), SpaceID: f.spaceID(), EntityType: "saved_query", EntityID: id,
 			Version: version, ChangeKind: "update", Snapshot: []byte(`{}`),
@@ -413,7 +398,7 @@ func TestWorkbenchExecutions(t *testing.T) {
 	if err != nil || done.Status != "finished" || done.RowsReturned == nil || *done.RowsReturned != 3 {
 		t.Fatalf("UpdateQueryExecution = %+v, %v", done, err)
 	}
-	if _, err := f.r.UpdateQueryExecution(ctx, db.UpdateQueryExecutionParams{ID: finished.ID, Status: "failed"}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.UpdateQueryExecution(ctx, db.UpdateQueryExecutionParams{ID: finished.ID, Status: "failed"}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("second completion = %v, want ErrNoRows", err)
 	}
 
@@ -422,10 +407,10 @@ func TestWorkbenchExecutions(t *testing.T) {
 	if c, err := f.r.CancelQueryExecution(ctx, db.CancelQueryExecutionParams{ID: cancelled.ID, WorkspaceID: f.wsID()}); err != nil || c.Status != "cancelled" || !c.FinishedAt.Valid {
 		t.Fatalf("CancelQueryExecution = %+v, %v", c, err)
 	}
-	if _, err := f.r.CancelQueryExecution(ctx, db.CancelQueryExecutionParams{ID: cancelled.ID, WorkspaceID: f.wsID()}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.CancelQueryExecution(ctx, db.CancelQueryExecutionParams{ID: cancelled.ID, WorkspaceID: f.wsID()}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("second cancel = %v, want ErrNoRows", err)
 	}
-	if _, err := f.r.CancelQueryExecution(ctx, db.CancelQueryExecutionParams{ID: cancelled.ID, WorkspaceID: PGUUID(NewUUID())}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.CancelQueryExecution(ctx, db.CancelQueryExecutionParams{ID: cancelled.ID, WorkspaceID: PGUUID(NewUUID())}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("foreign cancel = %v, want ErrNoRows", err)
 	}
 
@@ -445,7 +430,7 @@ func TestWorkbenchExecutions(t *testing.T) {
 	if err != nil || admitted.Status != "running" || !admitted.AdmittedAt.Valid || admitted.QueueWaitMs == nil {
 		t.Fatalf("AdmitQueryExecution = %+v, %v", admitted, err)
 	}
-	if _, err := f.r.AdmitQueryExecution(ctx, queued.ID); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.AdmitQueryExecution(ctx, queued.ID); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("second admit = %v, want ErrNoRows", err)
 	}
 
@@ -513,7 +498,7 @@ func TestWorkbenchStatementsAndReferences(t *testing.T) {
 	}
 	if _, err := f.r.GetQueryStatementByPosition(ctx, db.GetQueryStatementByPositionParams{
 		ExecutionID: exec.ID, WorkspaceID: PGUUID(NewUUID()), Position: 1,
-	}); !errors.Is(err, pgx.ErrNoRows) {
+	}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("foreign statement = %v, want ErrNoRows", err)
 	}
 
@@ -537,7 +522,7 @@ func TestWorkbenchStatementsAndReferences(t *testing.T) {
 	if err != nil || finished.Status != "finished" {
 		t.Fatalf("UpdateQueryStatement = %+v, %v", finished, err)
 	}
-	if _, err := f.r.UpdateQueryStatement(ctx, db.UpdateQueryStatementParams{ID: first.ID, Status: "failed"}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.UpdateQueryStatement(ctx, db.UpdateQueryStatementParams{ID: first.ID, Status: "failed"}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("second statement completion = %v, want ErrNoRows", err)
 	}
 	if err := f.r.SetExecutionResult(ctx, db.SetExecutionResultParams{ID: exec.ID, ResultKey: stringPtr("result/1")}); err != nil {

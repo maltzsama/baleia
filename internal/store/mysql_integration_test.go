@@ -3,9 +3,7 @@ package store
 import (
 	"context"
 	"crypto/rand"
-	"fmt"
 	"log/slog"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -14,38 +12,43 @@ import (
 )
 
 // openMySQLTestStore creates a throwaway database on the MySQL or MariaDB
-// server named by env and opens the store with a DSN that omits parseTime, the
-// shape an operator is most likely to write. The env contract is the same as
-// the rest of the repository: mysql://user:pass@host:port.
-func openMySQLTestStore(t *testing.T, env string) *gorm.DB {
+// server named by BALEIA_TEST_DATABASE_URL (the go-sql-driver DSN); it skips
+// when the configured store is PostgreSQL. The child DSN omits parseTime, the
+// shape an operator is most likely to write.
+func openMySQLTestStore(t *testing.T) *gorm.DB {
 	t.Helper()
-	raw := os.Getenv(env)
-	if raw == "" {
-		t.Skipf("%s not set", env)
+	dsn := os.Getenv("BALEIA_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("BALEIA_TEST_DATABASE_URL not set")
 	}
-	u, err := url.Parse(raw)
+	backend, err := BackendFromDSN(dsn)
 	if err != nil {
-		t.Fatalf("parse %s: %v", env, err)
+		t.Fatalf("parse BALEIA_TEST_DATABASE_URL: %v", err)
 	}
-	if u.User == nil || u.Host == "" {
-		t.Fatalf("%s must be mysql://user:pass@host:port", env)
+	if backend != MySQL {
+		t.Skip("BALEIA_TEST_DATABASE_URL is not a MySQL/MariaDB DSN")
 	}
-	pass, _ := u.User.Password()
-	serverDSN := fmt.Sprintf("%s:%s@tcp(%s)/", u.User.Username(), pass, u.Host)
-
-	admin, err := Open(context.Background(), serverDSN, MySQL, Options{Logger: slog.New(slog.DiscardHandler)})
+	idx := strings.LastIndex(dsn, ")/")
+	if idx < 0 {
+		t.Fatalf("BALEIA_TEST_DATABASE_URL must be a go-sql-driver DSN: %q", dsn)
+	}
+	prefix, rest := dsn[:idx+2], dsn[idx+2:]
+	_, params, hasParams := strings.Cut(rest, "?")
+	sep := ""
+	if hasParams {
+		sep = "?" + params
+	}
+	dbName := "baleia_store_test_" + strings.ToLower(rand.Text()[:12])
+	admin, err := Open(context.Background(), prefix+sep, MySQL, Options{Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatalf("open admin store: %v", err)
 	}
 	t.Cleanup(func() { _ = Close(admin) })
-
-	dbName := "baleia_store_test_" + strings.ToLower(rand.Text()[:12])
 	if err := admin.Exec("CREATE DATABASE `" + dbName + "`").Error; err != nil {
 		t.Fatalf("create test database: %v", err)
 	}
 	t.Cleanup(func() { _ = admin.Exec("DROP DATABASE IF EXISTS `" + dbName + "`").Error })
-
-	db, err := Open(context.Background(), serverDSN+dbName, MySQL, Options{Logger: slog.New(slog.DiscardHandler)})
+	db, err := Open(context.Background(), prefix+dbName+sep, MySQL, Options{Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -55,21 +58,16 @@ func openMySQLTestStore(t *testing.T, env string) *gorm.DB {
 
 func TestMySQLRunner(t *testing.T) {
 	t.Parallel()
-	testMySQLRunner(t, "BALEIA_TEST_MYSQL_URL")
-}
-
-func TestMariaDBRunner(t *testing.T) {
-	t.Parallel()
-	testMySQLRunner(t, "BALEIA_TEST_MARIADB_URL")
+	testMySQLRunner(t)
 }
 
 // testMySQLRunner mirrors store-up, store-status and a repeated store-up
 // against a MySQL/MariaDB server. The ledger stores applied_at as a time, so
 // this fails if the store does not force the driver's parseTime.
-func testMySQLRunner(t *testing.T, env string) {
+func testMySQLRunner(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
-	db := openMySQLTestStore(t, env)
+	db := openMySQLTestStore(t)
 	runner := NewRunner(db, testRegistry(t), slog.New(slog.DiscardHandler))
 
 	applied, err := runner.Up(ctx)

@@ -8,7 +8,6 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/workspaces/spaces"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -17,8 +16,8 @@ import (
 // caller cannot see is a 404, never a 403, and a visible space below the
 // required role is a 403.
 
-func spaceIDFromRequest(id openapi_types.UUID) pgtype.UUID {
-	return pgtype.UUID{Bytes: id, Valid: true}
+func spaceIDFromRequest(id openapi_types.UUID) db.UUID {
+	return db.UUID{Bytes: id, Valid: true}
 }
 
 func spaceError(err error) (spaceErr, bool) {
@@ -34,7 +33,7 @@ func spaceError(err error) (spaceErr, bool) {
 type spaceErr struct{ status int }
 
 // requireSpace maps RequireSpace to (role, ok, handled status).
-func (h *core) requireSpace(ctx context.Context, ws, spaceID pgtype.UUID, minRole authz.SpaceRole) (authz.SpaceRole, *spaceErr, error) {
+func (h *core) requireSpace(ctx context.Context, ws, spaceID db.UUID, minRole authz.SpaceRole) (authz.SpaceRole, *spaceErr, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return authz.SpaceNone, nil, authz.ErrUnauthenticated
@@ -51,14 +50,14 @@ func (h *core) requireSpace(ctx context.Context, ws, spaceID pgtype.UUID, minRol
 
 // contentSpace is requireSpace for a metric: it returns nil when allowed, a
 // spaceErr with 404 (invisible) or 403 (below min), or a real error.
-func (h *core) contentSpace(ctx context.Context, ws, spaceID pgtype.UUID, minRole authz.SpaceRole) (*spaceErr, error) {
+func (h *core) contentSpace(ctx context.Context, ws, spaceID db.UUID, minRole authz.SpaceRole) (*spaceErr, error) {
 	_, se, err := h.requireSpace(ctx, ws, spaceID, minRole)
 	return se, err
 }
 
 // spaceForWrite resolves the space a write targets: the requested one, else the
 // workspace's default space, and requires min on it.
-func (h *core) spaceForWrite(ctx context.Context, ws pgtype.UUID, requested *openapi_types.UUID, minRole authz.SpaceRole) (db.Space, *spaceErr, error) {
+func (h *core) spaceForWrite(ctx context.Context, ws db.UUID, requested *openapi_types.UUID, minRole authz.SpaceRole) (db.Space, *spaceErr, error) {
 	var space db.Space
 	var err error
 	if requested != nil {

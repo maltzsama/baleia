@@ -12,24 +12,22 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 	"gorm.io/gorm"
 )
 
 type attentionFixture struct {
-	pool      *pgxpool.Pool
+	pool      *gorm.DB
 	gdb       *gorm.DB
 	h         *API
 	admin     context.Context
 	owner     context.Context
 	stranger  context.Context
 	ownerID   string
-	catalogID pgtype.UUID
-	engineID  pgtype.UUID
-	bindingID pgtype.UUID
-	wsID      pgtype.UUID
+	catalogID db.UUID
+	engineID  db.UUID
+	bindingID db.UUID
+	wsID      db.UUID
 	cache     *TTLStore[[]AttentionItem]
 }
 
@@ -37,11 +35,11 @@ func newAttentionFixture(t *testing.T) *attentionFixture {
 	t.Helper()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	q := repo.New(gdb)
 	f := &attentionFixture{pool: pool, gdb: gdb}
 
-	user := func(email, role string) pgtype.UUID {
+	user := func(email, role string) db.UUID {
 		password := "x"
 		row := model.User{
 			ID: model.UUID(repo.NewUUID()), Name: email, Email: model.Text(email),
@@ -59,7 +57,7 @@ func newAttentionFixture(t *testing.T) *attentionFixture {
 	f.owner = ctxAs(f.ownerID, "member")
 	f.stranger = ctxAs(idString(strangerID), "member")
 
-	conn := func(name, owner string) pgtype.UUID {
+	conn := func(name, owner string) db.UUID {
 		row, err := q.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
 			ID: repo.PGUUID(repo.NewUUID()), Name: name, Type: "polaris",
 			Url: "http://polaris.test", CreatedBy: repo.PGUUID(owner),
@@ -122,8 +120,7 @@ func newAttentionFixture(t *testing.T) *attentionFixture {
 	f.cache = NewTTLStore[[]AttentionItem](time.Hour)
 	f.h = testAPI(handlerFields{
 		queries:        q,
-		pool:           pool,
-		tx:             poolTx{pool: pool},
+		tx:             storeTx{db: pool},
 		settings:       SettingsFromConfig(&config.Config{AuditExportURL: "https://opensearch.test"}),
 		attentionCache: f.cache,
 	})
@@ -315,7 +312,7 @@ func TestAttention_LineageBroken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := pgtype.UUID{Bytes: uuid.MustParse(f.ownerID), Valid: true}
+	owner := db.UUID{Bytes: uuid.MustParse(f.ownerID), Valid: true}
 	def := []byte(`{"source":{"kind":"table","namespace":["sales"],"table":"orders"},
 		"primary_key":["id"],
 		"dimensions":[{"name":"id","type":"int64"},{"name":"note","sql":"note","type":"string"}]}`)

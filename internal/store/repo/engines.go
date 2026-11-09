@@ -7,8 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -50,7 +48,7 @@ func (r *Repo) ListEngines(ctx context.Context) ([]db.Engine, error) {
 }
 
 // ListEnginesVisibleToUser lists the engines on connections the user owns.
-func (r *Repo) ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]db.Engine, error) {
+func (r *Repo) ListEnginesVisibleToUser(ctx context.Context, userID db.UUID) ([]db.Engine, error) {
 	var rows []model.Engine
 	if err := r.Users.db.WithContext(ctx).
 		Table("engines AS e").
@@ -99,13 +97,13 @@ func (r *Repo) UpdateEngine(ctx context.Context, arg db.UpdateEngineParams) (db.
 		return db.Engine{}, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.Engine{}, pgx.ErrNoRows
+		return db.Engine{}, db.ErrNoRows
 	}
 	return r.GetEngineByID(ctx, arg.ID)
 }
 
 // DeleteEngine removes an engine; its bindings cascade.
-func (r *Repo) DeleteEngine(ctx context.Context, id pgtype.UUID) error {
+func (r *Repo) DeleteEngine(ctx context.Context, id db.UUID) error {
 	return r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).Delete(&model.Engine{}).Error
 }
 
@@ -135,14 +133,14 @@ func (r *Repo) SetEngineTrinoResourceGroups(ctx context.Context, arg db.SetEngin
 // ── Trino clusters ────────────────────────────────────────────────────────────
 
 // GetTrinoClusterByID returns one cluster.
-func (r *Repo) GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (db.TrinoCluster, error) {
+func (r *Repo) GetTrinoClusterByID(ctx context.Context, id db.UUID) (db.TrinoCluster, error) {
 	if !id.Valid {
-		return db.TrinoCluster{}, pgx.ErrNoRows
+		return db.TrinoCluster{}, db.ErrNoRows
 	}
 	var row model.TrinoCluster
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.TrinoCluster{}, pgx.ErrNoRows
+		return db.TrinoCluster{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.TrinoCluster{}, err
@@ -151,11 +149,11 @@ func (r *Repo) GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (db.Trin
 }
 
 // GetTrinoClusterByEngine returns the cluster an engine runs.
-func (r *Repo) GetTrinoClusterByEngine(ctx context.Context, engineID pgtype.UUID) (db.TrinoCluster, error) {
+func (r *Repo) GetTrinoClusterByEngine(ctx context.Context, engineID db.UUID) (db.TrinoCluster, error) {
 	var row model.TrinoCluster
 	err := r.Users.db.WithContext(ctx).Where("engine_id = ?", uuidText(engineID)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.TrinoCluster{}, pgx.ErrNoRows
+		return db.TrinoCluster{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.TrinoCluster{}, err
@@ -173,7 +171,7 @@ func (r *Repo) LinkTrinoClusterEngine(ctx context.Context, arg db.LinkTrinoClust
 // ── queue capacities ──────────────────────────────────────────────────────────
 
 // DeleteEngineQueueCapacities clears one engine's capacities.
-func (r *Repo) DeleteEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) error {
+func (r *Repo) DeleteEngineQueueCapacities(ctx context.Context, engineID db.UUID) error {
 	return r.Users.db.WithContext(ctx).
 		Where("engine_id = ?", UUIDString(engineID)).
 		Delete(&model.EngineQueueCapacity{}).Error
@@ -207,7 +205,7 @@ func (r *Repo) UpsertEngineQueueCapacity(ctx context.Context, arg db.UpsertEngin
 // ── observations ──────────────────────────────────────────────────────────────
 
 // ListEngineObservations lists the catalogs an engine reported.
-func (r *Repo) ListEngineObservations(ctx context.Context, engineID pgtype.UUID) ([]db.EngineCatalogObservation, error) {
+func (r *Repo) ListEngineObservations(ctx context.Context, engineID db.UUID) ([]db.EngineCatalogObservation, error) {
 	var rows []model.EngineCatalogObservation
 	if err := r.Users.db.WithContext(ctx).
 		Where("engine_id = ?", UUIDString(engineID)).
@@ -277,7 +275,7 @@ func (r *Repo) MarkEngineCatalogManaged(ctx context.Context, arg db.MarkEngineCa
 }
 
 // ObservedManagedNamesOfEngine lists managed names the engine still reports.
-func (r *Repo) ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error) {
+func (r *Repo) ObservedManagedNamesOfEngine(ctx context.Context, engineID db.UUID) ([]string, error) {
 	var names []string
 	err := r.Users.db.WithContext(ctx).Model(&model.EngineCatalogObservation{}).
 		Where("engine_id = ? AND mode = ? AND present", UUIDString(engineID), "managed").

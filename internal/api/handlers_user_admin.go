@@ -10,14 +10,13 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity/users"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // SuspendUser — POST /users/{id}/suspend (#258). The account is suspended,
 // never deleted; its refresh tokens and API keys die immediately.
 func (h *AuthHandlers) SuspendUser(ctx context.Context, request SuspendUserRequestObject) (SuspendUserResponseObject, error) {
-	uid := pgtype.UUID{Bytes: request.Id, Valid: true}
+	uid := db.UUID{Bytes: request.Id, Valid: true}
 	ev := audit.Event{Action: audit.UserSuspend, ResourceType: "user", ResourceID: idString(uid)}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
@@ -48,7 +47,7 @@ func (h *AuthHandlers) SuspendUser(ctx context.Context, request SuspendUserReque
 // ReinstateUser — POST /users/{id}/reinstate (#258). An admin override can
 // lift any suspension, including a directory one.
 func (h *AuthHandlers) ReinstateUser(ctx context.Context, request ReinstateUserRequestObject) (ReinstateUserResponseObject, error) {
-	uid := pgtype.UUID{Bytes: request.Id, Valid: true}
+	uid := db.UUID{Bytes: request.Id, Valid: true}
 	ev := audit.Event{Action: audit.UserReinstate, ResourceType: "user", ResourceID: idString(uid)}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
@@ -86,9 +85,9 @@ func (h *AuthHandlers) ListDirectoryReconcileRuns(ctx context.Context, request L
 		}
 		limit = *request.Params.Limit
 	}
-	var providerID pgtype.UUID
+	var providerID db.UUID
 	if request.Params.ProviderId != nil {
-		providerID = pgtype.UUID{Bytes: *request.Params.ProviderId, Valid: true}
+		providerID = db.UUID{Bytes: *request.Params.ProviderId, Valid: true}
 	}
 
 	rows, err := h.users.ReconcileRuns(ctx, providerID, int32(limit))

@@ -25,7 +25,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // draftQuerier fails the test on any write: a draft test persists nothing.
@@ -234,7 +233,7 @@ func TestTransient_IntentsFilter(t *testing.T) {
 	}
 	h2, _, _ := newAuthzHandlers(t)
 	h2.connections = reg
-	if _, ok := runDraft(t, h2, strangerID, draft(srv.URL+"/catalog", "bind:"+uuidString(pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}))).(TestConnectionDraft404JSONResponse); !ok {
+	if _, ok := runDraft(t, h2, strangerID, draft(srv.URL+"/catalog", "bind:"+uuidString(db.UUID{Bytes: [16]byte{0xE1}, Valid: true}))).(TestConnectionDraft404JSONResponse); !ok {
 		t.Fatal("binding into an engine the caller may not use is a 404")
 	}
 }
@@ -292,8 +291,8 @@ func TestTransient_SQLCleanupOnClientCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // the client went away
 	err = connectionTest{h: h.CatalogHandlers, provider: p, cfg: cfg}.bind(ctx, testBind{
-		engine:  db.Engine{ID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: "trino"},
-		cluster: db.TrinoCluster{ID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}},
+		engine:  db.Engine{ID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: "trino"},
+		cluster: db.TrinoCluster{ID: db.UUID{Bytes: [16]byte{0xCC}, Valid: true}},
 	})
 	if err == nil {
 		t.Fatal("a cancelled request fails the check")
@@ -318,7 +317,7 @@ func TestSweeper_DropsExpired(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	clusterModel := model.TrinoCluster{
 		ID: model.UUID(repo.NewUUID()), Name: "sweeper-test", CoordinatorURL: "http://t",
 	}
@@ -329,7 +328,7 @@ func TestSweeper_DropsExpired(t *testing.T) {
 	q := repo.New(gdb)
 	ins := func(name string, ttl time.Duration) {
 		if err := q.InsertEphemeralRegistryRow(ctx, db.InsertEphemeralRegistryRowParams{ClusterID: cluster, CatalogName: name, ConnectorName: "postgresql",
-			Column4: []byte("{}"), Ttl: pgtype.Interval{Microseconds: ttl.Microseconds(), Valid: true}}); err != nil {
+			Column4: []byte("{}"), Ttl: db.Interval{Microseconds: ttl.Microseconds(), Valid: true}}); err != nil {
 			t.Fatal(err)
 		}
 	}

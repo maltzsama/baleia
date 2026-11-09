@@ -11,8 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/bindings/stored"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/engines/manage"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -26,8 +24,8 @@ func (h *CatalogHandlers) ReconcileEngine(ctx context.Context, request Reconcile
 	if err := p.RequireAdmin(); err != nil {
 		return ReconcileEngine403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
-	if _, err := h.topology.Engine(ctx, id); errors.Is(err, pgx.ErrNoRows) {
+	id := db.UUID{Bytes: request.Id, Valid: true}
+	if _, err := h.topology.Engine(ctx, id); errors.Is(err, db.ErrNoRows) {
 		return ReconcileEngine404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	} else if err != nil {
 		return nil, err
@@ -58,7 +56,7 @@ func (h *CatalogHandlers) ListReconcileRuns(ctx context.Context, request ListRec
 	if request.Params.Limit != nil {
 		limit = *request.Params.Limit
 	}
-	rows, err := h.engineAdmin.ReconcileRuns(ctx, pgtype.UUID{Bytes: request.Id, Valid: true}, limit)
+	rows, err := h.engineAdmin.ReconcileRuns(ctx, db.UUID{Bytes: request.Id, Valid: true}, limit)
 	if errors.Is(err, manage.ErrNotFound) {
 		return ListReconcileRuns404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: err.Error()}}, nil
 	}
@@ -78,7 +76,7 @@ func (h *CatalogHandlers) ListReconcileRuns(ctx context.Context, request ListRec
 
 // reconcile runs and persists one reconcile of a federated engine;
 // unsupported is set for an engine Baleia cannot reconcile.
-func (h *CatalogHandlers) reconcile(ctx context.Context, engineID pgtype.UUID, dryRun bool) (ReconcileRun, *UnprocessableEntityJSONResponse, error) {
+func (h *CatalogHandlers) reconcile(ctx context.Context, engineID db.UUID, dryRun bool) (ReconcileRun, *UnprocessableEntityJSONResponse, error) {
 	eng, err := h.topology.Engine(ctx, engineID)
 	if err != nil {
 		return ReconcileRun{}, nil, err
@@ -88,7 +86,7 @@ func (h *CatalogHandlers) reconcile(ctx context.Context, engineID pgtype.UUID, d
 		return ReconcileRun{}, &u, nil
 	}
 	cluster, err := h.topology.ClusterOfEngine(ctx, eng.ID)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		u := unprocessable(ErrorCodeEngineUnsupported, "the engine has no Trino cluster")
 		return ReconcileRun{}, &u, nil
 	}

@@ -6,18 +6,18 @@ package queryengine
 import (
 	"encoding/json"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 // Target is where an execution runs: a binding (catalog × engine) plus an
 // optional schema. It is resolved and authorized per request (#13) and stored
 // with the execution.
 type Target struct {
-	EngineID      pgtype.UUID
+	EngineID      db.UUID
 	EngineKind    string // "trino", "postgresql", …
 	EngineName    string
-	BindingID     pgtype.UUID
-	CatalogID     pgtype.UUID
+	BindingID     db.UUID
+	CatalogID     db.UUID
 	CatalogName   string // logical name shown in the UI
 	EngineCatalog string // the catalog's name in SQL on that engine
 	Schema        string // optional; multi-level namespaces are joined by the dialect (#14)

@@ -1,24 +1,31 @@
 package model_test
 
 import (
+	"os"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/store/model"
 )
 
+// TestAllModelsMigrate runs the schema twice on the backend named by the single
+// BALEIA_TEST_DATABASE_URL (the DSN selects the dialector).
 func TestAllModelsMigrate(t *testing.T) {
 	t.Parallel()
-	models := model.All()
-	t.Run("postgres", func(t *testing.T) {
+	dsn := os.Getenv("BALEIA_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("BALEIA_TEST_DATABASE_URL not set")
+	}
+	backend, err := store.BackendFromDSN(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run(string(backend), func(t *testing.T) {
 		t.Parallel()
-		checkMigration(t, openPostgres(t), models)
-	})
-	t.Run("mysql", func(t *testing.T) {
-		t.Parallel()
-		checkMigration(t, openMySQL(t, "BALEIA_TEST_MYSQL_URL"), models)
-	})
-	t.Run("mariadb", func(t *testing.T) {
-		t.Parallel()
-		checkMigration(t, openMySQL(t, "BALEIA_TEST_MARIADB_URL"), models)
+		if backend == store.MySQL {
+			checkMigration(t, openMySQL(t, "BALEIA_TEST_DATABASE_URL"), model.All())
+			return
+		}
+		checkMigration(t, openPostgres(t), model.All())
 	})
 }

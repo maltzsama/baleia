@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestAuditInsertList covers the GORM replacement for audit.sql (#774): the
@@ -21,7 +19,7 @@ func TestAuditInsertList(t *testing.T) {
 	r := f.r
 	outsider := createAPIKeyUser(t, f.gdb, "audit-outsider@example.test")
 
-	insert := func(actor, resource string, ws pgtype.UUID) {
+	insert := func(actor, resource string, ws db.UUID) {
 		t.Helper()
 		if err := r.InsertAuditEvent(ctx, db.InsertAuditEventParams{
 			ActorKind: "user", ActorID: &actor, Action: "query.run", ResourceType: resource,
@@ -108,7 +106,7 @@ func TestAuditExportCursor(t *testing.T) {
 	r := f.r
 	actor := "service:exporter"
 
-	if _, err := r.GetAuditExportCursor(ctx, "opensearch"); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := r.GetAuditExportCursor(ctx, "opensearch"); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("empty cursor = %v, want ErrNoRows", err)
 	}
 	for range 3 {
@@ -120,8 +118,8 @@ func TestAuditExportCursor(t *testing.T) {
 	}
 	before := time.Now().UTC().Add(time.Minute)
 	batch, err := r.ListAuditEventsForExport(ctx, db.ListAuditEventsForExportParams{
-		AfterAt: pgtype.Timestamptz{Time: time.Unix(0, 0).UTC(), Valid: true},
-		Before:  pgtype.Timestamptz{Time: before, Valid: true}, Lim: 10,
+		AfterAt: db.Timestamptz{Time: time.Unix(0, 0).UTC(), Valid: true},
+		Before:  db.Timestamptz{Time: before, Valid: true}, Lim: 10,
 	})
 	if err != nil || len(batch) != 3 {
 		t.Fatalf("export batch = %d, %v", len(batch), err)
@@ -144,7 +142,7 @@ func TestAuditExportCursor(t *testing.T) {
 		t.Fatalf("cursor = %+v, %v", got, err)
 	}
 	after, err := r.ListAuditEventsForExport(ctx, db.ListAuditEventsForExportParams{
-		AfterAt: got.OccurredAt, AfterID: got.ID, Before: pgtype.Timestamptz{Time: before, Valid: true}, Lim: 10,
+		AfterAt: got.OccurredAt, AfterID: got.ID, Before: db.Timestamptz{Time: before, Valid: true}, Lim: 10,
 	})
 	if err != nil || len(after) != 1 || after[0].ID <= pos.ID {
 		t.Fatalf("batch after cursor = %+v, %v", after, err)

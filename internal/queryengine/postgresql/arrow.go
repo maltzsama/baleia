@@ -1,8 +1,10 @@
 package postgresql
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,8 +12,8 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/decimal128"
 	"github.com/apache/arrow-go/v18/arrow/memory"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // PostgreSQL type OIDs the adapter maps explicitly (pg_catalog).
@@ -150,19 +152,23 @@ func appendValue(b array.Builder, c column, v any) error {
 		raw, _ := v.([]byte)
 		bb.Append(append([]byte(nil), raw...))
 	case *array.StringBuilder:
-		bb.Append(stringValue(v))
+		bb.Append(stringValue(v, c.oid))
 	case *array.Date32Builder:
 		bb.Append(arrow.Date32FromTime(v.(time.Time)))
 	case *array.TimestampBuilder:
 		bb.Append(arrow.Timestamp(v.(time.Time).UnixMicro()))
 	case *array.Time64Builder:
-		bb.Append(arrow.Time64(v.(pgtype.Time).Microseconds))
+		micros, err := timeMicros(v)
+		if err != nil {
+			return fmt.Errorf("time column %q: %w", c.name, err)
+		}
+		bb.Append(arrow.Time64(micros))
 	case *array.Decimal128Builder:
-		n, ok := v.(pgtype.Numeric)
+		decimal, ok := decimalString(v)
 		if !ok {
 			return fmt.Errorf("decimal column %q: value is %T", c.name, v)
 		}
-		d, err := decimal128.FromString(numericString(n), c.precision, c.scale)
+		d, err := decimal128.FromString(decimal, c.precision, c.scale)
 		if err != nil {
 			return fmt.Errorf("decimal column %q: %w", c.name, err)
 		}
@@ -173,8 +179,10 @@ func appendValue(b array.Builder, c column, v any) error {
 	return nil
 }
 
-// stringValue renders an utf8 column's value from its pgx Go type.
-func stringValue(v any) string {
+// stringValue renders an utf8 column's value from its pgx Go type. PostgreSQL
+// types without a native Arrow mapping arrive as driver values; numeric and
+// interval are rendered from their text form.
+func stringValue(v any, oid uint32) string {
 	switch x := v.(type) {
 	case string:
 		return x
@@ -184,14 +192,92 @@ func stringValue(v any) string {
 		return jsonString(x)
 	case []any:
 		return jsonString(x)
-	case pgtype.Numeric:
-		return numericString(x)
-	case pgtype.Interval:
-		return isoInterval(x)
 	case time.Time:
 		return x.Format(time.RFC3339Nano)
 	}
+	if s, ok := textValue(v); ok {
+		if oid == oidInterval {
+			return isoInterval(parseInterval(s))
+		}
+		return s
+	}
 	return fmt.Sprint(v)
+}
+
+// textValue asks a driver.Valuer (pgx returns one for numeric, interval and
+// time) for its text form, so Baleia never names a pgx type.
+func textValue(v any) (string, bool) {
+	valuer, ok := v.(driver.Valuer)
+	if !ok {
+		return "", false
+	}
+	value, err := valuer.Value()
+	if err != nil {
+		return "", false
+	}
+	switch x := value.(type) {
+	case string:
+		return x, true
+	case []byte:
+		return string(x), true
+	}
+	return fmt.Sprint(value), true
+}
+
+// decimalString renders a numeric value as a plain decimal string.
+func decimalString(v any) (string, bool) {
+	if s, ok := textValue(v); ok {
+		return s, true
+	}
+	if n, ok := v.(db.Numeric); ok {
+		return numericString(n), true
+	}
+	return "", false
+}
+
+// timeMicros converts a time value's text form to microseconds since midnight.
+func timeMicros(v any) (int64, error) {
+	s, ok := textValue(v)
+	if !ok {
+		return 0, fmt.Errorf("value is %T", v)
+	}
+	return clockMicros(s)
+}
+
+func clockMicros(s string) (int64, error) {
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	clock := strings.SplitN(s, ".", 2)
+	hms := strings.Split(clock[0], ":")
+	if len(hms) != 3 {
+		return 0, fmt.Errorf("invalid time %q", s)
+	}
+	var total int64
+	for i, mult := range []int64{3_600_000_000, 60_000_000, 1_000_000} {
+		n, err := strconv.ParseInt(hms[i], 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid time %q: %w", s, err)
+		}
+		total += n * mult
+	}
+	if len(clock) == 2 {
+		frac := clock[1]
+		if len(frac) > 6 {
+			frac = frac[:6]
+		}
+		for len(frac) < 6 {
+			frac += "0"
+		}
+		us, err := strconv.ParseInt(frac, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid time %q: %w", s, err)
+		}
+		total += us
+	}
+	if neg {
+		total = -total
+	}
+	return total, nil
 }
 
 func jsonString(v any) string {
@@ -206,8 +292,8 @@ func formatUUID(b [16]byte) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// numericString renders a pgtype.Numeric as a plain decimal string.
-func numericString(n pgtype.Numeric) string {
+// numericString renders a db.Numeric as a plain decimal string.
+func numericString(n db.Numeric) string {
 	if !n.Valid {
 		return ""
 	}
@@ -215,9 +301,9 @@ func numericString(n pgtype.Numeric) string {
 		return "NaN"
 	}
 	switch n.InfinityModifier {
-	case pgtype.Infinity:
+	case db.Infinity:
 		return "Infinity"
-	case pgtype.NegativeInfinity:
+	case db.NegativeInfinity:
 		return "-Infinity"
 	}
 	if n.Int == nil {
@@ -245,8 +331,38 @@ func numericString(n pgtype.Numeric) string {
 	return s
 }
 
-// isoInterval renders a pgtype.Interval as an ISO 8601 duration.
-func isoInterval(i pgtype.Interval) string {
+// parseInterval reads the text interval pgx renders: an optional "<n> mon",
+// an optional "<n> day" and a [-]HH:MM:SS[.ffffff] clock.
+func parseInterval(s string) db.Interval {
+	i := db.Interval{Valid: true}
+	fields := strings.Fields(s)
+	for n, field := range fields {
+		switch field {
+		case "mon":
+			if n > 0 {
+				if v, err := strconv.ParseInt(fields[n-1], 10, 32); err == nil {
+					i.Months = int32(v)
+				}
+			}
+		case "day":
+			if n > 0 {
+				if v, err := strconv.ParseInt(fields[n-1], 10, 32); err == nil {
+					i.Days = int32(v)
+				}
+			}
+		default:
+			if strings.Contains(field, ":") {
+				if v, err := clockMicros(field); err == nil {
+					i.Microseconds = v
+				}
+			}
+		}
+	}
+	return i
+}
+
+// isoInterval renders a db.Interval as an ISO 8601 duration.
+func isoInterval(i db.Interval) string {
 	if !i.Valid {
 		return ""
 	}

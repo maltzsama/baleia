@@ -9,8 +9,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Versions reads content versions; *repo.Repo implements it.
@@ -46,25 +44,25 @@ func New(store Store) *Service { return &Service{store: store} }
 
 // SpaceOf is the space a history is authorized against: the live entity's,
 // or, for a deleted one, its last version's.
-func (s *Service) SpaceOf(ctx context.Context, ws pgtype.UUID, entityType string, id pgtype.UUID) (pgtype.UUID, error) {
+func (s *Service) SpaceOf(ctx context.Context, ws db.UUID, entityType string, id db.UUID) (db.UUID, error) {
 	space, err := s.liveSpace(ctx, ws, entityType, id)
 	if err == nil {
 		return space, nil
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return pgtype.UUID{}, err
+	if !errors.Is(err, db.ErrNoRows) {
+		return db.UUID{}, err
 	}
 	v, err := s.store.LatestContentVersion(ctx, db.LatestContentVersionParams{WorkspaceID: ws, EntityType: entityType, EntityID: id})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return pgtype.UUID{}, ErrNotFound
+	if errors.Is(err, db.ErrNoRows) {
+		return db.UUID{}, ErrNotFound
 	}
 	if err != nil {
-		return pgtype.UUID{}, err
+		return db.UUID{}, err
 	}
 	return v.SpaceID, nil
 }
 
-func (s *Service) liveSpace(ctx context.Context, ws pgtype.UUID, entityType string, id pgtype.UUID) (pgtype.UUID, error) {
+func (s *Service) liveSpace(ctx context.Context, ws db.UUID, entityType string, id db.UUID) (db.UUID, error) {
 	switch entityType {
 	case content.EntitySavedQuery:
 		q, err := s.store.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{ID: id, WorkspaceID: ws})
@@ -76,11 +74,11 @@ func (s *Service) liveSpace(ctx context.Context, ws pgtype.UUID, entityType stri
 		m, err := s.store.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: id})
 		return m.SpaceID, err
 	}
-	return pgtype.UUID{}, pgx.ErrNoRows
+	return db.UUID{}, db.ErrNoRows
 }
 
 // Latest is the entity's latest version number; zero when it has none.
-func (s *Service) Latest(ctx context.Context, ws pgtype.UUID, entityType string, id pgtype.UUID) int32 {
+func (s *Service) Latest(ctx context.Context, ws db.UUID, entityType string, id db.UUID) int32 {
 	v, err := s.store.LatestContentVersion(ctx, db.LatestContentVersionParams{WorkspaceID: ws, EntityType: entityType, EntityID: id})
 	if err != nil {
 		return 0
@@ -89,14 +87,14 @@ func (s *Service) Latest(ctx context.Context, ws pgtype.UUID, entityType string,
 }
 
 // List returns a page of the entity's versions, newest first.
-func (s *Service) List(ctx context.Context, ws pgtype.UUID, entityType string, id pgtype.UUID, limit, offset int32) ([]db.ListContentVersionsRow, error) {
+func (s *Service) List(ctx context.Context, ws db.UUID, entityType string, id db.UUID, limit, offset int32) ([]db.ListContentVersionsRow, error) {
 	return s.store.ListContentVersions(ctx, db.ListContentVersionsParams{WorkspaceID: ws, EntityType: entityType, EntityID: id, Lim: limit, Off: offset})
 }
 
 // Get returns one version of the entity.
-func (s *Service) Get(ctx context.Context, ws pgtype.UUID, entityType string, id pgtype.UUID, version int32) (db.GetContentVersionRow, error) {
+func (s *Service) Get(ctx context.Context, ws db.UUID, entityType string, id db.UUID, version int32) (db.GetContentVersionRow, error) {
 	v, err := s.store.GetContentVersion(ctx, db.GetContentVersionParams{WorkspaceID: ws, EntityType: entityType, EntityID: id, Version: version})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.GetContentVersionRow{}, ErrNotFound
 	}
 	return v, err
@@ -104,6 +102,6 @@ func (s *Service) Get(ctx context.Context, ws pgtype.UUID, entityType string, id
 
 // Trash returns a page of the workspace's deleted content, of one entity
 // type when entityType is set.
-func (s *Service) Trash(ctx context.Context, ws pgtype.UUID, entityType *string, limit, offset int32) ([]db.ListDeletedContentRow, error) {
+func (s *Service) Trash(ctx context.Context, ws db.UUID, entityType *string, limit, offset int32) ([]db.ListDeletedContentRow, error) {
 	return s.store.ListDeletedContent(ctx, db.ListDeletedContentParams{WorkspaceID: ws, EntityType: entityType, Lim: limit, Off: offset})
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ErrCredentialsUnreadable means a connection's stored credentials cannot be
@@ -32,7 +31,7 @@ const credentialsAADPrefix = "catalog_connections:"
 // ALL existing credentials unopenable (ErrCredentialsUnreadable on every row,
 // with no recovery but re-entering them by hand). Never rewrite it as a
 // cleanup; version the envelope format instead.
-func CredentialsAAD(connID pgtype.UUID) string {
+func CredentialsAAD(connID db.UUID) string {
 	return credentialsAADPrefix + uuid.UUID(connID.Bytes).String()
 }
 

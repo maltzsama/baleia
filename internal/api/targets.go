@@ -6,7 +6,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -145,7 +144,7 @@ func (h *WorkspaceHandlers) ListWorkspaceTargets(ctx context.Context, request Li
 	} else if err != nil {
 		return nil, err
 	}
-	wsID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	wsID := db.UUID{Bytes: request.Id, Valid: true}
 	ws, err := h.access.Workspace(ctx, wsID)
 	if err != nil {
 		return nil, err

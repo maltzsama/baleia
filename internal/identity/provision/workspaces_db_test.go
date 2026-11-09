@@ -9,7 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/identity"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestApplyWorkspaces_Postgres (#653): groups set workspace roles at sign-in,
@@ -18,7 +17,7 @@ import (
 func TestApplyWorkspaces_Postgres(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	q := repo.New(testdb.GORM(t, testdb.New(t)))
+	q := repo.New(testdb.New(t))
 	pw := "x"
 	newUser := func(email string) db.User {
 		u, err := q.CreateUser(ctx, db.CreateUserParams{Name: email, Email: email, PasswordHash: &pw, Role: "member", AuthProvider: "local"})
@@ -47,7 +46,7 @@ func TestApplyWorkspaces_Postgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	role := func(ws pgtype.UUID) string {
+	role := func(ws db.UUID) string {
 		t.Helper()
 		r, err := q.GetWorkspaceMemberRole(ctx, db.GetWorkspaceMemberRoleParams{ID: ws, UserID: ana.ID})
 		if err != nil {

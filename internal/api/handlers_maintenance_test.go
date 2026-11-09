@@ -17,8 +17,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -35,7 +33,7 @@ func (e maintEngine) Capabilities() queryengine.Capabilities {
 
 type maintEngines struct{}
 
-func (maintEngines) Get(context.Context, pgtype.UUID) (queryengine.Engine, error) {
+func (maintEngines) Get(context.Context, db.UUID) (queryengine.Engine, error) {
 	return maintEngine{fake.New(fake.Options{})}, nil
 }
 
@@ -67,13 +65,13 @@ func (a *auditLog) actions() []audit.Action {
 }
 
 type maintenanceFixture struct {
-	pool         *pgxpool.Pool
+	pool         *gorm.DB
 	gdb          *gorm.DB
 	h            *API
 	audit        *auditLog
-	catalogID    pgtype.UUID
-	bindingID    pgtype.UUID
-	connectionID pgtype.UUID
+	catalogID    db.UUID
+	bindingID    db.UUID
+	connectionID db.UUID
 	clusterID    model.UUID
 	admin        context.Context
 	stranger     context.Context
@@ -85,7 +83,7 @@ func newMaintenanceFixture(t *testing.T, bindingMode string) *maintenanceFixture
 	t.Helper()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	q := repo.New(gdb)
 	f := &maintenanceFixture{pool: pool, gdb: gdb, audit: &auditLog{}}
 	user := func(email, role string) string {
@@ -161,8 +159,7 @@ func newMaintenanceFixture(t *testing.T, bindingMode string) *maintenanceFixture
 	f.setApplied(t, `{"iceberg.expire-snapshots.min-retention": "1h", "iceberg.remove-orphan-files.min-retention": "1h"}`, "trino")
 	f.h = testAPI(handlerFields{
 		queries:        q,
-		pool:           pool,
-		tx:             poolTx{pool: pool},
+		tx:             storeTx{db: pool},
 		engines:        maintEngines{},
 		audit:          f.audit,
 		settings:       SettingsFromConfig(&config.Config{IcebergMaintenanceMinRetention: time.Hour}),

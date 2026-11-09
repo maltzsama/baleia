@@ -10,14 +10,13 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestCleanup_DeletesOnlyExpired: the daily pass removes expired or revoked
 // refresh tokens and expired or used reset tokens, and nothing else (#51).
 func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 	pool := testdb.New(t)
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	q := repo.New(gdb)
 	ctx := context.Background()
 	now := time.Now()
@@ -34,12 +33,12 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	family := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	family := db.UUID{Bytes: [16]byte{1}, Valid: true}
 	insertRefresh := func(hash string, expires time.Time, revoked bool) {
 		rt, err := q.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 			UserID:    user.ID,
 			TokenHash: hash,
-			ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
+			ExpiresAt: db.Timestamptz{Time: expires, Valid: true},
 			FamilyID:  family,
 		})
 		if err != nil {
@@ -59,7 +58,7 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 		if err := q.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
 			TokenHash: hash,
 			UserID:    user.ID,
-			ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
+			ExpiresAt: db.Timestamptz{Time: expires, Valid: true},
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -82,7 +81,7 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 			State:        state,
 			ProviderID:   provider.ID,
 			CodeVerifier: "verifier",
-			ExpiresAt:    pgtype.Timestamptz{Time: expires, Valid: true},
+			ExpiresAt:    db.Timestamptz{Time: expires, Valid: true},
 		}); err != nil {
 			t.Fatal(err)
 		}

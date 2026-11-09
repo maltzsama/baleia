@@ -10,7 +10,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/agentpolicy"
 	"github.com/galileostudio/baleia/internal/api"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -130,11 +130,11 @@ func id(s string) (openapi_types.UUID, error) {
 
 func pathOf(u openapi_types.UUID) api.PathId { return api.PathId(u) }
 
-func pgUUID(u openapi_types.UUID) pgtype.UUID {
-	return pgtype.UUID{Bytes: u, Valid: true}
+func pgUUID(u openapi_types.UUID) db.UUID {
+	return db.UUID{Bytes: u, Valid: true}
 }
 
-func pgPtr(u openapi_types.UUID) *pgtype.UUID {
+func pgPtr(u openapi_types.UUID) *db.UUID {
 	id := pgUUID(u)
 	return &id
 }
@@ -555,12 +555,12 @@ func (s *Server) runQuery(ctx context.Context, _ *mcpsdk.CallToolRequest, in run
 	if in.Schema != "" {
 		target.Schema = &in.Schema
 	}
-	var enginePtr *pgtype.UUID
+	var enginePtr *db.UUID
 	if in.EngineID != "" {
 		e, _ := id(in.EngineID)
 		enginePtr = pgPtr(e)
 	}
-	var catalogPtr *pgtype.UUID
+	var catalogPtr *db.UUID
 	if in.CatalogID != "" {
 		c, _ := id(in.CatalogID)
 		catalogPtr = pgPtr(c)

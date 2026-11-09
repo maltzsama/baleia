@@ -21,7 +21,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/galileostudio/baleia/internal/workspaces/spaces"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 	"gorm.io/gorm"
 )
@@ -41,8 +40,7 @@ type core struct {
 	// serviceAccounts persists service accounts (#653): GORM when store is
 	// configured, sqlc otherwise (#769).
 	serviceAccounts serviceAccountStore
-	pool            *pgxpool.Pool
-	// tx runs dependent writes in one transaction (poolTx outside tests).
+	// tx runs dependent writes in one transaction over the GORM store.
 	tx txRunner
 	// settings is the resolved configuration the handlers read (#363).
 	settings Settings

@@ -11,7 +11,9 @@ import (
 
 // TestImportBoundary pins the #62 rule: the assistant persists only its own
 // tables and reaches data exclusively through the MCP tools. It may not import
-// the API, the main db package, an engine adapter, Temporal or object storage.
+// the API, the store (or its driver), an engine adapter, Temporal or object
+// storage. internal/db is only the shared value/type package (UUIDs, DTOs) and
+// owns no connection, so the assistant may use its types and ErrNoRows.
 func TestImportBoundary(t *testing.T) {
 	t.Parallel()
 	files, err := filepath.Glob("*.go")
@@ -19,7 +21,8 @@ func TestImportBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	forbiddenExact := map[string]bool{
-		"github.com/galileostudio/baleia/internal/db":          true,
+		"github.com/galileostudio/baleia/internal/store":       true,
+		"github.com/galileostudio/baleia/internal/dbpool":      true,
 		"github.com/galileostudio/baleia/internal/api":         true,
 		"github.com/galileostudio/baleia/internal/trino":       true,
 		"github.com/galileostudio/baleia/internal/queryengine": true,

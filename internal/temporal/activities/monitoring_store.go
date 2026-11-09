@@ -5,7 +5,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // monitoringStore is the monitoring and maintenance persistence the worker
@@ -17,12 +16,12 @@ type monitoringStore interface {
 	SetTrinoQueryProfile(ctx context.Context, arg db.SetTrinoQueryProfileParams) error
 	InsertClusterSnapshot(ctx context.Context, arg db.InsertClusterSnapshotParams) (db.ClusterSnapshot, error)
 	ListEnabledIcebergCatalogs(ctx context.Context) ([]db.ListEnabledIcebergCatalogsRow, error)
-	ListTableMaintenancePolicies(ctx context.Context, catalogID pgtype.UUID) ([]db.TableMaintenancePolicy, error)
+	ListTableMaintenancePolicies(ctx context.Context, catalogID db.UUID) ([]db.TableMaintenancePolicy, error)
 	UpsertTableHealthSnapshot(ctx context.Context, arg db.UpsertTableHealthSnapshotParams) (db.TableHealthSnapshot, error)
-	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
-	ListManagedMaintenancePolicies(ctx context.Context, catalogID pgtype.UUID) ([]db.TableMaintenancePolicy, error)
-	GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (db.MaintenanceRun, error)
-	GetBinding(ctx context.Context, id pgtype.UUID) (db.CatalogBinding, error)
+	GetCatalogConnectionByID(ctx context.Context, id db.UUID) (db.CatalogConnection, error)
+	ListManagedMaintenancePolicies(ctx context.Context, catalogID db.UUID) ([]db.TableMaintenancePolicy, error)
+	GetMaintenanceRun(ctx context.Context, id db.UUID) (db.MaintenanceRun, error)
+	GetBinding(ctx context.Context, id db.UUID) (db.CatalogBinding, error)
 	SetMaintenanceRunAttempts(ctx context.Context, arg db.SetMaintenanceRunAttemptsParams) error
 }
 

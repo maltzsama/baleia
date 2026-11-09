@@ -10,9 +10,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeMembers struct {
@@ -36,7 +33,7 @@ func (f *fakeMembers) UpsertTeamMember(_ context.Context, arg db.UpsertTeamMembe
 
 func TestApplyTeams(t *testing.T) {
 	t.Parallel()
-	user := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	user := db.UUID{Bytes: uuid.New(), Valid: true}
 	ok, broken, failing := uuid.NewString(), "not-a-uuid", uuid.NewString()
 	f := &fakeMembers{fail: map[string]bool{failing: true}}
 
@@ -64,14 +61,14 @@ func (f *fakeAccounts) GetUserByExternalID(_ context.Context, arg db.GetUserByEx
 	if u, ok := f.bySubject[*arg.ExternalID]; ok {
 		return u, nil
 	}
-	return db.User{}, pgx.ErrNoRows
+	return db.User{}, db.ErrNoRows
 }
 
 func (f *fakeAccounts) CreateUser(_ context.Context, arg db.CreateUserParams) (db.User, error) {
-	u := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Email: arg.Email, Role: arg.Role, AuthProvider: arg.AuthProvider, ExternalID: arg.ExternalID}
+	u := db.User{ID: db.UUID{Bytes: uuid.New(), Valid: true}, Email: arg.Email, Role: arg.Role, AuthProvider: arg.AuthProvider, ExternalID: arg.ExternalID}
 	if *arg.ExternalID == f.raceSubject {
 		f.bySubject[f.raceSubject] = u
-		return db.User{}, &pgconn.PgError{Code: "23505"}
+		return db.User{}, &db.PGError{Code: "23505"}
 	}
 	f.bySubject[*arg.ExternalID] = u
 	return u, nil
@@ -89,7 +86,7 @@ func newAccounts() *fakeAccounts {
 func TestOIDCUser(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	provider := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	provider := db.UUID{Bytes: uuid.New(), Valid: true}
 	team := uuid.NewString()
 	cfg := auth.OIDCProviderConfig{
 		AutoCreate:          true,
@@ -147,7 +144,7 @@ func TestOIDCUser(t *testing.T) {
 	t.Run("an existing subject gets the mapped role", func(t *testing.T) {
 		t.Parallel()
 		st := newAccounts()
-		existing := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Role: identity.RoleMember}
+		existing := db.User{ID: db.UUID{Bytes: uuid.New(), Valid: true}, Role: identity.RoleMember}
 		st.bySubject["s6"] = existing
 		u, err := OIDCUser(ctx, slog.New(slog.DiscardHandler), st, provider, auth.OIDCProviderConfig{RoleMapping: cfg.RoleMapping}, info("s6", "ana@x.io", true, "admins"))
 		if err != nil || u.Role != identity.RoleAdmin || st.roles[existing.ID.Bytes] != identity.RoleAdmin {

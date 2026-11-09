@@ -10,12 +10,11 @@ import (
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store lists the workspace's targets; *repo.Repo implements it.
 type Store interface {
-	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)
+	ListWorkspaceTargets(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceTargetsRow, error)
 }
 
 // For returns engine_scope(workspace, engine): the engine-side catalog names
@@ -27,7 +26,7 @@ type Store interface {
 // baleia.catalogs on "," (and Trino the header on "="), so such a name would
 // be read as two grants. Names are validated at creation, so this is
 // fail-closed defense in depth.
-func For(store Store, workspaceID, engineID pgtype.UUID) func(context.Context) ([]string, error) {
+func For(store Store, workspaceID, engineID db.UUID) func(context.Context) ([]string, error) {
 	return func(ctx context.Context) ([]string, error) {
 		rows, err := store.ListWorkspaceTargets(ctx, workspaceID)
 		if err != nil {

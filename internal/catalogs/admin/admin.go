@@ -10,17 +10,16 @@ import (
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Reader counts what depends on catalogs and connections; *repo.Repo
 // implements it.
 type Reader interface {
-	CountNamespacesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
-	CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
-	CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (db.CountCatalogImpactRow, error)
-	CountConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (db.CountConnectionImpactRow, error)
-	ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error)
+	CountNamespacesByCatalog(ctx context.Context, catalogID db.UUID) (int64, error)
+	CountTablesByCatalog(ctx context.Context, catalogID db.UUID) (int64, error)
+	CountCatalogImpact(ctx context.Context, catalogID db.UUID) (db.CountCatalogImpactRow, error)
+	CountConnectionImpact(ctx context.Context, connectionID db.UUID) (db.CountConnectionImpactRow, error)
+	ListBindingsByCatalog(ctx context.Context, catalogID db.UUID) ([]db.CatalogBinding, error)
 	ListEngines(ctx context.Context) ([]db.Engine, error)
 }
 
@@ -39,7 +38,7 @@ type Store interface {
 // implements it.
 type TxStore interface {
 	SetCatalogEnabled(ctx context.Context, arg db.SetCatalogEnabledParams) error
-	DisableManagedBindingsOfCatalog(ctx context.Context, catalogID pgtype.UUID) error
+	DisableManagedBindingsOfCatalog(ctx context.Context, catalogID db.UUID) error
 }
 
 // Tx runs fn in one transaction.
@@ -125,7 +124,7 @@ type Size struct {
 
 // Size counts a catalog's namespaces and tables. A failed count is left out,
 // never an error: the size only decorates the catalog.
-func (s *Service) Size(ctx context.Context, catalogID pgtype.UUID) Size {
+func (s *Service) Size(ctx context.Context, catalogID db.UUID) Size {
 	var out Size
 	if n, err := s.store.CountNamespacesByCatalog(ctx, catalogID); err == nil {
 		v := int(n)
@@ -139,7 +138,7 @@ func (s *Service) Size(ctx context.Context, catalogID pgtype.UUID) Size {
 }
 
 // Impact counts what depends on a catalog.
-func (s *Service) Impact(ctx context.Context, catalogID pgtype.UUID) (db.CountCatalogImpactRow, error) {
+func (s *Service) Impact(ctx context.Context, catalogID db.UUID) (db.CountCatalogImpactRow, error) {
 	return s.store.CountCatalogImpact(ctx, catalogID)
 }
 
@@ -152,7 +151,7 @@ type ConnectionImpact struct {
 
 // ConnectionImpact counts what depends on a connection. The engine is best
 // effort: a failure to list engines leaves it out.
-func (s *Service) ConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (ConnectionImpact, error) {
+func (s *Service) ConnectionImpact(ctx context.Context, connectionID db.UUID) (ConnectionImpact, error) {
 	row, err := s.store.CountConnectionImpact(ctx, connectionID)
 	if err != nil {
 		return ConnectionImpact{}, err

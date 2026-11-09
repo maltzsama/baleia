@@ -28,8 +28,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/obs"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -60,12 +58,12 @@ func ErrorCode(err error) string {
 // LifecycleStore is the part of the database the procedures use.
 type LifecycleStore interface {
 	TransitionBinding(ctx context.Context, arg db.TransitionBindingParams) (db.CatalogBinding, error)
-	ManagedBindingNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
+	ManagedBindingNamesOfEngine(ctx context.Context, engineID db.UUID) ([]string, error)
 	UpsertEngineCatalogObservation(ctx context.Context, arg db.UpsertEngineCatalogObservationParams) error
 	MarkEngineCatalogsAbsent(ctx context.Context, arg db.MarkEngineCatalogsAbsentParams) error
 	UpsertNativeCatalog(ctx context.Context, arg db.UpsertNativeCatalogParams) (db.Catalog, error)
 	UpsertAdoptedBinding(ctx context.Context, arg db.UpsertAdoptedBindingParams) error
-	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
+	ObservedManagedNamesOfEngine(ctx context.Context, engineID db.UUID) ([]string, error)
 	MarkEngineCatalogManaged(ctx context.Context, arg db.MarkEngineCatalogManagedParams) error
 }
 
@@ -75,7 +73,7 @@ type Lifecycle struct {
 	Binder Binder
 	Engine EngineRef
 	// ConnectionID is the engine's connection; adopted catalogs belong to it.
-	ConnectionID pgtype.UUID
+	ConnectionID db.UUID
 	// DDLTimeout bounds each call to the engine; 0 means 30s. State writes
 	// never inherit it, so an engine that times out still leaves the binding
 	// in error with the cause recorded.
@@ -103,13 +101,13 @@ func (l Lifecycle) engine(ctx context.Context) (context.Context, context.CancelF
 	return context.WithTimeout(ctx, d)
 }
 
-func (l Lifecycle) transition(ctx context.Context, id pgtype.UUID, to string, from []string, cause error, rename *string) (db.CatalogBinding, error) {
+func (l Lifecycle) transition(ctx context.Context, id db.UUID, to string, from []string, cause error, rename *string) (db.CatalogBinding, error) {
 	return l.transitionTo(ctx, id, to, from, cause, rename, nil)
 }
 
 // transitionTo is transition that also sets the desired version. The write
 // survives the request and the engine's deadline (stateWriteTimeout).
-func (l Lifecycle) transitionTo(ctx context.Context, id pgtype.UUID, to string, from []string, cause error, rename, version *string) (db.CatalogBinding, error) {
+func (l Lifecycle) transitionTo(ctx context.Context, id db.UUID, to string, from []string, cause error, rename, version *string) (db.CatalogBinding, error) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stateWriteTimeout)
 	defer cancel()
 	arg := db.TransitionBindingParams{ID: id, ToState: to, FromStates: from, EngineCatalogName: rename, DesiredVersion: version}
@@ -118,7 +116,7 @@ func (l Lifecycle) transitionTo(ctx context.Context, id pgtype.UUID, to string, 
 		arg.ErrorCode, arg.ErrorMessage = &code, &msg
 	}
 	b, err := l.Store.TransitionBinding(ctx, arg)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.CatalogBinding{}, ErrConcurrentChange
 	}
 	return b, err
@@ -138,7 +136,7 @@ func coded(code, msg string) error { return &codedError{code: code, err: errors.
 
 // confirm moves a binding that the engine applied to active, or to error
 // when the binder cannot confirm it.
-func (l Lifecycle) confirm(ctx context.Context, id pgtype.UUID, from string, p Projection) (db.CatalogBinding, error) {
+func (l Lifecycle) confirm(ctx context.Context, id db.UUID, from string, p Projection) (db.CatalogBinding, error) {
 	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stateWriteTimeout)
 	defer cancel()
 	c, err := l.Binder.Confirm(cctx, l.Engine, p)

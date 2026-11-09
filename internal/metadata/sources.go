@@ -17,7 +17,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // PathFor says how a catalog whose connection has provider p is read: from
@@ -52,13 +51,13 @@ var typeSystems = map[connections.Kind]string{
 
 // SourceStore is the slice of the database Sources reads.
 type SourceStore interface {
-	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
-	ListSyncBindings(ctx context.Context, catalogID pgtype.UUID) ([]db.ListSyncBindingsRow, error)
+	GetCatalogConnectionByID(ctx context.Context, id db.UUID) (db.CatalogConnection, error)
+	ListSyncBindings(ctx context.Context, catalogID db.UUID) ([]db.ListSyncBindingsRow, error)
 }
 
 // EngineSource returns engines by id; *queryengine.Manager implements it.
 type EngineSource interface {
-	Get(ctx context.Context, engineID pgtype.UUID) (queryengine.Engine, error)
+	Get(ctx context.Context, engineID db.UUID) (queryengine.Engine, error)
 }
 
 // Sources is the production Opener.

@@ -9,9 +9,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/slug"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Reader reads folders; *repo.Repo implements it.
@@ -77,7 +74,7 @@ func New(store Store, tx Tx) *Service { return &Service{store: store, tx: tx} }
 
 // List returns the folders the user can see in the workspace, of one space
 // when spaceID is valid. With a parent, only its children; without, all.
-func (s *Service) List(ctx context.Context, ws, userID, spaceID pgtype.UUID, parent *pgtype.UUID) ([]db.QueryFolder, error) {
+func (s *Service) List(ctx context.Context, ws, userID, spaceID db.UUID, parent *db.UUID) ([]db.QueryFolder, error) {
 	if parent != nil {
 		return s.store.ListVisibleQueryFolders(ctx, db.ListVisibleQueryFoldersParams{
 			WorkspaceID: ws, UserID: userID, SpaceID: spaceID, ParentID: *parent,
@@ -89,9 +86,9 @@ func (s *Service) List(ctx context.Context, ws, userID, spaceID pgtype.UUID, par
 }
 
 // Get returns one folder of the workspace.
-func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.QueryFolder, error) {
+func (s *Service) Get(ctx context.Context, ws, id db.UUID) (db.QueryFolder, error) {
 	f, err := s.store.GetQueryFolderByID(ctx, db.GetQueryFolderByIDParams{ID: id, WorkspaceID: ws})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.QueryFolder{}, ErrNotFound
 	}
 	return f, err
@@ -99,8 +96,8 @@ func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.QueryFolder, 
 
 // Create adds a folder to a space, under parent when it is not nil. An empty
 // slug is derived from the name and made unique in the space.
-func (s *Service) Create(ctx context.Context, ws, spaceID pgtype.UUID, parent *pgtype.UUID, name, folderSlug string) (db.QueryFolder, error) {
-	var parentID pgtype.UUID
+func (s *Service) Create(ctx context.Context, ws, spaceID db.UUID, parent *db.UUID, name, folderSlug string) (db.QueryFolder, error) {
+	var parentID db.UUID
 	if parent != nil {
 		p, err := s.Get(ctx, ws, *parent)
 		if err != nil && !errors.Is(err, ErrNotFound) {
@@ -134,7 +131,7 @@ func (s *Service) Create(ctx context.Context, ws, spaceID pgtype.UUID, parent *p
 }
 
 // Delete removes a folder of the workspace.
-func (s *Service) Delete(ctx context.Context, ws, id pgtype.UUID) error {
+func (s *Service) Delete(ctx context.Context, ws, id db.UUID) error {
 	deleted, err := s.store.DeleteQueryFolder(ctx, db.DeleteQueryFolderParams{WorkspaceID: ws, ID: id})
 	if err != nil {
 		return err
@@ -146,8 +143,8 @@ func (s *Service) Delete(ctx context.Context, ws, id pgtype.UUID) error {
 }
 
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505" // unique_violation
+	pgErr, ok := db.AsPGError(err)
+	return ok && pgErr.Code == "23505" // unique_violation
 }
 
 // Edit renames or moves a folder; nil fields keep their value. Moving to
@@ -156,8 +153,8 @@ type Edit struct {
 	Name *string
 	Slug *string
 	// SpaceID is the destination space, already authorized by the caller.
-	SpaceID pgtype.UUID
-	Parent  *pgtype.UUID
+	SpaceID db.UUID
+	Parent  *db.UUID
 }
 
 // maxDepth bounds the walk up the parents when looking for a cycle.
@@ -194,7 +191,7 @@ func (s *Service) Update(ctx context.Context, folder db.QueryFolder, e Edit) (db
 		parent = *e.Parent
 	}
 	if moving && e.Parent == nil {
-		parent = pgtype.UUID{}
+		parent = db.UUID{}
 	}
 	if parent.Valid {
 		if parent == folder.ID {

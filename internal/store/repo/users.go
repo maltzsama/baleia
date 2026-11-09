@@ -9,9 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity/users"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -20,7 +17,7 @@ import (
 type Users struct{ db *gorm.DB }
 
 // uniqueViolation is PostgreSQL's unique_violation SQLSTATE, returned as a
-// pgconn.PgError so the users service classifies it as before.
+// db.PGError so the users service classifies it as before.
 const uniqueViolation = "23505"
 
 // NewUsers builds the account store.
@@ -33,15 +30,15 @@ func (s *Users) Tx(ctx context.Context, fn func(users.TxStore) error) error {
 	})
 }
 
-// GetUserByID returns one account or pgx.ErrNoRows.
-func (s *Users) GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error) {
+// GetUserByID returns one account or db.ErrNoRows.
+func (s *Users) GetUserByID(ctx context.Context, id db.UUID) (db.User, error) {
 	if !id.Valid {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	var row model.User
 	err := s.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.User{}, err
@@ -49,12 +46,12 @@ func (s *Users) GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error
 	return toDBUser(row), nil
 }
 
-// GetUserByEmail returns one account or pgx.ErrNoRows.
+// GetUserByEmail returns one account or db.ErrNoRows.
 func (s *Users) GetUserByEmail(ctx context.Context, email string) (db.User, error) {
 	var row model.User
 	err := s.db.WithContext(ctx).Where("email = ?", email).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.User{}, err
@@ -94,7 +91,7 @@ func (s *Users) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.Use
 	}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			return db.User{}, &pgconn.PgError{Code: uniqueViolation, Message: "duplicate key value violates unique constraint"}
+			return db.User{}, &db.PGError{Code: uniqueViolation, Message: "duplicate key value violates unique constraint"}
 		}
 		return db.User{}, err
 	}
@@ -117,10 +114,10 @@ func (s *Users) UpdateUser(ctx context.Context, arg db.UpdateUserParams) (db.Use
 }
 
 // PersonalWorkspaceID returns the account's personal workspace or
-// pgx.ErrNoRows when it has none.
-func (s *Users) PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID) (pgtype.UUID, error) {
+// db.ErrNoRows when it has none.
+func (s *Users) PersonalWorkspaceID(ctx context.Context, ownerUserID db.UUID) (db.UUID, error) {
 	if !ownerUserID.Valid {
-		return pgtype.UUID{}, pgx.ErrNoRows
+		return db.UUID{}, db.ErrNoRows
 	}
 	var ws model.Workspace
 	err := s.db.WithContext(ctx).
@@ -129,10 +126,10 @@ func (s *Users) PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID
 		Order("created_at").
 		First(&ws).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return pgtype.UUID{}, pgx.ErrNoRows
+		return db.UUID{}, db.ErrNoRows
 	}
 	if err != nil {
-		return pgtype.UUID{}, err
+		return db.UUID{}, err
 	}
 	return PGUUID(string(ws.ID)), nil
 }
@@ -140,7 +137,7 @@ func (s *Users) PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID
 // RevokeUserRefreshTokens revokes every live refresh token of the account.
 // The explicit method resolves the ambiguity between the Users and Sessions
 // promoted methods so *Repo can satisfy the directory-reconcile interface.
-func (r *Repo) RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error {
+func (r *Repo) RevokeUserRefreshTokens(ctx context.Context, userID db.UUID) error {
 	return r.Users.RevokeUserRefreshTokens(ctx, userID)
 }
 
@@ -178,7 +175,7 @@ func (s *Users) UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams)
 }
 
 // DeleteUser removes the account.
-func (s *Users) DeleteUser(ctx context.Context, id pgtype.UUID) error {
+func (s *Users) DeleteUser(ctx context.Context, id db.UUID) error {
 	return s.db.WithContext(ctx).Where("id = ?", UUIDString(id)).Delete(&model.User{}).Error
 }
 
@@ -199,7 +196,7 @@ func (s *Users) SuspendUser(ctx context.Context, arg db.SuspendUserParams) (db.U
 }
 
 // ReinstateUser lifts any suspension and returns the account.
-func (s *Users) ReinstateUser(ctx context.Context, id pgtype.UUID) (db.User, error) {
+func (s *Users) ReinstateUser(ctx context.Context, id db.UUID) (db.User, error) {
 	if err := s.db.WithContext(ctx).Model(&model.User{}).
 		Where("id = ?", UUIDString(id)).
 		Updates(map[string]any{
@@ -214,19 +211,19 @@ func (s *Users) ReinstateUser(ctx context.Context, id pgtype.UUID) (db.User, err
 }
 
 // RevokeUserRefreshTokens revokes every live refresh token of the account.
-func (s *Users) RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error {
+func (s *Users) RevokeUserRefreshTokens(ctx context.Context, userID db.UUID) error {
 	return s.db.WithContext(ctx).Model(&model.RefreshToken{}).
 		Where("user_id = ? AND revoked = ?", UUIDString(userID), false).
 		Update("revoked", true).Error
 }
 
 // DeleteAPIKeysByUser removes the account's API keys.
-func (s *Users) DeleteAPIKeysByUser(ctx context.Context, userID pgtype.UUID) error {
+func (s *Users) DeleteAPIKeysByUser(ctx context.Context, userID db.UUID) error {
 	return s.db.WithContext(ctx).Where("user_id = ?", UUIDString(userID)).Delete(&model.APIKey{}).Error
 }
 
 // DeleteUserIDPToken removes the account's identity-provider token.
-func (s *Users) DeleteUserIDPToken(ctx context.Context, userID pgtype.UUID) error {
+func (s *Users) DeleteUserIDPToken(ctx context.Context, userID db.UUID) error {
 	return s.db.WithContext(ctx).Where("user_id = ?", UUIDString(userID)).Delete(&model.UserIDPToken{}).Error
 }
 
@@ -253,7 +250,7 @@ func (s *Users) ConsumePasswordResetToken(ctx context.Context, tokenHash string)
 			Where("token_hash = ? AND used_at IS NULL AND expires_at > ?", tokenHash, time.Now().UTC()).
 			First(&row)
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if res.Error != nil {
 			return res.Error
@@ -346,9 +343,9 @@ func toDBDirectoryReconcileRun(r model.DirectoryReconcileRun) db.DirectoryReconc
 	}
 }
 
-func uuidPtr(u *model.UUID) pgtype.UUID {
+func uuidPtr(u *model.UUID) db.UUID {
 	if u == nil {
-		return pgtype.UUID{}
+		return db.UUID{}
 	}
 	return PGUUID(string(*u))
 }
@@ -361,7 +358,7 @@ func textPtr(t *model.Text) *string {
 	return &s
 }
 
-func modelUUIDPtr(u pgtype.UUID) *model.UUID {
+func modelUUIDPtr(u db.UUID) *model.UUID {
 	if !u.Valid {
 		return nil
 	}

@@ -9,8 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -44,14 +42,14 @@ func (r *Repo) InsertClusterSnapshot(ctx context.Context, arg db.InsertClusterSn
 }
 
 // GetLatestClusterSnapshotByEngine is the newest sample of one engine.
-func (r *Repo) GetLatestClusterSnapshotByEngine(ctx context.Context, engineID pgtype.UUID) (db.ClusterSnapshot, error) {
+func (r *Repo) GetLatestClusterSnapshotByEngine(ctx context.Context, engineID db.UUID) (db.ClusterSnapshot, error) {
 	var row model.ClusterSnapshot
 	err := r.Users.db.WithContext(ctx).
 		Where("engine_id = ?", UUIDString(engineID)).
 		Order("captured_at DESC").
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.ClusterSnapshot{}, pgx.ErrNoRows
+		return db.ClusterSnapshot{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.ClusterSnapshot{}, err
@@ -186,7 +184,7 @@ func (r *Repo) GetTrinoQuerySnapshotByEngine(ctx context.Context, arg db.GetTrin
 		Where("engine_id = ? AND trino_query_id = ?", UUIDString(arg.EngineID), arg.TrinoQueryID).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.TrinoQuerySnapshot{}, pgx.ErrNoRows
+		return db.TrinoQuerySnapshot{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.TrinoQuerySnapshot{}, err
@@ -385,7 +383,7 @@ func (r *Repo) GetTableHealthByTable(ctx context.Context, arg db.GetTableHealthB
 			UUIDString(arg.CatalogID), arg.Namespace, arg.TableName).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.TableHealthSnapshot{}, pgx.ErrNoRows
+		return db.TableHealthSnapshot{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.TableHealthSnapshot{}, err
@@ -532,13 +530,13 @@ func (r *Repo) UpdateMaintenanceRun(ctx context.Context, arg db.UpdateMaintenanc
 		return db.MaintenanceRun{}, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.MaintenanceRun{}, pgx.ErrNoRows
+		return db.MaintenanceRun{}, db.ErrNoRows
 	}
 	return r.getMaintenanceRun(ctx, arg.ID)
 }
 
 // GetMaintenanceRun returns one run.
-func (r *Repo) GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (db.MaintenanceRun, error) {
+func (r *Repo) GetMaintenanceRun(ctx context.Context, id db.UUID) (db.MaintenanceRun, error) {
 	return r.getMaintenanceRun(ctx, id)
 }
 
@@ -613,7 +611,7 @@ func (r *Repo) GetRunningMaintenanceRun(ctx context.Context, arg db.GetRunningMa
 			UUIDString(arg.CatalogID), arg.Namespace, arg.TableName, "running").
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.MaintenanceRun{}, pgx.ErrNoRows
+		return db.MaintenanceRun{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.MaintenanceRun{}, err
@@ -621,11 +619,11 @@ func (r *Repo) GetRunningMaintenanceRun(ctx context.Context, arg db.GetRunningMa
 	return toDBMaintenanceRun(row), nil
 }
 
-func (r *Repo) getMaintenanceRun(ctx context.Context, id pgtype.UUID) (db.MaintenanceRun, error) {
+func (r *Repo) getMaintenanceRun(ctx context.Context, id db.UUID) (db.MaintenanceRun, error) {
 	var row model.MaintenanceRun
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.MaintenanceRun{}, pgx.ErrNoRows
+		return db.MaintenanceRun{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.MaintenanceRun{}, err
@@ -634,7 +632,7 @@ func (r *Repo) getMaintenanceRun(ctx context.Context, id pgtype.UUID) (db.Mainte
 }
 
 // catalogFinishedRuns returns the finished runs of a catalog with a finish time.
-func (r *Repo) catalogFinishedRuns(ctx context.Context, catalogID pgtype.UUID) ([]model.MaintenanceRun, error) {
+func (r *Repo) catalogFinishedRuns(ctx context.Context, catalogID db.UUID) ([]model.MaintenanceRun, error) {
 	var rows []model.MaintenanceRun
 	if err := r.Users.db.WithContext(ctx).
 		Select("namespace", "table_name", "operations", "finished_at").

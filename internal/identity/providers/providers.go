@@ -9,17 +9,14 @@ import (
 	"fmt"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store reads providers and updates one; *repo.Repo implements it.
 type Store interface {
 	ListAllAuthProviders(ctx context.Context) ([]db.AuthProvider, error)
 	ListAuthProviders(ctx context.Context) ([]db.AuthProvider, error)
-	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error)
-	CountUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) (int64, error)
+	GetAuthProviderByID(ctx context.Context, id db.UUID) (db.AuthProvider, error)
+	CountUsersByAuthProvider(ctx context.Context, authProviderID db.UUID) (int64, error)
 	UpdateAuthProvider(ctx context.Context, arg db.UpdateAuthProviderParams) (db.AuthProvider, error)
 }
 
@@ -31,12 +28,12 @@ type Creator interface {
 
 // Remover detaches a provider's users and deletes it; *repo.Repo implements it.
 type Remover interface {
-	CountUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) (int64, error)
-	RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
-	DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
-	SuspendUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
-	DeleteAuthProvider(ctx context.Context, id pgtype.UUID) error
-	DeleteUserIDPTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
+	CountUsersByAuthProvider(ctx context.Context, authProviderID db.UUID) (int64, error)
+	RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID db.UUID) error
+	DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID db.UUID) error
+	SuspendUsersByAuthProvider(ctx context.Context, authProviderID db.UUID) error
+	DeleteAuthProvider(ctx context.Context, id db.UUID) error
+	DeleteUserIDPTokensByAuthProvider(ctx context.Context, authProviderID db.UUID) error
 }
 
 // TxStore is the transactional part.
@@ -49,7 +46,7 @@ type TxStore interface {
 type Tx func(ctx context.Context, fn func(TxStore) error) error
 
 // Seal seals a provider's configuration for the provider id.
-type Seal func(id pgtype.UUID) (string, error)
+type Seal func(id db.UUID) (string, error)
 
 var (
 	// ErrNotFound: no provider has this id.
@@ -78,9 +75,9 @@ func (s *Service) List(ctx context.Context) ([]db.AuthProvider, error) {
 }
 
 // Get returns one provider.
-func (s *Service) Get(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error) {
+func (s *Service) Get(ctx context.Context, id db.UUID) (db.AuthProvider, error) {
 	ap, err := s.store.GetAuthProviderByID(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.AuthProvider{}, ErrNotFound
 	}
 	if err != nil {
@@ -90,7 +87,7 @@ func (s *Service) Get(ctx context.Context, id pgtype.UUID) (db.AuthProvider, err
 }
 
 // LinkedUsers counts the accounts linked to a provider.
-func (s *Service) LinkedUsers(ctx context.Context, id pgtype.UUID) (int64, error) {
+func (s *Service) LinkedUsers(ctx context.Context, id db.UUID) (int64, error) {
 	return s.store.CountUsersByAuthProvider(ctx, id)
 }
 
@@ -120,7 +117,7 @@ func (s *Service) Create(ctx context.Context, name, typ string, enabled bool, se
 // Update stores a provider's name, switch and sealed configuration.
 // Disabling it forgets, in the same transaction, the identity-provider
 // tokens its sign-ins left (#648).
-func (s *Service) Update(ctx context.Context, id pgtype.UUID, name string, enabled bool, sealed string) (db.AuthProvider, error) {
+func (s *Service) Update(ctx context.Context, id db.UUID, name string, enabled bool, sealed string) (db.AuthProvider, error) {
 	params := db.UpdateAuthProviderParams{ID: id, Name: name, ConfigEnc: sealed, Enabled: enabled}
 	if enabled {
 		return s.store.UpdateAuthProvider(ctx, params)
@@ -142,7 +139,7 @@ func (s *Service) Update(ctx context.Context, id pgtype.UUID, name string, enabl
 // Delete removes a provider. With linked users it refuses with ErrInUse
 // unless suspendUsers, which in the same transaction ends their sessions,
 // deletes their API keys and suspends them.
-func (s *Service) Delete(ctx context.Context, id pgtype.UUID, suspendUsers bool) error {
+func (s *Service) Delete(ctx context.Context, id db.UUID, suspendUsers bool) error {
 	ap, err := s.Get(ctx, id)
 	if err != nil {
 		return err
@@ -168,8 +165,7 @@ func (s *Service) Delete(ctx context.Context, id pgtype.UUID, suspendUsers bool)
 		err := q.DeleteAuthProvider(ctx, ap.ID)
 		// A user linked after the count: the FK's ON DELETE SET NULL breaks
 		// chk_oidc_auth/chk_ldap_auth, which means the provider is in use.
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23514" { // check_violation
+		if pgErr, ok := db.AsPGError(err); ok && pgErr.Code == "23514" { // check_violation
 			return ErrInUse
 		}
 		return err

@@ -14,51 +14,37 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
-func testPool(t *testing.T) *pgxpool.Pool {
+func testPool(t *testing.T) *gorm.DB {
 	t.Helper()
 	return testdb.New(t)
 }
 
-// testGORM opens the GORM store over a test pool, as the application does.
-func testGORM(t *testing.T, pool *pgxpool.Pool) *gorm.DB {
+// testGORM returns the test's GORM store.
+func testGORM(t *testing.T, gdb *gorm.DB) *gorm.DB {
 	t.Helper()
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
 	return gdb
 }
 
 // testStore builds the GORM store over the test database.
-func testStore(t *testing.T, pool *pgxpool.Pool) *repo.Repo {
+func testStore(t *testing.T, pool *gorm.DB) *repo.Repo {
 	t.Helper()
 	return repo.New(testGORM(t, pool))
 }
 
 // newSyncer builds the GORM-backed syncer over the test database.
-func newSyncer(t *testing.T, pool *pgxpool.Pool, opener Opener) *Syncer {
+func newSyncer(t *testing.T, pool *gorm.DB, opener Opener) *Syncer {
 	t.Helper()
 	r := testStore(t, pool)
-	return NewSyncer(r, func(ctx context.Context, runID pgtype.UUID, fn func(Store) error) error {
+	return NewSyncer(r, func(ctx context.Context, runID db.UUID, fn func(Store) error) error {
 		return r.TxMetadata(ctx, runID, func(tx *repo.Repo) error { return fn(tx) })
 	}, opener)
 }
 
 // testCatalog inserts a native catalog on a fresh connection.
-func testCatalog(t *testing.T, pool *pgxpool.Pool) pgtype.UUID {
+func testCatalog(t *testing.T, pool *gorm.DB) db.UUID {
 	t.Helper()
 	gdb := testGORM(t, pool)
 	conn, err := repo.New(gdb).CreateCatalogConnection(context.Background(), db.CreateCatalogConnectionParams{
@@ -454,7 +440,7 @@ func TestSync_FailedRunRecorded(t *testing.T) {
 func TestSync_UnknownCatalog(t *testing.T) {
 	t.Parallel()
 	pool := testPool(t)
-	_, err := newSyncer(t, pool, fakeOpener{&fakeSource{}}).Sync(context.Background(), pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, nil)
+	_, err := newSyncer(t, pool, fakeOpener{&fakeSource{}}).Sync(context.Background(), db.UUID{Bytes: [16]byte{1}, Valid: true}, nil)
 	if !errors.Is(err, ErrCatalogNotFound) {
 		t.Fatalf("err = %v", err)
 	}

@@ -8,8 +8,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestRetrieverStore covers the GORM replacement for retrievers.sql (#118,
@@ -38,7 +36,7 @@ func TestRetrieverStore(t *testing.T) {
 		t.Fatalf("destination = %+v", destinations[0])
 	}
 
-	next := pgtype.Timestamptz{Time: time.Now().Add(time.Hour).UTC(), Valid: true}
+	next := db.Timestamptz{Time: time.Now().Add(time.Hour).UTC(), Valid: true}
 	created, err := r.CreateRetriever(ctx, db.CreateRetrieverParams{
 		WorkspaceID: f.wsID(), CreatedBy: f.ownerID(), Name: "Daily orders",
 		DefinitionSql: "select * from orders", DestCatalog: "lake",
@@ -59,7 +57,7 @@ func TestRetrieverStore(t *testing.T) {
 	if err != nil || got.ID != created.ID {
 		t.Fatalf("GetRetrieverByID = %+v, %v", got, err)
 	}
-	if _, err := r.GetRetrieverByID(ctx, db.GetRetrieverByIDParams{WorkspaceID: PGUUID(NewUUID()), ID: created.ID}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := r.GetRetrieverByID(ctx, db.GetRetrieverByIDParams{WorkspaceID: PGUUID(NewUUID()), ID: created.ID}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("GetRetrieverByID(other workspace) = %v, want ErrNoRows", err)
 	}
 	list, err := r.ListRetrieversByWorkspace(ctx, f.wsID())
@@ -80,7 +78,7 @@ func TestRetrieverStore(t *testing.T) {
 	if updated.Name != renamed || updated.DestTable != "orders2" || updated.Status != "paused" || updated.CronSchedule != "0 4 * * *" {
 		t.Fatalf("updated = %+v", updated)
 	}
-	if _, err := r.UpdateRetriever(ctx, db.UpdateRetrieverParams{ID: PGUUID(NewUUID()), WorkspaceID: f.wsID()}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := r.UpdateRetriever(ctx, db.UpdateRetrieverParams{ID: PGUUID(NewUUID()), WorkspaceID: f.wsID()}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("UpdateRetriever(missing) = %v, want ErrNoRows", err)
 	}
 
@@ -104,7 +102,7 @@ func TestRetrieverStore(t *testing.T) {
 	if err != nil || latest.Status != "finished" {
 		t.Fatalf("LatestRetrieverRefresh = %+v, %v", latest, err)
 	}
-	if _, err := r.LatestRetrieverRefresh(ctx, PGUUID(NewUUID())); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := r.LatestRetrieverRefresh(ctx, PGUUID(NewUUID())); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("LatestRetrieverRefresh(none) = %v, want ErrNoRows", err)
 	}
 
@@ -114,14 +112,14 @@ func TestRetrieverStore(t *testing.T) {
 	if n, err := r.DeleteRetriever(ctx, db.DeleteRetrieverParams{ID: created.ID, WorkspaceID: f.wsID()}); err != nil || n != 0 {
 		t.Fatalf("DeleteRetriever(again) = %d, %v", n, err)
 	}
-	if _, err := r.GetRetrieverByID(ctx, db.GetRetrieverByIDParams{WorkspaceID: f.wsID(), ID: created.ID}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := r.GetRetrieverByID(ctx, db.GetRetrieverByIDParams{WorkspaceID: f.wsID(), ID: created.ID}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("GetRetrieverByID(deleted) = %v, want ErrNoRows", err)
 	}
 	runs, err = r.ListRetrieverRefreshHistory(ctx, db.ListRetrieverRefreshHistoryParams{RetrieverID: created.ID, Limit: 10})
 	if err != nil || len(runs) != 0 {
 		t.Fatalf("history after delete = %+v, %v", runs, err)
 	}
-	if _, err := r.LatestRetrieverRefresh(ctx, created.ID); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := r.LatestRetrieverRefresh(ctx, created.ID); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("LatestRetrieverRefresh(deleted) = %v, want ErrNoRows", err)
 	}
 }

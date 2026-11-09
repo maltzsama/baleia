@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func testUUID(n int) pgtype.UUID {
-	var u pgtype.UUID
+func testUUID(n int) db.UUID {
+	var u db.UUID
 	u.Bytes[0] = byte(n)
 	u.Valid = true
 	return u

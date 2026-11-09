@@ -3,7 +3,6 @@ package model_test
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/store/model"
-	_ "github.com/jackc/pgx/v5/stdlib" // the test creates a throwaway PostgreSQL database
 	"gorm.io/gorm"
 )
 
@@ -38,18 +36,22 @@ func identityModels() []any {
 
 func TestIdentityModelsMigrate(t *testing.T) {
 	t.Parallel()
-	models := identityModels()
-	t.Run("postgres", func(t *testing.T) {
+	dsn := os.Getenv("BALEIA_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("BALEIA_TEST_DATABASE_URL not set")
+	}
+	backend, err := store.BackendFromDSN(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run(string(backend), func(t *testing.T) {
 		t.Parallel()
+		models := identityModels()
+		if backend == store.MySQL {
+			checkMigration(t, openMySQL(t, "BALEIA_TEST_DATABASE_URL"), models)
+			return
+		}
 		checkMigration(t, openPostgres(t), models)
-	})
-	t.Run("mysql", func(t *testing.T) {
-		t.Parallel()
-		checkMigration(t, openMySQL(t, "BALEIA_TEST_MYSQL_URL"), models)
-	})
-	t.Run("mariadb", func(t *testing.T) {
-		t.Parallel()
-		checkMigration(t, openMySQL(t, "BALEIA_TEST_MARIADB_URL"), models)
 	})
 }
 
@@ -75,19 +77,19 @@ func openPostgres(t *testing.T) *gorm.DB {
 	if adminURL == "" {
 		t.Skip("BALEIA_TEST_DATABASE_URL not set")
 	}
-	admin, err := sql.Open("pgx", adminURL)
+	ctx := context.Background()
+	admin, err := store.Open(ctx, adminURL, store.Postgres, store.Options{MaxOpenConns: 1, Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = admin.Close() })
+	t.Cleanup(func() { _ = store.Close(admin) })
 
-	ctx := context.Background()
 	name := "baleia_model_" + strings.ToLower(rand.Text()[:12])
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE "+name); err != nil {
+	if err := admin.WithContext(ctx).Exec("CREATE DATABASE " + name).Error; err != nil {
 		t.Fatalf("create database: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = admin.ExecContext(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
+		_ = admin.Exec("DROP DATABASE IF EXISTS " + name + " WITH (FORCE)").Error
 	})
 
 	u, err := url.Parse(adminURL)

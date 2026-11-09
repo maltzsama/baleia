@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/semantic/docs"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -17,8 +17,8 @@ func tags(v ...string) *[]string { return &v }
 
 func strPtr(s string) *string { return &s }
 
-func pgUUIDOf(id openapi_types.UUID) pgtype.UUID {
-	return pgtype.UUID{Bytes: id, Valid: true}
+func pgUUIDOf(id openapi_types.UUID) db.UUID {
+	return db.UUID{Bytes: id, Valid: true}
 }
 
 func upsertDoc(t *testing.T, f *metaFixture, ctx context.Context, catalog openapi_types.UUID, column *string, body SemanticDocUpsert) UpsertSemanticDocResponseObject {

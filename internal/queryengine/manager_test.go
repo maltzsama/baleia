@@ -11,7 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/fake"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type store struct {
@@ -25,20 +24,20 @@ func (s *store) GetDefaultTrinoEngine(context.Context) (db.GetDefaultTrinoEngine
 	return db.GetDefaultTrinoEngineRow{Engine: s.row.Engine, CatalogConnection: s.row.CatalogConnection}, nil
 }
 
-func (s *store) GetEngineWithConnection(context.Context, pgtype.UUID) (db.GetEngineWithConnectionRow, error) {
+func (s *store) GetEngineWithConnection(context.Context, db.UUID) (db.GetEngineWithConnectionRow, error) {
 	if s.row == nil {
 		return db.GetEngineWithConnectionRow{}, pgx.ErrNoRows
 	}
 	return *s.row, nil
 }
 
-var engineID = pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}
+var engineID = db.UUID{Bytes: [16]byte{0xE1}, Valid: true}
 
 func engineRow(kind string, updated time.Time, readOnlyCreds bool) *db.GetEngineWithConnectionRow {
 	return &db.GetEngineWithConnectionRow{
 		Engine: db.Engine{ID: engineID, Name: "e", Kind: kind, Class: "direct", IdentityMode: "connection", Enabled: true,
-			UpdatedAt: pgtype.Timestamptz{Time: updated, Valid: true}},
-		CatalogConnection: db.CatalogConnection{ID: pgtype.UUID{Bytes: [16]byte{0xC1}, Valid: true}, Type: kind,
+			UpdatedAt: db.Timestamptz{Time: updated, Valid: true}},
+		CatalogConnection: db.CatalogConnection{ID: db.UUID{Bytes: [16]byte{0xC1}, Valid: true}, Type: kind,
 			Config: []byte(`{"url":"fake://"}`), CredentialsReadOnly: readOnlyCreds},
 	}
 }
@@ -147,7 +146,7 @@ func TestManager_RebuildsOnConnectionUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.row.CatalogConnection.UpdatedAt = pgtype.Timestamptz{Time: time.Unix(2, 0), Valid: true}
+	s.row.CatalogConnection.UpdatedAt = db.Timestamptz{Time: time.Unix(2, 0), Valid: true}
 	second, err := m.Get(ctx, engineID)
 	if err != nil {
 		t.Fatal(err)
@@ -289,7 +288,7 @@ func (s multiStore) GetDefaultTrinoEngine(context.Context) (db.GetDefaultTrinoEn
 	return db.GetDefaultTrinoEngineRow{}, pgx.ErrNoRows
 }
 
-func (s multiStore) GetEngineWithConnection(_ context.Context, id pgtype.UUID) (db.GetEngineWithConnectionRow, error) {
+func (s multiStore) GetEngineWithConnection(_ context.Context, id db.UUID) (db.GetEngineWithConnectionRow, error) {
 	r, ok := s[id.Bytes]
 	if !ok {
 		return db.GetEngineWithConnectionRow{}, pgx.ErrNoRows
@@ -303,9 +302,9 @@ func TestManager_SeveralInstancesAndKinds(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	s := multiStore{}
-	ids := []pgtype.UUID{}
+	ids := []db.UUID{}
 	for i, kind := range []string{fake.Kind, fake.Kind, readOnlyNoneKind} {
-		id := pgtype.UUID{Bytes: [16]byte{0xE0, byte(i)}, Valid: true}
+		id := db.UUID{Bytes: [16]byte{0xE0, byte(i)}, Valid: true}
 		r := engineRow(kind, time.Unix(1, 0), false)
 		r.Engine.ID = id
 		s[id.Bytes] = r

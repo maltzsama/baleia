@@ -7,20 +7,18 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
-// GetCatalogConnectionByID returns one connection or pgx.ErrNoRows.
-func (r *Repo) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
+// GetCatalogConnectionByID returns one connection or db.ErrNoRows.
+func (r *Repo) GetCatalogConnectionByID(ctx context.Context, id db.UUID) (db.CatalogConnection, error) {
 	if !id.Valid {
-		return db.CatalogConnection{}, pgx.ErrNoRows
+		return db.CatalogConnection{}, db.ErrNoRows
 	}
 	var row model.CatalogConnection
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.CatalogConnection{}, pgx.ErrNoRows
+		return db.CatalogConnection{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.CatalogConnection{}, err
@@ -41,15 +39,15 @@ func (r *Repo) GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db
 	}, nil
 }
 
-// GetCatalogByID returns one catalog or pgx.ErrNoRows.
-func (r *Repo) GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error) {
+// GetCatalogByID returns one catalog or db.ErrNoRows.
+func (r *Repo) GetCatalogByID(ctx context.Context, id db.UUID) (db.Catalog, error) {
 	if !id.Valid {
-		return db.Catalog{}, pgx.ErrNoRows
+		return db.Catalog{}, db.ErrNoRows
 	}
 	var row model.Catalog
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Catalog{}, pgx.ErrNoRows
+		return db.Catalog{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Catalog{}, err
@@ -73,15 +71,15 @@ func (r *Repo) GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, 
 	}, nil
 }
 
-// GetEngineByID returns one engine or pgx.ErrNoRows.
-func (r *Repo) GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error) {
+// GetEngineByID returns one engine or db.ErrNoRows.
+func (r *Repo) GetEngineByID(ctx context.Context, id db.UUID) (db.Engine, error) {
 	if !id.Valid {
-		return db.Engine{}, pgx.ErrNoRows
+		return db.Engine{}, db.ErrNoRows
 	}
 	var row model.Engine
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Engine{}, pgx.ErrNoRows
+		return db.Engine{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Engine{}, err

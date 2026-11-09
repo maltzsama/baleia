@@ -7,7 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -62,7 +61,7 @@ func (r *Repo) GetTrinoCatalogRegistryState(ctx context.Context, arg db.GetTrino
 		Where("cluster_id = ? AND catalog_name = ?", UUIDString(arg.ClusterID), arg.CatalogName).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetTrinoCatalogRegistryStateRow{}, pgx.ErrNoRows
+		return db.GetTrinoCatalogRegistryStateRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetTrinoCatalogRegistryStateRow{}, err

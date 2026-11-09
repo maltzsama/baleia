@@ -20,7 +20,6 @@ import (
 	"github.com/galileostudio/baleia/internal/trino/monitor"
 	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 )
 
@@ -119,7 +118,7 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 			Sql:                q.Query,
 			Catalog:            strPtr(q.Catalog()),
 			Schema:             strPtr(q.Schema()),
-			CreatedAt:          pgtype.Timestamptz{Time: createdAt, Valid: true},
+			CreatedAt:          db.Timestamptz{Time: createdAt, Valid: true},
 			ElapsedMs:          elapsedMs,
 			CpuMs:              cpuMs,
 			PhysicalInputBytes: physBytes,
@@ -143,7 +142,7 @@ func (a *Activities) lensPollTrinoQueries(ctx context.Context) error {
 	// poller must not re-trigger clients every 30 s (#733). A query finishing
 	// without the event ingester is caught by the client's fallback poll.
 	if anyActive {
-		if err := events.Notify(ctx, a.pool, uuid.UUID(engineID.Bytes).String(), events.KindQueries); err != nil {
+		if err := events.Notify(ctx, a.notify, uuid.UUID(engineID.Bytes).String(), events.KindQueries); err != nil {
 			logger.Warn("monitoring notify failed", "err", err)
 		}
 	}
@@ -194,7 +193,7 @@ func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
 		}
 		a.metrics.monitoring.Cluster(eng.Kind(), stats.ActiveWorkers, stats.RunningQueries, stats.QueuedQueries, stats.BlockedQueries, used)
 	}
-	if err := events.Notify(ctx, a.pool, uuid.UUID(engineID.Bytes).String(), events.KindCluster); err != nil {
+	if err := events.Notify(ctx, a.notify, uuid.UUID(engineID.Bytes).String(), events.KindCluster); err != nil {
 		a.logger.WarnContext(ctx, "monitoring notify failed", "err", err)
 	}
 	a.applyAdaptiveGate(ctx, engineID, stats)
@@ -205,7 +204,7 @@ func (a *Activities) lensPollTrinoCluster(ctx context.Context) error {
 // snapshot crosses a threshold (#551, #579). It is best effort: a missing
 // workflow (no run has needed admission yet) or a failed signal must not fail
 // the Lens poll.
-func (a *Activities) applyAdaptiveGate(ctx context.Context, engineID pgtype.UUID, stats *monitor.ClusterStats) {
+func (a *Activities) applyAdaptiveGate(ctx context.Context, engineID db.UUID, stats *monitor.ClusterStats) {
 	if a.temporalClient == nil {
 		return
 	}
@@ -301,11 +300,11 @@ func resolveCatalogRef(catalogs []connections.CatalogRef, want string) (string, 
 }
 
 func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnalyzeTableHealthParams) error {
-	var connID pgtype.UUID
+	var connID db.UUID
 	if err := connID.Scan(params.CatalogConnectionID); err != nil {
 		return err
 	}
-	var catalogID pgtype.UUID
+	var catalogID db.UUID
 	if err := catalogID.Scan(params.CatalogID); err != nil {
 		return err
 	}
@@ -422,8 +421,8 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 // or by each table's own maintenance parameters (#500).
 type healthPass struct {
 	a         *Activities
-	catalogID pgtype.UUID
-	connID    pgtype.UUID
+	catalogID db.UUID
+	connID    db.UUID
 	now       time.Time
 	policies  map[string]db.TableMaintenancePolicy
 	engine    queryengine.Engine
@@ -586,9 +585,9 @@ func allTables(ctx context.Context, r connections.MetadataReader, catalog string
 	}
 }
 
-func engineUUID(id string) pgtype.UUID {
+func engineUUID(id string) db.UUID {
 	// An unparsable id stays invalid and matches no row.
-	var out pgtype.UUID
+	var out db.UUID
 	_ = out.Scan(id)
 	return out
 }
@@ -716,7 +715,7 @@ func finishMaintenanceRun(ctx context.Context, queries monitoringStore, runID, s
 	if runID == "" {
 		return
 	}
-	var id pgtype.UUID
+	var id db.UUID
 	if err := id.Scan(runID); err != nil {
 		return
 	}
@@ -741,11 +740,11 @@ const maintenanceMaxResultRows = 10000
 // one; a planned run has no query_executions row, so it passes empty and only
 // snapshotID (its run id) identifies the snapshot. Persistence failures are
 // returned to the caller, never discarded.
-func recordMaintenanceSnapshot(ctx context.Context, queries monitoringStore, engineID pgtype.UUID, executionID, snapshotID, sql, state string, rows int64, elapsedMs int32, errMsg string) error {
-	var execID pgtype.UUID
+func recordMaintenanceSnapshot(ctx context.Context, queries monitoringStore, engineID db.UUID, executionID, snapshotID, sql, state string, rows int64, elapsedMs int32, errMsg string) error {
+	var execID db.UUID
 	if executionID != "" {
 		if err := execID.Scan(executionID); err != nil {
-			execID = pgtype.UUID{}
+			execID = db.UUID{}
 		}
 	}
 
@@ -783,7 +782,7 @@ func recordMaintenanceSnapshot(ctx context.Context, queries monitoringStore, eng
 		User:            "lens",
 		State:           state,
 		Sql:             sql,
-		CreatedAt:       pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		CreatedAt:       db.Timestamptz{Time: time.Now(), Valid: true},
 		ElapsedMs:       elapsed,
 		OutputRows:      outputRows,
 		ErrorMessage:    errorMsg,

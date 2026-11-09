@@ -8,8 +8,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -63,7 +61,7 @@ func (r *Repo) GetTableMaintenancePolicy(ctx context.Context, arg db.GetTableMai
 			UUIDString(arg.CatalogID), arg.Namespace, arg.TableName).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.TableMaintenancePolicy{}, pgx.ErrNoRows
+		return db.TableMaintenancePolicy{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.TableMaintenancePolicy{}, err
@@ -72,16 +70,16 @@ func (r *Repo) GetTableMaintenancePolicy(ctx context.Context, arg db.GetTableMai
 }
 
 // ListTableMaintenancePolicies lists every table of a catalog with parameters.
-func (r *Repo) ListTableMaintenancePolicies(ctx context.Context, catalogID pgtype.UUID) ([]db.TableMaintenancePolicy, error) {
+func (r *Repo) ListTableMaintenancePolicies(ctx context.Context, catalogID db.UUID) ([]db.TableMaintenancePolicy, error) {
 	return r.listTableMaintenancePolicies(ctx, catalogID, "")
 }
 
 // ListManagedMaintenancePolicies lists the managed tables of a catalog.
-func (r *Repo) ListManagedMaintenancePolicies(ctx context.Context, catalogID pgtype.UUID) ([]db.TableMaintenancePolicy, error) {
+func (r *Repo) ListManagedMaintenancePolicies(ctx context.Context, catalogID db.UUID) ([]db.TableMaintenancePolicy, error) {
 	return r.listTableMaintenancePolicies(ctx, catalogID, "managed")
 }
 
-func (r *Repo) listTableMaintenancePolicies(ctx context.Context, catalogID pgtype.UUID, mode string) ([]db.TableMaintenancePolicy, error) {
+func (r *Repo) listTableMaintenancePolicies(ctx context.Context, catalogID db.UUID, mode string) ([]db.TableMaintenancePolicy, error) {
 	q := r.Users.db.WithContext(ctx).Where("catalog_id = ?", UUIDString(catalogID))
 	if mode != "" {
 		q = q.Where("mode = ?", mode)
@@ -98,7 +96,7 @@ func (r *Repo) listTableMaintenancePolicies(ctx context.Context, catalogID pgtyp
 }
 
 // CreateTableMaintenancePolicy inserts the table's parameters, or returns
-// pgx.ErrNoRows when it already has some (the sqlc ON CONFLICT DO NOTHING).
+// db.ErrNoRows when it already has some (the sqlc ON CONFLICT DO NOTHING).
 func (r *Repo) CreateTableMaintenancePolicy(ctx context.Context, arg db.CreateTableMaintenancePolicyParams) (db.TableMaintenancePolicy, error) {
 	now := time.Now().UTC()
 	row := model.TableMaintenancePolicy{
@@ -144,14 +142,14 @@ func (r *Repo) CreateTableMaintenancePolicy(ctx context.Context, arg db.CreateTa
 		return db.TableMaintenancePolicy{}, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.TableMaintenancePolicy{}, pgx.ErrNoRows
+		return db.TableMaintenancePolicy{}, db.ErrNoRows
 	}
 	return toDBTableMaintenancePolicy(row), nil
 }
 
 // UpdateTableMaintenancePolicy replaces the parameters at the caller's
 // revision and bumps it. No row means the revision moved on or the table has
-// no parameters (pgx.ErrNoRows). The stored row is read in the same
+// no parameters (db.ErrNoRows). The stored row is read in the same
 // transaction as the guarded update, so another writer cannot slip between
 // them.
 func (r *Repo) UpdateTableMaintenancePolicy(ctx context.Context, arg db.UpdateTableMaintenancePolicyParams) (db.TableMaintenancePolicy, error) {
@@ -175,7 +173,7 @@ func (r *Repo) UpdateTableMaintenancePolicy(ctx context.Context, arg db.UpdateTa
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		var row model.TableMaintenancePolicy
 		if err := tx.Where("catalog_id = ? AND namespace = ? AND table_name = ?",
@@ -198,7 +196,7 @@ func (r *Repo) DeleteTableMaintenancePolicy(ctx context.Context, arg db.DeleteTa
 				UUIDString(arg.CatalogID), arg.Namespace, arg.TableName).
 			First(&row).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if err != nil {
 			return err
@@ -280,7 +278,7 @@ func (r *Repo) CreatePlannedMaintenanceRun(ctx context.Context, arg db.CreatePla
 }
 
 // ListCatalogTableHealth lists every health row of a catalog.
-func (r *Repo) ListCatalogTableHealth(ctx context.Context, catalogID pgtype.UUID) ([]db.TableHealthSnapshot, error) {
+func (r *Repo) ListCatalogTableHealth(ctx context.Context, catalogID db.UUID) ([]db.TableHealthSnapshot, error) {
 	var rows []model.TableHealthSnapshot
 	if err := r.Users.db.WithContext(ctx).
 		Where("catalog_id = ?", UUIDString(catalogID)).
@@ -296,7 +294,7 @@ func (r *Repo) ListCatalogTableHealth(ctx context.Context, catalogID pgtype.UUID
 
 // ListCatalogLastSuccessfulMaintenance is the latest finished run of each
 // operation of every table of a catalog.
-func (r *Repo) ListCatalogLastSuccessfulMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogLastSuccessfulMaintenanceRow, error) {
+func (r *Repo) ListCatalogLastSuccessfulMaintenance(ctx context.Context, catalogID db.UUID) ([]db.ListCatalogLastSuccessfulMaintenanceRow, error) {
 	runs, err := r.catalogFinishedRuns(ctx, catalogID)
 	if err != nil {
 		return nil, err
@@ -333,7 +331,7 @@ func (r *Repo) ListCatalogLastSuccessfulMaintenance(ctx context.Context, catalog
 }
 
 // ListCatalogRunningMaintenance lists the tables of a catalog with a running run.
-func (r *Repo) ListCatalogRunningMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogRunningMaintenanceRow, error) {
+func (r *Repo) ListCatalogRunningMaintenance(ctx context.Context, catalogID db.UUID) ([]db.ListCatalogRunningMaintenanceRow, error) {
 	var rows []model.MaintenanceRun
 	if err := r.Users.db.WithContext(ctx).
 		Where("catalog_id = ? AND status = ?", UUIDString(catalogID), "running").
@@ -348,7 +346,7 @@ func (r *Repo) ListCatalogRunningMaintenance(ctx context.Context, catalogID pgty
 }
 
 // ListCatalogLatestMaintenanceRuns is each table's most recent run of a catalog.
-func (r *Repo) ListCatalogLatestMaintenanceRuns(ctx context.Context, catalogID pgtype.UUID) ([]db.MaintenanceRun, error) {
+func (r *Repo) ListCatalogLatestMaintenanceRuns(ctx context.Context, catalogID db.UUID) ([]db.MaintenanceRun, error) {
 	var rows []model.MaintenanceRun
 	if err := r.Users.db.WithContext(ctx).
 		Where("catalog_id = ?", UUIDString(catalogID)).
@@ -378,7 +376,7 @@ func (r *Repo) GetAppliedCatalogRetention(ctx context.Context, arg db.GetApplied
 		Where("engine_id = ?", UUIDString(arg.EngineID)).
 		First(&cluster).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetAppliedCatalogRetentionRow{}, pgx.ErrNoRows
+		return db.GetAppliedCatalogRetentionRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetAppliedCatalogRetentionRow{}, err
@@ -388,7 +386,7 @@ func (r *Repo) GetAppliedCatalogRetention(ctx context.Context, arg db.GetApplied
 		Where("cluster_id = ? AND catalog_name = ?", string(cluster.ID), model.Text(arg.CatalogName)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetAppliedCatalogRetentionRow{}, pgx.ErrNoRows
+		return db.GetAppliedCatalogRetentionRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetAppliedCatalogRetentionRow{}, err

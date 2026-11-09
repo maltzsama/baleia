@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/activities"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -29,11 +29,11 @@ func v3Input() QueryExecutionInput {
 		WorkspaceID: "ws-1",
 		SQL:         "SELECT 1; SELECT 2",
 		Target: queryengine.Target{
-			EngineID:      pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true},
+			EngineID:      db.UUID{Bytes: [16]byte{0xE1}, Valid: true},
 			EngineKind:    "trino",
 			EngineName:    "default",
-			BindingID:     pgtype.UUID{Bytes: [16]byte{0xB1}, Valid: true},
-			CatalogID:     pgtype.UUID{Bytes: [16]byte{0xC1}, Valid: true},
+			BindingID:     db.UUID{Bytes: [16]byte{0xB1}, Valid: true},
+			CatalogID:     db.UUID{Bytes: [16]byte{0xC1}, Valid: true},
 			CatalogName:   "Sales",
 			EngineCatalog: "sales",
 			Schema:        "eu",
@@ -133,14 +133,14 @@ func TestV3_SplitsWithTheInputDialect(t *testing.T) {
 func TestV3_TwoEnginesSameWorkflow(t *testing.T) {
 	t.Parallel()
 	pg := v3Input()
-	pg.Target.EngineID = pgtype.UUID{Bytes: [16]byte{0xE2}, Valid: true}
+	pg.Target.EngineID = db.UUID{Bytes: [16]byte{0xE2}, Valid: true}
 	pg.Target.EngineKind = "postgresql"
 	pg.Dialect = "postgresql"
 	for _, in := range []QueryExecutionInput{v3Input(), pg} {
 		var ts testsuite.WorkflowTestSuite
 		env := ts.NewTestWorkflowEnvironment()
 		var dialectName string
-		var engineID pgtype.UUID
+		var engineID db.UUID
 		env.OnActivity(activities.SplitSQL, mock.Anything, mock.MatchedBy(func(p activities.SplitSQLParams) bool {
 			dialectName = p.Dialect
 			return true

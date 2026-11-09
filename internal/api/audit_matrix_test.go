@@ -11,11 +11,10 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"gorm.io/gorm"
 )
@@ -49,7 +48,7 @@ func (m *memAudit) take() []recorded {
 }
 
 type auditFixture struct {
-	pool                   *pgxpool.Pool
+	pool                   *gorm.DB
 	gdb                    *gorm.DB
 	h                      *API
 	mem                    *memAudit
@@ -64,7 +63,7 @@ func newAuditFixture(t *testing.T) *auditFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	f := &auditFixture{pool: pool, gdb: gdb, mem: &memAudit{}}
 	user := func(email, role string) string {
 		row := model.User{
@@ -88,7 +87,7 @@ func newAuditFixture(t *testing.T) *auditFixture {
 	addDefaultSpace(t, gdb, ws.ID)
 	f.ownerWS = openapi_types.UUID(repo.PGUUID(string(ws.ID)).Bytes)
 	f.h = testAPI(handlerFields{
-		queries: repo.New(gdb), pool: pool, tx: poolTx{pool: pool}, schema: poolSchema{pool: pool}, keyring: testKeyring(t), connections: testRegistry(t),
+		queries: repo.New(gdb), tx: storeTx{db: gdb}, schema: storeSchema{db: gdb}, keyring: testKeyring(t), connections: testRegistry(t),
 		settings:     SettingsFromConfig(&config.Config{JWTSecret: strings.Repeat("s", 40)}),
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
 		audit:        f.mem,
@@ -139,7 +138,7 @@ func TestAuditMatrix(t *testing.T) {
 	one(t, "connection.update by a stranger", mem.take(), audit.ConnectionUpdate, audit.Denied)
 
 	// Grants: a native catalog on the owner's connection.
-	var cat pgtype.UUID
+	var cat db.UUID
 	catalog := model.Catalog{
 		ID: model.UUID(repo.NewUUID()), ConnectionID: model.UUID(created.Id.String()),
 		Name: "lake", Origin: "native",
@@ -278,9 +277,9 @@ func TestAuditLoginFailureHashesEmail(t *testing.T) {
 	}
 }
 
-func mustUUID(t *testing.T, s string) pgtype.UUID {
+func mustUUID(t *testing.T, s string) db.UUID {
 	t.Helper()
-	var id pgtype.UUID
+	var id db.UUID
 	if err := id.Scan(s); err != nil {
 		t.Fatal(err)
 	}

@@ -18,14 +18,13 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
 func i64(v int64) *int64 { return &v }
 
 // seedUser inserts an admin user through the GORM store.
-func seedUser(t *testing.T, gdb *gorm.DB, name, email string) pgtype.UUID {
+func seedUser(t *testing.T, gdb *gorm.DB, name, email string) db.UUID {
 	t.Helper()
 	password := "x"
 	row := model.User{
@@ -39,7 +38,7 @@ func seedUser(t *testing.T, gdb *gorm.DB, name, email string) pgtype.UUID {
 }
 
 // seedConnection inserts a Polaris connection through the GORM store.
-func seedConnection(t *testing.T, gdb *gorm.DB, name string, createdBy pgtype.UUID) pgtype.UUID {
+func seedConnection(t *testing.T, gdb *gorm.DB, name string, createdBy db.UUID) db.UUID {
 	t.Helper()
 	row, err := repo.New(gdb).CreateCatalogConnection(context.Background(), db.CreateCatalogConnectionParams{
 		ID: repo.PGUUID(repo.NewUUID()), Name: name, Type: "polaris", Url: "http://p.test", CreatedBy: createdBy,
@@ -51,7 +50,7 @@ func seedConnection(t *testing.T, gdb *gorm.DB, name string, createdBy pgtype.UU
 }
 
 // seedEngine inserts a Trino engine through the GORM store.
-func seedEngine(t *testing.T, gdb *gorm.DB, name string, conn, createdBy pgtype.UUID) pgtype.UUID {
+func seedEngine(t *testing.T, gdb *gorm.DB, name string, conn, createdBy db.UUID) db.UUID {
 	t.Helper()
 	row, err := repo.New(gdb).CreateEngine(context.Background(), db.CreateEngineParams{
 		Name: name, Kind: "trino", Class: "federated", ConnectionID: conn,
@@ -65,7 +64,7 @@ func seedEngine(t *testing.T, gdb *gorm.DB, name string, conn, createdBy pgtype.
 
 // seedCatalogBinding inserts a catalog and its managed binding, on the seeded
 // Trino cluster, and returns both ids.
-func seedCatalogBinding(t *testing.T, gdb *gorm.DB, conn, engine pgtype.UUID, name string) (pgtype.UUID, pgtype.UUID) {
+func seedCatalogBinding(t *testing.T, gdb *gorm.DB, conn, engine db.UUID, name string) (db.UUID, db.UUID) {
 	t.Helper()
 	var cluster model.TrinoCluster
 	if err := gdb.Order("name").First(&cluster).Error; err != nil {
@@ -230,13 +229,13 @@ func TestReserveRuns_GlobalLimit(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	user := seedUser(t, gdb, "m", "m@maint.test")
 	conn := seedConnection(t, gdb, "src", user)
 	engConn := seedConnection(t, gdb, "eng", user)
 	engine := seedEngine(t, gdb, "e", engConn, user)
 	const catalogs, tables, limit = 4, 3, 5
-	a := &Activities{store: repo.New(gdb), pool: pool, cfg: &config.Config{MaintenanceMaxConcurrentRuns: limit}}
+	a := &Activities{store: repo.New(gdb), cfg: &config.Config{MaintenanceMaxConcurrentRuns: limit}}
 	type round struct {
 		binding    db.CatalogBinding
 		candidates []roundCandidate
@@ -253,7 +252,7 @@ func TestReserveRuns_GlobalLimit(t *testing.T) {
 	}
 	// The first catalog's first table is already running.
 	first := rounds[0].candidates[0]
-	if _, err := RecordMaintenanceRun(ctx, repo.New(gdb), first.key, rounds[0].binding, first.row, first.step, first.settings, "manual", pgtype.UUID{}); err != nil {
+	if _, err := RecordMaintenanceRun(ctx, repo.New(gdb), first.key, rounds[0].binding, first.row, first.step, first.settings, "manual", db.UUID{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -285,7 +284,7 @@ func TestReserveRuns_GlobalLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.store = repo.New(gdb)
-	if _, err := RecordMaintenanceRun(ctx, a.store, first.key, rounds[0].binding, first.row, first.step, first.settings, "manual", pgtype.UUID{}); err != nil {
+	if _, err := RecordMaintenanceRun(ctx, a.store, first.key, rounds[0].binding, first.row, first.step, first.settings, "manual", db.UUID{}); err != nil {
 		t.Fatal(err)
 	}
 	errs = make(chan error, catalogs)
@@ -317,7 +316,7 @@ func TestReserveRunsStore_DuplicateRecovery(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	user := seedUser(t, gdb, "dup", "dup@maint.test")
 	conn := seedConnection(t, gdb, "src", user)
 	engConn := seedConnection(t, gdb, "eng", user)
@@ -325,12 +324,12 @@ func TestReserveRunsStore_DuplicateRecovery(t *testing.T) {
 	catalog, binding := seedCatalogBinding(t, gdb, conn, engine, "dup_lake")
 
 	store := repo.New(gdb)
-	a := &Activities{store: store, pool: pool, cfg: &config.Config{MaintenanceMaxConcurrentRuns: 10}}
+	a := &Activities{store: store, cfg: &config.Config{MaintenanceMaxConcurrentRuns: 10}}
 
 	existing := monitoring.TableKey{CatalogID: catalog, Namespace: "cdc", Table: "t0"}
 	step := maintenance.Step{Operation: maintenance.OpExpireSnapshots, Due: true, WouldRun: true}
 	b := db.CatalogBinding{ID: binding}
-	if _, err := RecordMaintenanceRun(ctx, store, existing, b, db.TableMaintenancePolicy{}, step, maintenance.Settings{}, "manual", pgtype.UUID{}); err != nil {
+	if _, err := RecordMaintenanceRun(ctx, store, existing, b, db.TableMaintenancePolicy{}, step, maintenance.Settings{}, "manual", db.UUID{}); err != nil {
 		t.Fatal(err)
 	}
 	candidates := []roundCandidate{

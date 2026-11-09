@@ -14,8 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Tokens persists refresh tokens; *repo.Repo implements it.
@@ -23,13 +21,13 @@ type Tokens interface {
 	CreateRefreshToken(ctx context.Context, arg db.CreateRefreshTokenParams) (db.RefreshToken, error)
 	ConsumeRefreshToken(ctx context.Context, tokenHash string) (db.ConsumeRefreshTokenRow, error)
 	GetRefreshTokenByHashAny(ctx context.Context, tokenHash string) (db.RefreshToken, error)
-	RevokeRefreshFamily(ctx context.Context, familyID pgtype.UUID) error
-	RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error
+	RevokeRefreshFamily(ctx context.Context, familyID db.UUID) error
+	RevokeUserRefreshTokens(ctx context.Context, userID db.UUID) error
 }
 
 // Users loads the account a refresh token belongs to; *repo.Repo implements it.
 type Users interface {
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
 }
 
 // Config are the token settings, resolved by the caller.
@@ -78,13 +76,13 @@ func New(tokens Tokens, users Users, cfg Config) *Service {
 
 // Issue starts a session for user in a new refresh-token family.
 func (s *Service) Issue(ctx context.Context, user db.User) (Pair, error) {
-	return s.issue(ctx, user, pgtype.UUID{Bytes: uuid.New(), Valid: true})
+	return s.issue(ctx, user, db.UUID{Bytes: uuid.New(), Valid: true})
 }
 
 // IssueRefresh starts a session with only a refresh token, for a browser
 // sign-in that redirects and renews its access token afterwards (OIDC).
 func (s *Service) IssueRefresh(ctx context.Context, user db.User) (string, error) {
-	refresh, err := s.newRefresh(ctx, user, pgtype.UUID{Bytes: uuid.New(), Valid: true})
+	refresh, err := s.newRefresh(ctx, user, db.UUID{Bytes: uuid.New(), Valid: true})
 	if err != nil {
 		return "", err
 	}
@@ -96,14 +94,14 @@ func (s *Service) IssueRefresh(ctx context.Context, user db.User) (string, error
 func (s *Service) Rotate(ctx context.Context, refreshToken string) (Pair, db.User, error) {
 	hash := auth.HashRefreshToken(refreshToken)
 	rt, err := s.tokens.ConsumeRefreshToken(ctx, hash)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil && !errors.Is(err, db.ErrNoRows) {
 		return Pair{}, db.User{}, err
 	}
 	if err != nil {
 		// No live row: a revoked one with this hash means a rotated token was
 		// replayed, so the whole family goes (#51).
 		old, lookupErr := s.tokens.GetRefreshTokenByHashAny(ctx, hash)
-		if lookupErr != nil && !errors.Is(lookupErr, pgx.ErrNoRows) {
+		if lookupErr != nil && !errors.Is(lookupErr, db.ErrNoRows) {
 			return Pair{}, db.User{}, fmt.Errorf("look up refresh token: %w", lookupErr)
 		}
 		if lookupErr == nil && old.Revoked {
@@ -117,7 +115,7 @@ func (s *Service) Rotate(ctx context.Context, refreshToken string) (Pair, db.Use
 	}
 
 	user, err := s.users.GetUserByID(ctx, rt.UserID)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return Pair{}, db.User{}, ErrUserNotFound
 	}
 	if err != nil {
@@ -140,13 +138,13 @@ func (s *Service) Rotate(ctx context.Context, refreshToken string) (Pair, db.Use
 // End revokes the whole family of refreshToken. found is false, with no
 // error, when the token is unknown; a store failure is an error, so the
 // caller never reports a logout that did not happen.
-func (s *Service) End(ctx context.Context, refreshToken string) (userID pgtype.UUID, found bool, err error) {
+func (s *Service) End(ctx context.Context, refreshToken string) (userID db.UUID, found bool, err error) {
 	rt, err := s.tokens.GetRefreshTokenByHashAny(ctx, auth.HashRefreshToken(refreshToken))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return pgtype.UUID{}, false, nil
+	if errors.Is(err, db.ErrNoRows) {
+		return db.UUID{}, false, nil
 	}
 	if err != nil {
-		return pgtype.UUID{}, false, fmt.Errorf("look up refresh token: %w", err)
+		return db.UUID{}, false, fmt.Errorf("look up refresh token: %w", err)
 	}
 	// A client disconnect must not cancel the revoke halfway (#370).
 	if err := s.tokens.RevokeRefreshFamily(context.WithoutCancel(ctx), rt.FamilyID); err != nil {
@@ -158,13 +156,13 @@ func (s *Service) End(ctx context.Context, refreshToken string) (userID pgtype.U
 // RevokeAll ends every session of a user after a security-relevant change;
 // access tokens already issued expire within the access TTL. A failure is
 // logged, not returned: the triggering change already succeeded.
-func (s *Service) RevokeAll(ctx context.Context, userID pgtype.UUID) {
+func (s *Service) RevokeAll(ctx context.Context, userID db.UUID) {
 	if err := s.tokens.RevokeUserRefreshTokens(ctx, userID); err != nil {
 		s.logger.ErrorContext(ctx, "RevokeUserRefreshTokens failed", "user_id", userID.String(), "err", err)
 	}
 }
 
-func (s *Service) issue(ctx context.Context, user db.User, family pgtype.UUID) (Pair, error) {
+func (s *Service) issue(ctx context.Context, user db.User, family db.UUID) (Pair, error) {
 	access, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, s.cfg.JWTSecret, s.cfg.AccessTTL)
 	if err != nil {
 		return Pair{}, err
@@ -176,7 +174,7 @@ func (s *Service) issue(ctx context.Context, user db.User, family pgtype.UUID) (
 	return Pair{AccessToken: access, RefreshToken: refresh, ExpiresAt: time.Now().Add(s.cfg.AccessTTL)}, nil
 }
 
-func (s *Service) newRefresh(ctx context.Context, user db.User, family pgtype.UUID) (string, error) {
+func (s *Service) newRefresh(ctx context.Context, user db.User, family db.UUID) (string, error) {
 	refresh, hash, err := auth.GenerateRefreshToken()
 	if err != nil {
 		return "", err
@@ -184,7 +182,7 @@ func (s *Service) newRefresh(ctx context.Context, user db.User, family pgtype.UU
 	if _, err := s.tokens.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		TokenHash: hash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(s.cfg.RefreshTTL), Valid: true},
+		ExpiresAt: db.Timestamptz{Time: time.Now().Add(s.cfg.RefreshTTL), Valid: true},
 		FamilyID:  family,
 	}); err != nil {
 		return "", err

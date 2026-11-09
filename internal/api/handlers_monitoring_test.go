@@ -11,8 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/fake"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -24,7 +22,7 @@ type snapshotFake struct {
 
 // GetEngineByID puts the engine on the fake's connection, so the engine
 // access check passes.
-func (q snapshotFake) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+func (q snapshotFake) GetEngineByID(_ context.Context, id db.UUID) (db.Engine, error) {
 	return db.Engine{ID: id, Name: "default", Kind: "trino", ConnectionID: q.conn.ID, Enabled: true}, nil
 }
 
@@ -40,7 +38,7 @@ func TestQueryClassFallback(t *testing.T) {
 	if got := queryClass(map[string]string{}, map[string]string{"q1": "heavy"}, row); got == nil || *got != "heavy" {
 		t.Errorf("class by query id = %v", got)
 	}
-	row.ExecutionID = pgtype.UUID{Bytes: [16]byte{0xE2}, Valid: true}
+	row.ExecutionID = db.UUID{Bytes: [16]byte{0xE2}, Valid: true}
 	if got := queryClass(map[string]string{"e2000000-0000-0000-0000-000000000000": "interactive"}, map[string]string{"q1": "heavy"}, row); got == nil || *got != "interactive" {
 		t.Errorf("class by execution id = %v", got)
 	}
@@ -84,7 +82,7 @@ func TestMonitoringQuery_LookupErrors(t *testing.T) {
 	admin := ctxAs(ownerID, "admin")
 	engine := [16]byte{0xE1}
 
-	h.queries = snapshotFake{authzFake: q, err: pgx.ErrNoRows}
+	h.queries = snapshotFake{authzFake: q, err: db.ErrNoRows}
 	h.access = wsaccess.New(h.queries)
 	h.topology = topology.New(h.queries)
 	h.monitor = monitoring.New(h.queries)
@@ -110,7 +108,7 @@ func TestMonitoringQuery_LookupErrors(t *testing.T) {
 // brokenCatalogLookup fails the catalog lookup.
 type brokenCatalogLookup struct{ *authzFake }
 
-func (brokenCatalogLookup) GetCatalogByID(context.Context, pgtype.UUID) (db.Catalog, error) {
+func (brokenCatalogLookup) GetCatalogByID(context.Context, db.UUID) (db.Catalog, error) {
 	return db.Catalog{}, errors.New("connection reset")
 }
 
@@ -140,8 +138,8 @@ func TestCatalogForMonitoring_LookupFailureIsAnError(t *testing.T) {
 // catalogBindings lists one enabled binding for the fake's catalog.
 type catalogBindings struct{ *authzFake }
 
-func (q catalogBindings) ListBindingsByCatalog(_ context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error) {
-	return []db.CatalogBinding{{ID: pgtype.UUID{Bytes: [16]byte{0xB0}, Valid: true}, CatalogID: catalogID, EngineID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Enabled: true}}, nil
+func (q catalogBindings) ListBindingsByCatalog(_ context.Context, catalogID db.UUID) ([]db.CatalogBinding, error) {
+	return []db.CatalogBinding{{ID: db.UUID{Bytes: [16]byte{0xB0}, Valid: true}, CatalogID: catalogID, EngineID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Enabled: true}}, nil
 }
 
 // TestCreateMaintenanceRun_RejectsForeignBinding: an explicit binding_id that

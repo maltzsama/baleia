@@ -6,7 +6,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 // errNoKeyring means BALEIA_ENCRYPTION_KEY is not configured, so credentials
@@ -18,7 +18,7 @@ var errNoKeyring = errors.New("BALEIA_ENCRYPTION_KEY is not configured")
 // connection credentials. A nil value yields a nil result, so a missing field
 // preserves whatever secret is already stored. The returned string is always an
 // envelope bound to connID — never plaintext.
-func encodeCredentials(kr *crypto.Keyring, creds any, connID pgtype.UUID) (*string, error) {
+func encodeCredentials(kr *crypto.Keyring, creds any, connID db.UUID) (*string, error) {
 	if creds == nil {
 		return nil, nil
 	}

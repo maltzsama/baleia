@@ -15,7 +15,7 @@ import (
 	"sync"
 
 	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 var (
@@ -83,8 +83,8 @@ type BindingSpec struct {
 // EngineRef names the engine a binder acts on. ClusterID is the Trino
 // binder's registry key (trino_clusters, the plugin contract).
 type EngineRef struct {
-	ID        pgtype.UUID
-	ClusterID pgtype.UUID
+	ID        db.UUID
+	ClusterID db.UUID
 }
 
 // Binder materializes bindings in one engine kind.

@@ -6,8 +6,6 @@ import (
 	"sync"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // lifecycleFake is the binding-lifecycle part of the database (#38) for
@@ -37,7 +35,7 @@ func (f *lifecycleFake) track(b db.CatalogBinding) db.CatalogBinding {
 	return b
 }
 
-func (f *lifecycleFake) current(id pgtype.UUID) (db.CatalogBinding, bool) {
+func (f *lifecycleFake) current(id db.UUID) (db.CatalogBinding, bool) {
 	f.lmu.Lock()
 	defer f.lmu.Unlock()
 	f.init()
@@ -63,7 +61,7 @@ func (f *lifecycleFake) TransitionBinding(ctx context.Context, a db.TransitionBi
 	f.init()
 	b, ok := f.tracked[a.ID.Bytes]
 	if !ok || !slices.Contains(a.FromStates, b.LifecycleState) {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+		return db.CatalogBinding{}, db.ErrNoRows
 	}
 	b.LifecycleState, b.LastErrorCode, b.LastErrorMessage = a.ToState, a.ErrorCode, a.ErrorMessage
 	if a.EngineCatalogName != nil {
@@ -76,10 +74,10 @@ func (f *lifecycleFake) TransitionBinding(ctx context.Context, a db.TransitionBi
 	return b, nil
 }
 
-func (f *lifecycleFake) GetBindingStatus(_ context.Context, id pgtype.UUID) (db.BindingStatusV, error) {
+func (f *lifecycleFake) GetBindingStatus(_ context.Context, id db.UUID) (db.BindingStatusV, error) {
 	b, ok := f.current(id)
 	if !ok {
-		return db.BindingStatusV{}, pgx.ErrNoRows
+		return db.BindingStatusV{}, db.ErrNoRows
 	}
 	status := map[string]string{"error": "error", "deprovisioning": "disabled", "disabled": "disabled", "provisioning": "pending", "updating": "pending"}[b.LifecycleState]
 	if status == "" {
@@ -97,7 +95,7 @@ func (f *lifecycleFake) GetTrinoCatalogRegistryState(_ context.Context, a db.Get
 	f.init()
 	v, ok := f.versions[a.CatalogName]
 	if !ok {
-		return db.GetTrinoCatalogRegistryStateRow{}, pgx.ErrNoRows
+		return db.GetTrinoCatalogRegistryStateRow{}, db.ErrNoRows
 	}
 	by := "trino"
 	if f.unconfirmed {
@@ -115,10 +113,10 @@ func (f *lifecycleFake) GetManagedBindingOfCatalog(_ context.Context, a db.GetMa
 			return b, nil
 		}
 	}
-	return db.CatalogBinding{}, pgx.ErrNoRows
+	return db.CatalogBinding{}, db.ErrNoRows
 }
 
-func (f *lifecycleFake) ManagedBindingNamesOfEngine(context.Context, pgtype.UUID) ([]string, error) {
+func (f *lifecycleFake) ManagedBindingNamesOfEngine(context.Context, db.UUID) ([]string, error) {
 	f.lmu.Lock()
 	defer f.lmu.Unlock()
 	var out []string
@@ -148,7 +146,7 @@ func (f *lifecycleFake) UpsertAdoptedBinding(context.Context, db.UpsertAdoptedBi
 	return nil
 }
 
-func (f *lifecycleFake) ObservedManagedNamesOfEngine(context.Context, pgtype.UUID) ([]string, error) {
+func (f *lifecycleFake) ObservedManagedNamesOfEngine(context.Context, db.UUID) ([]string, error) {
 	return nil, nil
 }
 

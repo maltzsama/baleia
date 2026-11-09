@@ -15,7 +15,7 @@ import (
 // with empty strings for NULLs, and the cursor round-trips.
 func TestPostgres_EventsAndCursor(t *testing.T) {
 	t.Parallel()
-	q := repo.New(testdb.GORM(t, testdb.New(t)))
+	q := repo.New(testdb.New(t))
 	ctx := context.Background()
 	// Seed directly: the recorder is best-effort with a 200ms write budget,
 	// which is unrelated to the cursor semantics under test and can time out

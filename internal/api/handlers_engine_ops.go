@@ -10,7 +10,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/engines/manage"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestEngine — POST /engines/{id}/test (#110). Runs the checks on the
@@ -20,7 +19,7 @@ func (h *CatalogHandlers) TestEngine(ctx context.Context, request TestEngineRequ
 	if err != nil {
 		return TestEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	_, _, err = h.authz().Engine(ctx, p, id, authz.ActWrite)
 	if errors.Is(err, authz.ErrNotFound) {
 		return TestEngine404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
@@ -127,7 +126,7 @@ func (h *CatalogHandlers) ListEngineObservations(ctx context.Context, request Li
 	if err != nil {
 		return ListEngineObservations401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	if _, _, err := h.authz().Engine(ctx, p, id, authz.ActRead); errors.Is(err, authz.ErrNotFound) {
 		return ListEngineObservations404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
 	} else if err != nil {
@@ -157,7 +156,7 @@ func (h *CatalogHandlers) GetEngineImpact(ctx context.Context, request GetEngine
 	if err != nil {
 		return GetEngineImpact401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	if _, _, err := h.authz().Engine(ctx, p, id, authz.ActRead); errors.Is(err, authz.ErrNotFound) {
 		return GetEngineImpact404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
 	} else if err != nil {
@@ -185,7 +184,7 @@ func (h *CatalogHandlers) DiscoverEngineCatalogs(ctx context.Context, request Di
 	if err != nil {
 		return DiscoverEngineCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	eng, conn, err := h.authz().Engine(ctx, p, id, authz.ActWrite)
 	switch {
 	case errors.Is(err, authz.ErrNotFound):
@@ -222,7 +221,7 @@ func (h *CatalogHandlers) DiscoverEngineCatalogs(ctx context.Context, request Di
 
 	added := make([]string, 0)
 	unchanged := make([]string, 0)
-	var addedIDs []pgtype.UUID
+	var addedIDs []db.UUID
 	err = h.inTx(ctx, func(q db.Querier) error {
 		for _, name := range names {
 			if _, ok := seen[name]; ok {
@@ -274,7 +273,7 @@ func (h *CatalogHandlers) GetReconcileRun(ctx context.Context, request GetReconc
 	if err := p.RequireAdmin(); err != nil {
 		return GetReconcileRun403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
-	row, err := h.engineAdmin.ReconcileRun(ctx, pgtype.UUID{Bytes: request.Id, Valid: true}, pgtype.UUID{Bytes: request.RunId, Valid: true})
+	row, err := h.engineAdmin.ReconcileRun(ctx, db.UUID{Bytes: request.Id, Valid: true}, db.UUID{Bytes: request.RunId, Valid: true})
 	switch {
 	case errors.Is(err, manage.ErrNotFound):
 		return GetReconcileRun404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil

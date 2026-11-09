@@ -12,7 +12,7 @@ The chart does not install Baleia's dependencies. Before installing, have:
 
 | Dependency | Setting |
 |---|---|
-| A database for Baleia's own data: PostgreSQL (CI and the dev stacks run 18), or MySQL 8 / MariaDB with `BALEIA_STORE_BACKEND=mysql` | `DATABASE_URL` (secret), `BALEIA_STORE_BACKEND` |
+| A database for Baleia's own data: PostgreSQL (CI and the dev stacks run 18), or MySQL 8 / MariaDB (the `DATABASE_URL` DSN selects the dialector) | `DATABASE_URL` (secret) |
 | [Temporal](https://temporal.io) (self-hosted or Temporal Cloud) | `config.TEMPORAL_HOST` |
 | S3-compatible object storage for query results | `config.S3_ENDPOINT`, `config.S3_BUCKET`, `config.S3_REGION`, `config.S3_USE_SSL`; `S3_ACCESS_KEY` and `S3_SECRET_KEY` (secret) |
 | SMTP, for invitations and password resets (optional) | `config.SMTP_*`; `SMTP_PASSWORD` (secret) |
@@ -26,7 +26,7 @@ Put the credentials in a Secret and name it in `existingSecret`. These keys are 
 |---|---|
 | `JWT_SECRET` | Signs sessions |
 | `BALEIA_ENCRYPTION_KEY` | Seals stored connection credentials; at least 32 characters, different from `JWT_SECRET` |
-| `DATABASE_URL` | Baleia's store (PostgreSQL by default; the MySQL/MariaDB DSN with `BALEIA_STORE_BACKEND=mysql`) |
+| `DATABASE_URL` | Baleia's store; the DSN selects PostgreSQL or the MySQL/MariaDB go-sql-driver DSN |
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Result storage |
 
 With the in-chart Trino, add `BALEIA_TRINO_DB_PASSWORD`, which the catalog-store plugin uses to read the catalog registry. See [Secrets](secrets.md) for key rotation and the optional keys.

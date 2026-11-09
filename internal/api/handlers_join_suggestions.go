@@ -5,8 +5,6 @@ import (
 	"errors"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // joinSuggestionLimit bounds one suggestion list. The editor only needs the
@@ -93,11 +91,11 @@ func (h *CatalogHandlers) ListJoinSuggestions(ctx context.Context, request ListJ
 
 // grantedTable loads a live table of a catalog granted to the workspace. A
 // missing, foreign or removed table is notFound, never an error.
-func (h *CatalogHandlers) grantedTable(ctx context.Context, ws pgtype.UUID, id [16]byte) (db.GetGrantedMetadataTableRow, bool, error) {
+func (h *CatalogHandlers) grantedTable(ctx context.Context, ws db.UUID, id [16]byte) (db.GetGrantedMetadataTableRow, bool, error) {
 	t, err := h.workbenchReader().GetGrantedMetadataTable(ctx, db.GetGrantedMetadataTableParams{
-		WorkspaceID: ws, TableID: pgtype.UUID{Bytes: id, Valid: true},
+		WorkspaceID: ws, TableID: db.UUID{Bytes: id, Valid: true},
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return t, true, nil
 	}
 	if err != nil {

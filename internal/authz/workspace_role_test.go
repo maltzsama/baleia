@@ -7,13 +7,12 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestRequireWorkspaceRole(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	newID := func() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+	newID := func() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 	ws, viewer, editor, admin, outsider, agent := newID(), newID(), newID(), newID(), newID(), newID()
 	st := store{
 		wss: map[[16]byte]db.Workspace{ws.Bytes: {ID: ws}},
@@ -25,7 +24,7 @@ func TestRequireWorkspaceRole(t *testing.T) {
 		agentBound: map[[2][16]byte]bool{{agent.Bytes, ws.Bytes}: true},
 	}
 	c := New(st)
-	user := func(id pgtype.UUID) Principal { return Principal{UserID: id, Role: "member"} }
+	user := func(id db.UUID) Principal { return Principal{UserID: id, Role: "member"} }
 	cases := []struct {
 		name string
 		p    Principal

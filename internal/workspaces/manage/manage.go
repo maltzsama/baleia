@@ -14,18 +14,16 @@ import (
 	"unicode"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Reader reads workspaces, grants and what depends on them; *repo.Repo
 // implements it.
 type Reader interface {
-	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]db.Workspace, error)
-	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (db.Workspace, error)
-	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error)
-	CountWorkspaceRunningExecutions(ctx context.Context, workspaceID pgtype.UUID) (int64, error)
-	CountWorkspaceImpact(ctx context.Context, workspaceID pgtype.UUID) (db.CountWorkspaceImpactRow, error)
+	ListWorkspacesByUser(ctx context.Context, ownerUserID db.UUID) ([]db.Workspace, error)
+	GetWorkspaceByID(ctx context.Context, id db.UUID) (db.Workspace, error)
+	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error)
+	CountWorkspaceRunningExecutions(ctx context.Context, workspaceID db.UUID) (int64, error)
+	CountWorkspaceImpact(ctx context.Context, workspaceID db.UUID) (db.CountWorkspaceImpactRow, error)
 	CountCatalogAccessImpact(ctx context.Context, arg db.CountCatalogAccessImpactParams) (db.CountCatalogAccessImpactRow, error)
 }
 
@@ -33,7 +31,7 @@ type Reader interface {
 // implements it.
 type Writer interface {
 	CreateWorkspace(ctx context.Context, arg db.CreateWorkspaceParams) (db.Workspace, error)
-	DeleteWorkspace(ctx context.Context, id pgtype.UUID) (int64, error)
+	DeleteWorkspace(ctx context.Context, id db.UUID) (int64, error)
 	UpsertWorkspaceCatalogGrant(ctx context.Context, arg db.UpsertWorkspaceCatalogGrantParams) (db.WorkspaceCatalogGrant, error)
 }
 
@@ -76,14 +74,14 @@ type Service struct {
 func New(store Store, tx Tx) *Service { return &Service{store: store, tx: tx} }
 
 // ListForUser returns the workspaces userID belongs to.
-func (s *Service) ListForUser(ctx context.Context, userID pgtype.UUID) ([]db.Workspace, error) {
+func (s *Service) ListForUser(ctx context.Context, userID db.UUID) ([]db.Workspace, error) {
 	return s.store.ListWorkspacesByUser(ctx, userID)
 }
 
 // Get returns a workspace.
-func (s *Service) Get(ctx context.Context, id pgtype.UUID) (db.Workspace, error) {
+func (s *Service) Get(ctx context.Context, id db.UUID) (db.Workspace, error) {
 	w, err := s.store.GetWorkspaceByID(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.Workspace{}, ErrNotFound
 	}
 	return w, err
@@ -95,8 +93,8 @@ type NewWorkspace struct {
 	Name        string
 	Description *string
 	Type        string
-	OwnerUser   pgtype.UUID
-	OwnerTeam   pgtype.UUID
+	OwnerUser   db.UUID
+	OwnerTeam   db.UUID
 }
 
 // Create stores a workspace, with a Polaris catalog name derived from its
@@ -115,7 +113,7 @@ func (s *Service) Create(ctx context.Context, n NewWorkspace) (db.Workspace, err
 // Default changes a workspace's default target: a valid Binding sets it,
 // an invalid one clears it.
 type Default struct {
-	Binding pgtype.UUID
+	Binding db.UUID
 	Schema  *string
 }
 
@@ -178,7 +176,7 @@ func (s *Service) Delete(ctx context.Context, ws db.Workspace) error {
 }
 
 // Grants lists the catalogs granted to a workspace.
-func (s *Service) Grants(ctx context.Context, ws pgtype.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
+func (s *Service) Grants(ctx context.Context, ws db.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
 	return s.store.ListWorkspaceCatalogGrants(ctx, ws)
 }
 
@@ -186,13 +184,13 @@ func (s *Service) Grants(ctx context.Context, ws pgtype.UUID) ([]db.ListWorkspac
 // they) reach it; granting it again refreshes who granted it. The link carries
 // no read/write level: the catalog manager decides what each member may read
 // or write in it (#651).
-func (s *Service) Grant(ctx context.Context, ws, catalogID pgtype.UUID, by pgtype.UUID) (db.WorkspaceCatalogGrant, error) {
+func (s *Service) Grant(ctx context.Context, ws, catalogID db.UUID, by db.UUID) (db.WorkspaceCatalogGrant, error) {
 	return s.store.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{WorkspaceID: ws, CatalogID: catalogID, GrantedBy: by})
 }
 
 // Revoke removes a grant and, in the same transaction, a default target on
 // its catalog.
-func (s *Service) Revoke(ctx context.Context, ws, catalogID pgtype.UUID) error {
+func (s *Service) Revoke(ctx context.Context, ws, catalogID db.UUID) error {
 	var n int64
 	err := s.tx(ctx, func(q TxStore) error {
 		var err error
@@ -211,13 +209,13 @@ func (s *Service) Revoke(ctx context.Context, ws, catalogID pgtype.UUID) error {
 }
 
 // Impact counts what deleting a workspace affects.
-func (s *Service) Impact(ctx context.Context, ws pgtype.UUID) (db.CountWorkspaceImpactRow, error) {
+func (s *Service) Impact(ctx context.Context, ws db.UUID) (db.CountWorkspaceImpactRow, error) {
 	return s.store.CountWorkspaceImpact(ctx, ws)
 }
 
 // CatalogAccessImpact counts what revoking a catalog from a workspace
 // affects.
-func (s *Service) CatalogAccessImpact(ctx context.Context, ws, catalogID pgtype.UUID) (db.CountCatalogAccessImpactRow, error) {
+func (s *Service) CatalogAccessImpact(ctx context.Context, ws, catalogID db.UUID) (db.CountCatalogAccessImpactRow, error) {
 	return s.store.CountCatalogAccessImpact(ctx, db.CountCatalogAccessImpactParams{WorkspaceID: ws, CatalogID: catalogID})
 }
 

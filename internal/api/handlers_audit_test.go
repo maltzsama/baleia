@@ -17,7 +17,7 @@ import (
 func TestAuditList_Scoping(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	rec := audit.NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
 	const alice, bob = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
 	as := func(user string) context.Context {
