@@ -383,6 +383,42 @@ func TestTableMaintenance_RunsAndPlans(t *testing.T) {
 	}
 }
 
+// TestCreateMaintenanceRun_WorkflowGetsRowID: the legacy run must start
+// MaintenanceRunWorkflow with the recorded row's id, so the activity can
+// close it. A fresh uuid leaves the row running and blocks the next run
+// (#883).
+func TestCreateMaintenanceRun_WorkflowGetsRowID(t *testing.T) {
+	t.Parallel()
+	f := newMaintenanceFixture(t, "managed")
+	tc := f.h.temporalClient.(*fakeTemporalClient)
+
+	resp, err := f.h.CreateMaintenanceRun(f.admin, CreateMaintenanceRunRequestObject{
+		CatalogId: f.catalog(),
+		Body: &CreateMaintenanceRequest{
+			Namespace: "cdc", Table: "orders",
+			Operations: []string{"optimize", "expire_snapshots", "remove_orphan_files"},
+			Retention:  ptrTo("7d"),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, ok := resp.(CreateMaintenanceRun202JSONResponse)
+	if !ok {
+		t.Fatalf("CreateMaintenanceRun = %T, want 202", resp)
+	}
+	if len(tc.started) == 0 {
+		t.Fatal("no workflow was started")
+	}
+	got, ok := tc.started[0].(string)
+	if !ok {
+		t.Fatalf("first workflow arg = %T, want string", tc.started[0])
+	}
+	if got != run.Id.String() {
+		t.Fatalf("workflow run id = %q, want the recorded row id %q", got, run.Id.String())
+	}
+}
+
 // TestTableMaintenance_Analyze: analyze now accepts an enabled Iceberg
 // catalog and refuses an unknown one.
 func TestTableMaintenance_Analyze(t *testing.T) {
