@@ -9,7 +9,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -108,5 +111,49 @@ func testMySQLRunner(t *testing.T, env string) {
 	}
 	if db.Migrator().HasTable(&runnerTestRow{}) {
 		t.Fatal("migration table survived the rollback")
+	}
+}
+
+// TestMySQLAllMigrationsExpandTypeCheck runs the real migration registry (not
+// the one-migration test registry) against MySQL and MariaDB, so migration 6
+// exercises its single-statement constraint replacement on both dialects and
+// the expanded list is accepted while an unknown kind is still rejected.
+func TestMySQLAllMigrationsExpandTypeCheck(t *testing.T) {
+	t.Parallel()
+	for _, env := range []string{"BALEIA_TEST_MYSQL_URL", "BALEIA_TEST_MARIADB_URL"} {
+		t.Run(env, func(t *testing.T) {
+			t.Parallel()
+			testMySQLAllMigrations(t, env)
+		})
+	}
+}
+
+func testMySQLAllMigrations(t *testing.T, env string) {
+	t.Helper()
+	ctx := context.Background()
+	db := openMySQLTestStore(t, env)
+	reg, err := AllMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewRunner(db, reg, slog.New(slog.DiscardHandler)).Up(ctx); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	now := time.Now().UTC()
+	for _, kind := range []string{"bigquery", "system", "delta"} {
+		row := model.CatalogConnection{
+			ID: model.UUID(uuid.NewString()), Name: model.Text("check-" + kind),
+			Type: kind, URL: "", Config: model.JSON(`{}`), CreatedAt: now, UpdatedAt: now,
+		}
+		if err := db.Create(&row).Error; err != nil {
+			t.Errorf("%s: the expanded type check rejected a declared kind: %v", kind, err)
+		}
+	}
+	bad := model.CatalogConnection{
+		ID: model.UUID(uuid.NewString()), Name: model.Text("check-unknown"),
+		Type: "not-a-kind", URL: "", Config: model.JSON(`{}`), CreatedAt: now, UpdatedAt: now,
+	}
+	if err := db.Create(&bad).Error; err == nil {
+		t.Error("the type check accepted an unknown kind")
 	}
 }

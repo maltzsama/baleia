@@ -129,6 +129,15 @@ func TestAllMigrationsUpgradeFromVersionOne(t *testing.T) {
 	if err := db.Migrator().DropColumn(&model.CatalogConnection{}, "access_mode"); err != nil {
 		t.Fatalf("drop access_mode: %v", err)
 	}
+	// Replace the constraint with the older, narrower one so migration 6 has to
+	// expand it instead of finding the current model's list already in place.
+	if err := db.Exec("ALTER TABLE catalog_connections DROP CONSTRAINT catalog_connections_type_check").Error; err != nil {
+		t.Fatalf("drop current type check: %v", err)
+	}
+	oldCheck := "type = ANY (ARRAY['polaris'::text, 'nessie'::text, 'iceberg'::text, 'lakekeeper'::text, 'unity'::text, 'hive'::text, 'glue'::text, 'postgresql'::text, 'mysql'::text, 'mariadb'::text, 'sqlserver'::text, 'oracle'::text, 'sqlite'::text, 'clickhouse'::text, 'flightsql'::text, 'trino'::text, 'doris'::text, 'starrocks'::text])"
+	if err := db.Exec("ALTER TABLE catalog_connections ADD CONSTRAINT catalog_connections_type_check CHECK (" + oldCheck + ")").Error; err != nil {
+		t.Fatalf("add old type check: %v", err)
+	}
 
 	reg, err := AllMigrations()
 	if err != nil {
