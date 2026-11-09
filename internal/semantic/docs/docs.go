@@ -12,8 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Reader reads docs and tags; *repo.Repo implements it.
@@ -60,7 +58,7 @@ func (e *InvalidTagsError) Error() string { return e.Msg }
 
 // ConflictError: the doc changed since the client loaded it.
 type ConflictError struct {
-	UpdatedBy pgtype.UUID
+	UpdatedBy db.UUID
 	UpdatedAt time.Time
 }
 
@@ -68,8 +66,8 @@ func (e *ConflictError) Error() string { return "docs: the doc changed since you
 
 // Key names a documented table, or one of its columns when Column is set.
 type Key struct {
-	WorkspaceID pgtype.UUID
-	CatalogID   pgtype.UUID
+	WorkspaceID db.UUID
+	CatalogID   db.UUID
 	Namespace   []string
 	Table       string
 	// Column is nil for a table-level doc; an empty name means nil.
@@ -94,7 +92,7 @@ func (s *Service) Get(ctx context.Context, k Key) (db.SemanticDoc, error) {
 	d, err := s.store.GetSemanticDoc(ctx, db.GetSemanticDocParams{
 		WorkspaceID: k.WorkspaceID, CatalogID: k.CatalogID, Namespace: k.Namespace, TableName: k.Table, ColumnName: k.column(),
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.SemanticDoc{}, ErrNotFound
 	}
 	return d, err
@@ -112,7 +110,7 @@ func (s *Service) ListForTable(ctx context.Context, k Key) ([]db.SemanticDoc, er
 type Edit struct {
 	Description string
 	Tags        *[]string
-	Owner       pgtype.UUID
+	Owner       db.UUID
 	Certified   *bool
 	// ExpectedUpdatedAt rejects the write when the doc changed after it.
 	ExpectedUpdatedAt *time.Time
@@ -121,7 +119,7 @@ type Edit struct {
 // Upsert writes the doc at k as actor. canCertify says whether the actor may
 // certify. certificationChanged reports a certify or uncertify, for the audit
 // trail.
-func (s *Service) Upsert(ctx context.Context, k Key, e Edit, actor pgtype.UUID, canCertify bool) (doc db.SemanticDoc, certificationChanged bool, err error) {
+func (s *Service) Upsert(ctx context.Context, k Key, e Edit, actor db.UUID, canCertify bool) (doc db.SemanticDoc, certificationChanged bool, err error) {
 	if utf8.RuneCountInString(e.Description) > MaxDescription {
 		return db.SemanticDoc{}, false, ErrDescriptionTooLong
 	}
@@ -190,7 +188,7 @@ func (s *Service) Search(ctx context.Context, q db.SearchSemanticDocsParams) ([]
 }
 
 // Tags lists the workspace's tags matching the prefix q, with their counts.
-func (s *Service) Tags(ctx context.Context, ws pgtype.UUID, q string, limit int32) ([]db.ListSemanticTagsRow, error) {
+func (s *Service) Tags(ctx context.Context, ws db.UUID, q string, limit int32) ([]db.ListSemanticTagsRow, error) {
 	return s.store.ListSemanticTags(ctx, db.ListSemanticTagsParams{WorkspaceID: ws, Q: strings.ToLower(strings.TrimSpace(q)), Lim: limit})
 }
 

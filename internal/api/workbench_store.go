@@ -5,14 +5,13 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // workbenchReads are the workbench reads that have a GORM path (#770): the
 // agent lookup of a run, the Trino profile of a statement, and the join
 // suggestions of two tables. *repo.Repo implements it.
 type workbenchReads interface {
-	GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, error)
+	GetAgentByID(ctx context.Context, id db.UUID) (db.Agent, error)
 	GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string) (db.TrinoQuerySnapshot, error)
 	ListJoinSuggestions(ctx context.Context, arg db.ListJoinSuggestionsParams) ([]db.ListJoinSuggestionsRow, error)
 	ListForeignKeyJoinSuggestions(ctx context.Context, arg db.ListForeignKeyJoinSuggestionsParams) ([]db.ListForeignKeyJoinSuggestionsRow, error)

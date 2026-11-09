@@ -10,42 +10,6 @@ import (
 	"gorm.io/driver/postgres"
 )
 
-func TestParseBackend(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		in      string
-		want    Backend
-		wantErr bool
-	}{
-		{name: "empty defaults to postgres", in: "", want: Postgres},
-		{name: "postgres", in: "postgres", want: Postgres},
-		{name: "postgresql alias", in: "postgresql", want: Postgres},
-		{name: "case insensitive", in: "POSTGRES", want: Postgres},
-		{name: "mysql", in: "mysql", want: MySQL},
-		{name: "mariadb alias", in: "mariadb", want: MySQL},
-		{name: "unsupported", in: "oracle", wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got, err := ParseBackend(tt.in)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("ParseBackend(%q) = %q, want error", tt.in, got)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("ParseBackend(%q): %v", tt.in, err)
-			}
-			if got != tt.want {
-				t.Fatalf("ParseBackend(%q) = %q, want %q", tt.in, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestBackendFromDSN(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -77,26 +41,6 @@ func TestBackendFromDSN(t *testing.T) {
 				t.Fatalf("BackendFromDSN(%q) = %q, want %q", tt.dsn, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestResolveBackendPrefersConfigured(t *testing.T) {
-	t.Parallel()
-	// An explicit backend wins even when the DSN looks like the other one.
-	got, err := ResolveBackend("mysql", "postgres://u:p@localhost/db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != MySQL {
-		t.Fatalf("ResolveBackend = %q, want mysql", got)
-	}
-
-	got, err = ResolveBackend("", "postgres://u:p@localhost/db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != Postgres {
-		t.Fatalf("ResolveBackend = %q, want postgres", got)
 	}
 }
 

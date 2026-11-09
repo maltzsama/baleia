@@ -6,9 +6,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity/users"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (h *AuthHandlers) ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error) {
@@ -76,14 +75,14 @@ func (h *AuthHandlers) InviteUser(ctx context.Context, request InviteUserRequest
 }
 
 func (h *AuthHandlers) UpdateUserRole(ctx context.Context, request UpdateUserRoleRequestObject) (UpdateUserRoleResponseObject, error) {
-	ev := audit.Event{Action: audit.UserRoleChange, ResourceType: "user", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ev := audit.Event{Action: audit.UserRoleChange, ResourceType: "user", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true})}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return UpdateUserRole403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	var uid pgtype.UUID
+	var uid db.UUID
 	uid.Bytes = request.Id
 	uid.Valid = true
 
@@ -108,14 +107,14 @@ func (h *AuthHandlers) UpdateUserRole(ctx context.Context, request UpdateUserRol
 }
 
 func (h *AuthHandlers) RemoveUser(ctx context.Context, request RemoveUserRequestObject) (RemoveUserResponseObject, error) {
-	ev := audit.Event{Action: audit.UserDisable, ResourceType: "user", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ev := audit.Event{Action: audit.UserDisable, ResourceType: "user", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true})}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return RemoveUser403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	var uid pgtype.UUID
+	var uid db.UUID
 	uid.Bytes = request.Id
 	uid.Valid = true
 
@@ -139,8 +138,8 @@ func (h *AuthHandlers) RemoveUser(ctx context.Context, request RemoveUserRequest
 // still referenced: a workspace the user owns (every user who has logged in
 // owns a personal one) keeps its content, so the removal is refused.
 func removeUserConflict(err error) (ConflictJSONResponse, bool) {
-	var pg *pgconn.PgError
-	if !errors.As(err, &pg) || !isFKViolation(pg) {
+	pg, ok := db.AsPGError(err)
+	if !ok || !isFKViolation(pg) {
 		return ConflictJSONResponse{}, false
 	}
 	if pg.ConstraintName == "workspaces_owner_user_id_fkey" {

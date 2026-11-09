@@ -14,8 +14,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Workspaces reads membership, workspaces and targets; *repo.Repo
@@ -23,18 +21,18 @@ import (
 type Workspaces interface {
 	CheckWorkspaceAccess(ctx context.Context, arg db.CheckWorkspaceAccessParams) (bool, error)
 	AgentWorkspaceBound(ctx context.Context, arg db.AgentWorkspaceBoundParams) (bool, error)
-	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (db.Workspace, error)
-	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)
+	GetWorkspaceByID(ctx context.Context, id db.UUID) (db.Workspace, error)
+	ListWorkspaceTargets(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceTargetsRow, error)
 }
 
 // Principals reads users and teams; *repo.Repo implements it.
 type Principals interface {
 	ListWorkspacePrincipalUsers(ctx context.Context, arg db.ListWorkspacePrincipalUsersParams) ([]db.ListWorkspacePrincipalUsersRow, error)
-	ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]db.Team, error)
-	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]db.ListTeamMembersRow, error)
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
-	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)
-	ListWorkspacesByUser(ctx context.Context, ownerUserID pgtype.UUID) ([]db.Workspace, error)
+	ListTeamsByUser(ctx context.Context, userID db.UUID) ([]db.Team, error)
+	ListTeamMembers(ctx context.Context, teamID db.UUID) ([]db.ListTeamMembersRow, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
+	UserOwnsTeam(ctx context.Context, userID db.UUID) (bool, error)
+	ListWorkspacesByUser(ctx context.Context, ownerUserID db.UUID) ([]db.Workspace, error)
 	CreateWorkspace(ctx context.Context, arg db.CreateWorkspaceParams) (db.Workspace, error)
 }
 
@@ -64,14 +62,14 @@ func New(store Store) *Service { return &Service{store: store} }
 // Actor is who asks: a user, or an agent acting for its owner when Agent is
 // valid.
 type Actor struct {
-	User  pgtype.UUID
-	Agent pgtype.UUID
+	User  db.UUID
+	Agent db.UUID
 }
 
 // Check returns ErrNotFound unless the user is a member of ws and, for an
 // agent, the agent is bound to ws: an agent acts only in the workspaces it is
 // bound to, even though its owner remains a member of them (#59).
-func (s *Service) Check(ctx context.Context, ws pgtype.UUID, a Actor) error {
+func (s *Service) Check(ctx context.Context, ws db.UUID, a Actor) error {
 	ok, err := s.store.CheckWorkspaceAccess(ctx, db.CheckWorkspaceAccessParams{ID: ws, UserID: a.User})
 	if err != nil {
 		return err
@@ -93,23 +91,23 @@ func (s *Service) Check(ctx context.Context, ws pgtype.UUID, a Actor) error {
 }
 
 // Workspace returns a workspace, without checking access.
-func (s *Service) Workspace(ctx context.Context, id pgtype.UUID) (db.Workspace, error) {
+func (s *Service) Workspace(ctx context.Context, id db.UUID) (db.Workspace, error) {
 	w, err := s.store.GetWorkspaceByID(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.Workspace{}, ErrNotFound
 	}
 	return w, err
 }
 
 // Targets lists every binding a workspace may query, usable or not.
-func (s *Service) Targets(ctx context.Context, ws pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+func (s *Service) Targets(ctx context.Context, ws db.UUID) ([]db.ListWorkspaceTargetsRow, error) {
 	return s.store.ListWorkspaceTargets(ctx, ws)
 }
 
 // Principal is a user or team content can be shared with.
 type Principal struct {
 	Kind  string // "user" or "team"
-	ID    pgtype.UUID
+	ID    db.UUID
 	Name  string
 	Email string // users only
 	// Members counts a team's members.
@@ -125,7 +123,7 @@ type PrincipalFilter struct {
 }
 
 // Principals lists up to f.Limit members of ws, then the caller's teams.
-func (s *Service) Principals(ctx context.Context, ws, caller pgtype.UUID, f PrincipalFilter) ([]Principal, error) {
+func (s *Service) Principals(ctx context.Context, ws, caller db.UUID, f PrincipalFilter) ([]Principal, error) {
 	q := strings.ToLower(strings.TrimSpace(f.Q))
 	match := func(values ...string) bool {
 		if q == "" {
@@ -177,7 +175,7 @@ func (s *Service) Principals(ctx context.Context, ws, caller pgtype.UUID, f Prin
 }
 
 // UserName returns a user's name, empty when the user cannot be read.
-func (s *Service) UserName(ctx context.Context, id pgtype.UUID) string {
+func (s *Service) UserName(ctx context.Context, id db.UUID) string {
 	u, err := s.store.GetUserByID(ctx, id)
 	if err != nil {
 		return ""
@@ -187,7 +185,7 @@ func (s *Service) UserName(ctx context.Context, id pgtype.UUID) string {
 
 // TrinoIdentity is the Trino user name of uid. mode "email" reads the user's
 // e-mail; anything else derives u_<uuid> without a lookup.
-func (s *Service) TrinoIdentity(ctx context.Context, mode string, uid pgtype.UUID) (string, error) {
+func (s *Service) TrinoIdentity(ctx context.Context, mode string, uid db.UUID) (string, error) {
 	if mode == "email" {
 		return trinoidentity.For(ctx, s.store, mode, uid)
 	}
@@ -208,7 +206,7 @@ func (s *Service) RetrieversAvailable(ctx context.Context) bool {
 
 // PersonalWorkspace returns the user's personal workspace, creating it when
 // it does not exist yet (named after the user).
-func (s *Service) PersonalWorkspace(ctx context.Context, userID pgtype.UUID) (db.Workspace, error) {
+func (s *Service) PersonalWorkspace(ctx context.Context, userID db.UUID) (db.Workspace, error) {
 	workspaces, err := s.store.ListWorkspacesByUser(ctx, userID)
 	if err == nil {
 		for _, w := range workspaces {
@@ -231,7 +229,7 @@ func (s *Service) PersonalWorkspace(ctx context.Context, userID pgtype.UUID) (db
 
 // OwnsTeam reports whether the user owns a team, which lets them create
 // shared workspaces.
-func (s *Service) OwnsTeam(ctx context.Context, user pgtype.UUID) bool {
+func (s *Service) OwnsTeam(ctx context.Context, user db.UUID) bool {
 	owns, err := s.store.UserOwnsTeam(ctx, user)
 	return err == nil && owns
 }

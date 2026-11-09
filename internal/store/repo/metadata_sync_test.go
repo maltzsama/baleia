@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestMetadataSyncFence covers the ownership check every metadata write
@@ -32,7 +31,7 @@ func TestMetadataSyncFence(t *testing.T) {
 	if err := f.r.TxMetadata(ctx, run.ID, func(tx *Repo) error { return nil }); !errors.Is(err, ErrMetadataSyncTakenOver) {
 		t.Fatalf("TxMetadata(former owner) = %v, want ErrMetadataSyncTakenOver", err)
 	}
-	if err := f.r.TxMetadata(ctx, pgtype.UUID{}, func(tx *Repo) error { return nil }); !errors.Is(err, ErrMetadataSyncTakenOver) {
+	if err := f.r.TxMetadata(ctx, db.UUID{}, func(tx *Repo) error { return nil }); !errors.Is(err, ErrMetadataSyncTakenOver) {
 		t.Fatalf("TxMetadata(invalid run) = %v, want ErrMetadataSyncTakenOver", err)
 	}
 }

@@ -29,7 +29,6 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
@@ -84,7 +83,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	}
 	defer core.Close()
 	go obs.ServePprof(ctx, logger, cfg.PprofAddr)
-	pool, reg := core.Pool, core.Metrics
+	reg := core.Metrics
 
 	// The worker's own listener: /metrics (Temporal SDK, pool, build) and
 	// /healthz. Prometheus scrapes it directly; it is never behind the JWT.
@@ -103,18 +102,18 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	// Lens reads the Trino coordinator's runtime state as the service identity.
 	lensMonitor := monitor.New(trino.NewWithHTTPClient(cfg.TrinoURL, cfg.TrinoServiceUser, core.TrinoHTTP))
 
-	act := activities.New(logger, pool, core.StoreRepo, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
+	act := activities.New(logger, core.Notifier, core.StoreRepo, cfg, core.Keyring, core.Connections, core.Engines, lensMonitor, core.Storage, core.Dialects)
 	act.SetStore(core.StoreRepo)
 	act.SetMetrics(reg)
 	act.SetTemporal(core.Temporal)
 	r := core.StoreRepo
-	act.SetMetadataSyncer(metadata.NewSyncer(r, func(ctx context.Context, runID pgtype.UUID, fn func(metadata.Store) error) error {
+	act.SetMetadataSyncer(metadata.NewSyncer(r, func(ctx context.Context, runID db.UUID, fn func(metadata.Store) error) error {
 		return r.TxMetadata(ctx, runID, func(tx *repo.Repo) error { return fn(tx) })
 	}, metadata.NewSources(r, core.Keyring, core.Connections, core.Engines)))
 	// The dispatcher observes federated engines' catalogs (adopting the ones
 	// Baleia did not create) with the binder, as the catalog DDL identity.
 	binder := core.Binder
-	act.SetEngineObserver(func(ctx context.Context, eng db.Engine, clusterID pgtype.UUID) error {
+	act.SetEngineObserver(func(ctx context.Context, eng db.Engine, clusterID db.UUID) error {
 		q := core.StoreRepo
 		l := bindings.Lifecycle{Store: q, Binder: binder.WithStore(q), Engine: bindings.EngineRef{ID: eng.ID, ClusterID: clusterID}, ConnectionID: eng.ConnectionID}
 		if _, err := l.Observe(ctx); err != nil {
@@ -128,7 +127,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 	// reported, never changed.
 	act.SetEphemeralSweeper(func(ctx context.Context) (int, error) { return binder.SweepEphemeral(ctx, core.Queries) })
 	projector := stored.Projector{Store: core.Queries, Keyring: core.Keyring, Providers: core.Connections, Binder: binder}
-	act.SetEngineReconciler(func(ctx context.Context, eng db.Engine, clusterID pgtype.UUID, dryRun bool, onAction func(context.Context, bindings.Action)) (bindings.Report, error) {
+	act.SetEngineReconciler(func(ctx context.Context, eng db.Engine, clusterID db.UUID, dryRun bool, onAction func(context.Context, bindings.Action)) (bindings.Report, error) {
 		q := core.StoreRepo
 		r := bindings.Reconciler{
 			Lifecycle:  bindings.Lifecycle{Store: q, Binder: binder.WithStore(q), Engine: bindings.EngineRef{ID: eng.ID, ClusterID: clusterID}, ConnectionID: eng.ConnectionID},

@@ -13,12 +13,22 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Channel is the PostgreSQL notification channel carrying monitoring changes.
 const Channel = "baleia_monitoring"
+
+// Transport carries a change across processes through PostgreSQL
+// LISTEN/NOTIFY. GORM's database/sql surface cannot express the asynchronous
+// notification protocol, so the adapter lives in internal/dbpool; events only
+// sees this seam (and tests can pass nil).
+type Transport interface {
+	Notify(ctx context.Context, channel, payload string) error
+	// Listen holds a connection on channel, reports when LISTEN succeeded
+	// (onConnected), and delivers every payload until ctx ends or the
+	// connection drops.
+	Listen(ctx context.Context, channel string, onConnected func(), deliver func(payload string)) error
+}
 
 // Kind is the monitoring dataset that changed.
 type Kind string
@@ -125,26 +135,33 @@ func (h *Hub) Resync() {
 }
 
 // Notify tells every API replica that an engine's monitoring data changed.
-// Callers that write snapshots use it; a nil pool or engine is a no-op (tests).
-func Notify(ctx context.Context, pool *pgxpool.Pool, engineID string, kind Kind) error {
-	if pool == nil || engineID == "" {
+// Callers that write snapshots use it; a nil transport or engine is a no-op
+// (tests).
+func Notify(ctx context.Context, t Transport, engineID string, kind Kind) error {
+	if t == nil || engineID == "" {
 		return nil
 	}
-	_, err := pool.Exec(ctx, "SELECT pg_notify($1, $2)", Channel, engineID+":"+string(kind))
-	return err
+	return t.Notify(ctx, Channel, engineID+":"+string(kind))
 }
 
 // Listen relays PostgreSQL notifications into the hub until ctx ends. It
 // reconnects with a short backoff when the listening connection drops, and
 // resyncs subscribers after a reconnection.
-func Listen(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, hub *Hub) {
+func Listen(ctx context.Context, logger *slog.Logger, t Transport, hub *Hub) {
+	if t == nil {
+		return
+	}
 	connectedOnce := false
 	for ctx.Err() == nil {
-		err := listenOnce(ctx, pool, hub, func() {
+		err := t.Listen(ctx, Channel, func() {
 			if connectedOnce {
 				hub.Resync()
 			}
 			connectedOnce = true
+		}, func(payload string) {
+			if engineID, kind, ok := ParsePayload(payload); ok {
+				hub.Publish(engineID, kind)
+			}
 		})
 		if ctx.Err() != nil {
 			return
@@ -156,28 +173,6 @@ func Listen(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, hub *H
 		case <-time.After(time.Second):
 		case <-ctx.Done():
 			return
-		}
-	}
-}
-
-func listenOnce(ctx context.Context, pool *pgxpool.Pool, hub *Hub, onConnected func()) error {
-	conn, err := pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Release()
-	if _, err := conn.Exec(ctx, "LISTEN "+Channel); err != nil {
-		return err
-	}
-	onConnected()
-	for {
-		n, err := conn.Conn().WaitForNotification(ctx)
-		if err != nil {
-			return err
-		}
-		engineID, kind, ok := ParsePayload(n.Payload)
-		if ok {
-			hub.Publish(engineID, kind)
 		}
 	}
 }

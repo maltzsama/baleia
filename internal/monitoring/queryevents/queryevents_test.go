@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // recorder keeps the snapshots it is asked to write.
@@ -24,10 +23,10 @@ func (r *recorder) UpsertTrinoQuerySnapshot(_ context.Context, arg db.UpsertTrin
 	return db.TrinoQuerySnapshot{}, nil
 }
 
-var engineID = pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}
+var engineID = db.UUID{Bytes: [16]byte{0xE1}, Valid: true}
 
 func ingester(r *recorder, token string) *Ingester {
-	return New(nil, r, func(context.Context) (pgtype.UUID, error) { return engineID, nil }, token, nil)
+	return New(nil, r, func(context.Context) (db.UUID, error) { return engineID, nil }, token, nil)
 }
 
 // fixture is an event captured from Trino 483's HTTP event listener, with

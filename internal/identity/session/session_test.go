@@ -9,8 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // fakeStore keeps refresh tokens and users in memory.
@@ -33,7 +31,7 @@ func (f *fakeStore) CreateRefreshToken(_ context.Context, arg db.CreateRefreshTo
 func (f *fakeStore) ConsumeRefreshToken(_ context.Context, hash string) (db.ConsumeRefreshTokenRow, error) {
 	rt, ok := f.tokens[hash]
 	if !ok || rt.Revoked {
-		return db.ConsumeRefreshTokenRow{}, pgx.ErrNoRows
+		return db.ConsumeRefreshTokenRow{}, db.ErrNoRows
 	}
 	rt.Revoked = true
 	return db.ConsumeRefreshTokenRow{ID: rt.ID, UserID: rt.UserID, FamilyID: rt.FamilyID}, nil
@@ -42,12 +40,12 @@ func (f *fakeStore) ConsumeRefreshToken(_ context.Context, hash string) (db.Cons
 func (f *fakeStore) GetRefreshTokenByHashAny(_ context.Context, hash string) (db.RefreshToken, error) {
 	rt, ok := f.tokens[hash]
 	if !ok {
-		return db.RefreshToken{}, pgx.ErrNoRows
+		return db.RefreshToken{}, db.ErrNoRows
 	}
 	return *rt, nil
 }
 
-func (f *fakeStore) RevokeRefreshFamily(_ context.Context, family pgtype.UUID) error {
+func (f *fakeStore) RevokeRefreshFamily(_ context.Context, family db.UUID) error {
 	if f.revokeErr != nil {
 		return f.revokeErr
 	}
@@ -59,7 +57,7 @@ func (f *fakeStore) RevokeRefreshFamily(_ context.Context, family pgtype.UUID) e
 	return nil
 }
 
-func (f *fakeStore) RevokeUserRefreshTokens(_ context.Context, user pgtype.UUID) error {
+func (f *fakeStore) RevokeUserRefreshTokens(_ context.Context, user db.UUID) error {
 	for _, rt := range f.tokens {
 		if rt.UserID == user {
 			rt.Revoked = true
@@ -68,17 +66,17 @@ func (f *fakeStore) RevokeUserRefreshTokens(_ context.Context, user pgtype.UUID)
 	return nil
 }
 
-func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+func (f *fakeStore) GetUserByID(_ context.Context, id db.UUID) (db.User, error) {
 	u, ok := f.users[id.Bytes]
 	if !ok {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	return u, nil
 }
 
 func (f *fakeStore) active(hash string) bool { return !f.tokens[hash].Revoked }
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 func setup(t *testing.T, status string) (*Service, *fakeStore, db.User) {
 	t.Helper()
@@ -231,7 +229,7 @@ func TestStoreFailureIsNotInvalid(t *testing.T) {
 type lostLookup struct{ *fakeStore }
 
 func (lostLookup) ConsumeRefreshToken(context.Context, string) (db.ConsumeRefreshTokenRow, error) {
-	return db.ConsumeRefreshTokenRow{}, pgx.ErrNoRows
+	return db.ConsumeRefreshTokenRow{}, db.ErrNoRows
 }
 
 func (lostLookup) GetRefreshTokenByHashAny(context.Context, string) (db.RefreshToken, error) {

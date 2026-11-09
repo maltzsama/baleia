@@ -14,14 +14,13 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine/fake"
 	qtrino "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/galileostudio/baleia/internal/trino"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // fixedEngines serves one engine for every lookup.
 type fixedEngines struct{ e queryengine.Engine }
 
-func (f fixedEngines) Get(context.Context, pgtype.UUID) (queryengine.Engine, error) { return f.e, nil }
-func (f fixedEngines) DefaultTrino(context.Context) (queryengine.Engine, error)     { return f.e, nil }
+func (f fixedEngines) Get(context.Context, db.UUID) (queryengine.Engine, error) { return f.e, nil }
+func (f fixedEngines) DefaultTrino(context.Context) (queryengine.Engine, error) { return f.e, nil }
 
 // trinoBackends points the default engine and the catalog DDL at a (fake)
 // coordinator, as the wiring site does with the real one.

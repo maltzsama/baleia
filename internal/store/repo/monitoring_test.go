@@ -12,8 +12,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring/queryevents"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // monitoringFixture is the workbench fixture's catalog, binding and engine,
@@ -71,7 +69,7 @@ func TestWorkloadRulesCRUD(t *testing.T) {
 	if err != nil || got.Class != "interactive" || !got.CreatedAt.Valid || !got.UpdatedAt.Valid {
 		t.Fatalf("GetWorkloadRule = %+v, %v", got, err)
 	}
-	if _, err := f.r.GetWorkloadRule(ctx, PGUUID(NewUUID())); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.GetWorkloadRule(ctx, PGUUID(NewUUID())); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("GetWorkloadRule(missing) = %v, want ErrNoRows", err)
 	}
 
@@ -86,7 +84,7 @@ func TestWorkloadRulesCRUD(t *testing.T) {
 		updated.MaxClass == nil || *updated.MaxClass != "background" || updated.Weight != 5 {
 		t.Fatalf("UpdateWorkloadRule = %+v", updated)
 	}
-	if _, err := f.r.UpdateWorkloadRule(ctx, db.UpdateWorkloadRuleParams{ID: PGUUID(NewUUID()), Position: 1}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.UpdateWorkloadRule(ctx, db.UpdateWorkloadRuleParams{ID: PGUUID(NewUUID()), Position: 1}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("UpdateWorkloadRule(missing) = %v, want ErrNoRows", err)
 	}
 
@@ -170,7 +168,7 @@ func TestTableHealthUpsert(t *testing.T) {
 	}
 	if _, err := f.r.GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{
 		CatalogID: f.catalogID(), Namespace: "nope", TableName: "none",
-	}); !errors.Is(err, pgx.ErrNoRows) {
+	}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("GetTableHealthByTable(missing) = %v, want ErrNoRows", err)
 	}
 }
@@ -195,7 +193,7 @@ func TestTableMaintenancePolicies(t *testing.T) {
 	if created.Revision != 1 || created.Mode != "managed" || !created.CreatedBy.Valid || !created.UpdatedBy.Valid {
 		t.Fatalf("CreateTableMaintenancePolicy = %+v", created)
 	}
-	if _, err := f.r.CreateTableMaintenancePolicy(ctx, create); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.CreateTableMaintenancePolicy(ctx, create); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("CreateTableMaintenancePolicy(duplicate) = %v, want ErrNoRows", err)
 	}
 	got, err := f.r.GetTableMaintenancePolicy(ctx, db.GetTableMaintenancePolicyParams{
@@ -218,7 +216,7 @@ func TestTableMaintenancePolicies(t *testing.T) {
 	}
 	if _, err := f.r.UpdateTableMaintenancePolicy(ctx, db.UpdateTableMaintenancePolicyParams{
 		CatalogID: f.catalogID(), Namespace: "sales", TableName: "orders", Mode: "off", Revision: 1,
-	}); !errors.Is(err, pgx.ErrNoRows) {
+	}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("UpdateTableMaintenancePolicy(stale revision) = %v, want ErrNoRows", err)
 	}
 	deleted, err := f.r.DeleteTableMaintenancePolicy(ctx, db.DeleteTableMaintenancePolicyParams{
@@ -229,7 +227,7 @@ func TestTableMaintenancePolicies(t *testing.T) {
 	}
 	if _, err := f.r.GetTableMaintenancePolicy(ctx, db.GetTableMaintenancePolicyParams{
 		CatalogID: f.catalogID(), Namespace: "sales", TableName: "orders",
-	}); !errors.Is(err, pgx.ErrNoRows) {
+	}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("GetTableMaintenancePolicy(after delete) = %v, want ErrNoRows", err)
 	}
 }
@@ -266,7 +264,7 @@ func TestMaintenanceRuns(t *testing.T) {
 	}
 	if _, err := f.r.GetRunningMaintenanceRun(ctx, db.GetRunningMaintenanceRunParams{
 		CatalogID: f.catalogID(), Namespace: "sales", TableName: "orders",
-	}); !errors.Is(err, pgx.ErrNoRows) {
+	}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("GetRunningMaintenanceRun(finished) = %v, want ErrNoRows", err)
 	}
 
@@ -296,7 +294,7 @@ func TestMaintenanceRuns(t *testing.T) {
 
 	// Distinct start times make the page assertion deterministic.
 	base := time.Now().UTC().Add(-time.Hour)
-	for i, id := range []pgtype.UUID{run.ID, auto.ID, dry.ID} {
+	for i, id := range []db.UUID{run.ID, auto.ID, dry.ID} {
 		if err := f.gdb.Model(&model.MaintenanceRun{}).
 			Where("id = ?", string(model.UUID(UUIDString(id)))).
 			Update("started_at", base.Add(time.Duration(i)*time.Minute)).Error; err != nil {
@@ -382,7 +380,7 @@ func TestMonitoringSnapshots(t *testing.T) {
 	if err != nil || len(series) != 2 || series[0].ID != older.ID {
 		t.Fatalf("ListClusterSnapshotsByEngine = %+v, %v; want oldest first", series, err)
 	}
-	if _, err := f.r.GetLatestClusterSnapshotByEngine(ctx, PGUUID(NewUUID())); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.GetLatestClusterSnapshotByEngine(ctx, PGUUID(NewUUID())); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("GetLatestClusterSnapshotByEngine(missing) = %v, want ErrNoRows", err)
 	}
 
@@ -482,7 +480,7 @@ func TestMonitoringSnapshots(t *testing.T) {
 
 	if _, err := f.r.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
 		EngineID: f.engineID(), TrinoQueryID: "missing",
-	}); !errors.Is(err, pgx.ErrNoRows) {
+	}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("GetTrinoQuerySnapshotByEngine(missing) = %v, want ErrNoRows", err)
 	}
 }
@@ -591,7 +589,7 @@ func TestReconcileRuns(t *testing.T) {
 	if err != nil || got.ID != old.ID || got.DryRun != true {
 		t.Fatalf("GetReconcileRun = %+v, %v", got, err)
 	}
-	if _, err := f.r.GetReconcileRun(ctx, db.GetReconcileRunParams{EngineID: f.engineID(), ID: PGUUID(NewUUID())}); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := f.r.GetReconcileRun(ctx, db.GetReconcileRunParams{EngineID: f.engineID(), ID: PGUUID(NewUUID())}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("GetReconcileRun(missing) = %v, want ErrNoRows", err)
 	}
 
@@ -709,7 +707,7 @@ func TestQueryEventIngesterUsesRepo(t *testing.T) {
 	t.Parallel()
 	f := monitoringFixture(t)
 	ctx := context.Background()
-	ingester := queryevents.New(nil, f.r, func(context.Context) (pgtype.UUID, error) {
+	ingester := queryevents.New(nil, f.r, func(context.Context) (db.UUID, error) {
 		return f.engineID(), nil
 	}, "", nil)
 

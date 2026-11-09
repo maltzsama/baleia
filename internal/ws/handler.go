@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/client"
 )
 
@@ -34,37 +34,37 @@ var upgrader = websocket.Upgrader{
 
 type Querier interface {
 	CheckWorkspaceAccess(ctx context.Context, arg QuerierCheckWorkspaceAccessParams) (bool, error)
-	GetQueryExecutionByIDAndWorkspace(ctx context.Context, id pgtype.UUID, workspaceID pgtype.UUID) (QuerierQueryExecution, error)
-	ListQueryStatementsByWorkspace(ctx context.Context, executionID pgtype.UUID, workspaceID pgtype.UUID) ([]QuerierQueryStatement, error)
+	GetQueryExecutionByIDAndWorkspace(ctx context.Context, id db.UUID, workspaceID db.UUID) (QuerierQueryExecution, error)
+	ListQueryStatementsByWorkspace(ctx context.Context, executionID db.UUID, workspaceID db.UUID) ([]QuerierQueryStatement, error)
 }
 
 type QuerierCheckWorkspaceAccessParams struct {
-	ID     pgtype.UUID
-	UserID pgtype.UUID
+	ID     db.UUID
+	UserID db.UUID
 }
 
 type QuerierQueryExecution struct {
-	ID             pgtype.UUID
-	WorkspaceID    pgtype.UUID
+	ID             db.UUID
+	WorkspaceID    db.UUID
 	Status         string
 	Sql            string
 	RowsReturned   *int64
 	DurationMs     *int64
 	ErrorCode      *string
-	StartedAt      pgtype.Timestamptz
+	StartedAt      db.Timestamptz
 	TargetSnapshot []byte
 	// Workload queue (#399).
-	EngineID    pgtype.UUID
+	EngineID    db.UUID
 	QueueClass  *string
 	QueueReason *string
-	QueuedAt    pgtype.Timestamptz
-	AdmittedAt  pgtype.Timestamptz
+	QueuedAt    db.Timestamptz
+	AdmittedAt  db.Timestamptz
 	QueueWaitMs *int64
 }
 
 type QuerierQueryStatement struct {
-	ID           pgtype.UUID
-	ExecutionID  pgtype.UUID
+	ID           db.UUID
+	ExecutionID  db.UUID
 	Position     int32
 	Sql          string
 	Status       string
@@ -74,8 +74,8 @@ type QuerierQueryStatement struct {
 	ErrorCode    *string
 	ResultSets   []byte
 	Truncated    bool
-	StartedAt    pgtype.Timestamptz
-	FinishedAt   pgtype.Timestamptz
+	StartedAt    db.Timestamptz
+	FinishedAt   db.Timestamptz
 }
 
 type Handler struct {
@@ -201,13 +201,13 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 	// which logs after this handler returns.
 	auth.SetLogActor(r.Context(), ticket.UserID)
 
-	var wsID pgtype.UUID
+	var wsID db.UUID
 	if err := wsID.Scan(workspaceID); err != nil {
 		http.Error(w, "invalid workspace id", http.StatusBadRequest)
 		return
 	}
 
-	var userID pgtype.UUID
+	var userID db.UUID
 	if err := userID.Scan(ticket.UserID); err != nil {
 		http.Error(w, "invalid user", http.StatusUnauthorized)
 		return
@@ -279,8 +279,8 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID string, workspaceID pgtype.UUID, lastStatus *string, lastQueuePos *int, seenStatements *map[int32]string, seq *int64) bool {
-	var execID pgtype.UUID
+func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID string, workspaceID db.UUID, lastStatus *string, lastQueuePos *int, seenStatements *map[int32]string, seq *int64) bool {
+	var execID db.UUID
 	execID.Scan(executionID)
 
 	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, execID, workspaceID)
@@ -543,14 +543,14 @@ func now() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
-func timeString(ts pgtype.Timestamptz) string {
+func timeString(ts db.Timestamptz) string {
 	if ts.Valid {
 		return ts.Time.UTC().Format(time.RFC3339)
 	}
 	return now()
 }
 
-func uuidString(id pgtype.UUID) string {
+func uuidString(id db.UUID) string {
 	return uuid.UUID(id.Bytes).String()
 }
 

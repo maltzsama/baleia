@@ -18,8 +18,6 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	qtrino "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // fakeQuerier embeds db.Querier so only the exercised method is implemented.
@@ -76,7 +74,7 @@ func (f *fakeEngine) DefaultTrino(context.Context) (queryengine.Engine, error) {
 	return f, nil
 }
 
-func (f *fakeEngine) Get(_ context.Context, id pgtype.UUID) (queryengine.Engine, error) {
+func (f *fakeEngine) Get(_ context.Context, id db.UUID) (queryengine.Engine, error) {
 	f.mu.Lock()
 	f.gotEngine = append(f.gotEngine, uuid.UUID(id.Bytes).String())
 	f.mu.Unlock()
@@ -257,7 +255,7 @@ const (
 // conditional update matches nothing (the execution was cancelled), the activity
 // must succeed without overwriting the terminal status.
 func TestCompleteExecutionDoesNotOverwriteTerminal(t *testing.T) {
-	a := &Activities{dialects: dialect.NewRegistry(), store: &fakeQuerier{updateErr: pgx.ErrNoRows}}
+	a := &Activities{dialects: dialect.NewRegistry(), store: &fakeQuerier{updateErr: db.ErrNoRows}}
 
 	err := a.completeExecution(context.Background(), CompleteExecutionParams{
 		ExecutionID: testExecID,
@@ -269,7 +267,7 @@ func TestCompleteExecutionDoesNotOverwriteTerminal(t *testing.T) {
 }
 
 func TestFailExecutionDoesNotOverwriteTerminal(t *testing.T) {
-	a := &Activities{dialects: dialect.NewRegistry(), store: &fakeQuerier{updateErr: pgx.ErrNoRows}}
+	a := &Activities{dialects: dialect.NewRegistry(), store: &fakeQuerier{updateErr: db.ErrNoRows}}
 
 	err := a.failExecution(context.Background(), FailExecutionParams{
 		ExecutionID: testExecID,

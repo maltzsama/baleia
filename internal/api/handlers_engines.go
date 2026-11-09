@@ -12,8 +12,6 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/engines/manage"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -22,7 +20,7 @@ const enginePingTimeout = 15 * time.Second
 
 // isFKViolation reports a delete blocked by a foreign key: 23503 for NO
 // ACTION, 23001 for ON DELETE RESTRICT (engines use RESTRICT).
-func isFKViolation(e *pgconn.PgError) bool {
+func isFKViolation(e *db.PGError) bool {
 	return manage.IsFKViolation(e)
 }
 
@@ -97,7 +95,7 @@ func (h *CatalogHandlers) GetEngine(ctx context.Context, request GetEngineReques
 	if err != nil {
 		return GetEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	eng, _, err := h.authz().Engine(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
+	eng, _, err := h.authz().Engine(ctx, p, db.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
 	if errors.Is(err, authz.ErrNotFound) {
 		return GetEngine404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
 	}
@@ -123,7 +121,7 @@ func (h *CatalogHandlers) CreateEngine(ctx context.Context, request CreateEngine
 		return invalid("validation_error", "name", err.Error()), nil
 	}
 
-	conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: body.ConnectionId, Valid: true}, authz.ActWrite)
+	conn, err := h.authz().Connection(ctx, p, db.UUID{Bytes: body.ConnectionId, Valid: true}, authz.ActWrite)
 	if errors.Is(err, authz.ErrNotFound) {
 		return CreateEngine404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
 	}
@@ -173,7 +171,7 @@ func (h *CatalogHandlers) UpdateEngine(ctx context.Context, request UpdateEngine
 	if err != nil {
 		return UpdateEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	_, _, err = h.authz().Engine(ctx, p, id, authz.ActWrite)
 	switch {
 	case errors.Is(err, authz.ErrNotFound):
@@ -217,7 +215,7 @@ func (h *CatalogHandlers) DeleteEngine(ctx context.Context, request DeleteEngine
 	if err != nil {
 		return DeleteEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	_, _, err = h.authz().Engine(ctx, p, id, authz.ActAdmin)
 	switch {
 	case errors.Is(err, authz.ErrNotFound):
@@ -245,7 +243,7 @@ func (h *CatalogHandlers) ListEngineBindings(ctx context.Context, request ListEn
 	if err != nil {
 		return ListEngineBindings401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	_, conn, err := h.authz().Engine(ctx, p, id, authz.ActRead)
 	if errors.Is(err, authz.ErrNotFound) {
 		return ListEngineBindings404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
@@ -279,7 +277,7 @@ func (h *CatalogHandlers) ListCatalogBindings(ctx context.Context, request ListC
 	if err != nil {
 		return ListCatalogBindings401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.Id, Valid: true}
+	id := db.UUID{Bytes: request.Id, Valid: true}
 	if _, _, err := h.authz().Catalog(ctx, p, id, authz.ActRead); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
 			return ListCatalogBindings404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil

@@ -8,8 +8,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeUserDeleter struct {
@@ -18,13 +16,13 @@ type fakeUserDeleter struct {
 	revoked   bool
 }
 
-func (f *fakeUserDeleter) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+func (f *fakeUserDeleter) GetUserByID(context.Context, db.UUID) (db.User, error) {
 	return db.User{}, nil
 }
 
-func (f *fakeUserDeleter) DeleteUser(context.Context, pgtype.UUID) error { return f.deleteErr }
+func (f *fakeUserDeleter) DeleteUser(context.Context, db.UUID) error { return f.deleteErr }
 
-func (f *fakeUserDeleter) RevokeUserRefreshTokens(context.Context, pgtype.UUID) error {
+func (f *fakeUserDeleter) RevokeUserRefreshTokens(context.Context, db.UUID) error {
 	f.revoked = true
 	return nil
 }
@@ -40,8 +38,8 @@ func TestRemoveUserConflict(t *testing.T) {
 		wantCode string // "" = 204
 	}{
 		{"deleted", nil, ""},
-		{"owns a workspace", &pgconn.PgError{Code: "23001", ConstraintName: "workspaces_owner_user_id_fkey", TableName: "workspaces"}, "user_owns_workspace"},
-		{"other reference", fmt.Errorf("delete: %w", &pgconn.PgError{Code: "23503", ConstraintName: "x_fkey", TableName: "audit"}), "user_in_use"},
+		{"owns a workspace", &db.PGError{Code: "23001", ConstraintName: "workspaces_owner_user_id_fkey", TableName: "workspaces"}, "user_owns_workspace"},
+		{"other reference", fmt.Errorf("delete: %w", &db.PGError{Code: "23503", ConstraintName: "x_fkey", TableName: "audit"}), "user_in_use"},
 	}
 	for _, tc := range cases {
 		h := testAPI(handlerFields{queries: &fakeUserDeleter{deleteErr: tc.err}})

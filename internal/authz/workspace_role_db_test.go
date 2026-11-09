@@ -8,7 +8,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestWorkspaceRoles_Postgres runs the role rules of #653 on the real schema:
@@ -17,7 +16,7 @@ import (
 func TestWorkspaceRoles_Postgres(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	q := repo.New(testdb.GORM(t, testdb.New(t)))
+	q := repo.New(testdb.New(t))
 	c := authz.New(q)
 
 	user := func(email string) db.User {
@@ -33,7 +32,7 @@ func TestWorkspaceRoles_Postgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for u, r := range map[pgtype.UUID]string{owner.ID: "owner", member.ID: "member", viewer.ID: "member"} {
+	for u, r := range map[db.UUID]string{owner.ID: "owner", member.ID: "member", viewer.ID: "member"} {
 		if _, err := q.AddTeamMember(ctx, db.AddTeamMemberParams{TeamID: team.ID, UserID: u, Role: r}); err != nil {
 			t.Fatal(err)
 		}
@@ -46,7 +45,7 @@ func TestWorkspaceRoles_Postgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set := func(ws, u pgtype.UUID, role string) {
+	set := func(ws, u db.UUID, role string) {
 		t.Helper()
 		if _, err := q.UpsertWorkspaceMember(ctx, db.UpsertWorkspaceMemberParams{WorkspaceID: ws, UserID: u, Role: role}); err != nil {
 			t.Fatal(err)
@@ -56,7 +55,7 @@ func TestWorkspaceRoles_Postgres(t *testing.T) {
 	set(personal.ID, guest.ID, "editor")
 	set(shared.ID, outsider.ID, "admin") // refused: not in the team (0 rows)
 
-	role := func(ws pgtype.UUID, u db.User) authz.WorkspaceRole {
+	role := func(ws db.UUID, u db.User) authz.WorkspaceRole {
 		t.Helper()
 		r, err := c.WorkspaceRole(ctx, authz.Principal{UserID: u.ID, Role: u.Role}, ws)
 		if err != nil {
@@ -66,7 +65,7 @@ func TestWorkspaceRoles_Postgres(t *testing.T) {
 	}
 	for _, tt := range []struct {
 		name string
-		ws   pgtype.UUID
+		ws   db.UUID
 		u    db.User
 		want authz.WorkspaceRole
 	}{

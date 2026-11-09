@@ -14,8 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -57,7 +55,7 @@ func (h *CatalogHandlers) ListCatalogs(ctx context.Context, request ListCatalogs
 	if err != nil {
 		return ListCatalogs401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
+	connID := db.UUID{Bytes: request.ConnectionId, Valid: true}
 	if _, err := h.authz().Connection(ctx, p, connID, authz.ActRead); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
 			return ListCatalogs404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
@@ -84,7 +82,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	if err != nil {
 		return CreateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
+	connID := db.UUID{Bytes: request.ConnectionId, Valid: true}
 	ev := audit.Event{Action: audit.CatalogCreate, ResourceType: "catalog"}
 	ctx = audit.WithAction(ctx, ev.Action)
 	conn, err := h.authz().Connection(ctx, p, connID, authz.ActWrite)
@@ -141,7 +139,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		extra = *body.ExtraProps
 	}
 	spec := bindings.BindingSpec{EngineCatalog: body.TrinoCatalogName, Connector: connector, SourceRef: warehouse, ExtraProps: extra}
-	proj, err := h.projectBinding(ctx, conn, cluster.EngineID, pgtype.UUID{}, spec)
+	proj, err := h.projectBinding(ctx, conn, cluster.EngineID, db.UUID{}, spec)
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
@@ -164,7 +162,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	var binding db.CatalogBinding
 	// Share with: an active grant to the chosen workspace, so the new catalog is
 	// reachable without the removed personal auto-reach (ADR 0018 §3).
-	var shareWith pgtype.UUID
+	var shareWith db.UUID
 	if body.ShareWithWorkspaceId != nil {
 		if err := requireWorkspaceAccess(ctx, h.access, *body.ShareWithWorkspaceId); err != nil {
 			if errors.Is(err, ErrWorkspaceNotFound) {
@@ -172,7 +170,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 			}
 			return nil, err
 		}
-		shareWith = pgtype.UUID{Bytes: *body.ShareWithWorkspaceId, Valid: true}
+		shareWith = db.UUID{Bytes: *body.ShareWithWorkspaceId, Valid: true}
 	}
 	txErr := h.inCatalogTx(ctx, func(q catalogWriteStore) error {
 		c, err := q.CreateCatalog(ctx, db.CreateCatalogParams{
@@ -238,7 +236,7 @@ func upsertPrimaryBinding(ctx context.Context, q catalogWriteStore, cluster db.T
 // projectBinding projects a binding of conn through the Trino binder. A
 // Hive-connector catalog of a metastore whose connection also exposes Iceberg
 // or Delta catalogs on engineID gets Trino table redirection (#86).
-func (h *CatalogHandlers) projectBinding(ctx context.Context, conn db.CatalogConnection, engineID, catalogID pgtype.UUID, spec bindings.BindingSpec) (bindings.Projection, error) {
+func (h *CatalogHandlers) projectBinding(ctx context.Context, conn db.CatalogConnection, engineID, catalogID db.UUID, spec bindings.BindingSpec) (bindings.Projection, error) {
 	_, cfg, err := h.connectionConfig(conn)
 	if err != nil {
 		return bindings.Projection{}, err
@@ -265,7 +263,7 @@ func catalogSpec(cat db.Catalog) (bindings.BindingSpec, error) {
 }
 
 // projectCatalog projects a stored catalog.
-func (h *CatalogHandlers) projectCatalog(ctx context.Context, conn db.CatalogConnection, engineID, catalogID pgtype.UUID, cat db.Catalog) (bindings.Projection, error) {
+func (h *CatalogHandlers) projectCatalog(ctx context.Context, conn db.CatalogConnection, engineID, catalogID db.UUID, cat db.Catalog) (bindings.Projection, error) {
 	spec, err := catalogSpec(cat)
 	if err != nil {
 		return bindings.Projection{}, err
@@ -320,8 +318,8 @@ func (h *CatalogHandlers) GetCatalog(ctx context.Context, request GetCatalogRequ
 	if err != nil {
 		return GetCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
-	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	connID := db.UUID{Bytes: request.ConnectionId, Valid: true}
+	id := db.UUID{Bytes: request.CatalogId, Valid: true}
 	cat, _, err := h.authz().CatalogOfConnection(ctx, p, connID, id, authz.ActRead)
 	if err != nil {
 		if nf, _ := catalogAccessError(err); nf {
@@ -341,8 +339,8 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 	if err != nil {
 		return UpdateCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
-	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	connID := db.UUID{Bytes: request.ConnectionId, Valid: true}
+	id := db.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.CatalogUpdate, ResourceType: "catalog", ResourceID: idString(id)}
 	ctx = audit.WithAction(ctx, ev.Action)
 	existing, conn, err := h.authz().CatalogOfConnection(ctx, p, connID, id, authz.ActWrite)
@@ -447,7 +445,7 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 			LifecycleState: bindings.StateUpdating, DesiredVersion: &proj.Version, FromStates: []string{bindings.StateActive, bindings.StateError},
 		})
 		return err
-	}); errors.Is(err, pgx.ErrNoRows) {
+	}); errors.Is(err, db.ErrNoRows) {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return UpdateCatalog409JSONResponse{ConflictJSONResponse: concurrentChange(cur)}, nil
 	} else if err != nil {
@@ -489,8 +487,8 @@ func (h *CatalogHandlers) DeleteCatalog(ctx context.Context, request DeleteCatal
 	if err != nil {
 		return DeleteCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	connID := pgtype.UUID{Bytes: request.ConnectionId, Valid: true}
-	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	connID := db.UUID{Bytes: request.ConnectionId, Valid: true}
+	id := db.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.CatalogDelete, ResourceType: "catalog", ResourceID: idString(id)}
 	ctx = audit.WithAction(ctx, ev.Action)
 	cat, _, err := h.authz().CatalogOfConnection(ctx, p, connID, id, authz.ActWrite)
@@ -543,7 +541,7 @@ func (h *CatalogHandlers) SyncCatalog(ctx context.Context, request SyncCatalogRe
 	if err != nil {
 		return SyncCatalog401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	id := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	id := db.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.CatalogSync, ResourceType: "catalog", ResourceID: idString(id)}
 	ctx = audit.WithAction(ctx, ev.Action)
 	cat, conn, err := h.authz().Catalog(ctx, p, id, authz.ActWrite)
@@ -652,7 +650,7 @@ func dbCatalogToPublic(c db.Catalog) Catalog {
 	return out
 }
 
-func pgTimestampToTimePtr(ts pgtype.Timestamptz) *time.Time {
+func pgTimestampToTimePtr(ts db.Timestamptz) *time.Time {
 	t := pgTimestampToTime(ts)
 	if t.IsZero() {
 		return nil

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/temporal/schedulespecs"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Platform sections of the system status (#291). Each section is probed under
@@ -97,7 +97,7 @@ func (h *OpsHandlers) enginesStatus(ctx context.Context) SystemStatusResource {
 	if !h.signals.Available() {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
-	engines, err := h.signals.Engines(ctx, pgtype.UUID{}, true)
+	engines, err := h.signals.Engines(ctx, db.UUID{}, true)
 	if err != nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
@@ -155,7 +155,7 @@ func (h *OpsHandlers) reconcileStatus(ctx context.Context) SystemStatusResource 
 	if !h.signals.Available() {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}
-	engines, err := h.signals.Engines(ctx, pgtype.UUID{}, true)
+	engines, err := h.signals.Engines(ctx, db.UUID{}, true)
 	if err != nil {
 		return SystemStatusResource{Status: SystemStatusResourceStatusUnknown, ErrorCode: statusStringPtr("database_unavailable"), Items: statusItems(items)}
 	}

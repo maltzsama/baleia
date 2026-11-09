@@ -5,7 +5,7 @@ package assistant
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 type Querier interface {
@@ -25,15 +25,15 @@ type Querier interface {
 	// not use the main db package for data access.
 	GetAssistantSettings(ctx context.Context) (AssistantSetting, error)
 	GetConversation(ctx context.Context, arg GetConversationParams) (AssistantConversation, error)
-	HeartbeatConversation(ctx context.Context, id pgtype.UUID) error
+	HeartbeatConversation(ctx context.Context, id db.UUID) error
 	// A crashed replica leaves a running turn behind; the sweeper marks it
 	// interrupted so the user can retry.
-	InterruptStaleConversations(ctx context.Context) ([]pgtype.UUID, error)
-	LatestConversationMessage(ctx context.Context, conversationID pgtype.UUID) (AssistantMessage, error)
+	InterruptStaleConversations(ctx context.Context) ([]db.UUID, error)
+	LatestConversationMessage(ctx context.Context, conversationID db.UUID) (AssistantMessage, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AssistantConversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]AssistantMessage, error)
-	ReleaseConversation(ctx context.Context, id pgtype.UUID) error
-	SetConversationInterrupted(ctx context.Context, id pgtype.UUID) error
+	ReleaseConversation(ctx context.Context, id db.UUID) error
+	SetConversationInterrupted(ctx context.Context, id db.UUID) error
 	SetConversationTitle(ctx context.Context, arg SetConversationTitleParams) error
 	UpdateAssistantSettings(ctx context.Context, arg UpdateAssistantSettingsParams) (AssistantSetting, error)
 }

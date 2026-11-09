@@ -19,13 +19,8 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 	"go.temporal.io/sdk/client"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 // handlerFields are the dependencies a test sets. Tests build handlers only
@@ -34,7 +29,6 @@ import (
 type handlerFields struct {
 	queries        db.Querier
 	store          *gorm.DB
-	pool           *pgxpool.Pool
 	tx             txRunner
 	schema         schemaVersioner
 	settings       Settings
@@ -59,7 +53,6 @@ func testAPI(f handlerFields) *API {
 		versionCache:   f.versionCache,
 		queries:        f.queries,
 		store:          f.store,
-		pool:           f.pool,
 		tx:             f.tx,
 		settings:       f.settings,
 		keyring:        f.keyring,
@@ -103,23 +96,6 @@ func testAPI(f handlerFields) *API {
 	return h
 }
 
-// openTestStore opens GORM over a test pool, as the application does when the
-// GORM store is configured. Handler tests pass it through handlerFields.store
-// to exercise the migrated path (#769).
-func openTestStore(t *testing.T, pool *pgxpool.Pool) *gorm.DB {
-	t.Helper()
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatalf("open gorm: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	return gdb
-}
-
 // addDefaultSpace creates the default space a workspace always has. Fixtures
 // that create a workspace through the store need it because ADR 0020 removed
 // the trigger that used to create it.
@@ -129,7 +105,7 @@ func addDefaultSpace(t *testing.T, gdb *gorm.DB, workspaceID any) {
 	switch v := workspaceID.(type) {
 	case model.UUID:
 		ws = v
-	case pgtype.UUID:
+	case db.UUID:
 		ws = model.UUID(repo.UUIDString(v))
 	case string:
 		ws = model.UUID(v)

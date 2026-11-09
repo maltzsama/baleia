@@ -10,8 +10,6 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/testsuite"
 )
@@ -30,22 +28,22 @@ type retrieverFakeQuerier struct {
 	ownerMissing  bool
 }
 
-func (f *retrieverFakeQuerier) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+func (f *retrieverFakeQuerier) GetUserByID(_ context.Context, id db.UUID) (db.User, error) {
 	if f.ownerMissing {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	return db.User{ID: id, Email: "owner@example.test"}, nil
 }
 
-func (f *retrieverFakeQuerier) GetRetrieverForRefresh(context.Context, pgtype.UUID) (db.Retriever, error) {
+func (f *retrieverFakeQuerier) GetRetrieverForRefresh(context.Context, db.UUID) (db.Retriever, error) {
 	return f.retriever, nil
 }
 
 func (f *retrieverFakeQuerier) GetDefaultTrinoEngine(context.Context) (db.GetDefaultTrinoEngineRow, error) {
-	return db.GetDefaultTrinoEngineRow{Engine: db.Engine{ID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}}}, nil
+	return db.GetDefaultTrinoEngineRow{Engine: db.Engine{ID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true}}}, nil
 }
 
-func (f *retrieverFakeQuerier) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+func (f *retrieverFakeQuerier) ListWorkspaceTargets(context.Context, db.UUID) ([]db.ListWorkspaceTargetsRow, error) {
 	return nil, nil
 }
 
@@ -61,8 +59,8 @@ func (f *retrieverFakeQuerier) AdvanceRetrieverSchedule(context.Context, db.Adva
 func (f *retrieverFakeQuerier) CreateRetrieverRefreshHistory(_ context.Context, arg db.CreateRetrieverRefreshHistoryParams) (db.RetrieverRefreshHistory, error) {
 	f.refreshType = arg.RefreshType
 	return db.RetrieverRefreshHistory{
-		ID:          pgtype.UUID{Bytes: [16]byte{9}, Valid: true},
-		RetrieverID: pgtype.UUID{Bytes: [16]byte{9}, Valid: true},
+		ID:          db.UUID{Bytes: [16]byte{9}, Valid: true},
+		RetrieverID: db.UUID{Bytes: [16]byte{9}, Valid: true},
 		RefreshType: arg.RefreshType,
 		Status:      arg.Status,
 	}, nil
@@ -82,14 +80,14 @@ func (f *retrieverFakeQuerier) UpdateRetrieverRefreshHistory(_ context.Context, 
 
 func fakeRetriever() db.Retriever {
 	return db.Retriever{
-		ID:            pgtype.UUID{Bytes: [16]byte{7}, Valid: true},
+		ID:            db.UUID{Bytes: [16]byte{7}, Valid: true},
 		DestCatalog:   "tpch",
 		DestNamespace: "sf1",
 		DestTable:     "daily_snapshot",
 		DefinitionSql: "SELECT 1 AS x",
 		CronSchedule:  "0 */6 * * *",
 		RefreshType:   "full",
-		NextRefreshAt: pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
+		NextRefreshAt: db.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
 	}
 }
 
@@ -206,7 +204,7 @@ func TestAdvanceRetrieverSchedule_ComputesNext(t *testing.T) {
 // number of rows the CTAS wrote (#142), not the one-row result.
 func TestRetrieverRefresh_RunsAsTheOwner(t *testing.T) {
 	r := fakeRetriever()
-	owner := pgtype.UUID{Bytes: [16]byte{0xA1, 0xB2}, Valid: true}
+	owner := db.UUID{Bytes: [16]byte{0xA1, 0xB2}, Valid: true}
 	r.CreatedBy = owner
 	fakeQuery := &retrieverFakeQuerier{retriever: r}
 	fakeTrino := &fakeEngine{Engine: testTrino, ctasCount: "25"}

@@ -12,21 +12,19 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mail"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type fakeStore struct {
 	users     map[string]db.User
-	resets    map[string]pgtype.UUID // token hash → user, removed when consumed
+	resets    map[string]db.UUID // token hash → user, removed when consumed
 	passwords map[[16]byte]string
 }
 
 func (f *fakeStore) GetUserByEmail(_ context.Context, email string) (db.User, error) {
 	u, ok := f.users[email]
 	if !ok {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	return u, nil
 }
@@ -39,7 +37,7 @@ func (f *fakeStore) CreatePasswordResetToken(_ context.Context, arg db.CreatePas
 func (f *fakeStore) ConsumePasswordResetToken(_ context.Context, hash string) (db.PasswordResetToken, error) {
 	user, ok := f.resets[hash]
 	if !ok {
-		return db.PasswordResetToken{}, pgx.ErrNoRows
+		return db.PasswordResetToken{}, db.ErrNoRows
 	}
 	delete(f.resets, hash)
 	return db.PasswordResetToken{UserID: user, TokenHash: hash}, nil
@@ -71,17 +69,17 @@ func (m *fakeMailer) Send(_ context.Context, to, locale string, template mail.Te
 	return m.err
 }
 
-type fakeSessions struct{ revoked []pgtype.UUID }
+type fakeSessions struct{ revoked []db.UUID }
 
-func (s *fakeSessions) RevokeAll(_ context.Context, id pgtype.UUID) {
+func (s *fakeSessions) RevokeAll(_ context.Context, id db.UUID) {
 	s.revoked = append(s.revoked, id)
 }
 
 func setup(t *testing.T) (*Service, *fakeStore, *fakeMailer, *fakeSessions, db.User) {
 	t.Helper()
 	pt := "pt-BR"
-	u := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Email: "ana@x.io", Name: "Ana", Locale: &pt, AuthProvider: "local", Status: "active"}
-	st := &fakeStore{users: map[string]db.User{u.Email: u}, resets: map[string]pgtype.UUID{}, passwords: map[[16]byte]string{}}
+	u := db.User{ID: db.UUID{Bytes: uuid.New(), Valid: true}, Email: "ana@x.io", Name: "Ana", Locale: &pt, AuthProvider: "local", Status: "active"}
+	st := &fakeStore{users: map[string]db.User{u.Email: u}, resets: map[string]db.UUID{}, passwords: map[[16]byte]string{}}
 	m, ss := &fakeMailer{}, &fakeSessions{}
 	return New(st, m, ss, Config{PublicURL: "https://baleia.example", DefaultLocale: "en", TokenTTL: time.Hour, PasswordCost: bcrypt.MinCost}), st, m, ss, u
 }
@@ -198,8 +196,8 @@ func TestConfirm_StoreFailureIsNotAnInvalidLink(t *testing.T) {
 func TestRequest_OnlyLocalActiveAccounts(t *testing.T) {
 	t.Parallel()
 	s, st, m, _, _ := setup(t)
-	st.users["sso@x.io"] = db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Email: "sso@x.io", AuthProvider: "oidc", Status: "active"}
-	st.users["off@x.io"] = db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Email: "off@x.io", AuthProvider: "local", Status: "suspended"}
+	st.users["sso@x.io"] = db.User{ID: db.UUID{Bytes: uuid.New(), Valid: true}, Email: "sso@x.io", AuthProvider: "oidc", Status: "active"}
+	st.users["off@x.io"] = db.User{ID: db.UUID{Bytes: uuid.New(), Valid: true}, Email: "off@x.io", AuthProvider: "local", Status: "suspended"}
 	for _, email := range []string{"sso@x.io", "off@x.io"} {
 		if err := s.Request(context.Background(), email); err != nil {
 			t.Errorf("Request(%s) = %v, want nil", email, err)

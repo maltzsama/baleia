@@ -8,19 +8,17 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/client"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 type fakeStore struct {
 	retrievers map[[16]byte]db.Retriever
 	dests      []db.ListRetrieverDestinationsRow
 }
 
-func (f *fakeStore) ListRetrieversByWorkspace(context.Context, pgtype.UUID) ([]db.Retriever, error) {
+func (f *fakeStore) ListRetrieversByWorkspace(context.Context, db.UUID) ([]db.Retriever, error) {
 	return nil, nil
 }
 
@@ -28,7 +26,7 @@ func (f *fakeStore) GetRetrieverByID(_ context.Context, arg db.GetRetrieverByIDP
 	if r, ok := f.retrievers[arg.ID.Bytes]; ok && r.WorkspaceID == arg.WorkspaceID {
 		return r, nil
 	}
-	return db.Retriever{}, pgx.ErrNoRows
+	return db.Retriever{}, db.ErrNoRows
 }
 
 func (f *fakeStore) CreateRetriever(_ context.Context, arg db.CreateRetrieverParams) (db.Retriever, error) {
@@ -56,26 +54,26 @@ func (f *fakeStore) ListRetrieverRefreshHistory(context.Context, db.ListRetrieve
 	return nil, nil
 }
 
-func (f *fakeStore) LatestRetrieverRefresh(context.Context, pgtype.UUID) (db.LatestRetrieverRefreshRow, error) {
-	return db.LatestRetrieverRefreshRow{}, pgx.ErrNoRows
+func (f *fakeStore) LatestRetrieverRefresh(context.Context, db.UUID) (db.LatestRetrieverRefreshRow, error) {
+	return db.LatestRetrieverRefreshRow{}, db.ErrNoRows
 }
 
-func (f *fakeStore) ListRetrieverDestinations(context.Context, pgtype.UUID) ([]db.ListRetrieverDestinationsRow, error) {
+func (f *fakeStore) ListRetrieverDestinations(context.Context, db.UUID) ([]db.ListRetrieverDestinationsRow, error) {
 	return f.dests, nil
 }
 
-func (f *fakeStore) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+func (f *fakeStore) ListWorkspaceTargets(context.Context, db.UUID) ([]db.ListWorkspaceTargetsRow, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) GetBinding(context.Context, pgtype.UUID) (db.CatalogBinding, error) {
-	return db.CatalogBinding{}, pgx.ErrNoRows
+func (f *fakeStore) GetBinding(context.Context, db.UUID) (db.CatalogBinding, error) {
+	return db.CatalogBinding{}, db.ErrNoRows
 }
-func (f *fakeStore) GetCatalogByID(context.Context, pgtype.UUID) (db.Catalog, error) {
-	return db.Catalog{}, pgx.ErrNoRows
+func (f *fakeStore) GetCatalogByID(context.Context, db.UUID) (db.Catalog, error) {
+	return db.Catalog{}, db.ErrNoRows
 }
-func (f *fakeStore) GetEngineByID(context.Context, pgtype.UUID) (db.Engine, error) {
-	return db.Engine{}, pgx.ErrNoRows
+func (f *fakeStore) GetEngineByID(context.Context, db.UUID) (db.Engine, error) {
+	return db.Engine{}, db.ErrNoRows
 }
 
 type fakeWorkflows struct{ args [][]any }
@@ -89,7 +87,7 @@ type fixture struct {
 	s    *Service
 	st   *fakeStore
 	wf   *fakeWorkflows
-	ws   pgtype.UUID
+	ws   db.UUID
 	dest db.ListRetrieverDestinationsRow
 }
 

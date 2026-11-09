@@ -22,8 +22,6 @@ import (
 	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Store writes query snapshots; *repo.Repo implements it.
@@ -33,7 +31,7 @@ type Store interface {
 
 // Engine returns the Baleia engine whose coordinator posts the events: the
 // default Trino engine, the one the poller watches.
-type Engine func(ctx context.Context) (pgtype.UUID, error)
+type Engine func(ctx context.Context) (db.UUID, error)
 
 // maxEventBytes bounds one event: it carries the query's text, plan and
 // per-operator statistics.
@@ -47,20 +45,20 @@ type Ingester struct {
 	// token is what the listener sends as "Authorization: Bearer <token>"
 	// (http-event-listener.connect-http-headers).
 	token string
-	// pool NOTIFYs the monitoring SSE subscribers after a snapshot (#733); nil
-	// skips it (tests).
-	pool *pgxpool.Pool
+	// notify tells the monitoring SSE subscribers a snapshot was recorded
+	// (#733); nil skips it (tests).
+	notify events.Transport
 }
 
 var _ http.Handler = (*Ingester)(nil)
 
 // New builds the ingester for the listener's token; a nil logger discards.
 // An empty token serves 404: the feature is off.
-func New(logger *slog.Logger, store Store, engine Engine, token string, pool *pgxpool.Pool) *Ingester {
+func New(logger *slog.Logger, store Store, engine Engine, token string, notify events.Transport) *Ingester {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	return &Ingester{store: store, engine: engine, logger: logger, token: token, pool: pool}
+	return &Ingester{store: store, engine: engine, logger: logger, token: token, notify: notify}
 }
 
 // ErrMalformed: the body is not a Trino query event.
@@ -130,7 +128,7 @@ func (i *Ingester) Ingest(ctx context.Context, body io.Reader) error {
 	if _, err := i.store.UpsertTrinoQuerySnapshot(ctx, snap); err != nil {
 		return fmt.Errorf("record query %s: %w", e.Metadata.QueryID, err)
 	}
-	if err := events.Notify(ctx, i.pool, uuid.UUID(engineID.Bytes).String(), events.KindQueries); err != nil {
+	if err := events.Notify(ctx, i.notify, uuid.UUID(engineID.Bytes).String(), events.KindQueries); err != nil {
 		i.logger.WarnContext(ctx, "query event: monitoring notify", "err", err)
 	}
 	return nil
@@ -162,7 +160,7 @@ func snapshot(e event) db.UpsertTrinoQuerySnapshotParams {
 		Sql:                e.Metadata.Query,
 		Catalog:            e.Context.Catalog,
 		Schema:             e.Context.Schema,
-		CreatedAt:          pgtype.Timestamptz{Time: created, Valid: true},
+		CreatedAt:          db.Timestamptz{Time: created, Valid: true},
 		ElapsedMs:          elapsed,
 		CpuMs:              cpu,
 		PhysicalInputBytes: &physical,

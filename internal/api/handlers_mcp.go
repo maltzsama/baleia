@@ -7,9 +7,9 @@ import (
 	"github.com/galileostudio/baleia/internal/agentpolicy"
 	agentmanage "github.com/galileostudio/baleia/internal/agents/manage"
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/results"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -40,7 +40,7 @@ func (h *AgentHandlers) MCPResults(ctx context.Context, workspaceID, executionID
 	if err := requireWorkspaceAccess(ctx, h.access, workspaceID); err != nil {
 		return results.Result{}, err
 	}
-	var id pgtype.UUID
+	var id db.UUID
 	id.Bytes = executionID
 	id.Valid = true
 	exec, err := h.agents.Execution(ctx, workspaceIDFromRequest(workspaceID), id)
@@ -67,7 +67,7 @@ func (h *AgentHandlers) AgentCeilings() agentpolicy.Ceilings { return h.agentCei
 
 // EngineReadOnly reports whether an engine can enforce a read-only session;
 // the agent gate needs it.
-func (h *AgentHandlers) EngineReadOnly(ctx context.Context, engineID pgtype.UUID) (queryengine.ReadOnlySupport, error) {
+func (h *AgentHandlers) EngineReadOnly(ctx context.Context, engineID db.UUID) (queryengine.ReadOnlySupport, error) {
 	eng, err := h.engines.Get(ctx, engineID)
 	if err != nil {
 		return "", err

@@ -10,7 +10,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/ops/signals"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -141,17 +140,17 @@ func (r *Repo) AuditExportLagSeconds(ctx context.Context) (float64, error) {
 
 // PluginLastConfirmation is when updatedBy last wrote the registry, invalid
 // when it never did.
-func (r *Repo) PluginLastConfirmation(ctx context.Context, updatedBy string) (pgtype.Timestamptz, error) {
+func (r *Repo) PluginLastConfirmation(ctx context.Context, updatedBy string) (db.Timestamptz, error) {
 	var row model.TrinoCatalogRegistry
 	err := r.Users.db.WithContext(ctx).
 		Where("updated_by = ?", updatedBy).
 		Order("updated_at DESC").
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return pgtype.Timestamptz{}, nil
+		return db.Timestamptz{}, nil
 	}
 	if err != nil {
-		return pgtype.Timestamptz{}, err
+		return db.Timestamptz{}, err
 	}
 	return PGTime(row.UpdatedAt), nil
 }
@@ -330,11 +329,11 @@ func (r *Repo) ListAttentionReconcileDrift(ctx context.Context) ([]db.ListAttent
 
 // GetAttentionAuditExportLag is the oldest audit event the export has not
 // shipped; invalid when nothing is pending.
-func (r *Repo) GetAttentionAuditExportLag(ctx context.Context) (pgtype.Timestamptz, error) {
+func (r *Repo) GetAttentionAuditExportLag(ctx context.Context) (db.Timestamptz, error) {
 	var cursor model.AuditExportCursor
 	err := r.Users.db.WithContext(ctx).Where("sink = ?", "opensearch").First(&cursor).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return pgtype.Timestamptz{}, err
+		return db.Timestamptz{}, err
 	}
 	q := r.Users.db.WithContext(ctx).Model(&model.AuditEvent{})
 	if err == nil {
@@ -343,9 +342,9 @@ func (r *Repo) GetAttentionAuditExportLag(ctx context.Context) (pgtype.Timestamp
 	var event model.AuditEvent
 	if err := q.Order("occurred_at ASC, id ASC").First(&event).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pgtype.Timestamptz{}, nil
+			return db.Timestamptz{}, nil
 		}
-		return pgtype.Timestamptz{}, err
+		return db.Timestamptz{}, err
 	}
 	return PGTime(event.OccurredAt), nil
 }

@@ -8,8 +8,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -151,17 +149,17 @@ func dropGroupRoles(tx *gorm.DB, userID string, keep map[string]string) error {
 }
 
 // GetUserByExternalID returns the account linked to a provider subject, or
-// pgx.ErrNoRows.
+// db.ErrNoRows.
 func (s *Users) GetUserByExternalID(ctx context.Context, arg db.GetUserByExternalIDParams) (db.User, error) {
 	if !arg.AuthProviderID.Valid || arg.ExternalID == nil {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	var row model.User
 	err := s.db.WithContext(ctx).
 		Where("auth_provider_id = ? AND external_id = ?", UUIDString(arg.AuthProviderID), *arg.ExternalID).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.User{}, err
@@ -170,7 +168,7 @@ func (s *Users) GetUserByExternalID(ctx context.Context, arg db.GetUserByExterna
 }
 
 // ListUsersByAuthProvider returns the accounts linked to a provider, by name.
-func (s *Users) ListUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) ([]db.User, error) {
+func (s *Users) ListUsersByAuthProvider(ctx context.Context, authProviderID db.UUID) ([]db.User, error) {
 	var rows []model.User
 	if err := s.db.WithContext(ctx).
 		Where("auth_provider_id = ?", UUIDString(authProviderID)).
@@ -186,7 +184,7 @@ func (s *Users) ListUsersByAuthProvider(ctx context.Context, authProviderID pgty
 }
 
 // MarkDirectorySynced stamps the account's last successful directory pass.
-func (s *Users) MarkDirectorySynced(ctx context.Context, id pgtype.UUID) error {
+func (s *Users) MarkDirectorySynced(ctx context.Context, id db.UUID) error {
 	now := time.Now().UTC()
 	return s.db.WithContext(ctx).Model(&model.User{}).
 		Where("id = ?", UUIDString(id)).
@@ -194,7 +192,7 @@ func (s *Users) MarkDirectorySynced(ctx context.Context, id pgtype.UUID) error {
 }
 
 // ReinstateDirectoryUser lifts only the directory's own suspension (#257).
-func (s *Users) ReinstateDirectoryUser(ctx context.Context, id pgtype.UUID) error {
+func (s *Users) ReinstateDirectoryUser(ctx context.Context, id db.UUID) error {
 	return s.db.WithContext(ctx).Model(&model.User{}).
 		Where("id = ? AND status = ? AND suspended_reason = ?", UUIDString(id), "suspended", "directory").
 		Updates(map[string]any{
@@ -206,7 +204,7 @@ func (s *Users) ReinstateDirectoryUser(ctx context.Context, id pgtype.UUID) erro
 }
 
 // CreateDirectoryReconcileRun opens a pass and returns its row.
-func (s *Users) CreateDirectoryReconcileRun(ctx context.Context, providerID pgtype.UUID) (db.DirectoryReconcileRun, error) {
+func (s *Users) CreateDirectoryReconcileRun(ctx context.Context, providerID db.UUID) (db.DirectoryReconcileRun, error) {
 	row := model.DirectoryReconcileRun{
 		ID:         model.UUID(NewUUID()),
 		ProviderID: model.UUID(UUIDString(providerID)),

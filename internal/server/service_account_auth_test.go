@@ -9,7 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestBearerContext (#653): a Baleia access token authenticates as before; a
@@ -23,7 +22,7 @@ func TestBearerContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sa := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Role: "member", Kind: "service_account"}
+	sa := db.User{ID: db.UUID{Bytes: uuid.New(), Valid: true}, Role: "member", Kind: "service_account"}
 	calls := 0
 	authSA := func(_ context.Context, raw string) (db.User, error) {
 		calls++

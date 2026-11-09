@@ -17,8 +17,6 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func testRegistry(t *testing.T) *connections.Registry {
@@ -44,7 +42,7 @@ func (f *recordingConnQuerier) CreateCatalogConnection(_ context.Context, p db.C
 	return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, AccessMode: p.AccessMode, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy}, nil
 }
 
-func (f *recordingConnQuerier) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
+func (f *recordingConnQuerier) GetCatalogConnectionByID(_ context.Context, id db.UUID) (db.CatalogConnection, error) {
 	for _, p := range f.created {
 		if p.ID == id {
 			return db.CatalogConnection{ID: p.ID, Name: p.Name, Type: p.Type, AccessMode: p.AccessMode, Url: p.Url, Config: p.Config, CredentialsEnc: p.CredentialsEnc, CreatedBy: p.CreatedBy}, nil
@@ -348,13 +346,13 @@ type updateConnQuerier struct {
 	updateErr error
 }
 
-func (f *updateConnQuerier) GetCatalogConnectionByID(context.Context, pgtype.UUID) (db.CatalogConnection, error) {
+func (f *updateConnQuerier) GetCatalogConnectionByID(context.Context, db.UUID) (db.CatalogConnection, error) {
 	return f.conn, nil
 }
 
 // ListCatalogsByConnection: these tests edit a connection nothing is bound
 // from, so there is nothing to re-apply (#664).
-func (f *updateConnQuerier) ListCatalogsByConnection(context.Context, pgtype.UUID) ([]db.Catalog, error) {
+func (f *updateConnQuerier) ListCatalogsByConnection(context.Context, db.UUID) ([]db.Catalog, error) {
 	return nil, nil
 }
 
@@ -413,7 +411,7 @@ func TestUpdateConnection_NameOnlyTouchesNothingElse(t *testing.T) {
 func TestUpdateConnection_NameTakenIsConflict(t *testing.T) {
 	t.Parallel()
 	kr := testKeyring(t)
-	q := &updateConnQuerier{conn: storedPolaris(t, kr), updateErr: &pgconn.PgError{Code: "23505"}}
+	q := &updateConnQuerier{conn: storedPolaris(t, kr), updateErr: &db.PGError{Code: "23505"}}
 	name := "taken"
 	rec := runUpdate(t, createHandlers(t, q, kr), UpdateCatalogConnectionRequest{Name: &name})
 	if rec.Code != 409 || !strings.Contains(rec.Body.String(), `"code":"conflict"`) {

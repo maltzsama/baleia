@@ -5,7 +5,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // catalogWriteStore is the persistence the catalog and grant write flows need
@@ -16,7 +15,7 @@ type catalogWriteStore interface {
 	SetCatalogEnabled(ctx context.Context, arg db.SetCatalogEnabledParams) error
 	UpsertManagedBinding(ctx context.Context, arg db.UpsertManagedBindingParams) (db.CatalogBinding, error)
 	UpdateBinding(ctx context.Context, arg db.UpdateBindingParams) (db.CatalogBinding, error)
-	DisableManagedBindingsOfCatalog(ctx context.Context, catalogID pgtype.UUID) error
+	DisableManagedBindingsOfCatalog(ctx context.Context, catalogID db.UUID) error
 	UpsertWorkspaceCatalogGrant(ctx context.Context, arg db.UpsertWorkspaceCatalogGrantParams) (db.WorkspaceCatalogGrant, error)
 	DeleteCatalogGrantRequest(ctx context.Context, arg db.DeleteCatalogGrantRequestParams) (int64, error)
 }

@@ -16,8 +16,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/galileostudio/baleia/internal/workload/resourcegroups/publish"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -40,7 +38,7 @@ func (s *Store) inTx(ctx context.Context, fn func(q db.Querier) error) error {
 
 // Write validates and publishes the document for one cluster's environment,
 // recording a new revision. It returns the revision number.
-func (s *Store) Write(ctx context.Context, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
+func (s *Store) Write(ctx context.Context, engineID db.UUID, environment string, doc workload.ResourceGroups) (int, error) {
 	var revision int
 	err := s.inTx(ctx, func(q db.Querier) error {
 		r, err := publish.Publish(ctx, q, engineID, environment, doc)
@@ -52,12 +50,12 @@ func (s *Store) Write(ctx context.Context, engineID pgtype.UUID, environment str
 
 // Rollback re-publishes the configuration of an earlier revision as a new
 // write, restoring the tables to that state.
-func (s *Store) Rollback(ctx context.Context, engineID pgtype.UUID, environment string, revision int) error {
+func (s *Store) Rollback(ctx context.Context, engineID db.UUID, environment string, revision int) error {
 	return s.inTx(ctx, func(q db.Querier) error {
 		config, err := q.GetTrinoResourceGroupRevision(ctx, db.GetTrinoResourceGroupRevisionParams{
 			EngineID: engineID, Revision: int32(revision), //nolint:gosec // a revision number never overflows int32
 		})
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return ErrRevisionNotFound
 		}
 		if err != nil {

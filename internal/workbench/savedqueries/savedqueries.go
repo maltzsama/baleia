@@ -11,16 +11,13 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/slug"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store reads saved queries; *repo.Repo implements it.
 type Store interface {
 	ListVisibleSavedQueries(ctx context.Context, arg db.ListVisibleSavedQueriesParams) ([]db.SavedQuery, error)
 	SearchVisibleSavedQueries(ctx context.Context, arg db.SearchVisibleSavedQueriesParams) ([]db.SavedQuery, error)
-	ListSavedQueryVersions(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListSavedQueryVersionsRow, error)
+	ListSavedQueryVersions(ctx context.Context, workspaceID db.UUID) ([]db.ListSavedQueryVersionsRow, error)
 	GetSavedQueryByID(ctx context.Context, arg db.GetSavedQueryByIDParams) (db.SavedQuery, error)
 	SavedQuerySlugExists(ctx context.Context, arg db.SavedQuerySlugExistsParams) (bool, error)
 }
@@ -28,20 +25,20 @@ type Store interface {
 // Folders finds a folder of the workspace; *folders.Service implements it
 // and reports a missing folder as folders.ErrNotFound.
 type Folders interface {
-	Get(ctx context.Context, ws, id pgtype.UUID) (db.QueryFolder, error)
+	Get(ctx context.Context, ws, id db.UUID) (db.QueryFolder, error)
 }
 
 // Content writes saved queries and their versions; *content.Service
 // implements it.
 type Content interface {
-	CreateSavedQuery(ctx context.Context, actor pgtype.UUID, in db.CreateSavedQueryParams) (db.SavedQuery, error)
-	UpdateSavedQuery(ctx context.Context, actor pgtype.UUID, in db.UpdateSavedQueryParams, expectedVersion *int32) (db.SavedQuery, bool, error)
-	DeleteSavedQuery(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID) error
+	CreateSavedQuery(ctx context.Context, actor db.UUID, in db.CreateSavedQueryParams) (db.SavedQuery, error)
+	UpdateSavedQuery(ctx context.Context, actor db.UUID, in db.UpdateSavedQueryParams, expectedVersion *int32) (db.SavedQuery, bool, error)
+	DeleteSavedQuery(ctx context.Context, actor db.UUID, workspaceID, id db.UUID) error
 }
 
 // Target resolves the engine target a saved query runs on: its binding and
 // optional schema. It runs after every other check, so its errors come last.
-type Target func(ctx context.Context) (bindingID pgtype.UUID, schema *string, err error)
+type Target func(ctx context.Context) (bindingID db.UUID, schema *string, err error)
 
 var (
 	// ErrNotFound: no saved query has this id in the workspace.
@@ -63,17 +60,17 @@ type Item struct {
 // Filter narrows a listing. A valid FolderID lists that folder; otherwise
 // the whole workspace is searched.
 type Filter struct {
-	SpaceID  pgtype.UUID
-	FolderID pgtype.UUID
+	SpaceID  db.UUID
+	FolderID db.UUID
 	Q        *string
 	Limit    *int32
 }
 
 // New is a saved query to create.
 type New struct {
-	SpaceID pgtype.UUID
+	SpaceID db.UUID
 	// FolderID is the folder in SpaceID, or invalid for the root.
-	FolderID pgtype.UUID
+	FolderID db.UUID
 	Name     string
 	// Slug is derived from the name and made unique when empty.
 	Slug   string
@@ -87,10 +84,10 @@ type Change struct {
 	SQL  *string
 	Slug *string
 	// SpaceID moves the query; the caller checked the destination space.
-	SpaceID *pgtype.UUID
+	SpaceID *db.UUID
 	// MoveToRoot clears the folder; FolderID, when set, wins over it.
 	MoveToRoot bool
-	FolderID   *pgtype.UUID
+	FolderID   *db.UUID
 	// Target, when set, replaces the target.
 	Target Target
 	// ExpectedVersion rejects the write when another one landed first.
@@ -110,7 +107,7 @@ func NewService(store Store, folders Folders, content Content) *Service {
 }
 
 // List returns the saved queries the user can see, with their versions.
-func (s *Service) List(ctx context.Context, ws, userID pgtype.UUID, f Filter) ([]Item, error) {
+func (s *Service) List(ctx context.Context, ws, userID db.UUID, f Filter) ([]Item, error) {
 	var (
 		queries []db.SavedQuery
 		err     error
@@ -143,16 +140,16 @@ func (s *Service) List(ctx context.Context, ws, userID pgtype.UUID, f Filter) ([
 }
 
 // Get returns one saved query of the workspace.
-func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.SavedQuery, error) {
+func (s *Service) Get(ctx context.Context, ws, id db.UUID) (db.SavedQuery, error) {
 	q, err := s.store.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{WorkspaceID: ws, ID: id})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.SavedQuery{}, ErrNotFound
 	}
 	return q, err
 }
 
 // Create saves a query as actor.
-func (s *Service) Create(ctx context.Context, actor, ws pgtype.UUID, in New) (db.SavedQuery, error) {
+func (s *Service) Create(ctx context.Context, actor, ws db.UUID, in New) (db.SavedQuery, error) {
 	if err := s.checkFolder(ctx, ws, in.FolderID, in.SpaceID); err != nil {
 		return db.SavedQuery{}, err
 	}
@@ -169,7 +166,7 @@ func (s *Service) Create(ctx context.Context, actor, ws pgtype.UUID, in New) (db
 		return db.SavedQuery{}, ErrInvalidSlug
 	}
 	var (
-		bindingID pgtype.UUID
+		bindingID db.UUID
 		schema    *string
 	)
 	if in.Target != nil {
@@ -199,7 +196,7 @@ func (s *Service) Create(ctx context.Context, actor, ws pgtype.UUID, in New) (db
 
 // Update applies change to current as actor. A version conflict is returned
 // as content reports it.
-func (s *Service) Update(ctx context.Context, actor pgtype.UUID, current db.SavedQuery, change Change) (db.SavedQuery, error) {
+func (s *Service) Update(ctx context.Context, actor db.UUID, current db.SavedQuery, change Change) (db.SavedQuery, error) {
 	spaceID := current.SpaceID
 	if change.SpaceID != nil {
 		spaceID = *change.SpaceID
@@ -213,7 +210,7 @@ func (s *Service) Update(ctx context.Context, actor pgtype.UUID, current db.Save
 	}
 	folderID := current.FolderID
 	if change.MoveToRoot {
-		folderID = pgtype.UUID{}
+		folderID = db.UUID{}
 	}
 	if change.FolderID != nil {
 		folderID = *change.FolderID
@@ -255,12 +252,12 @@ func (s *Service) Update(ctx context.Context, actor pgtype.UUID, current db.Save
 }
 
 // Delete removes a saved query as actor.
-func (s *Service) Delete(ctx context.Context, actor, ws, id pgtype.UUID) error {
+func (s *Service) Delete(ctx context.Context, actor, ws, id db.UUID) error {
 	return s.content.DeleteSavedQuery(ctx, actor, ws, id)
 }
 
 // checkFolder accepts no folder, or a folder of the workspace in spaceID.
-func (s *Service) checkFolder(ctx context.Context, ws, folderID, spaceID pgtype.UUID) error {
+func (s *Service) checkFolder(ctx context.Context, ws, folderID, spaceID db.UUID) error {
 	if !folderID.Valid {
 		return nil
 	}
@@ -275,6 +272,6 @@ func (s *Service) checkFolder(ctx context.Context, ws, folderID, spaceID pgtype.
 }
 
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505" // unique_violation
+	pgErr, ok := db.AsPGError(err)
+	return ok && pgErr.Code == "23505" // unique_violation
 }

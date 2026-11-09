@@ -15,12 +15,10 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func uid(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }
+func uid(b byte) db.UUID { return db.UUID{Bytes: [16]byte{b}, Valid: true} }
 
 type fakeTokenStore struct {
 	token db.AgentToken
@@ -30,20 +28,20 @@ type fakeTokenStore struct {
 
 func (s *fakeTokenStore) GetAgentTokenByHash(_ context.Context, hash string) (db.AgentToken, error) {
 	if hash != s.token.TokenHash {
-		return db.AgentToken{}, pgx.ErrNoRows
+		return db.AgentToken{}, db.ErrNoRows
 	}
 	return s.token, nil
 }
 
-func (s *fakeTokenStore) GetAgentByID(context.Context, pgtype.UUID) (db.Agent, error) {
+func (s *fakeTokenStore) GetAgentByID(context.Context, db.UUID) (db.Agent, error) {
 	return s.agent, nil
 }
 
-func (s *fakeTokenStore) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+func (s *fakeTokenStore) GetUserByID(context.Context, db.UUID) (db.User, error) {
 	return s.owner, nil
 }
 
-func (s *fakeTokenStore) TouchAgentToken(context.Context, pgtype.UUID) error { return nil }
+func (s *fakeTokenStore) TouchAgentToken(context.Context, db.UUID) error { return nil }
 
 func fixtures() (*fakeTokenStore, string) {
 	raw := auth.AgentTokenPrefix + "test-secret"
@@ -52,7 +50,7 @@ func fixtures() (*fakeTokenStore, string) {
 			ID:        uid(3),
 			AgentID:   uid(1),
 			TokenHash: auth.AgentTokenHash(raw),
-			ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
+			ExpiresAt: db.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
 		},
 		agent: db.Agent{ID: uid(1), OwnerID: uid(2), Kind: "external", Status: "active"},
 		owner: db.User{ID: uid(2), Status: auth.StatusActive},
@@ -178,7 +176,7 @@ type gateStore struct {
 	agent db.Agent
 }
 
-func (s gateStore) GetAgentByID(context.Context, pgtype.UUID) (db.Agent, error) {
+func (s gateStore) GetAgentByID(context.Context, db.UUID) (db.Agent, error) {
 	return s.agent, nil
 }
 
@@ -221,7 +219,11 @@ func TestImportBoundary(t *testing.T) {
 		t.Fatalf("go list: %v", err)
 	}
 	forbidden := []string{
-		"/internal/db",
+		// internal/db is the shared value/type package (UUIDs and DTOs); it
+		// owns no connection. The store and its drivers are what MCP must not
+		// reach directly.
+		"/internal/store",
+		"/internal/dbpool",
 		"/internal/trino",
 		"/internal/queryengine",
 		"/internal/temporal",

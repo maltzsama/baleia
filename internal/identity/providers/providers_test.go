@@ -7,9 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeStore struct {
@@ -45,19 +42,19 @@ func (f *fakeStore) ListAuthProviders(ctx context.Context) ([]db.AuthProvider, e
 	return out, nil
 }
 
-func (f *fakeStore) GetAuthProviderByID(_ context.Context, id pgtype.UUID) (db.AuthProvider, error) {
+func (f *fakeStore) GetAuthProviderByID(_ context.Context, id db.UUID) (db.AuthProvider, error) {
 	if ap, ok := f.providers[id.Bytes]; ok {
 		return ap, nil
 	}
-	return db.AuthProvider{}, pgx.ErrNoRows
+	return db.AuthProvider{}, db.ErrNoRows
 }
 
-func (f *fakeStore) CountUsersByAuthProvider(_ context.Context, id pgtype.UUID) (int64, error) {
+func (f *fakeStore) CountUsersByAuthProvider(_ context.Context, id db.UUID) (int64, error) {
 	return f.linked[id.Bytes], nil
 }
 
 func (f *fakeStore) CreateAuthProvider(_ context.Context, arg db.CreateAuthProviderParams) (db.AuthProvider, error) {
-	ap := db.AuthProvider{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Name: arg.Name, Type: arg.Type, ConfigEnc: arg.ConfigEnc, Enabled: arg.Enabled}
+	ap := db.AuthProvider{ID: db.UUID{Bytes: uuid.New(), Valid: true}, Name: arg.Name, Type: arg.Type, ConfigEnc: arg.ConfigEnc, Enabled: arg.Enabled}
 	f.providers[ap.ID.Bytes] = ap
 	return ap, nil
 }
@@ -69,22 +66,22 @@ func (f *fakeStore) UpdateAuthProvider(_ context.Context, arg db.UpdateAuthProvi
 	return ap, nil
 }
 
-func (f *fakeStore) DeleteUserIDPTokensByAuthProvider(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) DeleteUserIDPTokensByAuthProvider(_ context.Context, id db.UUID) error {
 	f.tokensForgot[id.Bytes] = true
 	return nil
 }
 
-func (f *fakeStore) RevokeRefreshTokensByAuthProvider(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) RevokeRefreshTokensByAuthProvider(_ context.Context, id db.UUID) error {
 	f.detached[id.Bytes] = true
 	return nil
 }
-func (f *fakeStore) DeleteAPIKeysByAuthProvider(context.Context, pgtype.UUID) error { return nil }
-func (f *fakeStore) SuspendUsersByAuthProvider(context.Context, pgtype.UUID) error  { return nil }
+func (f *fakeStore) DeleteAPIKeysByAuthProvider(context.Context, db.UUID) error { return nil }
+func (f *fakeStore) SuspendUsersByAuthProvider(context.Context, db.UUID) error  { return nil }
 
-func (f *fakeStore) DeleteAuthProvider(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) DeleteAuthProvider(_ context.Context, id db.UUID) error {
 	if f.raceLinked {
 		// A login linked a user after the count: the database refuses.
-		return &pgconn.PgError{Code: "23514", ConstraintName: "chk_oidc_auth"}
+		return &db.PGError{Code: "23514", ConstraintName: "chk_oidc_auth"}
 	}
 	delete(f.providers, id.Bytes)
 	return nil
@@ -96,8 +93,8 @@ func TestCreate_SealsWithTheGeneratedID(t *testing.T) {
 	t.Parallel()
 	st := newStore()
 	s := New(st, st.tx)
-	var sealedFor pgtype.UUID
-	ap, err := s.Create(context.Background(), "corp", "oidc", true, func(id pgtype.UUID) (string, error) {
+	var sealedFor db.UUID
+	ap, err := s.Create(context.Background(), "corp", "oidc", true, func(id db.UUID) (string, error) {
 		sealedFor = id
 		return "sealed:" + id.String(), nil
 	})
@@ -109,7 +106,7 @@ func TestCreate_SealsWithTheGeneratedID(t *testing.T) {
 	}
 
 	failing := errors.New("cannot seal")
-	if _, err := s.Create(context.Background(), "bad", "ldap", true, func(pgtype.UUID) (string, error) { return "", failing }); !errors.Is(err, failing) {
+	if _, err := s.Create(context.Background(), "bad", "ldap", true, func(db.UUID) (string, error) { return "", failing }); !errors.Is(err, failing) {
 		t.Errorf("seal failure = %v", err)
 	}
 }
@@ -119,7 +116,7 @@ func TestDelete(t *testing.T) {
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
-	seal := func(id pgtype.UUID) (string, error) { return id.String(), nil }
+	seal := func(id db.UUID) (string, error) { return id.String(), nil }
 
 	free, _ := s.Create(ctx, "free", "oidc", true, seal)
 	if err := s.Delete(ctx, free.ID, false); err != nil {
@@ -150,7 +147,7 @@ func TestListEnabled(t *testing.T) {
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
-	seal := func(id pgtype.UUID) (string, error) { return id.String(), nil }
+	seal := func(id db.UUID) (string, error) { return id.String(), nil }
 	_, _ = s.Create(ctx, "on", "oidc", true, seal)
 	_, _ = s.Create(ctx, "off", "oidc", false, seal)
 	if on, _ := s.ListEnabled(ctx); len(on) != 1 || on[0].Name != "on" {
@@ -165,7 +162,7 @@ type brokenStore struct{ *fakeStore }
 
 var errDown = errors.New("connection refused")
 
-func (brokenStore) GetAuthProviderByID(context.Context, pgtype.UUID) (db.AuthProvider, error) {
+func (brokenStore) GetAuthProviderByID(context.Context, db.UUID) (db.AuthProvider, error) {
 	return db.AuthProvider{}, errDown
 }
 
@@ -175,7 +172,7 @@ func TestGet_StoreFailureIsNotNotFound(t *testing.T) {
 	t.Parallel()
 	st := brokenStore{newStore()}
 	s := New(st, st.tx)
-	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	id := db.UUID{Bytes: uuid.New(), Valid: true}
 	if _, err := s.Get(context.Background(), id); !errors.Is(err, errDown) || errors.Is(err, ErrNotFound) {
 		t.Errorf("Get = %v, want the store error", err)
 	}
@@ -190,7 +187,7 @@ func TestDelete_UserLinkedDuringDelete(t *testing.T) {
 	t.Parallel()
 	st := newStore()
 	s := New(st, st.tx)
-	ap, _ := s.Create(context.Background(), "p", "oidc", true, func(id pgtype.UUID) (string, error) { return id.String(), nil })
+	ap, _ := s.Create(context.Background(), "p", "oidc", true, func(id db.UUID) (string, error) { return id.String(), nil })
 	st.raceLinked = true
 	if err := s.Delete(context.Background(), ap.ID, false); !errors.Is(err, ErrInUse) {
 		t.Fatalf("Delete = %v, want ErrInUse", err)
@@ -204,7 +201,7 @@ func TestUpdate_DisableForgetsTokens(t *testing.T) {
 	ctx := context.Background()
 	st := newStore()
 	s := New(st, st.tx)
-	ap, err := s.Create(ctx, "corp", "oidc", true, func(pgtype.UUID) (string, error) { return "sealed", nil })
+	ap, err := s.Create(ctx, "corp", "oidc", true, func(db.UUID) (string, error) { return "sealed", nil })
 	if err != nil {
 		t.Fatal(err)
 	}

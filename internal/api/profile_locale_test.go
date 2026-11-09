@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const localeTestUserID = "11111111-1111-1111-1111-111111111111"
@@ -16,7 +15,7 @@ type fakeLocaleQuerier struct {
 	updated *db.UpdateUserParams
 }
 
-func (f *fakeLocaleQuerier) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+func (f *fakeLocaleQuerier) GetUserByID(context.Context, db.UUID) (db.User, error) {
 	return f.user, nil
 }
 

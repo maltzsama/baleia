@@ -14,8 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/semantic/metrics"
 	"github.com/galileostudio/baleia/internal/semantic/models"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -31,10 +29,10 @@ var (
 // ── docs ──────────────────────────────────────────────────────────────────────
 
 // GetSemanticDoc returns the doc of a table (ColumnName nil) or one of its
-// columns, or pgx.ErrNoRows.
+// columns, or db.ErrNoRows.
 func (r *Repo) GetSemanticDoc(ctx context.Context, arg db.GetSemanticDocParams) (db.SemanticDoc, error) {
 	if !arg.WorkspaceID.Valid || !arg.CatalogID.Valid {
-		return db.SemanticDoc{}, pgx.ErrNoRows
+		return db.SemanticDoc{}, db.ErrNoRows
 	}
 	return r.getSemanticDoc(ctx, r.Users.db.WithContext(ctx), arg)
 }
@@ -83,7 +81,7 @@ func (r *Repo) ListSemanticDocsForTable(ctx context.Context, arg db.ListSemantic
 // ON CONFLICT clause did.
 func (r *Repo) UpsertSemanticDoc(ctx context.Context, arg db.UpsertSemanticDocParams) (db.SemanticDoc, error) {
 	if !arg.WorkspaceID.Valid || !arg.CatalogID.Valid {
-		return db.SemanticDoc{}, pgx.ErrNoRows
+		return db.SemanticDoc{}, db.ErrNoRows
 	}
 	var out db.SemanticDoc
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -93,7 +91,7 @@ func (r *Repo) UpsertSemanticDoc(ctx context.Context, arg db.UpsertSemanticDocPa
 			TableName: arg.TableName, ColumnName: arg.ColumnName,
 		}
 		current, err := r.getSemanticDoc(ctx, tx, getParams)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err != nil && !errors.Is(err, db.ErrNoRows) {
 			return err
 		}
 		exists := err == nil
@@ -112,8 +110,8 @@ func (r *Repo) UpsertSemanticDoc(ctx context.Context, arg db.UpsertSemanticDocPa
 					certifiedAt = PGTime(now)
 				}
 			} else {
-				certifiedBy = pgtype.UUID{}
-				certifiedAt = pgtype.Timestamptz{}
+				certifiedBy = db.UUID{}
+				certifiedAt = db.Timestamptz{}
 			}
 			updates := map[string]any{
 				"description":   arg.Description,
@@ -324,7 +322,7 @@ func (r *Repo) ListVisibleSemanticMetrics(ctx context.Context, arg db.ListVisibl
 
 // ListSemanticMetricVersions returns the latest content version of every
 // metric in the workspace. The per-entity maximum is reduced in Go (ADR 0020).
-func (r *Repo) ListSemanticMetricVersions(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListSemanticMetricVersionsRow, error) {
+func (r *Repo) ListSemanticMetricVersions(ctx context.Context, workspaceID db.UUID) ([]db.ListSemanticMetricVersionsRow, error) {
 	return r.listContentVersions(ctx, workspaceID, "semantic_metric")
 }
 
@@ -332,7 +330,7 @@ func (r *Repo) ListSemanticMetricVersions(ctx context.Context, workspaceID pgtyp
 // clears both when uncertifying.
 func (r *Repo) SetSemanticMetricCertification(ctx context.Context, arg db.SetSemanticMetricCertificationParams) (db.SemanticMetric, error) {
 	if !arg.WorkspaceID.Valid || !arg.ID.Valid {
-		return db.SemanticMetric{}, pgx.ErrNoRows
+		return db.SemanticMetric{}, db.ErrNoRows
 	}
 	updates := map[string]any{
 		"certified":    arg.Certified,
@@ -350,7 +348,7 @@ func (r *Repo) SetSemanticMetricCertification(ctx context.Context, arg db.SetSem
 		return db.SemanticMetric{}, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.SemanticMetric{}, pgx.ErrNoRows
+		return db.SemanticMetric{}, db.ErrNoRows
 	}
 	return r.GetSemanticMetric(ctx, db.GetSemanticMetricParams{WorkspaceID: arg.WorkspaceID, ID: arg.ID})
 }
@@ -390,7 +388,7 @@ func (r *Repo) ListVisibleSemanticModels(ctx context.Context, arg db.ListVisible
 
 // ListSemanticModelVersions returns the latest content version of every model
 // in the workspace.
-func (r *Repo) ListSemanticModelVersions(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListSemanticModelVersionsRow, error) {
+func (r *Repo) ListSemanticModelVersions(ctx context.Context, workspaceID db.UUID) ([]db.ListSemanticModelVersionsRow, error) {
 	versions, err := r.listContentVersions(ctx, workspaceID, "semantic_model")
 	if err != nil {
 		return nil, err
@@ -406,7 +404,7 @@ func (r *Repo) ListSemanticModelVersions(ctx context.Context, workspaceID pgtype
 // clears both when uncertifying.
 func (r *Repo) SetSemanticModelCertification(ctx context.Context, arg db.SetSemanticModelCertificationParams) (db.SemanticModel, error) {
 	if !arg.WorkspaceID.Valid || !arg.ID.Valid {
-		return db.SemanticModel{}, pgx.ErrNoRows
+		return db.SemanticModel{}, db.ErrNoRows
 	}
 	updates := map[string]any{
 		"certified":    arg.Certified,
@@ -424,7 +422,7 @@ func (r *Repo) SetSemanticModelCertification(ctx context.Context, arg db.SetSema
 		return db.SemanticModel{}, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.SemanticModel{}, pgx.ErrNoRows
+		return db.SemanticModel{}, db.ErrNoRows
 	}
 	return r.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: arg.WorkspaceID, ID: arg.ID})
 }
@@ -442,7 +440,7 @@ func (r *Repo) getSemanticDoc(ctx context.Context, scope *gorm.DB, arg db.GetSem
 	var row model.SemanticDoc
 	err := q.First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.SemanticDoc{}, pgx.ErrNoRows
+		return db.SemanticDoc{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.SemanticDoc{}, err
@@ -452,7 +450,7 @@ func (r *Repo) getSemanticDoc(ctx context.Context, scope *gorm.DB, arg db.GetSem
 
 // listContentVersions returns the latest version per entity of one kind. The
 // highest version per entity is reduced in Go, so the query needs no GROUP BY.
-func (r *Repo) listContentVersions(ctx context.Context, workspaceID pgtype.UUID, entityType string) ([]db.ListSemanticMetricVersionsRow, error) {
+func (r *Repo) listContentVersions(ctx context.Context, workspaceID db.UUID, entityType string) ([]db.ListSemanticMetricVersionsRow, error) {
 	if !workspaceID.Valid {
 		return nil, nil
 	}
@@ -478,7 +476,7 @@ func (r *Repo) listContentVersions(ctx context.Context, workspaceID pgtype.UUID,
 
 // grantedCatalogIDs is the Go replacement for baleia_workspace_catalog_ids:
 // the enabled catalogs granted to the workspace.
-func grantedCatalogIDs(scope *gorm.DB, workspaceID pgtype.UUID) ([]string, error) {
+func grantedCatalogIDs(scope *gorm.DB, workspaceID db.UUID) ([]string, error) {
 	if !workspaceID.Valid {
 		return nil, nil
 	}

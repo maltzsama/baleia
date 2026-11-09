@@ -9,7 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // The definition a client sends carries neither the slug nor the binding, and
@@ -232,7 +231,7 @@ func TestSemanticModels_SpaceCountsAndSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	model := created.(CreateSemanticModel201JSONResponse)
-	n, err := f.h.queries.CountSpaceContent(context.Background(), pgtype.UUID{Bytes: *model.SpaceId, Valid: true})
+	n, err := f.h.queries.CountSpaceContent(context.Background(), db.UUID{Bytes: *model.SpaceId, Valid: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,14 +302,14 @@ func TestSemanticModels_MigrateV1NeedsCatalogGrant(t *testing.T) {
 	t.Parallel()
 	f, _ := metricFixture(t)
 	ctx := f.as(f.owner)
-	space, err := f.h.queries.GetDefaultSpace(context.Background(), pgtype.UUID{Bytes: f.ws, Valid: true})
+	space, err := f.h.queries.GetDefaultSpace(context.Background(), db.UUID{Bytes: f.ws, Valid: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := pgtype.UUID{Bytes: uuid.MustParse(f.owner), Valid: true}
+	owner := db.UUID{Bytes: uuid.MustParse(f.owner), Valid: true}
 	if _, err := f.h.queries.CreateSemanticMetric(context.Background(), db.CreateSemanticMetricParams{
-		WorkspaceID: pgtype.UUID{Bytes: f.ws, Valid: true}, SpaceID: space.ID, Slug: "secret_count", Label: "Secret",
-		CatalogID: pgtype.UUID{Bytes: f.other, Valid: true}, Namespace: []string{"sales"}, TableName: "orders_secret",
+		WorkspaceID: db.UUID{Bytes: f.ws, Valid: true}, SpaceID: space.ID, Slug: "secret_count", Label: "Secret",
+		CatalogID: db.UUID{Bytes: f.other, Valid: true}, Namespace: []string{"sales"}, TableName: "orders_secret",
 		Definition: []byte(`{"type":"simple","aggregation":"count"}`), FormatVersion: 1, OwnerUserID: owner, UpdatedBy: owner,
 	}); err != nil {
 		t.Fatal(err)

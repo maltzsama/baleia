@@ -13,9 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TeamMembers writes team memberships; *repo.Repo implements it.
@@ -25,9 +22,9 @@ type TeamMembers interface {
 
 // ApplyTeams adds userID to every mapped team with its mapped role. A team
 // that cannot be applied is logged and skipped: the login still succeeds.
-func ApplyTeams(ctx context.Context, logger *slog.Logger, store TeamMembers, userID pgtype.UUID, teams []identity.TeamAssignment) {
+func ApplyTeams(ctx context.Context, logger *slog.Logger, store TeamMembers, userID db.UUID, teams []identity.TeamAssignment) {
 	for _, t := range teams {
-		var teamID pgtype.UUID
+		var teamID db.UUID
 		if err := teamID.Scan(t.TeamID); err != nil {
 			continue
 		}
@@ -53,7 +50,7 @@ type WorkspaceMembers interface {
 // never reached, and on a team's workspace the role needs team membership,
 // which ApplyTeams applies first. A failure is returned so the sign-in fails
 // instead of leaving a removed group's role in effect.
-func ApplyWorkspaces(ctx context.Context, store WorkspaceMembers, userID pgtype.UUID, workspaces []identity.WorkspaceAssignment) error {
+func ApplyWorkspaces(ctx context.Context, store WorkspaceMembers, userID db.UUID, workspaces []identity.WorkspaceAssignment) error {
 	type assignment struct {
 		WorkspaceID string `json:"workspace_id"`
 		Role        string `json:"role"`
@@ -89,7 +86,7 @@ var ErrNotProvisioned = errors.New("provision: not provisioned")
 // provider allows (#251): auto-create on, a verified e-mail, and an allowed
 // domain. An existing e-mail account is never linked. The mapped role and
 // teams are applied on every login.
-func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, providerID pgtype.UUID, cfg auth.OIDCProviderConfig, info *auth.OIDCUserInfo) (db.User, error) {
+func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, providerID db.UUID, cfg auth.OIDCProviderConfig, info *auth.OIDCUserInfo) (db.User, error) {
 	mapped, err := identity.MapIdentity(identity.MappingInput{
 		Groups:           info.Groups,
 		RoleMapping:      cfg.RoleMapping,
@@ -104,7 +101,7 @@ func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, provider
 	bySubject := db.GetUserByExternalIDParams{AuthProviderID: providerID, ExternalID: &info.Subject}
 	user, err := store.GetUserByExternalID(ctx, bySubject)
 	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
+		if !errors.Is(err, db.ErrNoRows) {
 			return db.User{}, err
 		}
 		if !cfg.AutoCreate || !info.EmailVerified || len(cfg.AllowedEmailDomains) == 0 || !DomainAllowed(info.Email, cfg.AllowedEmailDomains) {
@@ -165,6 +162,6 @@ func DomainAllowed(email string, domains []string) bool {
 }
 
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	pgErr, ok := db.AsPGError(err)
+	return ok && pgErr.Code == "23505"
 }

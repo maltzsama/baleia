@@ -15,7 +15,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func main() {
@@ -47,7 +46,7 @@ func main() {
 	defer func() { _ = store.Close(gdb) }()
 	q := repo.New(gdb)
 
-	var cursor pgtype.UUID
+	var cursor db.UUID
 	total := 0
 	for {
 		rows, err := q.ListStatementsForReferenceBackfill(ctx, db.ListStatementsForReferenceBackfillParams{

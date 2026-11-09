@@ -15,8 +15,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestGetDialect(t *testing.T) {
@@ -87,7 +85,7 @@ func TestSplitStatements_UTF16Offsets(t *testing.T) {
 
 type failingEngines struct{}
 
-func (failingEngines) Get(context.Context, pgtype.UUID) (queryengine.Engine, error) {
+func (failingEngines) Get(context.Context, db.UUID) (queryengine.Engine, error) {
 	return nil, errors.New("no adapter")
 }
 func (failingEngines) DefaultTrino(context.Context) (queryengine.Engine, error) {
@@ -108,8 +106,8 @@ func TestDescribeEngine(t *testing.T) {
 	defer srv.Close()
 	engines, _ := trinoBackends(srv.URL)
 	h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)})
-	row := db.Engine{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, Name: "trino", Kind: "trino", Class: "federated",
-		IdentityMode: "impersonation", Enabled: true, UpdatedAt: pgtype.Timestamptz{Time: time.Unix(10, 0), Valid: true}}
+	row := db.Engine{ID: db.UUID{Bytes: [16]byte{1}, Valid: true}, Name: "trino", Kind: "trino", Class: "federated",
+		IdentityMode: "impersonation", Enabled: true, UpdatedAt: db.Timestamptz{Time: time.Unix(10, 0), Valid: true}}
 
 	for range 2 {
 		e := h.describeEngine(context.Background(), row)
@@ -137,7 +135,7 @@ func TestDescribeEngine(t *testing.T) {
 // slowEngines answers like failingEngines after a delay.
 type slowEngines struct{ delay time.Duration }
 
-func (s slowEngines) Get(context.Context, pgtype.UUID) (queryengine.Engine, error) {
+func (s slowEngines) Get(context.Context, db.UUID) (queryengine.Engine, error) {
 	time.Sleep(s.delay)
 	return nil, errors.New("no adapter")
 }
@@ -154,7 +152,7 @@ func TestDescribeEngines_ParallelInOrder(t *testing.T) {
 		h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: slowEngines{delay: delay}})
 		rows := make([]db.Engine, 8)
 		for i := range rows {
-			rows[i] = db.Engine{ID: pgtype.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, Name: string(rune('a' + i)), Kind: "postgresql"}
+			rows[i] = db.Engine{ID: db.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, Name: string(rune('a' + i)), Kind: "postgresql"}
 		}
 		start := time.Now()
 		out := h.describeEngines(context.Background(), rows)
@@ -220,8 +218,8 @@ func TestEngineHealth_FromProbe(t *testing.T) {
 
 	engines, _ := trinoBackends(srv.URL)
 	h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: noEngineRows{}, engines: engines, versionCache: NewTTLStore[engineProbe](engineVersionTTL)})
-	row := db.Engine{ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true}, Name: "trino", Kind: "trino", Class: "federated",
-		IdentityMode: "impersonation", Enabled: true, UpdatedAt: pgtype.Timestamptz{Time: time.Unix(20, 0), Valid: true}}
+	row := db.Engine{ID: db.UUID{Bytes: [16]byte{2}, Valid: true}, Name: "trino", Kind: "trino", Class: "federated",
+		IdentityMode: "impersonation", Enabled: true, UpdatedAt: db.Timestamptz{Time: time.Unix(20, 0), Valid: true}}
 
 	e := h.describeEngine(context.Background(), row)
 	if e.Health == nil {
@@ -257,10 +255,10 @@ func TestConnectionAllows_ChecksComputedActions(t *testing.T) {
 // reports neither.
 type noEngineRows struct{ db.Querier }
 
-func (noEngineRows) GetCatalogConnectionByID(context.Context, pgtype.UUID) (db.CatalogConnection, error) {
-	return db.CatalogConnection{}, pgx.ErrNoRows
+func (noEngineRows) GetCatalogConnectionByID(context.Context, db.UUID) (db.CatalogConnection, error) {
+	return db.CatalogConnection{}, db.ErrNoRows
 }
 
-func (noEngineRows) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+func (noEngineRows) ListBindingsByEngine(context.Context, db.UUID) ([]db.CatalogBinding, error) {
 	return nil, nil
 }

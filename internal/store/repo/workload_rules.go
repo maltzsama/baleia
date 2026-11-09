@@ -7,17 +7,15 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
 // GetWorkloadRule returns one ordered workload rule (#539, #773).
-func (r *Repo) GetWorkloadRule(ctx context.Context, id pgtype.UUID) (db.WorkloadRule, error) {
+func (r *Repo) GetWorkloadRule(ctx context.Context, id db.UUID) (db.WorkloadRule, error) {
 	var row model.WorkloadRule
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.WorkloadRule{}, pgx.ErrNoRows
+		return db.WorkloadRule{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.WorkloadRule{}, err
@@ -85,13 +83,13 @@ func (r *Repo) UpdateWorkloadRule(ctx context.Context, arg db.UpdateWorkloadRule
 		return db.WorkloadRule{}, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.WorkloadRule{}, pgx.ErrNoRows
+		return db.WorkloadRule{}, db.ErrNoRows
 	}
 	return r.GetWorkloadRule(ctx, arg.ID)
 }
 
 // DeleteWorkloadRule removes one rule and reports how many rows it deleted.
-func (r *Repo) DeleteWorkloadRule(ctx context.Context, id pgtype.UUID) (int64, error) {
+func (r *Repo) DeleteWorkloadRule(ctx context.Context, id db.UUID) (int64, error) {
 	res := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).Delete(&model.WorkloadRule{})
 	return res.RowsAffected, res.Error
 }

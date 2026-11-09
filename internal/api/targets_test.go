@@ -12,11 +12,10 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func id(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }
+func id(b byte) db.UUID { return db.UUID{Bytes: [16]byte{b}, Valid: true} }
 
 // targetRow is binding 0xB<binding> of catalog 0xC<catalog> on an engine of
 // the given kind.

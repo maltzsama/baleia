@@ -10,8 +10,6 @@ import (
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // engineSim is a binder over a simulated engine: the catalogs it has and
@@ -75,7 +73,7 @@ type manyStore struct {
 func (s *manyStore) TransitionBinding(_ context.Context, a db.TransitionBindingParams) (db.CatalogBinding, error) {
 	b, ok := s.bindings[a.ID.Bytes]
 	if !ok || !slices.Contains(a.FromStates, b.LifecycleState) {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+		return db.CatalogBinding{}, db.ErrNoRows
 	}
 	s.transitions++
 	b.LifecycleState, b.LastErrorCode = a.ToState, a.ErrorCode
@@ -84,7 +82,7 @@ func (s *manyStore) TransitionBinding(_ context.Context, a db.TransitionBindingP
 	}
 	return *b, nil
 }
-func (s *manyStore) ListManagedBindingsOfEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+func (s *manyStore) ListManagedBindingsOfEngine(context.Context, db.UUID) ([]db.CatalogBinding, error) {
 	var out []db.CatalogBinding
 	for _, b := range s.bindings {
 		out = append(out, *b)
@@ -92,14 +90,14 @@ func (s *manyStore) ListManagedBindingsOfEngine(context.Context, pgtype.UUID) ([
 	slices.SortFunc(out, func(a, b db.CatalogBinding) int { return strings.Compare(a.EngineCatalogName, b.EngineCatalogName) })
 	return out, nil
 }
-func (s *manyStore) ManagedBindingNamesOfEngine(context.Context, pgtype.UUID) ([]string, error) {
+func (s *manyStore) ManagedBindingNamesOfEngine(context.Context, db.UUID) ([]string, error) {
 	var out []string
 	for _, b := range s.bindings {
 		out = append(out, b.EngineCatalogName)
 	}
 	return out, nil
 }
-func (s *manyStore) ObservedManagedNamesOfEngine(context.Context, pgtype.UUID) ([]string, error) {
+func (s *manyStore) ObservedManagedNamesOfEngine(context.Context, db.UUID) ([]string, error) {
 	return s.leftovers, nil
 }
 func (s *manyStore) UpsertEngineCatalogObservation(context.Context, db.UpsertEngineCatalogObservationParams) error {
@@ -121,7 +119,7 @@ func (s *manyStore) MarkEngineCatalogManaged(context.Context, db.MarkEngineCatal
 
 func (s *manyStore) add(name, state string) {
 	id := [16]byte{byte(len(s.bindings) + 1)}
-	s.bindings[id] = &db.CatalogBinding{ID: pgtype.UUID{Bytes: id, Valid: true}, EngineCatalogName: name, Mode: "managed", LifecycleState: state, Enabled: true}
+	s.bindings[id] = &db.CatalogBinding{ID: db.UUID{Bytes: id, Valid: true}, EngineCatalogName: name, Mode: "managed", LifecycleState: state, Enabled: true}
 }
 
 func (s *manyStore) state(name string) string {
@@ -134,7 +132,7 @@ func (s *manyStore) state(name string) string {
 }
 
 func reconciler(st *manyStore, eng *engineSim) bindings.Reconciler {
-	l := bindings.Lifecycle{Store: st, Binder: eng, ConnectionID: pgtype.UUID{Bytes: [16]byte{7}, Valid: true}}
+	l := bindings.Lifecycle{Store: st, Binder: eng, ConnectionID: db.UUID{Bytes: [16]byte{7}, Valid: true}}
 	return bindings.Reconciler{
 		Lifecycle: l, Store: st,
 		Project: func(_ context.Context, b db.CatalogBinding) (bindings.Projection, error) {

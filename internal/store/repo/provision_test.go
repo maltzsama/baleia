@@ -10,11 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 // TestApplyGroupWorkspaceRoles (#653, #769) checks the Go replacement for
@@ -22,16 +18,7 @@ import (
 // teams, idp_group rows written/updated/dropped, a manual role never touched.
 func TestApplyGroupWorkspaceRoles(t *testing.T) {
 	t.Parallel()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 
 	ctx := context.Background()
 	r := New(gdb)
@@ -98,7 +85,7 @@ func TestApplyGroupWorkspaceRoles(t *testing.T) {
 	if role, _ := r.WorkspaceRole(ctx, UUIDString(foreign.ID), string(user.ID)); role != "" {
 		t.Errorf("foreign role = %q", role)
 	}
-	if _, err := workspaceMember(ctx, gdb, UUIDString(personal.ID), string(user.ID)); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := workspaceMember(ctx, gdb, UUIDString(personal.ID), string(user.ID)); !errors.Is(err, db.ErrNoRows) {
 		t.Errorf("personal membership written: %v", err)
 	}
 
@@ -127,7 +114,7 @@ func TestApplyGroupWorkspaceRoles(t *testing.T) {
 	if err := r.ApplyGroupWorkspaceRoles(ctx, db.ApplyGroupWorkspaceRolesParams{UserID: extraID, Assignments: []byte("[]")}); err != nil {
 		t.Fatalf("apply empty: %v", err)
 	}
-	if _, err := workspaceMember(ctx, gdb, UUIDString(ws.ID), UUIDString(extraID)); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := workspaceMember(ctx, gdb, UUIDString(ws.ID), UUIDString(extraID)); !errors.Is(err, db.ErrNoRows) {
 		t.Errorf("stale idp_group row = %v", err)
 	}
 	if _, err := workspaceMember(ctx, gdb, UUIDString(ws.ID), UUIDString(userID)); err != nil {
@@ -139,16 +126,7 @@ func TestApplyGroupWorkspaceRoles(t *testing.T) {
 // provisioning path uses.
 func TestDirectoryRoundTrip(t *testing.T) {
 	t.Parallel()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 
 	ctx := context.Background()
 	users := NewUsers(gdb)
@@ -202,7 +180,7 @@ func workspaceMember(ctx context.Context, gdb *gorm.DB, workspaceID, userID stri
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return model.WorkspaceMember{}, pgx.ErrNoRows
+		return model.WorkspaceMember{}, db.ErrNoRows
 	}
 	return row, err
 }

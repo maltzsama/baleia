@@ -13,8 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeStore struct {
@@ -23,10 +21,10 @@ type fakeStore struct {
 	reads int
 }
 
-func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+func (f *fakeStore) GetUserByID(_ context.Context, id db.UUID) (db.User, error) {
 	u, ok := f.users[id.String()]
 	if !ok {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	return u, nil
 }
@@ -35,18 +33,18 @@ func (f *fakeStore) GetManagedConnectionOfEngineCatalog(_ context.Context, a db.
 	f.reads++
 	c, ok := f.conns[a.EngineCatalogName]
 	if !ok {
-		return db.CatalogConnection{}, pgx.ErrNoRows
+		return db.CatalogConnection{}, db.ErrNoRows
 	}
 	return c, nil
 }
 
 type fakeUserTokens map[string]string
 
-func (f fakeUserTokens) Access(_ context.Context, id pgtype.UUID) (string, error) {
+func (f fakeUserTokens) Access(_ context.Context, id db.UUID) (string, error) {
 	return f[id.String()], nil
 }
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 // unityConn is a Unity connection with a static token, sealed like the API
 // stores it; userIdentity sets the per-user flag.
@@ -62,7 +60,7 @@ func unityConn(t *testing.T, kr *crypto.Keyring, userIdentity bool) db.CatalogCo
 	if err != nil {
 		t.Fatal(err)
 	}
-	return db.CatalogConnection{ID: id, Type: "unity", Url: "http://unity:8080", Config: raw, CredentialsEnc: &enc, UpdatedAt: pgtype.Timestamptz{Time: time.Unix(1, 0), Valid: true}}
+	return db.CatalogConnection{ID: id, Type: "unity", Url: "http://unity:8080", Config: raw, CredentialsEnc: &enc, UpdatedAt: db.Timestamptz{Time: time.Unix(1, 0), Valid: true}}
 }
 
 func TestResolver(t *testing.T) {
@@ -95,7 +93,7 @@ func TestResolver(t *testing.T) {
 	}
 	r := New(st, kr, reg, fakeUserTokens{oidcUser.String(): "alice-idp-token"}, nil)
 	engine := uuid.NewString()
-	spec := func(user pgtype.UUID, catalog string) queryengine.SessionSpec {
+	spec := func(user db.UUID, catalog string) queryengine.SessionSpec {
 		s := queryengine.SessionSpec{Catalog: catalog}
 		if user.Valid {
 			s.Identity.Principal = user.String()
@@ -112,10 +110,10 @@ func TestResolver(t *testing.T) {
 		{"their token goes on any catalog", spec(oidcUser, ""), "alice-idp-token"},
 		{"expired identity-provider user never falls back to the connection", spec(expiredUser, "per_user"), ""},
 		{"local user acts as the per-user connection", spec(localUser, "per_user"), "service-token"},
-		{"work without a user acts as the per-user connection", spec(pgtype.UUID{}, "per_user"), "service-token"},
+		{"work without a user acts as the per-user connection", spec(db.UUID{}, "per_user"), "service-token"},
 		{"connection without per-user identity needs no token", spec(localUser, "shared_svc"), ""},
 		{"catalog Baleia does not manage needs no token", spec(localUser, "system"), ""},
-		{"no catalog, no user", spec(pgtype.UUID{}, ""), ""},
+		{"no catalog, no user", spec(db.UUID{}, ""), ""},
 	}
 	for _, tt := range tests {
 		got, err := r.CatalogToken(ctx, engine, tt.spec)

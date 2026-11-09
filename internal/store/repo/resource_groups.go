@@ -9,8 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/galileostudio/baleia/internal/workload/resourcegroups/publish"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -35,7 +33,7 @@ func (r *Repo) LockTrinoResourceGroups(ctx context.Context) error {
 
 // PublishTrinoResourceGroups writes a generated document as a new revision on
 // the transaction's connection.
-func (r *Repo) PublishTrinoResourceGroups(ctx context.Context, engineID pgtype.UUID, environment string, doc workload.ResourceGroups) (int, error) {
+func (r *Repo) PublishTrinoResourceGroups(ctx context.Context, engineID db.UUID, environment string, doc workload.ResourceGroups) (int, error) {
 	return publish.Publish(ctx, r, engineID, environment, doc)
 }
 
@@ -87,7 +85,7 @@ func (r *Repo) InsertTrinoSelector(ctx context.Context, arg db.InsertTrinoSelect
 
 // NextTrinoResourceGroupRevision returns the next revision number of an
 // engine. The caller holds LockTrinoResourceGroups, so no two saves collide.
-func (r *Repo) NextTrinoResourceGroupRevision(ctx context.Context, engineID pgtype.UUID) (int32, error) {
+func (r *Repo) NextTrinoResourceGroupRevision(ctx context.Context, engineID db.UUID) (int32, error) {
 	var maxRevision *int32
 	if err := r.Users.db.WithContext(ctx).Model(&model.TrinoResourceGroupRevision{}).
 		Where("engine_id = ?", UUIDString(engineID)).
@@ -120,7 +118,7 @@ func (r *Repo) GetTrinoResourceGroupRevision(ctx context.Context, arg db.GetTrin
 		Where("engine_id = ? AND revision = ?", UUIDString(arg.EngineID), arg.Revision).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, pgx.ErrNoRows
+		return nil, db.ErrNoRows
 	}
 	if err != nil {
 		return nil, err

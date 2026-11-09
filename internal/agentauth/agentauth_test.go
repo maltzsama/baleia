@@ -8,11 +8,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func uid(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }
+func uid(b byte) db.UUID { return db.UUID{Bytes: [16]byte{b}, Valid: true} }
 
 type fakeStore struct {
 	token db.AgentToken
@@ -22,26 +20,26 @@ type fakeStore struct {
 
 func (s fakeStore) GetAgentTokenByHash(_ context.Context, hash string) (db.AgentToken, error) {
 	if hash != s.token.TokenHash {
-		return db.AgentToken{}, pgx.ErrNoRows
+		return db.AgentToken{}, db.ErrNoRows
 	}
 	return s.token, nil
 }
 
-func (s fakeStore) GetAgentByID(_ context.Context, id pgtype.UUID) (db.Agent, error) {
+func (s fakeStore) GetAgentByID(_ context.Context, id db.UUID) (db.Agent, error) {
 	if id.Bytes != s.agent.ID.Bytes {
-		return db.Agent{}, pgx.ErrNoRows
+		return db.Agent{}, db.ErrNoRows
 	}
 	return s.agent, nil
 }
 
-func (s fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+func (s fakeStore) GetUserByID(_ context.Context, id db.UUID) (db.User, error) {
 	if id.Bytes != s.owner.ID.Bytes {
-		return db.User{}, pgx.ErrNoRows
+		return db.User{}, db.ErrNoRows
 	}
 	return s.owner, nil
 }
 
-func (s fakeStore) TouchAgentToken(context.Context, pgtype.UUID) error { return nil }
+func (s fakeStore) TouchAgentToken(context.Context, db.UUID) error { return nil }
 
 func fixture() (fakeStore, string) {
 	raw := auth.AgentTokenPrefix + "test-secret"
@@ -51,7 +49,7 @@ func fixture() (fakeStore, string) {
 			AgentID:   uid(2),
 			TokenHash: auth.AgentTokenHash(raw),
 			Prefix:    auth.AgentTokenDisplayPrefix(raw),
-			ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
+			ExpiresAt: db.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
 		},
 		agent: db.Agent{ID: uid(2), OwnerID: uid(3), Kind: "external", Status: "active"},
 		owner: db.User{ID: uid(3), Status: auth.StatusActive, Role: "member"},
@@ -98,14 +96,14 @@ func TestAuthenticate_Rejections(t *testing.T) {
 		{
 			name: "expired",
 			mutate: func(s *fakeStore) {
-				s.token.ExpiresAt = pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true}
+				s.token.ExpiresAt = db.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true}
 			},
 			reason: auth.AgentRejectExpired,
 		},
 		{
 			name: "revoked",
 			mutate: func(s *fakeStore) {
-				s.token.RevokedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+				s.token.RevokedAt = db.Timestamptz{Time: time.Now(), Valid: true}
 			},
 			reason: auth.AgentRejectRevoked,
 		},

@@ -23,17 +23,15 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store is the subset of db.Querier the tokens use.
 type Store interface {
 	SaveUserIDPTokenOnSignIn(ctx context.Context, arg db.SaveUserIDPTokenOnSignInParams) (int64, error)
-	GetUserIDPToken(ctx context.Context, userID pgtype.UUID) (db.UserIdpToken, error)
-	GetUserIDPTokenForUpdate(ctx context.Context, userID pgtype.UUID) (db.UserIdpToken, error)
+	GetUserIDPToken(ctx context.Context, userID db.UUID) (db.UserIdpToken, error)
+	GetUserIDPTokenForUpdate(ctx context.Context, userID db.UUID) (db.UserIdpToken, error)
 	UpdateUserIDPToken(ctx context.Context, arg db.UpdateUserIDPTokenParams) error
-	DeleteUserIDPToken(ctx context.Context, userID pgtype.UUID) error
+	DeleteUserIDPToken(ctx context.Context, userID db.UUID) error
 }
 
 // Tx runs fn in one database transaction over a Store.
@@ -41,7 +39,7 @@ type Tx func(ctx context.Context, fn func(Store) error) error
 
 // Refresher redeems a refresh token at the provider that issued it.
 type Refresher interface {
-	Refresh(ctx context.Context, providerID pgtype.UUID, refreshToken string) (auth.IDPTokens, error)
+	Refresh(ctx context.Context, providerID db.UUID, refreshToken string) (auth.IDPTokens, error)
 }
 
 // ErrNoKeyring means tokens cannot be sealed: BALEIA_ENCRYPTION_KEY is unset.
@@ -75,17 +73,17 @@ func New(store Store, tx Tx, keyring *crypto.Keyring, refresher Refresher, logge
 	return &Tokens{store: store, tx: tx, keyring: keyring, refresher: refresher, logger: cmp.Or(logger, slog.New(slog.DiscardHandler)), now: time.Now}
 }
 
-func aad(userID pgtype.UUID, kind string) string {
+func aad(userID db.UUID, kind string) string {
 	return "user_idp_token:" + userID.String() + ":" + kind
 }
 
 type sealed struct {
 	access  string
 	refresh *string
-	expiry  pgtype.Timestamptz
+	expiry  db.Timestamptz
 }
 
-func (t *Tokens) seal(userID pgtype.UUID, tok auth.IDPTokens) (sealed, error) {
+func (t *Tokens) seal(userID db.UUID, tok auth.IDPTokens) (sealed, error) {
 	if t.keyring == nil {
 		return sealed{}, ErrNoKeyring
 	}
@@ -105,14 +103,14 @@ func (t *Tokens) seal(userID pgtype.UUID, tok auth.IDPTokens) (sealed, error) {
 	if expiry.IsZero() {
 		expiry = t.now().Add(unknownExpiry)
 	}
-	out.expiry = pgtype.Timestamptz{Time: expiry, Valid: true}
+	out.expiry = db.Timestamptz{Time: expiry, Valid: true}
 	return out, nil
 }
 
 // Save keeps the tokens of a sign-in, replacing the previous ones. It keeps
 // nothing for a suspended account or a disabled provider, and a sign-in
 // without an access token clears the previous one.
-func (t *Tokens) Save(ctx context.Context, userID, providerID pgtype.UUID, tok auth.IDPTokens) error {
+func (t *Tokens) Save(ctx context.Context, userID, providerID db.UUID, tok auth.IDPTokens) error {
 	if tok.AccessToken == "" {
 		return t.Forget(ctx, userID)
 	}
@@ -129,19 +127,19 @@ func (t *Tokens) Save(ctx context.Context, userID, providerID pgtype.UUID, tok a
 
 // Forget deletes a user's tokens (sign-out, failed sign-in save). A refresh
 // in flight finishes first; it cannot write the row back.
-func (t *Tokens) Forget(ctx context.Context, userID pgtype.UUID) error {
+func (t *Tokens) Forget(ctx context.Context, userID db.UUID) error {
 	return t.store.DeleteUserIDPToken(ctx, userID)
 }
 
 // Access returns the user's access token, refreshed when it is about to
 // expire. It returns "" when the user has none, or it expired and cannot be
 // refreshed: the caller then acts without the user's identity.
-func (t *Tokens) Access(ctx context.Context, userID pgtype.UUID) (string, error) {
+func (t *Tokens) Access(ctx context.Context, userID db.UUID) (string, error) {
 	if !userID.Valid || t.keyring == nil {
 		return "", nil
 	}
 	row, err := t.store.GetUserIDPToken(ctx, userID)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return "", nil
 	}
 	if err != nil {
@@ -157,7 +155,7 @@ func (t *Tokens) Access(ctx context.Context, userID pgtype.UUID) (string, error)
 	var token string
 	err = t.tx(ctx, func(q Store) error {
 		row, err := q.GetUserIDPTokenForUpdate(ctx, userID)
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return nil // signed out meanwhile
 		}
 		if err != nil {
@@ -178,7 +176,7 @@ func (t *Tokens) fresh(row db.UserIdpToken) bool {
 }
 
 // refresh runs inside the transaction that locked row.
-func (t *Tokens) refresh(ctx context.Context, q Store, userID pgtype.UUID, row db.UserIdpToken) (string, error) {
+func (t *Tokens) refresh(ctx context.Context, q Store, userID db.UUID, row db.UserIdpToken) (string, error) {
 	stillValid := row.ExpiresAt.Valid && t.now().Before(row.ExpiresAt.Time)
 	if row.RefreshTokenEnc == nil || t.refresher == nil {
 		if stillValid {
@@ -215,7 +213,7 @@ func (t *Tokens) refresh(ctx context.Context, q Store, userID pgtype.UUID, row d
 	return tok.AccessToken, nil
 }
 
-func (t *Tokens) open(enc string, userID pgtype.UUID, kind string) (string, error) {
+func (t *Tokens) open(enc string, userID db.UUID, kind string) (string, error) {
 	plain, err := t.keyring.Open(enc, aad(userID, kind))
 	if err != nil {
 		return "", fmt.Errorf("open %s token: %w", kind, err)

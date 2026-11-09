@@ -5,18 +5,17 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeStore struct {
 	rows []db.ListWorkspaceTargetsRow
 }
 
-func (f *fakeStore) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+func (f *fakeStore) ListWorkspaceTargets(context.Context, db.UUID) ([]db.ListWorkspaceTargetsRow, error) {
 	return f.rows, nil
 }
 
-func id(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }
+func id(b byte) db.UUID { return db.UUID{Bytes: [16]byte{b}, Valid: true} }
 
 func row(engine byte, catalog string, binding, engineEnabled, catalogEnabled bool) db.ListWorkspaceTargetsRow {
 	return db.ListWorkspaceTargetsRow{

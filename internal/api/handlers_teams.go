@@ -9,7 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/workspaces/teams"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -63,7 +62,7 @@ func (h *WorkspaceHandlers) GetTeam(ctx context.Context, request GetTeamRequestO
 	if err != nil {
 		return GetTeam401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	team, err := h.authz().Team(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
+	team, err := h.authz().Team(ctx, p, db.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
 			return GetTeam404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
@@ -80,7 +79,7 @@ func (h *WorkspaceHandlers) DeleteTeam(ctx context.Context, request DeleteTeamRe
 		return DeleteTeam403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	var uid pgtype.UUID
+	var uid db.UUID
 	uid.Bytes = request.Id
 	uid.Valid = true
 
@@ -100,7 +99,7 @@ func (h *WorkspaceHandlers) ListTeamMembers(ctx context.Context, request ListTea
 	if err != nil {
 		return ListTeamMembers401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	uid := pgtype.UUID{Bytes: request.Id, Valid: true}
+	uid := db.UUID{Bytes: request.Id, Valid: true}
 	if _, err := h.authz().Team(ctx, p, uid, authz.ActRead); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
 			return ListTeamMembers404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "team not found"}}, nil
@@ -133,18 +132,18 @@ func (h *WorkspaceHandlers) ListTeamMembers(ctx context.Context, request ListTea
 }
 
 func (h *WorkspaceHandlers) AddTeamMember(ctx context.Context, request AddTeamMemberRequestObject) (AddTeamMemberResponseObject, error) {
-	ev := audit.Event{Action: audit.TeamMemberAdd, ResourceType: "team", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ev := audit.Event{Action: audit.TeamMemberAdd, ResourceType: "team", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true})}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return AddTeamMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	var teamID pgtype.UUID
+	var teamID db.UUID
 	teamID.Bytes = request.Id
 	teamID.Valid = true
 
-	var userID pgtype.UUID
+	var userID db.UUID
 	userID.Bytes = request.Body.UserId
 	userID.Valid = true
 
@@ -182,8 +181,8 @@ func (h *WorkspaceHandlers) AddTeamMember(ctx context.Context, request AddTeamMe
 
 // UpdateTeamMemberRole — PATCH /teams/{id}/members/{user_id} (#288).
 func (h *WorkspaceHandlers) UpdateTeamMemberRole(ctx context.Context, request UpdateTeamMemberRoleRequestObject) (UpdateTeamMemberRoleResponseObject, error) {
-	ev := audit.Event{Action: audit.TeamRoleChange, ResourceType: "team", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true}),
-		Changes: map[string]audit.Change{"member": {To: idString(pgtype.UUID{Bytes: request.UserId, Valid: true})}}}
+	ev := audit.Event{Action: audit.TeamRoleChange, ResourceType: "team", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true}),
+		Changes: map[string]audit.Change{"member": {To: idString(db.UUID{Bytes: request.UserId, Valid: true})}}}
 	if auth.RoleFromContext(ctx) != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return UpdateTeamMemberRole403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
@@ -192,8 +191,8 @@ func (h *WorkspaceHandlers) UpdateTeamMemberRole(ctx context.Context, request Up
 		return UpdateTeamMemberRole422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "request body is required")}, nil
 	}
 
-	teamID := pgtype.UUID{Bytes: request.Id, Valid: true}
-	userID := pgtype.UUID{Bytes: request.UserId, Valid: true}
+	teamID := db.UUID{Bytes: request.Id, Valid: true}
+	userID := db.UUID{Bytes: request.UserId, Valid: true}
 	memberRole := string(request.Body.Role)
 	member, err := h.teams.SetRole(ctx, teamID, userID, memberRole)
 	switch {
@@ -225,19 +224,19 @@ func (h *WorkspaceHandlers) UpdateTeamMemberRole(ctx context.Context, request Up
 }
 
 func (h *WorkspaceHandlers) RemoveTeamMember(ctx context.Context, request RemoveTeamMemberRequestObject) (RemoveTeamMemberResponseObject, error) {
-	ev := audit.Event{Action: audit.TeamMemberRemove, ResourceType: "team", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true}),
-		Changes: map[string]audit.Change{"member": {From: idString(pgtype.UUID{Bytes: request.UserId, Valid: true})}}}
+	ev := audit.Event{Action: audit.TeamMemberRemove, ResourceType: "team", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true}),
+		Changes: map[string]audit.Change{"member": {From: idString(db.UUID{Bytes: request.UserId, Valid: true})}}}
 	role := auth.RoleFromContext(ctx)
 	if role != "admin" {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return RemoveTeamMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "admin only"}}, nil
 	}
 
-	var teamID pgtype.UUID
+	var teamID db.UUID
 	teamID.Bytes = request.Id
 	teamID.Valid = true
 
-	var userID pgtype.UUID
+	var userID db.UUID
 	userID.Bytes = request.UserId
 	userID.Valid = true
 

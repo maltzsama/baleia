@@ -13,7 +13,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 func registry(t *testing.T, o connections.DialerOptions) *connections.Registry {
@@ -378,7 +378,7 @@ func TestFromStored(t *testing.T) {
 	t.Parallel()
 	reg := registry(t, connections.DialerOptions{})
 
-	cfg, err := FromStored(reg, connections.KindPolaris, pgtype.UUID{}, "http://polaris:8181/", nil, []byte(`{"client_id":"id","client_secret":"sec","realm":"R","stray":"x"}`))
+	cfg, err := FromStored(reg, connections.KindPolaris, db.UUID{}, "http://polaris:8181/", nil, []byte(`{"client_id":"id","client_secret":"sec","realm":"R","stray":"x"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func TestFromStored(t *testing.T) {
 		t.Errorf("polaris = %+v", cfg)
 	}
 
-	cfg, err = FromStored(reg, connections.KindPostgreSQL, pgtype.UUID{}, "jdbc:postgresql://db.internal:6543/sales", nil, []byte(`{"username":"u","password":"p"}`))
+	cfg, err = FromStored(reg, connections.KindPostgreSQL, db.UUID{}, "jdbc:postgresql://db.internal:6543/sales", nil, []byte(`{"username":"u","password":"p"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestFromStored(t *testing.T) {
 		t.Errorf("postgresql = %+v", cfg)
 	}
 
-	if _, err := FromStored(reg, connections.Kind("does-not-exist"), pgtype.UUID{}, "", nil, nil); !errors.Is(err, connections.ErrUnknownKind) {
+	if _, err := FromStored(reg, connections.Kind("does-not-exist"), db.UUID{}, "", nil, nil); !errors.Is(err, connections.ErrUnknownKind) {
 		t.Errorf("unknown kind: want ErrUnknownKind, got %v", err)
 	}
 }
@@ -415,7 +415,7 @@ func TestFromStoredParseFailureIsUnreadable(t *testing.T) {
 		"corrupt creds":  {config: []byte(`{}`), creds: []byte(`not json`)},
 	}
 	for name, tc := range cases {
-		got, err := FromStored(reg, connections.KindPolaris, pgtype.UUID{}, "http://polaris:8181/", tc.config, tc.creds)
+		got, err := FromStored(reg, connections.KindPolaris, db.UUID{}, "http://polaris:8181/", tc.config, tc.creds)
 		if !errors.Is(err, catalogs.ErrCredentialsUnreadable) {
 			t.Errorf("%s: err = %v, want ErrCredentialsUnreadable", name, err)
 		}
@@ -449,7 +449,7 @@ func TestFromStoredReadsConfigColumn(t *testing.T) {
 	reg := registry(t, connections.DialerOptions{})
 
 	// A database row after the migration backfill: the JDBC URL sits in config.
-	cfg, err := FromStored(reg, connections.KindMySQL, pgtype.UUID{}, "jdbc:mysql://old:1/x", []byte(`{"url":"jdbc:mysql://db:3307/app"}`), []byte(`{"username":"u","password":"p"}`))
+	cfg, err := FromStored(reg, connections.KindMySQL, db.UUID{}, "jdbc:mysql://old:1/x", []byte(`{"url":"jdbc:mysql://db:3307/app"}`), []byte(`{"username":"u","password":"p"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +458,7 @@ func TestFromStoredReadsConfigColumn(t *testing.T) {
 	}
 
 	// A row written through the registry: config wins over a leftover blob value.
-	cfg, err = FromStored(reg, connections.KindPolaris, pgtype.UUID{}, "http://ignored", []byte(`{"url":"http://p:8181","client_id":"new"}`), []byte(`{"client_id":"old","client_secret":"s"}`))
+	cfg, err = FromStored(reg, connections.KindPolaris, db.UUID{}, "http://ignored", []byte(`{"url":"http://p:8181","client_id":"new"}`), []byte(`{"client_id":"old","client_secret":"s"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

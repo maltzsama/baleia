@@ -9,7 +9,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 // FromStored builds a Config from a catalog_connections row: the config column
@@ -21,7 +21,7 @@ import (
 // data that cannot be read, so it carries ErrCredentialsUnreadable like an
 // unopenable envelope does (#349): one errors.Is at the call site covers the
 // lot, and the caller reports 422 rather than a server failure.
-func FromStored(reg *connections.Registry, kind connections.Kind, id pgtype.UUID, rawURL string, config, creds []byte) (connections.Config, error) {
+func FromStored(reg *connections.Registry, kind connections.Kind, id db.UUID, rawURL string, config, creds []byte) (connections.Config, error) {
 	values := map[string]string{}
 	if len(config) > 0 {
 		if err := json.Unmarshal(config, &values); err != nil {
@@ -41,7 +41,7 @@ func FromStored(reg *connections.Registry, kind connections.Kind, id pgtype.UUID
 // credentials split per the provider's schema, or the older url plus a
 // credentials object that also carries non-secret fields. Unknown keys are
 // kept, so Validate reports them.
-func FromRequest(reg *connections.Registry, kind connections.Kind, id pgtype.UUID, rawURL string, config map[string]string, creds map[string]any) (connections.Config, error) {
+func FromRequest(reg *connections.Registry, kind connections.Kind, id db.UUID, rawURL string, config map[string]string, creds map[string]any) (connections.Config, error) {
 	values := map[string]string{}
 	for k, v := range config {
 		if v != "" {
@@ -94,7 +94,7 @@ func Merge(reg *connections.Registry, cur connections.Config, rawURL *string, co
 	return out, nil
 }
 
-func build(reg *connections.Registry, kind connections.Kind, id pgtype.UUID, rawURL string, values map[string]string, creds map[string]any, keepUnknown bool) (connections.Config, error) {
+func build(reg *connections.Registry, kind connections.Kind, id db.UUID, rawURL string, values map[string]string, creds map[string]any, keepUnknown bool) (connections.Config, error) {
 	p, err := reg.Get(kind)
 	if err != nil {
 		return connections.Config{}, err

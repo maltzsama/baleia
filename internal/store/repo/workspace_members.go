@@ -6,7 +6,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -14,7 +13,7 @@ import (
 // role (#653). The role is resolved in Go from the workspace, its owning
 // team's members and the explicit grants, replacing the
 // baleia_workspace_member_role() PL/pgSQL function removed by ADR 0020.
-func (r *Repo) ListWorkspaceMembers(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceMembersRow, error) {
+func (r *Repo) ListWorkspaceMembers(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceMembersRow, error) {
 	if !workspaceID.Valid {
 		return nil, nil
 	}
@@ -127,7 +126,7 @@ func (r *Repo) UpsertWorkspaceMember(ctx context.Context, arg db.UpsertWorkspace
 	return NewServiceAccounts(r.Users.db).UpsertWorkspaceMember(ctx, arg)
 }
 
-// GetServiceAccount returns one service account or pgx.ErrNoRows.
-func (r *Repo) GetServiceAccount(ctx context.Context, id pgtype.UUID) (db.User, error) {
+// GetServiceAccount returns one service account or db.ErrNoRows.
+func (r *Repo) GetServiceAccount(ctx context.Context, id db.UUID) (db.User, error) {
 	return NewServiceAccounts(r.Users.db).GetServiceAccount(ctx, id)
 }

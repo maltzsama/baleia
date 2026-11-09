@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store reads the visible content and the space names; *repo.Repo
@@ -42,24 +41,24 @@ const (
 type Query struct {
 	Text    string
 	Kind    string
-	SpaceID pgtype.UUID
+	SpaceID db.UUID
 	// Limit outside 1..MaxLimit is DefaultLimit.
 	Limit int
 }
 
 // Folder is one step of a hit's folder path.
 type Folder struct {
-	ID   pgtype.UUID
+	ID   db.UUID
 	Name string
 }
 
 // Hit is one result.
 type Hit struct {
 	Kind      string
-	ID        pgtype.UUID
+	ID        db.UUID
 	Slug      string
 	Title     string
-	SpaceID   pgtype.UUID
+	SpaceID   db.UUID
 	SpaceName string
 	// FolderPath runs from the root to the hit's folder; empty at the root
 	// and for semantic content.
@@ -77,7 +76,7 @@ func New(store Store) *Service { return &Service{store: store} }
 
 // Search returns the hits for q visible to userID, ordered by title. A query
 // shorter than MinQuery has no hits.
-func (s *Service) Search(ctx context.Context, ws, userID pgtype.UUID, q Query) ([]Hit, error) {
+func (s *Service) Search(ctx context.Context, ws, userID db.UUID, q Query) ([]Hit, error) {
 	text := strings.TrimSpace(q.Text)
 	if len([]rune(text)) < MinQuery {
 		return []Hit{}, nil
@@ -111,7 +110,7 @@ func (s *Service) Search(ctx context.Context, ws, userID pgtype.UUID, q Query) (
 		return false
 	}
 	want := func(kind string) bool { return q.Kind == "" || q.Kind == kind }
-	hit := func(kind string, id pgtype.UUID, slug, title string, space pgtype.UUID, path []Folder, updated pgtype.Timestamptz, certified *bool) Hit {
+	hit := func(kind string, id db.UUID, slug, title string, space db.UUID, path []Folder, updated db.Timestamptz, certified *bool) Hit {
 		return Hit{Kind: kind, ID: id, Slug: slug, Title: title, SpaceID: space, SpaceName: spaceNames[space.Bytes], FolderPath: path, UpdatedAt: updated.Time, Certified: certified}
 	}
 
@@ -177,7 +176,7 @@ func newPaths(folders []db.QueryFolder) paths {
 
 // to returns the path from the root down to id; a folder the user cannot
 // see, or a cycle, ends it.
-func (p paths) to(id pgtype.UUID) []Folder {
+func (p paths) to(id db.UUID) []Folder {
 	out := []Folder{}
 	seen := map[[16]byte]bool{}
 	for id.Valid && !seen[id.Bytes] {

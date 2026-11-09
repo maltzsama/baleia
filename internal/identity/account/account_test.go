@@ -8,21 +8,19 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type fakeStore struct {
 	users    map[[16]byte]db.User
-	personal map[[16]byte]pgtype.UUID
+	personal map[[16]byte]db.UUID
 }
 
-func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+func (f *fakeStore) GetUserByID(_ context.Context, id db.UUID) (db.User, error) {
 	if u, ok := f.users[id.Bytes]; ok {
 		return u, nil
 	}
-	return db.User{}, pgx.ErrNoRows
+	return db.User{}, db.ErrNoRows
 }
 
 func (f *fakeStore) UpdateUser(_ context.Context, arg db.UpdateUserParams) (db.User, error) {
@@ -39,20 +37,20 @@ func (f *fakeStore) UpdateUserPassword(_ context.Context, arg db.UpdateUserPassw
 	return nil
 }
 
-func (f *fakeStore) PersonalWorkspaceID(_ context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+func (f *fakeStore) PersonalWorkspaceID(_ context.Context, id db.UUID) (db.UUID, error) {
 	if ws, ok := f.personal[id.Bytes]; ok {
 		return ws, nil
 	}
-	return pgtype.UUID{}, pgx.ErrNoRows
+	return db.UUID{}, db.ErrNoRows
 }
 
-type fakeSessions struct{ revoked []pgtype.UUID }
+type fakeSessions struct{ revoked []db.UUID }
 
-func (s *fakeSessions) RevokeAll(_ context.Context, id pgtype.UUID) {
+func (s *fakeSessions) RevokeAll(_ context.Context, id db.UUID) {
 	s.revoked = append(s.revoked, id)
 }
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 func setup(t *testing.T) (*Service, *fakeStore, *fakeSessions, db.User) {
 	t.Helper()
@@ -61,7 +59,7 @@ func setup(t *testing.T) (*Service, *fakeStore, *fakeSessions, db.User) {
 		t.Fatal(err)
 	}
 	u := db.User{ID: newID(), Name: "Ana", Email: "ana@x.io", PasswordHash: &h}
-	st := &fakeStore{users: map[[16]byte]db.User{u.ID.Bytes: u}, personal: map[[16]byte]pgtype.UUID{}}
+	st := &fakeStore{users: map[[16]byte]db.User{u.ID.Bytes: u}, personal: map[[16]byte]db.UUID{}}
 	ss := &fakeSessions{}
 	return New(st, ss, Config{PasswordCost: bcrypt.MinCost, MinPasswordLength: 8}), st, ss, u
 }
@@ -143,12 +141,12 @@ type brokenStore struct{ *fakeStore }
 
 var errDown = errors.New("connection refused")
 
-func (brokenStore) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+func (brokenStore) GetUserByID(context.Context, db.UUID) (db.User, error) {
 	return db.User{}, errDown
 }
 
-func (brokenStore) PersonalWorkspaceID(context.Context, pgtype.UUID) (pgtype.UUID, error) {
-	return pgtype.UUID{}, errDown
+func (brokenStore) PersonalWorkspaceID(context.Context, db.UUID) (db.UUID, error) {
+	return db.UUID{}, errDown
 }
 
 // TestStoreFailureIsNotNotFound: a database outage is an error, never a

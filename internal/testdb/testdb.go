@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/store"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 // Parallel tests share one server (#374). At most maxTests top-level tests
@@ -66,9 +66,34 @@ func acquire(t *testing.T) {
 }
 
 // New creates the database, migrates it with the GORM store migrations and
-// drops it when the test ends. Parallel tests wait for a free slot; see
-// acquire.
-func New(t *testing.T) *pgxpool.Pool {
+// drops it when the test ends, returning the GORM connection the application
+// uses. Parallel tests wait for a free slot; see acquire.
+func New(t *testing.T) *gorm.DB {
+	t.Helper()
+	dsn := createDatabase(t)
+	ctx := context.Background()
+	if err := migrate(ctx, dsn); err != nil {
+		t.Fatal(err)
+	}
+	db, err := openTestStore(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = closeDB(db) })
+	return db
+}
+
+// DSN creates a throwaway database and returns its connection string, for
+// tests that open a connection of their own (the pgx pool's session guards).
+func DSN(t *testing.T) string {
+	t.Helper()
+	return createDatabase(t)
+}
+
+// createDatabase makes an empty database on the test server and registers its
+// drop. The slot is registered first, so it is given back last: after the
+// drop.
+func createDatabase(t *testing.T) string {
 	t.Helper()
 	admin := os.Getenv("BALEIA_TEST_DATABASE_URL")
 	if admin == "" {
@@ -77,47 +102,75 @@ func New(t *testing.T) *pgxpool.Pool {
 		}
 		t.Skip("BALEIA_TEST_DATABASE_URL not set")
 	}
-	// Registered first, so the slot is given back last: after the drop below.
 	acquire(t)
 	ctx := context.Background()
-	adminPool, err := newPool(ctx, admin, adminConns)
+	// Random, not time-based: parallel tests must never pick the same name.
+	name := "baleia_test_" + strings.ToLower(rand.Text()[:16])
+	backend, err := store.BackendFromDSN(admin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Random, not time-based: parallel tests must never pick the same name.
-	name := "baleia_test_" + strings.ToLower(rand.Text()[:16])
-	if _, err := adminPool.Exec(ctx, "CREATE DATABASE "+name); err != nil {
-		adminPool.Close()
+	create, drop, child := "", "", ""
+	if backend == store.Postgres {
+		u, err := url.Parse(admin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		u.Path = "/" + name
+		child = u.String()
+		create = "CREATE DATABASE " + name
+		drop = "DROP DATABASE IF EXISTS " + name + " WITH (FORCE)"
+	} else {
+		adminDSN, childDSN, c, d, err := mysqlTestDSNs(admin, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		admin, child, create, drop = adminDSN, childDSN, c, d
+	}
+	adminDB, err := openAdmin(ctx, admin, backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := adminDB.WithContext(ctx).Exec(create).Error; err != nil {
+		_ = closeDB(adminDB)
 		t.Fatal(err)
 	}
 	// Registered before anything else can fail, so a broken migration
-	// leaves no database behind. Cleanups run last-in first-out: the pool
-	// below is closed before this drops the database.
+	// leaves no database behind. Cleanups run last-in first-out: the test
+	// store below is closed before this drops the database.
 	t.Cleanup(func() {
-		_, _ = adminPool.Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
-		adminPool.Close()
+		_ = adminDB.Exec(drop).Error
+		_ = closeDB(adminDB)
 	})
-	u, err := url.Parse(admin)
-	if err != nil {
-		t.Fatal(err)
+	return child
+}
+
+// mysqlTestDSNs splits the go-sql-driver DSN into the admin DSN (no database),
+// the child DSN (the new database) and the CREATE/DROP statements.
+func mysqlTestDSNs(base, name string) (adminDSN, childDSN, create, drop string, err error) {
+	idx := strings.LastIndex(base, ")/")
+	if idx < 0 {
+		return "", "", "", "", fmt.Errorf("mysql test DSN must contain )/: %q", base)
 	}
-	u.Path = "/" + name
-	if err := migrate(ctx, u.String()); err != nil {
-		t.Fatal(err)
+	prefix, rest := base[:idx+2], base[idx+2:]
+	_, params, hasParams := strings.Cut(rest, "?")
+	sep := ""
+	if hasParams {
+		sep = "?" + params
 	}
-	pool, err := newPool(ctx, u.String(), poolConns)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
+	return prefix + sep, prefix + name + sep,
+		"CREATE DATABASE `" + name + "`", "DROP DATABASE IF EXISTS `" + name + "`", nil
 }
 
 // migrate creates the schema through the GORM store registry (ADR 0020).
 // Test databases are independent, so no cross-process migration lock is
 // needed.
 func migrate(ctx context.Context, dsn string) error {
-	gdb, err := store.Open(ctx, dsn, store.Postgres, store.Options{Logger: slog.New(slog.DiscardHandler)})
+	backend, err := store.BackendFromDSN(dsn)
+	if err != nil {
+		return err
+	}
+	gdb, err := store.Open(ctx, dsn, backend, store.Options{Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		return err
 	}
@@ -130,12 +183,36 @@ func migrate(ctx context.Context, dsn string) error {
 	return err
 }
 
-// newPool opens a pool of at most maxConns connections.
-func newPool(ctx context.Context, dsn string, maxConns int32) (*pgxpool.Pool, error) {
-	cfg, err := pgxpool.ParseConfig(dsn)
+// openAdmin opens the maintenance connection used to create and drop the
+// throwaway database.
+func openAdmin(ctx context.Context, dsn string, backend store.Backend) (*gorm.DB, error) {
+	db, err := store.Open(ctx, dsn, backend, store.Options{
+		MaxOpenConns: adminConns, Logger: slog.New(slog.DiscardHandler),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("parse test database url: %w", err)
+		return nil, fmt.Errorf("open test database admin: %w", err)
 	}
-	cfg.MaxConns = maxConns
-	return pgxpool.NewWithConfig(ctx, cfg)
+	return db, nil
+}
+
+// openTestStore opens the throwaway database's GORM connection.
+func openTestStore(ctx context.Context, dsn string) (*gorm.DB, error) {
+	backend, err := store.BackendFromDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+	db, err := store.Open(ctx, dsn, backend, store.Options{
+		MaxOpenConns: poolConns, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open test store: %w", err)
+	}
+	return db, nil
+}
+
+func closeDB(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	return store.Close(db)
 }

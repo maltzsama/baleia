@@ -15,9 +15,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -83,28 +80,28 @@ type engineQuerier struct {
 	deletedEng int
 }
 
-func (q *engineQuerier) GetCatalogConnectionByID(context.Context, pgtype.UUID) (db.CatalogConnection, error) {
+func (q *engineQuerier) GetCatalogConnectionByID(context.Context, db.UUID) (db.CatalogConnection, error) {
 	return q.conn, nil
 }
-func (q *engineQuerier) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+func (q *engineQuerier) GetEngineByID(_ context.Context, id db.UUID) (db.Engine, error) {
 	if !q.engine.ID.Valid || q.engine.ID != id {
-		return db.Engine{}, pgx.ErrNoRows
+		return db.Engine{}, db.ErrNoRows
 	}
 	return q.engine, nil
 }
 func (q *engineQuerier) CreateEngine(_ context.Context, p db.CreateEngineParams) (db.Engine, error) {
 	q.created = append(q.created, p)
-	return db.Engine{ID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: p.Name, Kind: p.Kind, Class: p.Class, ConnectionID: p.ConnectionID, IdentityMode: p.IdentityMode, Enabled: true}, nil
+	return db.Engine{ID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: p.Name, Kind: p.Kind, Class: p.Class, ConnectionID: p.ConnectionID, IdentityMode: p.IdentityMode, Enabled: true}, nil
 }
 func (q *engineQuerier) UpsertNativeCatalog(_ context.Context, p db.UpsertNativeCatalogParams) (db.Catalog, error) {
 	q.natives = append(q.natives, p)
-	return db.Catalog{ID: pgtype.UUID{Bytes: [16]byte{byte(len(q.natives))}, Valid: true}, ConnectionID: p.ConnectionID, Name: p.Name, Origin: "native"}, nil
+	return db.Catalog{ID: db.UUID{Bytes: [16]byte{byte(len(q.natives))}, Valid: true}, ConnectionID: p.ConnectionID, Name: p.Name, Origin: "native"}, nil
 }
 func (q *engineQuerier) UpsertNativeBinding(_ context.Context, p db.UpsertNativeBindingParams) (db.CatalogBinding, error) {
 	q.bindings = append(q.bindings, p)
 	return db.CatalogBinding{}, nil
 }
-func (q *engineQuerier) CountEngineBlockers(context.Context, pgtype.UUID) (db.CountEngineBlockersRow, error) {
+func (q *engineQuerier) CountEngineBlockers(context.Context, db.UUID) (db.CountEngineBlockersRow, error) {
 	return q.blockers, nil
 }
 func (q *engineQuerier) UpdateEngine(_ context.Context, p db.UpdateEngineParams) (db.Engine, error) {
@@ -124,11 +121,11 @@ func (q *engineQuerier) UpdateEngine(_ context.Context, p db.UpdateEngineParams)
 	}
 	return e, nil
 }
-func (q *engineQuerier) DeleteNativeCatalogsOfEngine(context.Context, pgtype.UUID) error {
+func (q *engineQuerier) DeleteNativeCatalogsOfEngine(context.Context, db.UUID) error {
 	q.deletedNat++
 	return nil
 }
-func (q *engineQuerier) DeleteEngine(context.Context, pgtype.UUID) error {
+func (q *engineQuerier) DeleteEngine(context.Context, db.UUID) error {
 	q.deletedEng++
 	return nil
 }
@@ -144,7 +141,7 @@ func engineHandlers(t *testing.T, q *engineQuerier, providers ...connections.Pro
 
 func ownedConnection(t *testing.T, typ string, owner string) db.CatalogConnection {
 	return db.CatalogConnection{
-		ID: pgtype.UUID{Bytes: [16]byte{0xC1}, Valid: true}, Name: "warehouse-db", Type: typ,
+		ID: db.UUID{Bytes: [16]byte{0xC1}, Valid: true}, Name: "warehouse-db", Type: typ,
 		Config: []byte(`{"database":"sales"}`), CreatedBy: ownerUUID(t, owner),
 	}
 }
@@ -235,7 +232,7 @@ func TestCreateEngine_Rejects(t *testing.T) {
 
 func engineFixture(t *testing.T, owner string) *engineQuerier {
 	conn := ownedConnection(t, "clickhouse", owner)
-	return &engineQuerier{conn: conn, engine: db.Engine{ID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: "ch", ConnectionID: conn.ID}}
+	return &engineQuerier{conn: conn, engine: db.Engine{ID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: "ch", ConnectionID: conn.ID}}
 }
 
 func deleteEngine(t *testing.T, h *API) *httptest.ResponseRecorder {
@@ -343,10 +340,10 @@ type deleteConnQuerier struct {
 	err  error
 }
 
-func (q *deleteConnQuerier) GetCatalogConnectionByID(context.Context, pgtype.UUID) (db.CatalogConnection, error) {
+func (q *deleteConnQuerier) GetCatalogConnectionByID(context.Context, db.UUID) (db.CatalogConnection, error) {
 	return q.conn, nil
 }
-func (q *deleteConnQuerier) DeleteCatalogConnection(context.Context, pgtype.UUID) error { return q.err }
+func (q *deleteConnQuerier) DeleteCatalogConnection(context.Context, db.UUID) error { return q.err }
 
 // TestDeleteConnectionBackingEngine409: engines reference their connection
 // ON DELETE RESTRICT, which Postgres reports as 23001.
@@ -354,7 +351,7 @@ func TestDeleteConnectionBackingEngine409(t *testing.T) {
 	t.Parallel()
 	q := &deleteConnQuerier{
 		conn: ownedConnection(t, "postgresql", testUserID),
-		err:  &pgconn.PgError{Code: "23001", ConstraintName: "engines_connection_id_fkey"},
+		err:  &db.PGError{Code: "23001", ConstraintName: "engines_connection_id_fkey"},
 	}
 	h := engineHandlers(t, nil)
 	h.queries = q
@@ -375,11 +372,11 @@ func TestDeleteConnectionBackingEngine409(t *testing.T) {
 }
 
 // The describeEngine reads: these fakes have no catalog bound to the engine.
-func (q *engineQuerier) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+func (q *engineQuerier) ListBindingsByEngine(context.Context, db.UUID) ([]db.CatalogBinding, error) {
 	return nil, nil
 }
 
-func (q *deleteConnQuerier) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+func (q *deleteConnQuerier) ListBindingsByEngine(context.Context, db.UUID) ([]db.CatalogBinding, error) {
 	return nil, nil
 }
 

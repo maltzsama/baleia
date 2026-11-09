@@ -22,7 +22,6 @@ import (
 	"github.com/galileostudio/baleia/internal/semantic/docs"
 	"github.com/galileostudio/baleia/internal/semantic/metrics"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -34,7 +33,7 @@ import (
 
 // semanticCatalog checks the workspace may use the catalog. notFound covers a
 // foreign or missing workspace/catalog; err is anything else.
-func (h *core) semanticCatalog(ctx context.Context, ws pgtype.UUID, catalogID openapi_types.UUID) (notFound bool, err error) {
+func (h *core) semanticCatalog(ctx context.Context, ws db.UUID, catalogID openapi_types.UUID) (notFound bool, err error) {
 	_, ok, err := h.grantedCatalog(ctx, ws, catalogID)
 	if err != nil {
 		return false, err
@@ -125,7 +124,7 @@ func (h *SemanticHandlers) UpsertSemanticDoc(ctx context.Context, request Upsert
 		ExpectedUpdatedAt: request.Body.ExpectedUpdatedAt,
 	}
 	if request.Body.OwnerUserId != nil {
-		edit.Owner = pgtype.UUID{Bytes: *request.Body.OwnerUserId, Valid: true}
+		edit.Owner = db.UUID{Bytes: *request.Body.OwnerUserId, Valid: true}
 	}
 	k := docKey(ws, request.Params.CatalogId, request.Params.Ns, request.Params.Table, request.Params.Column)
 	doc, certChanged, err := h.docs.Upsert(ctx, k, edit, updatedBy, h.canCertifyDocs(ctx, ws))
@@ -162,7 +161,7 @@ func (h *SemanticHandlers) UpsertSemanticDoc(ctx context.Context, request Upsert
 }
 
 // canCertifyDocs is true for a workspace owner or a global admin (#116).
-func (h *core) canCertifyDocs(ctx context.Context, ws pgtype.UUID) bool {
+func (h *core) canCertifyDocs(ctx context.Context, ws db.UUID) bool {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return false
@@ -171,7 +170,7 @@ func (h *core) canCertifyDocs(ctx context.Context, ws pgtype.UUID) bool {
 	return err == nil
 }
 
-func (h *core) docActions(ctx context.Context, ws pgtype.UUID) []string {
+func (h *core) docActions(ctx context.Context, ws db.UUID) []string {
 	acts := []string{"view"}
 	if p, err := authz.PrincipalFromContext(ctx); err == nil {
 		if role, err := h.authz().WorkspaceRole(ctx, p, ws); err == nil && role >= authz.WorkspaceEditor {
@@ -242,7 +241,7 @@ func (h *SemanticHandlers) SearchSemanticDocs(ctx context.Context, request Searc
 		Q: p.Q, WorkspaceID: ws, Tag: p.Tag, Certified: p.Certified, Lim: int32(limit),
 	}
 	if p.OwnerId != nil {
-		params.OwnerID = pgtype.UUID{Bytes: *p.OwnerId, Valid: true}
+		params.OwnerID = db.UUID{Bytes: *p.OwnerId, Valid: true}
 	}
 	rows, err := h.docs.Search(ctx, params)
 	if err != nil {
@@ -285,13 +284,13 @@ func (h *SemanticHandlers) ListSemanticMetrics(ctx context.Context, request List
 		f.Q = *request.Params.Q
 	}
 	if request.Params.SpaceId != nil {
-		f.SpaceID = &pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+		f.SpaceID = &db.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
 	if request.Params.CatalogId != nil {
-		f.CatalogID = &pgtype.UUID{Bytes: *request.Params.CatalogId, Valid: true}
+		f.CatalogID = &db.UUID{Bytes: *request.Params.CatalogId, Valid: true}
 	}
 	if request.Params.OwnerId != nil {
-		f.OwnerID = &pgtype.UUID{Bytes: *request.Params.OwnerId, Valid: true}
+		f.OwnerID = &db.UUID{Bytes: *request.Params.OwnerId, Valid: true}
 	}
 	items, err := h.metricDefs.List(ctx, ws, userID, f)
 	if err != nil {
@@ -309,7 +308,7 @@ func (h *SemanticHandlers) ListSemanticMetrics(ctx context.Context, request List
 
 // metricActions is what the caller may do with a metric (#115): view always,
 // edit/delete for space editors, certify for space managers or admins.
-func (h *core) metricActions(ctx context.Context, ws, spaceID pgtype.UUID) []string {
+func (h *core) metricActions(ctx context.Context, ws, spaceID db.UUID) []string {
 	acts := []string{"view"}
 	if se, err := h.contentSpace(ctx, ws, spaceID, authz.SpaceEditor); err == nil && se == nil {
 		acts = append(acts, "update", "delete")
@@ -329,7 +328,7 @@ func (h *SemanticHandlers) GetSemanticMetric(ctx context.Context, request GetSem
 	if nf {
 		return GetSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	metric, err := h.metricDefs.Get(ctx, ws, pgtype.UUID{Bytes: request.MetricId, Valid: true})
+	metric, err := h.metricDefs.Get(ctx, ws, db.UUID{Bytes: request.MetricId, Valid: true})
 	if errors.Is(err, metrics.ErrNotFound) {
 		return GetSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
@@ -378,7 +377,7 @@ func (h *SemanticHandlers) CreateSemanticMetric(ctx context.Context, request Cre
 	f := metrics.Fields{
 		Slug:      request.Body.Slug,
 		Label:     request.Body.Label,
-		CatalogID: pgtype.UUID{Bytes: request.Body.CatalogId, Valid: true},
+		CatalogID: db.UUID{Bytes: request.Body.CatalogId, Valid: true},
 		Namespace: request.Body.Namespace,
 		Table:     request.Body.Table,
 		BindingID: emptyUUID(request.Body.BindingId),
@@ -482,7 +481,7 @@ func (h *SemanticHandlers) UpdateSemanticMetric(ctx context.Context, request Upd
 	if request.Body == nil {
 		return nil, errors.New("semantic metric: missing body")
 	}
-	metricID := pgtype.UUID{Bytes: request.MetricId, Valid: true}
+	metricID := db.UUID{Bytes: request.MetricId, Valid: true}
 	current, err := h.metricDefs.Get(ctx, ws, metricID)
 	if errors.Is(err, metrics.ErrNotFound) {
 		return UpdateSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
@@ -512,13 +511,13 @@ func (h *SemanticHandlers) UpdateSemanticMetric(ctx context.Context, request Upd
 		Namespace: body.Namespace, Table: body.Table, Definition: body.Definition,
 	}
 	if body.CatalogId != nil {
-		change.CatalogID = &pgtype.UUID{Bytes: *body.CatalogId, Valid: true}
+		change.CatalogID = &db.UUID{Bytes: *body.CatalogId, Valid: true}
 	}
 	if body.BindingId != nil {
-		change.BindingID = &pgtype.UUID{Bytes: *body.BindingId, Valid: true}
+		change.BindingID = &db.UUID{Bytes: *body.BindingId, Valid: true}
 	}
 	if body.OwnerUserId != nil {
-		change.OwnerID = &pgtype.UUID{Bytes: *body.OwnerUserId, Valid: true}
+		change.OwnerID = &db.UUID{Bytes: *body.OwnerUserId, Valid: true}
 	}
 	// A certification is applied after the update so certified_by/at stay
 	// consistent.
@@ -589,7 +588,7 @@ func (h *SemanticHandlers) DeleteSemanticMetric(ctx context.Context, request Del
 	if nf {
 		return DeleteSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	metricID := pgtype.UUID{Bytes: request.MetricId, Valid: true}
+	metricID := db.UUID{Bytes: request.MetricId, Valid: true}
 	current, err := h.metricDefs.Get(ctx, ws, metricID)
 	if errors.Is(err, metrics.ErrNotFound) {
 		return DeleteSemanticMetric404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
@@ -630,7 +629,7 @@ func (h *SemanticHandlers) GetSemanticMetricSql(ctx context.Context, request Get
 	if nf {
 		return GetSemanticMetricSql404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
 	}
-	metric, err := h.metricDefs.Get(ctx, ws, pgtype.UUID{Bytes: request.MetricId, Valid: true})
+	metric, err := h.metricDefs.Get(ctx, ws, db.UUID{Bytes: request.MetricId, Valid: true})
 	if errors.Is(err, metrics.ErrNotFound) {
 		return GetSemanticMetricSql404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
 	}
@@ -662,7 +661,7 @@ func (h *SemanticHandlers) GetSemanticMetricSql(ctx context.Context, request Get
 
 	bindingID := metric.BindingID
 	if request.Params.BindingId != nil {
-		bindingID = pgtype.UUID{Bytes: *request.Params.BindingId, Valid: true}
+		bindingID = db.UUID{Bytes: *request.Params.BindingId, Valid: true}
 	}
 	opts := semantic.RenderOptions{From: request.Params.From, To: request.Params.To}
 	if request.Params.Grain != nil {
@@ -695,17 +694,17 @@ func (h *SemanticHandlers) GetSemanticMetricSql(ctx context.Context, request Get
 
 // ── metric validation ───────────────────────────────────────────────────────────
 
-func emptyUUID(v *openapi_types.UUID) pgtype.UUID {
+func emptyUUID(v *openapi_types.UUID) db.UUID {
 	if v == nil {
-		return pgtype.UUID{}
+		return db.UUID{}
 	}
-	return pgtype.UUID{Bytes: *v, Valid: true}
+	return db.UUID{Bytes: *v, Valid: true}
 }
 
 // semanticTarget resolves the binding a metric is validated/rendered against:
 // the explicit binding, else the metric's binding, else the catalog's only
 // enabled binding.
-func (h *SemanticHandlers) semanticTarget(ctx context.Context, ws pgtype.UUID, catalogID, bindingID pgtype.UUID) (queryengine.Target, queryengine.Engine, error) {
+func (h *SemanticHandlers) semanticTarget(ctx context.Context, ws db.UUID, catalogID, bindingID db.UUID) (queryengine.Target, queryengine.Engine, error) {
 	workspace, err := h.access.Workspace(ctx, ws)
 	if err != nil {
 		return queryengine.Target{}, nil, err
@@ -735,7 +734,7 @@ func (h *SemanticHandlers) semanticTarget(ctx context.Context, ws pgtype.UUID, c
 
 // validateSemanticMetric renders the metric for the target binding and probes
 // it with a zero-row, read-only statement in the caller's identity.
-func (h *SemanticHandlers) validateSemanticMetric(ctx context.Context, ws pgtype.UUID, catalogID, bindingID, userID pgtype.UUID, def semantic.SimpleMetricV1, namespace []string, table, slug string) error {
+func (h *SemanticHandlers) validateSemanticMetric(ctx context.Context, ws db.UUID, catalogID, bindingID, userID db.UUID, def semantic.SimpleMetricV1, namespace []string, table, slug string) error {
 	target, engine, err := h.semanticTarget(ctx, ws, catalogID, bindingID)
 	if err != nil {
 		return err
@@ -771,7 +770,7 @@ func (h *SemanticHandlers) validateSemanticMetric(ctx context.Context, ws pgtype
 	return nil
 }
 
-func (h *core) connectionReadOnly(ctx context.Context, engineID pgtype.UUID) bool {
+func (h *core) connectionReadOnly(ctx context.Context, engineID db.UUID) bool {
 	eng, err := h.topology.Engine(ctx, engineID)
 	if err != nil {
 		return false
@@ -843,7 +842,7 @@ func dbSemanticSearchRowToPublic(r db.SearchSemanticDocsRow) SemanticDocSearchRe
 }
 
 // semanticMetricVersion returns the latest content version, or 0 when none.
-func (h *core) semanticMetricVersion(ctx context.Context, ws, id pgtype.UUID) int32 {
+func (h *core) semanticMetricVersion(ctx context.Context, ws, id db.UUID) int32 {
 	return h.history.Latest(ctx, ws, content.EntitySemanticMetric, id)
 }
 
@@ -934,11 +933,11 @@ func (h *SemanticHandlers) RenderSemanticMetric(ctx context.Context, request Ren
 	if err != nil {
 		return RenderSemanticMetric422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeInvalidDefinition, err.Error())}, nil
 	}
-	var bindingID pgtype.UUID
+	var bindingID db.UUID
 	if request.Body.BindingId != nil {
-		bindingID = pgtype.UUID{Bytes: *request.Body.BindingId, Valid: true}
+		bindingID = db.UUID{Bytes: *request.Body.BindingId, Valid: true}
 	}
-	catalogID := pgtype.UUID{Bytes: request.Body.CatalogId, Valid: true}
+	catalogID := db.UUID{Bytes: request.Body.CatalogId, Valid: true}
 	target, engine, err := h.semanticTarget(ctx, ws, catalogID, bindingID)
 	if err != nil {
 		if te, ok := asTargetError(err); ok {
@@ -977,11 +976,11 @@ func (h *SemanticHandlers) ValidateSemanticMetricDefinition(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	var bindingID pgtype.UUID
+	var bindingID db.UUID
 	if request.Body.BindingId != nil {
-		bindingID = pgtype.UUID{Bytes: *request.Body.BindingId, Valid: true}
+		bindingID = db.UUID{Bytes: *request.Body.BindingId, Valid: true}
 	}
-	catalogID := pgtype.UUID{Bytes: request.Body.CatalogId, Valid: true}
+	catalogID := db.UUID{Bytes: request.Body.CatalogId, Valid: true}
 	if err := h.validateSemanticMetric(ctx, ws, catalogID, bindingID, userID, def, request.Body.Namespace, request.Body.Table, "metric"); err != nil {
 		if te, ok := asTargetError(err); ok {
 			if te.notFound {
@@ -1023,6 +1022,6 @@ func (h *SemanticHandlers) ListSemanticTags(ctx context.Context, request ListSem
 }
 
 // docKey names a documented table, or one of its columns.
-func docKey(ws pgtype.UUID, catalogID openapi_types.UUID, ns []string, table string, column *string) docs.Key {
-	return docs.Key{WorkspaceID: ws, CatalogID: pgtype.UUID{Bytes: catalogID, Valid: true}, Namespace: ns, Table: table, Column: column}
+func docKey(ws db.UUID, catalogID openapi_types.UUID, ns []string, table string, column *string) docs.Key {
+	return docs.Key{WorkspaceID: ws, CatalogID: db.UUID{Bytes: catalogID, Valid: true}, Namespace: ns, Table: table, Column: column}
 }

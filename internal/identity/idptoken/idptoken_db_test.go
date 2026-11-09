@@ -16,7 +16,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestTokens_Postgres runs the token store on the real schema: the sign-in
@@ -27,7 +26,7 @@ func TestTokens_Postgres(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	pool := testdb.New(t)
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	q := repo.New(gdb)
 	tx := q.TxIDPToken
 	r := &dbRotatingRefresher{valid: "rt-0"}
@@ -90,7 +89,7 @@ type dbRotatingRefresher struct {
 	err   error
 }
 
-func (r *dbRotatingRefresher) Refresh(_ context.Context, _ pgtype.UUID, rt string) (auth.IDPTokens, error) {
+func (r *dbRotatingRefresher) Refresh(_ context.Context, _ db.UUID, rt string) (auth.IDPTokens, error) {
 	r.calls.Add(1)
 	if r.err != nil {
 		return auth.IDPTokens{}, r.err

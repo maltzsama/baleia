@@ -11,8 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"go.temporal.io/sdk/client"
 )
@@ -82,11 +80,11 @@ func execRequest() (PathId, openapi_types.UUID) {
 }
 
 // TestGetExecutionRejectsForeignWorkspace pins the leak fix: an execution that
-// belongs to another workspace yields pgx.ErrNoRows from the scoped query, so
+// belongs to another workspace yields db.ErrNoRows from the scoped query, so
 // the handler answers 404 instead of returning the foreign execution.
 func TestGetExecutionRejectsForeignWorkspace(t *testing.T) {
 	t.Parallel()
-	fake := &fakeQuerier{hasWorkspaceAccess: true, execErr: pgx.ErrNoRows}
+	fake := &fakeQuerier{hasWorkspaceAccess: true, execErr: db.ErrNoRows}
 	h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
 	wsID, execID := execRequest()
 
@@ -140,7 +138,7 @@ func TestGetExecutionHidesAnotherMembersExecution(t *testing.T) {
 	fake := &fakeQuerier{
 		hasWorkspaceAccess: true,
 		notOwner:           true,
-		exec:               db.QueryExecution{UserID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}},
+		exec:               db.QueryExecution{UserID: db.UUID{Bytes: [16]byte{0xCC}, Valid: true}},
 	}
 	h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
 	wsID, execID := execRequest()
@@ -201,7 +199,7 @@ func TestCancelExecutionDoesNotOverrideCompletion(t *testing.T) {
 	t.Parallel()
 	fake := &fakeQuerier{
 		hasWorkspaceAccess: true,
-		cancelErr:          pgx.ErrNoRows,
+		cancelErr:          db.ErrNoRows,
 		exec:               db.QueryExecution{Status: "finished"},
 	}
 	h := testAPI(handlerFields{queries: fake, tx: directTx{q: fake}})
@@ -222,7 +220,7 @@ func TestCancelExecutionDoesNotOverrideCompletion(t *testing.T) {
 
 func TestListStatementsReturns404ForForeignExecution(t *testing.T) {
 	t.Parallel()
-	h := testAPI(handlerFields{queries: &fakeQuerier{hasWorkspaceAccess: true, execErr: pgx.ErrNoRows}})
+	h := testAPI(handlerFields{queries: &fakeQuerier{hasWorkspaceAccess: true, execErr: db.ErrNoRows}})
 	wsID, execID := execRequest()
 
 	resp, err := h.ListStatements(testContext(), ListStatementsRequestObject{Id: wsID, ExecutionId: execID})
@@ -250,7 +248,7 @@ type fakeRunQueryQuerier struct {
 	agentKind string
 }
 
-func (f *fakeRunQueryQuerier) GetAgentByID(_ context.Context, id pgtype.UUID) (db.Agent, error) {
+func (f *fakeRunQueryQuerier) GetAgentByID(_ context.Context, id db.UUID) (db.Agent, error) {
 	kind := f.agentKind
 	if kind == "" {
 		kind = "external"
@@ -265,7 +263,7 @@ func (f *fakeRunQueryQuerier) GetWorkspaceMemberRole(context.Context, db.GetWork
 	return f.role, nil
 }
 
-func (f *fakeRunQueryQuerier) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+func (f *fakeRunQueryQuerier) ListWorkspaceTargets(context.Context, db.UUID) ([]db.ListWorkspaceTargetsRow, error) {
 	return f.targets, nil
 }
 
@@ -273,7 +271,7 @@ func (f *fakeRunQueryQuerier) CheckWorkspaceAccess(context.Context, db.CheckWork
 	return true, nil
 }
 
-func (f *fakeRunQueryQuerier) GetWorkspaceByID(context.Context, pgtype.UUID) (db.Workspace, error) {
+func (f *fakeRunQueryQuerier) GetWorkspaceByID(context.Context, db.UUID) (db.Workspace, error) {
 	return f.workspace, nil
 }
 
@@ -313,7 +311,7 @@ func (f *fakeTemporalClient) CancelWorkflow(ctx context.Context, workflowID, run
 func TestRunQuery_WorkflowStartFailureFailsRow(t *testing.T) {
 	t.Parallel()
 	fake := &fakeRunQueryQuerier{
-		exec:    db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
+		exec:    db.QueryExecution{ID: db.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
 		targets: []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true)},
 	}
 	h := testAPI(handlerFields{
@@ -342,7 +340,7 @@ type handlesQuerier struct {
 	rows []db.ListRunningStatementHandlesRow
 }
 
-func (q *handlesQuerier) ListRunningStatementHandles(context.Context, pgtype.UUID) ([]db.ListRunningStatementHandlesRow, error) {
+func (q *handlesQuerier) ListRunningStatementHandles(context.Context, db.UUID) ([]db.ListRunningStatementHandlesRow, error) {
 	return q.rows, nil
 }
 
@@ -363,7 +361,7 @@ func (c *cancelRecorder) Cancel(_ context.Context, h queryengine.QueryHandle) er
 func TestCancelExecutionCancelsOnTheEngine(t *testing.T) {
 	t.Parallel()
 	q := &handlesQuerier{
-		fakeQuerier: &fakeQuerier{hasWorkspaceAccess: true, cancelResult: db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "cancelled"}},
+		fakeQuerier: &fakeQuerier{hasWorkspaceAccess: true, cancelResult: db.QueryExecution{ID: db.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "cancelled"}},
 		rows:        []db.ListRunningStatementHandlesRow{{Position: 1, QueryHandle: []byte(`{"engine_id":"e","query_id":"20260101_000000_00001_abcde"}`)}},
 	}
 	rec := &cancelRecorder{}

@@ -10,11 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 type runnerTestRow struct {
@@ -28,17 +24,7 @@ func (runnerTestRow) TableName() string { return "runner_test_rows" }
 // legacy goose path, which is the upgrade case the runner has to adopt.
 func openTestStore(t *testing.T) *gorm.DB {
 	t.Helper()
-	pool := newThrowawayPool(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatalf("open gorm store: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	return db
+	return newThrowawayDB(t)
 }
 
 func testRegistry(t *testing.T) *Registry {
@@ -228,48 +214,38 @@ func TestRunnerAppliesTracksAndRollsBack(t *testing.T) {
 	}
 }
 
-// newThrowawayPool creates an empty database on the test server. The store
+// newThrowawayDB creates an empty database on the test server. The store
 // tests cannot use internal/testdb, which imports this package to run the
 // GORM migrations.
-func newThrowawayPool(t *testing.T) *pgxpool.Pool {
+func newThrowawayDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	admin := os.Getenv("BALEIA_TEST_DATABASE_URL")
 	if admin == "" {
 		t.Skip("BALEIA_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
-	cfg, err := pgxpool.ParseConfig(admin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg.MaxConns = 1
-	adminPool, err := pgxpool.NewWithConfig(ctx, cfg)
+	adminDB, err := Open(ctx, admin, Postgres, Options{MaxOpenConns: 1, Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	name := "baleia_runner_" + strings.ToLower(rand.Text()[:12])
-	if _, err := adminPool.Exec(ctx, "CREATE DATABASE "+name); err != nil {
-		adminPool.Close()
+	if err := adminDB.WithContext(ctx).Exec("CREATE DATABASE " + name).Error; err != nil {
+		_ = Close(adminDB)
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = adminPool.Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
-		adminPool.Close()
+		_ = adminDB.Exec("DROP DATABASE IF EXISTS " + name + " WITH (FORCE)").Error
+		_ = Close(adminDB)
 	})
 	u, err := url.Parse(admin)
 	if err != nil {
 		t.Fatal(err)
 	}
 	u.Path = "/" + name
-	cfg, err = pgxpool.ParseConfig(u.String())
+	db, err := Open(ctx, u.String(), Postgres, Options{MaxOpenConns: 4, Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.MaxConns = 4
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
+	t.Cleanup(func() { _ = Close(db) })
+	return db
 }

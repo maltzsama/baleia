@@ -11,20 +11,17 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 var (
-	bSourceConn = pgtype.UUID{Bytes: [16]byte{0xC1}, Valid: true}
-	bEngineConn = pgtype.UUID{Bytes: [16]byte{0xC2}, Valid: true}
-	bCatalog    = pgtype.UUID{Bytes: [16]byte{0xCA}, Valid: true}
-	bEngine     = pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}
-	bCluster    = pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}
-	bOther      = pgtype.UUID{Bytes: [16]byte{0xCD}, Valid: true} // another cluster
-	bBinding    = pgtype.UUID{Bytes: [16]byte{0xB1}, Valid: true}
+	bSourceConn = db.UUID{Bytes: [16]byte{0xC1}, Valid: true}
+	bEngineConn = db.UUID{Bytes: [16]byte{0xC2}, Valid: true}
+	bCatalog    = db.UUID{Bytes: [16]byte{0xCA}, Valid: true}
+	bEngine     = db.UUID{Bytes: [16]byte{0xE1}, Valid: true}
+	bCluster    = db.UUID{Bytes: [16]byte{0xCC}, Valid: true}
+	bOther      = db.UUID{Bytes: [16]byte{0xCD}, Valid: true} // another cluster
+	bBinding    = db.UUID{Bytes: [16]byte{0xB1}, Valid: true}
 )
 
 // bindingQuerier is a catalog on a PostgreSQL connection owned by ownerID, a
@@ -34,14 +31,14 @@ type bindingQuerier struct {
 	mu            sync.Mutex
 	catalog       db.Catalog
 	engineKind    string
-	clusterOfEng  pgtype.UUID
+	clusterOfEng  db.UUID
 	createErr     error
 	updatedCats   []db.UpdateCatalogParams
 	createdBinds  []db.CreateManagedBindingParams
 	updatedBinds  []db.UpdateBindingParams
 	deletedBinds  int
 	registry      []string
-	sourceCreated pgtype.UUID
+	sourceCreated db.UUID
 }
 
 func newBindingQuerier(t *testing.T) *bindingQuerier {
@@ -53,14 +50,14 @@ func newBindingQuerier(t *testing.T) *bindingQuerier {
 	return &bindingQuerier{catalog: cat, engineKind: "trino", clusterOfEng: bOther, sourceCreated: owner}
 }
 
-func (q *bindingQuerier) GetCatalogByID(_ context.Context, id pgtype.UUID) (db.Catalog, error) {
+func (q *bindingQuerier) GetCatalogByID(_ context.Context, id db.UUID) (db.Catalog, error) {
 	if id != q.catalog.ID {
-		return db.Catalog{}, pgx.ErrNoRows
+		return db.Catalog{}, db.ErrNoRows
 	}
 	return q.catalog, nil
 }
 
-func (q *bindingQuerier) GetCatalogConnectionByID(_ context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
+func (q *bindingQuerier) GetCatalogConnectionByID(_ context.Context, id db.UUID) (db.CatalogConnection, error) {
 	switch id {
 	case bSourceConn:
 		return db.CatalogConnection{ID: id, Name: "pg", Type: "postgresql", CreatedBy: q.sourceCreated,
@@ -68,17 +65,17 @@ func (q *bindingQuerier) GetCatalogConnectionByID(_ context.Context, id pgtype.U
 	case bEngineConn:
 		return db.CatalogConnection{ID: id, Name: "trino", Type: "trino", Config: []byte(`{"url":"http://trino:8080"}`)}, nil
 	}
-	return db.CatalogConnection{}, pgx.ErrNoRows
+	return db.CatalogConnection{}, db.ErrNoRows
 }
 
-func (q *bindingQuerier) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+func (q *bindingQuerier) GetEngineByID(_ context.Context, id db.UUID) (db.Engine, error) {
 	if id != bEngine {
-		return db.Engine{}, pgx.ErrNoRows
+		return db.Engine{}, db.ErrNoRows
 	}
 	return db.Engine{ID: id, Name: "default", Kind: q.engineKind, Class: "federated", ConnectionID: bEngineConn, Enabled: true}, nil
 }
 
-func (q *bindingQuerier) GetTrinoClusterByEngine(_ context.Context, id pgtype.UUID) (db.TrinoCluster, error) {
+func (q *bindingQuerier) GetTrinoClusterByEngine(_ context.Context, id db.UUID) (db.TrinoCluster, error) {
 	return db.TrinoCluster{ID: q.clusterOfEng, Name: "c", EngineID: id}, nil
 }
 
@@ -93,11 +90,11 @@ func (q *bindingQuerier) CreateManagedBinding(_ context.Context, p db.CreateMana
 		ExtraProps: p.ExtraProps, Mode: "managed", Enabled: true, LifecycleState: "provisioning", DesiredVersion: p.DesiredVersion}), nil
 }
 
-func (q *bindingQuerier) GetBinding(_ context.Context, id pgtype.UUID) (db.CatalogBinding, error) {
+func (q *bindingQuerier) GetBinding(_ context.Context, id db.UUID) (db.CatalogBinding, error) {
 	if b, ok := q.current(id); ok {
 		return b, nil
 	}
-	return db.CatalogBinding{}, pgx.ErrNoRows
+	return db.CatalogBinding{}, db.ErrNoRows
 }
 
 func (q *bindingQuerier) UpdateBinding(_ context.Context, p db.UpdateBindingParams) (db.CatalogBinding, error) {
@@ -106,13 +103,13 @@ func (q *bindingQuerier) UpdateBinding(_ context.Context, p db.UpdateBindingPara
 	q.updatedBinds = append(q.updatedBinds, p)
 	b, ok := q.current(p.ID)
 	if !ok || !slices.Contains(p.FromStates, b.LifecycleState) {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+		return db.CatalogBinding{}, db.ErrNoRows
 	}
 	b.EngineCatalogName, b.Connector, b.ExtraProps, b.Enabled, b.LifecycleState = p.EngineCatalogName, p.Connector, p.ExtraProps, p.Enabled, p.LifecycleState
 	return q.track(b), nil
 }
 
-func (q *bindingQuerier) DeleteBinding(context.Context, pgtype.UUID) error {
+func (q *bindingQuerier) DeleteBinding(context.Context, db.UUID) error {
 	q.deletedBinds++
 	return nil
 }
@@ -220,7 +217,7 @@ func TestBindingAPI_Rejections(t *testing.T) {
 		"catalog_bindings_catalog_id_engine_id_key":          "binding_exists",
 		"catalog_bindings_engine_id_engine_catalog_name_key": "name_in_use",
 	} {
-		q.createErr = &pgconn.PgError{Code: "23505", ConstraintName: constraint}
+		q.createErr = &db.PGError{Code: "23505", ConstraintName: constraint}
 		if c, b := createBinding(t, h, admin, base); c != 409 || !strings.Contains(b, want) {
 			t.Errorf("%s: %d %s", constraint, c, b)
 		}

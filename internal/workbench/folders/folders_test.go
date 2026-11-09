@@ -7,9 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeStore struct {
@@ -19,7 +16,7 @@ type fakeStore struct {
 	createErr error
 	// moved and movedQueries record the subtree moves; moveErr fails the
 	// move of the saved queries.
-	moved, movedQueries []pgtype.UUID
+	moved, movedQueries []db.UUID
 	moveErr             error
 	// updateErr fails the folder update.
 	updateErr error
@@ -27,7 +24,7 @@ type fakeStore struct {
 
 func newStore() *fakeStore { return &fakeStore{folders: map[[16]byte]db.QueryFolder{}} }
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 func (f *fakeStore) ListVisibleQueryFolders(_ context.Context, arg db.ListVisibleQueryFoldersParams) ([]db.QueryFolder, error) {
 	var out []db.QueryFolder
@@ -53,7 +50,7 @@ func (f *fakeStore) GetQueryFolderByID(_ context.Context, arg db.GetQueryFolderB
 	if q, ok := f.folders[arg.ID.Bytes]; ok && q.WorkspaceID == arg.WorkspaceID {
 		return q, nil
 	}
-	return db.QueryFolder{}, pgx.ErrNoRows
+	return db.QueryFolder{}, db.ErrNoRows
 }
 
 func (f *fakeStore) FolderSlugExists(_ context.Context, arg db.FolderSlugExistsParams) (bool, error) {
@@ -115,7 +112,7 @@ func TestCreate(t *testing.T) {
 	if _, err := s.Create(ctx, ws, space, nil, "x", "Not A Slug"); !errors.Is(err, ErrInvalidSlug) {
 		t.Errorf("bad slug = %v, want ErrInvalidSlug", err)
 	}
-	st.createErr = &pgconn.PgError{Code: "23505"}
+	st.createErr = &db.PGError{Code: "23505"}
 	if _, err := s.Create(ctx, ws, space, nil, "x", "taken"); !errors.Is(err, ErrSlugTaken) {
 		t.Errorf("duplicate = %v, want ErrSlugTaken", err)
 	}
@@ -130,10 +127,10 @@ func TestListGetDelete(t *testing.T) {
 	root, _ := s.Create(ctx, ws, space, nil, "root", "")
 	_, _ = s.Create(ctx, ws, space, &root.ID, "child", "")
 
-	if all, _ := s.List(ctx, ws, newID(), pgtype.UUID{}, nil); len(all) != 2 {
+	if all, _ := s.List(ctx, ws, newID(), db.UUID{}, nil); len(all) != 2 {
 		t.Errorf("all = %d, want 2", len(all))
 	}
-	if kids, _ := s.List(ctx, ws, newID(), pgtype.UUID{}, &root.ID); len(kids) != 1 {
+	if kids, _ := s.List(ctx, ws, newID(), db.UUID{}, &root.ID); len(kids) != 1 {
 		t.Errorf("children = %d, want 1", len(kids))
 	}
 	if _, err := s.Get(ctx, newID(), root.ID); !errors.Is(err, ErrNotFound) {
@@ -276,7 +273,7 @@ func TestUpdate_ParentMustExistInTheSpace(t *testing.T) {
 	f, _ := s.Create(ctx, ws, space, nil, "f", "")
 	elsewhere, _ := s.Create(ctx, ws, other, nil, "elsewhere", "")
 	missing := newID()
-	for name, parent := range map[string]pgtype.UUID{"missing": missing, "other space": elsewhere.ID} {
+	for name, parent := range map[string]db.UUID{"missing": missing, "other space": elsewhere.ID} {
 		if _, err := s.Update(ctx, f, Edit{SpaceID: space, Parent: &parent}); !errors.Is(err, ErrParentNotFound) {
 			t.Errorf("%s parent = %v, want ErrParentNotFound", name, err)
 		}
@@ -291,7 +288,7 @@ func TestUpdate_SlugTakenIsAConflict(t *testing.T) {
 	st := newStore()
 	s := New(st, st.tx)
 	f, _ := s.Create(ctx, newID(), newID(), nil, "f", "")
-	st.updateErr = &pgconn.PgError{Code: "23505"}
+	st.updateErr = &db.PGError{Code: "23505"}
 	taken := "taken"
 	if _, err := s.Update(ctx, f, Edit{Slug: &taken, SpaceID: f.SpaceID}); !errors.Is(err, ErrSlugConflict) {
 		t.Errorf("Update = %v, want ErrSlugConflict", err)

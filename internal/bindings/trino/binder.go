@@ -16,7 +16,6 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	trinoclient "github.com/galileostudio/baleia/internal/trino"
-	"github.com/jackc/pgx/v5"
 )
 
 // RegistryStore is the plugin contract's registry (docs/adr/0003):
@@ -292,7 +291,7 @@ func (b *Binder) Remove(ctx context.Context, name string) error {
 // loaded exactly this version.
 func (b *Binder) Confirm(ctx context.Context, eng bindings.EngineRef, p bindings.Projection) (bindings.Confirmation, error) {
 	row, err := b.store.GetTrinoCatalogRegistryState(ctx, db.GetTrinoCatalogRegistryStateParams{ClusterID: eng.ClusterID, CatalogName: p.EngineCatalog})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return bindings.Confirmation{Reason: "not_registered"}, nil
 	}
 	if err != nil {

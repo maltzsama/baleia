@@ -8,8 +8,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity/providers"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -26,15 +24,15 @@ func (s *Providers) Tx(ctx context.Context, fn func(providers.TxStore) error) er
 	})
 }
 
-// GetAuthProviderByID returns one provider or pgx.ErrNoRows.
-func (s *Providers) GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error) {
+// GetAuthProviderByID returns one provider or db.ErrNoRows.
+func (s *Providers) GetAuthProviderByID(ctx context.Context, id db.UUID) (db.AuthProvider, error) {
 	if !id.Valid {
-		return db.AuthProvider{}, pgx.ErrNoRows
+		return db.AuthProvider{}, db.ErrNoRows
 	}
 	var row model.AuthProvider
 	err := s.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.AuthProvider{}, pgx.ErrNoRows
+		return db.AuthProvider{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.AuthProvider{}, err
@@ -69,7 +67,7 @@ func (s *Providers) list(ctx context.Context, enabledOnly bool) ([]db.AuthProvid
 }
 
 // CountUsersByAuthProvider counts the accounts linked to the provider.
-func (s *Providers) CountUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) (int64, error) {
+func (s *Providers) CountUsersByAuthProvider(ctx context.Context, authProviderID db.UUID) (int64, error) {
 	var count int64
 	err := s.db.WithContext(ctx).Model(&model.User{}).
 		Where("auth_provider_id = ?", UUIDString(authProviderID)).
@@ -120,7 +118,7 @@ func (s *Providers) UpdateAuthProvider(ctx context.Context, arg db.UpdateAuthPro
 }
 
 // RevokeRefreshTokensByAuthProvider revokes the tokens of every linked account.
-func (s *Providers) RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error {
+func (s *Providers) RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID db.UUID) error {
 	users := s.db.Model(&model.User{}).Select("id").Where("auth_provider_id = ?", UUIDString(authProviderID))
 	return s.db.WithContext(ctx).Model(&model.RefreshToken{}).
 		Where("revoked = ? AND user_id IN (?)", false, users).
@@ -128,7 +126,7 @@ func (s *Providers) RevokeRefreshTokensByAuthProvider(ctx context.Context, authP
 }
 
 // DeleteAPIKeysByAuthProvider deletes the API keys of every linked account.
-func (s *Providers) DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error {
+func (s *Providers) DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID db.UUID) error {
 	users := s.db.Model(&model.User{}).Select("id").Where("auth_provider_id = ?", UUIDString(authProviderID))
 	return s.db.WithContext(ctx).
 		Where("user_id IN (?)", users).
@@ -137,7 +135,7 @@ func (s *Providers) DeleteAPIKeysByAuthProvider(ctx context.Context, authProvide
 
 // SuspendUsersByAuthProvider suspends and detaches every linked account before
 // the provider is deleted, so the auth checks still hold.
-func (s *Providers) SuspendUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error {
+func (s *Providers) SuspendUsersByAuthProvider(ctx context.Context, authProviderID db.UUID) error {
 	now := time.Now().UTC()
 	base := map[string]any{
 		"status":           "suspended",
@@ -165,13 +163,13 @@ func (s *Providers) SuspendUsersByAuthProvider(ctx context.Context, authProvider
 }
 
 // DeleteAuthProvider removes the provider.
-func (s *Providers) DeleteAuthProvider(ctx context.Context, id pgtype.UUID) error {
+func (s *Providers) DeleteAuthProvider(ctx context.Context, id db.UUID) error {
 	return s.db.WithContext(ctx).Where("id = ?", UUIDString(id)).Delete(&model.AuthProvider{}).Error
 }
 
 // DeleteUserIDPTokensByAuthProvider deletes the sealed IdP tokens of the
 // provider.
-func (s *Providers) DeleteUserIDPTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error {
+func (s *Providers) DeleteUserIDPTokensByAuthProvider(ctx context.Context, authProviderID db.UUID) error {
 	return s.db.WithContext(ctx).
 		Where("auth_provider_id = ?", UUIDString(authProviderID)).
 		Delete(&model.UserIDPToken{}).Error

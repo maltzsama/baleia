@@ -10,12 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 // contentFixture is a workspace with its default space, a user, and a granted
@@ -33,16 +28,7 @@ type contentFixture struct {
 
 func newContentFixture(t *testing.T) *contentFixture {
 	t.Helper()
-	pool := testdb.New(t)
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
+	gdb := testdb.New(t)
 	r := New(gdb)
 	ctx := context.Background()
 
@@ -110,13 +96,13 @@ func newContentFixture(t *testing.T) *contentFixture {
 	}
 }
 
-func (f *contentFixture) workspaceID() pgtype.UUID { return PGUUID(string(f.ws)) }
-func (f *contentFixture) spaceID() pgtype.UUID     { return PGUUID(string(f.space)) }
-func (f *contentFixture) actor() pgtype.UUID       { return PGUUID(string(f.user)) }
-func (f *contentFixture) catalogID() pgtype.UUID   { return PGUUID(string(f.catalog)) }
-func (f *contentFixture) bindingID() pgtype.UUID   { return PGUUID(string(f.binding)) }
+func (f *contentFixture) workspaceID() db.UUID { return PGUUID(string(f.ws)) }
+func (f *contentFixture) spaceID() db.UUID     { return PGUUID(string(f.space)) }
+func (f *contentFixture) actor() db.UUID       { return PGUUID(string(f.user)) }
+func (f *contentFixture) catalogID() db.UUID   { return PGUUID(string(f.catalog)) }
+func (f *contentFixture) bindingID() db.UUID   { return PGUUID(string(f.binding)) }
 
-func (f *contentFixture) versions(t *testing.T, entityType string, id pgtype.UUID) []db.ListContentVersionsRow {
+func (f *contentFixture) versions(t *testing.T, entityType string, id db.UUID) []db.ListContentVersionsRow {
 	t.Helper()
 	rows, err := f.r.ListContentVersions(context.Background(), db.ListContentVersionsParams{
 		WorkspaceID: f.workspaceID(), EntityType: entityType, EntityID: id, Lim: 100,
@@ -194,8 +180,8 @@ func TestContentSavedQueryLifecycle(t *testing.T) {
 	if err := svc.DeleteSavedQuery(ctx, f.actor(), f.workspaceID(), q.ID); err != nil {
 		t.Fatalf("DeleteSavedQuery: %v", err)
 	}
-	if _, err := f.r.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{ID: q.ID, WorkspaceID: f.workspaceID()}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("deleted row = %v, want pgx.ErrNoRows", err)
+	if _, err := f.r.GetSavedQueryByID(ctx, db.GetSavedQueryByIDParams{ID: q.ID, WorkspaceID: f.workspaceID()}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("deleted row = %v, want db.ErrNoRows", err)
 	}
 	if versions = f.versions(t, content.EntitySavedQuery, q.ID); len(versions) != 3 || versions[0].ChangeKind != "delete" {
 		t.Fatalf("after delete: %+v", versions)
@@ -283,8 +269,8 @@ func TestContentSemanticMetricLifecycle(t *testing.T) {
 	if err := svc.DeleteSemanticMetric(ctx, f.actor(), f.workspaceID(), m.ID); err != nil {
 		t.Fatalf("DeleteSemanticMetric: %v", err)
 	}
-	if _, err := f.r.GetSemanticMetric(ctx, db.GetSemanticMetricParams{ID: m.ID, WorkspaceID: f.workspaceID()}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("deleted metric = %v, want pgx.ErrNoRows", err)
+	if _, err := f.r.GetSemanticMetric(ctx, db.GetSemanticMetricParams{ID: m.ID, WorkspaceID: f.workspaceID()}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("deleted metric = %v, want db.ErrNoRows", err)
 	}
 	if versions := f.versions(t, content.EntitySemanticMetric, m.ID); len(versions) != 3 || versions[0].ChangeKind != "delete" {
 		t.Fatalf("after delete: %+v", versions)
@@ -343,8 +329,8 @@ func TestContentSemanticModelLifecycle(t *testing.T) {
 	if err := svc.DeleteSemanticModel(ctx, f.actor(), f.workspaceID(), m.ID); err != nil {
 		t.Fatalf("DeleteSemanticModel: %v", err)
 	}
-	if _, err := f.r.GetSemanticModel(ctx, db.GetSemanticModelParams{ID: m.ID, WorkspaceID: f.workspaceID()}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("deleted model = %v, want pgx.ErrNoRows", err)
+	if _, err := f.r.GetSemanticModel(ctx, db.GetSemanticModelParams{ID: m.ID, WorkspaceID: f.workspaceID()}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("deleted model = %v, want db.ErrNoRows", err)
 	}
 	if versions := f.versions(t, content.EntitySemanticModel, m.ID); len(versions) != 3 || versions[0].ChangeKind != "delete" {
 		t.Fatalf("after delete: %+v", versions)
@@ -392,12 +378,12 @@ func TestContentBundleSources(t *testing.T) {
 		t.Fatalf("ListWorkspaceTargets = %+v, %v", targets, err)
 	}
 
-	if _, err := f.r.GetCatalogNameByID(ctx, PGUUID(NewUUID())); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("missing catalog = %v, want pgx.ErrNoRows", err)
+	if _, err := f.r.GetCatalogNameByID(ctx, PGUUID(NewUUID())); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("missing catalog = %v, want db.ErrNoRows", err)
 	}
 	if _, err := f.r.GetGrantedCatalogByName(ctx, db.GetGrantedCatalogByNameParams{
 		WorkspaceID: f.workspaceID(), Name: "absent",
-	}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("missing grant = %v, want pgx.ErrNoRows", err)
+	}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("missing grant = %v, want db.ErrNoRows", err)
 	}
 }

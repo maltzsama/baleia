@@ -17,9 +17,6 @@ import (
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/slug"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store reads models and records their certification; *repo.Repo
@@ -33,9 +30,9 @@ type Store interface {
 
 // Content writes models and their versions; *content.Service implements it.
 type Content interface {
-	CreateSemanticModel(ctx context.Context, actor pgtype.UUID, in db.CreateSemanticModelParams) (db.SemanticModel, error)
-	UpdateSemanticModel(ctx context.Context, actor pgtype.UUID, in db.UpdateSemanticModelParams, expectedVersion *int32) (db.SemanticModel, bool, error)
-	DeleteSemanticModel(ctx context.Context, actor pgtype.UUID, workspaceID, id pgtype.UUID) error
+	CreateSemanticModel(ctx context.Context, actor db.UUID, in db.CreateSemanticModelParams) (db.SemanticModel, error)
+	UpdateSemanticModel(ctx context.Context, actor db.UUID, in db.UpdateSemanticModelParams, expectedVersion *int32) (db.SemanticModel, bool, error)
+	DeleteSemanticModel(ctx context.Context, actor db.UUID, workspaceID, id db.UUID) error
 }
 
 // FormatVersion is the stored definition format.
@@ -71,23 +68,23 @@ type Service struct {
 func New(store Store, content Content) *Service { return &Service{store: store, content: content} }
 
 // List returns the models the user can see, of one space when spaceID is valid.
-func (s *Service) List(ctx context.Context, ws, userID, spaceID pgtype.UUID) ([]db.SemanticModel, error) {
+func (s *Service) List(ctx context.Context, ws, userID, spaceID db.UUID) ([]db.SemanticModel, error) {
 	return s.store.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{WorkspaceID: ws, UserID: userID, SpaceID: spaceID})
 }
 
 // Get returns one model of the workspace.
-func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.SemanticModel, error) {
+func (s *Service) Get(ctx context.Context, ws, id db.UUID) (db.SemanticModel, error) {
 	m, err := s.store.GetSemanticModel(ctx, db.GetSemanticModelParams{WorkspaceID: ws, ID: id})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.SemanticModel{}, ErrNotFound
 	}
 	return m, err
 }
 
 // SlugTaken reports whether the workspace has a model with this slug.
-func (s *Service) SlugTaken(ctx context.Context, ws pgtype.UUID, modelSlug string) (bool, error) {
+func (s *Service) SlugTaken(ctx context.Context, ws db.UUID, modelSlug string) (bool, error) {
 	_, err := s.store.GetSemanticModelBySlug(ctx, db.GetSemanticModelBySlugParams{WorkspaceID: ws, Slug: modelSlug})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return false, nil
 	}
 	return err == nil, err
@@ -95,7 +92,7 @@ func (s *Service) SlugTaken(ctx context.Context, ws pgtype.UUID, modelSlug strin
 
 // Visible returns the definitions of every model the user can see, by slug.
 // A malformed model is skipped: it must not block a valid edit.
-func (s *Service) Visible(ctx context.Context, ws, userID pgtype.UUID) (map[string]semantic.Model, error) {
+func (s *Service) Visible(ctx context.Context, ws, userID db.UUID) (map[string]semantic.Model, error) {
 	rows, err := s.store.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{WorkspaceID: ws, UserID: userID})
 	if err != nil {
 		return nil, err
@@ -119,9 +116,9 @@ type Fields struct {
 	Label       string
 	Description string
 	Certified   bool
-	CatalogID   pgtype.UUID
-	BindingID   pgtype.UUID
-	OwnerID     pgtype.UUID
+	CatalogID   db.UUID
+	BindingID   db.UUID
+	OwnerID     db.UUID
 }
 
 // Prepared is a validated model, ready to store.
@@ -133,7 +130,7 @@ type Prepared struct {
 
 // PrepareNew checks a new model's fields, parses its definition and
 // validates it against the models the user can see.
-func (s *Service) PrepareNew(ctx context.Context, ws, userID pgtype.UUID, f Fields, definition map[string]any) (Prepared, error) {
+func (s *Service) PrepareNew(ctx context.Context, ws, userID db.UUID, f Fields, definition map[string]any) (Prepared, error) {
 	if err := checkFields(f); err != nil {
 		return Prepared{}, err
 	}
@@ -153,7 +150,7 @@ func (s *Service) PrepareNew(ctx context.Context, ws, userID pgtype.UUID, f Fiel
 
 // Create stores a prepared model in spaceID as actor. Certifying needs
 // canCertify.
-func (s *Service) Create(ctx context.Context, actor, ws, spaceID pgtype.UUID, p Prepared, canCertify bool) (db.SemanticModel, error) {
+func (s *Service) Create(ctx context.Context, actor, ws, spaceID db.UUID, p Prepared, canCertify bool) (db.SemanticModel, error) {
 	if p.Certified && !canCertify {
 		return db.SemanticModel{}, ErrCertifyForbidden
 	}
@@ -194,9 +191,9 @@ type Change struct {
 	Label       *string
 	Description *string
 	Certified   *bool
-	CatalogID   *pgtype.UUID
-	BindingID   *pgtype.UUID
-	OwnerID     *pgtype.UUID
+	CatalogID   *db.UUID
+	BindingID   *db.UUID
+	OwnerID     *db.UUID
 	// ChangesDefinition says the update also replaces the definition.
 	ChangesDefinition bool
 }
@@ -243,7 +240,7 @@ func MergeFields(current db.SemanticModel, change Change, isManager bool) (Field
 
 // PrepareUpdate parses the new definition, or keeps current's, and validates
 // it with f against the other models the user can see.
-func (s *Service) PrepareUpdate(ctx context.Context, ws, userID pgtype.UUID, current db.SemanticModel, f Fields, definition *map[string]any) (Prepared, error) {
+func (s *Service) PrepareUpdate(ctx context.Context, ws, userID db.UUID, current db.SemanticModel, f Fields, definition *map[string]any) (Prepared, error) {
 	raw := current.Definition
 	var def semantic.Model
 	if definition != nil {
@@ -267,7 +264,7 @@ func (s *Service) PrepareUpdate(ctx context.Context, ws, userID pgtype.UUID, cur
 
 // Update stores a prepared model over current as actor. A version conflict
 // is returned as content reports it.
-func (s *Service) Update(ctx context.Context, actor pgtype.UUID, current db.SemanticModel, p Prepared, expectedVersion *int32) (db.SemanticModel, error) {
+func (s *Service) Update(ctx context.Context, actor db.UUID, current db.SemanticModel, p Prepared, expectedVersion *int32) (db.SemanticModel, error) {
 	updated, _, err := s.content.UpdateSemanticModel(ctx, actor, db.UpdateSemanticModelParams{
 		WorkspaceID:   current.WorkspaceID,
 		SpaceID:       current.SpaceID,
@@ -301,7 +298,7 @@ func (s *Service) Update(ctx context.Context, actor pgtype.UUID, current db.Sema
 }
 
 // Delete removes a model as actor.
-func (s *Service) Delete(ctx context.Context, actor, ws, id pgtype.UUID) error {
+func (s *Service) Delete(ctx context.Context, actor, ws, id db.UUID) error {
 	return s.content.DeleteSemanticModel(ctx, actor, ws, id)
 }
 
@@ -356,6 +353,6 @@ func checkFields(f Fields) error {
 }
 
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505" // unique_violation
+	pgErr, ok := db.AsPGError(err)
+	return ok && pgErr.Code == "23505" // unique_violation
 }

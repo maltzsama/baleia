@@ -7,8 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -41,7 +39,7 @@ func (r *Repo) CreateCatalog(ctx context.Context, arg db.CreateCatalogParams) (d
 }
 
 // ListCatalogsByConnection lists a connection's catalogs by name.
-func (r *Repo) ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]db.Catalog, error) {
+func (r *Repo) ListCatalogsByConnection(ctx context.Context, connectionID db.UUID) ([]db.Catalog, error) {
 	var rows []model.Catalog
 	if err := r.Users.db.WithContext(ctx).
 		Where("connection_id = ?", UUIDString(connectionID)).
@@ -74,7 +72,7 @@ func (r *Repo) GetCatalogByTrinoName(ctx context.Context, arg db.GetCatalogByTri
 		Where("cluster_id = ? AND trino_catalog_name = ?", uuidText(arg.ClusterID), arg.TrinoCatalogName).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Catalog{}, pgx.ErrNoRows
+		return db.Catalog{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Catalog{}, err
@@ -130,7 +128,7 @@ func (r *Repo) SetCatalogEnabled(ctx context.Context, arg db.SetCatalogEnabledPa
 }
 
 // DeleteCatalog removes a catalog; its bindings cascade.
-func (r *Repo) DeleteCatalog(ctx context.Context, id pgtype.UUID) error {
+func (r *Repo) DeleteCatalog(ctx context.Context, id db.UUID) error {
 	return r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).Delete(&model.Catalog{}).Error
 }
 
@@ -176,7 +174,7 @@ func (r *Repo) ListDiscoverableCatalogs(ctx context.Context) ([]db.ListDiscovera
 }
 
 // GetCatalogSyncState returns the freshness of a catalog snapshot.
-func (r *Repo) GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID) (db.GetCatalogSyncStateRow, error) {
+func (r *Repo) GetCatalogSyncState(ctx context.Context, catalogID db.UUID) (db.GetCatalogSyncStateRow, error) {
 	var out db.GetCatalogSyncStateRow
 	var latest model.MetadataSyncRun
 	err := r.Users.db.WithContext(ctx).
@@ -205,23 +203,23 @@ func (r *Repo) GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID) (
 }
 
 // GetMetadataTableByName finds a live table by its natural key.
-func (r *Repo) GetMetadataTableByName(ctx context.Context, arg db.GetMetadataTableByNameParams) (pgtype.UUID, error) {
+func (r *Repo) GetMetadataTableByName(ctx context.Context, arg db.GetMetadataTableByNameParams) (db.UUID, error) {
 	var row model.MetadataTable
 	err := r.Users.db.WithContext(ctx).
 		Where("catalog_id = ? AND namespace = ? AND name = ? AND removed_at IS NULL",
 			uuidText(arg.CatalogID), model.StringArray(arg.Namespace), arg.Name).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return pgtype.UUID{}, pgx.ErrNoRows
+		return db.UUID{}, db.ErrNoRows
 	}
 	if err != nil {
-		return pgtype.UUID{}, err
+		return db.UUID{}, err
 	}
 	return PGUUID(string(row.ID)), nil
 }
 
 // ListMetadataColumns lists a table's stored columns by ordinal.
-func (r *Repo) ListMetadataColumns(ctx context.Context, tableID pgtype.UUID) ([]db.ListMetadataColumnsRow, error) {
+func (r *Repo) ListMetadataColumns(ctx context.Context, tableID db.UUID) ([]db.ListMetadataColumnsRow, error) {
 	var rows []model.MetadataColumn
 	if err := r.Users.db.WithContext(ctx).
 		Where("table_id = ?", UUIDString(tableID)).
@@ -245,8 +243,8 @@ func (r *Repo) ListMetadataColumns(ctx context.Context, tableID pgtype.UUID) ([]
 
 // ── bindings ──────────────────────────────────────────────────────────────────
 
-// GetBinding returns one binding or pgx.ErrNoRows.
-func (r *Repo) GetBinding(ctx context.Context, id pgtype.UUID) (db.CatalogBinding, error) {
+// GetBinding returns one binding or db.ErrNoRows.
+func (r *Repo) GetBinding(ctx context.Context, id db.UUID) (db.CatalogBinding, error) {
 	row, err := r.getBinding(ctx, id)
 	if err != nil {
 		return db.CatalogBinding{}, err
@@ -255,7 +253,7 @@ func (r *Repo) GetBinding(ctx context.Context, id pgtype.UUID) (db.CatalogBindin
 }
 
 // ListBindingsByEngine lists an engine's bindings by engine catalog name.
-func (r *Repo) ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]db.CatalogBinding, error) {
+func (r *Repo) ListBindingsByEngine(ctx context.Context, engineID db.UUID) ([]db.CatalogBinding, error) {
 	var rows []model.CatalogBinding
 	if err := r.Users.db.WithContext(ctx).
 		Where("engine_id = ?", UUIDString(engineID)).
@@ -274,7 +272,7 @@ func (r *Repo) GetManagedBindingOfCatalog(ctx context.Context, arg db.GetManaged
 			UUIDString(arg.CatalogID), UUIDString(arg.EngineID), "managed").
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+		return db.CatalogBinding{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.CatalogBinding{}, err
@@ -283,7 +281,7 @@ func (r *Repo) GetManagedBindingOfCatalog(ctx context.Context, arg db.GetManaged
 }
 
 // GetBindingStatus derives the sync status the API shows for a binding.
-func (r *Repo) GetBindingStatus(ctx context.Context, bindingID pgtype.UUID) (db.BindingStatusV, error) {
+func (r *Repo) GetBindingStatus(ctx context.Context, bindingID db.UUID) (db.BindingStatusV, error) {
 	binding, err := r.getBinding(ctx, bindingID)
 	if err != nil {
 		return db.BindingStatusV{}, err
@@ -311,19 +309,19 @@ func (r *Repo) CountManagedBindingsByState(ctx context.Context) ([]db.CountManag
 }
 
 // DeleteBinding removes a binding row.
-func (r *Repo) DeleteBinding(ctx context.Context, id pgtype.UUID) error {
+func (r *Repo) DeleteBinding(ctx context.Context, id db.UUID) error {
 	return r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).Delete(&model.CatalogBinding{}).Error
 }
 
 // DisableManagedBindingsOfCatalog disables a catalog's managed bindings.
-func (r *Repo) DisableManagedBindingsOfCatalog(ctx context.Context, catalogID pgtype.UUID) error {
+func (r *Repo) DisableManagedBindingsOfCatalog(ctx context.Context, catalogID db.UUID) error {
 	return r.Users.db.WithContext(ctx).Model(&model.CatalogBinding{}).
 		Where("catalog_id = ? AND mode = ?", UUIDString(catalogID), "managed").
 		Updates(map[string]any{"enabled": false, "updated_at": time.Now().UTC()}).Error
 }
 
 // ListManagedBindingsOfEngine lists the managed bindings the reconciler checks.
-func (r *Repo) ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]db.CatalogBinding, error) {
+func (r *Repo) ListManagedBindingsOfEngine(ctx context.Context, engineID db.UUID) ([]db.CatalogBinding, error) {
 	var rows []model.CatalogBinding
 	if err := r.Users.db.WithContext(ctx).
 		Where("engine_id = ? AND mode = ?", UUIDString(engineID), "managed").
@@ -335,7 +333,7 @@ func (r *Repo) ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.
 }
 
 // ManagedBindingNamesOfEngine lists the names of an engine's managed bindings.
-func (r *Repo) ManagedBindingNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error) {
+func (r *Repo) ManagedBindingNamesOfEngine(ctx context.Context, engineID db.UUID) ([]string, error) {
 	var names []string
 	err := r.Users.db.WithContext(ctx).Model(&model.CatalogBinding{}).
 		Where("engine_id = ? AND mode = ?", UUIDString(engineID), "managed").
@@ -413,7 +411,7 @@ func (r *Repo) CreateManagedBinding(ctx context.Context, arg db.CreateManagedBin
 // start from; no row means a concurrent change.
 func (r *Repo) UpdateBinding(ctx context.Context, arg db.UpdateBindingParams) (db.CatalogBinding, error) {
 	if !arg.ID.Valid || len(arg.FromStates) == 0 {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+		return db.CatalogBinding{}, db.ErrNoRows
 	}
 	now := time.Now().UTC()
 	changes := map[string]any{
@@ -437,7 +435,7 @@ func (r *Repo) UpdateBinding(ctx context.Context, arg db.UpdateBindingParams) (d
 		return db.CatalogBinding{}, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+		return db.CatalogBinding{}, db.ErrNoRows
 	}
 	return r.GetBinding(ctx, arg.ID)
 }
@@ -446,7 +444,7 @@ func (r *Repo) UpdateBinding(ctx context.Context, arg db.UpdateBindingParams) (d
 // expected ones; no row means a concurrent change.
 func (r *Repo) TransitionBinding(ctx context.Context, arg db.TransitionBindingParams) (db.CatalogBinding, error) {
 	if !arg.ID.Valid || len(arg.FromStates) == 0 {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+		return db.CatalogBinding{}, db.ErrNoRows
 	}
 	now := time.Now().UTC()
 	changes := map[string]any{
@@ -469,7 +467,7 @@ func (r *Repo) TransitionBinding(ctx context.Context, arg db.TransitionBindingPa
 		return db.CatalogBinding{}, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.CatalogBinding{}, pgx.ErrNoRows
+		return db.CatalogBinding{}, db.ErrNoRows
 	}
 	return r.GetBinding(ctx, arg.ID)
 }
@@ -554,7 +552,7 @@ func (r *Repo) DisableMissingNativeBindings(ctx context.Context, arg db.DisableM
 
 // DeleteNativeCatalogsOfEngine deletes the native catalogs of an engine (their
 // bindings cascade).
-func (r *Repo) DeleteNativeCatalogsOfEngine(ctx context.Context, engineID pgtype.UUID) error {
+func (r *Repo) DeleteNativeCatalogsOfEngine(ctx context.Context, engineID db.UUID) error {
 	var ids []string
 	if err := r.Users.db.WithContext(ctx).Model(&model.CatalogBinding{}).
 		Where("engine_id = ? AND mode = ?", UUIDString(engineID), "native").
@@ -611,7 +609,7 @@ func (r *Repo) UpsertAdoptedBinding(ctx context.Context, arg db.UpsertAdoptedBin
 
 // DisableMissingAdoptedBindings disables adopted catalogs the engine no
 // longer reports.
-func (r *Repo) DisableMissingAdoptedBindings(ctx context.Context, engineID pgtype.UUID) (int64, error) {
+func (r *Repo) DisableMissingAdoptedBindings(ctx context.Context, engineID db.UUID) (int64, error) {
 	var names []string
 	if err := r.Users.db.WithContext(ctx).Model(&model.EngineCatalogObservation{}).
 		Where("engine_id = ? AND NOT present", UUIDString(engineID)).
@@ -641,7 +639,7 @@ func (r *Repo) GetManagedConnectionOfEngineCatalog(ctx context.Context, arg db.G
 			UUIDString(arg.EngineID), arg.EngineCatalogName, "managed").
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.CatalogConnection{}, pgx.ErrNoRows
+		return db.CatalogConnection{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.CatalogConnection{}, err
@@ -652,7 +650,7 @@ func (r *Repo) GetManagedConnectionOfEngineCatalog(ctx context.Context, arg db.G
 // ── count helpers ─────────────────────────────────────────────────────────────
 
 // CountNamespacesByCatalog counts a catalog's live namespaces.
-func (r *Repo) CountNamespacesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error) {
+func (r *Repo) CountNamespacesByCatalog(ctx context.Context, catalogID db.UUID) (int64, error) {
 	var count int64
 	err := r.Users.db.WithContext(ctx).Model(&model.MetadataNamespace{}).
 		Where("catalog_id = ? AND removed_at IS NULL", UUIDString(catalogID)).
@@ -661,7 +659,7 @@ func (r *Repo) CountNamespacesByCatalog(ctx context.Context, catalogID pgtype.UU
 }
 
 // CountTablesByCatalog counts a catalog's live tables.
-func (r *Repo) CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error) {
+func (r *Repo) CountTablesByCatalog(ctx context.Context, catalogID db.UUID) (int64, error) {
 	var count int64
 	err := r.Users.db.WithContext(ctx).Model(&model.MetadataTable{}).
 		Where("catalog_id = ? AND removed_at IS NULL", UUIDString(catalogID)).
@@ -670,7 +668,7 @@ func (r *Repo) CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) 
 }
 
 // CountCatalogImpact counts what depends on a catalog before it is retired.
-func (r *Repo) CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (db.CountCatalogImpactRow, error) {
+func (r *Repo) CountCatalogImpact(ctx context.Context, catalogID db.UUID) (db.CountCatalogImpactRow, error) {
 	id := UUIDString(catalogID)
 	var out db.CountCatalogImpactRow
 	for _, c := range []struct {
@@ -706,7 +704,7 @@ func (r *Repo) CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (d
 }
 
 // CountConnectionImpact counts what depends on a connection.
-func (r *Repo) CountConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (db.CountConnectionImpactRow, error) {
+func (r *Repo) CountConnectionImpact(ctx context.Context, connectionID db.UUID) (db.CountConnectionImpactRow, error) {
 	id := UUIDString(connectionID)
 	var out db.CountConnectionImpactRow
 	if err := r.Users.db.WithContext(ctx).Model(&model.Catalog{}).
@@ -729,7 +727,7 @@ func (r *Repo) CountConnectionImpact(ctx context.Context, connectionID pgtype.UU
 }
 
 // CountEngineBlockers counts what stops an engine from being deleted.
-func (r *Repo) CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (db.CountEngineBlockersRow, error) {
+func (r *Repo) CountEngineBlockers(ctx context.Context, engineID db.UUID) (db.CountEngineBlockersRow, error) {
 	id := UUIDString(engineID)
 	var out db.CountEngineBlockersRow
 	if err := r.Users.db.WithContext(ctx).Model(&model.CatalogBinding{}).
@@ -745,7 +743,7 @@ func (r *Repo) CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (d
 
 // CountEngineImpact counts what depends on an engine before it is disabled or
 // deleted.
-func (r *Repo) CountEngineImpact(ctx context.Context, engineID pgtype.UUID) (db.CountEngineImpactRow, error) {
+func (r *Repo) CountEngineImpact(ctx context.Context, engineID db.UUID) (db.CountEngineImpactRow, error) {
 	id := UUIDString(engineID)
 	var out db.CountEngineImpactRow
 	if err := r.Users.db.WithContext(ctx).Model(&model.CatalogBinding{}).
@@ -820,7 +818,7 @@ func (r *Repo) GetReconcileRun(ctx context.Context, arg db.GetReconcileRunParams
 		Where("engine_id = ? AND id = ?", UUIDString(arg.EngineID), UUIDString(arg.ID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.CatalogReconcileRun{}, pgx.ErrNoRows
+		return db.CatalogReconcileRun{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.CatalogReconcileRun{}, err
@@ -847,14 +845,14 @@ func (r *Repo) ListReconcileRuns(ctx context.Context, arg db.ListReconcileRunsPa
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-func (r *Repo) getBinding(ctx context.Context, id pgtype.UUID) (model.CatalogBinding, error) {
+func (r *Repo) getBinding(ctx context.Context, id db.UUID) (model.CatalogBinding, error) {
 	var row model.CatalogBinding
 	if !id.Valid {
-		return row, pgx.ErrNoRows
+		return row, db.ErrNoRows
 	}
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return row, pgx.ErrNoRows
+		return row, db.ErrNoRows
 	}
 	return row, err
 }

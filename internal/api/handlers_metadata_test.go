@@ -12,7 +12,6 @@ import (
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	"github.com/jackc/pgx/v5/pgtype"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
@@ -178,7 +177,7 @@ func TestCatalog_FreshnessFields(t *testing.T) {
 		t.Fatalf("before any pass: %+v %+v %+v", c.MetadataSyncStatus, c.MetadataSyncedAt, c.MetadataSyncErrorCode)
 	}
 	at := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
-	q.syncState = db.GetCatalogSyncStateRow{LastStatus: "failed", LastErrorCode: "engine_unavailable", SyncedAt: pgtype.Timestamptz{Time: at, Valid: true}}
+	q.syncState = db.GetCatalogSyncStateRow{LastStatus: "failed", LastErrorCode: "engine_unavailable", SyncedAt: db.Timestamptz{Time: at, Valid: true}}
 	c = get()
 	if *c.MetadataSyncStatus != CatalogMetadataSyncStatusFailed || !c.MetadataSyncedAt.Equal(at) || *c.MetadataSyncErrorCode != "engine_unavailable" {
 		t.Fatalf("after a failed pass: %+v %+v %+v", *c.MetadataSyncStatus, c.MetadataSyncedAt, c.MetadataSyncErrorCode)

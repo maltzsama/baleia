@@ -7,7 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Glue between the handlers and the binding lifecycle (#38): the catalog
@@ -107,7 +106,7 @@ func (h *core) catalogResponse(ctx context.Context, cat db.Catalog, b db.Catalog
 // metadataFreshness fills a catalog's metadata sync fields from its latest
 // passes (#17). A read error leaves them unset rather than failing the
 // response.
-func (h *core) metadataFreshness(ctx context.Context, id pgtype.UUID, c *Catalog) {
+func (h *core) metadataFreshness(ctx context.Context, id db.UUID, c *Catalog) {
 	st, err := h.topology.SyncState(ctx, id)
 	if err != nil {
 		h.logger.WarnContext(ctx, "catalog metadata freshness", "err", err)

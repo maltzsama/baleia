@@ -13,8 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/slug"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -22,15 +20,15 @@ import (
 // *repo.ServiceAccounts implements it over GORM; db.Querier implements it over
 // sqlc while the store migrates (#769).
 type serviceAccountStore interface {
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
-	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error)
-	GetServiceAccount(ctx context.Context, id pgtype.UUID) (db.User, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
+	GetAuthProviderByID(ctx context.Context, id db.UUID) (db.AuthProvider, error)
+	GetServiceAccount(ctx context.Context, id db.UUID) (db.User, error)
 	ListServiceAccounts(ctx context.Context) ([]db.User, error)
-	ListAdminWorkspaceIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
-	ListServiceAccountsOfWorkspaces(ctx context.Context, workspaceIDs []pgtype.UUID) ([]db.User, error)
+	ListAdminWorkspaceIDs(ctx context.Context, userID db.UUID) ([]db.UUID, error)
+	ListServiceAccountsOfWorkspaces(ctx context.Context, workspaceIDs []db.UUID) ([]db.User, error)
 	UpdateServiceAccount(ctx context.Context, arg db.UpdateServiceAccountParams) (db.User, error)
-	DeleteUserIDPToken(ctx context.Context, userID pgtype.UUID) error
-	DeleteServiceAccount(ctx context.Context, id pgtype.UUID) (int64, error)
+	DeleteUserIDPToken(ctx context.Context, userID db.UUID) error
+	DeleteServiceAccount(ctx context.Context, id db.UUID) (int64, error)
 }
 
 // serviceAccountEmailDomain is reserved (RFC 2606): a service account's
@@ -100,8 +98,8 @@ func (h *core) managedServiceAccount(ctx context.Context, id openapi_types.UUID)
 	if !ok {
 		return p, db.User{}, false, nil
 	}
-	sa, err := h.serviceAccounts.GetServiceAccount(ctx, pgtype.UUID{Bytes: id, Valid: true})
-	if errors.Is(err, pgx.ErrNoRows) {
+	sa, err := h.serviceAccounts.GetServiceAccount(ctx, db.UUID{Bytes: id, Valid: true})
+	if errors.Is(err, db.ErrNoRows) {
 		return p, db.User{}, false, nil
 	}
 	if err != nil {
@@ -122,23 +120,23 @@ func serviceAccountNotFound() NotFoundJSONResponse {
 
 // identityLink validates an identity provider link: both or neither, and an
 // enabled OIDC provider.
-func (h *core) identityLink(ctx context.Context, providerID *openapi_types.UUID, clientID *string) (authProvider string, pid pgtype.UUID, external *string, fieldErr *FieldError, err error) {
+func (h *core) identityLink(ctx context.Context, providerID *openapi_types.UUID, clientID *string) (authProvider string, pid db.UUID, external *string, fieldErr *FieldError, err error) {
 	cid := ""
 	if clientID != nil {
 		cid = strings.TrimSpace(*clientID)
 	}
 	switch {
 	case providerID == nil && cid == "":
-		return "service", pgtype.UUID{}, nil, nil, nil
+		return "service", db.UUID{}, nil, nil, nil
 	case providerID == nil || cid == "":
-		return "", pgtype.UUID{}, nil, &FieldError{Field: "client_id", Code: FieldCodeRequired}, nil
+		return "", db.UUID{}, nil, &FieldError{Field: "client_id", Code: FieldCodeRequired}, nil
 	}
-	ap, err := h.serviceAccounts.GetAuthProviderByID(ctx, pgtype.UUID{Bytes: *providerID, Valid: true})
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && ap.Type != "oidc") {
-		return "", pgtype.UUID{}, nil, &FieldError{Field: "identity_provider_id", Code: FieldCodeInvalidFormat}, nil
+	ap, err := h.serviceAccounts.GetAuthProviderByID(ctx, db.UUID{Bytes: *providerID, Valid: true})
+	if errors.Is(err, db.ErrNoRows) || (err == nil && ap.Type != "oidc") {
+		return "", db.UUID{}, nil, &FieldError{Field: "identity_provider_id", Code: FieldCodeInvalidFormat}, nil
 	}
 	if err != nil {
-		return "", pgtype.UUID{}, nil, nil, err
+		return "", db.UUID{}, nil, nil, err
 	}
 	ext := clientExternalID(cid)
 	return "oidc", ap.ID, &ext, nil, nil
@@ -167,7 +165,7 @@ func (h *AuthHandlers) ListServiceAccounts(ctx context.Context, _ ListServiceAcc
 	if p.IsAdmin() {
 		rows, err = h.serviceAccounts.ListServiceAccounts(ctx)
 	} else {
-		var ws []pgtype.UUID
+		var ws []db.UUID
 		if ws, err = h.serviceAccounts.ListAdminWorkspaceIDs(ctx, p.UserID); err == nil && len(ws) > 0 {
 			rows, err = h.serviceAccounts.ListServiceAccountsOfWorkspaces(ctx, ws)
 		}
@@ -195,7 +193,7 @@ func (h *AuthHandlers) CreateServiceAccount(ctx context.Context, request CreateS
 	}
 	body := request.Body
 	ev := audit.Event{Action: audit.ServiceAccountCreate, ResourceType: "service_account", Changes: map[string]audit.Change{"name": {To: body.Name}}}
-	var home pgtype.UUID
+	var home db.UUID
 	role := "viewer"
 	if body.Role != nil {
 		role = string(*body.Role)
@@ -205,7 +203,7 @@ func (h *AuthHandlers) CreateServiceAccount(ctx context.Context, request CreateS
 	}
 	switch {
 	case body.WorkspaceId != nil:
-		home = pgtype.UUID{Bytes: *body.WorkspaceId, Valid: true}
+		home = db.UUID{Bytes: *body.WorkspaceId, Valid: true}
 		if _, err := h.authz().RequireWorkspaceRole(ctx, p, home, authz.WorkspaceAdmin); err != nil {
 			if errors.Is(err, authz.ErrNotFound) {
 				return CreateServiceAccount404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
@@ -397,7 +395,7 @@ func (h *AuthHandlers) RevokeServiceAccountToken(ctx context.Context, request Re
 	if !ok {
 		return RevokeServiceAccountToken404JSONResponse{NotFoundJSONResponse: serviceAccountNotFound()}, nil
 	}
-	if err := h.apiKeys.Delete(ctx, sa.ID, pgtype.UUID{Bytes: request.TokenId, Valid: true}); err != nil {
+	if err := h.apiKeys.Delete(ctx, sa.ID, db.UUID{Bytes: request.TokenId, Valid: true}); err != nil {
 		return nil, err
 	}
 	h.audited(ctx, audit.Event{Action: audit.ServiceAccountTokenRevoke, ResourceType: "service_account", ResourceID: idString(sa.ID), Outcome: audit.Allowed,

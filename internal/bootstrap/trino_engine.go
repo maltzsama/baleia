@@ -10,8 +10,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // DefaultEngineStore is the subset of db.Querier EnsureDefaultTrinoEngine uses.
@@ -41,7 +39,7 @@ type DefaultTrinoEngine struct {
 	CA string
 	// Seal encrypts the connection's credentials bound to its id (the keyring);
 	// required when Password is set.
-	Seal func(plain []byte, connID pgtype.UUID) (string, error)
+	Seal func(plain []byte, connID db.UUID) (string, error)
 }
 
 // TrinoPasswordRef is the external secret reference the default engine stores
@@ -71,7 +69,7 @@ func (d DefaultTrinoEngine) config() map[string]string {
 
 // credentials seals the password reference for connection id; nil when the
 // coordinator takes no password.
-func (d DefaultTrinoEngine) credentials(id pgtype.UUID) (*string, error) {
+func (d DefaultTrinoEngine) credentials(id db.UUID) (*string, error) {
 	if !d.Password {
 		return nil, nil
 	}
@@ -105,7 +103,7 @@ func EnsureDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q Defaul
 	}
 	row, err := q.GetDefaultTrinoEngine(ctx)
 	switch {
-	case errors.Is(err, pgx.ErrNoRows):
+	case errors.Is(err, db.ErrNoRows):
 		return createDefaultTrinoEngine(ctx, logger, q, env)
 	case err != nil:
 		return fmt.Errorf("default trino engine: %w", err)
@@ -167,7 +165,7 @@ func EnsureDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q Defaul
 func createDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q DefaultEngineStore, env DefaultTrinoEngine) error {
 	trinoURL := env.URL
 	cluster, err := q.GetDefaultTrinoCluster(ctx)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return nil // no Trino cluster to back: nothing to bootstrap
 	}
 	if err != nil {
@@ -191,7 +189,7 @@ func createDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q Defaul
 		}
 		name = fmt.Sprintf("trino-%s-%d", cluster.Name, n)
 	}
-	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	id := db.UUID{Bytes: uuid.New(), Valid: true}
 	creds, err := env.credentials(id)
 	if err != nil {
 		return err

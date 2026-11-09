@@ -7,18 +7,16 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
 // ── lineage reads ─────────────────────────────────────────────────────────────
 
 // GetMetadataTableByRef returns a live table by its natural key, or
-// pgx.ErrNoRows. A reference whose table no longer exists contributes no edge.
+// db.ErrNoRows. A reference whose table no longer exists contributes no edge.
 func (r *Repo) GetMetadataTableByRef(ctx context.Context, arg db.GetMetadataTableByRefParams) (db.GetMetadataTableByRefRow, error) {
 	if !arg.CatalogID.Valid {
-		return db.GetMetadataTableByRefRow{}, pgx.ErrNoRows
+		return db.GetMetadataTableByRefRow{}, db.ErrNoRows
 	}
 	var row model.MetadataTable
 	err := r.Users.db.WithContext(ctx).
@@ -27,7 +25,7 @@ func (r *Repo) GetMetadataTableByRef(ctx context.Context, arg db.GetMetadataTabl
 		First(&row).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return db.GetMetadataTableByRefRow{}, pgx.ErrNoRows
+			return db.GetMetadataTableByRefRow{}, db.ErrNoRows
 		}
 		return db.GetMetadataTableByRefRow{}, err
 	}
@@ -135,7 +133,7 @@ func (r *Repo) ListLineageSavedQueries(ctx context.Context, arg db.ListLineageSa
 		}
 		out = make([]db.ListLineageSavedQueriesRow, len(rows))
 		for i, row := range rows {
-			var target pgtype.UUID
+			var target db.UUID
 			if row.TargetBindingID != nil {
 				target = PGUUID(catalogByBinding[string(*row.TargetBindingID)])
 			}

@@ -20,14 +20,12 @@ import (
 	"github.com/galileostudio/baleia/internal/retrievers/schedule"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/client"
 )
 
 // Retrievers stores retrievers; *repo.Repo implements it.
 type Retrievers interface {
-	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]db.Retriever, error)
+	ListRetrieversByWorkspace(ctx context.Context, workspaceID db.UUID) ([]db.Retriever, error)
 	GetRetrieverByID(ctx context.Context, arg db.GetRetrieverByIDParams) (db.Retriever, error)
 	CreateRetriever(ctx context.Context, arg db.CreateRetrieverParams) (db.Retriever, error)
 	UpdateRetriever(ctx context.Context, arg db.UpdateRetrieverParams) (db.Retriever, error)
@@ -37,16 +35,16 @@ type Retrievers interface {
 // Refreshes reads refresh runs; *repo.Repo implements it.
 type Refreshes interface {
 	ListRetrieverRefreshHistory(ctx context.Context, arg db.ListRetrieverRefreshHistoryParams) ([]db.RetrieverRefreshHistory, error)
-	LatestRetrieverRefresh(ctx context.Context, retrieverID pgtype.UUID) (db.LatestRetrieverRefreshRow, error)
+	LatestRetrieverRefresh(ctx context.Context, retrieverID db.UUID) (db.LatestRetrieverRefreshRow, error)
 }
 
 // Destinations reads where a retriever can write; *repo.Repo implements it.
 type Destinations interface {
-	ListRetrieverDestinations(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListRetrieverDestinationsRow, error)
-	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)
-	GetBinding(ctx context.Context, id pgtype.UUID) (db.CatalogBinding, error)
-	GetCatalogByID(ctx context.Context, id pgtype.UUID) (db.Catalog, error)
-	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
+	ListRetrieverDestinations(ctx context.Context, workspaceID db.UUID) ([]db.ListRetrieverDestinationsRow, error)
+	ListWorkspaceTargets(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceTargetsRow, error)
+	GetBinding(ctx context.Context, id db.UUID) (db.CatalogBinding, error)
+	GetCatalogByID(ctx context.Context, id db.UUID) (db.Catalog, error)
+	GetEngineByID(ctx context.Context, id db.UUID) (db.Engine, error)
 }
 
 // Store is every read and write the service needs.
@@ -63,7 +61,7 @@ type Workflows interface {
 
 // Engines finds the engine behind a binding; the engine manager implements it.
 type Engines interface {
-	Get(ctx context.Context, engineID pgtype.UUID) (queryengine.Engine, error)
+	Get(ctx context.Context, engineID db.UUID) (queryengine.Engine, error)
 }
 
 var (
@@ -110,14 +108,14 @@ func New(store Store, workflows Workflows, engines Engines, trino dialect.Dialec
 }
 
 // List returns the workspace's retrievers.
-func (s *Service) List(ctx context.Context, ws pgtype.UUID) ([]db.Retriever, error) {
+func (s *Service) List(ctx context.Context, ws db.UUID) ([]db.Retriever, error) {
 	return s.store.ListRetrieversByWorkspace(ctx, ws)
 }
 
 // Get returns one retriever of the workspace.
-func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.Retriever, error) {
+func (s *Service) Get(ctx context.Context, ws, id db.UUID) (db.Retriever, error) {
 	r, err := s.store.GetRetrieverByID(ctx, db.GetRetrieverByIDParams{WorkspaceID: ws, ID: id})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.Retriever{}, ErrNotFound
 	}
 	return r, err
@@ -128,7 +126,7 @@ func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.Retriever, er
 type Draft struct {
 	Name          string
 	DefinitionSQL string
-	DestBindingID *pgtype.UUID
+	DestBindingID *db.UUID
 	DestCatalog   string
 	DestNamespace string
 	DestTable     string
@@ -139,7 +137,7 @@ type Draft struct {
 
 // Create validates and stores a retriever created by createdBy, scheduled
 // for the next run of its cron.
-func (s *Service) Create(ctx context.Context, ws, createdBy pgtype.UUID, in Draft) (db.Retriever, error) {
+func (s *Service) Create(ctx context.Context, ws, createdBy db.UUID, in Draft) (db.Retriever, error) {
 	for _, f := range []struct{ value, name string }{
 		{in.DestNamespace, "dest_namespace"},
 		{in.DestTable, "dest_table"},
@@ -177,7 +175,7 @@ func (s *Service) Create(ctx context.Context, ws, createdBy pgtype.UUID, in Draf
 		DestBindingID: dest.BindingID,
 		CronSchedule:  in.CronSchedule,
 		RefreshType:   refreshType,
-		NextRefreshAt: pgtype.Timestamptz{Time: sched.Next(time.Now().In(loc)), Valid: true},
+		NextRefreshAt: db.Timestamptz{Time: sched.Next(time.Now().In(loc)), Valid: true},
 	})
 }
 
@@ -185,7 +183,7 @@ func (s *Service) Create(ctx context.Context, ws, createdBy pgtype.UUID, in Draf
 type Change struct {
 	Name          *string
 	DefinitionSQL *string
-	DestBindingID *pgtype.UUID
+	DestBindingID *db.UUID
 	DestNamespace *string
 	DestTable     *string
 	CronSchedule  *string
@@ -195,7 +193,7 @@ type Change struct {
 
 // Update applies change to a retriever of the workspace. An edit with a
 // valid destination clears a previous destination error.
-func (s *Service) Update(ctx context.Context, ws, id pgtype.UUID, change Change) (db.Retriever, error) {
+func (s *Service) Update(ctx context.Context, ws, id db.UUID, change Change) (db.Retriever, error) {
 	current, err := s.Get(ctx, ws, id)
 	if err != nil {
 		return db.Retriever{}, err
@@ -259,12 +257,12 @@ func (s *Service) Update(ctx context.Context, ws, id pgtype.UUID, change Change)
 		RefreshType:   next.RefreshType,
 		Status:        next.Status,
 		ErrorCode:     nil,
-		NextRefreshAt: pgtype.Timestamptz{Time: sched.Next(time.Now().In(loc)), Valid: true},
+		NextRefreshAt: db.Timestamptz{Time: sched.Next(time.Now().In(loc)), Valid: true},
 	})
 }
 
 // Delete removes a retriever of the workspace.
-func (s *Service) Delete(ctx context.Context, ws, id pgtype.UUID) error {
+func (s *Service) Delete(ctx context.Context, ws, id db.UUID) error {
 	n, err := s.store.DeleteRetriever(ctx, db.DeleteRetrieverParams{WorkspaceID: ws, ID: id})
 	if err != nil {
 		return err
@@ -277,7 +275,7 @@ func (s *Service) Delete(ctx context.Context, ws, id pgtype.UUID) error {
 
 // Refresh starts a refresh of a retriever of the workspace now. An empty
 // refreshType uses the retriever's own.
-func (s *Service) Refresh(ctx context.Context, ws, id pgtype.UUID, refreshType string) error {
+func (s *Service) Refresh(ctx context.Context, ws, id db.UUID, refreshType string) error {
 	r, err := s.Get(ctx, ws, id)
 	if err != nil {
 		return err
@@ -299,7 +297,7 @@ const HistoryLimit = 50
 
 // History returns the latest refresh runs of a retriever of the workspace;
 // a retriever of another workspace is ErrNotFound.
-func (s *Service) History(ctx context.Context, ws, id pgtype.UUID) ([]db.RetrieverRefreshHistory, error) {
+func (s *Service) History(ctx context.Context, ws, id db.UUID) ([]db.RetrieverRefreshHistory, error) {
 	if _, err := s.Get(ctx, ws, id); err != nil {
 		return nil, err
 	}
@@ -307,7 +305,7 @@ func (s *Service) History(ctx context.Context, ws, id pgtype.UUID) ([]db.Retriev
 }
 
 // LastRefreshStatus is the status of the latest refresh run, if any.
-func (s *Service) LastRefreshStatus(ctx context.Context, id pgtype.UUID) (string, bool) {
+func (s *Service) LastRefreshStatus(ctx context.Context, id db.UUID) (string, bool) {
 	latest, err := s.store.LatestRetrieverRefresh(ctx, id)
 	if err != nil {
 		return "", false
@@ -316,7 +314,7 @@ func (s *Service) LastRefreshStatus(ctx context.Context, id pgtype.UUID) (string
 }
 
 // Destinations lists where the workspace's retrievers can write.
-func (s *Service) Destinations(ctx context.Context, ws pgtype.UUID) ([]db.ListRetrieverDestinationsRow, error) {
+func (s *Service) Destinations(ctx context.Context, ws db.UUID) ([]db.ListRetrieverDestinationsRow, error) {
 	return s.store.ListRetrieverDestinations(ctx, ws)
 }
 
@@ -329,7 +327,7 @@ type Destination struct {
 
 // DestinationOf loads a retriever's destination; false when the binding,
 // its catalog or its engine is gone.
-func (s *Service) DestinationOf(ctx context.Context, bindingID pgtype.UUID) (Destination, bool) {
+func (s *Service) DestinationOf(ctx context.Context, bindingID db.UUID) (Destination, bool) {
 	binding, err := s.store.GetBinding(ctx, bindingID)
 	if err != nil {
 		return Destination{}, false
@@ -347,7 +345,7 @@ func (s *Service) DestinationOf(ctx context.Context, bindingID pgtype.UUID) (Des
 
 // resolveDestination picks the destination by binding id or, for legacy
 // clients, by catalog name, among those the workspace may write to.
-func (s *Service) resolveDestination(ctx context.Context, ws pgtype.UUID, bindingID *pgtype.UUID, catalogName string) (db.ListRetrieverDestinationsRow, error) {
+func (s *Service) resolveDestination(ctx context.Context, ws db.UUID, bindingID *db.UUID, catalogName string) (db.ListRetrieverDestinationsRow, error) {
 	rows, err := s.store.ListRetrieverDestinations(ctx, ws)
 	if err != nil {
 		return db.ListRetrieverDestinationsRow{}, err
@@ -365,7 +363,7 @@ func (s *Service) resolveDestination(ctx context.Context, ws pgtype.UUID, bindin
 // Validate checks a definition and explains it on the destination engine in
 // a read-only session as identity, the caller's engine user and Baleia
 // principal (#118, #648). An engine rejection is an *InvalidError.
-func (s *Service) Validate(ctx context.Context, ws, bindingID pgtype.UUID, definition string, identity queryengine.Identity) error {
+func (s *Service) Validate(ctx context.Context, ws, bindingID db.UUID, definition string, identity queryengine.Identity) error {
 	if err := s.ValidateDefinition(definition); err != nil {
 		return invalid(err)
 	}
@@ -376,7 +374,7 @@ func (s *Service) Validate(ctx context.Context, ws, bindingID pgtype.UUID, defin
 		return errors.New("retriever validation: no engine registry")
 	}
 	binding, err := s.store.GetBinding(ctx, bindingID)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return ErrBindingNotFound
 	}
 	if err != nil {

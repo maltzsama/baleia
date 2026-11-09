@@ -4,8 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type fakeExecer struct {
@@ -13,16 +11,16 @@ type fakeExecer struct {
 	calls  int
 }
 
-func (f *fakeExecer) Exec(_ context.Context, sql string, _ ...any) (pgconn.CommandTag, error) {
-	f.gotSQL = sql
+func (f *fakeExecer) Exec(_ context.Context, query string, _ ...any) error {
+	f.gotSQL = query
 	f.calls++
-	return pgconn.CommandTag{}, nil
+	return nil
 }
 
 func TestSetTrinoRolePasswordQuotesLiteral(t *testing.T) {
 	t.Parallel()
 	f := &fakeExecer{}
-	if err := SetTrinoRolePassword(context.Background(), f, "p'wd"); err != nil {
+	if err := setTrinoRolePassword(context.Background(), f, "p'wd"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !strings.Contains(f.gotSQL, "ALTER ROLE baleia_trino WITH LOGIN PASSWORD 'p''wd'") {
@@ -33,7 +31,7 @@ func TestSetTrinoRolePasswordQuotesLiteral(t *testing.T) {
 func TestSetTrinoRolePasswordNoopWhenEmpty(t *testing.T) {
 	t.Parallel()
 	f := &fakeExecer{}
-	if err := SetTrinoRolePassword(context.Background(), f, ""); err != nil {
+	if err := setTrinoRolePassword(context.Background(), f, ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if f.calls != 0 {

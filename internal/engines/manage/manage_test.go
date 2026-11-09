@@ -7,17 +7,14 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 // fakeStore keeps engines and native catalogs; tx commits only on success.
 type fakeStore struct {
 	engines  map[[16]byte]db.Engine
-	catalogs map[string]pgtype.UUID
+	catalogs map[string]db.UUID
 	blockers db.CountEngineBlockersRow
 	// createErr fails CreateEngine, bindErr UpsertNativeBinding, deleteErr
 	// DeleteEngine.
@@ -27,7 +24,7 @@ type fakeStore struct {
 }
 
 func newStore() *fakeStore {
-	return &fakeStore{engines: map[[16]byte]db.Engine{}, catalogs: map[string]pgtype.UUID{}}
+	return &fakeStore{engines: map[[16]byte]db.Engine{}, catalogs: map[string]db.UUID{}}
 }
 
 func (f *fakeStore) ListEngines(context.Context) ([]db.Engine, error) {
@@ -35,20 +32,20 @@ func (f *fakeStore) ListEngines(context.Context) ([]db.Engine, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) ListEnginesVisibleToUser(context.Context, pgtype.UUID) ([]db.Engine, error) {
+func (f *fakeStore) ListEnginesVisibleToUser(context.Context, db.UUID) ([]db.Engine, error) {
 	f.admin = false
 	return nil, nil
 }
 
-func (f *fakeStore) ListBindingsByEngine(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+func (f *fakeStore) ListBindingsByEngine(context.Context, db.UUID) ([]db.CatalogBinding, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) ListBindingsByCatalog(context.Context, pgtype.UUID) ([]db.CatalogBinding, error) {
+func (f *fakeStore) ListBindingsByCatalog(context.Context, db.UUID) ([]db.CatalogBinding, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) CountEngineBlockers(context.Context, pgtype.UUID) (db.CountEngineBlockersRow, error) {
+func (f *fakeStore) CountEngineBlockers(context.Context, db.UUID) (db.CountEngineBlockersRow, error) {
 	return f.blockers, nil
 }
 
@@ -79,12 +76,12 @@ func (f *fakeStore) UpsertNativeBinding(context.Context, db.UpsertNativeBindingP
 	return db.CatalogBinding{}, f.bindErr
 }
 
-func (f *fakeStore) DeleteNativeCatalogsOfEngine(context.Context, pgtype.UUID) error {
-	f.catalogs = map[string]pgtype.UUID{}
+func (f *fakeStore) DeleteNativeCatalogsOfEngine(context.Context, db.UUID) error {
+	f.catalogs = map[string]db.UUID{}
 	return nil
 }
 
-func (f *fakeStore) DeleteEngine(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) DeleteEngine(_ context.Context, id db.UUID) error {
 	if f.deleteErr != nil {
 		return f.deleteErr
 	}
@@ -92,23 +89,23 @@ func (f *fakeStore) DeleteEngine(_ context.Context, id pgtype.UUID) error {
 	return nil
 }
 
-func (f *fakeStore) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+func (f *fakeStore) GetEngineByID(_ context.Context, id db.UUID) (db.Engine, error) {
 	if e, ok := f.engines[id.Bytes]; ok {
 		return e, nil
 	}
-	return db.Engine{}, pgx.ErrNoRows
+	return db.Engine{}, db.ErrNoRows
 }
 
-func (f *fakeStore) ListEngineObservations(context.Context, pgtype.UUID) ([]db.EngineCatalogObservation, error) {
+func (f *fakeStore) ListEngineObservations(context.Context, db.UUID) ([]db.EngineCatalogObservation, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) CountEngineImpact(context.Context, pgtype.UUID) (db.CountEngineImpactRow, error) {
+func (f *fakeStore) CountEngineImpact(context.Context, db.UUID) (db.CountEngineImpactRow, error) {
 	return db.CountEngineImpactRow{}, nil
 }
 
 func (f *fakeStore) GetReconcileRun(context.Context, db.GetReconcileRunParams) (db.CatalogReconcileRun, error) {
-	return db.CatalogReconcileRun{}, pgx.ErrNoRows
+	return db.CatalogReconcileRun{}, db.ErrNoRows
 }
 
 func (f *fakeStore) ListReconcileRuns(_ context.Context, arg db.ListReconcileRunsParams) ([]db.CatalogReconcileRun, error) {
@@ -117,7 +114,7 @@ func (f *fakeStore) ListReconcileRuns(_ context.Context, arg db.ListReconcileRun
 }
 
 func (f *fakeStore) tx(_ context.Context, fn func(TxStore) error) error {
-	engines, catalogs := map[[16]byte]db.Engine{}, map[string]pgtype.UUID{}
+	engines, catalogs := map[[16]byte]db.Engine{}, map[string]db.UUID{}
 	for k, v := range f.engines {
 		engines[k] = v
 	}
@@ -145,11 +142,11 @@ func TestCreate(t *testing.T) {
 		t.Fatalf("Create = %+v, %v, %v; want a direct engine and its two native catalogs", e, natives, err)
 	}
 
-	st.createErr = &pgconn.PgError{Code: "23505", ConstraintName: "engines_connection_id_key"}
+	st.createErr = &db.PGError{Code: "23505", ConstraintName: "engines_connection_id_key"}
 	if _, _, err := s.Create(ctx, NewEngine{Name: "pg2"}); !errors.Is(err, ErrConnectionTaken) {
 		t.Errorf("connection taken = %v", err)
 	}
-	st.createErr = &pgconn.PgError{Code: "23505", ConstraintName: "engines_name_key"}
+	st.createErr = &db.PGError{Code: "23505", ConstraintName: "engines_name_key"}
 	if _, _, err := s.Create(ctx, NewEngine{Name: "pg"}); !errors.Is(err, ErrNameTaken) {
 		t.Errorf("name taken = %v", err)
 	}
@@ -184,7 +181,7 @@ func TestDelete(t *testing.T) {
 		t.Errorf("with a managed binding = %v, want InUseError", err)
 	}
 	st.blockers = db.CountEngineBlockersRow{}
-	st.deleteErr = &pgconn.PgError{Code: "23001"}
+	st.deleteErr = &db.PGError{Code: "23001"}
 	if err := s.Delete(ctx, e.ID); !errors.As(err, &inUse) {
 		t.Errorf("still referenced = %v, want InUseError", err)
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"gorm.io/gorm"
 )
@@ -22,7 +21,7 @@ import (
 // the first workspace is granted catalog "lake" (Iceberg, bound into Trino),
 // not catalog "other", and its owner owns catalog "mine".
 type metaFixture struct {
-	pool            *pgxpool.Pool
+	pool            *gorm.DB
 	gdb             *gorm.DB
 	h               *API
 	owner, stranger string
@@ -37,7 +36,7 @@ type metaFixture struct {
 func newMetaFixture(t *testing.T) *metaFixture {
 	t.Helper()
 	pool := testdb.New(t)
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	f := &metaFixture{pool: pool, gdb: gdb}
 	q := repo.New(gdb)
 	create := func(model any) {
@@ -155,7 +154,7 @@ func newMetaFixture(t *testing.T) *metaFixture {
 		})
 	}
 
-	f.h = testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: q, store: gdb, tx: poolTx{pool: pool}}) // no engines: reads never call one
+	f.h = testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: q, store: gdb, tx: storeTx{db: pool}}) // no engines: reads never call one
 	return f
 }
 

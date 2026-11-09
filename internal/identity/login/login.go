@@ -16,8 +16,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/identity/provision"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -25,7 +23,7 @@ import (
 // and teams; *repo.Repo implements it.
 type Store interface {
 	GetUserByEmail(ctx context.Context, email string) (db.User, error)
-	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error)
+	GetAuthProviderByID(ctx context.Context, id db.UUID) (db.AuthProvider, error)
 	GetUserByExternalID(ctx context.Context, arg db.GetUserByExternalIDParams) (db.User, error)
 	UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error
 	provision.TeamMembers
@@ -75,7 +73,7 @@ func New(logger *slog.Logger, store Store, directory Directory, keyring *crypto.
 // Password verifies a local account's e-mail and password.
 func (s *Service) Password(ctx context.Context, email, password string) (db.User, error) {
 	user, err := s.store.GetUserByEmail(ctx, email)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		// Unknown e-mail: compare against a dummy hash anyway so the response
 		// time does not reveal whether the account exists (#51).
 		_ = auth.CheckPassword(s.dummyPasswordHash(), password)
@@ -100,12 +98,12 @@ func (s *Service) Password(ctx context.Context, email, password string) (db.User
 
 // Directory verifies a directory login through the enabled LDAP provider
 // providerID, then syncs the account's role and teams from the directory.
-func (s *Service) Directory(ctx context.Context, providerID pgtype.UUID, username, password string) (db.User, error) {
+func (s *Service) Directory(ctx context.Context, providerID db.UUID, username, password string) (db.User, error) {
 	if username == "" || password == "" {
 		return db.User{}, ErrInvalidCredentials
 	}
 	ap, err := s.store.GetAuthProviderByID(ctx, providerID)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil && !errors.Is(err, db.ErrNoRows) {
 		return db.User{}, fmt.Errorf("look up provider: %w", err)
 	}
 	if err != nil || ap.Type != "ldap" || !ap.Enabled {
@@ -125,7 +123,7 @@ func (s *Service) Directory(ctx context.Context, providerID pgtype.UUID, usernam
 		AuthProviderID: ap.ID,
 		ExternalID:     &result.ExternalID,
 	})
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil && !errors.Is(err, db.ErrNoRows) {
 		return db.User{}, fmt.Errorf("look up directory account: %w", err)
 	}
 	if err != nil || user.AuthProvider != "ldap" {
