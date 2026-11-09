@@ -6,16 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/app"
 	auditexport "github.com/galileostudio/baleia/internal/audit/export"
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/bindings/stored"
+	"github.com/galileostudio/baleia/internal/command"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metadata"
@@ -35,41 +33,16 @@ import (
 const taskQueue = "baleia-task-queue"
 
 func main() {
-	cfg := config.Load()
-	// An invalid level logs at info until Validate rejects it in run.
-	level, _ := cfg.SlogLevel()
-	// JSON like the api's (#379); the Temporal SDK logs through it too.
-	logger := obs.NewLogger(os.Stdout, level)
-	slog.SetDefault(logger)
-	obs.CapMemory(logger)
-	if err := run(cfg, logger); err != nil {
-		logger.ErrorContext(context.Background(), "worker", "err", err)
-		os.Exit(1)
-	}
+	command.Main("worker", run)
 }
 
 // run returns instead of exiting so every deferred Close runs.
-func run(cfg *config.Config, logger *slog.Logger) error {
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid configuration: %w", err)
-	}
-	// A Trino guard below 0.10.2 does not enforce baleia.catalogs (ADR 0018);
-	// warn at startup, and let BALEIA_REQUIRE_CATALOG_SCOPE refuse instead.
-	if msg := cfg.CatalogScopeWarning(); msg != "" {
-		logger.ErrorContext(context.Background(), msg)
-	}
-
-	// Setup is cancelled by SIGINT/SIGTERM like the API's (#367); the worker
-	// itself stops on worker.InterruptCh below.
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	core, err := app.New(ctx, cfg, app.Options{Service: "worker", PoolSize: 10, Logger: logger})
+func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
+	core, err := command.OpenCore(ctx, cfg, logger, app.Options{Service: "worker", PoolSize: 10, Logger: logger})
 	if err != nil {
 		return err
 	}
 	defer core.Close()
-	go obs.ServePprof(ctx, logger, cfg.PprofAddr)
 	reg := core.Metrics
 
 	// The worker's own listener: /metrics (Temporal SDK, pool, build) and
