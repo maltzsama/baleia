@@ -145,7 +145,13 @@ func testMySQLAllMigrations(t *testing.T, env string) {
 	if _, err := NewRunner(db, first, slog.New(slog.DiscardHandler)).Up(ctx); err != nil {
 		t.Fatalf("Up to migration 5: %v", err)
 	}
-	if err := db.Exec("ALTER TABLE catalog_connections DROP CONSTRAINT catalog_connections_type_check").Error; err != nil {
+	drop := "DROP CONSTRAINT catalog_connections_type_check"
+	if oldMySQL, err := mysqlBeforeCheckDropConstraint(db); err != nil {
+		t.Fatal(err)
+	} else if oldMySQL {
+		drop = "DROP CHECK catalog_connections_type_check"
+	}
+	if err := db.Exec("ALTER TABLE catalog_connections " + drop).Error; err != nil {
 		t.Fatalf("drop current type check: %v", err)
 	}
 	oldCheck := "type IN ('polaris','nessie','iceberg','lakekeeper','unity','hive','glue','postgresql','mysql','mariadb','sqlserver','oracle','sqlite','clickhouse','flightsql','trino','doris','starrocks')"
