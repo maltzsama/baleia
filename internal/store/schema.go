@@ -195,6 +195,13 @@ func AllMigrations() (*Registry, error) {
 			Name:    "seed store defaults",
 			Up:      seedDefaults,
 		},
+		Migration{
+			Version: 5,
+			Name:    "add connection access mode",
+			Up: func(db *gorm.DB) error {
+				return AutoMigrate(db, &model.CatalogConnection{})
+			},
+		},
 	)
 }
 

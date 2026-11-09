@@ -4981,6 +4981,11 @@ export interface components {
             name: string;
             /** @description Connection kind; one of the kinds listed by GET /connection-providers */
             type: string;
+            /**
+             * @description The connection's data access mode (ADR 0021). Absent for engine-family resources, which are not a data access path
+             * @enum {string}
+             */
+            access_mode?: "direct" | "trino";
             /** @description Deprecated: read config. Kept while the Trino projection still reads it (#80) */
             url: string;
             /** @description Non-secret values of the provider's config schema. Secret fields are never returned */
@@ -5003,6 +5008,11 @@ export interface components {
             name: string;
             /** @description A kind listed by GET /connection-providers */
             type: string;
+            /**
+             * @description Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
+             * @enum {string}
+             */
+            access_mode?: "direct" | "trino";
             /** @description Older shape: the endpoint URL (a JDBC URL for databases). Prefer config */
             url?: string;
             /** @description Non-secret fields of the provider's config schema */
@@ -5849,14 +5859,36 @@ export interface components {
         ConnectionProvider: {
             kind: string;
             label: string;
+            /** @description User-facing explanation of the connection type (ADR 0021 D.1) */
+            description?: string;
             /** @enum {string} */
             family: "iceberg" | "metastore" | "database" | "engine";
+            /**
+             * @description Presentation grouping; it does not determine access mode or compatibility (ADR 0021 D.10)
+             * @enum {string}
+             */
+            category?: "relational" | "analytical" | "catalog_manager" | "metastore" | "lakehouse" | "cloud_platform" | "nosql" | "search" | "analytics" | "streaming" | "observability" | "external_service" | "synthetic" | "internal_catalog" | "engine";
+            /** @description Data access paths the type supports (ADR 0021 D.2); empty for engine-family resources */
+            access_modes?: ("direct" | "trino")[];
+            /** @description Internal Trino catalog implementations the type is exposed through (ADR 0021 D.3) */
+            trino_catalog_types?: string[];
+            /** @description Declared capabilities per access mode (ADR 0021 D.6) */
+            capabilities?: {
+                [key: string]: {
+                    [key: string]: "supported" | "unknown" | "unsupported";
+                };
+            };
+            /** @description Validated engine and Trino version floors (ADR 0021 D.1) */
+            version_requirements?: {
+                min_engine_version?: string;
+                min_trino_version?: string;
+            };
             roles: ("metadata" | "direct_engine" | "federated_engine")[];
             /** @description Query-engine kind when the connection can be an engine */
             engine_kind?: string;
             status: {
                 /** @enum {string} */
-                state: "supported" | "preview" | "unsupported";
+                state: "supported" | "experimental" | "planned" | "unsupported" | "not_applicable";
                 reason?: string;
             };
             config_schema: components["schemas"]["ConnectionProviderField"][];

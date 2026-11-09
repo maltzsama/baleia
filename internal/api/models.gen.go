@@ -211,6 +211,12 @@ const (
 	CatalogBindingAllowedActionView   CatalogBindingAllowedAction = "view"
 )
 
+// Defines values for CatalogConnectionAccessMode.
+const (
+	CatalogConnectionAccessModeDirect CatalogConnectionAccessMode = "direct"
+	CatalogConnectionAccessModeTrino  CatalogConnectionAccessMode = "trino"
+)
+
 // Defines values for CatalogConnectionAllowedAction.
 const (
 	CatalogConnectionAllowedActionCreateCatalog  CatalogConnectionAllowedAction = "create_catalog"
@@ -250,6 +256,38 @@ const (
 	CatalogSummarySyncStatusSynced   CatalogSummarySyncStatus = "synced"
 )
 
+// Defines values for ConnectionProviderAccessModes.
+const (
+	ConnectionProviderAccessModesDirect ConnectionProviderAccessModes = "direct"
+	ConnectionProviderAccessModesTrino  ConnectionProviderAccessModes = "trino"
+)
+
+// Defines values for ConnectionProviderCapabilities.
+const (
+	ConnectionProviderCapabilitiesSupported   ConnectionProviderCapabilities = "supported"
+	ConnectionProviderCapabilitiesUnknown     ConnectionProviderCapabilities = "unknown"
+	ConnectionProviderCapabilitiesUnsupported ConnectionProviderCapabilities = "unsupported"
+)
+
+// Defines values for ConnectionProviderCategory.
+const (
+	ConnectionProviderCategoryAnalytical      ConnectionProviderCategory = "analytical"
+	ConnectionProviderCategoryAnalytics       ConnectionProviderCategory = "analytics"
+	ConnectionProviderCategoryCatalogManager  ConnectionProviderCategory = "catalog_manager"
+	ConnectionProviderCategoryCloudPlatform   ConnectionProviderCategory = "cloud_platform"
+	ConnectionProviderCategoryEngine          ConnectionProviderCategory = "engine"
+	ConnectionProviderCategoryExternalService ConnectionProviderCategory = "external_service"
+	ConnectionProviderCategoryInternalCatalog ConnectionProviderCategory = "internal_catalog"
+	ConnectionProviderCategoryLakehouse       ConnectionProviderCategory = "lakehouse"
+	ConnectionProviderCategoryMetastore       ConnectionProviderCategory = "metastore"
+	ConnectionProviderCategoryNosql           ConnectionProviderCategory = "nosql"
+	ConnectionProviderCategoryObservability   ConnectionProviderCategory = "observability"
+	ConnectionProviderCategoryRelational      ConnectionProviderCategory = "relational"
+	ConnectionProviderCategorySearch          ConnectionProviderCategory = "search"
+	ConnectionProviderCategoryStreaming       ConnectionProviderCategory = "streaming"
+	ConnectionProviderCategorySynthetic       ConnectionProviderCategory = "synthetic"
+)
+
 // Defines values for ConnectionProviderFamily.
 const (
 	ConnectionProviderFamilyDatabase  ConnectionProviderFamily = "database"
@@ -267,9 +305,11 @@ const (
 
 // Defines values for ConnectionProviderStatusState.
 const (
-	Preview     ConnectionProviderStatusState = "preview"
-	Supported   ConnectionProviderStatusState = "supported"
-	Unsupported ConnectionProviderStatusState = "unsupported"
+	ConnectionProviderStatusStateExperimental  ConnectionProviderStatusState = "experimental"
+	ConnectionProviderStatusStateNotApplicable ConnectionProviderStatusState = "not_applicable"
+	ConnectionProviderStatusStatePlanned       ConnectionProviderStatusState = "planned"
+	ConnectionProviderStatusStateSupported     ConnectionProviderStatusState = "supported"
+	ConnectionProviderStatusStateUnsupported   ConnectionProviderStatusState = "unsupported"
 )
 
 // Defines values for ConnectionProviderFieldType.
@@ -299,6 +339,12 @@ const (
 	ContentVersionDetailChangeKindImport  ContentVersionDetailChangeKind = "import"
 	ContentVersionDetailChangeKindRestore ContentVersionDetailChangeKind = "restore"
 	ContentVersionDetailChangeKindUpdate  ContentVersionDetailChangeKind = "update"
+)
+
+// Defines values for CreateCatalogConnectionRequestAccessMode.
+const (
+	CreateCatalogConnectionRequestAccessModeDirect CreateCatalogConnectionRequestAccessMode = "direct"
+	CreateCatalogConnectionRequestAccessModeTrino  CreateCatalogConnectionRequestAccessMode = "trino"
 )
 
 // Defines values for CreateMigrationRequestSourceType.
@@ -361,8 +407,8 @@ const (
 
 // Defines values for EngineClass.
 const (
-	Direct    EngineClass = "direct"
-	Federated EngineClass = "federated"
+	EngineClassDirect    EngineClass = "direct"
+	EngineClassFederated EngineClass = "federated"
 )
 
 // Defines values for EngineIdentityMode.
@@ -1011,6 +1057,12 @@ const (
 	TestCatalogConnectionResultErrorCodeTimeout                 TestCatalogConnectionResultErrorCode = "timeout"
 	TestCatalogConnectionResultErrorCodeTls                     TestCatalogConnectionResultErrorCode = "tls"
 	TestCatalogConnectionResultErrorCodeUnreachable             TestCatalogConnectionResultErrorCode = "unreachable"
+)
+
+// Defines values for TestConnectionRequestAccessMode.
+const (
+	Direct TestConnectionRequestAccessMode = "direct"
+	Trino  TestConnectionRequestAccessMode = "trino"
 )
 
 // Defines values for TrashItemEntityType.
@@ -1825,6 +1877,8 @@ type CatalogBindingRef struct {
 
 // CatalogConnection defines model for CatalogConnection.
 type CatalogConnection struct {
+	// AccessMode The connection's data access mode (ADR 0021). Absent for engine-family resources, which are not a data access path
+	AccessMode     *CatalogConnectionAccessMode      `json:"access_mode,omitempty"`
 	AllowedActions *[]CatalogConnectionAllowedAction `json:"allowed_actions,omitempty"`
 
 	// Config Non-secret values of the provider's config schema. Secret fields are never returned
@@ -1848,6 +1902,9 @@ type CatalogConnection struct {
 	// Url Deprecated: read config. Kept while the Trino projection still reads it (#80)
 	Url string `json:"url"`
 }
+
+// CatalogConnectionAccessMode The connection's data access mode (ADR 0021). Absent for engine-family resources, which are not a data access path
+type CatalogConnectionAccessMode string
 
 // CatalogConnectionAllowedAction defines model for CatalogConnectionAllowedAction.
 type CatalogConnectionAllowedAction string
@@ -2017,7 +2074,18 @@ type ConnectionCheck struct {
 
 // ConnectionProvider defines model for ConnectionProvider.
 type ConnectionProvider struct {
-	ConfigSchema []ConnectionProviderField `json:"config_schema"`
+	// AccessModes Data access paths the type supports (ADR 0021 D.2); empty for engine-family resources
+	AccessModes *[]ConnectionProviderAccessModes `json:"access_modes,omitempty"`
+
+	// Capabilities Declared capabilities per access mode (ADR 0021 D.6)
+	Capabilities *map[string]map[string]ConnectionProviderCapabilities `json:"capabilities,omitempty"`
+
+	// Category Presentation grouping; it does not determine access mode or compatibility (ADR 0021 D.10)
+	Category     *ConnectionProviderCategory `json:"category,omitempty"`
+	ConfigSchema []ConnectionProviderField   `json:"config_schema"`
+
+	// Description User-facing explanation of the connection type (ADR 0021 D.1)
+	Description *string `json:"description,omitempty"`
 
 	// EngineKind Query-engine kind when the connection can be an engine
 	EngineKind *string                   `json:"engine_kind,omitempty"`
@@ -2029,7 +2097,25 @@ type ConnectionProvider struct {
 		Reason *string                       `json:"reason,omitempty"`
 		State  ConnectionProviderStatusState `json:"state"`
 	} `json:"status"`
+
+	// TrinoCatalogTypes Internal Trino catalog implementations the type is exposed through (ADR 0021 D.3)
+	TrinoCatalogTypes *[]string `json:"trino_catalog_types,omitempty"`
+
+	// VersionRequirements Validated engine and Trino version floors (ADR 0021 D.1)
+	VersionRequirements *struct {
+		MinEngineVersion *string `json:"min_engine_version,omitempty"`
+		MinTrinoVersion  *string `json:"min_trino_version,omitempty"`
+	} `json:"version_requirements,omitempty"`
 }
+
+// ConnectionProviderAccessModes defines model for ConnectionProvider.AccessModes.
+type ConnectionProviderAccessModes string
+
+// ConnectionProviderCapabilities defines model for ConnectionProvider.Capabilities.
+type ConnectionProviderCapabilities string
+
+// ConnectionProviderCategory Presentation grouping; it does not determine access mode or compatibility (ADR 0021 D.10)
+type ConnectionProviderCategory string
 
 // ConnectionProviderFamily defines model for ConnectionProvider.Family.
 type ConnectionProviderFamily string
@@ -2162,6 +2248,9 @@ type CreateBindingRequest struct {
 
 // CreateCatalogConnectionRequest Values and secrets are validated against the provider's config schema (GET /connection-providers): unknown keys, missing required fields and kinds without a provider answer 422. Non-secret fields go in `config`, secret fields in `credentials`. `url` and the typed `*_credentials` objects are the older shape and are still accepted.
 type CreateCatalogConnectionRequest struct {
+	// AccessMode Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
+	AccessMode *CreateCatalogConnectionRequestAccessMode `json:"access_mode,omitempty"`
+
 	// Config Non-secret fields of the provider's config schema
 	Config *map[string]string `json:"config,omitempty"`
 
@@ -2184,6 +2273,9 @@ type CreateCatalogConnectionRequest struct {
 	// Url Older shape: the endpoint URL (a JDBC URL for databases). Prefer config
 	Url *string `json:"url,omitempty"`
 }
+
+// CreateCatalogConnectionRequestAccessMode Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
+type CreateCatalogConnectionRequestAccessMode string
 
 // CreateCatalogRequest defines model for CreateCatalogRequest.
 type CreateCatalogRequest struct {
@@ -4571,6 +4663,9 @@ type TestCatalogConnectionResultErrorCode string
 
 // TestConnectionRequest defines model for TestConnectionRequest.
 type TestConnectionRequest struct {
+	// AccessMode Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
+	AccessMode *TestConnectionRequestAccessMode `json:"access_mode,omitempty"`
+
 	// Config Non-secret fields of the provider's config schema
 	Config *map[string]string `json:"config,omitempty"`
 
@@ -4596,6 +4691,9 @@ type TestConnectionRequest struct {
 	// Url Older shape: the endpoint URL (a JDBC URL for databases). Prefer config
 	Url *string `json:"url,omitempty"`
 }
+
+// TestConnectionRequestAccessMode Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
+type TestConnectionRequestAccessMode string
 
 // TestIdentityProviderRequest An unsaved provider configuration to probe. Nothing is persisted.
 type TestIdentityProviderRequest struct {
