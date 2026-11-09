@@ -25,7 +25,7 @@ func main() {
 // run returns instead of exiting so every deferred Close runs.
 func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	// Migrations run on their own connection, before the pool opens.
-	if err := runStoreMigrations(ctx, cfg, logger); err != nil {
+	if err := store.MigrateUp(ctx, cfg.DatabaseURL, logger); err != nil {
 		return fmt.Errorf("migration: %w", err)
 	}
 
@@ -60,31 +60,6 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("server setup: %w", err)
 	}
 	return srv.Run(ctx)
-}
-
-// runStoreMigrations applies the GORM store migrations on a dedicated
-// connection. The API no longer shells out to a generated migration runner.
-func runStoreMigrations(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
-	backend, err := store.BackendFromDSN(cfg.DatabaseURL)
-	if err != nil {
-		return err
-	}
-	db, err := store.Open(ctx, cfg.DatabaseURL, backend, store.Options{Logger: logger})
-	if err != nil {
-		return err
-	}
-	defer func() { _ = store.Close(db) }()
-
-	registry, err := store.AllMigrations()
-	if err != nil {
-		return err
-	}
-	applied, err := store.NewRunner(db, registry, logger).Up(ctx)
-	if err != nil {
-		return err
-	}
-	logger.InfoContext(ctx, "store migrations applied", "applied", len(applied))
-	return nil
 }
 
 // sealCredentials seals a connection's credentials with the keyring; nil when

@@ -226,21 +226,10 @@ func runStoreUp(ctx context.Context, logger *slog.Logger, cfg *config.Config) er
 	}
 	defer func() { _ = store.Close(db) }()
 
-	reg, err := store.AllMigrations()
-	if err != nil {
+	if err := store.ApplyMigrations(ctx, db, logger); err != nil {
 		return err
 	}
-	applied, err := store.NewRunner(db, reg, logger).Up(ctx)
-	if err != nil {
-		return err
-	}
-	logger.InfoContext(ctx, "store migrations applied", "applied", len(applied))
-	if sqlDB, derr := db.DB(); derr == nil {
-		if err := bootstrap.EnsureTrinoRoleSQL(ctx, sqlDB); err != nil {
-			return err
-		}
-	}
-	return nil
+	return bootstrap.EnsureTrinoRole(ctx, db)
 }
 
 func runStoreDown(ctx context.Context, logger *slog.Logger, cfg *config.Config) error {
