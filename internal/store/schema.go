@@ -87,6 +87,24 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.CatalogConnection{})
 			},
 		},
+		Migration{
+			Version: 6,
+			Name:    "expand connection type check",
+			Up: func(db *gorm.DB) error {
+				// GORM owns the constraint: drop and recreate it from the
+				// portable model tag. The MySQL driver maps it to DROP CHECK.
+				const name = "catalog_connections_type_check"
+				if db.Migrator().HasConstraint(&model.CatalogConnection{}, name) {
+					if err := db.Migrator().DropConstraint(&model.CatalogConnection{}, name); err != nil {
+						return fmt.Errorf("drop connection type check: %w", err)
+					}
+				}
+				if err := db.Migrator().CreateConstraint(&model.CatalogConnection{}, name); err != nil {
+					return fmt.Errorf("create connection type check: %w", err)
+				}
+				return nil
+			},
+		},
 	)
 }
 
