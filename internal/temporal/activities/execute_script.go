@@ -204,7 +204,7 @@ func (s *script) openSession() (queryengine.Session, error) {
 		Tags:    queryengine.Tags{ExecutionID: s.p.ExecutionID, RequestID: s.p.RequestID, Source: source, Class: s.p.Class},
 		// A user identity must carry its scope; a service/agent identity leaves
 		// it nil (the guard lets trusted identities through anyway).
-		AllowedCatalogsSource: execscope.For(s.a.queries, exec.WorkspaceID, s.p.Target.EngineID),
+		AllowedCatalogsSource: execscope.For(s.a.store, exec.WorkspaceID, s.p.Target.EngineID),
 	}
 	if s.p.Target.Schema != "" {
 		spec.Schema = []string{s.p.Target.Schema}
@@ -442,10 +442,11 @@ func (s *script) run(sess queryengine.Session, st StatementRef) (stop bool, err 
 // persistReferences stores the tables and equi-joins of a finished statement
 // (#538). Best effort: extraction or a write failure never fails the run.
 func (s *script) persistReferences(st StatementRef) {
-	if s.a.pool == nil && s.a.store == nil {
+	r, ok := s.a.store.(*repo.Repo)
+	if !ok {
 		return
 	}
-	row, err := s.a.workbench().GetStatementReferenceTarget(s.bk, db.GetStatementReferenceTargetParams{
+	row, err := r.GetStatementReferenceTarget(s.bk, db.GetStatementReferenceTargetParams{
 		ExecutionID: s.execID,
 		Position:    st.Position,
 	})
@@ -454,29 +455,10 @@ func (s *script) persistReferences(st StatementRef) {
 			"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
 		return
 	}
-	if s.a.store != nil {
-		if err := s.a.store.TxWorkbench(s.bk, func(tx *repo.Repo) error {
-			return sqlref.Persist(s.bk, tx, row.StatementID, row.WorkspaceID, s.p.Target.CatalogID, s.p.Target.Schema, st.SQL)
-		}); err != nil {
-			activity.GetLogger(s.ctx).Warn("could not persist statement references",
-				"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
-		}
-		return
-	}
-	tx, err := s.a.pool.Begin(s.bk)
-	if err != nil {
-		activity.GetLogger(s.ctx).Warn("could not start reference transaction",
-			"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
-		return
-	}
-	defer func() { _ = tx.Rollback(s.bk) }()
-	if err := sqlref.Persist(s.bk, db.New(tx), row.StatementID, row.WorkspaceID, s.p.Target.CatalogID, s.p.Target.Schema, st.SQL); err != nil {
+	if err := r.TxWorkbench(s.bk, func(tx *repo.Repo) error {
+		return sqlref.Persist(s.bk, tx, row.StatementID, row.WorkspaceID, s.p.Target.CatalogID, s.p.Target.Schema, st.SQL)
+	}); err != nil {
 		activity.GetLogger(s.ctx).Warn("could not persist statement references",
-			"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
-		return
-	}
-	if err := tx.Commit(s.bk); err != nil {
-		activity.GetLogger(s.ctx).Warn("could not commit statement references",
 			"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)
 	}
 }
@@ -700,14 +682,14 @@ func (a *Activities) agentStillWrites(ctx context.Context, executionID string) (
 	if !exec.AgentID.Valid {
 		return false, nil
 	}
-	agent, err := a.queries.GetAgentByID(ctx, exec.AgentID)
+	agent, err := a.store.GetAgentByID(ctx, exec.AgentID)
 	if err != nil {
 		return false, fmt.Errorf("recheck agent role: %w", err)
 	}
 	if agent.Kind != "external" || agent.Status != "active" {
 		return false, nil
 	}
-	bound, err := a.queries.AgentWorkspaceBound(ctx, db.AgentWorkspaceBoundParams{AgentID: agent.ID, WorkspaceID: exec.WorkspaceID})
+	bound, err := a.store.AgentWorkspaceBound(ctx, db.AgentWorkspaceBoundParams{AgentID: agent.ID, WorkspaceID: exec.WorkspaceID})
 	if err != nil {
 		return false, fmt.Errorf("recheck agent role: %w", err)
 	}
@@ -726,7 +708,7 @@ func (a *Activities) agentStillWrites(ctx context.Context, executionID string) (
 	if len(eff.Engines) > 0 && !eff.Engines[uuidStr(exec.EngineID)] {
 		return false, nil
 	}
-	role, err := a.queries.GetWorkspaceMemberRole(ctx, db.GetWorkspaceMemberRoleParams{ID: exec.WorkspaceID, UserID: agent.OwnerID})
+	role, err := a.store.GetWorkspaceMemberRole(ctx, db.GetWorkspaceMemberRoleParams{ID: exec.WorkspaceID, UserID: agent.OwnerID})
 	if err != nil {
 		return false, fmt.Errorf("recheck agent role: %w", err)
 	}

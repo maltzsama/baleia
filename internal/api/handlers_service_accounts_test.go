@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -30,7 +31,7 @@ func TestServiceAccounts(t *testing.T) {
 func runServiceAccounts(t *testing.T, withStore bool) {
 	t.Helper()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	ctx := context.Background()
 	fields := handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool},
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),

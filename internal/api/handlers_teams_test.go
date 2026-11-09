@@ -8,6 +8,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -18,7 +19,7 @@ import (
 func TestUpdateTeamMemberRole(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	h := testAPI(handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
 	ctx := context.Background()
 
@@ -97,7 +98,7 @@ func TestUpdateTeamMemberRole(t *testing.T) {
 func TestTeamMembers_ErrorMapping(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	h := testAPI(handlerFields{queries: q, pool: pool, tx: poolTx{pool: pool}, catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
 	ctx := context.Background()
 	hash, err := auth.HashPassword("correct horse")
@@ -149,7 +150,7 @@ func TestTeamMembers_ErrorMapping(t *testing.T) {
 }
 
 // brokenTeams fails every team lookup.
-type brokenTeams struct{ *db.Queries }
+type brokenTeams struct{ db.Querier }
 
 func (brokenTeams) GetTeamByID(context.Context, pgtype.UUID) (db.Team, error) {
 	return db.Team{}, errors.New("connection reset")

@@ -27,10 +27,11 @@ type monitoringStore interface {
 	SetMaintenanceRunAttempts(ctx context.Context, arg db.SetMaintenanceRunAttemptsParams) error
 }
 
-// monitoring returns the GORM store when it is configured, sqlc otherwise.
+// monitoring returns the GORM store.
 func (a *Activities) monitoring() monitoringStore {
-	if a.store != nil {
-		return a.store
+	s, ok := a.store.(monitoringStore)
+	if !ok {
+		return nil
 	}
-	return a.queries
+	return s
 }

@@ -51,15 +51,18 @@ type fixture struct {
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	ctx := context.Background()
-	var user, ws, space pgtype.UUID
+	var user pgtype.UUID
 	if err := pool.QueryRow(ctx, `INSERT INTO users (name, email, password_hash) VALUES ('u', 'u@x', 'x') RETURNING id`).Scan(&user); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ('w', 'personal', 'p', $1) RETURNING id`, user).Scan(&ws); err != nil {
+	created, err := q.CreateWorkspace(ctx, db.CreateWorkspaceParams{Name: "w", Type: "personal", PolarisCatalogName: "p", OwnerUserID: user})
+	if err != nil {
 		t.Fatal(err)
 	}
+	ws := created.ID
+	var space pgtype.UUID
 	if err := pool.QueryRow(ctx, `SELECT id FROM spaces WHERE workspace_id = $1 AND is_default`, ws).Scan(&space); err != nil {
 		t.Fatal(err)
 	}

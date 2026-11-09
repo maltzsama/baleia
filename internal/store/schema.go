@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
 )
 
@@ -187,5 +190,73 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.MetadataSyncRun{})
 			},
 		},
+		Migration{
+			Version: 4,
+			Name:    "seed store defaults",
+			Up:      seedDefaults,
+		},
 	)
+}
+
+// seedDefaults creates the rows a fresh goose database used to seed: the
+// default Trino cluster and its federated engine, and the assistant settings
+// singleton. Existing rows are left untouched, so the migration is safe on an
+// adopted database.
+func seedDefaults(db *gorm.DB) error {
+	now := time.Now().UTC()
+	cluster := model.TrinoCluster{
+		ID:             model.UUID(uuid.NewString()),
+		Name:           model.Text("default"),
+		CoordinatorURL: "http://trino:8080",
+		CreatedAt:      now,
+	}
+	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&cluster).Error; err != nil {
+		return fmt.Errorf("seed default trino cluster: %w", err)
+	}
+	if err := db.Where("name = ?", "default").First(&cluster).Error; err != nil {
+		return fmt.Errorf("read default trino cluster: %w", err)
+	}
+	if cluster.EngineID == nil {
+		conn := model.CatalogConnection{
+			ID:        model.UUID(uuid.NewString()),
+			Name:      model.Text("trino-default"),
+			Type:      "trino",
+			URL:       "http://trino:8080",
+			Config:    model.JSON(`{"url":"http://trino:8080"}`),
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&conn).Error; err != nil {
+			return fmt.Errorf("seed trino connection: %w", err)
+		}
+		if err := db.Where("name = ?", "trino-default").First(&conn).Error; err != nil {
+			return fmt.Errorf("read trino connection: %w", err)
+		}
+		engine := model.Engine{
+			ID:           model.UUID(uuid.NewString()),
+			Name:         model.Text("default"),
+			Kind:         "trino",
+			Class:        "federated",
+			ConnectionID: conn.ID,
+			IdentityMode: model.Text("impersonation"),
+			Enabled:      true,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&engine).Error; err != nil {
+			return fmt.Errorf("seed trino engine: %w", err)
+		}
+		if err := db.Where("name = ?", "default").First(&engine).Error; err != nil {
+			return fmt.Errorf("read trino engine: %w", err)
+		}
+		if err := db.Model(&model.TrinoCluster{}).Where("id = ?", string(cluster.ID)).
+			Update("engine_id", engine.ID).Error; err != nil {
+			return fmt.Errorf("link default trino engine: %w", err)
+		}
+	}
+	settings := model.AssistantSetting{ID: true}
+	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&settings).Error; err != nil {
+		return fmt.Errorf("seed assistant settings: %w", err)
+	}
+	return nil
 }

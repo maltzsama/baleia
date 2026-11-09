@@ -8,7 +8,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 )
 
@@ -17,7 +17,7 @@ import (
 func TestAuditList_Scoping(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	rec := audit.NewPostgres(slog.New(slog.DiscardHandler), q, nil, nil)
 	const alice, bob = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
 	as := func(user string) context.Context {

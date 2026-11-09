@@ -4,7 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -33,7 +34,7 @@ func TestPopularTables_Refresh(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	q := db.New(f.pool)
+	q := repo.New(testdb.GORM(t, f.pool))
 	if err := q.DeleteTablePopularity(ctx); err != nil {
 		t.Fatal(err)
 	}

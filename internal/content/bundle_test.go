@@ -15,13 +15,13 @@ import (
 
 func (f *fixture) workspace(t *testing.T, name, slug string) pgtype.UUID {
 	t.Helper()
-	var ws pgtype.UUID
-	if err := f.pool.QueryRow(context.Background(),
-		`INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ($1, 'personal', $2, $3) RETURNING id`,
-		name, slug, f.user).Scan(&ws); err != nil {
+	ws, err := f.q.CreateWorkspace(context.Background(), db.CreateWorkspaceParams{
+		Name: name, Type: "personal", PolarisCatalogName: slug, OwnerUserID: f.user,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	return ws
+	return ws.ID
 }
 
 func (f *fixture) spaceIn(t *testing.T, ws pgtype.UUID, name, slug string) pgtype.UUID {

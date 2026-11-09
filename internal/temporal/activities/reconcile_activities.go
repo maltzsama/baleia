@@ -58,7 +58,7 @@ func (a *Activities) reconcileAll(ctx context.Context, dryRun bool, beat func(in
 	if a.reconcileEngine == nil {
 		return res, nil
 	}
-	rows, err := a.queries.ListEnabledEnginesWithConnection(ctx)
+	rows, err := a.store.ListEnabledEnginesWithConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (a *Activities) reconcileAll(ctx context.Context, dryRun bool, beat func(in
 		}
 		res.Engines++
 		rep, runErr := a.reconcileEngine(ctx, r.Engine, r.ClusterID, dryRun, onAction)
-		if _, err := stored.SaveRun(context.WithoutCancel(ctx), a.queries, r.Engine.ID, rep, runErr); err != nil {
+		if _, err := stored.SaveRun(context.WithoutCancel(ctx), a.store, r.Engine.ID, rep, runErr); err != nil {
 			a.logger.WarnContext(ctx, "save reconcile run", "engine", r.Engine.Name, "err", err)
 		}
 		if runErr != nil {

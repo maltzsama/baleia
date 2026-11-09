@@ -11,7 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -75,9 +75,10 @@ func newAuditFixture(t *testing.T) *auditFixture {
 	if err := pool.QueryRow(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ('w', 'personal', 'p', $1) RETURNING id`, f.owner).Scan(&ws); err != nil {
 		t.Fatal(err)
 	}
+	addDefaultSpace(t, pool, ws)
 	f.ownerWS = openapi_types.UUID(ws.Bytes)
 	f.h = testAPI(handlerFields{
-		queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, schema: poolSchema{pool: pool}, keyring: testKeyring(t), connections: testRegistry(t),
+		queries: repo.New(testdb.GORM(t, pool)), pool: pool, tx: poolTx{pool: pool}, schema: poolSchema{pool: pool}, keyring: testKeyring(t), connections: testRegistry(t),
 		settings:     SettingsFromConfig(&config.Config{JWTSecret: strings.Repeat("s", 40)}),
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
 		audit:        f.mem,

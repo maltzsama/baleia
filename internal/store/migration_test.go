@@ -2,12 +2,15 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"log/slog"
+	"net/url"
+	"os"
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -25,7 +28,7 @@ func (runnerTestRow) TableName() string { return "runner_test_rows" }
 // legacy goose path, which is the upgrade case the runner has to adopt.
 func openTestStore(t *testing.T) *gorm.DB {
 	t.Helper()
-	pool := testdb.New(t)
+	pool := newThrowawayPool(t)
 	sqlDB := stdlib.OpenDBFromPool(pool)
 	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
 		Logger:         gormlogger.Discard,
@@ -35,6 +38,15 @@ func openTestStore(t *testing.T) *gorm.DB {
 		t.Fatalf("open gorm store: %v", err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
+	// The runner adopts an existing goose-managed database; these tests keep
+	// exercising that upgrade path without running goose.
+	if err := db.Exec(`CREATE TABLE goose_db_version (
+		id SERIAL PRIMARY KEY,
+		version_id BIGINT NOT NULL,
+		is_applied BOOLEAN NOT NULL,
+		tstamp TIMESTAMP DEFAULT now())`).Error; err != nil {
+		t.Fatalf("create goose marker: %v", err)
+	}
 	return db
 }
 
@@ -249,4 +261,50 @@ func TestRunnerAppliesTracksAndRollsBack(t *testing.T) {
 	if len(statuses) != 2 || statuses[1].Applied {
 		t.Fatalf("status = %+v, want migration 1 pending again", statuses)
 	}
+}
+
+// newThrowawayPool creates an empty database on the test server. The store
+// tests cannot use internal/testdb, which imports this package to run the
+// GORM migrations.
+func newThrowawayPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	admin := os.Getenv("BALEIA_TEST_DATABASE_URL")
+	if admin == "" {
+		t.Skip("BALEIA_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	cfg, err := pgxpool.ParseConfig(admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.MaxConns = 1
+	adminPool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "baleia_runner_" + strings.ToLower(rand.Text()[:12])
+	if _, err := adminPool.Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		adminPool.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = adminPool.Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
+		adminPool.Close()
+	})
+	u, err := url.Parse(admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.Path = "/" + name
+	cfg, err = pgxpool.ParseConfig(u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.MaxConns = 4
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
 }

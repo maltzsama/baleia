@@ -19,6 +19,7 @@ func newWorkspaceFor(t *testing.T, f *metaFixture, name string) openapi_types.UU
 		name, name, mustUUID(t, f.owner)).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
+	addDefaultSpace(t, f.pool, id)
 	return openapi_types.UUID(id.Bytes)
 }
 

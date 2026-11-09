@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 )
 
@@ -15,7 +15,7 @@ func idpTestHandlers(t *testing.T) *API {
 	t.Helper()
 	pool := testdb.New(t)
 	return testAPI(handlerFields{
-		queries: db.New(pool),
+		queries: repo.New(testdb.GORM(t, pool)),
 		pool:    pool,
 		tx:      poolTx{pool: pool},
 		keyring: testKeyring(t),

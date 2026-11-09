@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -15,7 +15,7 @@ func TestPersistIsIdempotent(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 
 	var userID pgtype.UUID
 	if err := pool.QueryRow(ctx, `INSERT INTO users (name, email, password_hash) VALUES ('u','u@x','x') RETURNING id`).Scan(&userID); err != nil {
@@ -58,7 +58,7 @@ func TestPersistUnparsableWritesNothing(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 
 	var userID pgtype.UUID
 	if err := pool.QueryRow(ctx, `INSERT INTO users (name, email, password_hash) VALUES ('u','u@x','x') RETURNING id`).Scan(&userID); err != nil {

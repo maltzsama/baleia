@@ -127,7 +127,7 @@ func RefreshEngineCatalogs(ctx context.Context) (*RefreshEngineCatalogsResult, e
 }
 
 func (a *Activities) refreshEngineCatalogs(ctx context.Context) (*RefreshEngineCatalogsResult, error) {
-	rows, err := a.queries.ListEnabledEnginesWithConnection(ctx)
+	rows, err := a.store.ListEnabledEnginesWithConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -177,15 +177,15 @@ func (a *Activities) refreshNativeCatalogs(ctx context.Context, r db.ListEnabled
 		return err
 	}
 	for _, name := range names {
-		cat, err := a.queries.UpsertNativeCatalog(ctx, db.UpsertNativeCatalogParams{ConnectionID: conn.ID, Name: name})
+		cat, err := a.store.UpsertNativeCatalog(ctx, db.UpsertNativeCatalogParams{ConnectionID: conn.ID, Name: name})
 		if err != nil {
 			return err
 		}
-		if _, err := a.queries.UpsertNativeBinding(ctx, db.UpsertNativeBindingParams{CatalogID: cat.ID, EngineID: r.Engine.ID, EngineCatalogName: name}); err != nil {
+		if _, err := a.store.UpsertNativeBinding(ctx, db.UpsertNativeBindingParams{CatalogID: cat.ID, EngineID: r.Engine.ID, EngineCatalogName: name}); err != nil {
 			return err
 		}
 	}
-	_, err = a.queries.DisableMissingNativeBindings(ctx, db.DisableMissingNativeBindingsParams{EngineID: r.Engine.ID, Present: names})
+	_, err = a.store.DisableMissingNativeBindings(ctx, db.DisableMissingNativeBindingsParams{EngineID: r.Engine.ID, Present: names})
 	return err
 }
 
@@ -195,7 +195,7 @@ func ListSyncableCatalogs(ctx context.Context) ([]string, error) {
 }
 
 func (a *Activities) listSyncableCatalogs(ctx context.Context) ([]string, error) {
-	ids, err := a.queries.ListSyncableCatalogs(ctx)
+	ids, err := a.store.ListSyncableCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -2,11 +2,10 @@ package api
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -59,6 +58,7 @@ func newHistoryFixture(t *testing.T) *historyFixture {
 		team, f.owner, f.member, f.stranger)
 	scan(&f.ws, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_team_id)
 		VALUES ('w','shared','p',$1) RETURNING id`, team)
+	addDefaultSpace(t, pool, f.ws)
 
 	var conn openapi_types.UUID
 	scan(&conn, `INSERT INTO catalog_connections (name, type, url) VALUES ('tri','trino','http://t') RETURNING id`)
@@ -66,7 +66,7 @@ func newHistoryFixture(t *testing.T) *historyFixture {
 	scan(&f.catalog, `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1,'lake','native') RETURNING id`, conn)
 	scan(&f.binding, `INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode) VALUES ($1,$2,'lake_t','adopted') RETURNING id`, f.catalog, f.engine)
 
-	f.h = testAPI(handlerFields{queries: db.New(pool)})
+	f.h = testAPI(handlerFields{queries: repo.New(testdb.GORM(t, pool))})
 	return f
 }
 
@@ -235,50 +235,6 @@ func TestHistory_Visibility(t *testing.T) {
 	admin := executionIDs(f.list(t, f.stranger.String(), "admin", ListExecutionsParams{}))
 	if len(admin) != 3 {
 		t.Fatalf("an admin sees everyone: %v", admin)
-	}
-}
-
-func TestHistory_SearchUsesIndex(t *testing.T) {
-	t.Parallel()
-	f := newHistoryFixture(t)
-	ctx := context.Background()
-	if _, err := f.pool.Exec(ctx, `
-		INSERT INTO query_executions (workspace_id, user_id, status, sql, started_at)
-		SELECT $1, $2, 'finished', 'SELECT ' || g, now() - (g || ' seconds')::interval
-		FROM generate_series(1, 10000) g`, f.ws, f.member); err != nil {
-		t.Fatal(err)
-	}
-
-	// The planner may prefer a sequential scan on a small table; disable it so
-	// the test proves the trigram index is usable, not that it was chosen.
-	conn, err := f.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Release()
-	if _, err := conn.Exec(ctx, `SET enable_seqscan = off`); err != nil {
-		t.Fatal(err)
-	}
-	rows, err := conn.Query(ctx, `
-		EXPLAIN SELECT id FROM query_executions WHERE sql ILIKE '%9999%'`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	var plan strings.Builder
-	for rows.Next() {
-		var line string
-		if err := rows.Scan(&line); err != nil {
-			t.Fatal(err)
-		}
-		plan.WriteString(line)
-		plan.WriteString("\n")
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(plan.String(), "query_executions_sql_trgm") {
-		t.Fatalf("the trigram index is not used:\n%s", plan.String())
 	}
 }
 

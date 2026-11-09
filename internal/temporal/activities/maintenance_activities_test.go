@@ -180,7 +180,7 @@ func TestReserveRuns_GlobalLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	const catalogs, tables, limit = 4, 3, 5
-	a := &Activities{queries: db.New(pool), pool: pool, cfg: &config.Config{MaintenanceMaxConcurrentRuns: limit}}
+	a := &Activities{store: repo.New(testdb.GORM(t, pool)), pool: pool, cfg: &config.Config{MaintenanceMaxConcurrentRuns: limit}}
 	type round struct {
 		binding    db.CatalogBinding
 		candidates []roundCandidate
@@ -204,7 +204,7 @@ func TestReserveRuns_GlobalLimit(t *testing.T) {
 	}
 	// The first catalog's first table is already running.
 	first := rounds[0].candidates[0]
-	if _, err := RecordMaintenanceRun(ctx, db.New(pool), first.key, rounds[0].binding, first.row, first.step, first.settings, "manual", pgtype.UUID{}); err != nil {
+	if _, err := RecordMaintenanceRun(ctx, repo.New(testdb.GORM(t, pool)), first.key, rounds[0].binding, first.row, first.step, first.settings, "manual", pgtype.UUID{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -310,7 +310,7 @@ func TestReserveRunsStore_DuplicateRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := repo.New(gdb)
-	a := &Activities{queries: db.New(pool), store: store, pool: pool, cfg: &config.Config{MaintenanceMaxConcurrentRuns: 10}}
+	a := &Activities{store: store, pool: pool, cfg: &config.Config{MaintenanceMaxConcurrentRuns: 10}}
 
 	existing := monitoring.TableKey{CatalogID: catalog, Namespace: "cdc", Table: "t0"}
 	step := maintenance.Step{Operation: maintenance.OpExpireSnapshots, Due: true, WouldRun: true}

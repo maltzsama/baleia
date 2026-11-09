@@ -33,6 +33,7 @@ import (
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
+	"github.com/galileostudio/baleia/internal/workspaces/spaces"
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -194,11 +195,11 @@ type IdentityDeps struct {
 
 // DataDeps is Baleia's own database.
 type DataDeps struct {
+	// Queries is accepted for source compatibility; NewAPI builds every
+	// service over Store and ignores it.
 	Queries db.Querier
 	Pool    *pgxpool.Pool
-	// Store is the GORM connection; nil keeps the sqlc path (tests). The
-	// assistant has no sqlc path, so its service is built only when Store is
-	// set.
+	// Store is the GORM connection every service persists through (ADR 0020).
 	Store *gorm.DB
 }
 
@@ -218,7 +219,7 @@ type EngineDeps struct {
 func NewAPI(d Deps) (*API, error) {
 	var missing []string
 	for name, absent := range map[string]bool{
-		"Data.Queries":        d.Data.Queries == nil,
+		"Data.Store":          d.Data.Store == nil,
 		"Data.Pool":           d.Data.Pool == nil,
 		"Temporal":            d.Temporal == nil,
 		"Storage":             d.Storage == nil,
@@ -244,7 +245,7 @@ func NewAPI(d Deps) (*API, error) {
 		queries:        d.Data.Queries,
 		store:          d.Data.Store,
 		pool:           d.Data.Pool,
-		tx:             poolTx{pool: d.Data.Pool},
+		tx:             storeTx{db: d.Data.Store},
 		settings:       d.Settings,
 		keyring:        d.Keyring,
 		temporalClient: d.Temporal,
@@ -262,34 +263,17 @@ func NewAPI(d Deps) (*API, error) {
 	if c.audit == nil {
 		c.audit = audit.Nop{}
 	}
-	if c.store != nil {
-		contentStore := repo.New(c.store)
-		c.content = content.New(contentStore, contentStore.TxContent)
-		c.history = history.New(contentStore)
-	} else {
-		tx := func(ctx context.Context, fn func(content.Store) error) error {
-			return c.inTx(ctx, func(q db.Querier) error { return fn(q) })
-		}
-		c.content = content.New(c.queries, tx)
-		c.history = history.New(c.queries)
-	}
-	if c.store != nil {
-		c.browse = browse.New(repo.New(c.store))
-	} else {
-		c.browse = browse.New(c.queries)
-	}
-	c.spaces = spacesOver(c, c.queries)
-	if c.store != nil {
-		c.access = wsaccess.New(repo.New(c.store))
-		c.topology = topology.New(repo.New(c.store))
-	} else {
-		c.access = wsaccess.New(c.queries)
-		c.topology = topology.New(c.queries)
-	}
-	var assistantService *assistant.Service
-	if d.Data.Store != nil {
-		assistantService = assistant.New(repo.New(d.Data.Store), d.Keyring)
-	}
+	// Every service persists through the GORM store (ADR 0020); the
+	// sqlc-shaped interface is only the narrow surface they consume.
+	storeRepo := repo.New(c.store)
+	c.queries = storeRepo
+	c.content = content.New(storeRepo, storeRepo.TxContent)
+	c.history = history.New(storeRepo)
+	c.browse = browse.New(storeRepo)
+	c.spaces = spaces.New(storeRepo, storeRepo.TxSpaces)
+	c.access = wsaccess.New(storeRepo)
+	c.topology = topology.New(storeRepo)
+	assistantService := assistant.New(storeRepo, d.Keyring)
 	h := &API{
 		core:              c,
 		AuthHandlers:      newAuthHandlers(c),

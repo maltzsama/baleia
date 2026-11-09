@@ -46,7 +46,7 @@ const maintExecID = "00000000-0000-0000-0000-00000000abcd"
 // quoted Trino identifier and the retention a string literal.
 func TestLensRunMaintenance_QuotesIdentifiersAndRetention(t *testing.T) {
 	rec := &fakeEngine{Engine: testTrino}
-	a := &Activities{dialects: dialect.NewRegistry(), engines: rec, queries: snapshotSink{}}
+	a := &Activities{dialects: dialect.NewRegistry(), engines: rec, store: snapshotSink{}}
 	err := runMaintenance(t, a, LensRunMaintenanceParams{
 		ExecutionID: maintExecID, Catalog: "cat", Namespace: `we"ird`, Table: "t; DROP TABLE x", Retention: "7d",
 	})
@@ -78,7 +78,7 @@ func TestLensRunMaintenance_RejectsBadInputBeforeTrino(t *testing.T) {
 		"NUL in namespace":    {ExecutionID: maintExecID, Catalog: "c", Namespace: "n\x00", Table: "t", Retention: "7d"},
 	} {
 		rec := &fakeEngine{Engine: testTrino}
-		a := &Activities{dialects: dialect.NewRegistry(), engines: rec, queries: snapshotSink{}}
+		a := &Activities{dialects: dialect.NewRegistry(), engines: rec, store: snapshotSink{}}
 		err := runMaintenance(t, a, p)
 		if err == nil || len(rec.sqls) != 0 {
 			t.Errorf("%s: err=%v statements=%q, want an error and no statements", name, err, rec.sqls)
@@ -99,7 +99,7 @@ func TestLensRunMaintenance_RunsOnPlannedEngine(t *testing.T) {
 		"legacy route":   {"", "default"},
 	} {
 		rec := &fakeEngine{Engine: testTrino}
-		a := &Activities{dialects: dialect.NewRegistry(), engines: rec, queries: snapshotSink{}}
+		a := &Activities{dialects: dialect.NewRegistry(), engines: rec, store: snapshotSink{}}
 		err := runMaintenance(t, a, LensRunMaintenanceParams{
 			ExecutionID: maintExecID, EngineID: tc.engine, Catalog: "c", Namespace: "n", Table: "t", Operations: []string{"optimize"},
 		})
@@ -109,7 +109,7 @@ func TestLensRunMaintenance_RunsOnPlannedEngine(t *testing.T) {
 	}
 	rec := &fakeEngine{Engine: testTrino}
 	var finished []db.UpdateMaintenanceRunParams
-	a := &Activities{dialects: dialect.NewRegistry(), engines: rec, queries: snapshotSink{finished: &finished}}
+	a := &Activities{dialects: dialect.NewRegistry(), engines: rec, store: snapshotSink{finished: &finished}}
 	if err := runMaintenance(t, a, LensRunMaintenanceParams{ExecutionID: maintExecID, RunID: maintExecID, EngineID: "nope", Catalog: "c", Namespace: "n", Table: "t"}); err == nil || len(rec.sqls) != 0 {
 		t.Errorf("invalid engine id: err=%v statements=%q, want an error and no statements", err, rec.sqls)
 	}

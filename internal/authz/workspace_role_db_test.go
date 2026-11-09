@@ -1,10 +1,12 @@
-package authz
+package authz_test
 
 import (
 	"context"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -15,8 +17,8 @@ import (
 func TestWorkspaceRoles_Postgres(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	q := db.New(testdb.New(t))
-	c := New(q)
+	q := repo.New(testdb.GORM(t, testdb.New(t)))
+	c := authz.New(q)
 
 	user := func(email string) db.User {
 		h := "x"
@@ -54,9 +56,9 @@ func TestWorkspaceRoles_Postgres(t *testing.T) {
 	set(personal.ID, guest.ID, "editor")
 	set(shared.ID, outsider.ID, "admin") // refused: not in the team (0 rows)
 
-	role := func(ws pgtype.UUID, u db.User) WorkspaceRole {
+	role := func(ws pgtype.UUID, u db.User) authz.WorkspaceRole {
 		t.Helper()
-		r, err := c.WorkspaceRole(ctx, Principal{UserID: u.ID, Role: u.Role}, ws)
+		r, err := c.WorkspaceRole(ctx, authz.Principal{UserID: u.ID, Role: u.Role}, ws)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -66,15 +68,15 @@ func TestWorkspaceRoles_Postgres(t *testing.T) {
 		name string
 		ws   pgtype.UUID
 		u    db.User
-		want WorkspaceRole
+		want authz.WorkspaceRole
 	}{
-		{"team owner defaults to admin", shared.ID, owner, WorkspaceAdmin},
-		{"team member defaults to editor", shared.ID, member, WorkspaceEditor},
-		{"an explicit role wins", shared.ID, viewer, WorkspaceViewer},
-		{"a role row without team membership grants nothing", shared.ID, outsider, WorkspaceNone},
-		{"the personal owner is admin", personal.ID, owner, WorkspaceAdmin},
-		{"a personal workspace shared with a user", personal.ID, guest, WorkspaceEditor},
-		{"a personal workspace not shared", personal.ID, member, WorkspaceNone},
+		{"team owner defaults to admin", shared.ID, owner, authz.WorkspaceAdmin},
+		{"team member defaults to editor", shared.ID, member, authz.WorkspaceEditor},
+		{"an explicit role wins", shared.ID, viewer, authz.WorkspaceViewer},
+		{"a role row without team membership grants nothing", shared.ID, outsider, authz.WorkspaceNone},
+		{"the personal owner is admin", personal.ID, owner, authz.WorkspaceAdmin},
+		{"a personal workspace shared with a user", personal.ID, guest, authz.WorkspaceEditor},
+		{"a personal workspace not shared", personal.ID, member, authz.WorkspaceNone},
 	} {
 		if got := role(tt.ws, tt.u); got != tt.want {
 			t.Errorf("%s: %v, want %v", tt.name, got, tt.want)
@@ -92,24 +94,24 @@ func TestWorkspaceRoles_Postgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	spaceRole := func(u db.User) SpaceRole {
+	spaceRole := func(u db.User) authz.SpaceRole {
 		t.Helper()
-		r, err := c.EffectiveSpaceRole(ctx, Principal{UserID: u.ID}, shared.ID, sp.ID)
+		r, err := c.EffectiveSpaceRole(ctx, authz.Principal{UserID: u.ID}, shared.ID, sp.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return r
 	}
-	if got := spaceRole(member); got != SpaceEditor {
+	if got := spaceRole(member); got != authz.SpaceEditor {
 		t.Errorf("editor with a manager entry = %v, want editor", got)
 	}
-	if got := spaceRole(viewer); got != SpaceViewer {
+	if got := spaceRole(viewer); got != authz.SpaceViewer {
 		t.Errorf("viewer with a manager entry = %v, want viewer", got)
 	}
-	if got := spaceRole(owner); got != SpaceManager {
+	if got := spaceRole(owner); got != authz.SpaceManager {
 		t.Errorf("workspace admin in a restricted space = %v, want manager", got)
 	}
-	if got := spaceRole(outsider); got != SpaceNone {
+	if got := spaceRole(outsider); got != authz.SpaceNone {
 		t.Errorf("non-member = %v, want none", got)
 	}
 
@@ -133,7 +135,7 @@ func TestWorkspaceRoles_Postgres(t *testing.T) {
 	if _, err := q.RemoveTeamMember(ctx, db.RemoveTeamMemberParams{TeamID: team.ID, UserID: viewer.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if got := role(shared.ID, viewer); got != WorkspaceNone {
+	if got := role(shared.ID, viewer); got != authz.WorkspaceNone {
 		t.Errorf("after leaving the team = %v", got)
 	}
 

@@ -24,7 +24,7 @@ func (a *Activities) agentSlotAvailable(ctx context.Context, p AgentSlotParams) 
 	if err := id.Scan(p.AgentID); err != nil || !id.Valid || p.Limit <= 0 {
 		return true, nil
 	}
-	n, err := a.queries.CountActiveExecutionsByAgent(ctx, id)
+	n, err := a.store.CountActiveExecutionsByAgent(ctx, id)
 	if err != nil {
 		return false, err
 	}

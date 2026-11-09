@@ -29,12 +29,13 @@ type workbenchStore interface {
 	GetStatementReferenceTarget(ctx context.Context, arg db.GetStatementReferenceTargetParams) (db.GetStatementReferenceTargetRow, error)
 }
 
-// workbench returns the GORM store when it is configured, sqlc otherwise.
+// workbench returns the GORM store.
 func (a *Activities) workbench() workbenchStore {
-	if a.store != nil {
-		return a.store
+	s, ok := a.store.(workbenchStore)
+	if !ok {
+		return nil
 	}
-	return a.queries
+	return s
 }
 
 // SetStore wires the GORM store for the domains migrated off sqlc (#770).

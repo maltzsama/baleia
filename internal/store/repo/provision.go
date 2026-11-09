@@ -2,7 +2,6 @@ package repo
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"time"
@@ -46,6 +45,13 @@ func (r *Repo) ApplyGroupWorkspaceRoles(ctx context.Context, arg db.ApplyGroupWo
 	}
 	userID := UUIDString(arg.UserID)
 	return r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Lock the account row so concurrent sign-ins of the same user apply
+		// their mappings in turn, as the removed advisory lock did. A
+		// repeatable-read transaction would abort one of them instead.
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", userID).First(&model.User{}).Error; err != nil {
+			return err
+		}
 		keep, err := grantedWorkspaces(tx, userID, assignments)
 		if err != nil {
 			return err
@@ -54,7 +60,7 @@ func (r *Repo) ApplyGroupWorkspaceRoles(ctx context.Context, arg db.ApplyGroupWo
 			return err
 		}
 		return dropGroupRoles(tx, userID, keep)
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	})
 }
 
 // grantedWorkspaces keeps the assignments whose workspace is shared, owned by

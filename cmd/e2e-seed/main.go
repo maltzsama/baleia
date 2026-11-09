@@ -59,7 +59,16 @@ func main() {
 	}
 	defer pool.Close()
 
-	q := db.New(pool)
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	defer func() { _ = sqlDB.Close() }()
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger:         gormlogger.Discard,
+		TranslateError: true,
+	})
+	if err != nil {
+		log.Fatalf("e2e-seed: open gorm: %v", err)
+	}
+	q := repo.New(gdb)
 
 	hash, err := auth.HashPassword(password)
 	if err != nil {
@@ -135,7 +144,7 @@ func main() {
 	log.Printf("e2e-seed: ready (admin/member/viewer @e2e.test)")
 }
 
-func ensureUser(ctx context.Context, q *db.Queries, u seedUser, hash string) (db.User, error) {
+func ensureUser(ctx context.Context, q db.Querier, u seedUser, hash string) (db.User, error) {
 	existing, err := q.GetUserByEmail(ctx, u.email)
 	if err == nil {
 		return existing, nil
@@ -152,7 +161,7 @@ func ensureUser(ctx context.Context, q *db.Queries, u seedUser, hash string) (db
 	})
 }
 
-func ensurePersonalWorkspace(ctx context.Context, q *db.Queries, user db.User) error {
+func ensurePersonalWorkspace(ctx context.Context, q db.Querier, user db.User) error {
 	workspaces, err := q.ListWorkspacesByUser(ctx, user.ID)
 	if err == nil {
 		for _, w := range workspaces {
@@ -177,7 +186,7 @@ func ensurePersonalWorkspace(ctx context.Context, q *db.Queries, user db.User) e
 	})
 }
 
-func ensureTeam(ctx context.Context, q *db.Queries, name string, createdBy pgtype.UUID) (db.Team, error) {
+func ensureTeam(ctx context.Context, q db.Querier, name string, createdBy pgtype.UUID) (db.Team, error) {
 	teams, err := q.ListTeams(ctx)
 	if err == nil {
 		for _, team := range teams {
@@ -189,7 +198,7 @@ func ensureTeam(ctx context.Context, q *db.Queries, name string, createdBy pgtyp
 	return q.CreateTeam(ctx, db.CreateTeamParams{Name: name, CreatedBy: createdBy})
 }
 
-func ensureTeamMember(ctx context.Context, q *db.Queries, teamID, userID pgtype.UUID, role string) error {
+func ensureTeamMember(ctx context.Context, q db.Querier, teamID, userID pgtype.UUID, role string) error {
 	_, err := q.AddTeamMember(ctx, db.AddTeamMemberParams{
 		TeamID: teamID,
 		UserID: userID,
@@ -207,7 +216,7 @@ func ensureTeamMember(ctx context.Context, q *db.Queries, teamID, userID pgtype.
 // smoke. The Baleia catalog has the engine catalog's name (#388): `tpch`
 // itself is reserved, and a different name on each side made `tpch.*`
 // queries fail with CATALOG_NOT_FOUND.
-func ensureTarget(ctx context.Context, q *db.Queries, admin, member db.User) (db.Catalog, db.CatalogBinding, error) {
+func ensureTarget(ctx context.Context, q db.Querier, admin, member db.User) (db.Catalog, db.CatalogBinding, error) {
 	row, err := q.GetDefaultTrinoEngine(ctx)
 	if err != nil {
 		return db.Catalog{}, db.CatalogBinding{}, err
@@ -257,7 +266,7 @@ const e2eTrinoCatalog = "e2e_tpch"
 // actually run queries. Without it Trino answers CATALOG_NOT_FOUND and the run
 // smokes (#106, #121) cannot pass. Trino's built-in tpch connector needs no
 // external service.
-func ensureTrinoCatalog(ctx context.Context, q *db.Queries, trinoURL string) error {
+func ensureTrinoCatalog(ctx context.Context, q db.Querier, trinoURL string) error {
 	cluster, err := q.GetDefaultTrinoCluster(ctx)
 	if err != nil {
 		return err
@@ -343,7 +352,7 @@ func newContentService(pool *pgxpool.Pool) (*content.Service, error) {
 
 // ensureModels creates the e2e models in the member's default space; an
 // existing slug is left untouched so the seed stays idempotent.
-func ensureModels(ctx context.Context, q *db.Queries, svc *content.Service, member db.User, catalog db.Catalog, binding db.CatalogBinding) error {
+func ensureModels(ctx context.Context, q db.Querier, svc *content.Service, member db.User, catalog db.Catalog, binding db.CatalogBinding) error {
 	workspaceID, err := q.PersonalWorkspaceID(ctx, member.ID)
 	if err != nil {
 		return err
@@ -374,7 +383,7 @@ func ensureModels(ctx context.Context, q *db.Queries, svc *content.Service, memb
 
 // ensureV1Metric seeds one v1 metric on a table no model uses, so the
 // migration dialog (#121) has something to migrate.
-func ensureV1Metric(ctx context.Context, q *db.Queries, svc *content.Service, member db.User, catalog db.Catalog, binding db.CatalogBinding) error {
+func ensureV1Metric(ctx context.Context, q db.Querier, svc *content.Service, member db.User, catalog db.Catalog, binding db.CatalogBinding) error {
 	workspaceID, err := q.PersonalWorkspaceID(ctx, member.ID)
 	if err != nil {
 		return err
@@ -399,7 +408,7 @@ func ensureV1Metric(ctx context.Context, q *db.Queries, svc *content.Service, me
 
 // ensureMetadata seeds the tpch tables the e2e models and metrics use, so the
 // editor's table allowlist (#614) resolves them without waiting for a sync.
-func ensureMetadata(ctx context.Context, q *db.Queries, catalog db.Catalog) error {
+func ensureMetadata(ctx context.Context, q db.Querier, catalog db.Catalog) error {
 	for _, t := range []struct{ namespace, name string }{
 		{"tiny", "customer"},
 		{"tiny", "orders"},
@@ -415,7 +424,7 @@ func ensureMetadata(ctx context.Context, q *db.Queries, catalog db.Catalog) erro
 	return nil
 }
 
-func ensureSharedWorkspace(ctx context.Context, q *db.Queries, name string, teamID pgtype.UUID) (db.Workspace, error) {
+func ensureSharedWorkspace(ctx context.Context, q db.Querier, name string, teamID pgtype.UUID) (db.Workspace, error) {
 	polarisName := "e2e_shared"
 	if ws, err := q.GetWorkspaceByPolarisName(ctx, polarisName); err == nil {
 		return ws, nil
@@ -448,7 +457,7 @@ func randomSuffix() string {
 // ensureQueueCapacity pins the default Trino engine's interactive queue to one
 // slot so the workload smoke (#545) can make a second run wait. The other
 // classes keep their defaults.
-func ensureQueueCapacity(ctx context.Context, q *db.Queries) error {
+func ensureQueueCapacity(ctx context.Context, q db.Querier) error {
 	row, err := q.GetDefaultTrinoEngine(ctx)
 	if err != nil {
 		return err

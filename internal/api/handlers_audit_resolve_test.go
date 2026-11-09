@@ -30,9 +30,11 @@ func TestResolveAudit_UsersAreScopedToSharedWorkspaces(t *testing.T) {
 	if _, err := f.pool.Exec(ctx, `INSERT INTO team_members (team_id, user_id) VALUES ($1, $2), ($1, $3)`, team, f.owner, peer); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_team_id) VALUES ('shared', 'shared', 's', $1)`, team); err != nil {
+	var ws pgtype.UUID
+	if err := f.pool.QueryRow(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_team_id) VALUES ('shared', 'shared', 's', $1) RETURNING id`, team).Scan(&ws); err != nil {
 		t.Fatal(err)
 	}
+	addDefaultSpace(t, f.pool, ws)
 
 	ids := []openapi_types.UUID{uuid.MustParse(f.owner), uuid.MustParse(peer), uuid.MustParse(f.stranger)}
 	resolve := func(ctx context.Context) map[string]AuditResolvedUser {

@@ -46,7 +46,7 @@ type Server struct {
 	cfg             *config.Config
 	mux             *chi.Mux
 	pool            *pgxpool.Pool
-	queries         *db.Queries
+	queries         db.Querier
 	metrics         *metrics.Registry
 
 	handlers *api.API

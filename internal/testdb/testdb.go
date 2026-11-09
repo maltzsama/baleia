@@ -7,19 +7,16 @@ package testdb
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
-	_ "github.com/jackc/pgx/v5/stdlib" // goose opens the database with database/sql
-	"github.com/pressly/goose/v3"
 )
 
 // Parallel tests share one server (#374). At most maxTests top-level tests
@@ -68,8 +65,9 @@ func acquire(t *testing.T) {
 	})
 }
 
-// New creates the database, migrates it and drops it when the test ends.
-// Parallel tests wait for a free slot; see acquire.
+// New creates the database, migrates it with the GORM store migrations and
+// drops it when the test ends. Parallel tests wait for a free slot; see
+// acquire.
 func New(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	admin := os.Getenv("BALEIA_TEST_DATABASE_URL")
@@ -104,7 +102,7 @@ func New(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	u.Path = "/" + name
-	if err := migrate(ctx, adminPool, u.String()); err != nil {
+	if err := migrate(ctx, u.String()); err != nil {
 		t.Fatal(err)
 	}
 	pool, err := newPool(ctx, u.String(), poolConns)
@@ -115,40 +113,20 @@ func New(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// migrationLock is the advisory lock that serializes test migrations on the
-// server, across the processes of a `go test ./...` run.
-const migrationLock = 0x6261_6c65_6961 // "baleia"
-
-// migrate runs every migration through a goose Provider, which keeps no
-// package state. One migration runs at a time on the server: the migrations
-// create cluster-wide roles (00018 creates baleia_trino), and two databases
-// migrating at once raced to create the same role.
-func migrate(ctx context.Context, admin *pgxpool.Pool, dsn string) error {
-	conn, err := admin.Acquire(ctx)
-	if err != nil {
-		return fmt.Errorf("acquire migration lock connection: %w", err)
-	}
-	defer conn.Release()
-	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", migrationLock); err != nil {
-		return fmt.Errorf("take migration lock: %w", err)
-	}
-	defer func() {
-		// Best effort: the lock also ends with the session.
-		_, _ = conn.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", migrationLock)
-	}()
-
-	// sql.Open, not goose.OpenDBWithDriver: that one sets goose's global
-	// dialect, which raced between parallel tests.
-	sqlDB, err := sql.Open("pgx", dsn)
+// migrate creates the schema through the GORM store registry (ADR 0020).
+// Test databases are independent, so no cross-process migration lock is
+// needed.
+func migrate(ctx context.Context, dsn string) error {
+	gdb, err := store.Open(ctx, dsn, store.Postgres, store.Options{Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		return err
 	}
-	defer func() { _ = sqlDB.Close() }()
-	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, os.DirFS(migrationsDir()))
+	defer func() { _ = store.Close(gdb) }()
+	reg, err := store.AllMigrations()
 	if err != nil {
 		return err
 	}
-	_, err = p.Up(ctx)
+	_, err = store.NewRunner(gdb, reg, slog.New(slog.DiscardHandler)).Up(ctx)
 	return err
 }
 
@@ -160,11 +138,4 @@ func newPool(ctx context.Context, dsn string, maxConns int32) (*pgxpool.Pool, er
 	}
 	cfg.MaxConns = maxConns
 	return pgxpool.NewWithConfig(ctx, cfg)
-}
-
-// migrationsDir is db/migrations, found from this file so any package's
-// tests can use it.
-func migrationsDir() string {
-	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(file), "..", "..", "db", "migrations")
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
@@ -86,10 +87,11 @@ func newAttentionFixture(t *testing.T) *attentionFixture {
 		 VALUES ('attention-ws', 'personal', 'attention_polaris', $1) RETURNING id`, f.ownerID).Scan(&f.wsID); err != nil {
 		t.Fatal(err)
 	}
+	addDefaultSpace(t, pool, f.wsID)
 
 	f.cache = NewTTLStore[[]AttentionItem](time.Hour)
 	f.h = testAPI(handlerFields{
-		queries:        db.New(pool),
+		queries:        repo.New(testdb.GORM(t, pool)),
 		pool:           pool,
 		tx:             poolTx{pool: pool},
 		settings:       SettingsFromConfig(&config.Config{AuditExportURL: "https://opensearch.test"}),

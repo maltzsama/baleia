@@ -136,8 +136,8 @@ type poolSchema struct{ pool *pgxpool.Pool }
 
 func (p poolSchema) SchemaVersion(ctx context.Context) (int64, error) {
 	var v int64
-	// Raw SQL on purpose: goose_db_version is goose's own table, not part of
-	// the migrations sqlc reads.
-	err := p.pool.QueryRow(ctx, `SELECT COALESCE(MAX(version_id), 0) FROM goose_db_version WHERE is_applied`).Scan(&v)
+	// Raw SQL on purpose: the schema ledger is the store's own table, not
+	// part of any query package.
+	err := p.pool.QueryRow(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations WHERE NOT dirty`).Scan(&v)
 	return v, err
 }

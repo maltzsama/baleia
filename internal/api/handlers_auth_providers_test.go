@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 )
 
@@ -15,7 +16,7 @@ import (
 func TestListAuthProviders_OnlyEnabled(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	h := testAPI(handlerFields{queries: q, tx: directTx{q: q}})
 	ctx := context.Background()
 

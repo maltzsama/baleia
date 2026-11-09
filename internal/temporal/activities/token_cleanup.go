@@ -10,15 +10,15 @@ import (
 // used password-reset tokens (#51). It runs on the daily token-cleanup
 // schedule and never touches a live row.
 func CleanupExpiredTokens(ctx context.Context) error {
-	if err := defaultActivities.queries.DeleteExpiredRefreshTokens(ctx); err != nil {
+	if err := defaultActivities.store.DeleteExpiredRefreshTokens(ctx); err != nil {
 		defaultActivities.passDone(schedules.TokenCleanup, err)
 		return err
 	}
-	if err := defaultActivities.queries.DeleteExpiredPasswordResetTokens(ctx); err != nil {
+	if err := defaultActivities.store.DeleteExpiredPasswordResetTokens(ctx); err != nil {
 		defaultActivities.passDone(schedules.TokenCleanup, err)
 		return err
 	}
-	err := defaultActivities.queries.DeleteExpiredOIDCLoginAttempts(ctx)
+	err := defaultActivities.store.DeleteExpiredOIDCLoginAttempts(ctx)
 	defaultActivities.passDone(schedules.TokenCleanup, err)
 	return err
 }

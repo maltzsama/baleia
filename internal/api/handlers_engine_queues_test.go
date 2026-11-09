@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,9 +15,10 @@ import (
 // queuesAPI builds handlers over a real pool and transaction, so the switch,
 // the capacities and the published resource groups commit together, with the
 // resource groups written under environment.
-func queuesAPI(pool *pgxpool.Pool, environment string) *API {
+func queuesAPI(t *testing.T, pool *pgxpool.Pool, environment string) *API {
+	t.Helper()
 	settings := Settings{Execution: ExecutionSettings{TrinoResourceGroupsEnvironment: environment}}
-	return testAPI(handlerFields{queries: db.New(pool), pool: pool, tx: poolTx{pool: pool}, settings: settings})
+	return testAPI(handlerFields{queries: repo.New(testdb.GORM(t, pool)), pool: pool, tx: poolTx{pool: pool}, settings: settings})
 }
 
 // queuesEngine inserts an engine of kind over its own connection.
@@ -112,7 +113,7 @@ func resourceGroupRevisions(t *testing.T, pool *pgxpool.Pool, engine pgtype.UUID
 
 func engineHandover(t *testing.T, pool *pgxpool.Pool, engine pgtype.UUID) bool {
 	t.Helper()
-	eng, err := db.New(pool).GetEngineByID(context.Background(), engine)
+	eng, err := repo.New(testdb.GORM(t, pool)).GetEngineByID(context.Background(), engine)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +126,7 @@ func engineHandover(t *testing.T, pool *pgxpool.Pool, engine pgtype.UUID) bool {
 func TestPutEngineQueues_PublishesResourceGroups(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	h := queuesAPI(pool, "staging")
+	h := queuesAPI(t, pool, "staging")
 	engine := queuesEngine(t, pool, "trino", "trino")
 
 	if resp := putQueues(t, h, engine, queuesBody(ptr(true), false)); !is200(resp) {
@@ -160,7 +161,7 @@ func TestPutEngineQueues_PublishesResourceGroups(t *testing.T) {
 func TestPutEngineQueues_OffPublishesNothing(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	h := queuesAPI(pool, "")
+	h := queuesAPI(t, pool, "")
 	engine := queuesEngine(t, pool, "trino", "trino")
 
 	if resp := putQueues(t, h, engine, queuesBody(ptr(false), false)); !is200(resp) {
@@ -179,7 +180,7 @@ func TestPutEngineQueues_OffPublishesNothing(t *testing.T) {
 func TestPutEngineQueues_ResourceGroupsRefusals(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	h := queuesAPI(pool, "")
+	h := queuesAPI(t, pool, "")
 
 	direct := queuesEngine(t, pool, "warehouse", "postgresql")
 	if resp := putQueues(t, h, direct, queuesBody(ptr(true), false)); refusalCode(resp) != ErrorCodeEngineUnsupported {
@@ -216,7 +217,7 @@ func TestPutEngineQueues_ResourceGroupsRefusals(t *testing.T) {
 func TestPutEngineQueues_PublishFailureChangesNothing(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	h := queuesAPI(pool, "")
+	h := queuesAPI(t, pool, "")
 	engine := queuesEngine(t, pool, "trino", "trino")
 	failWrites(t, pool, "INSERT ON trino_resource_group_revisions")
 
@@ -227,7 +228,7 @@ func TestPutEngineQueues_PublishFailureChangesNothing(t *testing.T) {
 	if engineHandover(t, pool, engine) {
 		t.Fatal("a failed publish left the switch on")
 	}
-	capacities, err := db.New(pool).ListEngineQueueCapacities(context.Background(), engine)
+	capacities, err := repo.New(testdb.GORM(t, pool)).ListEngineQueueCapacities(context.Background(), engine)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +245,7 @@ func TestPutEngineQueues_PublishFailureChangesNothing(t *testing.T) {
 func TestPutEngineQueues_ConcurrentHandoverHasOneOwner(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	h := queuesAPI(pool, "")
+	h := queuesAPI(t, pool, "")
 	engines := []pgtype.UUID{
 		queuesEngine(t, pool, "trino-a", "trino"),
 		queuesEngine(t, pool, "trino-b", "trino"),

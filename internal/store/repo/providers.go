@@ -92,6 +92,15 @@ func (s *Providers) CreateAuthProvider(ctx context.Context, arg db.CreateAuthPro
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return db.AuthProvider{}, err
 	}
+	// The column defaults to true, so GORM omits the zero value on insert; a
+	// provider created disabled needs its explicit false.
+	if !arg.Enabled {
+		if err := s.db.WithContext(ctx).Model(&model.AuthProvider{}).
+			Where("id = ?", string(row.ID)).Update("enabled", false).Error; err != nil {
+			return db.AuthProvider{}, err
+		}
+		row.Enabled = false
+	}
 	return toDBAuthProvider(row), nil
 }
 

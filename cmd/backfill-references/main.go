@@ -12,9 +12,10 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/sqlref"
+	"github.com/galileostudio/baleia/internal/store"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -35,12 +36,16 @@ func main() {
 	}
 
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, *url)
+	backend, err := store.BackendFromDSN(*url)
+	if err != nil {
+		log.Fatalf("backfill-references: %v", err)
+	}
+	gdb, err := store.Open(ctx, *url, backend, store.Options{})
 	if err != nil {
 		log.Fatalf("backfill-references: connect: %v", err)
 	}
-	defer pool.Close()
-	q := db.New(pool)
+	defer func() { _ = store.Close(gdb) }()
+	q := repo.New(gdb)
 
 	var cursor pgtype.UUID
 	total := 0

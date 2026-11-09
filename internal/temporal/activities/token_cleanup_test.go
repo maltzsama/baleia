@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -15,7 +16,7 @@ import (
 // refresh tokens and expired or used reset tokens, and nothing else (#51).
 func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 	pool := testdb.New(t)
-	q := db.New(pool)
+	q := repo.New(testdb.GORM(t, pool))
 	ctx := context.Background()
 	now := time.Now()
 
@@ -88,7 +89,7 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 	insertAttempt("oidc-live", now.Add(time.Hour))
 
 	old := defaultActivities
-	defaultActivities = &Activities{dialects: dialect.NewRegistry(), queries: q}
+	defaultActivities = &Activities{dialects: dialect.NewRegistry(), store: q}
 	t.Cleanup(func() { defaultActivities = old })
 
 	if err := CleanupExpiredTokens(ctx); err != nil {
