@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 )
@@ -133,10 +134,11 @@ func TestIdP_SecretsNeverReturned(t *testing.T) {
 	}
 
 	// At rest, the config is sealed, not plaintext JSON.
-	var enc string
-	if err := h.pool.QueryRow(ctx, `SELECT config_enc FROM auth_providers WHERE name = 'okta'`).Scan(&enc); err != nil {
+	var provider model.AuthProvider
+	if err := testdb.GORM(t, h.pool).Where("name = ?", "okta").First(&provider).Error; err != nil {
 		t.Fatal(err)
 	}
+	enc := provider.ConfigEnc
 	if strings.Contains(enc, "oidc-client-secret") || !strings.HasPrefix(enc, "v1:") {
 		t.Errorf("config_enc is not a sealed envelope: %q", enc)
 	}
@@ -216,8 +218,8 @@ func TestIdP_CreateValidates(t *testing.T) {
 	}
 
 	// Nothing was written.
-	var n int
-	if err := h.pool.QueryRow(ctx, `SELECT count(*) FROM auth_providers`).Scan(&n); err != nil {
+	var n int64
+	if err := testdb.GORM(t, h.pool).Model(&model.AuthProvider{}).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

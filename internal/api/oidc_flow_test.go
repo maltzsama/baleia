@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	"github.com/galileostudio/baleia/internal/oidctest"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -85,32 +85,18 @@ func TestOIDC_AttemptSingleUse(t *testing.T) {
 	}
 }
 
-// TestOIDC_RedirectConstraint: the database refuses unsafe redirects even if a
-// future writer forgets to validate them (#252).
+// TestOIDC_RedirectConstraint: only a relative path may be stored as the
+// post-login redirect. The database CHECK was removed with ADR 0020, so the
+// application validator is the single source of truth.
 func TestOIDC_RedirectConstraint(t *testing.T) {
 	t.Parallel()
-	q, provider := oidcAttemptFixture(t)
-	ctx := context.Background()
-	expires := pgtype.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true}
-	create := func(state string, redirect *string) error {
-		return q.CreateOIDCLoginAttempt(ctx, db.CreateOIDCLoginAttemptParams{
-			State:        state,
-			ProviderID:   provider.ID,
-			CodeVerifier: "verifier",
-			Redirect:     redirect,
-			ExpiresAt:    expires,
-		})
-	}
-
-	for i, bad := range []string{"//evil.example", "/\\evil.example", "https://evil.example", "/a\nb"} {
-		bad := bad
-		if err := create(fmt.Sprintf("bad-%d", i), &bad); err == nil {
-			t.Errorf("redirect %q was stored", bad)
+	for _, bad := range []string{"//evil.example", "/\\evil.example", "https://evil.example", "/a\nb"} {
+		if safeRelativePath(bad) {
+			t.Errorf("safeRelativePath accepted %q", bad)
 		}
 	}
-	good := "/sql?tab=1"
-	if err := create("good", &good); err != nil {
-		t.Fatalf("relative redirect rejected: %v", err)
+	if !safeRelativePath("/sql?tab=1") {
+		t.Error("safeRelativePath rejected a relative path")
 	}
 }
 
@@ -307,7 +293,9 @@ func TestOIDC_Expired(t *testing.T) {
 	t.Parallel()
 	f := newOIDCFlow(t)
 	state, cookie := f.start(t)
-	if _, err := f.pool.Exec(context.Background(), "UPDATE oidc_login_attempts SET expires_at = now() - interval '1 minute' WHERE state = $1", state); err != nil {
+	if err := testdb.GORM(t, f.pool).Model(&model.OIDCLoginAttempt{}).
+		Where("state = ?", state).
+		Update("expires_at", time.Now().Add(-time.Minute)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if code := f.failure(t, f.finish(t, state, cookie)); code != oidcErrorSSOFailed {

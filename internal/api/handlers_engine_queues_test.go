@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -25,15 +27,20 @@ func queuesAPI(t *testing.T, pool *pgxpool.Pool, environment string) *API {
 func queuesEngine(t *testing.T, pool *pgxpool.Pool, name, kind string) pgtype.UUID {
 	t.Helper()
 	ctx := context.Background()
-	var conn pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO catalog_connections (name, type, url) VALUES ($1, $2, 'http://engine') RETURNING id`, name+"-conn", kind).Scan(&conn); err != nil {
+	q := repo.New(testdb.GORM(t, pool))
+	conn, err := q.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
+		ID: repo.PGUUID(repo.NewUUID()), Name: name + "-conn", Type: kind, Url: "http://engine",
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	var engine pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO engines (name, kind, class, connection_id) VALUES ($1, $2, 'federated', $3) RETURNING id`, name, kind, conn).Scan(&engine); err != nil {
+	engine, err := q.CreateEngine(ctx, db.CreateEngineParams{
+		Name: name, Kind: kind, Class: "federated", ConnectionID: conn.ID,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	return engine
+	return engine.ID
 }
 
 // queuesBody sets every class; background is closed when closeBackground.
@@ -83,29 +90,23 @@ func refusalCode(resp PutEngineQueuesResponseObject) ErrorCode {
 // resourceGroupNames lists the group names published under environment.
 func resourceGroupNames(t *testing.T, pool *pgxpool.Pool, environment string) []string {
 	t.Helper()
-	rows, err := pool.Query(context.Background(), `SELECT name FROM resource_groups WHERE environment = $1 ORDER BY name`, environment)
-	if err != nil {
+	gdb := testdb.GORM(t, pool)
+	var groups []model.ResourceGroup
+	if err := gdb.Where("environment = ?", environment).Order("name").Find(&groups).Error; err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			t.Fatal(err)
-		}
-		out = append(out, name)
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
+	out := make([]string, len(groups))
+	for i, g := range groups {
+		out[i] = g.Name
 	}
 	return out
 }
 
-func resourceGroupRevisions(t *testing.T, pool *pgxpool.Pool, engine pgtype.UUID) int {
+func resourceGroupRevisions(t *testing.T, pool *pgxpool.Pool, engine pgtype.UUID) int64 {
 	t.Helper()
-	var n int
-	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM trino_resource_group_revisions WHERE engine_id = $1`, engine).Scan(&n); err != nil {
+	var n int64
+	if err := testdb.GORM(t, pool).Model(&model.TrinoResourceGroupRevision{}).
+		Where("engine_id = ?", repo.UUIDString(engine)).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -144,12 +145,13 @@ func TestPutEngineQueues_PublishesResourceGroups(t *testing.T) {
 	if resp := putQueues(t, h, engine, queuesBody(nil, true)); !is200(resp) {
 		t.Fatalf("capacity change = %#v, want 200", resp)
 	}
-	var limit int
-	if err := pool.QueryRow(context.Background(), `SELECT hard_concurrency_limit FROM resource_groups WHERE environment = 'staging' AND name = 'background'`).Scan(&limit); err != nil {
+	var group model.ResourceGroup
+	if err := testdb.GORM(t, pool).Where("environment = ? AND name = ?", "staging", "background").
+		First(&group).Error; err != nil {
 		t.Fatal(err)
 	}
-	if limit != 0 {
-		t.Fatalf("closed background limit = %d, want 0", limit)
+	if group.HardConcurrencyLimit != 0 {
+		t.Fatalf("closed background limit = %d, want 0", group.HardConcurrencyLimit)
 	}
 	if got := resourceGroupRevisions(t, pool, engine); got != 2 {
 		t.Fatalf("revisions = %d, want 2", got)

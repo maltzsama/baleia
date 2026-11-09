@@ -9,6 +9,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
@@ -41,6 +42,7 @@ func newContentStore(t *testing.T, pool *pgxpool.Pool) *content.Service {
 
 type fixture struct {
 	pool  *pgxpool.Pool
+	gdb   *gorm.DB
 	q     db.Querier
 	s     *content.Service
 	user  pgtype.UUID
@@ -51,22 +53,28 @@ type fixture struct {
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	gdb := testdb.GORM(t, pool)
+	q := repo.New(gdb)
 	ctx := context.Background()
-	var user pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO users (name, email, password_hash) VALUES ('u', 'u@x', 'x') RETURNING id`).Scan(&user); err != nil {
+	uid := uuid.New()
+	password := "x"
+	if err := gdb.Create(&model.User{
+		ID: model.UUID(uid.String()), Name: "u", Email: "u@x", PasswordHash: &password,
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
+	user := pgUUID(uid)
 	created, err := q.CreateWorkspace(ctx, db.CreateWorkspaceParams{Name: "w", Type: "personal", PolarisCatalogName: "p", OwnerUserID: user})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ws := created.ID
-	var space pgtype.UUID
-	if err := pool.QueryRow(ctx, `SELECT id FROM spaces WHERE workspace_id = $1 AND is_default`, ws).Scan(&space); err != nil {
+	defaultSpace, err := q.GetDefaultSpace(ctx, ws)
+	if err != nil {
 		t.Fatal(err)
 	}
-	return &fixture{pool: pool, q: q, s: newContentStore(t, pool), user: user, ws: ws, space: space}
+	space := defaultSpace.ID
+	return &fixture{pool: pool, gdb: gdb, q: q, s: newContentStore(t, pool), user: user, ws: ws, space: space}
 }
 
 func (f *fixture) create(t *testing.T, name, slug string) db.SavedQuery {
@@ -152,14 +160,17 @@ func TestCreate_RollsBackEntityAndVersion(t *testing.T) {
 	if err == nil {
 		t.Fatal("create with a missing space should fail")
 	}
-	var n int
-	if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM saved_queries WHERE name = 'broken'`).Scan(&n); err != nil {
+	var n int64
+	if err := f.gdb.Model(&model.SavedQuery{}).Where("name = ?", "broken").Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {
 		t.Fatalf("entity survived a failed create: %d", n)
 	}
-	if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM content_versions WHERE entity_type = 'saved_query' AND entity_id NOT IN (SELECT id FROM saved_queries)`).Scan(&n); err != nil {
+	orphanQuery := f.gdb.Model(&model.SavedQuery{}).Select("id")
+	if err := f.gdb.Model(&model.ContentVersion{}).
+		Where("entity_type = ? AND entity_id NOT IN (?)", "saved_query", orphanQuery).
+		Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

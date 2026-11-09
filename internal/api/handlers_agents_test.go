@@ -10,6 +10,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/testdb"
@@ -17,10 +18,12 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"gorm.io/gorm"
 )
 
 type agentsFixture struct {
 	pool    *pgxpool.Pool
+	gdb     *gorm.DB
 	h       *API
 	owner   context.Context
 	other   context.Context
@@ -33,18 +36,20 @@ type agentsFixture struct {
 func newAgentsFixture(t *testing.T, enabled bool) *agentsFixture {
 	t.Helper()
 	pool := testdb.New(t)
-	ctx := context.Background()
-	f := &agentsFixture{pool: pool}
+	gdb := testdb.GORM(t, pool)
+	q := repo.New(gdb)
+	f := &agentsFixture{pool: pool, gdb: gdb}
 
 	user := func(email, role string) pgtype.UUID {
-		var id pgtype.UUID
-		if err := pool.QueryRow(ctx,
-			`INSERT INTO users (name, email, role, password_hash, personal_workspace_id)
-			 VALUES ($1, $1, $2, 'x', NULL) RETURNING id`,
-			email, role).Scan(&id); err != nil {
+		password := "x"
+		row := model.User{
+			ID: model.UUID(repo.NewUUID()), Name: email, Email: model.Text(email),
+			Role: model.Text(role), PasswordHash: &password,
+		}
+		if err := gdb.Create(&row).Error; err != nil {
 			t.Fatal(err)
 		}
-		return id
+		return repo.PGUUID(string(row.ID))
 	}
 	f.ownerID = user("owner@agents.test", "member")
 	otherID := user("other@agents.test", "member")
@@ -54,15 +59,19 @@ func newAgentsFixture(t *testing.T, enabled bool) *agentsFixture {
 	f.other = ctxAs(idString(otherID), "member")
 	f.admin = ctxAs(idString(adminID), "admin")
 
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id)
-		 VALUES ('agents-ws', 'personal', 'agents_polaris', $1) RETURNING id`, f.ownerID).Scan(&f.wsID); err != nil {
+	owner := model.UUID(idString(f.ownerID))
+	ws := model.Workspace{
+		ID: model.UUID(repo.NewUUID()), Name: "agents-ws", Type: "personal",
+		PolarisCatalogName: "agents_polaris", OwnerUserID: &owner,
+	}
+	if err := gdb.Create(&ws).Error; err != nil {
 		t.Fatal(err)
 	}
-	addDefaultSpace(t, pool, f.wsID)
+	f.wsID = repo.PGUUID(string(ws.ID))
+	addDefaultSpace(t, gdb, ws.ID)
 
 	f.h = testAPI(handlerFields{
-		queries:  repo.New(testdb.GORM(t, pool)),
+		queries:  q,
 		pool:     pool,
 		tx:       poolTx{pool: pool},
 		settings: SettingsFromConfig(&config.Config{AgentsEnabled: enabled}),
@@ -216,13 +225,16 @@ func TestUpdateAgent_InvalidWorkspaceLeavesNoWrite(t *testing.T) {
 	agent := f.createAgent(t, f.owner, "etl-agent")
 	id := openapi_types.UUID(agent.Id)
 
-	var foreign pgtype.UUID
-	if err := f.pool.QueryRow(context.Background(),
-		`INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id)
-		 VALUES ('foreign-ws', 'personal', 'foreign_polaris', $1) RETURNING id`, f.otherID).Scan(&foreign); err != nil {
+	other := model.UUID(idString(f.otherID))
+	foreignWS := model.Workspace{
+		ID: model.UUID(repo.NewUUID()), Name: "foreign-ws", Type: "personal",
+		PolarisCatalogName: "foreign_polaris", OwnerUserID: &other,
+	}
+	if err := f.gdb.Create(&foreignWS).Error; err != nil {
 		t.Fatal(err)
 	}
-	addDefaultSpace(t, f.pool, foreign)
+	foreign := repo.PGUUID(string(foreignWS.ID))
+	addDefaultSpace(t, f.gdb, foreignWS.ID)
 
 	name := "renamed"
 	got, err := f.h.UpdateAgent(f.owner, UpdateAgentRequestObject{

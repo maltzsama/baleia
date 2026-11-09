@@ -9,7 +9,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/assistant"
 	"github.com/galileostudio/baleia/internal/assistant/llm"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -27,19 +29,24 @@ func newTurnFixture(t *testing.T) (*assistant.Service, pgtype.UUID, pgtype.UUID)
 	t.Helper()
 	pool := testdb.New(t)
 	svc := newAssistantService(t, pool, nil)
+	gdb := testdb.GORM(t, pool)
 	ctx := context.Background()
-	var userID, workspaceID pgtype.UUID
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (name, email, role, password_hash) VALUES ('a', 'a@turn.test', 'member', 'x') RETURNING id`,
-	).Scan(&userID); err != nil {
+	uid, wsid := uuid.New(), uuid.New()
+	password := "x"
+	if err := gdb.Create(&model.User{
+		ID: model.UUID(uid.String()), Name: "a", Email: "a@turn.test", Role: "member", PasswordHash: &password,
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id)
-		 VALUES ('turn-ws', 'personal', 'turn_polaris', $1) RETURNING id`, userID,
-	).Scan(&workspaceID); err != nil {
+	owner := model.UUID(uid.String())
+	if err := gdb.Create(&model.Workspace{
+		ID: model.UUID(wsid.String()), Name: "turn-ws", Type: "personal",
+		PolarisCatalogName: "turn_polaris", OwnerUserID: &owner,
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
+	userID := pgtype.UUID{Bytes: uid, Valid: true}
+	workspaceID := pgtype.UUID{Bytes: wsid, Valid: true}
 	if _, err := svc.UpdateSettings(ctx, assistant.SettingsInput{
 		Enabled: true, Provider: strptr("anthropic"), Model: strptr("fake"),
 		DataSharing: "metadata_and_samples", MaxTurnSeconds: 10,

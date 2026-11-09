@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity/idptoken"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -26,7 +27,8 @@ func TestTokens_Postgres(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	gdb := testdb.GORM(t, pool)
+	q := repo.New(gdb)
 	tx := q.TxIDPToken
 	r := &dbRotatingRefresher{valid: "rt-0"}
 	tk := idptoken.New(q, tx, dbTestKeyring(t), r, nil)
@@ -56,7 +58,7 @@ func TestTokens_Postgres(t *testing.T) {
 	}
 
 	bob := newUser("bob@corp.test")
-	if _, err := pool.Exec(ctx, "UPDATE users SET status = 'suspended' WHERE id = $1", bob.ID); err != nil {
+	if err := gdb.Model(&model.User{}).Where("id = ?", model.UUID(repo.UUIDString(bob.ID))).Update("status", "suspended").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := tk.Save(ctx, bob.ID, ap.ID, soon); err != nil {
@@ -66,7 +68,7 @@ func TestTokens_Postgres(t *testing.T) {
 		t.Error("a suspended account kept identity-provider tokens")
 	}
 
-	if _, err := pool.Exec(ctx, "UPDATE auth_providers SET enabled = false WHERE id = $1", ap.ID); err != nil {
+	if err := gdb.Model(&model.AuthProvider{}).Where("id = ?", model.UUID(repo.UUIDString(ap.ID))).Update("enabled", false).Error; err != nil {
 		t.Fatal(err)
 	}
 	carol := newUser("carol@corp.test")
