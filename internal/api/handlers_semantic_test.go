@@ -4,8 +4,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/semantic/docs"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -177,11 +180,14 @@ func TestSemanticDocs_SurviveResync(t *testing.T) {
 	ctx := f.as(f.owner)
 	upsertDoc(t, f, ctx, f.lake, nil, SemanticDocUpsert{Description: "Survives."})
 
-	if _, err := f.pool.Exec(context.Background(), `DELETE FROM metadata_tables WHERE id = $1`, pgUUIDOf(f.orders)); err != nil {
+	if err := f.gdb.Where("id = ?", repo.UUIDString(pgUUIDOf(f.orders))).Delete(&model.MetadataTable{}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(context.Background(), `INSERT INTO metadata_tables (catalog_id, namespace, name, kind, fingerprint, last_seen_at, last_changed_at)
-		VALUES ($1, '{sales}', 'orders', 'table', 'new', now(), now())`, pgUUIDOf(f.lake)); err != nil {
+	if err := f.gdb.Create(&model.MetadataTable{
+		ID: model.UUID(repo.NewUUID()), CatalogID: model.UUID(repo.UUIDString(pgUUIDOf(f.lake))),
+		Namespace: model.StringArray{"sales"}, Name: "orders", Kind: "table", Fingerprint: "new",
+		LastSeenAt: time.Now(), LastChangedAt: time.Now(),
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,10 +210,12 @@ func TestSemanticDocs_Search(t *testing.T) {
 	upsertDoc(t, f, ctx, f.lake, nil, SemanticDocUpsert{Description: "Orders, one row per order.", Tags: tags("certified")})
 
 	// A doc on an ungranted catalog must not leak through search.
-	if _, err := f.pool.Exec(context.Background(), `INSERT INTO semantic_docs
-		(workspace_id, catalog_id, namespace, table_name, description, tags, updated_by)
-		VALUES ($1, $2, '{sales}', 'orders_secret', 'Orders secret', '{certified}', $3)`,
-		pgUUIDOf(f.ws), pgUUIDOf(f.other), mustUUID(t, f.owner)); err != nil {
+	if err := f.gdb.Create(&model.SemanticDoc{
+		ID: model.UUID(repo.NewUUID()), WorkspaceID: model.UUID(repo.UUIDString(pgUUIDOf(f.ws))),
+		CatalogID: model.UUID(repo.UUIDString(pgUUIDOf(f.other))), Namespace: model.StringArray{"sales"},
+		TableNameValue: "orders_secret", Description: "Orders secret",
+		Tags: model.StringArray{"certified"}, UpdatedBy: model.UUID(f.owner),
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 

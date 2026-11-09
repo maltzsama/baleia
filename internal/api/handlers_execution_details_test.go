@@ -1,22 +1,31 @@
 package api
 
 import (
-	"context"
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // addStatement inserts one finished statement with an engine query id.
 func addStatement(t *testing.T, f *historyFixture, execution openapi_types.UUID, queryID string) {
 	t.Helper()
-	if _, err := f.pool.Exec(context.Background(), `
-		INSERT INTO query_statements
-		  (execution_id, position, sql, status, engine_query_id, rows_returned, duration_ms, result_bytes, started_at, finished_at)
-		VALUES ($1,1,'SELECT 1','finished',$2,10,100,2048,now(),now())`,
-		pgUUID(execution), queryID); err != nil {
+	rows, duration, resultBytes := int64(10), int64(100), int64(2048)
+	var engineQueryID *string
+	if queryID != "" {
+		engineQueryID = &queryID
+	}
+	now := time.Now()
+	row := model.QueryStatement{
+		ID: model.UUID(repo.NewUUID()), ExecutionID: model.UUID(execution.String()),
+		Position: 1, SQL: "SELECT 1", Status: "finished", EngineQueryID: engineQueryID,
+		RowsReturned: &rows, DurationMs: &duration, ResultBytes: &resultBytes,
+		StartedAt: now, FinishedAt: &now, ResultSets: model.JSON(`[]`),
+	}
+	if err := f.gdb.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
 }
@@ -25,9 +34,10 @@ func addStatement(t *testing.T, f *historyFixture, execution openapi_types.UUID,
 // empty one).
 func setTarget(t *testing.T, f *historyFixture, execution openapi_types.UUID, engineKind string) {
 	t.Helper()
-	if _, err := f.pool.Exec(context.Background(), `
-		UPDATE query_executions SET target_snapshot = jsonb_build_object('engine_kind', $2::text) WHERE id = $1`,
-		pgUUID(execution), engineKind); err != nil {
+	snapshot := model.JSON(fmt.Sprintf(`{"engine_kind":%q}`, engineKind))
+	if err := f.gdb.Model(&model.QueryExecution{}).
+		Where("id = ?", execution.String()).
+		Update("target_snapshot", snapshot).Error; err != nil {
 		t.Fatal(err)
 	}
 }
@@ -38,13 +48,15 @@ func TestExecutionDetails_Trino(t *testing.T) {
 	execution := f.addExecution(t, f.owner, "finished", "SELECT 1", time.Now())
 	setTarget(t, f, execution, "trino")
 	addStatement(t, f, execution, "q1")
-	payload := `{"source":"query_completed_event","state":"FINISHED","queuedMs":10,"analysisMs":3,` +
+	payload := model.JSON(`{"source":"query_completed_event","state":"FINISHED","queuedMs":10,"analysisMs":3,` +
 		`"planningMs":20,"executionMs":65,"cpuMs":50,"peakMemoryBytes":4096,"spilledBytes":0,` +
 		`"inputBytes":5000,"inputRows":100,"outputBytes":200,"outputRows":10,` +
-		`"inputs":[{"catalog":"lake","schema":"sales","table":"orders"}]}`
-	if _, err := f.pool.Exec(context.Background(), `
-		INSERT INTO trino_query_snapshots (trino_query_id, engine_id, origin, "user", state, sql, created_at, raw_trino_payload)
-		VALUES ('q1',$1,'trino_direct','u','finished','SELECT 1',now(),$2::jsonb)`, pgUUID(f.engine), payload); err != nil {
+		`"inputs":[{"catalog":"lake","schema":"sales","table":"orders"}]}`)
+	if err := f.gdb.Create(&model.TrinoQuerySnapshot{
+		ID: model.UUID(repo.NewUUID()), TrinoQueryID: "q1",
+		EngineID: model.UUID(f.engine.String()), Origin: "trino_direct", User: "u",
+		State: "finished", SQL: "SELECT 1", CreatedAt: time.Now(), RawTrinoPayload: &payload,
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -115,12 +127,14 @@ func TestExecutionDetails_ForeignWorkspace401(t *testing.T) {
 	t.Parallel()
 	f := newHistoryFixture(t)
 	execution := f.addExecution(t, f.owner, "finished", "SELECT 1", time.Now())
-	var outsider pgtype.UUID
-	if err := f.pool.QueryRow(context.Background(),
-		`INSERT INTO users (name, email, password_hash) VALUES ('outsider','out@x','x') RETURNING id`).Scan(&outsider); err != nil {
+	password := "x"
+	outsiderUser := model.User{
+		ID: model.UUID(repo.NewUUID()), Name: "outsider", Email: "out@x", PasswordHash: &password,
+	}
+	if err := f.gdb.Create(&outsiderUser).Error; err != nil {
 		t.Fatal(err)
 	}
-	resp, err := f.h.GetExecutionDetails(ctxAs(openapi_types.UUID(outsider.Bytes).String(), "member"), GetExecutionDetailsRequestObject{
+	resp, err := f.h.GetExecutionDetails(ctxAs(string(outsiderUser.ID), "member"), GetExecutionDetailsRequestObject{
 		Id: f.ws, ExecutionId: execution,
 	})
 	if err != nil {

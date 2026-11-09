@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -26,8 +27,8 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	return testdb.New(t)
 }
 
-// testStore builds the GORM store over the test database.
-func testStore(t *testing.T, pool *pgxpool.Pool) *repo.Repo {
+// testGORM opens the GORM store over a test pool, as the application does.
+func testGORM(t *testing.T, pool *pgxpool.Pool) *gorm.DB {
 	t.Helper()
 	sqlDB := stdlib.OpenDBFromPool(pool)
 	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
@@ -38,7 +39,13 @@ func testStore(t *testing.T, pool *pgxpool.Pool) *repo.Repo {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	return repo.New(gdb)
+	return gdb
+}
+
+// testStore builds the GORM store over the test database.
+func testStore(t *testing.T, pool *pgxpool.Pool) *repo.Repo {
+	t.Helper()
+	return repo.New(testGORM(t, pool))
 }
 
 // newSyncer builds the GORM-backed syncer over the test database.
@@ -53,15 +60,21 @@ func newSyncer(t *testing.T, pool *pgxpool.Pool, opener Opener) *Syncer {
 // testCatalog inserts a native catalog on a fresh connection.
 func testCatalog(t *testing.T, pool *pgxpool.Pool) pgtype.UUID {
 	t.Helper()
-	ctx := context.Background()
-	var conn, cat pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO catalog_connections (name, type, url) VALUES ('src', 'polaris', 'http://x') RETURNING id`).Scan(&conn); err != nil {
+	gdb := testGORM(t, pool)
+	conn, err := repo.New(gdb).CreateCatalogConnection(context.Background(), db.CreateCatalogConnectionParams{
+		ID: repo.PGUUID(repo.NewUUID()), Name: "src", Type: "polaris", Url: "http://x",
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1, 'lake', 'native') RETURNING id`, conn).Scan(&cat); err != nil {
+	cat := model.Catalog{
+		ID: model.UUID(repo.NewUUID()), ConnectionID: model.UUID(repo.UUIDString(conn.ID)),
+		Name: "lake", Origin: "native",
+	}
+	if err := gdb.Create(&cat).Error; err != nil {
 		t.Fatal(err)
 	}
-	return cat
+	return repo.PGUUID(string(cat.ID))
 }
 
 // fakeSource is an Iceberg-like source: a fixed set of tables whose
@@ -138,10 +151,10 @@ func twoByThree() []fakeTable {
 	return out
 }
 
-func count(t *testing.T, pool *pgxpool.Pool, q string, args ...any) int {
+func count(t *testing.T, q *gorm.DB) int64 {
 	t.Helper()
-	var n int
-	if err := pool.QueryRow(context.Background(), q, args...).Scan(&n); err != nil {
+	var n int64
+	if err := q.Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -153,6 +166,7 @@ func TestSync_InitialPass(t *testing.T) {
 	t.Parallel()
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
+	gdb := testGORM(t, pool)
 	src := &fakeSource{tables: twoByThree()}
 	stats, err := newSyncer(t, pool, fakeOpener{src}).Sync(context.Background(), cat, nil)
 	if err != nil {
@@ -161,23 +175,31 @@ func TestSync_InitialPass(t *testing.T) {
 	if stats.TablesSeen != 6 || stats.TablesChanged != 6 || stats.TablesRemoved != 0 || stats.Path != PathProvider {
 		t.Fatalf("stats = %+v", stats)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_tables WHERE catalog_id = $1 AND removed_at IS NULL`, cat); n != 6 {
+	if n := count(t, gdb.Model(&model.MetadataTable{}).Where("catalog_id = ? AND removed_at IS NULL", cat)); n != 6 {
 		t.Fatalf("tables = %d", n)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_columns`); n != 12 {
+	if n := count(t, gdb.Model(&model.MetadataColumn{})); n != 12 {
 		t.Fatalf("columns = %d", n)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_columns WHERE type_system = 'iceberg' AND native_type = 'long'`); n != 12 {
+	if n := count(t, gdb.Model(&model.MetadataColumn{}).Where("type_system = ? AND native_type = ?", "iceberg", "long")); n != 12 {
 		t.Fatalf("columns with type system = %d", n)
 	}
-	var ns []string
-	if err := pool.QueryRow(context.Background(), `SELECT namespace FROM metadata_namespaces WHERE catalog_id = $1 AND cardinality(namespace) = 2`, cat).Scan(&ns); err != nil || !slices.Equal(ns, []string{"ops", "eu"}) {
-		t.Fatalf("multi-level namespace = %v, %v", ns, err)
+	var namespaces []model.MetadataNamespace
+	if err := gdb.Where("catalog_id = ?", cat).Find(&namespaces).Error; err != nil {
+		t.Fatal(err)
 	}
-	var status, path string
-	var seen int
-	if err := pool.QueryRow(context.Background(), `SELECT status, source_path, tables_seen FROM metadata_sync_runs WHERE catalog_id = $1`, cat).Scan(&status, &path, &seen); err != nil || status != "finished" || path != "provider" || seen != 6 {
-		t.Fatalf("run = %s %s %d, %v", status, path, seen, err)
+	var ns model.StringArray
+	for _, n := range namespaces {
+		if len(n.Namespace) == 2 {
+			ns = n.Namespace
+		}
+	}
+	if !slices.Equal(ns, []string{"ops", "eu"}) {
+		t.Fatalf("multi-level namespace = %v", ns)
+	}
+	var run model.MetadataSyncRun
+	if err := gdb.Where("catalog_id = ?", cat).First(&run).Error; err != nil || run.Status != "finished" || run.SourcePath != "provider" || run.TablesSeen == nil || *run.TablesSeen != 6 {
+		t.Fatalf("run = %+v, %v", run, err)
 	}
 }
 
@@ -187,6 +209,7 @@ func TestSync_OnlyChangedTablesReload(t *testing.T) {
 	t.Parallel()
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
+	gdb := testGORM(t, pool)
 	src := &fakeSource{tables: twoByThree()}
 	s := newSyncer(t, pool, fakeOpener{src})
 	if _, err := s.Sync(context.Background(), cat, nil); err != nil {
@@ -204,10 +227,12 @@ func TestSync_OnlyChangedTablesReload(t *testing.T) {
 	if err != nil || src.loads != 1 || stats.TablesChanged != 1 {
 		t.Fatalf("one changed: loads=%d stats=%+v err=%v", src.loads, stats, err)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_columns c JOIN metadata_tables t ON t.id = c.table_id WHERE t.name = 't1' AND t.namespace = '{ops,eu}'`); n != 3 {
+	if n := count(t, gdb.Model(&model.MetadataColumn{}).
+		Joins("JOIN metadata_tables t ON t.id = metadata_columns.table_id").
+		Where("t.name = ? AND t.namespace = ?", "t1", model.StringArray{"ops", "eu"})); n != 3 {
 		t.Fatalf("columns of the changed table = %d", n)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_columns`); n != 13 {
+	if n := count(t, gdb.Model(&model.MetadataColumn{})); n != 13 {
 		t.Fatalf("columns = %d", n)
 	}
 }
@@ -225,10 +250,11 @@ func TestSync_ForeignKeys(t *testing.T) {
 	}}
 	s := newSyncer(t, pool, fakeOpener{src})
 	ctx := context.Background()
+	gdb := testGORM(t, pool)
 	if _, err := s.Sync(ctx, cat, nil); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_foreign_keys WHERE column_name = 'customer_id' AND ref_table = 'customers' AND ref_namespace = '{sales}'`); n != 1 {
+	if n := count(t, gdb.Model(&model.MetadataForeignKey{}).Where("column_name = ? AND ref_table = ? AND ref_namespace = ?", "customer_id", "customers", model.StringArray{"sales"})); n != 1 {
 		t.Fatalf("foreign keys = %d", n)
 	}
 
@@ -236,7 +262,7 @@ func TestSync_ForeignKeys(t *testing.T) {
 	if _, err := s.Sync(ctx, cat, nil); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_foreign_keys`); n != 0 {
+	if n := count(t, gdb.Model(&model.MetadataForeignKey{})); n != 0 {
 		t.Fatalf("foreign keys after the drop = %d", n)
 	}
 }
@@ -250,6 +276,7 @@ func TestSync_Tombstones(t *testing.T) {
 	src := &fakeSource{tables: twoByThree()}
 	s := newSyncer(t, pool, fakeOpener{src})
 	ctx := context.Background()
+	gdb := testGORM(t, pool)
 	if _, err := s.Sync(ctx, cat, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +286,8 @@ func TestSync_Tombstones(t *testing.T) {
 	if err != nil || stats.TablesRemoved != 1 {
 		t.Fatalf("stats = %+v, %v", stats, err)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_tables WHERE name = $1 AND namespace = $2 AND removed_at IS NOT NULL`, gone.name, gone.ns); n != 1 {
+	if n := count(t, gdb.Model(&model.MetadataTable{}).
+		Where("name = ? AND namespace = ? AND removed_at IS NOT NULL", gone.name, model.StringArray(gone.ns))); n != 1 {
 		t.Fatal("the missing table must be tombstoned")
 	}
 
@@ -267,10 +295,12 @@ func TestSync_Tombstones(t *testing.T) {
 	if _, err := s.Sync(ctx, cat, nil); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_tables WHERE removed_at IS NOT NULL`); n != 0 {
+	if n := count(t, gdb.Model(&model.MetadataTable{}).Where("removed_at IS NOT NULL")); n != 0 {
 		t.Fatal("a table that reappears is no longer removed")
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_columns c JOIN metadata_tables t ON t.id = c.table_id WHERE t.name = $1 AND t.namespace = $2`, gone.name, gone.ns); n != 2 {
+	if n := count(t, gdb.Model(&model.MetadataColumn{}).
+		Joins("JOIN metadata_tables t ON t.id = metadata_columns.table_id").
+		Where("t.name = ? AND t.namespace = ?", gone.name, model.StringArray(gone.ns))); n != 2 {
 		t.Fatalf("the reappeared table has its columns: %d", n)
 	}
 
@@ -279,18 +309,20 @@ func TestSync_Tombstones(t *testing.T) {
 	if _, err := s.Sync(ctx, cat, nil); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_namespaces WHERE namespace = '{ops,eu}' AND removed_at IS NOT NULL`); n != 1 {
+	if n := count(t, gdb.Model(&model.MetadataNamespace{}).
+		Where("namespace = ? AND removed_at IS NOT NULL", model.StringArray{"ops", "eu"})); n != 1 {
 		t.Fatal("the emptied namespace must be tombstoned")
 	}
 
 	// Tombstones older than 7 days are purged by the next pass.
-	if _, err := pool.Exec(ctx, `UPDATE metadata_tables SET removed_at = now() - interval '8 days' WHERE removed_at IS NOT NULL`); err != nil {
+	if err := gdb.Model(&model.MetadataTable{}).Where("removed_at IS NOT NULL").
+		Update("removed_at", time.Now().Add(-8*24*time.Hour)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Sync(ctx, cat, nil); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_tables WHERE catalog_id = $1`, cat); n != 3 {
+	if n := count(t, gdb.Model(&model.MetadataTable{}).Where("catalog_id = ?", cat)); n != 3 {
 		t.Fatalf("tables after the purge = %d", n)
 	}
 }
@@ -333,11 +365,14 @@ func TestSync_StaleRunTakenOver(t *testing.T) {
 	cat := testCatalog(t, pool)
 	store := testStore(t, pool)
 	ctx := context.Background()
+	gdb := testGORM(t, pool)
 	stale, err := store.StartMetadataSyncRun(ctx, db.StartMetadataSyncRunParams{CatalogID: cat, SourcePath: PathProvider})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE metadata_sync_runs SET started_at = now() - interval '1 hour', heartbeat_at = now() - interval '1 hour' WHERE id = $1`, stale.ID); err != nil {
+	anHourAgo := time.Now().Add(-time.Hour)
+	if err := gdb.Model(&model.MetadataSyncRun{}).Where("id = ?", repo.UUIDString(stale.ID)).
+		Updates(map[string]any{"started_at": anHourAgo, "heartbeat_at": anHourAgo}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -346,13 +381,12 @@ func TestSync_StaleRunTakenOver(t *testing.T) {
 	if err != nil || stats.TablesSeen != 6 {
 		t.Fatalf("sync = %+v, %v", stats, err)
 	}
-	var status, code string
-	if err := pool.QueryRow(ctx, `SELECT status, error_code FROM metadata_sync_runs WHERE id = $1`, stale.ID).Scan(&status, &code); err != nil || status != "failed" || code != "interrupted" {
-		t.Fatalf("stale run = %s %s, %v", status, code, err)
+	var run model.MetadataSyncRun
+	if err := gdb.Where("id = ?", repo.UUIDString(stale.ID)).First(&run).Error; err != nil || run.Status != "failed" || run.ErrorCode == nil || *run.ErrorCode != "interrupted" {
+		t.Fatalf("stale run = %+v, %v", run, err)
 	}
-	var running int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM metadata_sync_runs WHERE catalog_id = $1 AND status = 'running'`, cat).Scan(&running); err != nil || running != 0 {
-		t.Fatalf("running rows = %d, %v", running, err)
+	if n := count(t, gdb.Model(&model.MetadataSyncRun{}).Where("catalog_id = ? AND status = ?", cat, "running")); n != 0 {
+		t.Fatalf("running rows = %d", n)
 	}
 }
 
@@ -364,12 +398,14 @@ func TestSync_FreshRunLeaseWaitedOut(t *testing.T) {
 	cat := testCatalog(t, pool)
 	store := testStore(t, pool)
 	ctx := context.Background()
+	gdb := testGORM(t, pool)
 	crashed, err := store.StartMetadataSyncRun(ctx, db.StartMetadataSyncRunParams{CatalogID: cat, SourcePath: PathProvider})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// The row of a worker that just died: its heartbeat is still fresh.
-	if _, err := pool.Exec(ctx, `UPDATE metadata_sync_runs SET heartbeat_at = now() WHERE id = $1`, crashed.ID); err != nil {
+	if err := gdb.Model(&model.MetadataSyncRun{}).Where("id = ?", repo.UUIDString(crashed.ID)).
+		Update("heartbeat_at", time.Now()).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -384,9 +420,9 @@ func TestSync_FreshRunLeaseWaitedOut(t *testing.T) {
 	if elapsed := time.Since(start); elapsed < s.staleAfter {
 		t.Fatalf("retry took %s, want it to wait for the %s lease", elapsed, s.staleAfter)
 	}
-	var status string
-	if err := pool.QueryRow(ctx, `SELECT status FROM metadata_sync_runs WHERE id = $1`, crashed.ID).Scan(&status); err != nil || status != "failed" {
-		t.Fatalf("crashed run = %s, %v", status, err)
+	var run model.MetadataSyncRun
+	if err := gdb.Where("id = ?", repo.UUIDString(crashed.ID)).First(&run).Error; err != nil || run.Status != "failed" {
+		t.Fatalf("crashed run = %+v, %v", run, err)
 	}
 }
 
@@ -396,6 +432,7 @@ func TestSync_FailedRunRecorded(t *testing.T) {
 	t.Parallel()
 	pool := testPool(t)
 	cat := testCatalog(t, pool)
+	gdb := testGORM(t, pool)
 	src := &fakeSource{tables: twoByThree()}
 	s := newSyncer(t, pool, fakeOpener{src})
 	if _, err := s.Sync(context.Background(), cat, nil); err != nil {
@@ -405,11 +442,11 @@ func TestSync_FailedRunRecorded(t *testing.T) {
 	if _, err := s.Sync(context.Background(), cat, nil); err == nil {
 		t.Fatal("the source error must fail the sync")
 	}
-	var status, code string
-	if err := pool.QueryRow(context.Background(), `SELECT status, error_code FROM metadata_sync_runs WHERE catalog_id = $1 ORDER BY started_at DESC LIMIT 1`, cat).Scan(&status, &code); err != nil || status != "failed" || code != "sync_failed" {
-		t.Fatalf("run = %s %s, %v", status, code, err)
+	var run model.MetadataSyncRun
+	if err := gdb.Where("catalog_id = ?", cat).Order("started_at DESC").First(&run).Error; err != nil || run.Status != "failed" || run.ErrorCode == nil || *run.ErrorCode != "sync_failed" {
+		t.Fatalf("run = %+v, %v", run, err)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM metadata_tables WHERE removed_at IS NOT NULL`); n != 0 {
+	if n := count(t, gdb.Model(&model.MetadataTable{}).Where("removed_at IS NOT NULL")); n != 0 {
 		t.Fatal("a failed pass must not tombstone")
 	}
 }

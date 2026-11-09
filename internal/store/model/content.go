@@ -4,11 +4,11 @@ import "time"
 
 // Space is the spaces table.
 type Space struct {
-	ID           UUID       `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();uniqueIndex:spaces_workspace_id_id_key,priority:2;check:spaces_name_check,(((length(name) >= 1) AND (length(name) <= 120)))"`
-	WorkspaceID  UUID       `gorm:"column:workspace_id;not null;uniqueIndex:spaces_workspace_id_name_key,priority:1;uniqueIndex:spaces_workspace_id_id_key,priority:1;uniqueIndex:spaces_slug_uq,priority:1;uniqueIndex:spaces_one_default,priority:1,where:is_default;check:spaces_visibility_check,((visibility = ANY (ARRAY['workspace'::text, 'restricted'::text])))"`
-	Name         Text       `gorm:"column:name;not null;size:128;uniqueIndex:spaces_workspace_id_name_key,priority:2;check:spaces_default_role_check,((default_role = ANY (ARRAY['viewer'::text, 'editor'::text])))"`
-	Description  *string    `gorm:"column:description;check:spaces_check,(((NOT is_default) OR (visibility = 'workspace'::text)))"`
-	Visibility   string     `gorm:"column:visibility;not null;check:spaces_slug_format,((slug ~ '^[a-z][a-z0-9_]{0,62}$'::text))"`
+	ID           UUID       `gorm:"column:id;primaryKey;not null;uniqueIndex:spaces_workspace_id_id_key,priority:2;check:spaces_name_check,(((length(name) >= 1) AND (length(name) <= 120)))"`
+	WorkspaceID  UUID       `gorm:"column:workspace_id;not null;uniqueIndex:spaces_workspace_id_name_key,priority:1;uniqueIndex:spaces_workspace_id_id_key,priority:1;uniqueIndex:spaces_slug_uq,priority:1;uniqueIndex:spaces_one_default,priority:1,where:is_default;check:spaces_visibility_check,((visibility IN ('workspace', 'restricted')))"`
+	Name         Text       `gorm:"column:name;not null;size:128;uniqueIndex:spaces_workspace_id_name_key,priority:2;check:spaces_default_role_check,((default_role IN ('viewer', 'editor')))"`
+	Description  *string    `gorm:"column:description;check:spaces_check,(((NOT is_default) OR (visibility = 'workspace')))"`
+	Visibility   string     `gorm:"column:visibility;not null"`
 	DefaultRole  Text       `gorm:"column:default_role;not null;size:255;default:'viewer'"`
 	IsDefault    bool       `gorm:"column:is_default;not null;default:false"`
 	CreatedBy    *UUID      `gorm:"column:created_by"`
@@ -23,8 +23,8 @@ func (Space) TableName() string { return "spaces" }
 
 // SpaceMember is the space_members table.
 type SpaceMember struct {
-	SpaceID       UUID      `gorm:"column:space_id;primaryKey;not null;check:space_members_principal_type_check,((principal_type = ANY (ARRAY['user'::text, 'team'::text])))"`
-	PrincipalType Text      `gorm:"column:principal_type;primaryKey;not null;size:128;index:space_members_principal,priority:1;check:space_members_role_check,((role = ANY (ARRAY['viewer'::text, 'editor'::text, 'manager'::text])))"`
+	SpaceID       UUID      `gorm:"column:space_id;primaryKey;not null;check:space_members_principal_type_check,((principal_type IN ('user', 'team')))"`
+	PrincipalType Text      `gorm:"column:principal_type;primaryKey;not null;size:128;index:space_members_principal,priority:1;check:space_members_role_check,((role IN ('viewer', 'editor', 'manager')))"`
 	PrincipalID   UUID      `gorm:"column:principal_id;primaryKey;not null;index:space_members_principal,priority:2"`
 	Role          string    `gorm:"column:role;not null"`
 	GrantedBy     *UUID     `gorm:"column:granted_by"`
@@ -37,7 +37,7 @@ func (SpaceMember) TableName() string { return "space_members" }
 
 // SavedQuery is the saved_queries table.
 type SavedQuery struct {
-	ID              UUID            `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:saved_queries_slug_format,((slug ~ '^[a-z][a-z0-9_]{0,62}$'::text))"`
+	ID              UUID            `gorm:"column:id;primaryKey;not null"`
 	WorkspaceID     UUID            `gorm:"column:workspace_id;not null;uniqueIndex:saved_queries_slug_uq,priority:1;index:idx_saved_queries_workspace,priority:1;uniqueIndex:idx_saved_queries_unique_name,priority:1"`
 	FolderID        *UUID           `gorm:"column:folder_id;index:idx_saved_queries_folder,priority:1"`
 	CreatedBy       UUID            `gorm:"column:created_by;not null;index:idx_saved_queries_created_by,priority:1"`
@@ -61,7 +61,7 @@ func (SavedQuery) TableName() string { return "saved_queries" }
 
 // QueryFolder is the query_folders table.
 type QueryFolder struct {
-	ID          UUID         `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();uniqueIndex:query_folders_space_id_uq,priority:2;check:query_folders_slug_format,((slug ~ '^[a-z][a-z0-9_]{0,62}$'::text))"`
+	ID          UUID         `gorm:"column:id;primaryKey;not null;uniqueIndex:query_folders_space_id_uq,priority:2"`
 	WorkspaceID UUID         `gorm:"column:workspace_id;not null;index:idx_query_folders_workspace,priority:1"`
 	ParentID    *UUID        `gorm:"column:parent_id;index:idx_query_folders_parent,priority:1"`
 	Name        string       `gorm:"column:name;not null"`
@@ -77,8 +77,8 @@ func (QueryFolder) TableName() string { return "query_folders" }
 
 // QueryExecution is the query_executions table.
 type QueryExecution struct {
-	ID              UUID            `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();index:query_executions_ws_started,priority:3;check:query_executions_status_check,((status = ANY (ARRAY['running'::text, 'finished'::text, 'failed'::text, 'cancelled'::text, 'queued'::text])))"`
-	WorkspaceID     UUID            `gorm:"column:workspace_id;not null;index:idx_query_executions_workspace,priority:1;index:query_executions_ws_started,priority:1;check:query_executions_queue_class_check,(((queue_class IS NULL) OR (queue_class = ANY (ARRAY['interactive'::text, 'heavy'::text, 'background'::text]))))"`
+	ID              UUID            `gorm:"column:id;primaryKey;not null;index:query_executions_ws_started,priority:3;check:query_executions_status_check,((status IN ('running', 'finished', 'failed', 'cancelled', 'queued')))"`
+	WorkspaceID     UUID            `gorm:"column:workspace_id;not null;index:idx_query_executions_workspace,priority:1;index:query_executions_ws_started,priority:1;check:query_executions_queue_class_check,(((queue_class IS NULL) OR (queue_class IN ('interactive', 'heavy', 'background'))))"`
 	UserID          UUID            `gorm:"column:user_id;not null;index:idx_query_executions_user,priority:1"`
 	SavedQueryID    *UUID           `gorm:"column:saved_query_id"`
 	Status          Text            `gorm:"column:status;not null;size:128;index:idx_query_executions_status,priority:1"`
@@ -117,7 +117,7 @@ func (QueryExecution) TableName() string { return "query_executions" }
 
 // QueryStatement is the query_statements table.
 type QueryStatement struct {
-	ID            UUID            `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:query_statements_status_check,((status = ANY (ARRAY['pending'::text, 'running'::text, 'finished'::text, 'failed'::text, 'cancelled'::text, 'skipped'::text])))"`
+	ID            UUID            `gorm:"column:id;primaryKey;not null;check:query_statements_status_check,((status IN ('pending', 'running', 'finished', 'failed', 'cancelled', 'skipped')))"`
 	ExecutionID   UUID            `gorm:"column:execution_id;not null;index:idx_query_statements_execution,priority:1"`
 	Position      int32           `gorm:"column:position;not null"`
 	SQL           string          `gorm:"column:sql;not null"`
@@ -142,8 +142,8 @@ func (QueryStatement) TableName() string { return "query_statements" }
 // ContentVersion is the content_versions table.
 type ContentVersion struct {
 	ID           int64      `gorm:"column:id;primaryKey;autoIncrement;check:content_versions_version_check,((version >= 1))"`
-	WorkspaceID  UUID       `gorm:"column:workspace_id;not null;index:content_versions_ws_time,priority:1;index:content_versions_deleted,priority:1,where:change_kind = 'delete'::text;check:content_versions_change_kind_check,((change_kind = ANY (ARRAY['create'::text, 'update'::text, 'delete'::text, 'restore'::text, 'import'::text])))"`
-	SpaceID      UUID       `gorm:"column:space_id;not null;check:content_versions_entity_type_check,((entity_type = ANY (ARRAY['saved_query'::text, 'semantic_metric'::text, 'semantic_model'::text])))"`
+	WorkspaceID  UUID       `gorm:"column:workspace_id;not null;index:content_versions_ws_time,priority:1;index:content_versions_deleted,priority:1,where:change_kind = 'delete';check:content_versions_change_kind_check,((change_kind IN ('create', 'update', 'delete', 'restore', 'import')))"`
+	SpaceID      UUID       `gorm:"column:space_id;not null;check:content_versions_entity_type_check,((entity_type IN ('saved_query', 'semantic_metric', 'semantic_model')))"`
 	EntityType   Text       `gorm:"column:entity_type;not null;size:128;uniqueIndex:content_versions_entity_type_entity_id_version_key,priority:1;index:content_versions_entity,priority:1;index:content_versions_deleted,priority:2"`
 	EntityID     UUID       `gorm:"column:entity_id;not null;uniqueIndex:content_versions_entity_type_entity_id_version_key,priority:2;index:content_versions_entity,priority:2"`
 	Version      int32      `gorm:"column:version;not null;uniqueIndex:content_versions_entity_type_entity_id_version_key,priority:3;index:content_versions_entity,priority:3"`
@@ -160,7 +160,7 @@ func (ContentVersion) TableName() string { return "content_versions" }
 
 // StatementReference is the statement_references table.
 type StatementReference struct {
-	StatementID    UUID            `gorm:"column:statement_id;primaryKey;not null;index:statement_references_statement,priority:1;check:statement_references_kind_check,((kind = ANY (ARRAY['read'::text, 'write'::text])))"`
+	StatementID    UUID            `gorm:"column:statement_id;primaryKey;not null;index:statement_references_statement,priority:1;check:statement_references_kind_check,((kind IN ('read', 'write')))"`
 	WorkspaceID    UUID            `gorm:"column:workspace_id;not null;index:statement_references_workspace_table,priority:1"`
 	CatalogID      *UUID           `gorm:"column:catalog_id"`
 	Namespace      Text            `gorm:"column:namespace;primaryKey;not null;size:128;default:'';index:statement_references_workspace_table,priority:2"`

@@ -8,6 +8,8 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -73,10 +75,11 @@ func TestSuspend_RevokesTokens(t *testing.T) {
 		t.Error("api key survived the suspension")
 	}
 
-	var status string
-	if err := f.pool.QueryRow(ctx, `SELECT status FROM users WHERE id = $1`, mustUUID(t, f.owner)).Scan(&status); err != nil {
+	var user model.User
+	if err := f.gdb.Where("id = ?", f.owner).First(&user).Error; err != nil {
 		t.Fatal(err)
 	}
+	status := string(user.Status)
 	if status != auth.StatusSuspended {
 		t.Errorf("status = %q, want suspended", status)
 	}
@@ -111,10 +114,11 @@ func TestReinstate_Reactivates(t *testing.T) {
 	if _, ok := got.(ReinstateUser200JSONResponse); !ok {
 		t.Fatalf("reinstate = %T, want 200", got)
 	}
-	var status string
-	if err := f.pool.QueryRow(context.Background(), `SELECT status FROM users WHERE id = $1`, mustUUID(t, f.owner)).Scan(&status); err != nil {
+	var user model.User
+	if err := f.gdb.Where("id = ?", f.owner).First(&user).Error; err != nil {
 		t.Fatal(err)
 	}
+	status := string(user.Status)
 	if status != auth.StatusActive {
 		t.Errorf("status = %q, want active", status)
 	}
@@ -208,10 +212,11 @@ func TestSuspendedCannotLDAP(t *testing.T) {
 	t.Parallel()
 	f, ap := ldapLoginFixture(t)
 	reason := "admin"
-	var userID pgtype.UUID
-	if err := f.pool.QueryRow(context.Background(), `SELECT id FROM users WHERE external_id = 'stable-1'`).Scan(&userID); err != nil {
+	var user model.User
+	if err := f.gdb.Where("external_id = ?", "stable-1").First(&user).Error; err != nil {
 		t.Fatal(err)
 	}
+	userID := repo.PGUUID(string(user.ID))
 	if _, err := f.h.queries.SuspendUser(context.Background(), db.SuspendUserParams{ID: userID, SuspendedReason: &reason}); err != nil {
 		t.Fatal(err)
 	}

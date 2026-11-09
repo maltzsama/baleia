@@ -5,17 +5,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"gorm.io/gorm"
 )
 
 // historyFixture is a workspace owned by `owner` with `member` and `stranger`
 // as non-owners, plus the catalog/engine/binding the executions ran on.
 type historyFixture struct {
 	pool     *pgxpool.Pool
+	gdb      *gorm.DB
 	h        *API
 	owner    openapi_types.UUID
 	member   openapi_types.UUID
@@ -29,44 +33,77 @@ type historyFixture struct {
 func newHistoryFixture(t *testing.T) *historyFixture {
 	t.Helper()
 	pool := testdb.New(t)
-	ctx := context.Background()
-	f := &historyFixture{pool: pool}
-
-	scan := func(dst *openapi_types.UUID, q string, args ...any) {
+	gdb := testdb.GORM(t, pool)
+	q := repo.New(gdb)
+	f := &historyFixture{pool: pool, gdb: gdb}
+	create := func(row any) {
 		t.Helper()
-		var id pgtype.UUID
-		if err := pool.QueryRow(ctx, q, args...).Scan(&id); err != nil {
-			t.Fatalf("%s: %v", q, err)
-		}
-		*dst = openapi_types.UUID(id.Bytes)
-	}
-	exec := func(q string, args ...any) {
-		t.Helper()
-		if _, err := pool.Exec(ctx, q, args...); err != nil {
-			t.Fatalf("%s: %v", q, err)
+		if err := gdb.Create(row).Error; err != nil {
+			t.Fatalf("create %T: %v", row, err)
 		}
 	}
-
-	scan(&f.owner, `INSERT INTO users (name, email, password_hash) VALUES ('owner','owner@x','x') RETURNING id`)
-	scan(&f.member, `INSERT INTO users (name, email, password_hash) VALUES ('member','member@x','x') RETURNING id`)
-	scan(&f.stranger, `INSERT INTO users (name, email, password_hash) VALUES ('stranger','stranger@x','x') RETURNING id`)
+	openapiID := func(id model.UUID) openapi_types.UUID {
+		return openapi_types.UUID(repo.PGUUID(string(id)).Bytes)
+	}
+	user := func(name, email string) openapi_types.UUID {
+		password := "x"
+		row := model.User{
+			ID: model.UUID(repo.NewUUID()), Name: name, Email: model.Text(email), PasswordHash: &password,
+		}
+		create(&row)
+		return openapiID(row.ID)
+	}
+	f.owner, f.member, f.stranger = user("owner", "owner@x"), user("member", "member@x"), user("stranger", "stranger@x")
 	// A shared workspace: the owner owns the team, the member and the admin are
 	// plain team members (the admin gets visibility from their global role).
-	var team openapi_types.UUID
-	scan(&team, `INSERT INTO teams (name, created_by) VALUES ('team',$1) RETURNING id`, f.owner)
-	exec(`INSERT INTO team_members (team_id, user_id, role) VALUES ($1,$2,'owner'), ($1,$3,'member'), ($1,$4,'member')`,
-		team, f.owner, f.member, f.stranger)
-	scan(&f.ws, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_team_id)
-		VALUES ('w','shared','p',$1) RETURNING id`, team)
-	addDefaultSpace(t, pool, f.ws)
+	owner := model.UUID(f.owner.String())
+	team := model.Team{ID: model.UUID(repo.NewUUID()), Name: "team", CreatedBy: owner}
+	create(&team)
+	for _, m := range []struct {
+		user model.UUID
+		role model.Text
+	}{
+		{owner, "owner"}, {model.UUID(f.member.String()), "member"}, {model.UUID(f.stranger.String()), "member"},
+	} {
+		create(&model.TeamMember{
+			ID: model.UUID(repo.NewUUID()), TeamID: team.ID, UserID: m.user, Role: m.role,
+		})
+	}
+	ws := model.Workspace{
+		ID: model.UUID(repo.NewUUID()), Name: "w", Type: "shared",
+		PolarisCatalogName: "p", OwnerTeamID: &team.ID,
+	}
+	create(&ws)
+	f.ws = openapiID(ws.ID)
+	addDefaultSpace(t, gdb, ws.ID)
 
-	var conn openapi_types.UUID
-	scan(&conn, `INSERT INTO catalog_connections (name, type, url) VALUES ('tri','trino','http://t') RETURNING id`)
-	scan(&f.engine, `INSERT INTO engines (name, kind, class, connection_id) VALUES ('trino','trino','federated',$1) RETURNING id`, conn)
-	scan(&f.catalog, `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1,'lake','native') RETURNING id`, conn)
-	scan(&f.binding, `INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode) VALUES ($1,$2,'lake_t','adopted') RETURNING id`, f.catalog, f.engine)
+	conn, err := q.CreateCatalogConnection(context.Background(), db.CreateCatalogConnectionParams{
+		ID: repo.PGUUID(repo.NewUUID()), Name: "tri", Type: "trino", Url: "http://t",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err := q.CreateEngine(context.Background(), db.CreateEngineParams{
+		Name: "trino", Kind: "trino", Class: "federated", ConnectionID: conn.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.engine = openapiID(model.UUID(engine.ID.String()))
+	catalog := model.Catalog{
+		ID: model.UUID(repo.NewUUID()), ConnectionID: model.UUID(conn.ID.String()),
+		Name: "lake", Origin: "native",
+	}
+	create(&catalog)
+	f.catalog = openapiID(catalog.ID)
+	binding := model.CatalogBinding{
+		ID: model.UUID(repo.NewUUID()), CatalogID: catalog.ID,
+		EngineID: model.UUID(engine.ID.String()), EngineCatalogName: "lake_t", Mode: "adopted",
+	}
+	create(&binding)
+	f.binding = openapiID(binding.ID)
 
-	f.h = testAPI(handlerFields{queries: repo.New(testdb.GORM(t, pool))})
+	f.h = testAPI(handlerFields{queries: q})
 	return f
 }
 
@@ -77,20 +114,21 @@ func pgUUID(u openapi_types.UUID) pgtype.UUID {
 // addExecution inserts one execution with the fixture's target.
 func (f *historyFixture) addExecution(t *testing.T, user openapi_types.UUID, status, sql string, started time.Time) openapi_types.UUID {
 	t.Helper()
-	var id pgtype.UUID
-	err := f.pool.QueryRow(context.Background(), `
-		INSERT INTO query_executions
-		  (workspace_id, user_id, status, sql, started_at, finished_at, rows_returned, duration_ms,
-		   engine_id, target_catalog_id, target_binding_id, target_snapshot)
-		VALUES ($1,$2,$3,$4,$5,$5,10,100,$6,$7,$8,'{}'::jsonb)
-		RETURNING id`,
-		f.ws, user, status, sql, started,
-		pgUUID(f.engine), pgUUID(f.catalog), pgUUID(f.binding),
-	).Scan(&id)
-	if err != nil {
+	rows, duration := int64(10), int64(100)
+	engine := model.UUID(f.engine.String())
+	catalog := model.UUID(f.catalog.String())
+	binding := model.UUID(f.binding.String())
+	snapshot := model.JSON(`{}`)
+	row := model.QueryExecution{
+		ID: model.UUID(repo.NewUUID()), WorkspaceID: model.UUID(f.ws.String()),
+		UserID: model.UUID(user.String()), Status: model.Text(status), SQL: model.Text(sql),
+		StartedAt: started, FinishedAt: &started, RowsReturned: &rows, DurationMs: &duration,
+		EngineID: &engine, TargetCatalogID: &catalog, TargetBindingID: &binding, TargetSnapshot: &snapshot,
+	}
+	if err := f.gdb.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	return openapi_types.UUID(id.Bytes)
+	return openapi_types.UUID(repo.PGUUID(string(row.ID)).Bytes)
 }
 
 func (f *historyFixture) list(t *testing.T, user string, role string, params ListExecutionsParams) ListExecutions200JSONResponse {
@@ -248,11 +286,12 @@ func TestHistory_FiltersByWorkloadClass(t *testing.T) {
 	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	f.addExecution(t, f.member, "finished", "SELECT 1", base)
 	heavy := f.addExecution(t, f.member, "finished", "SELECT 2", base.Add(time.Minute))
-	if _, err := f.pool.Exec(context.Background(), `
-		UPDATE query_executions
-		   SET queue_class = 'heavy', queue_reason = 'rule:x',
-		       queued_at = $2, admitted_at = $2, queue_wait_ms = 1500
-		 WHERE id = $1`, pgUUID(heavy), base.Add(time.Minute)); err != nil {
+	at := base.Add(time.Minute)
+	if err := f.gdb.Model(&model.QueryExecution{}).Where("id = ?", heavy.String()).
+		Updates(map[string]any{
+			"queue_class": "heavy", "queue_reason": "rule:x",
+			"queued_at": at, "admitted_at": at, "queue_wait_ms": 1500,
+		}).Error; err != nil {
 		t.Fatal(err)
 	}
 

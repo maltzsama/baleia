@@ -4,7 +4,7 @@ import "time"
 
 // ClusterSnapshot is the cluster_snapshots table.
 type ClusterSnapshot struct {
-	ID               UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid()"`
+	ID               UUID      `gorm:"column:id;primaryKey;not null"`
 	CapturedAt       time.Time `gorm:"column:captured_at;not null;default:CURRENT_TIMESTAMP(3);index:idx_cluster_snapshots_captured,priority:1;index:cluster_snapshots_engine_time,priority:2"`
 	ActiveWorkers    int32     `gorm:"column:active_workers;not null;default:0"`
 	RunningQueries   int32     `gorm:"column:running_queries;not null;default:0"`
@@ -21,8 +21,8 @@ func (ClusterSnapshot) TableName() string { return "cluster_snapshots" }
 
 // TrinoQuerySnapshot is the trino_query_snapshots table.
 type TrinoQuerySnapshot struct {
-	ID                 UUID            `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:trino_query_snapshots_origin_check,((origin = ANY (ARRAY['baleia'::text, 'trino_direct'::text])))"`
-	TrinoQueryID       Text            `gorm:"column:trino_query_id;not null;size:128;uniqueIndex:trino_query_snapshots_trino_query_id_key,priority:1;index:idx_trino_query_snapshots_query_id,priority:1;check:trino_query_snapshots_state_check,((state = ANY (ARRAY['running'::text, 'finished'::text, 'failed'::text, 'cancelled'::text])))"`
+	ID                 UUID            `gorm:"column:id;primaryKey;not null;check:trino_query_snapshots_origin_check,((origin IN ('baleia', 'trino_direct')))"`
+	TrinoQueryID       Text            `gorm:"column:trino_query_id;not null;size:128;uniqueIndex:trino_query_snapshots_trino_query_id_key,priority:1;index:idx_trino_query_snapshots_query_id,priority:1;check:trino_query_snapshots_state_check,((state IN ('running', 'finished', 'failed', 'cancelled')))"`
 	ExecutionID        *UUID           `gorm:"column:execution_id"`
 	Origin             Text            `gorm:"column:origin;not null;size:128;index:idx_trino_query_snapshots_origin,priority:1"`
 	User               Text            `gorm:"column:user;not null;size:128;index:idx_trino_query_snapshots_user,priority:1"`
@@ -48,7 +48,7 @@ func (TrinoQuerySnapshot) TableName() string { return "trino_query_snapshots" }
 
 // TrinoCluster is the trino_clusters table.
 type TrinoCluster struct {
-	ID             UUID       `gorm:"column:id;primaryKey;not null;default:gen_random_uuid()"`
+	ID             UUID       `gorm:"column:id;primaryKey;not null"`
 	Name           Text       `gorm:"column:name;not null;size:128;uniqueIndex:trino_clusters_name_key,priority:1"`
 	CoordinatorURL string     `gorm:"column:coordinator_url;not null"`
 	NodeVersion    *string    `gorm:"column:node_version"`
@@ -62,7 +62,7 @@ func (TrinoCluster) TableName() string { return "trino_clusters" }
 
 // TrinoResourceGroupRevision is the trino_resource_group_revisions table.
 type TrinoResourceGroupRevision struct {
-	ID        UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid()"`
+	ID        UUID      `gorm:"column:id;primaryKey;not null"`
 	EngineID  UUID      `gorm:"column:engine_id;not null;uniqueIndex:trino_resource_group_revisions_engine_id_revision_key,priority:1"`
 	Revision  int32     `gorm:"column:revision;not null;uniqueIndex:trino_resource_group_revisions_engine_id_revision_key,priority:2"`
 	Config    JSON      `gorm:"column:config;not null"`
@@ -103,7 +103,7 @@ func (ResourceGroupsGlobalProperty) TableName() string { return "resource_groups
 
 // TableHealthSnapshot is the table_health_snapshots table.
 type TableHealthSnapshot struct {
-	ID                     UUID               `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:table_health_snapshots_health_score_check,(((health_score >= 0) AND (health_score <= 100)))"`
+	ID                     UUID               `gorm:"column:id;primaryKey;not null;check:table_health_snapshots_health_score_check,(((health_score >= 0) AND (health_score <= 100)))"`
 	CatalogConnectionID    UUID               `gorm:"column:catalog_connection_id;not null;uniqueIndex:table_health_snapshots_catalog_connection_id_catalog_namesp_key,priority:1;index:idx_table_health_conn,priority:1"`
 	Catalog                Text               `gorm:"column:catalog;not null;size:128;uniqueIndex:table_health_snapshots_catalog_connection_id_catalog_namesp_key,priority:2"`
 	Namespace              Text               `gorm:"column:namespace;not null;size:128;uniqueIndex:table_health_snapshots_catalog_connection_id_catalog_namesp_key,priority:3;uniqueIndex:table_health_unique_catalog,priority:2"`
@@ -138,10 +138,10 @@ func (TableHealthSnapshot) TableName() string { return "table_health_snapshots" 
 
 // MaintenanceRun is the maintenance_runs table.
 type MaintenanceRun struct {
-	ID             UUID            `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:maintenance_runs_trigger_check,((trigger = ANY (ARRAY['manual'::text, 'automatic'::text, 'dry_run'::text])))"`
-	CatalogID      UUID            `gorm:"column:catalog_id;not null;index:maintenance_runs_catalog,priority:1;uniqueIndex:maintenance_runs_one_running,priority:1,where:status = 'running'::text;index:maintenance_runs_table,priority:1;check:maintenance_runs_attempts_check,((attempts > 0))"`
-	BindingID      *UUID           `gorm:"column:binding_id;check:maintenance_runs_status_check,((status = ANY (ARRAY['running'::text, 'finished'::text, 'failed'::text, 'gave_up'::text, 'dry_run'::text])))"`
-	Namespace      Text            `gorm:"column:namespace;not null;size:128;uniqueIndex:maintenance_runs_one_running,priority:2;index:maintenance_runs_table,priority:2;check:maintenance_runs_operations_check,((operations <@ ARRAY['optimize'::text, 'optimize_manifests'::text, 'expire_snapshots'::text, 'remove_orphan_files'::text]))"`
+	ID             UUID            `gorm:"column:id;primaryKey;not null;check:maintenance_runs_trigger_check,((maintenance_runs.trigger IN ('manual', 'automatic', 'dry_run')))"`
+	CatalogID      UUID            `gorm:"column:catalog_id;not null;index:maintenance_runs_catalog,priority:1;uniqueIndex:maintenance_runs_one_running,priority:1,where:status = 'running';index:maintenance_runs_table,priority:1;check:maintenance_runs_attempts_check,((attempts > 0))"`
+	BindingID      *UUID           `gorm:"column:binding_id;check:maintenance_runs_status_check,((status IN ('running', 'finished', 'failed', 'gave_up', 'dry_run')))"`
+	Namespace      Text            `gorm:"column:namespace;not null;size:128;uniqueIndex:maintenance_runs_one_running,priority:2;index:maintenance_runs_table,priority:2"`
 	TableNameValue Text            `gorm:"column:table_name;not null;size:128;uniqueIndex:maintenance_runs_one_running,priority:3;index:maintenance_runs_table,priority:3"`
 	Operations     StringArray     `gorm:"column:operations;not null"`
 	Retention      *string         `gorm:"column:retention"`
@@ -166,8 +166,8 @@ func (MaintenanceRun) TableName() string { return "maintenance_runs" }
 
 // TableMaintenancePolicy is the table_maintenance_policies table.
 type TableMaintenancePolicy struct {
-	ID                          UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:table_maintenance_policies_mode_check,((mode = ANY (ARRAY['managed'::text, 'off'::text, 'maintained_elsewhere'::text])))"`
-	CatalogID                   UUID      `gorm:"column:catalog_id;not null;uniqueIndex:table_maintenance_policies_catalog_id_namespace_table_name_key,priority:1;index:table_maintenance_policies_managed,priority:1,where:mode = 'managed'::text;check:table_maintenance_policies_writer_commit_interval_seconds_check,((writer_commit_interval_seconds > 0))"`
+	ID                          UUID      `gorm:"column:id;primaryKey;not null;check:table_maintenance_policies_mode_check,((mode IN ('managed', 'off', 'maintained_elsewhere')))"`
+	CatalogID                   UUID      `gorm:"column:catalog_id;not null;uniqueIndex:table_maintenance_policies_catalog_id_namespace_table_name_key,priority:1;index:table_maintenance_policies_managed,priority:1,where:mode = 'managed';check:table_maintenance_policies_writer_commit_interval_seconds_check,((writer_commit_interval_seconds > 0))"`
 	Namespace                   Text      `gorm:"column:namespace;not null;size:128;uniqueIndex:table_maintenance_policies_catalog_id_namespace_table_name_key,priority:2"`
 	TableNameValue              Text      `gorm:"column:table_name;not null;size:128;uniqueIndex:table_maintenance_policies_catalog_id_namespace_table_name_key,priority:3"`
 	Mode                        string    `gorm:"column:mode;not null"`
@@ -190,9 +190,9 @@ func (TableMaintenancePolicy) TableName() string { return "table_maintenance_pol
 
 // WorkloadRule is the workload_rules table.
 type WorkloadRule struct {
-	ID           UUID      `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:workload_rules_match_check,(((match - ARRAY['workspace_id'::text, 'team_id'::text, 'role'::text, 'user_id'::text, 'agent_id'::text, 'engine_id'::text, 'origin'::text, 'saved_query_id'::text, 'min_statements'::text, 'max_statements'::text]) = '{}'::jsonb))"`
-	Position     int32     `gorm:"column:position;not null;index:workload_rules_position_idx,priority:1;check:workload_rules_class_check,((class = ANY (ARRAY['interactive'::text, 'heavy'::text, 'background'::text])))"`
-	Enabled      bool      `gorm:"column:enabled;not null;default:true;check:workload_rules_max_class_check,(((max_class IS NULL) OR (max_class = ANY (ARRAY['interactive'::text, 'heavy'::text, 'background'::text]))))"`
+	ID           UUID      `gorm:"column:id;primaryKey;not null"`
+	Position     int32     `gorm:"column:position;not null;index:workload_rules_position_idx,priority:1;check:workload_rules_class_check,((class IN ('interactive', 'heavy', 'background')))"`
+	Enabled      bool      `gorm:"column:enabled;not null;default:true;check:workload_rules_max_class_check,(((max_class IS NULL) OR (max_class IN ('interactive', 'heavy', 'background'))))"`
 	Match        JSON      `gorm:"column:match;not null;default:('{}');check:workload_rules_weight_check,((weight > 0))"`
 	Class        string    `gorm:"column:class;not null"`
 	MaxClass     *string   `gorm:"column:max_class"`
@@ -224,7 +224,7 @@ func (Selector) TableName() string { return "selectors" }
 
 // DirectoryReconcileRun is the directory_reconcile_runs table.
 type DirectoryReconcileRun struct {
-	ID         UUID          `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:directory_reconcile_runs_outcome_check,((outcome = ANY (ARRAY['success'::text, 'error'::text, 'aborted_safety'::text])))"`
+	ID         UUID          `gorm:"column:id;primaryKey;not null;check:directory_reconcile_runs_outcome_check,((outcome IN ('success', 'error', 'aborted_safety')))"`
 	ProviderID UUID          `gorm:"column:provider_id;not null;index:idx_directory_reconcile_runs_provider,priority:1"`
 	StartedAt  time.Time     `gorm:"column:started_at;not null;default:CURRENT_TIMESTAMP(3);index:idx_directory_reconcile_runs_provider,priority:2"`
 	FinishedAt *time.Time    `gorm:"column:finished_at"`
@@ -241,7 +241,7 @@ func (DirectoryReconcileRun) TableName() string { return "directory_reconcile_ru
 
 // CatalogReconcileRun is the catalog_reconcile_runs table.
 type CatalogReconcileRun struct {
-	ID         UUID        `gorm:"column:id;primaryKey;not null;default:gen_random_uuid()"`
+	ID         UUID        `gorm:"column:id;primaryKey;not null"`
 	EngineID   UUID        `gorm:"column:engine_id;not null;index:catalog_reconcile_runs_engine,priority:1"`
 	StartedAt  time.Time   `gorm:"column:started_at;not null;index:catalog_reconcile_runs_engine,priority:2"`
 	FinishedAt time.Time   `gorm:"column:finished_at;not null"`
