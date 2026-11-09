@@ -6,7 +6,6 @@
 package metrics
 
 import (
-	"context"
 	"crypto/subtle"
 	"net/http"
 	"runtime/debug"
@@ -14,8 +13,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/version"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -100,70 +97,6 @@ func (r *Registry) TemporalHandler() (client.MetricsHandler, func() error) {
 		SanitizeOptions: &sdktally.PrometheusSanitizeOptions,
 	}, time.Second)
 	return sdktally.NewMetricsHandler(sdktally.NewPrometheusNamingScope(scope)), closer.Close
-}
-
-// PoolTracer observes how long connections take to acquire; set it as the
-// pool's ConnConfig.Tracer before opening the pool (WatchPool exports the
-// rest).
-type PoolTracer struct{ acquire prometheus.Observer }
-
-type acquireStart struct{}
-
-func (t *PoolTracer) TraceAcquireStart(ctx context.Context, _ *pgxpool.Pool, _ pgxpool.TraceAcquireStartData) context.Context {
-	return context.WithValue(ctx, acquireStart{}, time.Now())
-}
-
-func (t *PoolTracer) TraceAcquireEnd(ctx context.Context, _ *pgxpool.Pool, _ pgxpool.TraceAcquireEndData) {
-	if start, ok := ctx.Value(acquireStart{}).(time.Time); ok {
-		t.acquire.Observe(time.Since(start).Seconds())
-	}
-}
-
-// TraceQueryStart and TraceQueryEnd make PoolTracer a pgx.QueryTracer, the
-// type of ConnConfig.Tracer; queries are not traced.
-func (t *PoolTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
-	return ctx
-}
-func (t *PoolTracer) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
-
-// NewPoolTracer registers baleia_db_pool_acquire_duration_seconds.
-func (r *Registry) NewPoolTracer() *PoolTracer {
-	h := prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: Namespace, Name: "db_pool_acquire_duration_seconds",
-		Help:    "Time to acquire a connection from Baleia's database pool.",
-		Buckets: []float64{.0005, .001, .005, .01, .05, .1, .5, 1, 5},
-	}, []string{"process"})
-	r.reg.MustRegister(h)
-	return &PoolTracer{acquire: h.WithLabelValues(r.process)}
-}
-
-// WatchPool exports the pool's acquired, idle and max connections.
-func (r *Registry) WatchPool(pool *pgxpool.Pool) {
-	r.reg.MustRegister(&poolCollector{pool: pool, process: r.process})
-}
-
-type poolCollector struct {
-	pool    *pgxpool.Pool
-	process string
-}
-
-var (
-	poolAcquired = prometheus.NewDesc(Namespace+"_db_pool_acquired_conns", "Connections in use.", []string{"process"}, nil)
-	poolIdle     = prometheus.NewDesc(Namespace+"_db_pool_idle_conns", "Idle connections.", []string{"process"}, nil)
-	poolMax      = prometheus.NewDesc(Namespace+"_db_pool_max_conns", "Pool size limit.", []string{"process"}, nil)
-)
-
-func (c *poolCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- poolAcquired
-	ch <- poolIdle
-	ch <- poolMax
-}
-
-func (c *poolCollector) Collect(ch chan<- prometheus.Metric) {
-	s := c.pool.Stat()
-	ch <- prometheus.MustNewConstMetric(poolAcquired, prometheus.GaugeValue, float64(s.AcquiredConns()), c.process)
-	ch <- prometheus.MustNewConstMetric(poolIdle, prometheus.GaugeValue, float64(s.IdleConns()), c.process)
-	ch <- prometheus.MustNewConstMetric(poolMax, prometheus.GaugeValue, float64(s.MaxConns()), c.process)
 }
 
 // IsBaleia reports whether a metric family belongs to the catalog (the Go
