@@ -54,6 +54,17 @@ func (*Provider) Roles() []connections.Role {
 	return []connections.Role{connections.RoleMetadata, connections.RoleDirect}
 }
 func (*Provider) EngineKind() string { return "flightsql" }
+
+// Meta implements connections.Provider (ADR 0021).
+func (*Provider) Meta() connections.TypeMeta {
+	modes := []connections.AccessMode{connections.AccessModeDirect}
+	return connections.TypeMeta{
+		Description:  "Arrow Flight SQL endpoint, queried directly.",
+		Category:     connections.CategoryEngine,
+		AccessModes:  modes,
+		Capabilities: connections.CapabilitiesFor(modes, true),
+	}
+}
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }

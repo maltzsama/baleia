@@ -41,6 +41,15 @@ func (*Provider) Roles() []connections.Role {
 	return []connections.Role{connections.RoleMetadata, connections.RoleFederated}
 }
 func (*Provider) EngineKind() string { return "trino" }
+
+// Meta implements connections.Provider (ADR 0021). Trino is an engine-family
+// resource: it has no data access mode (D.2).
+func (*Provider) Meta() connections.TypeMeta {
+	return connections.TypeMeta{
+		Description: "Trino federated query engine.",
+		Category:    connections.CategoryEngine,
+	}
+}
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }

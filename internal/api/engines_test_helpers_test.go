@@ -7,6 +7,7 @@ import (
 
 	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -30,7 +31,11 @@ func trinoBackends(url string) (engineSource, *bindtrino.Binder) {
 		panic(err)
 	}
 	eng := queryengine.Guard(qtrino.New("test-trino", url, "baleia", "baleia_admin", d, dialect.NewRegistry().MustGet(dialect.Trino)), false)
-	return fixedEngines{eng}, bindtrino.New(slog.New(slog.DiscardHandler), trino.NewWithHTTPClient(url, "baleia_admin", d.HTTPClient(0)), nil)
+	reg, err := providers.New(d)
+	if err != nil {
+		panic(err)
+	}
+	return fixedEngines{eng}, bindtrino.New(slog.New(slog.DiscardHandler), trino.NewWithHTTPClient(url, "baleia_admin", d.HTTPClient(0)), nil).WithProviders(reg)
 }
 
 // testEngines is a Trino engine whose coordinator is never reached.

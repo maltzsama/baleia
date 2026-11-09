@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -49,6 +47,24 @@ func TestEveryProviderIsComplete(t *testing.T) {
 			}
 			if p.Label() == "" || p.Family() == "" || len(p.ConfigSchema()) == 0 {
 				t.Fatal("label, family and schema are required")
+			}
+			meta := p.Meta()
+			if meta.Description == "" || meta.Category == "" {
+				t.Error("description and category are required (ADR 0021 D.1)")
+			}
+			for _, mode := range meta.AccessModes {
+				if mode != connections.AccessModeDirect && mode != connections.AccessModeTrino {
+					t.Errorf("unknown access mode %q", mode)
+				}
+				if _, ok := meta.Capabilities[mode]; !ok {
+					t.Errorf("access mode %q has no declared capabilities (ADR 0021 D.6)", mode)
+				}
+			}
+			if slices.Contains(meta.AccessModes, connections.AccessModeDirect) && p.EngineKind() == "" {
+				t.Error("direct access requires an engine kind")
+			}
+			if len(meta.TrinoCatalogTypes) > 0 && !slices.Contains(meta.AccessModes, connections.AccessModeTrino) {
+				t.Error("Trino catalog types require the Trino access mode (ADR 0021 D.3)")
 			}
 			// Roles may be empty: a metastore that is only a bindable source
 			// (Hive Metastore, #86) declares none — "bindable" is declared by
@@ -394,8 +410,7 @@ func TestFromStoredParseFailureIsUnreadable(t *testing.T) {
 
 func TestConnectionsMatrixUpToDate(t *testing.T) {
 	t.Parallel()
-	// The bindable column comes from the binders (bindings.TestSupportsMatrixMatchesDocs).
-	got := Markdown(registry(t, connections.DialerOptions{}), bindtrino.New(slog.New(slog.DiscardHandler), nil, nil))
+	got := Markdown(registry(t, connections.DialerOptions{}))
 	const path = "../../../docs/connections.md"
 	if os.Getenv("BALEIA_UPDATE_DOCS") == "1" {
 		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {

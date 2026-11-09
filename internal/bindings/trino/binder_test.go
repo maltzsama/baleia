@@ -16,6 +16,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
 	trinoclient "github.com/galileostudio/baleia/internal/trino"
 	"github.com/jackc/pgx/v5"
@@ -26,13 +27,32 @@ func cfg(kind connections.Kind, values, secrets map[string]string) connections.C
 	return connections.Config{Kind: kind, Values: values, Secrets: secrets}
 }
 
+// newTestBinder is a binder wired to the real connection type registry, as the
+// composition root does, so Supports() derives the kind→catalog mapping
+// (ADR 0021 D.3) instead of a hand-held table.
+func newTestBinder() *Binder {
+	return New(slog.New(slog.DiscardHandler), nil, nil).WithProviders(testProviderSource())
+}
+
+func testProviderSource() *connections.Registry {
+	d, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		panic(err)
+	}
+	reg, err := providers.New(d)
+	if err != nil {
+		panic(err)
+	}
+	return reg
+}
+
 // TestProject_PolarisBuildsPolarisShape: the Polaris projection is
 // byte-identical to the one before the binder, so no Polaris catalog has to
 // resync; the version reproduces the value captured from Trino 482.
 func TestProject_PolarisBuildsPolarisShape(t *testing.T) {
 	t.Parallel()
 	src := cfg(connections.KindPolaris, map[string]string{"url": "http://polaris:8181", "client_id": "abc", "realm": "POLARIS"}, map[string]string{"client_secret": "def"})
-	p, err := New(slog.New(slog.DiscardHandler), nil, nil).Project(bindings.BindingSpec{EngineCatalog: "baleia_polaris", SourceRef: "baleia"}, src)
+	p, err := newTestBinder().Project(bindings.BindingSpec{EngineCatalog: "baleia_polaris", SourceRef: "baleia"}, src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +323,7 @@ func TestProject_Kinds(t *testing.T) {
 			want: map[string]string{"hive.metastore": "glue", "hive.metastore.glue.region": "eu-west-1", "fs.s3.enabled": "true"},
 		},
 	}
-	b := New(slog.New(slog.DiscardHandler), nil, nil)
+	b := newTestBinder()
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -362,7 +382,7 @@ func TestProject_Kinds(t *testing.T) {
 
 func TestExtraProps(t *testing.T) {
 	t.Parallel()
-	b := New(slog.New(slog.DiscardHandler), nil, nil)
+	b := newTestBinder()
 	src := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "pw"})
 	for _, key := range []string{"connection-url", "connection-password", "connection-user", "iceberg.rest-catalog.uri", "iceberg.rest-catalog.oauth2.credential",
 		"iceberg.rest-catalog.security", "s3.aws-secret-key", "s3.aws-access-key", "hive.metastore.uri", "iceberg.catalog.type", "x.token", "connector.name"} {
@@ -385,7 +405,7 @@ func TestExtraProps(t *testing.T) {
 
 func TestReservedNamesAndConnectors(t *testing.T) {
 	t.Parallel()
-	b := New(slog.New(slog.DiscardHandler), nil, nil)
+	b := newTestBinder()
 	src := cfg(connections.KindPostgreSQL, map[string]string{"host": "db"}, nil)
 	for _, name := range b.ReservedNames() {
 		if _, err := b.Project(bindings.BindingSpec{EngineCatalog: name}, src); !errors.Is(err, bindings.ErrReservedName) {
@@ -478,7 +498,7 @@ func TestDDLHasNoSecrets(t *testing.T) {
 	}
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
-	b := New(slog.New(slog.DiscardHandler), trinoclient.New(co.srv.URL, "baleia-admin"), st)
+	b := New(slog.New(slog.DiscardHandler), trinoclient.New(co.srv.URL, "baleia-admin"), st).WithProviders(testProviderSource())
 	eng := bindings.EngineRef{ClusterID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}}
 	for i, src := range sources {
 		p, err := b.Project(bindings.BindingSpec{EngineCatalog: "c" + string(rune('a'+i)), SourceRef: "w"}, src)
@@ -502,7 +522,7 @@ func TestLifecycleAndConfirm(t *testing.T) {
 	t.Parallel()
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
-	b := New(slog.New(slog.DiscardHandler), trinoclient.New(co.srv.URL, "baleia-admin"), st)
+	b := New(slog.New(slog.DiscardHandler), trinoclient.New(co.srv.URL, "baleia-admin"), st).WithProviders(testProviderSource())
 	eng := bindings.EngineRef{ClusterID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}}
 	ctx := context.Background()
 	src := cfg(connections.KindPostgreSQL, map[string]string{"host": "db"}, nil)
@@ -556,7 +576,7 @@ func TestLifecycleAndConfirm(t *testing.T) {
 // binder); this pins the binder side of it.
 func TestSupports(t *testing.T) {
 	t.Parallel()
-	got := New(slog.New(slog.DiscardHandler), nil, nil).Supports()
+	got := newTestBinder().Supports()
 	want := map[connections.Kind][]string{
 		connections.KindPolaris: {"iceberg"}, connections.KindNessie: {"iceberg"}, connections.KindIcebergREST: {"iceberg"},
 		connections.KindHiveMetastore: {"iceberg", "hive", "delta_lake"},
@@ -582,7 +602,7 @@ func TestSupports(t *testing.T) {
 // the plugin's catalog_version (#31).
 func TestProject_SecretReference(t *testing.T) {
 	t.Setenv("BALEIA_TEST_PASSWORD", "s3cret")
-	b := New(slog.New(slog.DiscardHandler), nil, nil)
+	b := newTestBinder()
 	ref := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "@baleia-secret[env:BALEIA_TEST_PASSWORD]"})
 	lit := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "s3cret"})
 
@@ -634,7 +654,7 @@ func TestBinder_IcebergMinRetention(t *testing.T) {
 // the REST session the query's user; off, the projection keeps its version.
 func TestProject_UserIdentity(t *testing.T) {
 	t.Parallel()
-	b := New(slog.New(slog.DiscardHandler), nil, nil)
+	b := newTestBinder()
 	spec := bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "wh"}
 	cases := []struct {
 		name string

@@ -23,6 +23,7 @@ type listingProvider struct {
 func (p *listingProvider) Kind() connections.Kind     { return p.kind }
 func (p *listingProvider) Label() string              { return string(p.kind) }
 func (p *listingProvider) Family() connections.Family { return connections.FamilyDatabase }
+func (p *listingProvider) Meta() connections.TypeMeta { return connections.TypeMeta{} }
 func (p *listingProvider) Roles() []connections.Role {
 	return []connections.Role{connections.RoleMetadata, connections.RoleDirect}
 }
