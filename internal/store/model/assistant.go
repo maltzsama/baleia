@@ -4,7 +4,7 @@ import "time"
 
 // AssistantConversation is the assistant_conversations table.
 type AssistantConversation struct {
-	ID              UUID       `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:assistant_conversations_state_check,((state = ANY (ARRAY['idle'::text, 'running'::text, 'interrupted'::text])))"`
+	ID              UUID       `gorm:"column:id;primaryKey;not null;check:assistant_conversations_state_check,((state IN ('idle', 'running', 'interrupted')))"`
 	UserID          UUID       `gorm:"column:user_id;not null;index:assistant_conversations_user,priority:1"`
 	WorkspaceID     UUID       `gorm:"column:workspace_id;not null"`
 	AgentID         UUID       `gorm:"column:agent_id;not null"`
@@ -24,7 +24,7 @@ func (AssistantConversation) TableName() string { return "assistant_conversation
 
 // AssistantMessage is the assistant_messages table.
 type AssistantMessage struct {
-	ConversationID UUID                   `gorm:"column:conversation_id;primaryKey;not null;check:assistant_messages_role_check,((role = ANY (ARRAY['user'::text, 'assistant'::text, 'tool_call'::text, 'tool_result'::text, 'notice'::text])))"`
+	ConversationID UUID                   `gorm:"column:conversation_id;primaryKey;not null;check:assistant_messages_role_check,((role IN ('user', 'assistant', 'tool_call', 'tool_result', 'notice')))"`
 	Seq            int32                  `gorm:"column:seq;primaryKey;not null"`
 	Role           string                 `gorm:"column:role;not null"`
 	Content        JSON                   `gorm:"column:content;not null"`
@@ -38,9 +38,9 @@ func (AssistantMessage) TableName() string { return "assistant_messages" }
 
 // AssistantSetting is the assistant_settings table.
 type AssistantSetting struct {
-	ID                      bool      `gorm:"column:id;primaryKey;not null;default:true;check:assistant_settings_id_check,(id)"`
-	Enabled                 bool      `gorm:"column:enabled;not null;default:false;check:assistant_settings_provider_check,((provider = ANY (ARRAY['anthropic'::text, 'openai_compatible'::text])))"`
-	Provider                *string   `gorm:"column:provider;check:assistant_settings_data_sharing_check,((data_sharing = ANY (ARRAY['metadata_only'::text, 'metadata_and_samples'::text])))"`
+	ID                      bool      `gorm:"column:id;primaryKey;not null;default:true;check:assistant_settings_id_check,((id = TRUE))"`
+	Enabled                 bool      `gorm:"column:enabled;not null;default:false;check:assistant_settings_provider_check,((provider IN ('anthropic', 'openai_compatible')))"`
+	Provider                *string   `gorm:"column:provider;check:assistant_settings_data_sharing_check,((data_sharing IN ('metadata_only', 'metadata_and_samples')))"`
 	BaseURL                 *string   `gorm:"column:base_url"`
 	Model                   *string   `gorm:"column:model"`
 	APIKeyEnc               *string   `gorm:"column:api_key_enc"`

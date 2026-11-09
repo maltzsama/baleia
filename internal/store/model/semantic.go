@@ -4,7 +4,7 @@ import "time"
 
 // SemanticDoc is the semantic_docs table.
 type SemanticDoc struct {
-	ID             UUID        `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:semantic_docs_description_check,((char_length(description) <= 20000))"`
+	ID             UUID        `gorm:"column:id;primaryKey;not null;check:semantic_docs_description_check,((char_length(description) <= 20000))"`
 	WorkspaceID    UUID        `gorm:"column:workspace_id;not null;uniqueIndex:semantic_docs_workspace_id_catalog_id_namespace_table_name__key,priority:1;index:semantic_docs_lookup,priority:1"`
 	CatalogID      UUID        `gorm:"column:catalog_id;not null;uniqueIndex:semantic_docs_workspace_id_catalog_id_namespace_table_name__key,priority:2;index:semantic_docs_lookup,priority:2"`
 	Namespace      StringArray `gorm:"column:namespace;not null;size:128;uniqueIndex:semantic_docs_workspace_id_catalog_id_namespace_table_name__key,priority:3;index:semantic_docs_lookup,priority:3"`
@@ -29,7 +29,7 @@ func (SemanticDoc) TableName() string { return "semantic_docs" }
 
 // SemanticMetric is the semantic_metrics table.
 type SemanticMetric struct {
-	ID             UUID            `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:semantic_metrics_slug_check,((slug ~ '^[a-z][a-z0-9_]{0,62}$'::text))"`
+	ID             UUID            `gorm:"column:id;primaryKey;not null"`
 	WorkspaceID    UUID            `gorm:"column:workspace_id;not null;uniqueIndex:semantic_metrics_workspace_id_slug_key,priority:1;index:semantic_metrics_table,priority:1"`
 	Slug           Text            `gorm:"column:slug;not null;size:128;uniqueIndex:semantic_metrics_workspace_id_slug_key,priority:2"`
 	Label          string          `gorm:"column:label;not null"`
@@ -60,7 +60,7 @@ func (SemanticMetric) TableName() string { return "semantic_metrics" }
 
 // SemanticModel is the semantic_models table.
 type SemanticModel struct {
-	ID             UUID            `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:semantic_models_slug_check,((slug ~ '^[a-z][a-z0-9_]{0,62}$'::text))"`
+	ID             UUID            `gorm:"column:id;primaryKey;not null"`
 	WorkspaceID    UUID            `gorm:"column:workspace_id;not null;uniqueIndex:semantic_models_workspace_id_slug_key,priority:1"`
 	SpaceID        UUID            `gorm:"column:space_id;not null;index:semantic_models_space,priority:1"`
 	Slug           Text            `gorm:"column:slug;not null;size:128;uniqueIndex:semantic_models_workspace_id_slug_key,priority:2"`
@@ -100,7 +100,7 @@ func (MetadataNamespace) TableName() string { return "metadata_namespaces" }
 
 // MetadataTable is the metadata_tables table.
 type MetadataTable struct {
-	ID            UUID        `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:metadata_tables_kind_check,((kind = ANY (ARRAY['table'::text, 'view'::text, 'materialized_view'::text])))"`
+	ID            UUID        `gorm:"column:id;primaryKey;not null;check:metadata_tables_kind_check,((kind IN ('table', 'view', 'materialized_view')))"`
 	CatalogID     UUID        `gorm:"column:catalog_id;not null;uniqueIndex:metadata_tables_catalog_id_namespace_name_key,priority:1"`
 	Namespace     StringArray `gorm:"column:namespace;not null;size:128;uniqueIndex:metadata_tables_catalog_id_namespace_name_key,priority:2"`
 	Name          Text        `gorm:"column:name;not null;size:128;uniqueIndex:metadata_tables_catalog_id_namespace_name_key,priority:3;index:metadata_tables_name_trgm,priority:1,where:removed_at IS NULL"`
@@ -147,8 +147,8 @@ func (MetadataForeignKey) TableName() string { return "metadata_foreign_keys" }
 
 // MetadataSyncRun is the metadata_sync_runs table.
 type MetadataSyncRun struct {
-	ID            UUID       `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:metadata_sync_runs_status_check,((status = ANY (ARRAY['running'::text, 'finished'::text, 'failed'::text])))"`
-	CatalogID     UUID       `gorm:"column:catalog_id;not null;index:metadata_sync_runs_catalog,priority:1;check:metadata_sync_runs_source_path_check,((source_path = ANY (ARRAY['provider'::text, 'engine'::text])))"`
+	ID            UUID       `gorm:"column:id;primaryKey;not null;check:metadata_sync_runs_status_check,((status IN ('running', 'finished', 'failed')))"`
+	CatalogID     UUID       `gorm:"column:catalog_id;not null;index:metadata_sync_runs_catalog,priority:1;check:metadata_sync_runs_source_path_check,((source_path IN ('provider', 'engine')))"`
 	StartedAt     time.Time  `gorm:"column:started_at;not null;default:CURRENT_TIMESTAMP(3);index:metadata_sync_runs_catalog,priority:2"`
 	FinishedAt    *time.Time `gorm:"column:finished_at"`
 	HeartbeatAt   *time.Time `gorm:"column:heartbeat_at"`

@@ -38,15 +38,6 @@ func openTestStore(t *testing.T) *gorm.DB {
 		t.Fatalf("open gorm store: %v", err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	// The runner adopts an existing goose-managed database; these tests keep
-	// exercising that upgrade path without running goose.
-	if err := db.Exec(`CREATE TABLE goose_db_version (
-		id SERIAL PRIMARY KEY,
-		version_id BIGINT NOT NULL,
-		is_applied BOOLEAN NOT NULL,
-		tstamp TIMESTAMP DEFAULT now())`).Error; err != nil {
-		t.Fatalf("create goose marker: %v", err)
-	}
 	return db
 }
 
@@ -84,32 +75,6 @@ func TestNewRegistryValidates(t *testing.T) {
 	}
 	if _, err := NewRegistry(Migration{Version: 1, Name: strings.Repeat("x", 256), Up: up}); err == nil {
 		t.Fatal("over-long migration name accepted")
-	}
-}
-
-func TestRunnerAdoptsGooseBaseline(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	db := openTestStore(t)
-	reg, err := NewRegistry()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	applied, err := NewRunner(db, reg, slog.New(slog.DiscardHandler)).Up(ctx)
-	if err != nil {
-		t.Fatalf("Up: %v", err)
-	}
-	if len(applied) != 0 {
-		t.Fatalf("applied = %v, want none on a goose baseline", applied)
-	}
-
-	var rows []SchemaMigration
-	if err := db.Order("version").Find(&rows).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 || rows[0].Version != BaselineVersion {
-		t.Fatalf("ledger = %+v, want one baseline row at version %d", rows, BaselineVersion)
 	}
 }
 
@@ -239,8 +204,8 @@ func TestRunnerAppliesTracksAndRollsBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
-	if len(statuses) != 2 || statuses[0].Version != BaselineVersion || !statuses[1].Applied {
-		t.Fatalf("status = %+v, want baseline and applied migration 1", statuses)
+	if len(statuses) != 1 || statuses[0].Version != 1 || !statuses[0].Applied {
+		t.Fatalf("status = %+v, want applied migration 1", statuses)
 	}
 
 	rolledBack, err := runner.Down(ctx)
@@ -258,7 +223,7 @@ func TestRunnerAppliesTracksAndRollsBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Status after Down: %v", err)
 	}
-	if len(statuses) != 2 || statuses[1].Applied {
+	if len(statuses) != 1 || statuses[0].Applied {
 		t.Fatalf("status = %+v, want migration 1 pending again", statuses)
 	}
 }

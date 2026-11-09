@@ -4,9 +4,9 @@ import "time"
 
 // AuditEvent is the audit_events table.
 type AuditEvent struct {
-	ID           int64     `gorm:"column:id;primaryKey;autoIncrement;check:audit_events_actor_kind_check,((actor_kind = ANY (ARRAY['user'::text, 'service'::text, 'agent'::text, 'anonymous'::text])))"`
-	OccurredAt   time.Time `gorm:"column:occurred_at;not null;default:CURRENT_TIMESTAMP(3);index:audit_events_resource,priority:3;index:audit_events_actor,priority:2;index:audit_events_ws,priority:2;index:audit_events_on_behalf_of,priority:2;check:audit_events_action_check,((action ~ '^[a-z_]+\\.[a-z_]+$'::text))"`
-	ActorKind    string    `gorm:"column:actor_kind;not null;check:audit_events_outcome_check,((outcome = ANY (ARRAY['allowed'::text, 'denied'::text, 'error'::text])))"`
+	ID           int64     `gorm:"column:id;primaryKey;autoIncrement;check:audit_events_actor_kind_check,((actor_kind IN ('user', 'service', 'agent', 'anonymous')))"`
+	OccurredAt   time.Time `gorm:"column:occurred_at;not null;default:CURRENT_TIMESTAMP(3);index:audit_events_resource,priority:3;index:audit_events_actor,priority:2;index:audit_events_ws,priority:2;index:audit_events_on_behalf_of,priority:2"`
+	ActorKind    string    `gorm:"column:actor_kind;not null;check:audit_events_outcome_check,((outcome IN ('allowed', 'denied', 'error')))"`
 	ActorID      *Text     `gorm:"column:actor_id;size:128;index:audit_events_actor,priority:1"`
 	AuthMethod   *string   `gorm:"column:auth_method"`
 	Action       string    `gorm:"column:action;not null"`
@@ -37,8 +37,8 @@ func (AuditExportCursor) TableName() string { return "audit_export_cursor" }
 
 // Retriever is the retrievers table.
 type Retriever struct {
-	ID            UUID            `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:retrievers_refresh_type_check,((refresh_type = ANY (ARRAY['incremental'::text, 'full'::text])))"`
-	WorkspaceID   UUID            `gorm:"column:workspace_id;not null;uniqueIndex:retrievers_workspace_id_name_key,priority:1;index:idx_retrievers_workspace,priority:1;check:retrievers_status_check,((status = ANY (ARRAY['active'::text, 'paused'::text, 'error'::text])))"`
+	ID            UUID            `gorm:"column:id;primaryKey;not null;check:retrievers_refresh_type_check,((refresh_type IN ('incremental', 'full')))"`
+	WorkspaceID   UUID            `gorm:"column:workspace_id;not null;uniqueIndex:retrievers_workspace_id_name_key,priority:1;index:idx_retrievers_workspace,priority:1;check:retrievers_status_check,((status IN ('active', 'paused', 'error')))"`
 	CreatedBy     UUID            `gorm:"column:created_by;not null"`
 	Name          Text            `gorm:"column:name;not null;size:128;uniqueIndex:retrievers_workspace_id_name_key,priority:2"`
 	DefinitionSQL string          `gorm:"column:definition_sql;not null"`
@@ -63,8 +63,8 @@ func (Retriever) TableName() string { return "retrievers" }
 
 // RetrieverRefreshHistory is the retriever_refresh_history table.
 type RetrieverRefreshHistory struct {
-	ID                 UUID       `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:retriever_refresh_history_refresh_type_check,((refresh_type = ANY (ARRAY['incremental'::text, 'full'::text])))"`
-	RetrieverID        UUID       `gorm:"column:retriever_id;not null;index:idx_retriever_refresh_retriever,priority:1;check:retriever_refresh_history_status_check,((status = ANY (ARRAY['running'::text, 'finished'::text, 'failed'::text])))"`
+	ID                 UUID       `gorm:"column:id;primaryKey;not null;check:retriever_refresh_history_refresh_type_check,((refresh_type IN ('incremental', 'full')))"`
+	RetrieverID        UUID       `gorm:"column:retriever_id;not null;index:idx_retriever_refresh_retriever,priority:1;check:retriever_refresh_history_status_check,((status IN ('running', 'finished', 'failed')))"`
 	TemporalWorkflowID string     `gorm:"column:temporal_workflow_id;not null"`
 	RefreshType        string     `gorm:"column:refresh_type;not null"`
 	Status             Text       `gorm:"column:status;not null;size:128;index:idx_retriever_refresh_status,priority:1"`
@@ -81,8 +81,8 @@ func (RetrieverRefreshHistory) TableName() string { return "retriever_refresh_hi
 
 // Migration is the migrations table.
 type Migration struct {
-	ID                        UUID               `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:migrations_source_type_check,((source_type = 'nessie'::text))"`
-	CreatedBy                 UUID               `gorm:"column:created_by;not null;index:idx_migrations_created_by,priority:1;check:migrations_status_check,((status = ANY (ARRAY['pending'::text, 'running'::text, 'finished'::text, 'failed'::text, 'cancelled'::text])))"`
+	ID                        UUID               `gorm:"column:id;primaryKey;not null;check:migrations_source_type_check,((source_type = 'nessie'))"`
+	CreatedBy                 UUID               `gorm:"column:created_by;not null;index:idx_migrations_created_by,priority:1;check:migrations_status_check,((status IN ('pending', 'running', 'finished', 'failed', 'cancelled')))"`
 	Name                      string             `gorm:"column:name;not null"`
 	SourceType                string             `gorm:"column:source_type;not null"`
 	SourceURL                 string             `gorm:"column:source_url;not null"`
@@ -104,7 +104,7 @@ func (Migration) TableName() string { return "migrations" }
 
 // MigrationItem is the migration_items table.
 type MigrationItem struct {
-	ID              UUID       `gorm:"column:id;primaryKey;not null;default:gen_random_uuid();check:migration_items_status_check,((status = ANY (ARRAY['pending'::text, 'running'::text, 'finished'::text, 'failed'::text, 'skipped'::text])))"`
+	ID              UUID       `gorm:"column:id;primaryKey;not null;check:migration_items_status_check,((status IN ('pending', 'running', 'finished', 'failed', 'skipped')))"`
 	MigrationID     UUID       `gorm:"column:migration_id;not null;index:idx_migration_items_migration,priority:1"`
 	SourceNamespace string     `gorm:"column:source_namespace;not null"`
 	SourceTable     string     `gorm:"column:source_table;not null"`
