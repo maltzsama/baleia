@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 	"github.com/galileostudio/baleia/internal/testdb"
@@ -14,10 +15,12 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
+	"gorm.io/gorm"
 )
 
 type attentionFixture struct {
 	pool      *pgxpool.Pool
+	gdb       *gorm.DB
 	h         *API
 	admin     context.Context
 	owner     context.Context
@@ -34,64 +37,91 @@ func newAttentionFixture(t *testing.T) *attentionFixture {
 	t.Helper()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	f := &attentionFixture{pool: pool}
+	gdb := testdb.GORM(t, pool)
+	q := repo.New(gdb)
+	f := &attentionFixture{pool: pool, gdb: gdb}
 
-	user := func(email, role string) string {
-		var id pgtype.UUID
-		if err := pool.QueryRow(ctx,
-			`INSERT INTO users (name, email, role, password_hash) VALUES ($1, $1, $2, 'x') RETURNING id`,
-			email, role).Scan(&id); err != nil {
+	user := func(email, role string) pgtype.UUID {
+		password := "x"
+		row := model.User{
+			ID: model.UUID(repo.NewUUID()), Name: email, Email: model.Text(email),
+			Role: model.Text(role), PasswordHash: &password,
+		}
+		if err := gdb.Create(&row).Error; err != nil {
 			t.Fatal(err)
 		}
-		return idString(id)
+		return repo.PGUUID(string(row.ID))
 	}
-	f.ownerID = user("owner@attention.test", "member")
+	f.ownerID = idString(user("owner@attention.test", "member"))
 	strangerID := user("stranger@attention.test", "member")
 	adminID := user("admin@attention.test", "admin")
-	f.admin = ctxAs(adminID, "admin")
+	f.admin = ctxAs(idString(adminID), "admin")
 	f.owner = ctxAs(f.ownerID, "member")
-	f.stranger = ctxAs(strangerID, "member")
+	f.stranger = ctxAs(idString(strangerID), "member")
 
 	conn := func(name, owner string) pgtype.UUID {
-		var id pgtype.UUID
-		if err := pool.QueryRow(ctx,
-			`INSERT INTO catalog_connections (name, type, url, created_by) VALUES ($1, 'polaris', 'http://polaris.test', $2) RETURNING id`,
-			name, owner).Scan(&id); err != nil {
+		row, err := q.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
+			ID: repo.PGUUID(repo.NewUUID()), Name: name, Type: "polaris",
+			Url: "http://polaris.test", CreatedBy: repo.PGUUID(owner),
+		})
+		if err != nil {
 			t.Fatal(err)
 		}
-		return id
+		return row.ID
 	}
 	catConn := conn("attention-source", f.ownerID)
 	engConn := conn("attention-engine", f.ownerID)
 
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO catalogs (connection_id, name, trino_catalog_name, cluster_id, warehouse, connector)
-		 VALUES ($1, 'attention_catalog', 'attention_catalog', (SELECT id FROM trino_clusters LIMIT 1), 'wh', 'iceberg')
-		 RETURNING id`, catConn).Scan(&f.catalogID); err != nil {
+	var cluster model.TrinoCluster
+	if err := gdb.Order("name").First(&cluster).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO engines (name, kind, class, connection_id, identity_mode, created_by)
-		 VALUES ('attention_engine', 'trino', 'federated', $1, 'connection', $2) RETURNING id`,
-		engConn, f.ownerID).Scan(&f.engineID); err != nil {
+	trinoCatalog := model.Text("attention_catalog")
+	warehouse := "wh"
+	connector := model.Text("iceberg")
+	clusterID := cluster.ID
+	catalog := model.Catalog{
+		ID: model.UUID(repo.NewUUID()), ConnectionID: model.UUID(repo.UUIDString(catConn)),
+		Name: "attention_catalog", TrinoCatalogName: &trinoCatalog, ClusterID: &clusterID,
+		Warehouse: &warehouse, Connector: &connector, Origin: "source",
+	}
+	if err := gdb.Create(&catalog).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode, enabled, lifecycle_state, state_changed_at)
-		 VALUES ($1, $2, 'attention_catalog', 'managed', true, 'error', now() - interval '1 hour') RETURNING id`,
-		f.catalogID, f.engineID).Scan(&f.bindingID); err != nil {
+	f.catalogID = repo.PGUUID(string(catalog.ID))
+
+	engine, err := q.CreateEngine(ctx, db.CreateEngineParams{
+		Name: "attention_engine", Kind: "trino", Class: "federated", ConnectionID: engConn,
+		IdentityMode: "connection", CreatedBy: repo.PGUUID(f.ownerID),
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id)
-		 VALUES ('attention-ws', 'personal', 'attention_polaris', $1) RETURNING id`, f.ownerID).Scan(&f.wsID); err != nil {
+	f.engineID = engine.ID
+	binding := model.CatalogBinding{
+		ID: model.UUID(repo.NewUUID()), CatalogID: catalog.ID,
+		EngineID: model.UUID(repo.UUIDString(f.engineID)), EngineCatalogName: "attention_catalog",
+		Mode: "managed", Enabled: true, LifecycleState: "error",
+		StateChangedAt: time.Now().Add(-time.Hour),
+	}
+	if err := gdb.Create(&binding).Error; err != nil {
 		t.Fatal(err)
 	}
-	addDefaultSpace(t, pool, f.wsID)
+	f.bindingID = repo.PGUUID(string(binding.ID))
+	owner := model.UUID(f.ownerID)
+	ws := model.Workspace{
+		ID: model.UUID(repo.NewUUID()), Name: "attention-ws", Type: "personal",
+		PolarisCatalogName: "attention_polaris", OwnerUserID: &owner,
+	}
+	if err := gdb.Create(&ws).Error; err != nil {
+		t.Fatal(err)
+	}
+	f.wsID = repo.PGUUID(string(ws.ID))
+	addDefaultSpace(t, gdb, ws.ID)
 
 	f.cache = NewTTLStore[[]AttentionItem](time.Hour)
 	f.h = testAPI(handlerFields{
-		queries:        repo.New(testdb.GORM(t, pool)),
+		queries:        q,
 		pool:           pool,
 		tx:             poolTx{pool: pool},
 		settings:       SettingsFromConfig(&config.Config{AuditExportURL: "https://opensearch.test"}),
@@ -158,22 +188,24 @@ func TestAttention_Scoped(t *testing.T) {
 func TestAttention_AdminOnlyKinds(t *testing.T) {
 	t.Parallel()
 	f := newAttentionFixture(t)
-	ctx := context.Background()
 
-	if _, err := f.pool.Exec(ctx,
-		`INSERT INTO catalog_reconcile_runs (engine_id, started_at, finished_at, dry_run, actions)
-		 VALUES ($1, now() - interval '5 minutes', now(), true, '[{"catalog":"c","kind":"create"}]'::jsonb)`,
-		f.engineID); err != nil {
+	now := time.Now()
+	actions := model.JSON(`[{"catalog":"c","kind":"create"}]`)
+	if err := f.gdb.Create(&model.CatalogReconcileRun{
+		ID: model.UUID(repo.NewUUID()), EngineID: model.UUID(repo.UUIDString(f.engineID)),
+		StartedAt: now.Add(-5 * time.Minute), FinishedAt: now, DryRun: true, Actions: actions,
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(ctx,
-		`INSERT INTO audit_events (occurred_at, actor_kind, action, resource_type, outcome)
-		 VALUES (now() - interval '30 minutes', 'user', 'catalog.update', 'catalog', 'allowed')`); err != nil {
+	if err := f.gdb.Create(&model.AuditEvent{
+		OccurredAt: now.Add(-30 * time.Minute), ActorKind: "user", Action: "catalog.update",
+		ResourceType: "catalog", Outcome: "allowed",
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(ctx,
-		`INSERT INTO audit_export_cursor (sink, occurred_at, id)
-		 VALUES ('opensearch', now() - interval '1 hour', 0)`); err != nil {
+	if err := f.gdb.Create(&model.AuditExportCursor{
+		Sink: "opensearch", OccurredAt: now.Add(-time.Hour), ID: 0,
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -202,8 +234,9 @@ func TestAttention_Cache(t *testing.T) {
 	}
 
 	// Fix it behind the cache's back.
-	if _, err := f.pool.Exec(context.Background(),
-		`UPDATE catalog_bindings SET lifecycle_state = 'active' WHERE id = $1`, f.bindingID); err != nil {
+	if err := f.gdb.Model(&model.CatalogBinding{}).
+		Where("id = ?", repo.UUIDString(f.bindingID)).
+		Update("lifecycle_state", "active").Error; err != nil {
 		t.Fatal(err)
 	}
 	if !hasKind(f.list(t, f.owner), BindingError) {
@@ -221,11 +254,13 @@ func TestAttention_Cache(t *testing.T) {
 func TestAttention_ClearsWhenFixed(t *testing.T) {
 	t.Parallel()
 	f := newAttentionFixture(t)
-	ctx := context.Background()
 
-	if _, err := f.pool.Exec(ctx,
-		`INSERT INTO metadata_sync_runs (catalog_id, status, finished_at, error_code, source_path)
-		 VALUES ($1, 'failed', now() - interval '2 hours', 'engine_unreachable', 'provider')`, f.catalogID); err != nil {
+	now := time.Now()
+	if err := f.gdb.Create(&model.MetadataSyncRun{
+		ID: model.UUID(repo.NewUUID()), CatalogID: model.UUID(repo.UUIDString(f.catalogID)),
+		Status: "failed", SourcePath: "provider", ErrorCode: ptrTo("engine_unreachable"),
+		FinishedAt: ptrTo(now.Add(-2 * time.Hour)),
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if !hasKind(f.list(t, f.owner), MetadataSyncFailed) {
@@ -233,9 +268,10 @@ func TestAttention_ClearsWhenFixed(t *testing.T) {
 	}
 
 	// A newer successful pass clears it.
-	if _, err := f.pool.Exec(ctx,
-		`INSERT INTO metadata_sync_runs (catalog_id, status, finished_at, source_path)
-		 VALUES ($1, 'finished', now(), 'provider')`, f.catalogID); err != nil {
+	if err := f.gdb.Create(&model.MetadataSyncRun{
+		ID: model.UUID(repo.NewUUID()), CatalogID: model.UUID(repo.UUIDString(f.catalogID)),
+		Status: "finished", SourcePath: "provider", FinishedAt: &now,
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 	f.cache.Clear()
@@ -251,16 +287,28 @@ func TestAttention_LineageBroken(t *testing.T) {
 	f := newAttentionFixture(t)
 	ctx := context.Background()
 
-	var tableID pgtype.UUID
-	if err := f.pool.QueryRow(ctx, `
-		INSERT INTO metadata_tables (catalog_id, namespace, name, kind, fingerprint, last_seen_at, last_changed_at)
-		VALUES ($1, '{sales}', 'orders', 'table', 'f', now(), now()) RETURNING id`, f.catalogID).Scan(&tableID); err != nil {
+	table := model.MetadataTable{
+		ID: model.UUID(repo.NewUUID()), CatalogID: model.UUID(repo.UUIDString(f.catalogID)),
+		Namespace: model.StringArray{"sales"}, Name: "orders", Kind: "table", Fingerprint: "f",
+		LastSeenAt: time.Now(), LastChangedAt: time.Now(),
+	}
+	if err := f.gdb.Create(&table).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(ctx, `
-		INSERT INTO metadata_columns (table_id, ordinal, name, native_type, type_system, nullable)
-		VALUES ($1, 1, 'id', 'long', 'iceberg', false), ($1, 2, 'note', 'string', 'iceberg', true)`, tableID); err != nil {
-		t.Fatal(err)
+	tableID := repo.PGUUID(string(table.ID))
+	nullable := func(v bool) *bool { return &v }
+	for _, col := range []struct {
+		ordinal  int32
+		name     model.Text
+		typ      string
+		nullable *bool
+	}{{1, "id", "long", nullable(false)}, {2, "note", "string", nullable(true)}} {
+		if err := f.gdb.Create(&model.MetadataColumn{
+			TableID: table.ID, Ordinal: col.ordinal, Name: col.name,
+			NativeType: col.typ, TypeSystem: "iceberg", Nullable: col.nullable,
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	space, err := f.h.queries.GetDefaultSpace(ctx, f.wsID)
@@ -283,7 +331,8 @@ func TestAttention_LineageBroken(t *testing.T) {
 		t.Fatal("lineage_broken raised before any column was removed")
 	}
 
-	if _, err := f.pool.Exec(ctx, `DELETE FROM metadata_columns WHERE table_id = $1 AND name = 'note'`, tableID); err != nil {
+	if err := f.gdb.Where("table_id = ? AND name = ?", repo.UUIDString(tableID), "note").
+		Delete(&model.MetadataColumn{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	f.cache.Clear()

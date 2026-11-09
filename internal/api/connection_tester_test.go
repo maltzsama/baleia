@@ -21,6 +21,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/icebergrest"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
@@ -317,11 +318,15 @@ func TestSweeper_DropsExpired(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	var cluster pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO trino_clusters (name, coordinator_url) VALUES ('sweeper-test', 'http://t') RETURNING id`).Scan(&cluster); err != nil {
+	gdb := testdb.GORM(t, pool)
+	clusterModel := model.TrinoCluster{
+		ID: model.UUID(repo.NewUUID()), Name: "sweeper-test", CoordinatorURL: "http://t",
+	}
+	if err := gdb.Create(&clusterModel).Error; err != nil {
 		t.Fatal(err)
 	}
-	q := repo.New(testdb.GORM(t, pool))
+	cluster := repo.PGUUID(string(clusterModel.ID))
+	q := repo.New(gdb)
 	ins := func(name string, ttl time.Duration) {
 		if err := q.InsertEphemeralRegistryRow(ctx, db.InsertEphemeralRegistryRowParams{ClusterID: cluster, CatalogName: name, ConnectorName: "postgresql",
 			Column4: []byte("{}"), Ttl: pgtype.Interval{Microseconds: ttl.Microseconds(), Valid: true}}); err != nil {
@@ -330,7 +335,10 @@ func TestSweeper_DropsExpired(t *testing.T) {
 	}
 	ins("baleia_test_old", -time.Minute)
 	ins("baleia_test_live", time.Minute)
-	if _, err := pool.Exec(ctx, `INSERT INTO trino_catalog_registry (cluster_id, catalog_name, connector_name, properties) VALUES ($1, 'sales', 'iceberg', '{}')`, cluster); err != nil {
+	if err := gdb.Create(&model.TrinoCatalogRegistry{
+		ClusterID: clusterModel.ID, CatalogName: "sales", ConnectorName: "iceberg",
+		Properties: model.JSON(`{}`),
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 	ft := newFakeTrino(t)
@@ -340,11 +348,8 @@ func TestSweeper_DropsExpired(t *testing.T) {
 		t.Fatalf("swept %d, %v", n, err)
 	}
 	var names []string
-	rows, _ := pool.Query(ctx, `SELECT catalog_name FROM trino_catalog_registry ORDER BY 1`)
-	for rows.Next() {
-		var s string
-		_ = rows.Scan(&s)
-		names = append(names, s)
+	if err := gdb.Model(&model.TrinoCatalogRegistry{}).Order("catalog_name").Pluck("catalog_name", &names).Error; err != nil {
+		t.Fatal(err)
 	}
 	if strings.Join(names, ",") != "baleia_test_live,sales" {
 		t.Fatalf("rows left = %v", names)

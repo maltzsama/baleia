@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -16,7 +17,8 @@ import (
 // refresh tokens and expired or used reset tokens, and nothing else (#51).
 func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	gdb := testdb.GORM(t, pool)
+	q := repo.New(gdb)
 	ctx := context.Background()
 	now := time.Now()
 
@@ -96,9 +98,9 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	count := func(table, hash string) int {
-		var n int
-		if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE token_hash = $1", hash).Scan(&n); err != nil {
+	count := func(table, hash string) int64 {
+		var n int64
+		if err := gdb.Table(table).Where("token_hash = ?", hash).Count(&n).Error; err != nil {
 			t.Fatal(err)
 		}
 		return n
@@ -106,7 +108,7 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 	for _, tc := range []struct {
 		table string
 		hash  string
-		want  int
+		want  int64
 	}{
 		{"refresh_tokens", "live", 1},
 		{"refresh_tokens", "expired", 0},
@@ -119,9 +121,9 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 			t.Errorf("%s %q: %d rows, want %d", tc.table, tc.hash, got, tc.want)
 		}
 	}
-	for state, want := range map[string]int{"oidc-live": 1, "oidc-expired": 0} {
-		var n int
-		if err := pool.QueryRow(ctx, "SELECT count(*) FROM oidc_login_attempts WHERE state = $1", state).Scan(&n); err != nil {
+	for state, want := range map[string]int64{"oidc-live": 1, "oidc-expired": 0} {
+		var n int64
+		if err := gdb.Model(&model.OIDCLoginAttempt{}).Where("state = ?", state).Count(&n).Error; err != nil {
 			t.Fatal(err)
 		}
 		if n != want {

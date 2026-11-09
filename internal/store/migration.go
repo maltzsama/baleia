@@ -12,13 +12,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// BaselineVersion marks a database whose schema was created by the previous
-// goose-based store. It is a bookkeeping row, not a registered migration.
+// BaselineVersion is the smallest accepted migration version.
 const BaselineVersion int64 = 0
 
 const (
-	baselineName = "baseline: goose schema"
-
 	// schemaMigrationNameMax matches the ledger's name column size. Names are
 	// validated up front so an over-long one cannot fail the ledger insert
 	// after Up has already changed the schema.
@@ -123,10 +120,7 @@ func NewRunner(db *gorm.DB, registry *Registry, logger *slog.Logger) *Runner {
 	return &Runner{db: db, registry: registry, logger: logger}
 }
 
-// Up applies every pending migration in order and records each one. On an
-// existing goose-managed database it first records the baseline row, then
-// applies the remaining versions, so an upgrade reconciles the schema instead
-// of recreating it.
+// Up applies every pending migration in order and records each one.
 func (r *Runner) Up(ctx context.Context) ([]Migration, error) {
 	if err := r.ensureTracking(ctx); err != nil {
 		return nil, err
@@ -137,13 +131,6 @@ func (r *Runner) Up(ctx context.Context) ([]Migration, error) {
 	}
 	defer release()
 
-	adopted, err := r.adoptBaseline(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if adopted {
-		r.logger.InfoContext(ctx, "adopted the existing goose schema as the store baseline")
-	}
 	if err := r.refuseInterrupted(ctx); err != nil {
 		return nil, err
 	}
@@ -219,8 +206,8 @@ func (r *Runner) Down(ctx context.Context) (*Migration, error) {
 	return nil, nil
 }
 
-// Status reports the registry and the ledger, baseline row first. It never
-// writes: when the ledger is absent every registered migration is pending.
+// Status reports the registry and the ledger. It never writes: when the ledger
+// is absent every registered migration is pending.
 func (r *Runner) Status(ctx context.Context) ([]Status, error) {
 	if !r.db.WithContext(ctx).Migrator().HasTable(&SchemaMigration{}) {
 		return r.pendingStatus(), nil
@@ -235,12 +222,6 @@ func (r *Runner) Status(ctx context.Context) ([]Status, error) {
 	}
 
 	out := make([]Status, 0, len(rows)+len(r.registry.All()))
-	if baseline, ok := byVersion[BaselineVersion]; ok {
-		out = append(out, Status{
-			Version: baseline.Version, Name: baseline.Name, Applied: true,
-			Dirty: baseline.Dirty, AppliedAt: baseline.AppliedAt,
-		})
-	}
 	for _, m := range r.registry.All() {
 		st := Status{Version: m.Version, Name: m.Name}
 		if row, ok := byVersion[m.Version]; ok {
@@ -324,24 +305,4 @@ func (r *Runner) appliedVersions(ctx context.Context) (map[int64]bool, error) {
 		out[row.Version] = true
 	}
 	return out, nil
-}
-
-// adoptBaseline records the goose baseline once, when the legacy ledger is
-// present and the GORM ledger is still empty.
-func (r *Runner) adoptBaseline(ctx context.Context) (bool, error) {
-	var count int64
-	if err := r.db.WithContext(ctx).Model(&SchemaMigration{}).Count(&count).Error; err != nil {
-		return false, fmt.Errorf("count schema_migrations: %w", err)
-	}
-	if count > 0 {
-		return false, nil
-	}
-	if !r.db.WithContext(ctx).Migrator().HasTable("goose_db_version") {
-		return false, nil
-	}
-	row := SchemaMigration{Version: BaselineVersion, Name: baselineName, AppliedAt: time.Now().UTC()}
-	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
-		return false, fmt.Errorf("record goose baseline: %w", err)
-	}
-	return true, nil
 }

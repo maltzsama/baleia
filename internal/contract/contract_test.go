@@ -26,6 +26,7 @@ import (
 	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -164,8 +165,8 @@ func TestReservedNames(t *testing.T) {
 		return errors.As(err, &pg) && pg.Code == "23514"
 	}
 	for _, name := range want {
-		_, err := db.Exec(`INSERT INTO catalogs (connection_id, name, trino_catalog_name, cluster_id, warehouse, connector)
-			VALUES ('00000000-0000-0000-0000-0000000000c1', $1, $1, $2, 'w', 'iceberg')`, name, cluster)
+		_, err := db.Exec(`INSERT INTO catalogs (connection_id, name, trino_catalog_name, cluster_id, warehouse, connector, id)
+			VALUES ('00000000-0000-0000-0000-0000000000c1', $1, $1, $2, 'w', 'iceberg', $3)`, name, cluster, uuid.NewString())
 		if !checkViolation(err) {
 			t.Errorf("catalogs accepted the reserved name %q: %v", name, err)
 		}

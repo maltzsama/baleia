@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -61,15 +63,17 @@ func newLineageFixture(t *testing.T) *lineageFixture {
 	}
 	f.metric = mt.ID
 
-	var sq pgtype.UUID
-	if err := f.pool.QueryRow(ctx, `
-		INSERT INTO saved_queries (workspace_id, space_id, created_by, name, sql, slug, target_binding_id, target_schema)
-		VALUES ($1, $2, $3, 'Orders query', 'select * from sales.orders', 'lineage_orders_query', $4, 'sales')
-		RETURNING id`,
-		ws, space.ID, f.ownerUUID, pgtype.UUID{Bytes: f.binding, Valid: true}).Scan(&sq); err != nil {
+	bindingID := model.UUID(repo.UUIDString(pgtype.UUID{Bytes: f.binding, Valid: true}))
+	savedQuery := model.SavedQuery{
+		ID: model.UUID(repo.NewUUID()), WorkspaceID: model.UUID(repo.UUIDString(ws)),
+		SpaceID: model.UUID(repo.UUIDString(space.ID)), CreatedBy: model.UUID(f.owner),
+		Name: "Orders query", SQL: "select * from sales.orders", Slug: "lineage_orders_query",
+		TargetBindingID: &bindingID, TargetSchema: ptrTo("sales"),
+	}
+	if err := f.gdb.Create(&savedQuery).Error; err != nil {
 		t.Fatal(err)
 	}
-	f.saved = sq
+	f.saved = repo.PGUUID(string(savedQuery.ID))
 	return f
 }
 

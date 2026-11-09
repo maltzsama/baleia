@@ -11,11 +11,13 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"gorm.io/gorm"
 )
 
 // memAudit keeps every event with the actor Record would store.
@@ -48,6 +50,7 @@ func (m *memAudit) take() []recorded {
 
 type auditFixture struct {
 	pool                   *pgxpool.Pool
+	gdb                    *gorm.DB
 	h                      *API
 	mem                    *memAudit
 	admin, owner, stranger string
@@ -57,28 +60,35 @@ type auditFixture struct {
 func newAuditFixture(t *testing.T) *auditFixture {
 	t.Helper()
 	pool := testdb.New(t)
-	ctx := context.Background()
 	hash, err := auth.HashPassword("correct horse")
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &auditFixture{pool: pool, mem: &memAudit{}}
+	gdb := testdb.GORM(t, pool)
+	f := &auditFixture{pool: pool, gdb: gdb, mem: &memAudit{}}
 	user := func(email, role string) string {
-		var id pgtype.UUID
-		if err := pool.QueryRow(ctx, `INSERT INTO users (name, email, role, password_hash) VALUES ($1, $1, $2, $3) RETURNING id`, email, role, hash).Scan(&id); err != nil {
+		row := model.User{
+			ID: model.UUID(repo.NewUUID()), Name: email, Email: model.Text(email),
+			Role: model.Text(role), PasswordHash: &hash,
+		}
+		if err := gdb.Create(&row).Error; err != nil {
 			t.Fatal(err)
 		}
-		return idString(id)
+		return string(row.ID)
 	}
 	f.admin, f.owner, f.stranger = user("admin@x.io", "admin"), user("owner@x.io", "member"), user("stranger@x.io", "member")
-	var ws pgtype.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ('w', 'personal', 'p', $1) RETURNING id`, f.owner).Scan(&ws); err != nil {
+	ws := model.Workspace{
+		ID: model.UUID(repo.NewUUID()), Name: "w", Type: "personal", PolarisCatalogName: "p",
+	}
+	ownerUser := model.UUID(f.owner)
+	ws.OwnerUserID = &ownerUser
+	if err := gdb.Create(&ws).Error; err != nil {
 		t.Fatal(err)
 	}
-	addDefaultSpace(t, pool, ws)
-	f.ownerWS = openapi_types.UUID(ws.Bytes)
+	addDefaultSpace(t, gdb, ws.ID)
+	f.ownerWS = openapi_types.UUID(repo.PGUUID(string(ws.ID)).Bytes)
 	f.h = testAPI(handlerFields{
-		queries: repo.New(testdb.GORM(t, pool)), pool: pool, tx: poolTx{pool: pool}, schema: poolSchema{pool: pool}, keyring: testKeyring(t), connections: testRegistry(t),
+		queries: repo.New(gdb), pool: pool, tx: poolTx{pool: pool}, schema: poolSchema{pool: pool}, keyring: testKeyring(t), connections: testRegistry(t),
 		settings:     SettingsFromConfig(&config.Config{JWTSecret: strings.Repeat("s", 40)}),
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
 		audit:        f.mem,
@@ -130,9 +140,14 @@ func TestAuditMatrix(t *testing.T) {
 
 	// Grants: a native catalog on the owner's connection.
 	var cat pgtype.UUID
-	if err := f.pool.QueryRow(context.Background(), `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1, 'lake', 'native') RETURNING id`, created.Id).Scan(&cat); err != nil {
+	catalog := model.Catalog{
+		ID: model.UUID(repo.NewUUID()), ConnectionID: model.UUID(created.Id.String()),
+		Name: "lake", Origin: "native",
+	}
+	if err := f.gdb.Create(&catalog).Error; err != nil {
 		t.Fatal(err)
 	}
+	cat = repo.PGUUID(string(catalog.ID))
 	catID := openapi_types.UUID(cat.Bytes)
 	_, _ = h.GrantCatalogAccess(owner, GrantCatalogAccessRequestObject{Id: f.ownerWS, Body: &GrantCatalogAccessRequest{CatalogId: catID}})
 	one(t, "grant.create", mem.take(), audit.GrantCreate, audit.Allowed)

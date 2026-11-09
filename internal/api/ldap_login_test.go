@@ -10,7 +10,8 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -50,9 +51,13 @@ func ldapLoginFixture(t *testing.T) (*auditFixture, db.AuthProvider) {
 		t.Fatal(err)
 	}
 
-	var userID pgtype.UUID
-	if err := f.pool.QueryRow(ctx, `INSERT INTO users (name, email, role, auth_provider, auth_provider_id, external_id)
-		VALUES ('Alice', 'alice@corp.test', 'member', 'ldap', $1, 'stable-1') RETURNING id`, ap.ID).Scan(&userID); err != nil {
+	providerUUID := model.UUID(repo.UUIDString(ap.ID))
+	externalID := model.Text("stable-1")
+	user := model.User{
+		ID: model.UUID(repo.NewUUID()), Name: "Alice", Email: "alice@corp.test", Role: "member",
+		AuthProvider: "ldap", AuthProviderID: &providerUUID, ExternalID: &externalID,
+	}
+	if err := f.gdb.Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
 	f.h.logins = newLogins(f.h.core, directoryFunc(func(_ context.Context, _ identityldap.Config, username, password string) (*identityldap.User, error) {
@@ -96,10 +101,11 @@ func TestLogin_LDAPProvider(t *testing.T) {
 		t.Fatalf("role = %q, want the mapped admin role", ok.User.Role)
 	}
 
-	var role string
-	if err := f.pool.QueryRow(context.Background(), `SELECT role FROM users WHERE external_id = 'stable-1'`).Scan(&role); err != nil {
+	var user model.User
+	if err := f.gdb.Where("external_id = ?", "stable-1").First(&user).Error; err != nil {
 		t.Fatal(err)
 	}
+	role := string(user.Role)
 	if role != "admin" {
 		t.Fatalf("stored role = %q, want admin", role)
 	}
@@ -182,9 +188,12 @@ func TestLogin_LDAPRejectsNonLDAPAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(context.Background(), `INSERT INTO users
-		(name, email, role, password_hash, auth_provider, auth_provider_id, external_id)
-		VALUES ('Local', 'local@corp.test', 'admin', $1, 'local', $2, 'local-linked')`, hash, ap.ID); err != nil {
+	providerUUID := model.UUID(repo.UUIDString(ap.ID))
+	externalID := model.Text("local-linked")
+	if err := f.gdb.Create(&model.User{
+		ID: model.UUID(repo.NewUUID()), Name: "Local", Email: "local@corp.test", Role: "admin",
+		PasswordHash: &hash, AuthProvider: "local", AuthProviderID: &providerUUID, ExternalID: &externalID,
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 	resp, err := f.h.Login(context.Background(), LoginRequestObject{Body: &LoginRequest{

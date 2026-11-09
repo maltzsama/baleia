@@ -3,14 +3,19 @@ package api
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"gorm.io/gorm"
 )
 
 // metaFixture is a database with two users, each with a personal workspace;
@@ -18,6 +23,7 @@ import (
 // not catalog "other", and its owner owns catalog "mine".
 type metaFixture struct {
 	pool            *pgxpool.Pool
+	gdb             *gorm.DB
 	h               *API
 	owner, stranger string
 	ws, strangerWS  openapi_types.UUID
@@ -31,64 +37,125 @@ type metaFixture struct {
 func newMetaFixture(t *testing.T) *metaFixture {
 	t.Helper()
 	pool := testdb.New(t)
-	ctx := context.Background()
-	f := &metaFixture{pool: pool}
-	scan := func(dst *openapi_types.UUID, q string, args ...any) {
+	gdb := testdb.GORM(t, pool)
+	f := &metaFixture{pool: pool, gdb: gdb}
+	q := repo.New(gdb)
+	create := func(model any) {
 		t.Helper()
-		var id pgtype.UUID
-		if err := pool.QueryRow(ctx, q, args...).Scan(&id); err != nil {
-			t.Fatalf("%s: %v", q, err)
-		}
-		*dst = openapi_types.UUID(id.Bytes)
-	}
-	exec := func(q string, args ...any) {
-		t.Helper()
-		if _, err := pool.Exec(ctx, q, args...); err != nil {
-			t.Fatalf("%s: %v", q, err)
+		if err := gdb.Create(model).Error; err != nil {
+			t.Fatalf("create %T: %v", model, err)
 		}
 	}
-	var ownerID, strangerID openapi_types.UUID
-	scan(&ownerID, `INSERT INTO users (name, email, password_hash) VALUES ('o', 'o@x', 'x') RETURNING id`)
-	scan(&strangerID, `INSERT INTO users (name, email, password_hash) VALUES ('s', 's@x', 'x') RETURNING id`)
-	f.owner, f.stranger = ownerID.String(), strangerID.String()
-	scan(&f.ws, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ('w', 'personal', 'p', $1) RETURNING id`, ownerID)
-	scan(&f.strangerWS, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_user_id) VALUES ('w2', 'personal', 'p2', $1) RETURNING id`, strangerID)
-	addDefaultSpace(t, pool, f.ws)
-	addDefaultSpace(t, pool, f.strangerWS)
-
-	var conn, trinoConn, engine openapi_types.UUID
-	scan(&conn, `INSERT INTO catalog_connections (name, type, url) VALUES ('pol', 'polaris', 'http://p') RETURNING id`)
-	scan(&trinoConn, `INSERT INTO catalog_connections (name, type, url) VALUES ('tri', 'trino', 'http://t') RETURNING id`)
-	scan(&engine, `INSERT INTO engines (name, kind, class, connection_id) VALUES ('trino', 'trino', 'federated', $1) RETURNING id`, trinoConn)
-	scan(&f.lake, `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1, 'lake', 'native') RETURNING id`, conn)
-	scan(&f.other, `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1, 'other', 'native') RETURNING id`, conn)
-	var ownConn openapi_types.UUID
-	scan(&ownConn, `INSERT INTO catalog_connections (name, type, url, created_by) VALUES ('own', 'postgresql', 'postgres://x', $1) RETURNING id`, ownerID)
-	scan(&f.mine, `INSERT INTO catalogs (connection_id, name, origin) VALUES ($1, 'mine', 'native') RETURNING id`, ownConn)
-	scan(&f.binding, `INSERT INTO catalog_bindings (catalog_id, engine_id, engine_catalog_name, mode) VALUES ($1, $2, 'lake_t', 'adopted') RETURNING id`, f.lake, engine)
-	exec(`INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, granted_by) VALUES ($1, $2, $3)`, f.ws, f.lake, ownerID)
-	exec(`INSERT INTO metadata_sync_runs (catalog_id, status, source_path, finished_at) VALUES ($1, 'finished', 'provider', now())`, f.lake)
-
-	for _, ns := range []string{`{sales}`, `{ops}`, `{ops,"b.c"}`} {
-		exec(`INSERT INTO metadata_namespaces (catalog_id, namespace, last_seen_at) VALUES ($1, $2, now())`, f.lake, ns)
+	openapiID := func(id model.UUID) openapi_types.UUID {
+		return openapi_types.UUID(repo.PGUUID(string(id)).Bytes)
 	}
-	table := func(dst *openapi_types.UUID, cat openapi_types.UUID, ns, name string, removed bool) {
+	user := func(name, email string) model.UUID {
+		password := "x"
+		row := model.User{
+			ID: model.UUID(repo.NewUUID()), Name: name, Email: model.Text(email), PasswordHash: &password,
+		}
+		create(&row)
+		return row.ID
+	}
+	ownerID, strangerID := user("o", "o@x"), user("s", "s@x")
+	f.owner, f.stranger = string(ownerID), string(strangerID)
+	workspace := func(name, polaris string, owner model.UUID) model.Workspace {
+		row := model.Workspace{
+			ID: model.UUID(repo.NewUUID()), Name: name, Type: "personal",
+			PolarisCatalogName: model.Text(polaris), OwnerUserID: &owner,
+		}
+		create(&row)
+		return row
+	}
+	ws, strangerWS := workspace("w", "p", ownerID), workspace("w2", "p2", strangerID)
+	f.ws, f.strangerWS = openapiID(ws.ID), openapiID(strangerWS.ID)
+	addDefaultSpace(t, gdb, ws.ID)
+	addDefaultSpace(t, gdb, strangerWS.ID)
+
+	connection := func(name, kind, url string, createdBy *model.UUID) model.UUID {
+		row := model.CatalogConnection{
+			ID: model.UUID(repo.NewUUID()), Name: model.Text(name), Type: kind, URL: url, CreatedBy: createdBy,
+		}
+		create(&row)
+		return row.ID
+	}
+	conn := connection("pol", "polaris", "http://p", nil)
+	trinoConn := connection("tri", "trino", "http://t", nil)
+	engine, err := q.CreateEngine(context.Background(), db.CreateEngineParams{
+		Name: "trino", Kind: "trino", Class: "federated", ConnectionID: repo.PGUUID(string(trinoConn)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := func(conn model.UUID, name string) model.UUID {
+		row := model.Catalog{
+			ID: model.UUID(repo.NewUUID()), ConnectionID: conn, Name: model.Text(name), Origin: "native",
+		}
+		create(&row)
+		return row.ID
+	}
+	lake, other := catalog(conn, "lake"), catalog(conn, "other")
+	ownConn := connection("own", "postgresql", "postgres://x", &ownerID)
+	mine := catalog(ownConn, "mine")
+	f.lake, f.other, f.mine = openapiID(lake), openapiID(other), openapiID(mine)
+	binding := model.CatalogBinding{
+		ID: model.UUID(repo.NewUUID()), CatalogID: lake, EngineID: model.UUID(engine.ID.String()),
+		EngineCatalogName: "lake_t", Mode: "adopted",
+	}
+	create(&binding)
+	f.binding = openapiID(binding.ID)
+	if _, err := q.UpsertWorkspaceCatalogGrant(context.Background(), db.UpsertWorkspaceCatalogGrantParams{
+		WorkspaceID: repo.PGUUID(string(ws.ID)), CatalogID: repo.PGUUID(string(lake)), GrantedBy: repo.PGUUID(string(ownerID)),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	finishedAt := time.Now()
+	create(&model.MetadataSyncRun{
+		ID: model.UUID(repo.NewUUID()), CatalogID: lake, Status: "finished",
+		SourcePath: "provider", FinishedAt: &finishedAt,
+	})
+
+	for _, ns := range []model.StringArray{{"sales"}, {"ops"}, {"ops", "b.c"}} {
+		create(&model.MetadataNamespace{CatalogID: lake, Namespace: ns, LastSeenAt: time.Now()})
+	}
+	table := func(cat model.UUID, ns model.StringArray, name string, removed bool) model.UUID {
 		t.Helper()
-		q := `INSERT INTO metadata_tables (catalog_id, namespace, name, kind, fingerprint, last_seen_at, last_changed_at, removed_at)
-		      VALUES ($1, $2, $3, 'table', 'f', now(), now(), CASE WHEN $4 THEN now() END) RETURNING id`
-		scan(dst, q, cat, ns, name, removed)
+		row := model.MetadataTable{
+			ID: model.UUID(repo.NewUUID()), CatalogID: cat, Namespace: ns, Name: model.Text(name),
+			Kind: "table", Fingerprint: "f", LastSeenAt: time.Now(), LastChangedAt: time.Now(),
+		}
+		if removed {
+			at := time.Now()
+			row.RemovedAt = &at
+		}
+		create(&row)
+		return row.ID
 	}
-	table(&f.orders, f.lake, `{sales}`, "orders", false)
-	exec(`INSERT INTO metadata_columns (table_id, ordinal, name, native_type, type_system, nullable)
-	      VALUES ($1, 1, 'id', 'long', 'iceberg', false), ($1, 2, 'tags', 'list<string>', 'iceberg', true), ($1, 3, 'order_note', 'string', 'iceberg', true)`, f.orders)
-	var hist openapi_types.UUID
-	table(&hist, f.lake, `{sales}`, "customer_order_history", false)
-	table(&f.removed, f.lake, `{sales}`, "orders_old", true)
-	table(&f.otherTable, f.other, `{sales}`, "orders_secret", false)
-	var deep openapi_types.UUID
-	table(&deep, f.lake, `{ops,"b.c"}`, "deep", false)
+	orders := table(lake, model.StringArray{"sales"}, "orders", false)
+	f.orders = openapiID(orders)
+	table(lake, model.StringArray{"sales"}, "customer_order_history", false)
+	f.removed = openapiID(table(lake, model.StringArray{"sales"}, "orders_old", true))
+	f.otherTable = openapiID(table(other, model.StringArray{"sales"}, "orders_secret", false))
+	table(lake, model.StringArray{"ops", "b.c"}, "deep", false)
 
-	f.h = testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: repo.New(testdb.GORM(t, pool)), store: openTestStore(t, pool), tx: poolTx{pool: pool}}) // no engines: reads never call one
+	nullable := func(v bool) *bool { return &v }
+	for _, col := range []struct {
+		ordinal  int32
+		name     model.Text
+		typ      string
+		nullable *bool
+	}{
+		{1, "id", "long", nullable(false)},
+		{2, "tags", "list<string>", nullable(true)},
+		{3, "order_note", "string", nullable(true)},
+	} {
+		create(&model.MetadataColumn{
+			TableID: orders, Ordinal: col.ordinal, Name: col.name, NativeType: col.typ,
+			TypeSystem: "iceberg", Nullable: col.nullable,
+		})
+	}
+
+	f.h = testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: q, store: gdb, tx: poolTx{pool: pool}}) // no engines: reads never call one
 	return f
 }
 
@@ -199,10 +266,13 @@ func TestMetadata_MultiLevelNamespace(t *testing.T) {
 func TestMetadata_Pagination(t *testing.T) {
 	t.Parallel()
 	f := newMetaFixture(t)
-	ctx := context.Background()
 	for i := range 250 {
-		if _, err := f.pool.Exec(ctx, `INSERT INTO metadata_tables (catalog_id, namespace, name, kind, fingerprint, last_seen_at, last_changed_at)
-			VALUES ($1, '{bulk}', $2, 'table', 'f', now(), now())`, f.lake, fmt.Sprintf("t%03d", 249-i)); err != nil {
+		row := model.MetadataTable{
+			ID: model.UUID(repo.NewUUID()), CatalogID: model.UUID(repo.UUIDString(pgUUID(f.lake))),
+			Namespace: model.StringArray{"bulk"}, Name: model.Text(fmt.Sprintf("t%03d", 249-i)),
+			Kind: "table", Fingerprint: "f", LastSeenAt: time.Now(), LastChangedAt: time.Now(),
+		}
+		if err := f.gdb.Create(&row).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -331,7 +401,6 @@ func TestMetadataTable_DisplayForBinding(t *testing.T) {
 func TestSearch_Filters(t *testing.T) {
 	t.Parallel()
 	f := newMetaFixture(t)
-	ctx := context.Background()
 	for name, doc := range map[string]struct {
 		tags      string
 		certified bool
@@ -339,10 +408,18 @@ func TestSearch_Filters(t *testing.T) {
 		"orders":                 {tags: `{finance}`, certified: true},
 		"customer_order_history": {tags: `{sales}`},
 	} {
-		if _, err := f.pool.Exec(ctx, `
-			INSERT INTO semantic_docs (workspace_id, catalog_id, namespace, table_name, description, tags, certified, updated_by)
-			VALUES ($1, $2, '{sales}', $3, '', $4::text[], $5, (SELECT owner_user_id FROM workspaces WHERE id = $1))`,
-			pgUUID(f.ws), pgUUID(f.lake), name, doc.tags, doc.certified); err != nil {
+		wsID := model.UUID(uuid.UUID(f.ws).String())
+		row := model.SemanticDoc{
+			ID: model.UUID(repo.NewUUID()), WorkspaceID: wsID,
+			CatalogID:      model.UUID(uuid.UUID(f.lake).String()),
+			Namespace:      model.StringArray{"sales"},
+			TableNameValue: model.Text(name),
+			Description:    "",
+			Tags:           model.StringArray(strings.Split(strings.Trim(doc.tags, "{}"), ",")),
+			Certified:      doc.certified,
+			UpdatedBy:      model.UUID(f.owner),
+		}
+		if err := f.gdb.Create(&row).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

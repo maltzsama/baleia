@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
@@ -25,12 +26,11 @@ func oid(t *testing.T, s string) openapi_types.UUID {
 
 func defaultSpaceID(t *testing.T, f *metaFixture, ws openapi_types.UUID) openapi_types.UUID {
 	t.Helper()
-	var id pgtype.UUID
-	if err := f.pool.QueryRow(context.Background(),
-		`SELECT id FROM spaces WHERE workspace_id = $1 AND is_default`, pgUUIDOf(ws)).Scan(&id); err != nil {
+	var space model.Space
+	if err := f.gdb.Where("workspace_id = ? AND is_default", repo.UUIDString(pgUUIDOf(ws))).First(&space).Error; err != nil {
 		t.Fatal(err)
 	}
-	return openapi_types.UUID(id.Bytes)
+	return openapi_types.UUID(repo.PGUUID(string(space.ID)).Bytes)
 }
 
 // sharedWorkspace adds a team (owner and stranger as members) and a shared
@@ -38,23 +38,36 @@ func defaultSpaceID(t *testing.T, f *metaFixture, ws openapi_types.UUID) openapi
 // members who are not the owner.
 func sharedWorkspace(t *testing.T, f *metaFixture) openapi_types.UUID {
 	t.Helper()
-	ctx := context.Background()
-	owner, stranger := mustUUID(t, f.owner), mustUUID(t, f.stranger)
-	var team, ws pgtype.UUID
-	if err := f.pool.QueryRow(ctx, `INSERT INTO teams (name, created_by) VALUES ('t', $1) RETURNING id`, owner).Scan(&team); err != nil {
+	owner, stranger := model.UUID(f.owner), model.UUID(f.stranger)
+	team := model.Team{ID: model.UUID(repo.NewUUID()), Name: "t", CreatedBy: owner}
+	if err := f.gdb.Create(&team).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(ctx, `INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, 'owner'), ($1, $3, 'member')`, team, owner, stranger); err != nil {
+	for _, m := range []struct {
+		user model.UUID
+		role model.Text
+	}{{owner, "owner"}, {stranger, "member"}} {
+		if err := f.gdb.Create(&model.TeamMember{
+			ID: model.UUID(repo.NewUUID()), TeamID: team.ID, UserID: m.user, Role: m.role,
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	ws := model.Workspace{
+		ID: model.UUID(repo.NewUUID()), Name: "shared", Type: "shared",
+		PolarisCatalogName: "shared", OwnerTeamID: &team.ID,
+	}
+	if err := f.gdb.Create(&ws).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := f.pool.QueryRow(ctx, `INSERT INTO workspaces (name, type, polaris_catalog_name, owner_team_id) VALUES ('shared', 'shared', 'shared', $1) RETURNING id`, team).Scan(&ws); err != nil {
+	addDefaultSpace(t, f.gdb, ws.ID)
+	if _, err := repo.New(f.gdb).UpsertWorkspaceCatalogGrant(context.Background(), db.UpsertWorkspaceCatalogGrantParams{
+		WorkspaceID: repo.PGUUID(string(ws.ID)), CatalogID: repo.PGUUID(repo.UUIDString(pgUUIDOf(f.lake))),
+		GrantedBy: repo.PGUUID(f.owner),
+	}); err != nil {
 		t.Fatal(err)
 	}
-	addDefaultSpace(t, f.pool, ws)
-	if _, err := f.pool.Exec(ctx, `INSERT INTO workspace_catalog_grants (workspace_id, catalog_id, granted_by) VALUES ($1, $2, $3)`, ws, pgUUIDOf(f.lake), owner); err != nil {
-		t.Fatal(err)
-	}
-	return openapi_types.UUID(ws.Bytes)
+	return openapi_types.UUID(repo.PGUUID(string(ws.ID)).Bytes)
 }
 
 func createSpaceIn(t *testing.T, f *metaFixture, ctx context.Context, ws openapi_types.UUID, body CreateSpaceRequest) Space {
@@ -244,8 +257,9 @@ func TestSpaces_AccessListAndForceDelete(t *testing.T) {
 	} else if _, ok := r.(DeleteSpace204Response); !ok {
 		t.Fatalf("force delete: %T", r)
 	}
-	var n int
-	if err := f.pool.QueryRow(context.Background(), `SELECT count(*) FROM query_folders WHERE space_id = $1`, pgUUIDOf(space.Id)).Scan(&n); err != nil {
+	var n int64
+	if err := f.gdb.Model(&model.QueryFolder{}).
+		Where("space_id = ?", repo.UUIDString(pgUUIDOf(space.Id))).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

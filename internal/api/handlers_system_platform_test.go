@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func findStatusItem(t *testing.T, res SystemStatusResource, name string) SystemStatusItem {
@@ -55,16 +55,21 @@ func TestSystemStatus_EngineHealth(t *testing.T) {
 	f := newAuditFixture(t)
 	ctx := context.Background()
 
-	var connID pgtype.UUID
-	if err := f.pool.QueryRow(ctx, `INSERT INTO catalog_connections (name, type, url)
-		VALUES ('status-conn', 'polaris', 'https://polaris.example.test') RETURNING id`).Scan(&connID); err != nil {
+	q := repo.New(f.gdb)
+	conn, err := q.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
+		ID: repo.PGUUID(repo.NewUUID()), Name: "status-conn", Type: "polaris",
+		Url: "https://polaris.example.test",
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	var engineID pgtype.UUID
-	if err := f.pool.QueryRow(ctx, `INSERT INTO engines (name, kind, class, connection_id)
-		VALUES ('status-engine', 'trino', 'federated', $1) RETURNING id`, connID).Scan(&engineID); err != nil {
+	engine, err := q.CreateEngine(ctx, db.CreateEngineParams{
+		Name: "status-engine", Kind: "trino", Class: "federated", ConnectionID: conn.ID,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
+	engineID := engine.ID
 
 	f.h.engineStatus = engineStatusFunc(func(_ context.Context, e db.Engine) (SystemStatusItemStatus, string) {
 		if e.ID == engineID {
