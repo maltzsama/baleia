@@ -13,7 +13,9 @@ test('@issue-22 connection onboarding renders providers and the schema form', as
 
 	await expect(page.getByRole('heading', { name: 'New connection' })).toBeVisible();
 
-	const card = page.getByTestId('provider-card').first();
+	// Planned types render as disabled cards and may sort before the creatable
+	// ones, so pick the first enabled card rather than the first card.
+	const card = page.locator('[data-testid="provider-card"]:not([disabled])').first();
 	await expect(card).toBeVisible();
 	await card.click();
 

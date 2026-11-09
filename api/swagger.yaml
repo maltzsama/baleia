@@ -1696,13 +1696,19 @@ components:
 
     CreateCatalogRequest:
       type: object
-      required: [name, trino_catalog_name, warehouse]
+      required: [name, trino_catalog_name]
       properties:
         name:               { type: string }
         trino_catalog_name:
           type: string
           pattern: '^[a-z][a-z0-9_]{0,62}$'
-        warehouse:          { type: string }
+        warehouse:
+          type: string
+          description: >-
+            Warehouse or logical source the connector addresses. Required for
+            catalog managers and Iceberg REST catalogs; omitted for databases
+            (their catalog falls back to the connection's database) and for
+            endpointless catalogs (memory, blackhole, faker, jmx, tpch, tpcds).
         connector:
           type: string
           default: iceberg

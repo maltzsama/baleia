@@ -128,13 +128,6 @@ func All() []connections.Provider {
 		trino(connections.KindLoki, "Grafana Loki", "Grafana Loki logs, exposed through Trino.", connections.CategoryObservability, ""),
 		trino(connections.KindPrometheus, "Prometheus", "Prometheus metrics, exposed through Trino.", connections.CategoryObservability, ""),
 		trino(connections.KindGSheets, "Google Sheets", "Google Sheets spreadsheets, exposed through Trino.", connections.CategoryExternal, ""),
-		// Synthetic and internal catalogs.
-		trino(connections.KindFaker, "Faker", "Synthetic Faker data, exposed through Trino.", connections.CategorySynthetic, ""),
-		trino(connections.KindMemory, "Memory", "In-memory Trino catalog.", connections.CategoryInternal, ""),
-		trino(connections.KindBlackhole, "Black Hole", "Trino Black Hole catalog.", connections.CategoryInternal, ""),
-		trino(connections.KindJMX, "JMX", "Trino JMX monitoring catalog.", connections.CategoryInternal, ""),
-		trino(connections.KindTPCH, "TPC-H", "TPC-H synthetic benchmark data.", connections.CategorySynthetic, ""),
-		trino(connections.KindTPCDS, "TPC-DS", "TPC-DS synthetic benchmark data.", connections.CategorySynthetic, ""),
 		// Lakehouse table formats.
 		trino(connections.KindDelta, "Delta Lake", "Delta Lake tables, exposed through Trino.", connections.CategoryLakehouse, "delta_lake"),
 		trino(connections.KindHudi, "Apache Hudi", "Apache Hudi tables, exposed through Trino.", connections.CategoryLakehouse, "hudi"),
