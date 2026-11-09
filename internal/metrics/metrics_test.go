@@ -34,6 +34,7 @@ func registry(t *testing.T) *Registry {
 	return r
 }
 
+// scrape renders the handler for one request and returns the status and body.
 func scrape(t *testing.T, h http.Handler, auth string) (int, string) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
