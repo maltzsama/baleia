@@ -241,7 +241,7 @@ func newAuthzHandlers(t *testing.T) (*API, *authzFake, *fakeTrino) {
 		conn: db.CatalogConnection{ID: connID, Name: "src", Type: "polaris", Url: "http://polaris:8181", CreatedBy: owner, CredentialsEnc: &sealed},
 		cat: db.Catalog{
 			ID: pgtype.UUID{Bytes: [16]byte{0xCA}, Valid: true}, ConnectionID: connID, Name: "wh", Origin: "source", TrinoCatalogName: strp("wh"),
-			ClusterID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Warehouse: strp("wh"), Connector: strp("iceberg"), ExtraProps: []byte("{}"),
+			ClusterID: pgtype.UUID{Bytes: [16]byte{0xCC}, Valid: true}, Warehouse: strp("wh"), SourceRef: strp("wh"), Connector: strp("iceberg"), ExtraProps: []byte("{}"),
 		},
 	}
 	// The catalog's primary binding, active (#38).
@@ -318,7 +318,7 @@ func TestUpdateCatalog_Authz(t *testing.T) {
 	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	conn, cat := reqIDs(q)
-	body := &CreateCatalogRequest{Warehouse: "wh2"}
+	body := &CreateCatalogRequest{Warehouse: strp("wh2")}
 
 	resp, err := h.UpdateCatalog(ctxAs(strangerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: body})
 	if err != nil {
@@ -464,7 +464,7 @@ func TestCreateCatalog_ForeignUser404_NothingWritten(t *testing.T) {
 	t.Parallel()
 	h, q, ft := newAuthzHandlers(t)
 	conn, _ := reqIDs(q)
-	resp, err := h.CreateCatalog(ctxAs(strangerID, "member"), CreateCatalogRequestObject{ConnectionId: conn, Body: &CreateCatalogRequest{Name: "x", TrinoCatalogName: "x", Warehouse: "x"}})
+	resp, err := h.CreateCatalog(ctxAs(strangerID, "member"), CreateCatalogRequestObject{ConnectionId: conn, Body: &CreateCatalogRequest{Name: "x", TrinoCatalogName: "x", Warehouse: strp("x")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -733,7 +733,7 @@ func TestUpdateCatalog_DeletedIsNotRecreated(t *testing.T) {
 	b.LifecycleState = "disabled"
 	q.track(b)
 	conn, cat := reqIDs(q)
-	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: "wh2"}})
+	resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: strp("wh2")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -750,7 +750,7 @@ func TestNativeCatalogsAreNotManaged(t *testing.T) {
 	q.cat.Origin = "native"
 	conn, cat := reqIDs(q)
 	owner := ctxAs(ownerID, "member")
-	u, _ := h.UpdateCatalog(owner, UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: "x"}})
+	u, _ := h.UpdateCatalog(owner, UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &CreateCatalogRequest{Warehouse: strp("x")}})
 	d, _ := h.DeleteCatalog(owner, DeleteCatalogRequestObject{ConnectionId: conn, CatalogId: cat})
 	s, _ := h.SyncCatalog(owner, SyncCatalogRequestObject{CatalogId: cat})
 	for name, code := range map[string]int{"update": visitCode(t, u), "delete": visitCode(t, d), "sync": visitCode(t, s)} {

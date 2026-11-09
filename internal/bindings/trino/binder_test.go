@@ -75,6 +75,9 @@ func TestProject_PolarisBuildsPolarisShape(t *testing.T) {
 	if p.Version != "d0e1bd0910fac8707c67296aa19bffbfa2740e4bbe578b4b15aa29897a9aa2a9" {
 		t.Errorf("version = %s; the Polaris projection changed", p.Version)
 	}
+	if _, err := newTestBinder().Project(bindings.BindingSpec{EngineCatalog: "x"}, src); !errors.Is(err, bindings.ErrInvalid) {
+		t.Errorf("polaris without a warehouse: %v, want ErrInvalid", err)
+	}
 }
 
 func mapsEqual(a, b map[string]string) bool {
@@ -87,6 +90,25 @@ func mapsEqual(a, b map[string]string) bool {
 		}
 	}
 	return true
+}
+
+// TestProject_Synthetic: endpointless catalogs project no properties and need
+// no warehouse (ADR 0021 D.7).
+func TestProject_Synthetic(t *testing.T) {
+	t.Parallel()
+	b := newTestBinder()
+	for _, kind := range []connections.Kind{
+		connections.KindFaker, connections.KindMemory, connections.KindBlackhole,
+		connections.KindJMX, connections.KindTPCH, connections.KindTPCDS,
+	} {
+		p, err := b.Project(bindings.BindingSpec{EngineCatalog: "my_" + string(kind)}, cfg(kind, nil, nil))
+		if err != nil {
+			t.Fatalf("%s: %v", kind, err)
+		}
+		if len(p.Properties) != 0 {
+			t.Errorf("%s: properties = %v, want none", kind, p.Properties)
+		}
+	}
 }
 
 // TestProject_Kinds fixes the projection of every bindable kind.
@@ -585,6 +607,9 @@ func TestSupports(t *testing.T) {
 		connections.KindUnity:         {"iceberg"},
 		connections.KindPostgreSQL:    {"postgresql"}, connections.KindMySQL: {"mysql"},
 		connections.KindMariaDB: {"mariadb"}, connections.KindSQLServer: {"sqlserver"}, connections.KindOracle: {"oracle"},
+		connections.KindFaker: {"faker"}, connections.KindMemory: {"memory"},
+		connections.KindBlackhole: {"blackhole"}, connections.KindJMX: {"jmx"},
+		connections.KindTPCH: {"tpch"}, connections.KindTPCDS: {"tpcds"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("supports = %v", got)

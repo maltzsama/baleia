@@ -102,9 +102,16 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "missing body"}}, nil
 	}
 	body := *request.Body
-	if body.TrinoCatalogName == "" || body.Name == "" || body.Warehouse == "" {
+	if body.TrinoCatalogName == "" || body.Name == "" {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "trino_catalog_name, name and warehouse are required"}}, nil
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "trino_catalog_name and name are required"}}, nil
+	}
+	// The warehouse is optional: the binder requires it only for the catalog
+	// types that address a warehouse (ADR 0021 D.7, CR-10). Databases fall back
+	// to the connection's database and endpointless catalogs ignore it.
+	warehouse := ""
+	if body.Warehouse != nil {
+		warehouse = *body.Warehouse
 	}
 	if !validEngineCatalogName(body.TrinoCatalogName) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
@@ -133,7 +140,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	if body.ExtraProps != nil {
 		extra = *body.ExtraProps
 	}
-	spec := bindings.BindingSpec{EngineCatalog: body.TrinoCatalogName, Connector: connector, SourceRef: body.Warehouse, ExtraProps: extra}
+	spec := bindings.BindingSpec{EngineCatalog: body.TrinoCatalogName, Connector: connector, SourceRef: warehouse, ExtraProps: extra}
 	proj, err := h.projectBinding(ctx, conn, cluster.EngineID, pgtype.UUID{}, spec)
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
@@ -174,7 +181,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 			Description:      body.Description,
 			TrinoCatalogName: &body.TrinoCatalogName,
 			ClusterID:        cluster.ID,
-			Warehouse:        &body.Warehouse,
+			Warehouse:        &warehouse,
 			Connector:        &proj.Connector,
 			ExtraProps:       extraProps,
 		})
@@ -377,8 +384,8 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 		newTrinoName = body.TrinoCatalogName
 	}
 	newWarehouse := existing.WarehouseName()
-	if body.Warehouse != "" {
-		newWarehouse = body.Warehouse
+	if body.Warehouse != nil && *body.Warehouse != "" {
+		newWarehouse = *body.Warehouse
 	}
 	newConnector := existing.ConnectorName()
 	if body.Connector != nil && *body.Connector != "" {
