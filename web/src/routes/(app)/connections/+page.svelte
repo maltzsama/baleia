@@ -227,15 +227,15 @@
 		const target = adding;
 		addingBusy = true;
 		try {
-			const name = normalizeCatalogName(addName);
-			if (!name) throw new Error('Choose a name that can be used as a SQL identifier.');
-			await createCatalog(target.id, {
-				name: addName,
-				trino_catalog_name: name,
-				warehouse: addName,
-				connector: addConnector,
-				description: ''
+			const base = addName.trim() || 'catalog';
+			const outputs = connectorsFor(target).map((connector, i) => {
+				const raw = i === 0 ? base : `${base}_${connector}`;
+				return { name: raw, trino_catalog_name: normalizeCatalogName(raw) };
 			});
+			if (outputs.some((o) => !o.trino_catalog_name)) {
+				throw new Error('Choose a name that can be used as a SQL identifier.');
+			}
+			await createCatalog(target.id, { catalogs: outputs, warehouse: base, description: '' });
 			toasts.success(m.connections_catalog_created({ addName }));
 			addOpen = false;
 			adding = null;

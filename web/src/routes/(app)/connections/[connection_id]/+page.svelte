@@ -26,8 +26,8 @@
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Input from '$lib/ui/Input.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
-	import Select from '$lib/ui/Select.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
+	import { normalizeCatalogName } from '$lib/connections/providers';
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
 	import EngineBadge from '$lib/ui/patterns/EngineBadge.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
@@ -53,9 +53,7 @@
 
 	let catalogOpen = $state(false);
 	let catalogName = $state('');
-	let catalogTrinoName = $state('');
 	let catalogWarehouse = $state('');
-	let catalogConnector = $state('');
 	let support = $state<BindingSupport | null>(null);
 	let catalogSaving = $state(false);
 	let catalogError = $state('');
@@ -134,28 +132,26 @@
 	function openCatalog() {
 		catalogError = '';
 		catalogName = (conn?.name ?? '').replace(/[^a-zA-Z0-9_]+/g, '_');
-		catalogTrinoName = (conn?.name ?? '')
-			.toLowerCase()
-			.replace(/[^a-z0-9_]+/g, '_')
-			.replace(/^[^a-z]+/, 'c_');
 		catalogWarehouse = '';
-		catalogConnector = support?.connectors[0] ?? '';
 		catalogOpen = true;
 	}
 
 	async function submitCatalog() {
-		if (!catalogName || !catalogTrinoName || !catalogWarehouse) {
-			catalogError = m.connections_name_engine_name_and_warehouse_are_require();
+		if (!catalogName.trim()) {
+			catalogError = m.field_required();
 			return;
 		}
 		catalogSaving = true;
 		catalogError = '';
 		try {
+			const connectors = support?.connectors ?? [];
+			const outputs = connectors.map((connector, i) => {
+				const raw = i === 0 ? catalogName : `${catalogName}_${connector}`;
+				return { name: raw, trino_catalog_name: normalizeCatalogName(raw) };
+			});
 			await createCatalog(connectionId, {
-				name: catalogName,
-				trino_catalog_name: catalogTrinoName,
-				warehouse: catalogWarehouse,
-				connector: catalogConnector
+				catalogs: outputs,
+				warehouse: catalogWarehouse.trim() || undefined
 			});
 			catalogs = await listConnectionCatalogs(connectionId);
 			catalogOpen = false;
@@ -367,19 +363,10 @@
 <Modal bind:open={catalogOpen} title={m.common_add_catalog()}>
 	<div class="flex flex-col gap-3 text-[12px]">
 		<Input label={m.common_name()} bind:value={catalogName} />
-		<Input label={m.connections_engine_name()} bind:value={catalogTrinoName} class="font-mono" />
 		<Input
 			label={m.connections_warehouse_database()}
 			bind:value={catalogWarehouse}
 			class="font-mono"
-		/>
-		<Select
-			label={m.common_connector()}
-			bind:value={catalogConnector}
-			options={(support?.connectors ?? []).map((connector) => ({
-				value: connector,
-				label: connector
-			}))}
 		/>
 		{#if catalogError}<p class="text-danger" role="alert">{catalogError}</p>{/if}
 	</div>

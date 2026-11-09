@@ -100,54 +100,57 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "missing body"}}, nil
 	}
 	body := *request.Body
-	if body.TrinoCatalogName == "" || body.Name == "" {
+	if len(body.Catalogs) == 0 {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "trino_catalog_name and name are required"}}, nil
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: "catalogs are required"}}, nil
+	}
+	// The connection type drives the connectors, in the order the registry
+	// declares them (ADR 0021 D.3, CR-08): one request output per catalog type.
+	connectors := h.connections.CatalogTypes(connections.Kind(conn.Type))
+	if len(connectors) != len(body.Catalogs) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: fmt.Sprintf("this connection type exposes %d catalog outputs", len(connectors))}}, nil
+	}
+	seenName := map[string]bool{}
+	seenTrino := map[string]bool{}
+	for _, c := range body.Catalogs {
+		if c.Name == "" {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("name is required", FieldError{Field: "name", Code: FieldCodeRequired})}, nil
+		}
+		if seenName[c.Name] {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("catalog names must be unique", FieldError{Field: "name", Code: FieldCodeInvalidFormat})}, nil
+		}
+		seenName[c.Name] = true
+		if !validEngineCatalogName(c.TrinoCatalogName) {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+				"trino_catalog_name must match ^[a-z][a-z0-9_]{0,62}$",
+				FieldError{Field: "trino_catalog_name", Code: FieldCodeInvalidFormat},
+			)}, nil
+		}
+		if seenTrino[c.TrinoCatalogName] {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("trino catalog names must be unique", FieldError{Field: "trino_catalog_name", Code: FieldCodeInvalidFormat})}, nil
+		}
+		seenTrino[c.TrinoCatalogName] = true
 	}
 	// The warehouse is optional: the binder requires it only for the catalog
-	// types that address a warehouse (ADR 0021 D.7, CR-10). Databases fall back
-	// to the connection's database and endpointless catalogs ignore it.
+	// types that address a warehouse (ADR 0021 D.7, CR-10).
 	warehouse := ""
 	if body.Warehouse != nil {
 		warehouse = *body.Warehouse
 	}
-	if !validEngineCatalogName(body.TrinoCatalogName) {
-		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
-			"trino_catalog_name must match ^[a-z][a-z0-9_]{0,62}$",
-			FieldError{Field: "trino_catalog_name", Code: FieldCodeInvalidFormat},
-		)}, nil
+	extra := map[string]string{}
+	if body.ExtraProps != nil {
+		extra = *body.ExtraProps
 	}
 
 	cluster, err := h.topology.DefaultCluster(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get default cluster: %w", err)
 	}
-	connector := ""
-	if body.Connector != nil {
-		connector = *body.Connector
-	}
-	if connector != "" && !validEngineCatalogName(connector) {
-		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
-			"connector must match ^[a-z][a-z0-9_]{0,62}$",
-			FieldError{Field: "connector", Code: FieldCodeInvalidFormat},
-		)}, nil
-	}
-	extra := map[string]string{}
-	if body.ExtraProps != nil {
-		extra = *body.ExtraProps
-	}
-	spec := bindings.BindingSpec{EngineCatalog: body.TrinoCatalogName, Connector: connector, SourceRef: warehouse, ExtraProps: extra}
-	proj, err := h.projectBinding(ctx, conn, cluster.EngineID, db.UUID{}, spec)
-	if bindingInvalid(err) {
-		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	extraProps, _ := json.Marshal(extra)
 	if !cluster.EngineID.Valid {
 		return nil, errors.New("the default Trino cluster has no engine")
 	}
@@ -155,13 +158,14 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	if err != nil {
 		return nil, err
 	}
+	// A partial multi-create must not leave cached catalog lists stale.
+	defer func() {
+		if h.catalogCache != nil {
+			h.catalogCache.Clear()
+		}
+	}()
 
-	// Desired state first (catalog and its binding, provisioning), then the
-	// lifecycle applies it (#38).
-	var cat db.Catalog
-	var binding db.CatalogBinding
-	// Share with: an active grant to the chosen workspace, so the new catalog is
-	// reachable without the removed personal auto-reach (ADR 0018 §3).
+	// Share with: an active grant to the chosen workspace (ADR 0018 §3).
 	var shareWith db.UUID
 	if body.ShareWithWorkspaceId != nil {
 		if err := requireWorkspaceAccess(ctx, h.access, *body.ShareWithWorkspaceId); err != nil {
@@ -172,54 +176,110 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 		}
 		shareWith = db.UUID{Bytes: *body.ShareWithWorkspaceId, Valid: true}
 	}
-	txErr := h.inCatalogTx(ctx, func(q catalogWriteStore) error {
-		c, err := q.CreateCatalog(ctx, db.CreateCatalogParams{
-			ConnectionID:     connID,
-			Name:             body.Name,
-			Description:      body.Description,
-			TrinoCatalogName: &body.TrinoCatalogName,
-			ClusterID:        cluster.ID,
-			Warehouse:        &warehouse,
-			Connector:        &proj.Connector,
-			ExtraProps:       extraProps,
-		})
-		if err != nil {
-			return err
-		}
-		cat = c
-		binding, err = upsertPrimaryBinding(ctx, q, cluster, c, bindings.StateProvisioning, proj.Version)
-		if err != nil {
-			return err
-		}
-		if shareWith.Valid {
-			_, err = q.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{
-				WorkspaceID: shareWith,
-				CatalogID:   c.ID,
-				GrantedBy:   p.UserID,
-			})
-		}
-		return err
-	})
-	if txErr != nil {
-		return nil, fmt.Errorf("create catalog: %w", txErr)
-	}
 
 	l := h.lifecycleOn(cluster, eng)
-	binding, err = l.Provision(ctx, binding, proj)
-	if errors.Is(err, bindings.ErrConcurrentChange) {
-		h.audited(ctx, withID(ev, cat.ID).Failed(audit.ReasonConflict))
-		return CreateCatalog409JSONResponse{ConflictJSONResponse: concurrentChange(binding)}, nil
+
+	// Provision the hive connector last: its table redirection (#86) names only
+	// siblings that are already active.
+	type output struct{ name, trinoName, connector string }
+	ordered := make([]output, 0, len(connectors))
+	for i, connector := range connectors {
+		if connector != "hive" {
+			ordered = append(ordered, output{body.Catalogs[i].Name, body.Catalogs[i].TrinoCatalogName, connector})
+		}
 	}
-	if err != nil {
-		return nil, err
+	for i, connector := range connectors {
+		if connector == "hive" {
+			ordered = append(ordered, output{body.Catalogs[i].Name, body.Catalogs[i].TrinoCatalogName, connector})
+		}
 	}
-	h.observe(ctx, l)
-	h.catalogCache.Clear()
-	h.startMetadataSync(ctx, cat.ID)
-	ev = withID(ev, cat.ID)
-	ev.Changes = map[string]audit.Change{"name": {To: cat.Name}, "trino_catalog_name": {To: cat.TrinoName()}, "warehouse": {To: cat.WarehouseName()}}
+
+	// Project every output up front so a validation failure surfaces before any
+	// catalog row is written. The hive projection is re-done after its siblings
+	// are provisioned, when table redirection can name them.
+	type plan struct {
+		out  output
+		proj bindings.Projection
+	}
+	plans := make([]plan, 0, len(ordered))
+	for _, out := range ordered {
+		spec := bindings.BindingSpec{EngineCatalog: out.trinoName, Connector: out.connector, SourceRef: warehouse, ExtraProps: extra}
+		proj, err := h.projectBinding(ctx, conn, cluster.EngineID, db.UUID{}, spec)
+		if bindingInvalid(err) {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		plans = append(plans, plan{out, proj})
+	}
+
+	created := make([]Catalog, 0, len(plans))
+	for _, pl := range plans {
+		proj := pl.proj
+		if pl.out.connector == "hive" {
+			spec := bindings.BindingSpec{EngineCatalog: pl.out.trinoName, Connector: pl.out.connector, SourceRef: warehouse, ExtraProps: extra}
+			proj, err = h.projectBinding(ctx, conn, cluster.EngineID, db.UUID{}, spec)
+			if bindingInvalid(err) {
+				h.audited(ctx, ev.Failed(audit.ReasonValidation))
+				return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+		extraProps, _ := json.Marshal(extra)
+
+		var cat db.Catalog
+		var binding db.CatalogBinding
+		txErr := h.inCatalogTx(ctx, func(q catalogWriteStore) error {
+			c, err := q.CreateCatalog(ctx, db.CreateCatalogParams{
+				ConnectionID:     connID,
+				Name:             pl.out.name,
+				Description:      body.Description,
+				TrinoCatalogName: &pl.out.trinoName,
+				ClusterID:        cluster.ID,
+				Warehouse:        &warehouse,
+				Connector:        &proj.Connector,
+				ExtraProps:       extraProps,
+			})
+			if err != nil {
+				return err
+			}
+			cat = c
+			binding, err = upsertPrimaryBinding(ctx, q, cluster, c, bindings.StateProvisioning, proj.Version)
+			if err != nil {
+				return err
+			}
+			if shareWith.Valid {
+				_, err = q.UpsertWorkspaceCatalogGrant(ctx, db.UpsertWorkspaceCatalogGrantParams{
+					WorkspaceID: shareWith,
+					CatalogID:   c.ID,
+					GrantedBy:   p.UserID,
+				})
+			}
+			return err
+		})
+		if txErr != nil {
+			return nil, fmt.Errorf("create catalog: %w", txErr)
+		}
+
+		binding, err = l.Provision(ctx, binding, proj)
+		if errors.Is(err, bindings.ErrConcurrentChange) {
+			h.audited(ctx, withID(ev, cat.ID).Failed(audit.ReasonConflict))
+			return CreateCatalog409JSONResponse{ConflictJSONResponse: concurrentChange(binding)}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		h.observe(ctx, l)
+		h.startMetadataSync(ctx, cat.ID)
+		created = append(created, h.catalogResponse(ctx, cat, binding, proj.Version))
+	}
+	ev.Changes = map[string]audit.Change{"catalogs": {To: fmt.Sprint(len(created))}}
 	h.audited(ctx, ev.Allowed())
-	return CreateCatalog201JSONResponse(h.catalogResponse(ctx, cat, binding, proj.Version)), nil
+	return CreateCatalog201JSONResponse(created), nil
 }
 
 // upsertPrimaryBinding writes the managed binding a catalog's Trino columns
@@ -362,7 +422,7 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 		return UpdateCatalog422JSONResponse{UnprocessableEntityJSONResponse: notManaged()}, nil
 	}
 	body := *request.Body
-	if body.TrinoCatalogName != "" && !validEngineCatalogName(body.TrinoCatalogName) {
+	if body.TrinoCatalogName != nil && *body.TrinoCatalogName != "" && !validEngineCatalogName(*body.TrinoCatalogName) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
 			"trino_catalog_name must match ^[a-z][a-z0-9_]{0,62}$",
@@ -378,8 +438,8 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 	}
 
 	newTrinoName := existing.TrinoName()
-	if body.TrinoCatalogName != "" {
-		newTrinoName = body.TrinoCatalogName
+	if body.TrinoCatalogName != nil && *body.TrinoCatalogName != "" {
+		newTrinoName = *body.TrinoCatalogName
 	}
 	newWarehouse := existing.WarehouseName()
 	if body.Warehouse != nil && *body.Warehouse != "" {
@@ -390,8 +450,8 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 		newConnector = *body.Connector
 	}
 	newName := existing.Name
-	if body.Name != "" {
-		newName = body.Name
+	if body.Name != nil && *body.Name != "" {
+		newName = *body.Name
 	}
 	extraProps := existing.ExtraProps
 	if body.ExtraProps != nil && len(*body.ExtraProps) > 0 {

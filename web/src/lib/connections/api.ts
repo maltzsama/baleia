@@ -35,10 +35,8 @@ export type CreateEngineInput = {
 };
 
 export type CreateCatalogInput = {
-	name: string;
-	trino_catalog_name: string;
-	warehouse: string;
-	connector: string;
+	catalogs: { name: string; trino_catalog_name: string }[];
+	warehouse?: string;
 	description?: string;
 };
 
@@ -195,18 +193,16 @@ export async function listConnectionCatalogs(connectionId: string): Promise<Cata
 	return data;
 }
 
-/** Creates a logical catalog and its managed binding on the default engine. */
+/** Creates the connection's logical catalog outputs and their managed bindings. */
 export async function createCatalog(
 	connectionId: string,
 	input: CreateCatalogInput
-): Promise<Catalog> {
+): Promise<Catalog[]> {
 	const { data, error, response } = await client.POST('/connections/{connection_id}/catalogs', {
 		params: { path: { connection_id: connectionId } },
 		body: {
-			name: input.name,
-			trino_catalog_name: input.trino_catalog_name,
+			catalogs: input.catalogs,
 			warehouse: input.warehouse,
-			connector: input.connector,
 			description: input.description,
 			enabled: true
 		}

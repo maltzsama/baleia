@@ -17401,7 +17401,7 @@ type CreateCatalogResponseObject interface {
 	VisitCreateCatalogResponse(w http.ResponseWriter) error
 }
 
-type CreateCatalog201JSONResponse Catalog
+type CreateCatalog201JSONResponse []Catalog
 
 func (response CreateCatalog201JSONResponse) VisitCreateCatalogResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")

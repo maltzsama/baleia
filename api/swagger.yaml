@@ -1696,12 +1696,23 @@ components:
 
     CreateCatalogRequest:
       type: object
-      required: [name, trino_catalog_name]
+      required: [catalogs]
+      description: >
+        Registers the connection's logical catalog outputs. Each entry names one
+        of the connection type's Trino catalog types, in the order
+        GET /connection-providers lists them; the backend derives the connector.
       properties:
-        name:               { type: string }
-        trino_catalog_name:
-          type: string
-          pattern: '^[a-z][a-z0-9_]{0,62}$'
+        catalogs:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [name, trino_catalog_name]
+            properties:
+              name: { type: string }
+              trino_catalog_name:
+                type: string
+                pattern: '^[a-z][a-z0-9_]{0,62}$'
         warehouse:
           type: string
           description: >-
@@ -1709,10 +1720,6 @@ components:
             catalog managers and Iceberg REST catalogs; omitted for databases
             (their catalog falls back to the connection's database) and for
             endpointless catalogs (memory, blackhole, faker, jmx, tpch, tpcds).
-        connector:
-          type: string
-          default: iceberg
-          pattern: '^[a-z][a-z0-9_]{0,62}$'
         description:        { type: string }
         extra_props:
           type: object
@@ -1723,10 +1730,31 @@ components:
           type: string
           format: uuid
           description: >-
-            Workspace to grant the new catalog to as an active grant (the
+            Workspace to grant the new catalogs to as active grants (the
             connection wizard's "Share with", preselected to the current
-            workspace). Omitted, the catalog is created unshared; the owner
-            shares it later from the catalog's Access screen.
+            workspace). Omitted, the catalogs are created unshared; the owner
+            shares them later from each catalog's Access screen.
+
+    UpdateCatalogRequest:
+      type: object
+      description: >
+        Partial update. `name` renames the catalog, `trino_catalog_name`
+        renames its Trino catalog identifier, and the other fields replace
+        their stored value.
+      properties:
+        name:               { type: string }
+        trino_catalog_name:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{0,62}$'
+        warehouse:          { type: string }
+        connector:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{0,62}$'
+        description:        { type: string }
+        extra_props:
+          type: object
+          additionalProperties: { type: string }
+          description: Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties.
 
     # ── Catalog Connections ────────────────────────────────────
     CatalogConnection:
@@ -7926,10 +7954,12 @@ paths:
             schema: { $ref: "#/components/schemas/CreateCatalogRequest" }
       responses:
         "201":
-          description: "Catalog created"
+          description: "Catalogs created"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Catalog" }
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Catalog" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -7966,7 +7996,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/CreateCatalogRequest" }
+            schema: { $ref: "#/components/schemas/UpdateCatalogRequest" }
       responses:
         "200":
           description: "Catalog updated"
