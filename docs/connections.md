@@ -14,24 +14,72 @@ user-facing connector selection.
 
 | Kind | Label | Category | Access modes | Roles | Engine kind | Trino catalog types | Status |
 |---|---|---|---|---|---|---|---|
+| `bigquery` | BigQuery | cloud_platform | trino | — | — | bigquery | planned |
+| `blackhole` | Black Hole | internal_catalog | trino | — | — | blackhole | planned |
+| `cassandra` | Apache Cassandra | nosql | trino | — | — | cassandra | planned |
 | `clickhouse` | ClickHouse | analytical | direct | metadata, direct_engine | clickhouse | — | supported |
-| `doris` | Apache Doris | engine | — | federated_engine | doris | — | unsupported (planned after v1 (#21)) |
+| `delta` | Delta Lake | lakehouse | trino | — | — | delta_lake | planned |
+| `doris` | Apache Doris | engine | — | federated_engine | doris | — | planned (planned after v1 (#21)) |
+| `druid` | Apache Druid | analytics | trino | — | — | druid | planned |
+| `duckdb` | DuckDB | analytical | trino | — | — | duckdb | planned |
+| `elasticsearch` | Elasticsearch | search | trino | — | — | elasticsearch | planned |
+| `exasol` | Exasol | relational | trino | — | — | exasol | planned |
+| `faker` | Faker | synthetic | trino | — | — | faker | planned |
 | `flightsql` | Arrow Flight SQL | engine | direct | metadata, direct_engine | flightsql | — | supported |
 | `glue` | AWS Glue Data Catalog | metastore | trino | metadata | — | iceberg, hive, delta_lake | supported |
+| `gsheets` | Google Sheets | external_service | trino | — | — | gsheets | planned |
 | `hive` | Hive Metastore | metastore | trino | — | — | iceberg, hive, delta_lake | supported |
+| `hudi` | Apache Hudi | lakehouse | trino | — | — | hudi | planned |
 | `iceberg` | Iceberg REST catalog | catalog_manager | trino | metadata | — | iceberg | supported |
+| `ignite` | Apache Ignite | relational | trino | — | — | ignite | planned |
+| `jmx` | JMX | internal_catalog | trino | — | — | jmx | planned |
+| `kafka` | Apache Kafka | streaming | trino | — | — | kafka | planned |
 | `lakekeeper` | Lakekeeper | catalog_manager | trino | metadata | — | iceberg | supported |
+| `loki` | Grafana Loki | observability | trino | — | — | loki | planned |
 | `mariadb` | MariaDB | relational | direct, trino | metadata, direct_engine | mariadb | mariadb | supported |
+| `memory` | Memory | internal_catalog | trino | — | — | memory | planned |
+| `mongodb` | MongoDB | nosql | trino | — | — | mongodb | planned |
 | `mysql` | MySQL | relational | direct, trino | metadata, direct_engine | mysql | mysql | supported |
 | `nessie` | Project Nessie | catalog_manager | trino | metadata | — | iceberg | supported |
+| `opensearch` | OpenSearch | search | trino | — | — | opensearch | planned |
 | `oracle` | Oracle Database | relational | direct, trino | metadata, direct_engine | oracle | oracle | supported |
+| `pinot` | Apache Pinot | analytics | trino | — | — | pinot | planned |
 | `polaris` | Apache Polaris | catalog_manager | trino | metadata | — | iceberg | supported |
 | `postgresql` | PostgreSQL | relational | direct, trino | metadata, direct_engine | postgresql | postgresql | supported |
+| `prometheus` | Prometheus | observability | trino | — | — | prometheus | planned |
+| `redis` | Redis | nosql | trino | — | — | redis | planned |
+| `redshift` | Amazon Redshift | cloud_platform | trino | — | — | redshift | planned |
+| `singlestore` | SingleStore | relational | trino | — | — | singlestore | planned |
+| `snowflake` | Snowflake | cloud_platform | trino | — | — | snowflake | planned |
 | `sqlite` | SQLite | relational | direct | metadata, direct_engine | sqlite | — | unsupported (BALEIA_SQLITE_ROOT not set) |
 | `sqlserver` | SQL Server | relational | direct, trino | metadata, direct_engine | sqlserver | sqlserver | supported |
-| `starrocks` | StarRocks | engine | — | federated_engine | starrocks | — | unsupported (planned after v1 (#30)) |
+| `starrocks` | StarRocks | engine | — | federated_engine | starrocks | — | planned (planned after v1 (#30)) |
+| `system` | System | internal_catalog | — | — | — | — | not_applicable (reserved system catalog; not user-creatable) |
+| `tpcds` | TPC-DS | synthetic | trino | — | — | tpcds | planned |
+| `tpch` | TPC-H | synthetic | trino | — | — | tpch | planned |
 | `trino` | Trino | engine | — | metadata, federated_engine | trino | — | supported |
 | `unity` | Unity Catalog | catalog_manager | trino | metadata | — | iceberg | supported |
+
+## `bigquery` — BigQuery
+
+Google BigQuery data warehouse, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `blackhole` — Black Hole
+
+Trino Black Hole catalog.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `cassandra` — Apache Cassandra
+
+Apache Cassandra store, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
 
 ## `clickhouse` — ClickHouse
 
@@ -46,16 +94,54 @@ ClickHouse analytical database; direct access is supported and Trino access is p
 | `username` | text |  | `default` |  |
 | `password` | secret |  |  |  |
 
-## `doris` — Apache Doris
+## `delta` — Delta Lake
 
-Apache Doris federated query engine (planned).
+Delta Lake tables, exposed through Trino.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
-| `host` | text | yes |  |  |
-| `port` | int |  | `9030` |  |
-| `username` | text |  |  |  |
-| `password` | secret |  |  |  |
+
+## `doris` — Apache Doris
+
+Apache Doris federated query engine.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `druid` — Apache Druid
+
+Apache Druid analytics store, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `duckdb` — DuckDB
+
+DuckDB analytical database, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `elasticsearch` — Elasticsearch
+
+Elasticsearch search store, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `exasol` — Exasol
+
+Exasol relational database, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `faker` — Faker
+
+Synthetic Faker data, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
 
 ## `flightsql` — Arrow Flight SQL
 
@@ -91,6 +177,13 @@ AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed throu
 | `storage.access_key` | text |  |  | Only when the table data is not on AWS S3 with the Glue credentials |
 | `storage.secret_key` | secret |  |  |  |
 
+## `gsheets` — Google Sheets
+
+Google Sheets spreadsheets, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
 ## `hive` — Hive Metastore
 
 Hive Metastore (Thrift) holding Iceberg, Hive and Delta Lake tables, exposed through Trino.
@@ -104,6 +197,13 @@ Hive Metastore (Thrift) holding Iceberg, Hive and Delta Lake tables, exposed thr
 | `storage.path_style` | bool |  | `false` | Required by most S3-compatible stores (RustFS, MinIO) |
 | `storage.access_key` | text |  |  |  |
 | `storage.secret_key` | secret |  |  |  |
+
+## `hudi` — Apache Hudi
+
+Apache Hudi tables, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
 
 ## `iceberg` — Iceberg REST catalog
 
@@ -125,6 +225,27 @@ Iceberg REST catalog, exposed through Trino.
 | `storage.access_key` | text |  |  | Set it when the object store has no STS: the engine then uses these credentials instead of vended ones |
 | `storage.secret_key` | secret |  |  |  |
 
+## `ignite` — Apache Ignite
+
+Apache Ignite distributed database, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `jmx` — JMX
+
+Trino JMX monitoring catalog.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `kafka` — Apache Kafka
+
+Apache Kafka streaming store, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
 ## `lakekeeper` — Lakekeeper
 
 Lakekeeper Iceberg REST catalog, exposed through Trino.
@@ -144,6 +265,13 @@ Lakekeeper Iceberg REST catalog, exposed through Trino.
 | `storage.access_key` | text |  |  | Set it when the object store has no STS: the engine then uses these credentials instead of vended ones |
 | `storage.secret_key` | secret |  |  |  |
 
+## `loki` — Grafana Loki
+
+Grafana Loki logs, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
 ## `mariadb` — MariaDB
 
 MariaDB relational database, queried directly or exposed through Trino.
@@ -156,6 +284,20 @@ MariaDB relational database, queried directly or exposed through Trino.
 | `tls` | select |  | `preferred` | one of `preferred`, `true`, `skip-verify`, `false` |
 | `username` | text | yes |  |  |
 | `password` | secret |  |  |  |
+
+## `memory` — Memory
+
+In-memory Trino catalog.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `mongodb` — MongoDB
+
+MongoDB store, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
 
 ## `mysql` — MySQL
 
@@ -185,6 +327,13 @@ Project Nessie catalog manager, exposed through Trino.
 | `storage.access_key` | text |  |  | Set it when the object store has no STS: the engine then uses these credentials instead of vended ones |
 | `storage.secret_key` | secret |  |  |  |
 
+## `opensearch` — OpenSearch
+
+OpenSearch search store, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
 ## `oracle` — Oracle Database
 
 Oracle Database, queried directly or exposed through Trino.
@@ -197,6 +346,13 @@ Oracle Database, queried directly or exposed through Trino.
 | `cancel_with_alter_system` | bool |  | `false` | Requires the ALTER SYSTEM permission and SELECT on v$session and v$sql; lets a running statement be cancelled from another process |
 | `username` | text | yes |  |  |
 | `password` | secret |  |  |  |
+
+## `pinot` — Apache Pinot
+
+Apache Pinot analytics store, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
 
 ## `polaris` — Apache Polaris
 
@@ -228,6 +384,41 @@ PostgreSQL relational database, queried directly or exposed through Trino.
 | `username` | text | yes |  |  |
 | `password` | secret |  |  |  |
 
+## `prometheus` — Prometheus
+
+Prometheus metrics, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `redis` — Redis
+
+Redis key-value store, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `redshift` — Amazon Redshift
+
+Amazon Redshift data warehouse, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `singlestore` — SingleStore
+
+SingleStore relational database, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `snowflake` — Snowflake
+
+Snowflake data warehouse, exposed through Trino.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
 ## `sqlite` — SQLite
 
 SQLite database, queried directly.
@@ -254,14 +445,31 @@ Microsoft SQL Server relational database, queried directly or exposed through Tr
 
 ## `starrocks` — StarRocks
 
-StarRocks federated query engine (planned).
+StarRocks federated query engine.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
-| `host` | text | yes |  |  |
-| `port` | int |  | `9030` |  |
-| `username` | text |  |  |  |
-| `password` | secret |  |  |  |
+
+## `system` — System
+
+Trino system catalog, reserved and not user-creatable.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `tpcds` — TPC-DS
+
+TPC-DS synthetic benchmark data.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+
+## `tpch` — TPC-H
+
+TPC-H synthetic benchmark data.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
 
 ## `trino` — Trino
 

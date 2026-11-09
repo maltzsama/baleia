@@ -44,7 +44,7 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 	if o.Dialects == nil {
 		o.Dialects = dialect.NewRegistry()
 	}
-	reg, err := connections.NewRegistry(
+	all := []connections.Provider{
 		polaris.New(d),
 		nessie.New(d),
 		iceberg.New(d),
@@ -61,9 +61,9 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 		clickhouse.New(d),
 		flightsql.New(d),
 		trino.New(d, o.Dialects.MustGet(dialect.Trino)),
-		planned.Doris(),
-		planned.StarRocks(),
-	)
+	}
+	all = append(all, planned.All()...)
+	reg, err := connections.NewRegistry(all...)
 	if err != nil {
 		return nil, err
 	}

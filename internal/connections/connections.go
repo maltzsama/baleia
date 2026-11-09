@@ -43,6 +43,36 @@ const (
 	KindTrino     Kind = "trino"
 	KindDoris     Kind = "doris"
 	KindStarRocks Kind = "starrocks"
+
+	// Planned Trino catalog types (ADR 0021 D.9). Declared for the
+	// interoperability inventory; not creatable until implemented.
+	KindBigQuery      Kind = "bigquery"
+	KindSnowflake     Kind = "snowflake"
+	KindRedshift      Kind = "redshift"
+	KindSingleStore   Kind = "singlestore"
+	KindExasol        Kind = "exasol"
+	KindCassandra     Kind = "cassandra"
+	KindMongoDB       Kind = "mongodb"
+	KindRedis         Kind = "redis"
+	KindElasticsearch Kind = "elasticsearch"
+	KindOpenSearch    Kind = "opensearch"
+	KindDruid         Kind = "druid"
+	KindPinot         Kind = "pinot"
+	KindDuckDB        Kind = "duckdb"
+	KindIgnite        Kind = "ignite"
+	KindKafka         Kind = "kafka"
+	KindLoki          Kind = "loki"
+	KindPrometheus    Kind = "prometheus"
+	KindGSheets       Kind = "gsheets"
+	KindFaker         Kind = "faker"
+	KindMemory        Kind = "memory"
+	KindBlackhole     Kind = "blackhole"
+	KindJMX           Kind = "jmx"
+	KindTPCH          Kind = "tpch"
+	KindTPCDS         Kind = "tpcds"
+	KindDelta         Kind = "delta"
+	KindHudi          Kind = "hudi"
+	KindSystem        Kind = "system"
 )
 
 // Role is a way a connection can be used.
@@ -57,9 +87,8 @@ const (
 
 // Family groups kinds for forms and docs.
 //
-// Deprecated: Family is presentation metadata kept for compatibility while the
-// API moves to Category (ADR 0021 D.10). Category is the single source of
-// truth for grouping and ordering.
+// Category is the presentation source of truth (ADR 0021 D.10); Family remains
+// for API compatibility.
 type Family string
 
 const (
@@ -181,6 +210,29 @@ func CapabilitiesFor(modes []AccessMode, metadata bool) Capabilities {
 	out := make(Capabilities, len(modes))
 	for _, m := range modes {
 		out[m] = DefaultCapabilities(metadata)
+	}
+	return out
+}
+
+func allCapabilities() []Capability {
+	return []Capability{
+		CapabilityConnect, CapabilityTestConnection, CapabilityListCatalogs,
+		CapabilityListSchemas, CapabilityListTables, CapabilityRead, CapabilityInsert,
+		CapabilityUpdate, CapabilityDelete, CapabilityCreateTable, CapabilityDropTable,
+		CapabilityAlterTable, CapabilityMetadata, CapabilityTransactions, CapabilityViews,
+	}
+}
+
+// UnknownCapabilities declares every capability of every mode as unknown, which
+// is what planned and not-yet-validated types must use (ADR 0021 D.6).
+func UnknownCapabilities(modes []AccessMode) Capabilities {
+	out := make(Capabilities, len(modes))
+	for _, m := range modes {
+		caps := make(map[Capability]CapabilityState, len(allCapabilities()))
+		for _, c := range allCapabilities() {
+			caps[c] = CapabilityUnknown
+		}
+		out[m] = caps
 	}
 	return out
 }
@@ -393,10 +445,15 @@ func (r *Registry) CatalogTypes(kind Kind) []string {
 	return slices.Clone(p.Meta().TrinoCatalogTypes)
 }
 
-// TrinoBindable reports whether p declares the Trino access mode with at least
-// one catalog mapping (ADR 0021 D.3). It is the single predicate the registry,
-// the Trino binder and the API share for connection-to-Trino compatibility.
+// TrinoBindable reports whether p is a creatable type that declares the Trino
+// access mode with at least one catalog mapping (ADR 0021 D.3). It is the single
+// predicate the registry, the Trino binder and the API share for
+// connection-to-Trino compatibility. Planned and not-applicable types are not
+// bindable because no connection of theirs can exist.
 func TrinoBindable(p Provider) bool {
+	if st := p.Status(); st.State != StateSupported && st.State != StateExperimental {
+		return false
+	}
 	m := p.Meta()
 	return slices.Contains(m.AccessModes, AccessModeTrino) && len(m.TrinoCatalogTypes) > 0
 }
