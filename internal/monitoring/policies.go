@@ -10,8 +10,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Policies reads and writes per-table maintenance parameters (#500);
@@ -27,15 +25,15 @@ type Policies interface {
 	CreatePlannedMaintenanceRun(ctx context.Context, arg db.CreatePlannedMaintenanceRunParams) (db.MaintenanceRun, error)
 	GetTableHealthByTable(ctx context.Context, arg db.GetTableHealthByTableParams) (db.TableHealthSnapshot, error)
 	GetAppliedCatalogRetention(ctx context.Context, arg db.GetAppliedCatalogRetentionParams) (db.GetAppliedCatalogRetentionRow, error)
-	ListCatalogTableHealth(ctx context.Context, catalogID pgtype.UUID) ([]db.TableHealthSnapshot, error)
-	ListCatalogLastSuccessfulMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogLastSuccessfulMaintenanceRow, error)
-	ListCatalogRunningMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogRunningMaintenanceRow, error)
-	ListCatalogLatestMaintenanceRuns(ctx context.Context, catalogID pgtype.UUID) ([]db.MaintenanceRun, error)
+	ListCatalogTableHealth(ctx context.Context, catalogID db.UUID) ([]db.TableHealthSnapshot, error)
+	ListCatalogLastSuccessfulMaintenance(ctx context.Context, catalogID db.UUID) ([]db.ListCatalogLastSuccessfulMaintenanceRow, error)
+	ListCatalogRunningMaintenance(ctx context.Context, catalogID db.UUID) ([]db.ListCatalogRunningMaintenanceRow, error)
+	ListCatalogLatestMaintenanceRuns(ctx context.Context, catalogID db.UUID) ([]db.MaintenanceRun, error)
 }
 
 // TableKey names one table of a catalog.
 type TableKey struct {
-	CatalogID pgtype.UUID
+	CatalogID db.UUID
 	Namespace string
 	Table     string
 }
@@ -56,7 +54,7 @@ func (s *Service) TablePolicy(ctx context.Context, k TableKey) (db.TableMaintena
 	row, err := s.store.GetTableMaintenancePolicy(ctx, db.GetTableMaintenancePolicyParams{
 		CatalogID: k.CatalogID, Namespace: k.Namespace, TableName: k.Table,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.TableMaintenancePolicy{}, ErrPolicyNotFound
 	}
 	return row, err
@@ -66,7 +64,7 @@ func (s *Service) TablePolicy(ctx context.Context, k TableKey) (db.TableMaintena
 // fails with ErrPolicyRevision when they already exist; otherwise it replaces
 // them only at that revision. It returns the stored row and the previous one
 // (zero when created).
-func (s *Service) SetTablePolicy(ctx context.Context, k TableKey, p maintenance.Policy, revision *int64, actor pgtype.UUID) (stored, before db.TableMaintenancePolicy, err error) {
+func (s *Service) SetTablePolicy(ctx context.Context, k TableKey, p maintenance.Policy, revision *int64, actor db.UUID) (stored, before db.TableMaintenancePolicy, err error) {
 	ops, err := encodeOperations(p)
 	if err != nil {
 		return db.TableMaintenancePolicy{}, db.TableMaintenancePolicy{}, err
@@ -82,7 +80,7 @@ func (s *Service) SetTablePolicy(ctx context.Context, k TableKey, p maintenance.
 			RemoveOrphanFiles:           ops[maintenance.OpRemoveOrphanFiles],
 			Actor:                       actor,
 		})
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return db.TableMaintenancePolicy{}, db.TableMaintenancePolicy{}, ErrPolicyRevision
 		}
 		return stored, db.TableMaintenancePolicy{}, err
@@ -101,7 +99,7 @@ func (s *Service) SetTablePolicy(ctx context.Context, k TableKey, p maintenance.
 		Actor:                       actor,
 		Revision:                    *revision,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.TableMaintenancePolicy{}, db.TableMaintenancePolicy{}, ErrPolicyRevision
 	}
 	return stored, before, err
@@ -112,7 +110,7 @@ func (s *Service) DeleteTablePolicy(ctx context.Context, k TableKey) (db.TableMa
 	row, err := s.store.DeleteTableMaintenancePolicy(ctx, db.DeleteTableMaintenancePolicyParams{
 		CatalogID: k.CatalogID, Namespace: k.Namespace, TableName: k.Table,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.TableMaintenancePolicy{}, ErrPolicyNotFound
 	}
 	return row, err
@@ -187,7 +185,7 @@ func (s *Service) RetentionFloor(ctx context.Context, b db.CatalogBinding) (time
 	row, err := s.store.GetAppliedCatalogRetention(ctx, db.GetAppliedCatalogRetentionParams{
 		EngineID: b.EngineID, CatalogName: b.EngineCatalogName,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return maintenance.UnmanagedRetentionFloor, nil
 	}
 	if err != nil {
@@ -264,7 +262,7 @@ func (s *Service) TableState(ctx context.Context, k TableKey, since time.Time) (
 	switch {
 	case err == nil:
 		st.Running = true
-	case !errors.Is(err, pgx.ErrNoRows):
+	case !errors.Is(err, db.ErrNoRows):
 		return maintenance.State{}, err
 	}
 	return st, nil
@@ -276,7 +274,7 @@ func (s *Service) TableMetrics(ctx context.Context, k TableKey) (maintenance.Met
 	row, err := s.store.GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{
 		CatalogID: k.CatalogID, Namespace: k.Namespace, TableName: k.Table,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return maintenance.Metrics{}, nil
 	}
 	if err != nil {
@@ -343,7 +341,7 @@ type CatalogPlan struct {
 
 // PlanCatalog plans each row of the catalog; a table maintained elsewhere
 // gets an empty plan.
-func (s *Service) PlanCatalog(ctx context.Context, catalogID pgtype.UUID, rows []db.TableMaintenancePolicy, kind maintenance.Kind, now time.Time) ([]CatalogPlan, error) {
+func (s *Service) PlanCatalog(ctx context.Context, catalogID db.UUID, rows []db.TableMaintenancePolicy, kind maintenance.Kind, now time.Time) ([]CatalogPlan, error) {
 	type table struct{ ns, name string }
 	health, err := s.store.ListCatalogTableHealth(ctx, catalogID)
 	if err != nil {
@@ -412,7 +410,7 @@ func (s *Service) PlanCatalog(ctx context.Context, catalogID pgtype.UUID, rows [
 
 // RecordDryRun stores a dry run: finished at once, with the operation the
 // plan would run (none when nothing is due) and its reason.
-func (s *Service) RecordDryRun(ctx context.Context, k TableKey, row db.TableMaintenancePolicy, plan maintenance.Plan, actor pgtype.UUID) (db.MaintenanceRun, error) {
+func (s *Service) RecordDryRun(ctx context.Context, k TableKey, row db.TableMaintenancePolicy, plan maintenance.Plan, actor db.UUID) (db.MaintenanceRun, error) {
 	ops := []string{}
 	reason := maintenance.Reason{}
 	params := []byte(`{}`)

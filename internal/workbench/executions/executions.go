@@ -20,8 +20,6 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
@@ -34,7 +32,7 @@ type Runs interface {
 	GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg db.GetQueryExecutionByIDAndWorkspaceParams) (db.QueryExecution, error)
 	CancelQueryExecution(ctx context.Context, arg db.CancelQueryExecutionParams) (db.QueryExecution, error)
 	FailQueryExecution(ctx context.Context, arg db.FailQueryExecutionParams) (db.QueryExecution, error)
-	ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]db.ListRunningStatementHandlesRow, error)
+	ListRunningStatementHandles(ctx context.Context, executionID db.UUID) ([]db.ListRunningStatementHandlesRow, error)
 }
 
 // History reads past executions and their statements; *repo.Repo
@@ -57,15 +55,15 @@ type Store interface {
 // Queues reads the per-engine workload capacities and the workload rules
 // (#399); *repo.Repo implements it.
 type Queues interface {
-	ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]db.EngineQueueCapacity, error)
-	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
+	ListEngineQueueCapacities(ctx context.Context, engineID db.UUID) ([]db.EngineQueueCapacity, error)
+	GetEngineByID(ctx context.Context, id db.UUID) (db.Engine, error)
 	ListWorkloadRules(ctx context.Context) ([]db.WorkloadRule, error)
 }
 
 // Scope reads the workspace catalog scope a session may reach (ADR 0018 §5);
 // *repo.Repo implements it.
 type Scope interface {
-	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)
+	ListWorkspaceTargets(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceTargetsRow, error)
 }
 
 // Workflows starts and cancels Temporal workflows; client.Client implements it.
@@ -77,7 +75,7 @@ type Workflows interface {
 // Engines finds the engine an execution ran on; the engine manager
 // implements it.
 type Engines interface {
-	Get(ctx context.Context, engineID pgtype.UUID) (queryengine.Engine, error)
+	Get(ctx context.Context, engineID db.UUID) (queryengine.Engine, error)
 	DefaultTrino(ctx context.Context) (queryengine.Engine, error)
 }
 
@@ -122,26 +120,26 @@ func New(store Store, workflows Workflows, engines Engines, dialects Dialects, c
 
 // Run is one execution to start on a resolved target.
 type Run struct {
-	WorkspaceID  pgtype.UUID
-	UserID       pgtype.UUID
-	SavedQueryID pgtype.UUID
+	WorkspaceID  db.UUID
+	UserID       db.UUID
+	SavedQueryID db.UUID
 	SQL          string
 	Target       queryengine.Target
 	// Identity is who the engine sees: the per-user identity and, for an
 	// agent, its id.
 	Identity  queryengine.Identity
-	AgentID   pgtype.UUID
+	AgentID   db.UUID
 	RequestID string
 	// RerunOf copies the statements of a previous execution from
 	// RerunFromPosition instead of re-splitting SQL (#111).
-	RerunOf           pgtype.UUID
+	RerunOf           db.UUID
 	RerunFromPosition int32
 	// Origin is where the run came from; classification uses it (#399).
 	Origin workload.Origin
 	// Role is the caller's global role, matched by admin rules (#546).
 	Role string
 	// TeamID is the workspace owner team, matched by admin rules (#546).
-	TeamID pgtype.UUID
+	TeamID db.UUID
 	// AgentMaxConcurrent is the agent policy's per-agent concurrency limit,
 	// enforced by admission instead of refusing the run (#589).
 	AgentMaxConcurrent int
@@ -230,7 +228,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 			failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 			defer cancel()
 			code := "internal"
-			if _, ferr := s.store.FailQueryExecution(failCtx, db.FailQueryExecutionParams{ID: execution.ID, ErrorCode: &code}); ferr != nil && !errors.Is(ferr, pgx.ErrNoRows) {
+			if _, ferr := s.store.FailQueryExecution(failCtx, db.FailQueryExecutionParams{ID: execution.ID, ErrorCode: &code}); ferr != nil && !errors.Is(ferr, db.ErrNoRows) {
 				s.logger.ErrorContext(ctx, "failed to mark execution failed after engine lookup error", "execution_id", executionID, "lookup_err", err, "mark_err", ferr)
 			}
 			return db.QueryExecution{}, err
@@ -274,7 +272,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 		// Detached from the request, which may be the reason it failed.
 		failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
-		if _, ferr := s.store.UpdateQueryExecution(failCtx, db.UpdateQueryExecutionParams{ID: execution.ID, Status: "failed"}); ferr != nil && !errors.Is(ferr, pgx.ErrNoRows) {
+		if _, ferr := s.store.UpdateQueryExecution(failCtx, db.UpdateQueryExecutionParams{ID: execution.ID, Status: "failed"}); ferr != nil && !errors.Is(ferr, db.ErrNoRows) {
 			s.logger.ErrorContext(ctx, "failed to mark execution failed after workflow start error",
 				"execution_id", executionID, "start_err", err, "mark_err", ferr)
 		}
@@ -284,7 +282,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 }
 
 // WorkflowID is the id of an execution's workflow.
-func WorkflowID(executionID pgtype.UUID) string {
+func WorkflowID(executionID db.UUID) string {
 	return workflows.ExecutionWorkflowID(uuid.UUID(executionID.Bytes).String())
 }
 
@@ -429,7 +427,7 @@ func (s *Service) workloadRules(ctx context.Context) []workload.Rule {
 }
 
 // uuidString renders a UUID, or "" when it is not set.
-func uuidString(v pgtype.UUID) string {
+func uuidString(v db.UUID) string {
 	if !v.Valid {
 		return ""
 	}
@@ -463,7 +461,7 @@ func engineClassOf(target queryengine.Target) string {
 // capacitiesFor is the admission workflow's initial state and the resolved
 // per-class capacities: the engine's own over the defaults, plus its optional
 // ceiling.
-func (s *Service) capacitiesFor(ctx context.Context, engineID pgtype.UUID, engineClass string) (workflows.AdmissionState, map[queryengine.WorkloadClass]workload.Capacity) {
+func (s *Service) capacitiesFor(ctx context.Context, engineID db.UUID, engineClass string) (workflows.AdmissionState, map[queryengine.WorkloadClass]workload.Capacity) {
 	state := workflows.AdmissionState{Capacities: workflows.DefaultAdmissionCapacitiesFor(engineClass)}
 
 	configured := map[queryengine.WorkloadClass]*workload.Capacity{}
@@ -506,9 +504,9 @@ func (s *Service) capacitiesFor(ctx context.Context, engineID pgtype.UUID, engin
 }
 
 // Get returns one execution of the workspace.
-func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.QueryExecution, error) {
+func (s *Service) Get(ctx context.Context, ws, id db.UUID) (db.QueryExecution, error) {
 	e, err := s.store.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{ID: id, WorkspaceID: ws})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.QueryExecution{}, ErrNotFound
 	}
 	return e, err
@@ -519,7 +517,7 @@ func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.QueryExecutio
 // workflow and, best effort, the statements still running on the engine.
 // cancelled is false when the execution had already finished; the execution
 // is then returned as it is.
-func (s *Service) Cancel(ctx context.Context, ws, id pgtype.UUID) (execution db.QueryExecution, cancelled bool, err error) {
+func (s *Service) Cancel(ctx context.Context, ws, id db.UUID) (execution db.QueryExecution, cancelled bool, err error) {
 	updated, err := s.store.CancelQueryExecution(ctx, db.CancelQueryExecutionParams{ID: id, WorkspaceID: ws})
 	if err == nil {
 		// A NotFound means the workflow already ended.
@@ -533,7 +531,7 @@ func (s *Service) Cancel(ctx context.Context, ws, id pgtype.UUID) (execution db.
 		s.cancelOnEngine(ctx, updated)
 		return updated, true, nil
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if !errors.Is(err, db.ErrNoRows) {
 		return db.QueryExecution{}, false, err
 	}
 	current, err := s.Get(ctx, ws, id)
@@ -578,7 +576,7 @@ func (s *Service) cancelOnEngine(ctx context.Context, e db.QueryExecution) {
 
 // Statements returns the statements of an execution of the workspace. A
 // foreign or absent execution is ErrNotFound, never an empty list.
-func (s *Service) Statements(ctx context.Context, ws, id pgtype.UUID) ([]db.QueryStatement, error) {
+func (s *Service) Statements(ctx context.Context, ws, id db.UUID) ([]db.QueryStatement, error) {
 	if _, err := s.Get(ctx, ws, id); err != nil {
 		return nil, err
 	}
@@ -586,9 +584,9 @@ func (s *Service) Statements(ctx context.Context, ws, id pgtype.UUID) ([]db.Quer
 }
 
 // Statement returns one statement of an execution of the workspace.
-func (s *Service) Statement(ctx context.Context, ws, executionID pgtype.UUID, position int32) (db.QueryStatement, error) {
+func (s *Service) Statement(ctx context.Context, ws, executionID db.UUID, position int32) (db.QueryStatement, error) {
 	st, err := s.store.GetQueryStatementByPosition(ctx, db.GetQueryStatementByPositionParams{ExecutionID: executionID, WorkspaceID: ws, Position: position})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.QueryStatement{}, ErrNotFound
 	}
 	return st, err
@@ -596,7 +594,7 @@ func (s *Service) Statement(ctx context.Context, ws, executionID pgtype.UUID, po
 
 // Viewer is who lists the history.
 type Viewer struct {
-	UserID pgtype.UUID
+	UserID db.UUID
 	// Admin is a platform administrator.
 	Admin bool
 }
@@ -611,7 +609,7 @@ type Page struct {
 // administrators and the workspace owner do (the personal user or a team
 // owner, not a member given the admin role, #653); everyone else sees only
 // their own (#36, #611).
-func (s *Service) seesAll(ctx context.Context, v Viewer, ws pgtype.UUID) (bool, error) {
+func (s *Service) seesAll(ctx context.Context, v Viewer, ws db.UUID) (bool, error) {
 	if v.Admin {
 		return true, nil
 	}
@@ -620,7 +618,7 @@ func (s *Service) seesAll(ctx context.Context, v Viewer, ws pgtype.UUID) (bool, 
 
 // Visible reports whether the viewer may read exec: the workspace owner, an
 // administrator, or the user who ran it (#611).
-func (s *Service) Visible(ctx context.Context, v Viewer, ws pgtype.UUID, exec db.QueryExecution) (bool, error) {
+func (s *Service) Visible(ctx context.Context, v Viewer, ws db.UUID, exec db.QueryExecution) (bool, error) {
 	seeAll, err := s.seesAll(ctx, v, ws)
 	if err != nil {
 		return false, err

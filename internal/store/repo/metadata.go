@@ -13,8 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -27,7 +25,7 @@ var _ browse.Store = (*Repo)(nil)
 
 // ListMetadataCatalogs lists the granted, enabled catalogs of a workspace
 // with their freshness and enabled bindings, by name.
-func (r *Repo) ListMetadataCatalogs(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListMetadataCatalogsRow, error) {
+func (r *Repo) ListMetadataCatalogs(ctx context.Context, workspaceID db.UUID) ([]db.ListMetadataCatalogsRow, error) {
 	var out []db.ListMetadataCatalogsRow
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		visible, err := grantedCatalogIDs(tx, workspaceID)
@@ -92,10 +90,10 @@ func (r *Repo) ListMetadataCatalogs(ctx context.Context, workspaceID pgtype.UUID
 }
 
 // GetGrantedMetadataCatalog returns a granted, enabled catalog with its
-// freshness, or pgx.ErrNoRows.
+// freshness, or db.ErrNoRows.
 func (r *Repo) GetGrantedMetadataCatalog(ctx context.Context, arg db.GetGrantedMetadataCatalogParams) (db.GetGrantedMetadataCatalogRow, error) {
 	if !arg.WorkspaceID.Valid || !arg.CatalogID.Valid {
-		return db.GetGrantedMetadataCatalogRow{}, pgx.ErrNoRows
+		return db.GetGrantedMetadataCatalogRow{}, db.ErrNoRows
 	}
 	var out db.GetGrantedMetadataCatalogRow
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -104,7 +102,7 @@ func (r *Repo) GetGrantedMetadataCatalog(ctx context.Context, arg db.GetGrantedM
 			return err
 		}
 		if !containsString(visible, UUIDString(arg.CatalogID)) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		syncedAt, err := finishedSyncAt(tx, UUIDString(arg.CatalogID))
 		if err != nil {
@@ -175,7 +173,7 @@ func (r *Repo) ListMetadataTablesPage(ctx context.Context, arg db.ListMetadataTa
 // given one, else the first) and its engine kind.
 func (r *Repo) GetCatalogBindingForDisplay(ctx context.Context, arg db.GetCatalogBindingForDisplayParams) (db.GetCatalogBindingForDisplayRow, error) {
 	if !arg.CatalogID.Valid {
-		return db.GetCatalogBindingForDisplayRow{}, pgx.ErrNoRows
+		return db.GetCatalogBindingForDisplayRow{}, db.ErrNoRows
 	}
 	q := r.Users.db.WithContext(ctx).
 		Table("catalog_bindings AS b").
@@ -195,7 +193,7 @@ func (r *Repo) GetCatalogBindingForDisplay(ctx context.Context, arg db.GetCatalo
 		return db.GetCatalogBindingForDisplayRow{}, err
 	}
 	if row.ID == "" {
-		return db.GetCatalogBindingForDisplayRow{}, pgx.ErrNoRows
+		return db.GetCatalogBindingForDisplayRow{}, db.ErrNoRows
 	}
 	return db.GetCatalogBindingForDisplayRow{
 		ID:                PGUUID(string(row.ID)),
@@ -377,9 +375,9 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 
 // GetCatalogForSync returns a catalog with what the sync needs to pick its
 // source.
-func (r *Repo) GetCatalogForSync(ctx context.Context, id pgtype.UUID) (db.GetCatalogForSyncRow, error) {
+func (r *Repo) GetCatalogForSync(ctx context.Context, id db.UUID) (db.GetCatalogForSyncRow, error) {
 	if !id.Valid {
-		return db.GetCatalogForSyncRow{}, pgx.ErrNoRows
+		return db.GetCatalogForSyncRow{}, db.ErrNoRows
 	}
 	var row struct {
 		ID             model.UUID
@@ -401,7 +399,7 @@ func (r *Repo) GetCatalogForSync(ctx context.Context, id pgtype.UUID) (db.GetCat
 		return db.GetCatalogForSyncRow{}, err
 	}
 	if row.ID == "" {
-		return db.GetCatalogForSyncRow{}, pgx.ErrNoRows
+		return db.GetCatalogForSyncRow{}, db.ErrNoRows
 	}
 	return db.GetCatalogForSyncRow{
 		ID:             PGUUID(string(row.ID)),
@@ -417,7 +415,7 @@ func (r *Repo) GetCatalogForSync(ctx context.Context, id pgtype.UUID) (db.GetCat
 
 // ListSyncBindings lists a catalog's enabled bindings on enabled engines,
 // oldest first.
-func (r *Repo) ListSyncBindings(ctx context.Context, catalogID pgtype.UUID) ([]db.ListSyncBindingsRow, error) {
+func (r *Repo) ListSyncBindings(ctx context.Context, catalogID db.UUID) ([]db.ListSyncBindingsRow, error) {
 	if !catalogID.Valid {
 		return nil, nil
 	}
@@ -457,13 +455,13 @@ func (r *Repo) ListSyncBindings(ctx context.Context, catalogID pgtype.UUID) ([]d
 // It fails a running pass older than staleAfter (a crashed worker) and
 // reports false when a live pass already owns the catalog, so the caller
 // returns ErrSyncInProgress.
-func (r *Repo) BeginMetadataSyncRun(ctx context.Context, catalogID pgtype.UUID, sourcePath string, staleAfter time.Duration) (db.StartMetadataSyncRunRow, bool, error) {
+func (r *Repo) BeginMetadataSyncRun(ctx context.Context, catalogID db.UUID, sourcePath string, staleAfter time.Duration) (db.StartMetadataSyncRunRow, bool, error) {
 	var (
 		out     db.StartMetadataSyncRunRow
 		started bool
 	)
 	if !catalogID.Valid {
-		return out, false, pgx.ErrNoRows
+		return out, false, db.ErrNoRows
 	}
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// The row lock serializes two starters: the second waits until the
@@ -473,7 +471,7 @@ func (r *Repo) BeginMetadataSyncRun(ctx context.Context, catalogID pgtype.UUID, 
 			Where("id = ?", UUIDString(catalogID)).
 			First(&catalog).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if err != nil {
 			return err
@@ -522,7 +520,7 @@ func (r *Repo) BeginMetadataSyncRun(ctx context.Context, catalogID pgtype.UUID, 
 
 // TouchMetadataSyncRun records that a running pass is still alive, so a
 // retry can tell a crashed worker from a slow one.
-func (r *Repo) TouchMetadataSyncRun(ctx context.Context, id pgtype.UUID) error {
+func (r *Repo) TouchMetadataSyncRun(ctx context.Context, id db.UUID) error {
 	if !id.Valid {
 		return nil
 	}
@@ -539,7 +537,7 @@ var ErrMetadataSyncTakenOver = errors.New("metadata sync run is no longer the ow
 // and its columns and foreign keys are replaced atomically (ADR 0020). It
 // first locks the run row and verifies it is still running: a pass that lost
 // its lease cannot mutate the catalog any more.
-func (r *Repo) TxMetadata(ctx context.Context, runID pgtype.UUID, fn func(*Repo) error) error {
+func (r *Repo) TxMetadata(ctx context.Context, runID db.UUID, fn func(*Repo) error) error {
 	if !runID.Valid {
 		return ErrMetadataSyncTakenOver
 	}
@@ -593,7 +591,7 @@ func (r *Repo) FinishMetadataSyncRun(ctx context.Context, arg db.FinishMetadataS
 }
 
 // FailStaleMetadataSyncRuns fails a run a crashed worker left running.
-func (r *Repo) FailStaleMetadataSyncRuns(ctx context.Context, catalogID pgtype.UUID) error {
+func (r *Repo) FailStaleMetadataSyncRuns(ctx context.Context, catalogID db.UUID) error {
 	code, message := "interrupted", "the sync stopped before it finished"
 	return r.Users.db.WithContext(ctx).Model(&model.MetadataSyncRun{}).
 		Where("catalog_id = ? AND status = ?", UUIDString(catalogID), "running").
@@ -606,7 +604,7 @@ func (r *Repo) FailStaleMetadataSyncRuns(ctx context.Context, catalogID pgtype.U
 }
 
 // GetTableFingerprints returns what the last passes stored about live tables.
-func (r *Repo) GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]db.GetTableFingerprintsRow, error) {
+func (r *Repo) GetTableFingerprints(ctx context.Context, catalogID db.UUID) ([]db.GetTableFingerprintsRow, error) {
 	if !catalogID.Valid {
 		return nil, nil
 	}
@@ -694,7 +692,7 @@ func (r *Repo) TouchMetadataTable(ctx context.Context, arg db.TouchMetadataTable
 }
 
 // DeleteMetadataColumns removes a table's columns.
-func (r *Repo) DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID) error {
+func (r *Repo) DeleteMetadataColumns(ctx context.Context, tableID db.UUID) error {
 	return r.Users.db.WithContext(ctx).Where("table_id = ?", UUIDString(tableID)).
 		Delete(&model.MetadataColumn{}).Error
 }
@@ -738,7 +736,7 @@ func (r *Repo) InsertMetadataColumns(ctx context.Context, arg db.InsertMetadataC
 }
 
 // DeleteMetadataForeignKeys removes a table's outgoing foreign keys.
-func (r *Repo) DeleteMetadataForeignKeys(ctx context.Context, tableID pgtype.UUID) error {
+func (r *Repo) DeleteMetadataForeignKeys(ctx context.Context, tableID db.UUID) error {
 	return r.Users.db.WithContext(ctx).Where("table_id = ?", UUIDString(tableID)).
 		Delete(&model.MetadataForeignKey{}).Error
 }
@@ -809,7 +807,7 @@ func (r *Repo) TombstoneMissingNamespaces(ctx context.Context, arg db.TombstoneM
 }
 
 // PurgeMetadataTableTombstones deletes table tombstones older than 7 days.
-func (r *Repo) PurgeMetadataTableTombstones(ctx context.Context, catalogID pgtype.UUID) error {
+func (r *Repo) PurgeMetadataTableTombstones(ctx context.Context, catalogID db.UUID) error {
 	cutoff := time.Now().UTC().Add(-7 * 24 * time.Hour)
 	return r.Users.db.WithContext(ctx).
 		Where("catalog_id = ? AND removed_at < ?", UUIDString(catalogID), cutoff).
@@ -818,7 +816,7 @@ func (r *Repo) PurgeMetadataTableTombstones(ctx context.Context, catalogID pgtyp
 
 // PurgeMetadataNamespaceTombstones deletes namespace tombstones older than 7
 // days.
-func (r *Repo) PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID pgtype.UUID) error {
+func (r *Repo) PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID db.UUID) error {
 	cutoff := time.Now().UTC().Add(-7 * 24 * time.Hour)
 	return r.Users.db.WithContext(ctx).
 		Where("catalog_id = ? AND removed_at < ?", UUIDString(catalogID), cutoff).
@@ -881,16 +879,16 @@ func (r *Repo) metadataBindings(scope *gorm.DB, catalogIDs []string) (map[string
 	return out, nil
 }
 
-func finishedSyncAt(scope *gorm.DB, catalogID string) (pgtype.Timestamptz, error) {
+func finishedSyncAt(scope *gorm.DB, catalogID string) (db.Timestamptz, error) {
 	var finished sql.NullTime
 	if err := scope.Model(&model.MetadataSyncRun{}).
 		Where("catalog_id = ? AND status = ?", catalogID, "finished").
 		Select("MAX(finished_at)").
 		Scan(&finished).Error; err != nil {
-		return pgtype.Timestamptz{}, err
+		return db.Timestamptz{}, err
 	}
 	if !finished.Valid {
-		return pgtype.Timestamptz{}, nil
+		return db.Timestamptz{}, nil
 	}
 	return PGTime(finished.Time), nil
 }
@@ -919,7 +917,7 @@ func syncStatuses(scope *gorm.DB, catalogIDs []string) (map[string]string, error
 	return out, nil
 }
 
-func (r *Repo) tableDocs(scope *gorm.DB, workspaceID pgtype.UUID, catalogIDs []string) (map[string]model.SemanticDoc, error) {
+func (r *Repo) tableDocs(scope *gorm.DB, workspaceID db.UUID, catalogIDs []string) (map[string]model.SemanticDoc, error) {
 	var rows []model.SemanticDoc
 	if err := scope.Where("workspace_id = ? AND catalog_id IN ? AND column_name IS NULL",
 		UUIDString(workspaceID), catalogIDs).Find(&rows).Error; err != nil {
@@ -932,7 +930,7 @@ func (r *Repo) tableDocs(scope *gorm.DB, workspaceID pgtype.UUID, catalogIDs []s
 	return out, nil
 }
 
-func (r *Repo) popularityByTable(scope *gorm.DB, workspaceID pgtype.UUID) (map[string]float64, error) {
+func (r *Repo) popularityByTable(scope *gorm.DB, workspaceID db.UUID) (map[string]float64, error) {
 	var rows []model.TablePopularity
 	if err := scope.Where("workspace_id = ?", UUIDString(workspaceID)).Find(&rows).Error; err != nil {
 		return nil, err
@@ -944,8 +942,8 @@ func (r *Repo) popularityByTable(scope *gorm.DB, workspaceID pgtype.UUID) (map[s
 	return out, nil
 }
 
-func (r *Repo) syncTimes(scope *gorm.DB, catalogIDs []string) (map[string]pgtype.Timestamptz, error) {
-	out := make(map[string]pgtype.Timestamptz, len(catalogIDs))
+func (r *Repo) syncTimes(scope *gorm.DB, catalogIDs []string) (map[string]db.Timestamptz, error) {
+	out := make(map[string]db.Timestamptz, len(catalogIDs))
 	if len(catalogIDs) == 0 {
 		return out, nil
 	}

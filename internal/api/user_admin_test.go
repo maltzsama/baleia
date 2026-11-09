@@ -11,7 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -163,7 +162,7 @@ func TestSuspendedCannotRefresh(t *testing.T) {
 	raw := "surviving-refresh-token"
 	if _, err := f.h.queries.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		UserID: user.ID, TokenHash: auth.HashRefreshToken(raw),
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}, FamilyID: pgtype.UUID{Bytes: uuid.New(), Valid: true},
+		ExpiresAt: db.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}, FamilyID: db.UUID{Bytes: uuid.New(), Valid: true},
 	}); err != nil {
 		t.Fatal(err)
 	}

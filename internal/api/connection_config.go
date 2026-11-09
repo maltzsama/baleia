@@ -14,7 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // errConfigInvalid wraps every request-config failure that answers 422.
@@ -130,7 +129,7 @@ func asConfigError(err error) error {
 }
 
 // createConfig builds and validates the config of a create request.
-func (h *core) createConfig(id pgtype.UUID, body *CreateCatalogConnectionRequest) (connections.Config, error) {
+func (h *core) createConfig(id db.UUID, body *CreateCatalogConnectionRequest) (connections.Config, error) {
 	p, err := h.provider(body.Type)
 	if err != nil {
 		return connections.Config{}, err

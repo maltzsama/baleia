@@ -9,8 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"gorm.io/gorm"
 )
@@ -18,7 +16,7 @@ import (
 // historyFixture is a workspace owned by `owner` with `member` and `stranger`
 // as non-owners, plus the catalog/engine/binding the executions ran on.
 type historyFixture struct {
-	pool     *pgxpool.Pool
+	pool     *gorm.DB
 	gdb      *gorm.DB
 	h        *API
 	owner    openapi_types.UUID
@@ -33,7 +31,7 @@ type historyFixture struct {
 func newHistoryFixture(t *testing.T) *historyFixture {
 	t.Helper()
 	pool := testdb.New(t)
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	q := repo.New(gdb)
 	f := &historyFixture{pool: pool, gdb: gdb}
 	create := func(row any) {
@@ -107,8 +105,8 @@ func newHistoryFixture(t *testing.T) *historyFixture {
 	return f
 }
 
-func pgUUID(u openapi_types.UUID) pgtype.UUID {
-	return pgtype.UUID{Bytes: u, Valid: u != openapi_types.UUID{}}
+func pgUUID(u openapi_types.UUID) db.UUID {
+	return db.UUID{Bytes: u, Valid: u != openapi_types.UUID{}}
 }
 
 // addExecution inserts one execution with the fixture's target.

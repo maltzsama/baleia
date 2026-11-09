@@ -6,15 +6,15 @@ import (
 
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content/search"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // decorateSpace adds the counts and allowed actions the content UI needs (#113).
 func (h *core) decorateSpace(ctx context.Context, sp *Space, role string) {
-	counts, err := h.spaces.ContentKinds(ctx, pgtype.UUID{Bytes: [16]byte(sp.Id), Valid: true})
+	counts, err := h.spaces.ContentKinds(ctx, db.UUID{Bytes: [16]byte(sp.Id), Valid: true})
 	if err == nil {
 		saved, metrics, models, folders := int(counts.SavedQueries), int(counts.SemanticMetrics), int(counts.SemanticModels), int(counts.Folders)
 		sp.Counts = &SpaceCounts{SavedQueries: &saved, SemanticMetrics: &metrics, SemanticModels: &models, Folders: &folders}
@@ -58,7 +58,7 @@ func (h *SemanticHandlers) SearchContent(ctx context.Context, request SearchCont
 		sq.Kind = *request.Params.Kind
 	}
 	if request.Params.SpaceId != nil {
-		sq.SpaceID = pgtype.UUID{Bytes: *request.Params.SpaceId, Valid: true}
+		sq.SpaceID = db.UUID{Bytes: *request.Params.SpaceId, Valid: true}
 	}
 	hits, err := h.search.Search(ctx, ws, p.UserID, sq)
 	if err != nil {
@@ -142,7 +142,7 @@ func (h *QueryHandlers) UpdateFolder(ctx context.Context, request UpdateFolderRe
 		}
 		return nil, err
 	}
-	folderID := pgtype.UUID{Bytes: request.FolderId, Valid: true}
+	folderID := db.UUID{Bytes: request.FolderId, Valid: true}
 	folder, err := h.folders.Get(ctx, ws, folderID)
 	if errors.Is(err, folders.ErrNotFound) {
 		return UpdateFolder404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "folder not found"}}, nil
@@ -161,7 +161,7 @@ func (h *QueryHandlers) UpdateFolder(ctx context.Context, request UpdateFolderRe
 
 	destSpace := folder.SpaceID
 	if request.Body.SpaceId != nil {
-		destSpace = pgtype.UUID{Bytes: [16]byte(*request.Body.SpaceId), Valid: true}
+		destSpace = db.UUID{Bytes: [16]byte(*request.Body.SpaceId), Valid: true}
 		if destSpace != folder.SpaceID {
 			if _, se, err := h.spaceForWrite(ctx, ws, uuidPtr(destSpace), authz.SpaceEditor); err != nil {
 				return nil, err
@@ -173,7 +173,7 @@ func (h *QueryHandlers) UpdateFolder(ctx context.Context, request UpdateFolderRe
 
 	edit := folders.Edit{Name: request.Body.Name, Slug: request.Body.Slug, SpaceID: destSpace}
 	if request.Body.ParentId != nil {
-		edit.Parent = &pgtype.UUID{Bytes: [16]byte(*request.Body.ParentId), Valid: true}
+		edit.Parent = &db.UUID{Bytes: [16]byte(*request.Body.ParentId), Valid: true}
 	}
 	updated, err := h.folders.Update(ctx, folder, edit)
 	var cycle *folders.CycleError
@@ -194,7 +194,7 @@ func (h *QueryHandlers) UpdateFolder(ctx context.Context, request UpdateFolderRe
 	return UpdateFolder200JSONResponse(dbFolderToPublic(updated)), nil
 }
 
-func uuidPtr(id pgtype.UUID) *openapi_types.UUID {
+func uuidPtr(id db.UUID) *openapi_types.UUID {
 	if !id.Valid {
 		return nil
 	}

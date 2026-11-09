@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // exportStore is the part of Baleia's database the export uses.
@@ -44,7 +42,7 @@ func (p Postgres) Events(ctx context.Context, after Position, before time.Time, 
 // Get returns the sink's position, or the zero position when none is stored.
 func (p Postgres) Get(ctx context.Context, sink string) (Position, error) {
 	row, err := p.Queries.GetAuditExportCursor(ctx, sink)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return Position{}, nil
 	}
 	if err != nil {
@@ -60,4 +58,4 @@ func (p Postgres) Set(ctx context.Context, sink string, pos Position) error {
 	})
 }
 
-func timestamptz(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
+func timestamptz(t time.Time) db.Timestamptz { return db.Timestamptz{Time: t, Valid: true} }

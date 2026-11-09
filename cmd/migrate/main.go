@@ -16,7 +16,6 @@ import (
 	"github.com/galileostudio/baleia/internal/migrate"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/store"
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/gorm"
 )
 
@@ -32,12 +31,12 @@ func main() {
 	slog.SetDefault(logger)
 	ctx := context.Background()
 
-	db, err := sql.Open("pgx", cfg.DatabaseURL)
+	db, closeDB, err := openSQLDB(ctx, logger, cfg)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to open database", "err", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer func() { _ = closeDB() }()
 
 	switch command {
 	case "store-up":
@@ -51,7 +50,7 @@ func main() {
 	case "oidc-providers":
 		err = migrateOIDCProviders(ctx, logger, db, cfg)
 	case "audit-prune":
-		backend, berr := store.ResolveBackend(cfg.StoreBackend, cfg.DatabaseURL)
+		backend, berr := store.BackendFromDSN(cfg.DatabaseURL)
 		if berr != nil {
 			err = berr
 			break
@@ -191,10 +190,26 @@ func (s sqlCredentialStore) UpdateCredentials(ctx context.Context, id, enc strin
 	return err
 }
 
+// openSQLDB opens the GORM store and hands back its database/sql handle for
+// the commands that backfill rows with explicit transactions. The driver is
+// whatever GORM's dialector uses; this command imports no driver directly.
+func openSQLDB(ctx context.Context, logger *slog.Logger, cfg *config.Config) (*sql.DB, func() error, error) {
+	gdb, err := openStore(ctx, logger, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	sqlDB, err := gdb.DB()
+	if err != nil {
+		_ = store.Close(gdb)
+		return nil, nil, err
+	}
+	return sqlDB, func() error { return store.Close(gdb) }, nil
+}
+
 // openStore opens Baleia's own store through GORM (ADR 0020). The dialector is
 // selected by the configured backend, never by the DSN alone.
 func openStore(ctx context.Context, logger *slog.Logger, cfg *config.Config) (*gorm.DB, error) {
-	backend, err := store.ResolveBackend(cfg.StoreBackend, cfg.DatabaseURL)
+	backend, err := store.BackendFromDSN(cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
 	}

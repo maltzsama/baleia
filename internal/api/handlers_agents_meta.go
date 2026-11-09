@@ -9,7 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -135,7 +134,7 @@ func (h *AgentHandlers) GetAgentEligibility(ctx context.Context, request GetAgen
 	return GetAgentEligibility200JSONResponse(out), nil
 }
 
-func (h *AgentHandlers) engineEligibility(ctx context.Context, effective agentpolicy.Effective, catalogID, engineID pgtype.UUID, engine db.Engine) AgentEngineEligibility {
+func (h *AgentHandlers) engineEligibility(ctx context.Context, effective agentpolicy.Effective, catalogID, engineID db.UUID, engine db.Engine) AgentEngineEligibility {
 	out := AgentEngineEligibility{
 		EngineId:   openapi_types.UUID(engineID.Bytes),
 		EngineName: engine.Name,

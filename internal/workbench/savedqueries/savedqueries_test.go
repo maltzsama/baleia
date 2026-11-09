@@ -8,12 +8,9 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 // fakeStore is the read side and, as fakeContent, the versioned write side.
 type fakeStore struct {
@@ -47,10 +44,10 @@ func (f *fakeStore) SearchVisibleSavedQueries(_ context.Context, arg db.SearchVi
 	return out, nil
 }
 
-func (f *fakeStore) ListSavedQueryVersions(context.Context, pgtype.UUID) ([]db.ListSavedQueryVersionsRow, error) {
+func (f *fakeStore) ListSavedQueryVersions(context.Context, db.UUID) ([]db.ListSavedQueryVersionsRow, error) {
 	var out []db.ListSavedQueryVersionsRow
 	for id, v := range f.versions {
-		out = append(out, db.ListSavedQueryVersionsRow{EntityID: pgtype.UUID{Bytes: id, Valid: true}, Version: v})
+		out = append(out, db.ListSavedQueryVersionsRow{EntityID: db.UUID{Bytes: id, Valid: true}, Version: v})
 	}
 	return out, nil
 }
@@ -59,7 +56,7 @@ func (f *fakeStore) GetSavedQueryByID(_ context.Context, arg db.GetSavedQueryByI
 	if q, ok := f.queries[arg.ID.Bytes]; ok && q.WorkspaceID == arg.WorkspaceID {
 		return q, nil
 	}
-	return db.SavedQuery{}, pgx.ErrNoRows
+	return db.SavedQuery{}, db.ErrNoRows
 }
 
 func (f *fakeStore) SavedQuerySlugExists(_ context.Context, arg db.SavedQuerySlugExistsParams) (bool, error) {
@@ -71,9 +68,9 @@ func (f *fakeStore) SavedQuerySlugExists(_ context.Context, arg db.SavedQuerySlu
 	return false, nil
 }
 
-func (f *fakeStore) CreateSavedQuery(_ context.Context, _ pgtype.UUID, in db.CreateSavedQueryParams) (db.SavedQuery, error) {
+func (f *fakeStore) CreateSavedQuery(_ context.Context, _ db.UUID, in db.CreateSavedQueryParams) (db.SavedQuery, error) {
 	if f.nameTaken {
-		return db.SavedQuery{}, &pgconn.PgError{Code: "23505"}
+		return db.SavedQuery{}, &db.PGError{Code: "23505"}
 	}
 	q := db.SavedQuery{ID: newID(), WorkspaceID: in.WorkspaceID, SpaceID: in.SpaceID, FolderID: in.FolderID, Name: in.Name, Slug: in.Slug, Sql: in.Sql, TargetBindingID: in.TargetBindingID, TargetSchema: in.TargetSchema}
 	f.queries[q.ID.Bytes] = q
@@ -81,9 +78,9 @@ func (f *fakeStore) CreateSavedQuery(_ context.Context, _ pgtype.UUID, in db.Cre
 	return q, nil
 }
 
-func (f *fakeStore) UpdateSavedQuery(_ context.Context, _ pgtype.UUID, in db.UpdateSavedQueryParams, _ *int32) (db.SavedQuery, bool, error) {
+func (f *fakeStore) UpdateSavedQuery(_ context.Context, _ db.UUID, in db.UpdateSavedQueryParams, _ *int32) (db.SavedQuery, bool, error) {
 	if f.nameTaken {
-		return db.SavedQuery{}, false, &pgconn.PgError{Code: "23505"}
+		return db.SavedQuery{}, false, &db.PGError{Code: "23505"}
 	}
 	q := f.queries[in.ID.Bytes]
 	q.Name, q.Sql, q.FolderID, q.SpaceID, q.Slug, q.TargetBindingID, q.TargetSchema = in.Name, in.Sql, in.FolderID, in.SpaceID, in.Slug, in.TargetBindingID, in.TargetSchema
@@ -92,7 +89,7 @@ func (f *fakeStore) UpdateSavedQuery(_ context.Context, _ pgtype.UUID, in db.Upd
 	return q, true, nil
 }
 
-func (f *fakeStore) DeleteSavedQuery(_ context.Context, _ pgtype.UUID, _, id pgtype.UUID) error {
+func (f *fakeStore) DeleteSavedQuery(_ context.Context, _ db.UUID, _, id db.UUID) error {
 	delete(f.queries, id.Bytes)
 	return nil
 }
@@ -100,7 +97,7 @@ func (f *fakeStore) DeleteSavedQuery(_ context.Context, _ pgtype.UUID, _, id pgt
 // fakeFolders knows one folder per space.
 type fakeFolders map[[16]byte]db.QueryFolder
 
-func (f fakeFolders) Get(_ context.Context, ws, id pgtype.UUID) (db.QueryFolder, error) {
+func (f fakeFolders) Get(_ context.Context, ws, id db.UUID) (db.QueryFolder, error) {
 	if q, ok := f[id.Bytes]; ok && q.WorkspaceID == ws {
 		return q, nil
 	}
@@ -112,7 +109,7 @@ type brokenFolders struct{}
 
 var errDown = errors.New("connection refused")
 
-func (brokenFolders) Get(context.Context, pgtype.UUID, pgtype.UUID) (db.QueryFolder, error) {
+func (brokenFolders) Get(context.Context, db.UUID, db.UUID) (db.QueryFolder, error) {
 	return db.QueryFolder{}, errDown
 }
 
@@ -131,7 +128,7 @@ func TestFolderLookupFailureIsNotNotFound(t *testing.T) {
 type fixture struct {
 	s             *Service
 	st            *fakeStore
-	ws, space     pgtype.UUID
+	ws, space     db.UUID
 	folder, other db.QueryFolder
 }
 
@@ -149,7 +146,7 @@ func TestCreate(t *testing.T) {
 	ctx := context.Background()
 	f := setup()
 	binding := newID()
-	target := func(context.Context) (pgtype.UUID, *string, error) { return binding, nil, nil }
+	target := func(context.Context) (db.UUID, *string, error) { return binding, nil, nil }
 
 	q, err := f.s.Create(ctx, newID(), f.ws, New{SpaceID: f.space, FolderID: f.folder.ID, Name: "Revenue by month", SQL: "select 1", Target: target})
 	if err != nil || q.Slug != "revenue_by_month" || q.TargetBindingID != binding || q.FolderID != f.folder.ID {
@@ -178,7 +175,7 @@ func TestCreate(t *testing.T) {
 
 	// The target is resolved last: a folder error wins over a target error.
 	badTarget := errors.New("target not granted")
-	failing := func(context.Context) (pgtype.UUID, *string, error) { return pgtype.UUID{}, nil, badTarget }
+	failing := func(context.Context) (db.UUID, *string, error) { return db.UUID{}, nil, badTarget }
 	if _, err := f.s.Create(ctx, newID(), f.ws, New{SpaceID: f.space, FolderID: newID(), Name: "x", Target: failing}); !errors.Is(err, ErrFolderNotFound) {
 		t.Errorf("folder and target errors = %v, want the folder error first", err)
 	}

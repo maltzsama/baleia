@@ -8,26 +8,25 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // lineageFixture extends metaFixture with content over the `orders` table: one
 // model, one metric and one saved query, all readable by the owner.
 type lineageFixture struct {
 	*metaFixture
-	space     pgtype.UUID
-	model     pgtype.UUID
-	metric    pgtype.UUID
-	saved     pgtype.UUID
-	ownerUUID pgtype.UUID
+	space     db.UUID
+	model     db.UUID
+	metric    db.UUID
+	saved     db.UUID
+	ownerUUID db.UUID
 }
 
 func newLineageFixture(t *testing.T) *lineageFixture {
 	t.Helper()
 	f := &lineageFixture{metaFixture: newMetaFixture(t)}
 	ctx := context.Background()
-	ws := pgtype.UUID{Bytes: f.ws, Valid: true}
-	f.ownerUUID = pgtype.UUID{Bytes: uuid.MustParse(f.owner), Valid: true}
+	ws := db.UUID{Bytes: f.ws, Valid: true}
+	f.ownerUUID = db.UUID{Bytes: uuid.MustParse(f.owner), Valid: true}
 
 	space, err := f.h.queries.GetDefaultSpace(ctx, ws)
 	if err != nil {
@@ -41,8 +40,8 @@ func newLineageFixture(t *testing.T) *lineageFixture {
 		"metrics":[{"name":"orders_count","aggregation":"count"}]}`)
 	m, err := f.h.queries.CreateSemanticModel(ctx, db.CreateSemanticModelParams{
 		WorkspaceID: ws, SpaceID: space.ID, Slug: "lineage_orders", Label: "Orders",
-		CatalogID:  pgtype.UUID{Bytes: f.lake, Valid: true},
-		BindingID:  pgtype.UUID{Bytes: f.binding, Valid: true},
+		CatalogID:  db.UUID{Bytes: f.lake, Valid: true},
+		BindingID:  db.UUID{Bytes: f.binding, Valid: true},
 		Definition: def, FormatVersion: 1,
 		OwnerUserID: f.ownerUUID, UpdatedBy: f.ownerUUID,
 	})
@@ -53,8 +52,8 @@ func newLineageFixture(t *testing.T) *lineageFixture {
 
 	mt, err := f.h.queries.CreateSemanticMetric(ctx, db.CreateSemanticMetricParams{
 		WorkspaceID: ws, SpaceID: space.ID, Slug: "lineage_orders_metric", Label: "Orders metric",
-		CatalogID: pgtype.UUID{Bytes: f.lake, Valid: true}, Namespace: []string{"sales"}, TableName: "orders",
-		BindingID:  pgtype.UUID{Bytes: f.binding, Valid: true},
+		CatalogID: db.UUID{Bytes: f.lake, Valid: true}, Namespace: []string{"sales"}, TableName: "orders",
+		BindingID:  db.UUID{Bytes: f.binding, Valid: true},
 		Definition: []byte(`{"type":"simple","aggregation":"count"}`), FormatVersion: 1,
 		OwnerUserID: f.ownerUUID, UpdatedBy: f.ownerUUID,
 	})
@@ -63,7 +62,7 @@ func newLineageFixture(t *testing.T) *lineageFixture {
 	}
 	f.metric = mt.ID
 
-	bindingID := model.UUID(repo.UUIDString(pgtype.UUID{Bytes: f.binding, Valid: true}))
+	bindingID := model.UUID(repo.UUIDString(db.UUID{Bytes: f.binding, Valid: true}))
 	savedQuery := model.SavedQuery{
 		ID: model.UUID(repo.NewUUID()), WorkspaceID: model.UUID(repo.UUIDString(ws)),
 		SpaceID: model.UUID(repo.UUIDString(space.ID)), CreatedBy: model.UUID(f.owner),
@@ -96,7 +95,7 @@ func TestLineage_TableUp(t *testing.T) {
 	resp, err := f.h.ListLineage(ctx, ListLineageRequestObject{
 		Id: f.ws,
 		Params: ListLineageParams{
-			Node:      "table:" + idString(pgtype.UUID{Bytes: f.orders, Valid: true}),
+			Node:      "table:" + idString(db.UUID{Bytes: f.orders, Valid: true}),
 			Direction: ptr(Up),
 		},
 	})
@@ -118,13 +117,13 @@ func TestLineage_TableUp(t *testing.T) {
 	}
 	// The table node links to the data explorer, on this workspace's table.
 	tables := nodeByKind(got.Nodes, LineageNodeKindTable)
-	wantHref := "/data?catalog=" + idString(pgtype.UUID{Bytes: f.lake, Valid: true}) +
-		"&ns=sales&table=orders&ws=" + idString(pgtype.UUID{Bytes: f.ws, Valid: true})
+	wantHref := "/data?catalog=" + idString(db.UUID{Bytes: f.lake, Valid: true}) +
+		"&ns=sales&table=orders&ws=" + idString(db.UUID{Bytes: f.ws, Valid: true})
 	if tables[0].Href == nil || *tables[0].Href != wantHref {
 		t.Errorf("table href = %v, want %q", tables[0].Href, wantHref)
 	}
 	// Every edge is "content depends on table": to == the table node.
-	tableID := "table:" + idString(pgtype.UUID{Bytes: f.orders, Valid: true})
+	tableID := "table:" + idString(db.UUID{Bytes: f.orders, Valid: true})
 	for _, e := range got.Edges {
 		if e.To != tableID {
 			t.Errorf("edge %+v does not point at the table", e)
@@ -167,7 +166,7 @@ func TestLineage_TableDown(t *testing.T) {
 
 	resp, err := f.h.ListLineage(ctx, ListLineageRequestObject{
 		Id:     f.ws,
-		Params: ListLineageParams{Node: "table:" + idString(pgtype.UUID{Bytes: f.orders, Valid: true})},
+		Params: ListLineageParams{Node: "table:" + idString(db.UUID{Bytes: f.orders, Valid: true})},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +185,7 @@ func TestLineage_ForeignWorkspace404(t *testing.T) {
 
 	resp, err := f.h.ListLineage(ctx, ListLineageRequestObject{
 		Id:     f.ws,
-		Params: ListLineageParams{Node: "table:" + idString(pgtype.UUID{Bytes: f.orders, Valid: true})},
+		Params: ListLineageParams{Node: "table:" + idString(db.UUID{Bytes: f.orders, Valid: true})},
 	})
 	if err != nil {
 		t.Fatal(err)

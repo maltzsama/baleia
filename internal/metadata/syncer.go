@@ -14,8 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -26,27 +24,27 @@ var ErrCatalogNotFound = errors.New("catalog not found")
 // Store is the persistence the syncer needs (ADR 0020, #774): the catalog
 // lookup, the run ledger and the per-table upserts. *repo.Repo implements it.
 type Store interface {
-	GetCatalogForSync(ctx context.Context, id pgtype.UUID) (db.GetCatalogForSyncRow, error)
-	BeginMetadataSyncRun(ctx context.Context, catalogID pgtype.UUID, sourcePath string, staleAfter time.Duration) (db.StartMetadataSyncRunRow, bool, error)
-	TouchMetadataSyncRun(ctx context.Context, id pgtype.UUID) error
+	GetCatalogForSync(ctx context.Context, id db.UUID) (db.GetCatalogForSyncRow, error)
+	BeginMetadataSyncRun(ctx context.Context, catalogID db.UUID, sourcePath string, staleAfter time.Duration) (db.StartMetadataSyncRunRow, bool, error)
+	TouchMetadataSyncRun(ctx context.Context, id db.UUID) error
 	FinishMetadataSyncRun(ctx context.Context, arg db.FinishMetadataSyncRunParams) error
-	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]db.GetTableFingerprintsRow, error)
+	GetTableFingerprints(ctx context.Context, catalogID db.UUID) ([]db.GetTableFingerprintsRow, error)
 	UpsertMetadataNamespace(ctx context.Context, arg db.UpsertMetadataNamespaceParams) error
 	UpsertMetadataTable(ctx context.Context, arg db.UpsertMetadataTableParams) (db.UpsertMetadataTableRow, error)
 	TouchMetadataTable(ctx context.Context, arg db.TouchMetadataTableParams) (int64, error)
-	DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID) error
+	DeleteMetadataColumns(ctx context.Context, tableID db.UUID) error
 	InsertMetadataColumns(ctx context.Context, arg db.InsertMetadataColumnsParams) error
-	DeleteMetadataForeignKeys(ctx context.Context, tableID pgtype.UUID) error
+	DeleteMetadataForeignKeys(ctx context.Context, tableID db.UUID) error
 	InsertMetadataForeignKeys(ctx context.Context, arg db.InsertMetadataForeignKeysParams) error
 	TombstoneMissingTables(ctx context.Context, arg db.TombstoneMissingTablesParams) (int64, error)
 	TombstoneMissingNamespaces(ctx context.Context, arg db.TombstoneMissingNamespacesParams) error
-	PurgeMetadataTableTombstones(ctx context.Context, catalogID pgtype.UUID) error
-	PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID pgtype.UUID) error
+	PurgeMetadataTableTombstones(ctx context.Context, catalogID db.UUID) error
+	PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID db.UUID) error
 }
 
 // Tx runs fn in one transaction over a Store bound to it, after atomically
 // checking that runID is still the running owner of the pass.
-type Tx func(ctx context.Context, runID pgtype.UUID, fn func(Store) error) error
+type Tx func(ctx context.Context, runID db.UUID, fn func(Store) error) error
 
 // Opener picks a catalog's source and opens it (SourceFor in production).
 type Opener interface {
@@ -101,7 +99,7 @@ func (s *Syncer) leaseDuration() time.Duration {
 // beginRun acquires the catalog's lease. A pass that finds a fresh lease
 // waits for it to expire (a retry after a crashed worker) instead of failing
 // at once; a duplicate of a live pass gives up after one lease period.
-func (s *Syncer) beginRun(ctx context.Context, catalogID pgtype.UUID, path string) (db.StartMetadataSyncRunRow, bool, error) {
+func (s *Syncer) beginRun(ctx context.Context, catalogID db.UUID, path string) (db.StartMetadataSyncRunRow, bool, error) {
 	lease := s.leaseDuration()
 	deadline := time.Now().Add(lease + 2*s.heartbeatInterval())
 	poll := min(s.heartbeatInterval(), time.Second)
@@ -132,7 +130,7 @@ func (s *Syncer) beginRun(ctx context.Context, catalogID pgtype.UUID, path strin
 // metadata_sync_runs row. The pass as a whole is not one transaction. One
 // sync per catalog runs at a time; a second caller gets ErrSyncInProgress.
 // progress, when set, is called after each table with the tables seen.
-func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(seen int)) (out RunStats, err error) {
+func (s *Syncer) Sync(ctx context.Context, catalogID db.UUID, progress func(seen int)) (out RunStats, err error) {
 	ctx, span := tracer().Start(ctx, "metadata.sync",
 		trace.WithAttributes(attribute.String("baleia.catalog.id", uuid.UUID(catalogID.Bytes).String())))
 	defer func() {
@@ -147,7 +145,7 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 	}()
 
 	cat, err := s.store.GetCatalogForSync(ctx, catalogID)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return RunStats{}, ErrCatalogNotFound
 	}
 	if err != nil {
@@ -161,7 +159,7 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 	}
 
 	run, started, err := s.beginRun(ctx, catalogID, path)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return stats, ErrCatalogNotFound
 	}
 	if err != nil {
@@ -239,7 +237,7 @@ func (s *Syncer) Sync(ctx context.Context, catalogID pgtype.UUID, progress func(
 
 // heartbeat refreshes the running row until ctx ends. A failure is ignored:
 // the sync itself reports the store failure that matters.
-func (s *Syncer) heartbeat(ctx context.Context, id pgtype.UUID) {
+func (s *Syncer) heartbeat(ctx context.Context, id db.UUID) {
 	t := time.NewTicker(s.heartbeatInterval())
 	defer t.Stop()
 	for {
@@ -256,8 +254,8 @@ func (s *Syncer) heartbeat(ctx context.Context, id pgtype.UUID) {
 type writer struct {
 	ctx        context.Context
 	tx         Tx
-	runID      pgtype.UUID
-	catalogID  pgtype.UUID
+	runID      db.UUID
+	catalogID  db.UUID
 	typeSystem string
 	stats      *RunStats
 	progress   func(int)

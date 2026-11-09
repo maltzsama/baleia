@@ -14,8 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // memStore stands in for the database: rowLock plays the row lock a refresh
@@ -47,21 +45,21 @@ func (m *memStore) SaveUserIDPTokenOnSignIn(_ context.Context, a db.SaveUserIDPT
 	return 1, nil
 }
 
-func (m *memStore) get(id pgtype.UUID) (db.UserIdpToken, error) {
+func (m *memStore) get(id db.UUID) (db.UserIdpToken, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	r, ok := m.rows[id.Bytes]
 	if !ok {
-		return db.UserIdpToken{}, pgx.ErrNoRows
+		return db.UserIdpToken{}, db.ErrNoRows
 	}
 	return r, nil
 }
 
-func (m *memStore) GetUserIDPToken(_ context.Context, id pgtype.UUID) (db.UserIdpToken, error) {
+func (m *memStore) GetUserIDPToken(_ context.Context, id db.UUID) (db.UserIdpToken, error) {
 	return m.get(id)
 }
 
-func (m *memStore) GetUserIDPTokenForUpdate(_ context.Context, id pgtype.UUID) (db.UserIdpToken, error) {
+func (m *memStore) GetUserIDPTokenForUpdate(_ context.Context, id db.UUID) (db.UserIdpToken, error) {
 	return m.get(id)
 }
 
@@ -77,7 +75,7 @@ func (m *memStore) UpdateUserIDPToken(_ context.Context, a db.UpdateUserIDPToken
 	return nil
 }
 
-func (m *memStore) DeleteUserIDPToken(_ context.Context, id pgtype.UUID) error {
+func (m *memStore) DeleteUserIDPToken(_ context.Context, id db.UUID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.rows, id.Bytes)
@@ -94,7 +92,7 @@ type rotatingRefresher struct {
 	err   error
 }
 
-func (r *rotatingRefresher) Refresh(_ context.Context, _ pgtype.UUID, rt string) (auth.IDPTokens, error) {
+func (r *rotatingRefresher) Refresh(_ context.Context, _ db.UUID, rt string) (auth.IDPTokens, error) {
 	r.calls.Add(1)
 	if r.err != nil {
 		return auth.IDPTokens{}, r.err
@@ -123,7 +121,7 @@ func newTokens(t *testing.T, st *memStore, r Refresher) *Tokens {
 	return New(st, st.tx, keyring(t), r, nil)
 }
 
-func id() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func id() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 func TestTokens_SaveSealsAndReturnsFresh(t *testing.T) {
 	t.Parallel()
@@ -260,7 +258,7 @@ type signOutFirst struct {
 	signOut func()
 }
 
-func (s signOutFirst) Refresh(ctx context.Context, p pgtype.UUID, rt string) (auth.IDPTokens, error) {
+func (s signOutFirst) Refresh(ctx context.Context, p db.UUID, rt string) (auth.IDPTokens, error) {
 	s.signOut()
 	return s.Refresher.Refresh(ctx, p, rt)
 }

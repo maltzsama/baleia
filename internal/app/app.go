@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net/http"
 	"os"
 	"time"
@@ -27,12 +26,12 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dbpool"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/engines"
 	"github.com/galileostudio/baleia/internal/identity/idptoken"
 	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/oracle"
@@ -42,7 +41,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"github.com/galileostudio/baleia/internal/trino"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
 	"gorm.io/gorm"
 )
@@ -63,7 +61,8 @@ type Core struct {
 	// Logger is injected into every component that logs (#379).
 	Logger  *slog.Logger
 	Metrics *metrics.Registry
-	Pool    *pgxpool.Pool
+	// Notifier is the cross-process monitoring outbox for SSE changes (#733).
+	Notifier *events.Outbox
 	// Queries is the GORM-backed store, kept under the sqlc-shaped interface
 	// the services still consume (stage A of #761, ADR 0020).
 	Queries db.Querier
@@ -129,43 +128,14 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	})
 
 	c.Metrics = metrics.New(opts.Service)
-	// The pgx pool and the GORM store share one per-process connection
-	// budget: the store gets a quarter and the pgx pool the rest.
 	totalConns := int(cfg.PoolSize(opts.PoolSize))
-	storeConns := totalConns / 4
-	if storeConns < 1 {
-		storeConns = 1
-	}
-	poolConns := totalConns - storeConns
-	if poolConns < 1 {
-		poolConns = 1
-		storeConns = totalConns - 1
-	}
-	var minConns int32
-	if cfg.DBMinConns > 0 && cfg.DBMinConns <= math.MaxInt32 {
-		minConns = int32(cfg.DBMinConns)
-	}
-	if int(minConns) > poolConns {
-		minConns = int32(poolConns)
-	}
-	c.Pool, err = dbpool.Open(ctx, cfg.DatabaseURL, dbpool.Options{
-		MaxConns: int32(poolConns), MinConns: minConns, MaxConnLifetime: cfg.DBMaxConnLifetime,
-		MaxConnIdleTime: cfg.DBMaxConnIdleTime, HealthCheckPeriod: cfg.DBHealthCheckPeriod,
-		StatementTimeout: cfg.DBStatementTimeout, IdleInTxTimeout: cfg.DBIdleInTxTimeout, LockTimeout: cfg.DBLockTimeout,
-		Tracer: obs.PGXTracer(c.Metrics.NewPoolTracer()),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("database: %w", err)
-	}
-	c.onClose(c.Pool.Close)
-	c.Metrics.WatchPool(c.Pool)
 
-	backend, err := store.ResolveBackend(cfg.StoreBackend, cfg.DatabaseURL)
+	backend, err := store.BackendFromDSN(cfg.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("store backend: %w", err)
 	}
 	c.Store, err = store.Open(ctx, cfg.DatabaseURL, backend, store.Options{
-		MaxOpenConns:     storeConns,
+		MaxOpenConns:     totalConns,
 		Logger:           c.Logger,
 		StatementTimeout: cfg.DBStatementTimeout,
 		IdleInTxTimeout:  cfg.DBIdleInTxTimeout,
@@ -177,6 +147,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.onClose(func() { _ = store.Close(c.Store) })
 	c.StoreRepo = repo.New(c.Store)
 	c.Queries = c.StoreRepo
+	c.Notifier = events.NewOutbox(c.Store)
 
 	// Credentials are sealed with BALEIA_ENCRYPTION_KEY (never JWT_SECRET).
 	// With stored credentials and no key, refuse to start rather than serve

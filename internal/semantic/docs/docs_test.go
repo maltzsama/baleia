@@ -9,8 +9,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestNormalizeTags(t *testing.T) {
@@ -55,7 +53,7 @@ func (f *fakeStore) GetSemanticDoc(_ context.Context, arg db.GetSemanticDocParam
 	if d, ok := f.docs[key(arg.TableName, arg.ColumnName)]; ok {
 		return d, nil
 	}
-	return db.SemanticDoc{}, pgx.ErrNoRows
+	return db.SemanticDoc{}, db.ErrNoRows
 }
 
 func (f *fakeStore) ListSemanticDocsForTable(context.Context, db.ListSemanticDocsForTableParams) ([]db.SemanticDoc, error) {
@@ -71,7 +69,7 @@ func (f *fakeStore) ListSemanticTags(context.Context, db.ListSemanticTagsParams)
 }
 
 func (f *fakeStore) UpsertSemanticDoc(_ context.Context, arg db.UpsertSemanticDocParams) (db.SemanticDoc, error) {
-	d := db.SemanticDoc{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, TableName: arg.TableName, ColumnName: arg.ColumnName, Description: arg.Description, Tags: arg.Tags, Certified: arg.Certified, UpdatedBy: arg.UpdatedBy, UpdatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}}
+	d := db.SemanticDoc{ID: db.UUID{Bytes: uuid.New(), Valid: true}, TableName: arg.TableName, ColumnName: arg.ColumnName, Description: arg.Description, Tags: arg.Tags, Certified: arg.Certified, UpdatedBy: arg.UpdatedBy, UpdatedAt: db.Timestamptz{Time: time.Now(), Valid: true}}
 	f.docs[key(arg.TableName, arg.ColumnName)] = d
 	return d, nil
 }
@@ -85,7 +83,7 @@ func (f *fakeStore) DeleteSemanticDoc(_ context.Context, arg db.DeleteSemanticDo
 	return 1, nil
 }
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 func TestUpsert_Certification(t *testing.T) {
 	t.Parallel()

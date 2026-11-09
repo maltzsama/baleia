@@ -17,8 +17,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/mail"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store persists reset tokens and passwords; *repo.Repo implements it.
@@ -36,7 +34,7 @@ type Mailer interface {
 
 // Sessions ends every session of an account; *session.Service implements it.
 type Sessions interface {
-	RevokeAll(ctx context.Context, userID pgtype.UUID)
+	RevokeAll(ctx context.Context, userID db.UUID)
 }
 
 // Config are the reset settings, resolved by the caller.
@@ -82,7 +80,7 @@ func New(store Store, mailer Mailer, sessions Sessions, cfg Config) *Service {
 // reveals the account (#422). A failed delivery is only logged.
 func (s *Service) Request(ctx context.Context, email string) error {
 	user, err := s.store.GetUserByEmail(ctx, email)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
@@ -128,7 +126,7 @@ func (s *Service) deliver(ctx context.Context, user db.User) error {
 	if err := s.store.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
 		TokenHash: auth.HashToken(token),
 		UserID:    user.ID,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(s.cfg.TokenTTL), Valid: true},
+		ExpiresAt: db.Timestamptz{Time: time.Now().Add(s.cfg.TokenTTL), Valid: true},
 	}); err != nil {
 		return fmt.Errorf("create password reset token: %w", err)
 	}
@@ -146,22 +144,22 @@ func (s *Service) deliver(ctx context.Context, user db.User) error {
 // Confirm sets a new password through a reset link and ends every session of
 // the account. The caller validates the password first: a rejected password
 // must not burn the link.
-func (s *Service) Confirm(ctx context.Context, token, newPassword string) (pgtype.UUID, error) {
+func (s *Service) Confirm(ctx context.Context, token, newPassword string) (db.UUID, error) {
 	// Consuming the hash makes the link single use even before it expires (#51).
 	row, err := s.store.ConsumePasswordResetToken(ctx, auth.HashToken(token))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return pgtype.UUID{}, ErrInvalidToken
+	if errors.Is(err, db.ErrNoRows) {
+		return db.UUID{}, ErrInvalidToken
 	}
 	if err != nil {
-		return pgtype.UUID{}, err
+		return db.UUID{}, err
 	}
 
 	hash, err := auth.HashPasswordWithCost(newPassword, s.cfg.PasswordCost)
 	if err != nil {
-		return pgtype.UUID{}, err
+		return db.UUID{}, err
 	}
 	if err := s.store.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{ID: row.UserID, PasswordHash: &hash}); err != nil {
-		return pgtype.UUID{}, err
+		return db.UUID{}, err
 	}
 
 	s.sessions.RevokeAll(ctx, row.UserID)

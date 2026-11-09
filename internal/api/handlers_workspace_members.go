@@ -9,8 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func workspaceMemberToPublic(r db.ListWorkspaceMembersRow) WorkspaceMember {
@@ -25,10 +23,10 @@ func workspaceMemberToPublic(r db.ListWorkspaceMembersRow) WorkspaceMember {
 // workspaceMemberStore is the membership persistence the handlers need: the
 // GORM store when configured, the sqlc querier otherwise (ADR 0020, #774).
 type workspaceMemberStore interface {
-	ListWorkspaceMembers(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceMembersRow, error)
+	ListWorkspaceMembers(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceMembersRow, error)
 	UpsertWorkspaceMember(ctx context.Context, arg db.UpsertWorkspaceMemberParams) (int64, error)
 	DeleteWorkspaceMember(ctx context.Context, arg db.DeleteWorkspaceMemberParams) (int64, error)
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
 	GetUserByEmail(ctx context.Context, email string) (db.User, error)
 }
 
@@ -81,7 +79,7 @@ const (
 // (#653): only a workspace admin changes members; a shared workspace's
 // members come from its team; a personal workspace's owner stays its admin.
 // user nil means the e-mail matched no one.
-func (h *core) setMember(ctx context.Context, wsID pgtype.UUID, user *db.User, role string) (db.ListWorkspaceMembersRow, memberOutcome, error) {
+func (h *core) setMember(ctx context.Context, wsID db.UUID, user *db.User, role string) (db.ListWorkspaceMembersRow, memberOutcome, error) {
 	p, err := authz.PrincipalFromContext(ctx)
 	if err != nil {
 		return db.ListWorkspaceMembersRow{}, memberForbidden, nil
@@ -134,7 +132,7 @@ func (h *core) setMember(ctx context.Context, wsID pgtype.UUID, user *db.User, r
 
 // lookupUser returns nil when no user matches.
 func lookupUser(u db.User, err error) (*db.User, error) {
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -152,7 +150,7 @@ func (h *WorkspaceHandlers) SetWorkspaceMember(ctx context.Context, request SetW
 	if request.Body != nil {
 		role = string(request.Body.Role)
 	}
-	user, err := lookupUser(h.memberStore().GetUserByID(ctx, pgtype.UUID{Bytes: request.UserId, Valid: true}))
+	user, err := lookupUser(h.memberStore().GetUserByID(ctx, db.UUID{Bytes: request.UserId, Valid: true}))
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +217,7 @@ func (h *WorkspaceHandlers) RemoveWorkspaceMember(ctx context.Context, request R
 		return RemoveWorkspaceMember401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	wsID := workspaceIDFromRequest(request.Id)
-	userID := pgtype.UUID{Bytes: request.UserId, Valid: true}
+	userID := db.UUID{Bytes: request.UserId, Valid: true}
 	ev := audit.Event{Action: audit.WorkspaceMemberRemove, ResourceType: "workspace", ResourceID: idString(wsID), WorkspaceID: idString(wsID),
 		Changes: map[string]audit.Change{"member": {From: idString(userID)}}}
 	ctx = audit.WithAction(ctx, ev.Action)

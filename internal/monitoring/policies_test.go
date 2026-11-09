@@ -9,8 +9,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // policyStore keeps one table's parameters, runs and health in memory, with
@@ -27,28 +25,28 @@ type policyStore struct {
 
 func (s *policyStore) GetTableMaintenancePolicy(context.Context, db.GetTableMaintenancePolicyParams) (db.TableMaintenancePolicy, error) {
 	if s.policy == nil {
-		return db.TableMaintenancePolicy{}, pgx.ErrNoRows
+		return db.TableMaintenancePolicy{}, db.ErrNoRows
 	}
 	return *s.policy, nil
 }
 
 func (s *policyStore) CreateTableMaintenancePolicy(_ context.Context, a db.CreateTableMaintenancePolicyParams) (db.TableMaintenancePolicy, error) {
 	if s.policy != nil {
-		return db.TableMaintenancePolicy{}, pgx.ErrNoRows
+		return db.TableMaintenancePolicy{}, db.ErrNoRows
 	}
 	s.policy = &db.TableMaintenancePolicy{
 		CatalogID: a.CatalogID, Namespace: a.Namespace, TableName: a.TableName, Mode: a.Mode,
 		WriterCommitIntervalSeconds: a.WriterCommitIntervalSeconds, Optimize: a.Optimize,
 		OptimizeManifests: a.OptimizeManifests, ExpireSnapshots: a.ExpireSnapshots,
 		RemoveOrphanFiles: a.RemoveOrphanFiles, Revision: 1,
-		CreatedAt: pgtype.Timestamptz{Time: time.Unix(0, 0).UTC(), Valid: true},
+		CreatedAt: db.Timestamptz{Time: time.Unix(0, 0).UTC(), Valid: true},
 	}
 	return *s.policy, nil
 }
 
 func (s *policyStore) UpdateTableMaintenancePolicy(_ context.Context, a db.UpdateTableMaintenancePolicyParams) (db.TableMaintenancePolicy, error) {
 	if s.policy == nil || s.policy.Revision != a.Revision {
-		return db.TableMaintenancePolicy{}, pgx.ErrNoRows
+		return db.TableMaintenancePolicy{}, db.ErrNoRows
 	}
 	p := *s.policy
 	p.Mode, p.Optimize, p.Revision = a.Mode, a.Optimize, p.Revision+1
@@ -58,7 +56,7 @@ func (s *policyStore) UpdateTableMaintenancePolicy(_ context.Context, a db.Updat
 
 func (s *policyStore) DeleteTableMaintenancePolicy(context.Context, db.DeleteTableMaintenancePolicyParams) (db.TableMaintenancePolicy, error) {
 	if s.policy == nil {
-		return db.TableMaintenancePolicy{}, pgx.ErrNoRows
+		return db.TableMaintenancePolicy{}, db.ErrNoRows
 	}
 	p := *s.policy
 	s.policy = nil
@@ -71,7 +69,7 @@ func (s *policyStore) LastSuccessfulMaintenanceByOperation(context.Context, db.L
 
 func (s *policyStore) GetRunningMaintenanceRun(context.Context, db.GetRunningMaintenanceRunParams) (db.MaintenanceRun, error) {
 	if !s.running {
-		return db.MaintenanceRun{}, pgx.ErrNoRows
+		return db.MaintenanceRun{}, db.ErrNoRows
 	}
 	return db.MaintenanceRun{Status: "running"}, nil
 }
@@ -87,19 +85,19 @@ func (s *policyStore) CreatePlannedMaintenanceRun(_ context.Context, a db.Create
 
 func (s *policyStore) GetAppliedCatalogRetention(context.Context, db.GetAppliedCatalogRetentionParams) (db.GetAppliedCatalogRetentionRow, error) {
 	if s.applied == nil {
-		return db.GetAppliedCatalogRetentionRow{}, pgx.ErrNoRows
+		return db.GetAppliedCatalogRetentionRow{}, db.ErrNoRows
 	}
 	return *s.applied, nil
 }
 
 func (s *policyStore) GetTableHealthByTable(context.Context, db.GetTableHealthByTableParams) (db.TableHealthSnapshot, error) {
 	if s.health == nil {
-		return db.TableHealthSnapshot{}, pgx.ErrNoRows
+		return db.TableHealthSnapshot{}, db.ErrNoRows
 	}
 	return *s.health, nil
 }
 
-var table = TableKey{CatalogID: pgtype.UUID{Bytes: [16]byte{0xCA}, Valid: true}, Namespace: "cdc", Table: "orders"}
+var table = TableKey{CatalogID: db.UUID{Bytes: [16]byte{0xCA}, Valid: true}, Namespace: "cdc", Table: "orders"}
 
 func p64(v int64) *int64 { return &v }
 
@@ -156,19 +154,19 @@ func TestService_SetTablePolicy(t *testing.T) {
 	if _, err := svc.TablePolicy(ctx, table); !errors.Is(err, ErrPolicyNotFound) {
 		t.Fatalf("TablePolicy() error = %v, want ErrPolicyNotFound", err)
 	}
-	created, before, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeManaged), nil, pgtype.UUID{})
+	created, before, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeManaged), nil, db.UUID{})
 	if err != nil || created.Revision != 1 || before.Revision != 0 {
 		t.Fatalf("create = %+v, before %+v, %v", created, before, err)
 	}
-	if _, _, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeManaged), nil, pgtype.UUID{}); !errors.Is(err, ErrPolicyRevision) {
+	if _, _, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeManaged), nil, db.UUID{}); !errors.Is(err, ErrPolicyRevision) {
 		t.Fatalf("second create error = %v, want ErrPolicyRevision", err)
 	}
 	stale := int64(7)
-	if _, _, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeOff), &stale, pgtype.UUID{}); !errors.Is(err, ErrPolicyRevision) {
+	if _, _, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeOff), &stale, db.UUID{}); !errors.Is(err, ErrPolicyRevision) {
 		t.Fatalf("stale update error = %v, want ErrPolicyRevision", err)
 	}
 	current := int64(1)
-	updated, before, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeOff), &current, pgtype.UUID{})
+	updated, before, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeOff), &current, db.UUID{})
 	if err != nil || updated.Revision != 2 || updated.Mode != maintenance.ModeOff || before.Mode != maintenance.ModeManaged {
 		t.Fatalf("update = %+v, before %+v, %v", updated, before, err)
 	}
@@ -202,7 +200,7 @@ func TestService_PlanTable(t *testing.T) {
 		{name: "not seen by the health pass yet", blocked: maintenance.BlockedNotFired},
 		{name: "ran recently", health: &db.TableHealthSnapshot{SnapshotCount: 140},
 			last: []db.LastSuccessfulMaintenanceByOperationRow{{
-				Operation: maintenance.OpExpireSnapshots, FinishedAt: pgtype.Timestamptz{Time: now.Add(-time.Minute), Valid: true},
+				Operation: maintenance.OpExpireSnapshots, FinishedAt: db.Timestamptz{Time: now.Add(-time.Minute), Valid: true},
 			}}, blocked: maintenance.BlockedMinInterval},
 		{name: "a run is in progress", health: &db.TableHealthSnapshot{SnapshotCount: 140}, running: true, blocked: maintenance.BlockedRunning},
 	}
@@ -211,7 +209,7 @@ func TestService_PlanTable(t *testing.T) {
 			t.Parallel()
 			store := &policyStore{health: tt.health, last: tt.last, running: tt.running}
 			svc := New(store)
-			row, _, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeManaged), nil, pgtype.UUID{})
+			row, _, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeManaged), nil, db.UUID{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -231,7 +229,7 @@ func TestService_PlanTable(t *testing.T) {
 				}
 			}
 
-			run, err := svc.RecordDryRun(ctx, table, row, plan, pgtype.UUID{})
+			run, err := svc.RecordDryRun(ctx, table, row, plan, db.UUID{})
 			if err != nil {
 				t.Fatalf("RecordDryRun() error = %v", err)
 			}
@@ -296,7 +294,7 @@ func TestService_TableMetrics_FileTriggers(t *testing.T) {
 			t.Parallel()
 			store := &policyStore{health: &tt.health}
 			svc := New(store)
-			row, _, err := svc.SetTablePolicy(ctx, table, tt.policy, nil, pgtype.UUID{})
+			row, _, err := svc.SetTablePolicy(ctx, table, tt.policy, nil, db.UUID{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -316,7 +314,7 @@ func TestService_PlanTable_MaintainedElsewhere(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	svc := New(&policyStore{})
-	row, _, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeMaintainedElsewhere), nil, pgtype.UUID{})
+	row, _, err := svc.SetTablePolicy(ctx, table, expiryPolicy(maintenance.ModeMaintainedElsewhere), nil, db.UUID{})
 	if err != nil {
 		t.Fatal(err)
 	}

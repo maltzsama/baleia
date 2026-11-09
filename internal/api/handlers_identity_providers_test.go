@@ -16,9 +16,9 @@ func idpTestHandlers(t *testing.T) *API {
 	t.Helper()
 	pool := testdb.New(t)
 	return testAPI(handlerFields{
-		queries: repo.New(testdb.GORM(t, pool)),
-		pool:    pool,
-		tx:      poolTx{pool: pool},
+		queries: repo.New(pool),
+		store:   pool,
+		tx:      storeTx{db: pool},
 		keyring: testKeyring(t),
 	})
 }
@@ -135,7 +135,7 @@ func TestIdP_SecretsNeverReturned(t *testing.T) {
 
 	// At rest, the config is sealed, not plaintext JSON.
 	var provider model.AuthProvider
-	if err := testdb.GORM(t, h.pool).Where("name = ?", "okta").First(&provider).Error; err != nil {
+	if err := h.store.Where("name = ?", "okta").First(&provider).Error; err != nil {
 		t.Fatal(err)
 	}
 	enc := provider.ConfigEnc
@@ -219,7 +219,7 @@ func TestIdP_CreateValidates(t *testing.T) {
 
 	// Nothing was written.
 	var n int64
-	if err := testdb.GORM(t, h.pool).Model(&model.AuthProvider{}).Count(&n).Error; err != nil {
+	if err := h.store.Model(&model.AuthProvider{}).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

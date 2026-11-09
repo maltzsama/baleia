@@ -10,8 +10,6 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -81,7 +79,7 @@ type userLookup struct {
 	err error
 }
 
-func (q userLookup) GetUserByID(context.Context, pgtype.UUID) (db.User, error) {
+func (q userLookup) GetUserByID(context.Context, db.UUID) (db.User, error) {
 	return db.User{}, q.err
 }
 
@@ -94,7 +92,7 @@ func TestResolveAudit_LookupFailureIsAnError(t *testing.T) {
 	ids := []openapi_types.UUID{{0xAA}}
 	body := &AuditResolveRequest{Users: &ids}
 
-	h.trail = trail.New(userLookup{authzFake: q, err: pgx.ErrNoRows})
+	h.trail = trail.New(userLookup{authzFake: q, err: db.ErrNoRows})
 	resp, err := h.ResolveAudit(admin, ResolveAuditRequestObject{Body: body})
 	ok, isOK := resp.(ResolveAudit200JSONResponse)
 	if err != nil || !isOK || len(*ok.Users) != 0 {

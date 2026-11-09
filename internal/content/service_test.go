@@ -13,47 +13,33 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
-func pgUUID(id uuid.UUID) pgtype.UUID { return pgtype.UUID{Bytes: id, Valid: true} }
+func pgUUID(id uuid.UUID) db.UUID { return db.UUID{Bytes: id, Valid: true} }
 
 // newContentStore builds the content service over the GORM store, as the API
 // does (ADR 0020).
-func newContentStore(t *testing.T, pool *pgxpool.Pool) *content.Service {
+func newContentStore(t *testing.T, gdb *gorm.DB) *content.Service {
 	t.Helper()
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		Logger:         gormlogger.Discard,
-		TranslateError: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
 	r := repo.New(gdb)
 	return content.New(r, r.TxContent)
 }
 
 type fixture struct {
-	pool  *pgxpool.Pool
+	pool  *gorm.DB
 	gdb   *gorm.DB
 	q     db.Querier
 	s     *content.Service
-	user  pgtype.UUID
-	ws    pgtype.UUID
-	space pgtype.UUID
+	user  db.UUID
+	ws    db.UUID
+	space db.UUID
 }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	pool := testdb.New(t)
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	q := repo.New(gdb)
 	ctx := context.Background()
 	uid := uuid.New()
@@ -104,7 +90,7 @@ func (f *fixture) update(t *testing.T, q db.SavedQuery, sql string) (db.SavedQue
 	return out, changed
 }
 
-func (f *fixture) versions(t *testing.T, id pgtype.UUID) []db.ContentVersion {
+func (f *fixture) versions(t *testing.T, id db.UUID) []db.ContentVersion {
 	t.Helper()
 	rows, err := f.q.ListContentVersions(context.Background(), db.ListContentVersionsParams{
 		WorkspaceID: f.ws, EntityType: content.EntitySavedQuery, EntityID: id, Lim: 100,

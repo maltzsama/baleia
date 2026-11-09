@@ -19,8 +19,6 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
 	trinoclient "github.com/galileostudio/baleia/internal/trino"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func cfg(kind connections.Kind, values, secrets map[string]string) connections.Config {
@@ -495,7 +493,7 @@ func (s *store) SoftDeleteTrinoCatalogRegistry(_ context.Context, arg db.SoftDel
 func (s *store) GetTrinoCatalogRegistryState(_ context.Context, arg db.GetTrinoCatalogRegistryStateParams) (db.GetTrinoCatalogRegistryStateRow, error) {
 	r, ok := s.rows[arg.CatalogName]
 	if !ok {
-		return r, pgx.ErrNoRows
+		return r, db.ErrNoRows
 	}
 	return r, nil
 }
@@ -521,7 +519,7 @@ func TestDDLHasNoSecrets(t *testing.T) {
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
 	b := New(slog.New(slog.DiscardHandler), trinoclient.New(co.srv.URL, "baleia-admin"), st).WithProviders(testProviderSource())
-	eng := bindings.EngineRef{ClusterID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}}
+	eng := bindings.EngineRef{ClusterID: db.UUID{Bytes: [16]byte{1}, Valid: true}}
 	for i, src := range sources {
 		p, err := b.Project(bindings.BindingSpec{EngineCatalog: "c" + string(rune('a'+i)), SourceRef: "w"}, src)
 		if err != nil {
@@ -545,7 +543,7 @@ func TestLifecycleAndConfirm(t *testing.T) {
 	co := newCoordinator(t)
 	st := &store{rows: map[string]db.GetTrinoCatalogRegistryStateRow{}}
 	b := New(slog.New(slog.DiscardHandler), trinoclient.New(co.srv.URL, "baleia-admin"), st).WithProviders(testProviderSource())
-	eng := bindings.EngineRef{ClusterID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}}
+	eng := bindings.EngineRef{ClusterID: db.UUID{Bytes: [16]byte{1}, Valid: true}}
 	ctx := context.Background()
 	src := cfg(connections.KindPostgreSQL, map[string]string{"host": "db"}, nil)
 	p, _ := b.Project(bindings.BindingSpec{EngineCatalog: "old"}, src)

@@ -5,8 +5,6 @@ import (
 	"errors"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // WorkspaceRole is what a caller may do in a workspace (#653, docs/adr/0016).
@@ -59,9 +57,9 @@ func ParseWorkspaceRole(s string) WorkspaceRole {
 // WorkspaceRole is the caller's role in the workspace. A global admin is a
 // workspace admin everywhere. An agent acts with its owner's role, and only
 // in the workspaces it is bound to.
-func (c *Checker) WorkspaceRole(ctx context.Context, p Principal, wsID pgtype.UUID) (WorkspaceRole, error) {
+func (c *Checker) WorkspaceRole(ctx context.Context, p Principal, wsID db.UUID) (WorkspaceRole, error) {
 	if _, err := c.q.GetWorkspaceByID(ctx, wsID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return WorkspaceNone, nil
 		}
 		return WorkspaceNone, err
@@ -84,7 +82,7 @@ func (c *Checker) WorkspaceRole(ctx context.Context, p Principal, wsID pgtype.UU
 
 // RequireWorkspaceRole returns ErrNotFound for a non-member (no existence
 // oracle) and ErrForbidden below min, reporting refusals like every check.
-func (c *Checker) RequireWorkspaceRole(ctx context.Context, p Principal, wsID pgtype.UUID, minRole WorkspaceRole) (role WorkspaceRole, err error) {
+func (c *Checker) RequireWorkspaceRole(ctx context.Context, p Principal, wsID db.UUID, minRole WorkspaceRole) (role WorkspaceRole, err error) {
 	defer c.observe(ctx, "workspace", wsID, &err)
 	if role, err = c.WorkspaceRole(ctx, p, wsID); err != nil {
 		return WorkspaceNone, err

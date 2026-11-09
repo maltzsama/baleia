@@ -11,7 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -43,14 +42,14 @@ func agentNotFound() NotFoundJSONResponse {
 
 // agentScope loads an external agent the caller may see: its owner or a global
 // administrator.
-func (h *AgentHandlers) agentScope(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
+func (h *AgentHandlers) agentScope(ctx context.Context, p authz.Principal, id db.UUID) (db.Agent, bool, error) {
 	return h.agents.Visible(ctx, agentmanage.Viewer{UserID: p.UserID, Admin: p.IsAdmin()}, id)
 }
 
 // asAgentOwner is p, or, for an agent linked to a service account p manages,
 // p acting as that service account (#653): the account cannot sign in to the
 // web app, so its managers manage its agents.
-func (h *AgentHandlers) asAgentOwner(ctx context.Context, p authz.Principal, id pgtype.UUID) authz.Principal {
+func (h *AgentHandlers) asAgentOwner(ctx context.Context, p authz.Principal, id db.UUID) authz.Principal {
 	owners := h.agentOwners()
 	a, err := owners.GetAgentByID(ctx, id)
 	if err != nil || a.OwnerID == p.UserID {
@@ -68,8 +67,8 @@ func (h *AgentHandlers) asAgentOwner(ctx context.Context, p authz.Principal, id 
 // agentOwners is the account lookup the agent handlers need: the GORM store
 // when configured, the sqlc querier otherwise (ADR 0020, #774).
 type agentOwners interface {
-	GetAgentByID(ctx context.Context, id pgtype.UUID) (db.Agent, error)
-	GetServiceAccount(ctx context.Context, id pgtype.UUID) (db.User, error)
+	GetAgentByID(ctx context.Context, id db.UUID) (db.Agent, error)
+	GetServiceAccount(ctx context.Context, id db.UUID) (db.User, error)
 }
 
 func (h *core) agentOwners() agentOwners {
@@ -80,7 +79,7 @@ func (h *core) agentOwners() agentOwners {
 }
 
 // agentOwned loads an external agent only when the caller owns it.
-func (h *AgentHandlers) agentOwned(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.Agent, bool, error) {
+func (h *AgentHandlers) agentOwned(ctx context.Context, p authz.Principal, id db.UUID) (db.Agent, bool, error) {
 	return h.agents.Owned(ctx, agentmanage.Viewer{UserID: p.UserID, Admin: p.IsAdmin()}, id)
 }
 
@@ -170,10 +169,10 @@ func agentTokenPublic(t db.AgentToken) AgentToken {
 // validateAgentWorkspaces keeps the workspace ids the owner is a member of.
 // Any inaccessible id fails the whole request: the caller cannot probe for
 // workspaces it cannot see.
-func (h *AgentHandlers) validateAgentWorkspaces(ctx context.Context, owner pgtype.UUID, ids []openapi_types.UUID) ([]pgtype.UUID, error) {
-	ws := make([]pgtype.UUID, 0, len(ids))
+func (h *AgentHandlers) validateAgentWorkspaces(ctx context.Context, owner db.UUID, ids []openapi_types.UUID) ([]db.UUID, error) {
+	ws := make([]db.UUID, 0, len(ids))
 	for _, id := range ids {
-		ws = append(ws, pgtype.UUID{Bytes: id, Valid: true})
+		ws = append(ws, db.UUID{Bytes: id, Valid: true})
 	}
 	return h.agents.CheckWorkspaces(ctx, owner, ws)
 }
@@ -243,7 +242,7 @@ func (h *AgentHandlers) CreateAgent(ctx context.Context, request CreateAgentRequ
 		owner = sa.ID
 	}
 
-	var workspaceIDs []pgtype.UUID
+	var workspaceIDs []db.UUID
 	if request.Body.WorkspaceIds != nil {
 		workspaceIDs, err = h.validateAgentWorkspaces(ctx, owner, *request.Body.WorkspaceIds)
 		if err != nil {
@@ -353,7 +352,7 @@ func (h *AgentHandlers) UpdateAgent(ctx context.Context, request UpdateAgentRequ
 
 	// Validate the new workspace set before writing anything: a refused PATCH
 	// must not leave a name or status change behind.
-	var workspaceIDs []pgtype.UUID
+	var workspaceIDs []db.UUID
 	if request.Body.WorkspaceIds != nil {
 		workspaceIDs, err = h.validateAgentWorkspaces(ctx, agent.OwnerID, *request.Body.WorkspaceIds)
 		if err != nil {

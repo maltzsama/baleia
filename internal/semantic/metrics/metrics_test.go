@@ -7,12 +7,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 var count = map[string]any{"type": "simple", "aggregation": "count"}
 
@@ -33,7 +30,7 @@ func (f *fakeStore) ListVisibleSemanticMetrics(context.Context, db.ListVisibleSe
 	return out, nil
 }
 
-func (f *fakeStore) ListSemanticMetricVersions(context.Context, pgtype.UUID) ([]db.ListSemanticMetricVersionsRow, error) {
+func (f *fakeStore) ListSemanticMetricVersions(context.Context, db.UUID) ([]db.ListSemanticMetricVersionsRow, error) {
 	return nil, nil
 }
 
@@ -41,35 +38,35 @@ func (f *fakeStore) GetSemanticMetric(_ context.Context, arg db.GetSemanticMetri
 	if m, ok := f.metrics[arg.ID.Bytes]; ok && m.WorkspaceID == arg.WorkspaceID {
 		return m, nil
 	}
-	return db.SemanticMetric{}, pgx.ErrNoRows
+	return db.SemanticMetric{}, db.ErrNoRows
 }
 
 func (f *fakeStore) SetSemanticMetricCertification(_ context.Context, arg db.SetSemanticMetricCertificationParams) (db.SemanticMetric, error) {
 	f.certified = append(f.certified, arg.Certified)
 	m := f.metrics[arg.ID.Bytes]
 	m.Certified = arg.Certified
-	m.CertifiedAt = pgtype.Timestamptz{Valid: arg.Certified}
+	m.CertifiedAt = db.Timestamptz{Valid: arg.Certified}
 	f.metrics[arg.ID.Bytes] = m
 	return m, nil
 }
 
-func (f *fakeStore) CreateSemanticMetric(_ context.Context, _ pgtype.UUID, in db.CreateSemanticMetricParams) (db.SemanticMetric, error) {
+func (f *fakeStore) CreateSemanticMetric(_ context.Context, _ db.UUID, in db.CreateSemanticMetricParams) (db.SemanticMetric, error) {
 	if f.slugTaken {
-		return db.SemanticMetric{}, &pgconn.PgError{Code: "23505"}
+		return db.SemanticMetric{}, &db.PGError{Code: "23505"}
 	}
 	m := db.SemanticMetric{ID: newID(), WorkspaceID: in.WorkspaceID, SpaceID: in.SpaceID, Slug: in.Slug, Label: in.Label, Description: in.Description, Certified: in.Certified, CatalogID: in.CatalogID, TableName: in.TableName, Definition: in.Definition}
 	f.metrics[m.ID.Bytes] = m
 	return m, nil
 }
 
-func (f *fakeStore) UpdateSemanticMetric(_ context.Context, _ pgtype.UUID, in db.UpdateSemanticMetricParams, _ *int32) (db.SemanticMetric, bool, error) {
+func (f *fakeStore) UpdateSemanticMetric(_ context.Context, _ db.UUID, in db.UpdateSemanticMetricParams, _ *int32) (db.SemanticMetric, bool, error) {
 	m := f.metrics[in.ID.Bytes]
 	m.Slug, m.Label, m.Description, m.Certified, m.TableName, m.Definition = in.Slug, in.Label, in.Description, in.Certified, in.TableName, in.Definition
 	f.metrics[in.ID.Bytes] = m
 	return m, true, nil
 }
 
-func (f *fakeStore) DeleteSemanticMetric(context.Context, pgtype.UUID, pgtype.UUID, pgtype.UUID) error {
+func (f *fakeStore) DeleteSemanticMetric(context.Context, db.UUID, db.UUID, db.UUID) error {
 	return nil
 }
 
@@ -158,8 +155,8 @@ func TestList_Filters(t *testing.T) {
 	st := newStore()
 	s := New(st, st)
 	space := newID()
-	st.metrics[[16]byte{1}] = db.SemanticMetric{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}, SpaceID: space, Label: "Revenue", Slug: "revenue", Certified: true}
-	st.metrics[[16]byte{2}] = db.SemanticMetric{ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true}, SpaceID: newID(), Label: "Orders", Slug: "orders"}
+	st.metrics[[16]byte{1}] = db.SemanticMetric{ID: db.UUID{Bytes: [16]byte{1}, Valid: true}, SpaceID: space, Label: "Revenue", Slug: "revenue", Certified: true}
+	st.metrics[[16]byte{2}] = db.SemanticMetric{ID: db.UUID{Bytes: [16]byte{2}, Valid: true}, SpaceID: newID(), Label: "Orders", Slug: "orders"}
 
 	yes := true
 	for _, c := range []struct {

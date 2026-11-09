@@ -15,7 +15,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 // Kind is the connection type, stored in catalog_connections.type.
@@ -265,7 +265,7 @@ func (f Field) Secret() bool { return f.Type == FieldSecret }
 // Config is a decrypted connection. Secrets are decrypted once per use and
 // never logged.
 type Config struct {
-	ConnectionID pgtype.UUID
+	ConnectionID db.UUID
 	Kind         Kind
 	Values       map[string]string
 	Secrets      map[string]string
@@ -421,7 +421,7 @@ func (r *Registry) WithSecrets(sr SecretResolver) *Registry {
 
 // NewConfig returns an empty Config of kind that resolves secret references
 // with the registry's resolver.
-func (r *Registry) NewConfig(id pgtype.UUID, kind Kind) Config {
+func (r *Registry) NewConfig(id db.UUID, kind Kind) Config {
 	return Config{ConnectionID: id, Kind: kind, Values: map[string]string{}, Secrets: map[string]string{}, resolver: r.secrets}
 }
 

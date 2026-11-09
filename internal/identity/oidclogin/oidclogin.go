@@ -18,12 +18,11 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/identity/provision"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store keeps providers and login attempts; *repo.Repo implements it.
 type Store interface {
-	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (db.AuthProvider, error)
+	GetAuthProviderByID(ctx context.Context, id db.UUID) (db.AuthProvider, error)
 	CreateOIDCLoginAttempt(ctx context.Context, arg db.CreateOIDCLoginAttemptParams) error
 	ConsumeOIDCLoginAttempt(ctx context.Context, state string) (db.OidcLoginAttempt, error)
 	ListAuthProviders(ctx context.Context) ([]db.AuthProvider, error)
@@ -40,8 +39,8 @@ type Provider interface {
 
 // TokenSaver keeps the identity-provider tokens of a sign-in (#648).
 type TokenSaver interface {
-	Save(ctx context.Context, userID, providerID pgtype.UUID, tok auth.IDPTokens) error
-	Forget(ctx context.Context, userID pgtype.UUID) error
+	Save(ctx context.Context, userID, providerID db.UUID, tok auth.IDPTokens) error
+	Forget(ctx context.Context, userID db.UUID) error
 }
 
 // Discover reaches an issuer and returns its provider.
@@ -95,7 +94,7 @@ type Service struct {
 func (s *Service) SetTokens(t TokenSaver) { s.tokens = t }
 
 // Refresh redeems a refresh token at the provider that issued it (#648).
-func (s *Service) Refresh(ctx context.Context, providerID pgtype.UUID, refreshToken string) (auth.IDPTokens, error) {
+func (s *Service) Refresh(ctx context.Context, providerID db.UUID, refreshToken string) (auth.IDPTokens, error) {
 	provider, _, err := s.Provider(ctx, providerID)
 	if err != nil {
 		return auth.IDPTokens{}, ErrUnavailable
@@ -119,7 +118,7 @@ func New(store Store, accounts provision.Accounts, keyring *crypto.Keyring, disc
 // discovery until the configuration changes or the cache entry expires. Only
 // an enabled OIDC provider is usable, and a configuration that cannot be
 // opened fails closed (#278).
-func (s *Service) Provider(ctx context.Context, providerID pgtype.UUID) (Provider, auth.OIDCProviderConfig, error) {
+func (s *Service) Provider(ctx context.Context, providerID db.UUID) (Provider, auth.OIDCProviderConfig, error) {
 	ap, err := s.store.GetAuthProviderByID(ctx, providerID)
 	if err != nil {
 		return nil, auth.OIDCProviderConfig{}, err
@@ -160,7 +159,7 @@ func (s *Service) Provider(ctx context.Context, providerID pgtype.UUID) (Provide
 // Begin records a login attempt and returns the provider's authorization URL
 // and the state the browser must present on the callback. redirect is where
 // to land after the login; the caller has validated it.
-func (s *Service) Begin(ctx context.Context, providerID pgtype.UUID, redirect *string) (authURL, state string, err error) {
+func (s *Service) Begin(ctx context.Context, providerID db.UUID, redirect *string) (authURL, state string, err error) {
 	provider, _, err := s.Provider(ctx, providerID)
 	if err != nil {
 		return "", "", ErrUnavailable
@@ -180,7 +179,7 @@ func (s *Service) Begin(ctx context.Context, providerID pgtype.UUID, redirect *s
 		Nonce:        &nonce,
 		CodeVerifier: verifier,
 		Redirect:     redirect,
-		ExpiresAt:    pgtype.Timestamptz{Time: time.Now().Add(auth.OIDCAttemptTTL), Valid: true},
+		ExpiresAt:    db.Timestamptz{Time: time.Now().Add(auth.OIDCAttemptTTL), Valid: true},
 	}); err != nil {
 		return "", "", err
 	}
@@ -195,7 +194,7 @@ func (s *Service) Begin(ctx context.Context, providerID pgtype.UUID, redirect *s
 // browser's cookie, consumes the attempt once, exchanges the code and
 // provisions the account. It returns the account and the attempt's redirect.
 // On ErrSuspended the account is returned too, for the audit trail.
-func (s *Service) Finish(ctx context.Context, providerID pgtype.UUID, state, cookieState, code string) (db.User, *string, error) {
+func (s *Service) Finish(ctx context.Context, providerID db.UUID, state, cookieState, code string) (db.User, *string, error) {
 	provider, cfg, err := s.Provider(ctx, providerID)
 	if err != nil {
 		return db.User{}, nil, ErrUnavailable

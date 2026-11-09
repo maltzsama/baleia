@@ -12,9 +12,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	slugs "github.com/galileostudio/baleia/internal/slug"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Reader reads spaces, their members and content counts, and the principals
@@ -22,13 +19,13 @@ import (
 type Reader interface {
 	ListSpacesForPrincipal(ctx context.Context, arg db.ListSpacesForPrincipalParams) ([]db.ListSpacesForPrincipalRow, error)
 	GetSpace(ctx context.Context, arg db.GetSpaceParams) (db.Space, error)
-	GetDefaultSpace(ctx context.Context, workspaceID pgtype.UUID) (db.Space, error)
+	GetDefaultSpace(ctx context.Context, workspaceID db.UUID) (db.Space, error)
 	SpaceSlugExists(ctx context.Context, arg db.SpaceSlugExistsParams) (bool, error)
-	CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error)
-	CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) (db.CountSpaceContentKindsRow, error)
-	ListSpaceMembers(ctx context.Context, spaceID pgtype.UUID) ([]db.SpaceMember, error)
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
-	GetTeamByID(ctx context.Context, id pgtype.UUID) (db.Team, error)
+	CountSpaceContent(ctx context.Context, spaceID db.UUID) (int32, error)
+	CountSpaceContentKinds(ctx context.Context, spaceID db.UUID) (db.CountSpaceContentKindsRow, error)
+	ListSpaceMembers(ctx context.Context, spaceID db.UUID) ([]db.SpaceMember, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
+	GetTeamByID(ctx context.Context, id db.UUID) (db.Team, error)
 }
 
 // Writer changes spaces and their members; *repo.Repo implements it.
@@ -89,14 +86,14 @@ type Service struct {
 func New(store Store, tx Tx) *Service { return &Service{store: store, tx: tx} }
 
 // List returns the spaces of ws that userID may see, with their role.
-func (s *Service) List(ctx context.Context, ws, userID pgtype.UUID) ([]db.ListSpacesForPrincipalRow, error) {
+func (s *Service) List(ctx context.Context, ws, userID db.UUID) ([]db.ListSpacesForPrincipalRow, error) {
 	return s.store.ListSpacesForPrincipal(ctx, db.ListSpacesForPrincipalParams{WorkspaceID: ws, UserID: userID})
 }
 
 // Get returns a space of ws.
-func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.Space, error) {
+func (s *Service) Get(ctx context.Context, ws, id db.UUID) (db.Space, error) {
 	sp, err := s.store.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: ws, ID: id})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.Space{}, ErrNotFound
 	}
 	return sp, err
@@ -104,12 +101,12 @@ func (s *Service) Get(ctx context.Context, ws, id pgtype.UUID) (db.Space, error)
 
 // Default returns the default space of ws, where content without a space
 // goes.
-func (s *Service) Default(ctx context.Context, ws pgtype.UUID) (db.Space, error) {
+func (s *Service) Default(ctx context.Context, ws db.UUID) (db.Space, error) {
 	return s.store.GetDefaultSpace(ctx, ws)
 }
 
 // ContentKinds counts a space's content by kind.
-func (s *Service) ContentKinds(ctx context.Context, id pgtype.UUID) (db.CountSpaceContentKindsRow, error) {
+func (s *Service) ContentKinds(ctx context.Context, id db.UUID) (db.CountSpaceContentKindsRow, error) {
 	return s.store.CountSpaceContentKinds(ctx, id)
 }
 
@@ -123,7 +120,7 @@ type Fields struct {
 }
 
 // Create stores a space in ws with actor as its manager.
-func (s *Service) Create(ctx context.Context, ws, actor pgtype.UUID, f Fields) (db.Space, error) {
+func (s *Service) Create(ctx context.Context, ws, actor db.UUID, f Fields) (db.Space, error) {
 	name, visibility, defaultRole := "", "", "viewer"
 	if f.Name != nil {
 		name = strings.TrimSpace(*f.Name)
@@ -166,7 +163,7 @@ func (s *Service) Create(ctx context.Context, ws, actor pgtype.UUID, f Fields) (
 
 // Update applies f to a space of ws. The default space stays
 // workspace-visible.
-func (s *Service) Update(ctx context.Context, ws, id pgtype.UUID, f Fields) (db.Space, error) {
+func (s *Service) Update(ctx context.Context, ws, id db.UUID, f Fields) (db.Space, error) {
 	current, err := s.store.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: ws, ID: id})
 	if err != nil {
 		return db.Space{}, err
@@ -203,7 +200,7 @@ func (s *Service) Update(ctx context.Context, ws, id pgtype.UUID, f Fields) (db.
 
 // Delete removes a space of ws. The default space is never deleted, and a
 // space with content only when force is set.
-func (s *Service) Delete(ctx context.Context, ws, id pgtype.UUID, force bool) error {
+func (s *Service) Delete(ctx context.Context, ws, id db.UUID, force bool) error {
 	current, err := s.store.GetSpace(ctx, db.GetSpaceParams{WorkspaceID: ws, ID: id})
 	if err != nil {
 		return err
@@ -229,21 +226,21 @@ func (s *Service) Delete(ctx context.Context, ws, id pgtype.UUID, force bool) er
 }
 
 // Members lists a space's access list.
-func (s *Service) Members(ctx context.Context, id pgtype.UUID) ([]db.SpaceMember, error) {
+func (s *Service) Members(ctx context.Context, id db.UUID) ([]db.SpaceMember, error) {
 	return s.store.ListSpaceMembers(ctx, id)
 }
 
 // SetMember grants a user or a team a role on a space.
-func (s *Service) SetMember(ctx context.Context, spaceID pgtype.UUID, principalType string, principalID pgtype.UUID, role string, grantedBy pgtype.UUID) (db.SpaceMember, error) {
+func (s *Service) SetMember(ctx context.Context, spaceID db.UUID, principalType string, principalID db.UUID, role string, grantedBy db.UUID) (db.SpaceMember, error) {
 	switch principalType {
 	case "user":
-		if _, err := s.store.GetUserByID(ctx, principalID); errors.Is(err, pgx.ErrNoRows) {
+		if _, err := s.store.GetUserByID(ctx, principalID); errors.Is(err, db.ErrNoRows) {
 			return db.SpaceMember{}, ErrUserNotFound
 		} else if err != nil {
 			return db.SpaceMember{}, err
 		}
 	case "team":
-		if _, err := s.store.GetTeamByID(ctx, principalID); errors.Is(err, pgx.ErrNoRows) {
+		if _, err := s.store.GetTeamByID(ctx, principalID); errors.Is(err, db.ErrNoRows) {
 			return db.SpaceMember{}, ErrTeamNotFound
 		} else if err != nil {
 			return db.SpaceMember{}, err
@@ -260,7 +257,7 @@ func (s *Service) SetMember(ctx context.Context, spaceID pgtype.UUID, principalT
 }
 
 // RemoveMember takes a principal off a space's access list.
-func (s *Service) RemoveMember(ctx context.Context, spaceID pgtype.UUID, principalType string, principalID pgtype.UUID) error {
+func (s *Service) RemoveMember(ctx context.Context, spaceID db.UUID, principalType string, principalID db.UUID) error {
 	deleted, err := s.store.DeleteSpaceMember(ctx, db.DeleteSpaceMemberParams{SpaceID: spaceID, PrincipalType: principalType, PrincipalID: principalID})
 	if err != nil {
 		return err
@@ -285,6 +282,6 @@ func validate(name, visibility, defaultRole string) error {
 }
 
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	pgErr, ok := db.AsPGError(err)
+	return ok && pgErr.Code == "23505"
 }

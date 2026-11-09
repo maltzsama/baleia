@@ -7,12 +7,9 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 // fakeStore keeps teams, users and memberships as the database would,
 // constraints included.
@@ -26,29 +23,29 @@ func newStore() *fakeStore {
 	return &fakeStore{teams: map[[16]byte]bool{}, users: map[[16]byte]bool{}, members: map[[2][16]byte]db.TeamMember{}}
 }
 
-func key(team, user pgtype.UUID) [2][16]byte { return [2][16]byte{team.Bytes, user.Bytes} }
+func key(team, user db.UUID) [2][16]byte { return [2][16]byte{team.Bytes, user.Bytes} }
 
 func (f *fakeStore) ListTeams(context.Context) ([]db.Team, error) { return nil, nil }
 
-func (f *fakeStore) ListTeamsByUser(context.Context, pgtype.UUID) ([]db.Team, error) {
+func (f *fakeStore) ListTeamsByUser(context.Context, db.UUID) ([]db.Team, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) GetTeamByID(_ context.Context, id pgtype.UUID) (db.Team, error) {
+func (f *fakeStore) GetTeamByID(_ context.Context, id db.UUID) (db.Team, error) {
 	if f.lookupErr != nil {
 		return db.Team{}, f.lookupErr
 	}
 	if !f.teams[id.Bytes] {
-		return db.Team{}, pgx.ErrNoRows
+		return db.Team{}, db.ErrNoRows
 	}
 	return db.Team{ID: id}, nil
 }
 
-func (f *fakeStore) ListTeamMembers(context.Context, pgtype.UUID) ([]db.ListTeamMembersRow, error) {
+func (f *fakeStore) ListTeamMembers(context.Context, db.UUID) ([]db.ListTeamMembersRow, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) GetUserByID(_ context.Context, id pgtype.UUID) (db.User, error) {
+func (f *fakeStore) GetUserByID(_ context.Context, id db.UUID) (db.User, error) {
 	return db.User{ID: id}, nil
 }
 
@@ -58,17 +55,17 @@ func (f *fakeStore) CreateTeam(context.Context, db.CreateTeamParams) (db.Team, e
 	return db.Team{ID: id}, nil
 }
 
-func (f *fakeStore) DeleteTeam(_ context.Context, id pgtype.UUID) error {
+func (f *fakeStore) DeleteTeam(_ context.Context, id db.UUID) error {
 	delete(f.teams, id.Bytes)
 	return nil
 }
 
 func (f *fakeStore) AddTeamMember(_ context.Context, arg db.AddTeamMemberParams) (db.TeamMember, error) {
 	if !f.users[arg.UserID.Bytes] {
-		return db.TeamMember{}, &pgconn.PgError{Code: "23503"}
+		return db.TeamMember{}, &db.PGError{Code: "23503"}
 	}
 	if _, ok := f.members[key(arg.TeamID, arg.UserID)]; ok {
-		return db.TeamMember{}, &pgconn.PgError{Code: "23505"}
+		return db.TeamMember{}, &db.PGError{Code: "23505"}
 	}
 	m := db.TeamMember{TeamID: arg.TeamID, UserID: arg.UserID, Role: arg.Role}
 	f.members[key(arg.TeamID, arg.UserID)] = m
@@ -78,7 +75,7 @@ func (f *fakeStore) AddTeamMember(_ context.Context, arg db.AddTeamMemberParams)
 func (f *fakeStore) UpdateTeamMemberRole(_ context.Context, arg db.UpdateTeamMemberRoleParams) (db.TeamMember, error) {
 	m, ok := f.members[key(arg.TeamID, arg.UserID)]
 	if !ok {
-		return db.TeamMember{}, pgx.ErrNoRows
+		return db.TeamMember{}, db.ErrNoRows
 	}
 	m.Role = arg.Role
 	f.members[key(arg.TeamID, arg.UserID)] = m

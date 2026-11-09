@@ -12,8 +12,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/crypto"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const (
@@ -77,7 +77,7 @@ func TestCredentialsMigration_Idempotent(t *testing.T) {
 			t.Fatalf("row %s not v1 after migration: %q", id, enc)
 		}
 		u, _ := uuid.Parse(id)
-		plain, err := kr.Open(enc, catalogs.CredentialsAAD(pgtype.UUID{Bytes: u, Valid: true}))
+		plain, err := kr.Open(enc, catalogs.CredentialsAAD(db.UUID{Bytes: u, Valid: true}))
 		if err != nil || !strings.Contains(string(plain), want) {
 			t.Fatalf("row %s: Open = %q, %v", id, plain, err)
 		}
@@ -109,7 +109,7 @@ func TestCredentialsMigration_CompletesKeyRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := uuid.New()
-	aad := catalogs.CredentialsAAD(pgtype.UUID{Bytes: id, Valid: true})
+	aad := catalogs.CredentialsAAD(db.UUID{Bytes: id, Valid: true})
 	sealed, _ := oldKR.Seal([]byte(`{"client_secret":"alpha"}`), aad)
 	store := &memStore{rows: map[string]string{id.String(): sealed}}
 

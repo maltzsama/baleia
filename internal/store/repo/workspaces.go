@@ -8,7 +8,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	wsmanage "github.com/galileostudio/baleia/internal/workspaces/manage"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -21,7 +20,7 @@ func (r *Repo) TxWorkspace(ctx context.Context, fn func(wsmanage.TxStore) error)
 }
 
 // ListWorkspaceCatalogGrants returns the catalogs granted to the workspace.
-func (r *Repo) ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
+func (r *Repo) ListWorkspaceCatalogGrants(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceCatalogGrantsRow, error) {
 	var rows []struct {
 		WorkspaceID model.UUID
 		CatalogID   model.UUID
@@ -51,7 +50,7 @@ func (r *Repo) ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtyp
 }
 
 // CountWorkspaceRunningExecutions counts the workspace's running executions.
-func (r *Repo) CountWorkspaceRunningExecutions(ctx context.Context, workspaceID pgtype.UUID) (int64, error) {
+func (r *Repo) CountWorkspaceRunningExecutions(ctx context.Context, workspaceID db.UUID) (int64, error) {
 	var count int64
 	err := r.Users.db.WithContext(ctx).Model(&model.QueryExecution{}).
 		Where("workspace_id = ? AND status = ?", UUIDString(workspaceID), "running").
@@ -60,7 +59,7 @@ func (r *Repo) CountWorkspaceRunningExecutions(ctx context.Context, workspaceID 
 }
 
 // CountWorkspaceImpact reports what deleting the workspace would affect.
-func (r *Repo) CountWorkspaceImpact(ctx context.Context, workspaceID pgtype.UUID) (db.CountWorkspaceImpactRow, error) {
+func (r *Repo) CountWorkspaceImpact(ctx context.Context, workspaceID db.UUID) (db.CountWorkspaceImpactRow, error) {
 	q := r.Users.db.WithContext(ctx)
 	ws := UUIDString(workspaceID)
 	var out db.CountWorkspaceImpactRow
@@ -120,7 +119,7 @@ func (r *Repo) CountCatalogAccessImpact(ctx context.Context, arg db.CountCatalog
 }
 
 // DeleteWorkspace deletes a shared workspace and returns the affected rows.
-func (r *Repo) DeleteWorkspace(ctx context.Context, id pgtype.UUID) (int64, error) {
+func (r *Repo) DeleteWorkspace(ctx context.Context, id db.UUID) (int64, error) {
 	res := r.Users.db.WithContext(ctx).
 		Where("id = ? AND type = ?", UUIDString(id), "shared").
 		Delete(&model.Workspace{})

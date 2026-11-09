@@ -4,8 +4,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -16,7 +14,7 @@ type Querier interface {
 	AddAgentWorkspace(ctx context.Context, arg AddAgentWorkspaceParams) error
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
 	// A run leaves the queue and starts: back to running, with the wait recorded.
-	AdmitQueryExecution(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
+	AdmitQueryExecution(ctx context.Context, id UUID) (QueryExecution, error)
 	// Fired by the dispatcher when a refresh run is started: schedule the next run
 	// from the cron expression immediately, so a long refresh never triggers a
 	// burst of runs afterwards.
@@ -30,7 +28,7 @@ type Querier interface {
 	AuditExportLagSeconds(ctx context.Context) (float64, error)
 	// Conditional cancel: a running or queued execution transitions to cancelled,
 	// so a concurrent completion or failure activity cannot be overwritten. Zero
-	// matched rows (pgx.ErrNoRows) means the execution is gone, foreign, or
+	// matched rows (db.ErrNoRows) means the execution is gone, foreign, or
 	// already terminal.
 	CancelQueryExecution(ctx context.Context, arg CancelQueryExecutionParams) (QueryExecution, error)
 	CatalogConnectionNameExists(ctx context.Context, name string) (bool, error)
@@ -38,7 +36,7 @@ type Querier interface {
 	// agent's owner is still a member of that workspace (#59).
 	CatalogGrantedToAgent(ctx context.Context, arg CatalogGrantedToAgentParams) (bool, error)
 	CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error)
-	ClearAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) error
+	ClearAgentWorkspaces(ctx context.Context, agentID UUID) error
 	ClearWorkspaceDefaultForCatalog(ctx context.Context, arg ClearWorkspaceDefaultForCatalogParams) error
 	// Single use: the row is deleted atomically, so a replayed state finds nothing.
 	ConsumeOIDCLoginAttempt(ctx context.Context, state string) (OidcLoginAttempt, error)
@@ -48,31 +46,31 @@ type Querier interface {
 	// Atomic rotation: of two concurrent refreshes with the same token, exactly one
 	// updates a row (#51).
 	ConsumeRefreshToken(ctx context.Context, tokenHash string) (ConsumeRefreshTokenRow, error)
-	CountActiveAgentTokens(ctx context.Context, agentID pgtype.UUID) (int64, error)
+	CountActiveAgentTokens(ctx context.Context, agentID UUID) (int64, error)
 	// Runs that still hold an agent concurrency slot: running or queued (#589).
-	CountActiveExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error)
+	CountActiveExecutionsByAgent(ctx context.Context, agentID UUID) (int64, error)
 	CountCatalogAccessImpact(ctx context.Context, arg CountCatalogAccessImpactParams) (CountCatalogAccessImpactRow, error)
-	CountCatalogImpact(ctx context.Context, catalogID pgtype.UUID) (CountCatalogImpactRow, error)
-	CountConnectionImpact(ctx context.Context, connectionID pgtype.UUID) (CountConnectionImpactRow, error)
+	CountCatalogImpact(ctx context.Context, catalogID UUID) (CountCatalogImpactRow, error)
+	CountConnectionImpact(ctx context.Context, connectionID UUID) (CountConnectionImpactRow, error)
 	// Whether any credential is stored, so a missing encryption key is fatal.
 	CountEncryptedConnections(ctx context.Context) (int64, error)
 	// What stops an engine from being deleted: managed bindings and executions
 	// still running on it. Native bindings go with the engine.
-	CountEngineBlockers(ctx context.Context, engineID pgtype.UUID) (CountEngineBlockersRow, error)
+	CountEngineBlockers(ctx context.Context, engineID UUID) (CountEngineBlockersRow, error)
 	// What depends on an engine before disabling or deleting it (#110).
-	CountEngineImpact(ctx context.Context, engineID pgtype.UUID) (CountEngineImpactRow, error)
+	CountEngineImpact(ctx context.Context, engineID UUID) (CountEngineImpactRow, error)
 	CountExecutionsByAgentSince(ctx context.Context, arg CountExecutionsByAgentSinceParams) (int64, error)
 	CountManagedBindingsByState(ctx context.Context) ([]CountManagedBindingsByStateRow, error)
-	CountNamespacesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
-	CountRunningExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error)
+	CountNamespacesByCatalog(ctx context.Context, catalogID UUID) (int64, error)
+	CountRunningExecutionsByAgent(ctx context.Context, agentID UUID) (int64, error)
 	CountRunningMaintenanceRuns(ctx context.Context) (int32, error)
-	CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error)
-	CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) (CountSpaceContentKindsRow, error)
-	CountTablesByCatalog(ctx context.Context, catalogID pgtype.UUID) (int64, error)
+	CountSpaceContent(ctx context.Context, spaceID UUID) (int32, error)
+	CountSpaceContentKinds(ctx context.Context, spaceID UUID) (CountSpaceContentKindsRow, error)
+	CountTablesByCatalog(ctx context.Context, catalogID UUID) (int64, error)
 	// Delete of a provider (#285) refuses while users are still linked.
-	CountUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) (int64, error)
-	CountWorkspaceImpact(ctx context.Context, workspaceID pgtype.UUID) (CountWorkspaceImpactRow, error)
-	CountWorkspaceRunningExecutions(ctx context.Context, workspaceID pgtype.UUID) (int64, error)
+	CountUsersByAuthProvider(ctx context.Context, authProviderID UUID) (int64, error)
+	CountWorkspaceImpact(ctx context.Context, workspaceID UUID) (CountWorkspaceImpactRow, error)
+	CountWorkspaceRunningExecutions(ctx context.Context, workspaceID UUID) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	// Agents (#59). External agents only; assistant agents are managed by #62.
 	CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent, error)
@@ -86,7 +84,7 @@ type Querier interface {
 	// A pending offer (initiated_by_side 'catalog') or request ('workspace'). The
 	// pair is unique: a new initiation from the other side flips the side.
 	CreateCatalogGrantRequest(ctx context.Context, arg CreateCatalogGrantRequestParams) (CatalogGrantRequest, error)
-	CreateDirectoryReconcileRun(ctx context.Context, providerID pgtype.UUID) (DirectoryReconcileRun, error)
+	CreateDirectoryReconcileRun(ctx context.Context, providerID UUID) (DirectoryReconcileRun, error)
 	CreateEngine(ctx context.Context, arg CreateEngineParams) (Engine, error)
 	CreateMaintenanceRun(ctx context.Context, arg CreateMaintenanceRunParams) (MaintenanceRun, error)
 	CreateManagedBinding(ctx context.Context, arg CreateManagedBindingParams) (CatalogBinding, error)
@@ -123,28 +121,28 @@ type Querier interface {
 	CreateWorkloadRule(ctx context.Context, arg CreateWorkloadRuleParams) (WorkloadRule, error)
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
-	DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
+	DeleteAPIKeysByAuthProvider(ctx context.Context, authProviderID UUID) error
 	// Suspension revokes every API key of the user (#258).
-	DeleteAPIKeysByUser(ctx context.Context, userID pgtype.UUID) error
-	DeleteAgent(ctx context.Context, id pgtype.UUID) error
-	DeleteAuthProvider(ctx context.Context, id pgtype.UUID) error
-	DeleteBinding(ctx context.Context, id pgtype.UUID) error
-	DeleteCatalog(ctx context.Context, id pgtype.UUID) error
-	DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) error
+	DeleteAPIKeysByUser(ctx context.Context, userID UUID) error
+	DeleteAgent(ctx context.Context, id UUID) error
+	DeleteAuthProvider(ctx context.Context, id UUID) error
+	DeleteBinding(ctx context.Context, id UUID) error
+	DeleteCatalog(ctx context.Context, id UUID) error
+	DeleteCatalogConnection(ctx context.Context, id UUID) error
 	DeleteCatalogGrantRequest(ctx context.Context, arg DeleteCatalogGrantRequestParams) (int64, error)
-	DeleteEngine(ctx context.Context, id pgtype.UUID) error
-	DeleteEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) error
+	DeleteEngine(ctx context.Context, id UUID) error
+	DeleteEngineQueueCapacities(ctx context.Context, engineID UUID) error
 	// Hard delete: the row holds real credentials. Permanent rows are never
 	// matched.
 	DeleteEphemeralRegistryRow(ctx context.Context, arg DeleteEphemeralRegistryRowParams) error
 	DeleteExpiredOIDCLoginAttempts(ctx context.Context) error
 	DeleteExpiredPasswordResetTokens(ctx context.Context) error
 	DeleteExpiredRefreshTokens(ctx context.Context) error
-	DeleteMetadataColumns(ctx context.Context, tableID pgtype.UUID) error
+	DeleteMetadataColumns(ctx context.Context, tableID UUID) error
 	// A changed table's outgoing foreign keys are replaced with the pass's result.
-	DeleteMetadataForeignKeys(ctx context.Context, tableID pgtype.UUID) error
+	DeleteMetadataForeignKeys(ctx context.Context, tableID UUID) error
 	// The native catalogs of an engine, deleted with it (their bindings cascade).
-	DeleteNativeCatalogsOfEngine(ctx context.Context, engineID pgtype.UUID) error
+	DeleteNativeCatalogsOfEngine(ctx context.Context, engineID UUID) error
 	DeleteQueryFolder(ctx context.Context, arg DeleteQueryFolderParams) (int64, error)
 	// Its refresh history goes with it (ON DELETE CASCADE).
 	DeleteRetriever(ctx context.Context, arg DeleteRetrieverParams) (int64, error)
@@ -152,32 +150,32 @@ type Querier interface {
 	DeleteSemanticDoc(ctx context.Context, arg DeleteSemanticDocParams) (int64, error)
 	DeleteSemanticMetric(ctx context.Context, arg DeleteSemanticMetricParams) (int64, error)
 	DeleteSemanticModel(ctx context.Context, arg DeleteSemanticModelParams) (int64, error)
-	DeleteServiceAccount(ctx context.Context, id pgtype.UUID) (int64, error)
+	DeleteServiceAccount(ctx context.Context, id UUID) (int64, error)
 	DeleteSpace(ctx context.Context, arg DeleteSpaceParams) (int64, error)
 	DeleteSpaceMember(ctx context.Context, arg DeleteSpaceMemberParams) (int64, error)
-	DeleteStatementJoins(ctx context.Context, statementID pgtype.UUID) error
+	DeleteStatementJoins(ctx context.Context, statementID UUID) error
 	// Statement references and equi-joins (B0, #530, #538).
-	DeleteStatementReferences(ctx context.Context, statementID pgtype.UUID) error
+	DeleteStatementReferences(ctx context.Context, statementID UUID) error
 	DeleteTableMaintenancePolicy(ctx context.Context, arg DeleteTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
 	// Popular tables from query history (B7, #562).
 	// The refresh replaces every row in one transaction with InsertTablePopularity.
 	DeleteTablePopularity(ctx context.Context) error
-	DeleteTeam(ctx context.Context, id pgtype.UUID) error
+	DeleteTeam(ctx context.Context, id UUID) error
 	// Trino resource groups (#599, A-5.2): the write path Baleia uses to publish
 	// the generated document (#598) into the tables Trino's db manager reads, plus
 	// the revision log that makes a rollback possible.
 	DeleteTrinoResourceGroups(ctx context.Context, environment *string) error
-	DeleteUser(ctx context.Context, id pgtype.UUID) error
-	DeleteUserIDPToken(ctx context.Context, userID pgtype.UUID) error
-	DeleteUserIDPTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
-	DeleteWorkloadRule(ctx context.Context, id pgtype.UUID) (int64, error)
-	DeleteWorkspace(ctx context.Context, id pgtype.UUID) (int64, error)
+	DeleteUser(ctx context.Context, id UUID) error
+	DeleteUserIDPToken(ctx context.Context, userID UUID) error
+	DeleteUserIDPTokensByAuthProvider(ctx context.Context, authProviderID UUID) error
+	DeleteWorkloadRule(ctx context.Context, id UUID) (int64, error)
+	DeleteWorkspace(ctx context.Context, id UUID) (int64, error)
 	DeleteWorkspaceCatalogGrant(ctx context.Context, arg DeleteWorkspaceCatalogGrantParams) (int64, error)
 	DeleteWorkspaceMember(ctx context.Context, arg DeleteWorkspaceMemberParams) (int64, error)
-	DisableManagedBindingsOfCatalog(ctx context.Context, catalogID pgtype.UUID) error
+	DisableManagedBindingsOfCatalog(ctx context.Context, catalogID UUID) error
 	// Adopted catalogs the engine no longer reports are disabled, never deleted
 	// (#17): their metadata and history stay.
-	DisableMissingAdoptedBindings(ctx context.Context, engineID pgtype.UUID) (int64, error)
+	DisableMissingAdoptedBindings(ctx context.Context, engineID UUID) (int64, error)
 	// Native catalogs an engine no longer reports are disabled, never deleted
 	// (#17): their metadata and history stay.
 	DisableMissingNativeBindings(ctx context.Context, arg DisableMissingNativeBindingsParams) (int64, error)
@@ -188,13 +186,13 @@ type Querier interface {
 	FailQueryExecution(ctx context.Context, arg FailQueryExecutionParams) (QueryExecution, error)
 	// A run left running by a crashed worker ends failed when the next pass of
 	// the same catalog starts (that pass holds the catalog sync lock).
-	FailStaleMetadataSyncRuns(ctx context.Context, catalogID pgtype.UUID) error
+	FailStaleMetadataSyncRuns(ctx context.Context, catalogID UUID) error
 	FinishDirectoryReconcileRun(ctx context.Context, arg FinishDirectoryReconcileRunParams) error
 	FinishMetadataSyncRun(ctx context.Context, arg FinishMetadataSyncRunParams) error
 	FolderSlugExists(ctx context.Context, arg FolderSlugExistsParams) (bool, error)
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAPIKeyByID(ctx context.Context, arg GetAPIKeyByIDParams) (ApiKey, error)
-	GetAgentByID(ctx context.Context, id pgtype.UUID) (Agent, error)
+	GetAgentByID(ctx context.Context, id UUID) (Agent, error)
 	GetAgentTokenByHash(ctx context.Context, tokenHash string) (AgentToken, error)
 	GetAgentTokenByID(ctx context.Context, arg GetAgentTokenByIDParams) (AgentToken, error)
 	// The properties Baleia wrote for the binding's catalog on its engine's
@@ -202,42 +200,42 @@ type Querier interface {
 	GetAppliedCatalogRetention(ctx context.Context, arg GetAppliedCatalogRetentionParams) (GetAppliedCatalogRetentionRow, error)
 	// The age of the oldest audit event not yet exported (the lag the exporter
 	// reports). NULL when nothing is pending.
-	GetAttentionAuditExportLag(ctx context.Context) (pgtype.Timestamptz, error)
+	GetAttentionAuditExportLag(ctx context.Context) (Timestamptz, error)
 	GetAuditExportCursor(ctx context.Context, sink string) (GetAuditExportCursorRow, error)
-	GetAuthProviderByID(ctx context.Context, id pgtype.UUID) (AuthProvider, error)
-	GetBinding(ctx context.Context, id pgtype.UUID) (CatalogBinding, error)
+	GetAuthProviderByID(ctx context.Context, id UUID) (AuthProvider, error)
+	GetBinding(ctx context.Context, id UUID) (CatalogBinding, error)
 	// Everything an execution target needs about a binding: its engine and its
 	// logical catalog.
-	GetBindingForTarget(ctx context.Context, id pgtype.UUID) (GetBindingForTargetRow, error)
-	GetBindingStatus(ctx context.Context, bindingID pgtype.UUID) (BindingStatusV, error)
-	GetBindingTargetNames(ctx context.Context, id pgtype.UUID) (GetBindingTargetNamesRow, error)
+	GetBindingForTarget(ctx context.Context, id UUID) (GetBindingForTargetRow, error)
+	GetBindingStatus(ctx context.Context, bindingID UUID) (BindingStatusV, error)
+	GetBindingTargetNames(ctx context.Context, id UUID) (GetBindingTargetNamesRow, error)
 	// An enabled binding of the catalog (the given one, else the first) and its
 	// engine kind, to render types and names in that engine's dialect.
 	GetCatalogBindingForDisplay(ctx context.Context, arg GetCatalogBindingForDisplayParams) (GetCatalogBindingForDisplayRow, error)
-	GetCatalogByID(ctx context.Context, id pgtype.UUID) (Catalog, error)
+	GetCatalogByID(ctx context.Context, id UUID) (Catalog, error)
 	GetCatalogByTrinoName(ctx context.Context, arg GetCatalogByTrinoNameParams) (Catalog, error)
-	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (CatalogConnection, error)
+	GetCatalogConnectionByID(ctx context.Context, id UUID) (CatalogConnection, error)
 	// A catalog with what the sync needs to pick its source: the connection
 	// kind and the reference inside it (warehouse, database).
-	GetCatalogForSync(ctx context.Context, id pgtype.UUID) (GetCatalogForSyncRow, error)
+	GetCatalogForSync(ctx context.Context, id UUID) (GetCatalogForSyncRow, error)
 	GetCatalogGrantRequest(ctx context.Context, arg GetCatalogGrantRequestParams) (CatalogGrantRequest, error)
-	GetCatalogNameByID(ctx context.Context, id pgtype.UUID) (string, error)
+	GetCatalogNameByID(ctx context.Context, id UUID) (string, error)
 	// The freshness of a catalog snapshot: its latest pass and the end of its
 	// latest finished one.
-	GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID) (GetCatalogSyncStateRow, error)
+	GetCatalogSyncState(ctx context.Context, catalogID UUID) (GetCatalogSyncStateRow, error)
 	GetContentVersion(ctx context.Context, arg GetContentVersionParams) (GetContentVersionRow, error)
-	GetDefaultSpace(ctx context.Context, workspaceID pgtype.UUID) (Space, error)
+	GetDefaultSpace(ctx context.Context, workspaceID UUID) (Space, error)
 	GetDefaultTrinoCluster(ctx context.Context) (TrinoCluster, error)
 	// The engine linked to the 'default' Trino cluster, with its connection.
 	GetDefaultTrinoEngine(ctx context.Context) (GetDefaultTrinoEngineRow, error)
 	// Empty string when the caller has no role (the space is invisible).
 	GetEffectiveSpaceRole(ctx context.Context, arg GetEffectiveSpaceRoleParams) (string, error)
-	GetEngineByID(ctx context.Context, id pgtype.UUID) (Engine, error)
+	GetEngineByID(ctx context.Context, id UUID) (Engine, error)
 	// The engine and the connection it runs on (decrypted by the caller, #19).
-	GetEngineWithConnection(ctx context.Context, id pgtype.UUID) (GetEngineWithConnectionRow, error)
+	GetEngineWithConnection(ctx context.Context, id UUID) (GetEngineWithConnectionRow, error)
 	GetFolderBySlug(ctx context.Context, arg GetFolderBySlugParams) (QueryFolder, error)
 	// A catalog the workspace may use, by its logical name.
-	GetGrantedCatalogByName(ctx context.Context, arg GetGrantedCatalogByNameParams) (pgtype.UUID, error)
+	GetGrantedCatalogByName(ctx context.Context, arg GetGrantedCatalogByNameParams) (UUID, error)
 	// A catalog the workspace may use, with its freshness; no row: not visible
 	// from this workspace.
 	GetGrantedMetadataCatalog(ctx context.Context, arg GetGrantedMetadataCatalogParams) (GetGrantedMetadataCatalogRow, error)
@@ -245,21 +243,21 @@ type Querier interface {
 	// removed_at), with its catalog freshness.
 	GetGrantedMetadataTable(ctx context.Context, arg GetGrantedMetadataTableParams) (GetGrantedMetadataTableRow, error)
 	GetLatestClusterSnapshot(ctx context.Context) (ClusterSnapshot, error)
-	GetLatestClusterSnapshotByEngine(ctx context.Context, engineID pgtype.UUID) (ClusterSnapshot, error)
-	GetMaintenanceRun(ctx context.Context, id pgtype.UUID) (MaintenanceRun, error)
+	GetLatestClusterSnapshotByEngine(ctx context.Context, engineID UUID) (ClusterSnapshot, error)
+	GetMaintenanceRun(ctx context.Context, id UUID) (MaintenanceRun, error)
 	GetManagedBindingOfCatalog(ctx context.Context, arg GetManagedBindingOfCatalogParams) (CatalogBinding, error)
 	// The connection behind a catalog an engine exposes through a managed binding
 	// (#648): its catalog manager may authorize each user.
 	GetManagedConnectionOfEngineCatalog(ctx context.Context, arg GetManagedConnectionOfEngineCatalogParams) (CatalogConnection, error)
 	// A live table by its natural key, for the v1 -> v2 metric migration (#121).
-	GetMetadataTableByName(ctx context.Context, arg GetMetadataTableByNameParams) (pgtype.UUID, error)
+	GetMetadataTableByName(ctx context.Context, arg GetMetadataTableByNameParams) (UUID, error)
 	// Lineage (#558, B4): the tables a model, metric or saved query reads, and
 	// the content that reads a table. Name resolution is best-effort: a reference
 	// whose table no longer exists simply contributes no edge.
 	// A live table by its natural key, to resolve a content reference.
 	GetMetadataTableByRef(ctx context.Context, arg GetMetadataTableByRefParams) (GetMetadataTableByRefRow, error)
-	GetMigrationByID(ctx context.Context, id pgtype.UUID) (Migration, error)
-	GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
+	GetMigrationByID(ctx context.Context, id UUID) (Migration, error)
+	GetQueryExecutionByID(ctx context.Context, id UUID) (QueryExecution, error)
 	// Workspace-scoped lookup: an execution id from another workspace must not be
 	// readable. Callers use this instead of GetQueryExecutionByID for user-facing
 	// reads so a cross-workspace id yields ErrNoRows (mapped to 404).
@@ -275,7 +273,7 @@ type Querier interface {
 	GetRetrieverByID(ctx context.Context, arg GetRetrieverByIDParams) (Retriever, error)
 	// Worker-only lookup: the refresh activity runs off a due list, so it does not
 	// have (and must not trust) a caller-supplied workspace id.
-	GetRetrieverForRefresh(ctx context.Context, id pgtype.UUID) (Retriever, error)
+	GetRetrieverForRefresh(ctx context.Context, id UUID) (Retriever, error)
 	GetRunningMaintenanceRun(ctx context.Context, arg GetRunningMaintenanceRunParams) (MaintenanceRun, error)
 	GetSavedQueryByID(ctx context.Context, arg GetSavedQueryByIDParams) (SavedQuery, error)
 	GetSavedQueryBySlug(ctx context.Context, arg GetSavedQueryBySlugParams) (SavedQuery, error)
@@ -287,7 +285,7 @@ type Querier interface {
 	GetSemanticModel(ctx context.Context, arg GetSemanticModelParams) (SemanticModel, error)
 	GetSemanticModelBySlug(ctx context.Context, arg GetSemanticModelBySlugParams) (SemanticModel, error)
 	GetSemanticModelForUpdate(ctx context.Context, arg GetSemanticModelForUpdateParams) (SemanticModel, error)
-	GetServiceAccount(ctx context.Context, id pgtype.UUID) (User, error)
+	GetServiceAccount(ctx context.Context, id UUID) (User, error)
 	// The active service account a client-credentials token of a provider
 	// authenticates as.
 	GetServiceAccountByClient(ctx context.Context, arg GetServiceAccountByClientParams) (User, error)
@@ -297,28 +295,28 @@ type Querier interface {
 	// not change (#538).
 	GetStatementReferenceTarget(ctx context.Context, arg GetStatementReferenceTargetParams) (GetStatementReferenceTargetRow, error)
 	// What the last passes stored, so a source can skip loading unchanged tables.
-	GetTableFingerprints(ctx context.Context, catalogID pgtype.UUID) ([]GetTableFingerprintsRow, error)
+	GetTableFingerprints(ctx context.Context, catalogID UUID) ([]GetTableFingerprintsRow, error)
 	GetTableHealthByTable(ctx context.Context, arg GetTableHealthByTableParams) (TableHealthSnapshot, error)
 	GetTableHealthSnapshot(ctx context.Context, arg GetTableHealthSnapshotParams) (TableHealthSnapshot, error)
 	// Per-table maintenance parameters and the runs they plan (#500).
 	GetTableMaintenancePolicy(ctx context.Context, arg GetTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
-	GetTeamByID(ctx context.Context, id pgtype.UUID) (Team, error)
+	GetTeamByID(ctx context.Context, id UUID) (Team, error)
 	GetTeamMemberRole(ctx context.Context, arg GetTeamMemberRoleParams) (string, error)
 	GetTrinoCatalogRegistryState(ctx context.Context, arg GetTrinoCatalogRegistryStateParams) (GetTrinoCatalogRegistryStateRow, error)
-	GetTrinoClusterByEngine(ctx context.Context, engineID pgtype.UUID) (TrinoCluster, error)
-	GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (TrinoCluster, error)
+	GetTrinoClusterByEngine(ctx context.Context, engineID UUID) (TrinoCluster, error)
+	GetTrinoClusterByID(ctx context.Context, id UUID) (TrinoCluster, error)
 	GetTrinoQuerySnapshot(ctx context.Context, trinoQueryID string) (TrinoQuerySnapshot, error)
 	GetTrinoQuerySnapshotByEngine(ctx context.Context, arg GetTrinoQuerySnapshotByEngineParams) (TrinoQuerySnapshot, error)
 	GetTrinoResourceGroupRevision(ctx context.Context, arg GetTrinoResourceGroupRevisionParams) ([]byte, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByExternalID(ctx context.Context, arg GetUserByExternalIDParams) (User, error)
-	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
-	GetUserIDPToken(ctx context.Context, userID pgtype.UUID) (UserIdpToken, error)
+	GetUserByID(ctx context.Context, id UUID) (User, error)
+	GetUserIDPToken(ctx context.Context, userID UUID) (UserIdpToken, error)
 	// Serializes a refresh across processes: one refreshes, the others wait and
 	// read its result.
-	GetUserIDPTokenForUpdate(ctx context.Context, userID pgtype.UUID) (UserIdpToken, error)
-	GetWorkloadRule(ctx context.Context, id pgtype.UUID) (WorkloadRule, error)
-	GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (Workspace, error)
+	GetUserIDPTokenForUpdate(ctx context.Context, userID UUID) (UserIdpToken, error)
+	GetWorkloadRule(ctx context.Context, id UUID) (WorkloadRule, error)
+	GetWorkspaceByID(ctx context.Context, id UUID) (Workspace, error)
 	GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName string) (Workspace, error)
 	// The user's role in the workspace (#653): admin, editor or viewer; empty for
 	// a non-member. A global admin is not a member by this query.
@@ -358,15 +356,15 @@ type Querier interface {
 	LatestContentVersion(ctx context.Context, arg LatestContentVersionParams) (ContentVersion, error)
 	// Newest run per engine for the system status section (#291).
 	LatestReconcileRuns(ctx context.Context) ([]LatestReconcileRunsRow, error)
-	LatestRetrieverRefresh(ctx context.Context, retrieverID pgtype.UUID) (LatestRetrieverRefreshRow, error)
+	LatestRetrieverRefresh(ctx context.Context, retrieverID UUID) (LatestRetrieverRefreshRow, error)
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
-	ListAPIKeysByUser(ctx context.Context, userID pgtype.UUID) ([]ApiKey, error)
+	ListAPIKeysByUser(ctx context.Context, userID UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
 	// The workspaces the user administers (#653).
-	ListAdminWorkspaceIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
-	ListAgentTokensByAgent(ctx context.Context, agentID pgtype.UUID) ([]AgentToken, error)
-	ListAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) ([]Workspace, error)
-	ListAgentsByOwner(ctx context.Context, ownerID pgtype.UUID) ([]Agent, error)
+	ListAdminWorkspaceIDs(ctx context.Context, userID UUID) ([]UUID, error)
+	ListAgentTokensByAgent(ctx context.Context, agentID UUID) ([]AgentToken, error)
+	ListAgentWorkspaces(ctx context.Context, agentID UUID) ([]Workspace, error)
+	ListAgentsByOwner(ctx context.Context, ownerID UUID) ([]Agent, error)
 	ListAllAgents(ctx context.Context) ([]Agent, error)
 	// Admin listing (#259): includes disabled providers so they can be re-enabled.
 	ListAllAuthProviders(ctx context.Context) ([]AuthProvider, error)
@@ -393,20 +391,20 @@ type Querier interface {
 	// The batch after the cursor, before the safety-lag cutoff.
 	ListAuditEventsForExport(ctx context.Context, arg ListAuditEventsForExportParams) ([]ListAuditEventsForExportRow, error)
 	ListAuthProviders(ctx context.Context) ([]AuthProvider, error)
-	ListBindingStatusByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]BindingStatusV, error)
-	ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]CatalogBinding, error)
-	ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)
-	ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]CatalogConnection, error)
-	ListCatalogGrantRequestsForCatalog(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogGrantRequestsForCatalogRow, error)
-	ListCatalogGrantRequestsForWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListCatalogGrantRequestsForWorkspaceRow, error)
-	ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogGrantsRow, error)
+	ListBindingStatusByCatalog(ctx context.Context, catalogID UUID) ([]BindingStatusV, error)
+	ListBindingsByCatalog(ctx context.Context, catalogID UUID) ([]CatalogBinding, error)
+	ListBindingsByEngine(ctx context.Context, engineID UUID) ([]CatalogBinding, error)
+	ListCatalogConnections(ctx context.Context, createdBy UUID) ([]CatalogConnection, error)
+	ListCatalogGrantRequestsForCatalog(ctx context.Context, catalogID UUID) ([]ListCatalogGrantRequestsForCatalogRow, error)
+	ListCatalogGrantRequestsForWorkspace(ctx context.Context, workspaceID UUID) ([]ListCatalogGrantRequestsForWorkspaceRow, error)
+	ListCatalogGrants(ctx context.Context, catalogID UUID) ([]ListCatalogGrantsRow, error)
 	// LastSuccessfulMaintenanceByOperation for every table of a catalog.
-	ListCatalogLastSuccessfulMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogLastSuccessfulMaintenanceRow, error)
+	ListCatalogLastSuccessfulMaintenance(ctx context.Context, catalogID UUID) ([]ListCatalogLastSuccessfulMaintenanceRow, error)
 	// Each table's most recent run.
-	ListCatalogLatestMaintenanceRuns(ctx context.Context, catalogID pgtype.UUID) ([]MaintenanceRun, error)
-	ListCatalogRunningMaintenance(ctx context.Context, catalogID pgtype.UUID) ([]ListCatalogRunningMaintenanceRow, error)
-	ListCatalogTableHealth(ctx context.Context, catalogID pgtype.UUID) ([]TableHealthSnapshot, error)
-	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]Catalog, error)
+	ListCatalogLatestMaintenanceRuns(ctx context.Context, catalogID UUID) ([]MaintenanceRun, error)
+	ListCatalogRunningMaintenance(ctx context.Context, catalogID UUID) ([]ListCatalogRunningMaintenanceRow, error)
+	ListCatalogTableHealth(ctx context.Context, catalogID UUID) ([]TableHealthSnapshot, error)
+	ListCatalogsByConnection(ctx context.Context, connectionID UUID) ([]Catalog, error)
 	// The namespaces one level below parent ('{}' = the top level).
 	ListChildNamespaces(ctx context.Context, arg ListChildNamespacesParams) ([][]string, error)
 	ListClusterSnapshots(ctx context.Context, arg ListClusterSnapshotsParams) ([]ClusterSnapshot, error)
@@ -428,14 +426,14 @@ type Querier interface {
 	ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabledIcebergCatalogsRow, error)
 	ListEnabledLDAPProviders(ctx context.Context) ([]AuthProvider, error)
 	// Catalogs the engine reported, with the managed/adopted mode (#38).
-	ListEngineObservations(ctx context.Context, engineID pgtype.UUID) ([]EngineCatalogObservation, error)
+	ListEngineObservations(ctx context.Context, engineID UUID) ([]EngineCatalogObservation, error)
 	// Per-class capacities configured for one engine (#399).
-	ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]EngineQueueCapacity, error)
+	ListEngineQueueCapacities(ctx context.Context, engineID UUID) ([]EngineQueueCapacity, error)
 	ListEngines(ctx context.Context) ([]Engine, error)
 	// The engines a non-admin may see on the admin plane: those on connections
 	// they own. Members reach engines through their workspace's data plane (ADR
 	// 0018 §7.1), not here.
-	ListEnginesVisibleToUser(ctx context.Context, userID pgtype.UUID) ([]Engine, error)
+	ListEnginesVisibleToUser(ctx context.Context, userID UUID) ([]Engine, error)
 	// Newest first, keyset-paginated on (started_at, id): the cursor is the last
 	// row of the previous page. Every filter is optional; the handler narrows
 	// user_id to the caller unless the caller owns the workspace or is an admin.
@@ -447,7 +445,7 @@ type Querier interface {
 	ListForeignKeyJoinSuggestions(ctx context.Context, arg ListForeignKeyJoinSuggestionsParams) ([]ListForeignKeyJoinSuggestionsRow, error)
 	// The workspaces a catalog owner may offer a catalog to (the offer picker).
 	ListGrantableWorkspaces(ctx context.Context) ([]ListGrantableWorkspacesRow, error)
-	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
+	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID UUID) ([]ListGrantedCatalogsOfWorkspaceRow, error)
 	// Join suggestions from query history (B1, #554).
 	// Equi-join conditions a workspace used between two tables over the last 90
 	// days, ranked by a 30-day half-life decay. The pair is normalized so the
@@ -469,36 +467,36 @@ type Querier interface {
 	ListLineageSavedQueries(ctx context.Context, arg ListLineageSavedQueriesParams) ([]ListLineageSavedQueriesRow, error)
 	ListMaintenanceRuns(ctx context.Context, arg ListMaintenanceRunsParams) ([]MaintenanceRun, error)
 	// The managed bindings of an engine the reconciler checks (#37).
-	ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]CatalogBinding, error)
-	ListManagedMaintenancePolicies(ctx context.Context, catalogID pgtype.UUID) ([]TableMaintenancePolicy, error)
+	ListManagedBindingsOfEngine(ctx context.Context, engineID UUID) ([]CatalogBinding, error)
+	ListManagedMaintenancePolicies(ctx context.Context, catalogID UUID) ([]TableMaintenancePolicy, error)
 	// The catalogs a workspace may use with their freshness and their enabled
 	// bindings (what the editor's target selector offers, #24).
-	ListMetadataCatalogs(ctx context.Context, workspaceID pgtype.UUID) ([]ListMetadataCatalogsRow, error)
-	ListMetadataColumns(ctx context.Context, tableID pgtype.UUID) ([]ListMetadataColumnsRow, error)
+	ListMetadataCatalogs(ctx context.Context, workspaceID UUID) ([]ListMetadataCatalogsRow, error)
+	ListMetadataColumns(ctx context.Context, tableID UUID) ([]ListMetadataColumnsRow, error)
 	ListMetadataSyncRuns(ctx context.Context, arg ListMetadataSyncRunsParams) ([]ListMetadataSyncRunsRow, error)
 	// One page of the tables in a namespace, by name, after the cursor.
 	ListMetadataTablesPage(ctx context.Context, arg ListMetadataTablesPageParams) ([]ListMetadataTablesPageRow, error)
-	ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
+	ListMigrationItems(ctx context.Context, migrationID UUID) ([]MigrationItem, error)
 	ListMigrations(ctx context.Context) ([]Migration, error)
-	ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]MigrationItem, error)
+	ListPendingMigrationItems(ctx context.Context, migrationID UUID) ([]MigrationItem, error)
 	// The workspace's most used tables, live and granted only, best first.
 	ListPopularTables(ctx context.Context, arg ListPopularTablesParams) ([]ListPopularTablesRow, error)
 	ListQueryClasses(ctx context.Context, arg ListQueryClassesParams) ([]ListQueryClassesRow, error)
 	ListQueryExecutionsByWorkspace(ctx context.Context, arg ListQueryExecutionsByWorkspaceParams) ([]QueryExecution, error)
-	ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]QueryStatement, error)
+	ListQueryStatements(ctx context.Context, executionID UUID) ([]QueryStatement, error)
 	// Only returns statements of an execution that belongs to the given workspace.
 	ListQueryStatementsByWorkspace(ctx context.Context, arg ListQueryStatementsByWorkspaceParams) ([]QueryStatement, error)
 	ListReconcileRuns(ctx context.Context, arg ListReconcileRunsParams) ([]CatalogReconcileRun, error)
 	// Bindings a retriever of the workspace may write to: a granted catalog, Iceberg
 	// connector, active binding on an enabled federated engine (#118). Whether the
 	// write succeeds is the engine's and the catalog manager's decision (#651).
-	ListRetrieverDestinations(ctx context.Context, workspaceID pgtype.UUID) ([]ListRetrieverDestinationsRow, error)
+	ListRetrieverDestinations(ctx context.Context, workspaceID UUID) ([]ListRetrieverDestinationsRow, error)
 	ListRetrieverRefreshHistory(ctx context.Context, arg ListRetrieverRefreshHistoryParams) ([]RetrieverRefreshHistory, error)
-	ListRetrieversByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Retriever, error)
+	ListRetrieversByWorkspace(ctx context.Context, workspaceID UUID) ([]Retriever, error)
 	ListRetrieversDue(ctx context.Context) ([]Retriever, error)
-	ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]ListRunningStatementHandlesRow, error)
+	ListRunningStatementHandles(ctx context.Context, executionID UUID) ([]ListRunningStatementHandlesRow, error)
 	// Latest content version of every saved query in the workspace, in one query.
-	ListSavedQueryVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSavedQueryVersionsRow, error)
+	ListSavedQueryVersions(ctx context.Context, workspaceID UUID) ([]ListSavedQueryVersionsRow, error)
 	// Semantic layer v1 (#33): docs keyed by natural key, simple metrics keyed by
 	// portable slug. Docs are workspace-scoped; the catalog must be granted to the
 	// workspace (#16). Metrics become content items in #40 and are versioned in #34.
@@ -507,24 +505,24 @@ type Querier interface {
 	// one column. The natural key is catalog + namespace + table [+ column].
 	ListSemanticDocsForTable(ctx context.Context, arg ListSemanticDocsForTableParams) ([]SemanticDoc, error)
 	// Latest content version of every metric in the workspace, in one query.
-	ListSemanticMetricVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSemanticMetricVersionsRow, error)
+	ListSemanticMetricVersions(ctx context.Context, workspaceID UUID) ([]ListSemanticMetricVersionsRow, error)
 	// Latest content version of every model in the workspace, in one query.
-	ListSemanticModelVersions(ctx context.Context, workspaceID pgtype.UUID) ([]ListSemanticModelVersionsRow, error)
+	ListSemanticModelVersions(ctx context.Context, workspaceID UUID) ([]ListSemanticModelVersionsRow, error)
 	// Distinct tags of docs on catalogs the workspace may use (#116). Prefix
 	// matches rank first.
 	ListSemanticTags(ctx context.Context, arg ListSemanticTagsParams) ([]ListSemanticTagsRow, error)
 	// Every service account, for a global admin.
 	ListServiceAccounts(ctx context.Context) ([]User, error)
 	// The service accounts created in, or members of, the given workspaces.
-	ListServiceAccountsOfWorkspaces(ctx context.Context, workspaceIds []pgtype.UUID) ([]User, error)
+	ListServiceAccountsOfWorkspaces(ctx context.Context, workspaceIDs []UUID) ([]User, error)
 	// Bundles (#34): deterministic, portable content-as-code. Items are matched by
 	// (kind, slug), never by id; omitted items are never deleted.
-	ListSpaceFolders(ctx context.Context, spaceID pgtype.UUID) ([]QueryFolder, error)
-	ListSpaceMembers(ctx context.Context, spaceID pgtype.UUID) ([]SpaceMember, error)
-	ListSpaceMetrics(ctx context.Context, spaceID pgtype.UUID) ([]SemanticMetric, error)
+	ListSpaceFolders(ctx context.Context, spaceID UUID) ([]QueryFolder, error)
+	ListSpaceMembers(ctx context.Context, spaceID UUID) ([]SpaceMember, error)
+	ListSpaceMetrics(ctx context.Context, spaceID UUID) ([]SemanticMetric, error)
 	// Every model of one space, for bundles (#34/#91).
-	ListSpaceModels(ctx context.Context, spaceID pgtype.UUID) ([]SemanticModel, error)
-	ListSpaceSavedQueries(ctx context.Context, spaceID pgtype.UUID) ([]SavedQuery, error)
+	ListSpaceModels(ctx context.Context, spaceID UUID) ([]SemanticModel, error)
+	ListSpaceSavedQueries(ctx context.Context, spaceID UUID) ([]SavedQuery, error)
 	// Every space of the workspace where the caller has at least viewer, with the
 	// role. A space with no role is invisible (absent), never 403.
 	ListSpacesForPrincipal(ctx context.Context, arg ListSpacesForPrincipalParams) ([]ListSpacesForPrincipalRow, error)
@@ -534,23 +532,23 @@ type Querier interface {
 	// The catalog enabled bindings on enabled engines, oldest first: the
 	// engine path introspects through the first one (a native catalog has only
 	// its native binding).
-	ListSyncBindings(ctx context.Context, catalogID pgtype.UUID) ([]ListSyncBindingsRow, error)
+	ListSyncBindings(ctx context.Context, catalogID UUID) ([]ListSyncBindingsRow, error)
 	// Every catalog the scheduled sync refreshes: enabled, and readable from its
 	// source or through at least one enabled binding.
-	ListSyncableCatalogs(ctx context.Context) ([]pgtype.UUID, error)
+	ListSyncableCatalogs(ctx context.Context) ([]UUID, error)
 	ListTableHealthByCatalog(ctx context.Context, arg ListTableHealthByCatalogParams) ([]TableHealthSnapshot, error)
 	ListTableHealthByConnection(ctx context.Context, arg ListTableHealthByConnectionParams) ([]TableHealthSnapshot, error)
 	ListTableHealthSnapshots(ctx context.Context, arg ListTableHealthSnapshotsParams) ([]TableHealthSnapshot, error)
-	ListTableMaintenancePolicies(ctx context.Context, catalogID pgtype.UUID) ([]TableMaintenancePolicy, error)
+	ListTableMaintenancePolicies(ctx context.Context, catalogID UUID) ([]TableMaintenancePolicy, error)
 	ListTableMaintenanceRuns(ctx context.Context, arg ListTableMaintenanceRunsParams) ([]MaintenanceRun, error)
-	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error)
+	ListTeamMembers(ctx context.Context, teamID UUID) ([]ListTeamMembersRow, error)
 	ListTeams(ctx context.Context) ([]Team, error)
-	ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]Team, error)
+	ListTeamsByUser(ctx context.Context, userID UUID) ([]Team, error)
 	ListTrinoQuerySnapshots(ctx context.Context, arg ListTrinoQuerySnapshotsParams) ([]TrinoQuerySnapshot, error)
 	ListTrinoQuerySnapshotsByEngine(ctx context.Context, arg ListTrinoQuerySnapshotsByEngineParams) ([]TrinoQuerySnapshot, error)
 	ListTrinoQuerySnapshotsByUser(ctx context.Context, arg ListTrinoQuerySnapshotsByUserParams) ([]TrinoQuerySnapshot, error)
 	ListUsers(ctx context.Context) ([]User, error)
-	ListUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) ([]User, error)
+	ListUsersByAuthProvider(ctx context.Context, authProviderID UUID) ([]User, error)
 	// The connections the caller may view: their own, and every one for an admin
 	// (as authz.Connection and ListVisibleCatalogs), including the bootstrap
 	// connection that has no owner.
@@ -575,21 +573,21 @@ type Querier interface {
 	ListWorkloadRules(ctx context.Context) ([]WorkloadRule, error)
 	// catalog_name is the Trino name of a source catalog (what the UI showed
 	// before bindings) and the logical name of a native one.
-	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceCatalogGrantsRow, error)
+	ListWorkspaceCatalogGrants(ctx context.Context, workspaceID UUID) ([]ListWorkspaceCatalogGrantsRow, error)
 	// The members of a workspace with their role (#653): source is how they are
 	// a member (owner of a personal workspace, member of the owning team, or
 	// shared with them), role_set whether their role was set explicitly.
-	ListWorkspaceMembers(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceMembersRow, error)
+	ListWorkspaceMembers(ctx context.Context, workspaceID UUID) ([]ListWorkspaceMembersRow, error)
 	// Users who are members of the workspace (#113, #653).
 	ListWorkspacePrincipalUsers(ctx context.Context, arg ListWorkspacePrincipalUsersParams) ([]ListWorkspacePrincipalUsersRow, error)
 	// Every binding of a catalog the workspace may use: the granted ones (ADR 0018).
 	// A catalog linked to a workspace is reachable by the workspace's members
 	// only; what they may read or write in it is the catalog manager's decision
 	// (#651). Disabled bindings, engines and catalogs are included; callers filter.
-	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceTargetsRow, error)
+	ListWorkspaceTargets(ctx context.Context, workspaceID UUID) ([]ListWorkspaceTargetsRow, error)
 	// The workspaces a user is a member of (#653): their personal workspace,
 	// personal workspaces shared with them and their teams' workspaces.
-	ListWorkspacesByUser(ctx context.Context, userID pgtype.UUID) ([]Workspace, error)
+	ListWorkspacesByUser(ctx context.Context, userID UUID) ([]Workspace, error)
 	// Serializes first-admin setup until the transaction ends (#375).
 	LockFirstAdminSetup(ctx context.Context) error
 	// Serializes the rounds' capacity check and run creation until the
@@ -598,8 +596,8 @@ type Querier interface {
 	// Serializes the saves that decide who owns the Trino resource groups and
 	// publish them (#635): held until the transaction ends.
 	LockTrinoResourceGroups(ctx context.Context) error
-	ManagedBindingNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
-	MarkDirectorySynced(ctx context.Context, id pgtype.UUID) error
+	ManagedBindingNamesOfEngine(ctx context.Context, engineID UUID) ([]string, error)
+	MarkDirectorySynced(ctx context.Context, id UUID) error
 	MarkEngineCatalogManaged(ctx context.Context, arg MarkEngineCatalogManagedParams) error
 	// Catalogs the engine no longer reports.
 	MarkEngineCatalogsAbsent(ctx context.Context, arg MarkEngineCatalogsAbsentParams) error
@@ -615,26 +613,26 @@ type Querier interface {
 	MoveQueryFolderSubtree(ctx context.Context, arg MoveQueryFolderSubtreeParams) error
 	MoveSavedQueriesInFolderSubtree(ctx context.Context, arg MoveSavedQueriesInFolderSubtreeParams) error
 	NextContentVersion(ctx context.Context, arg NextContentVersionParams) (int32, error)
-	NextTrinoResourceGroupRevision(ctx context.Context, engineID pgtype.UUID) (int32, error)
+	NextTrinoResourceGroupRevision(ctx context.Context, engineID UUID) (int32, error)
 	// Catalogs Baleia managed and still sees in the engine, though no managed
 	// binding owns them any more (an old name that failed to drop): they stay
 	// managed, never adopted, for the reconciler (#37) to drop.
-	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
-	OldestExecutionByAgentSince(ctx context.Context, arg OldestExecutionByAgentSinceParams) (pgtype.Timestamptz, error)
-	PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID) (pgtype.UUID, error)
+	ObservedManagedNamesOfEngine(ctx context.Context, engineID UUID) ([]string, error)
+	OldestExecutionByAgentSince(ctx context.Context, arg OldestExecutionByAgentSinceParams) (Timestamptz, error)
+	PersonalWorkspaceID(ctx context.Context, ownerUserID UUID) (UUID, error)
 	// Last time the plugin confirmed a registry write (#291). The writer is a
 	// parameter because only the plugin may claim it (contract test).
-	PluginLastConfirmation(ctx context.Context, updatedBy string) (pgtype.Timestamptz, error)
-	PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID pgtype.UUID) error
+	PluginLastConfirmation(ctx context.Context, updatedBy string) (Timestamptz, error)
+	PurgeMetadataNamespaceTombstones(ctx context.Context, catalogID UUID) error
 	// Tombstones older than 7 days go: the explorer shows "removed" for a while,
 	// history does not grow forever.
-	PurgeMetadataTableTombstones(ctx context.Context, catalogID pgtype.UUID) error
+	PurgeMetadataTableTombstones(ctx context.Context, catalogID UUID) error
 	// A run enters its engine's admission queue (#399).
-	QueueQueryExecution(ctx context.Context, id pgtype.UUID) (QueryExecution, error)
+	QueueQueryExecution(ctx context.Context, id UUID) (QueryExecution, error)
 	// Reconciliation only lifts its own suspensions (#257): an admin suspension
 	// survives a directory pass.
-	ReinstateDirectoryUser(ctx context.Context, id pgtype.UUID) error
-	ReinstateUser(ctx context.Context, id pgtype.UUID) (User, error)
+	ReinstateDirectoryUser(ctx context.Context, id UUID) error
+	ReinstateUser(ctx context.Context, id UUID) (User, error)
 	ReleaseMetadataSyncLock(ctx context.Context, catalogID string) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error)
 	// Recreate a deleted saved query with its old id, so links and execution
@@ -644,10 +642,10 @@ type Querier interface {
 	// Recreate a deleted model with its old id, so versions and links still line up.
 	RestoreSemanticModel(ctx context.Context, arg RestoreSemanticModelParams) (SemanticModel, error)
 	RevokeAgentToken(ctx context.Context, arg RevokeAgentTokenParams) error
-	RevokeRefreshFamily(ctx context.Context, familyID pgtype.UUID) error
-	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
-	RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
-	RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error
+	RevokeRefreshFamily(ctx context.Context, familyID UUID) error
+	RevokeRefreshToken(ctx context.Context, id UUID) error
+	RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID UUID) error
+	RevokeUserRefreshTokens(ctx context.Context, userID UUID) error
 	// Keeps a sign-in's tokens only while the account is active and its provider
 	// enabled. The share locks make a concurrent suspension or provider disable,
 	// which deletes the tokens in the same transaction as its update, win: this
@@ -690,7 +688,7 @@ type Querier interface {
 	SharesWorkspace(ctx context.Context, arg SharesWorkspaceParams) (bool, error)
 	// After a failure, a cancel or a crash the statements that never ran are
 	// skipped.
-	SkipPendingStatements(ctx context.Context, executionID pgtype.UUID) error
+	SkipPendingStatements(ctx context.Context, executionID UUID) error
 	SoftDeleteTrinoCatalogRegistry(ctx context.Context, arg SoftDeleteTrinoCatalogRegistryParams) error
 	SpaceSlugExists(ctx context.Context, arg SpaceSlugExistsParams) (bool, error)
 	StartMetadataSyncRun(ctx context.Context, arg StartMetadataSyncRunParams) (StartMetadataSyncRunRow, error)
@@ -703,12 +701,12 @@ type Querier interface {
 	// Deleting a provider (#285) suspends and detaches its users first: the FK's
 	// ON DELETE SET NULL would otherwise violate chk_oidc_auth/chk_ldap_auth. The
 	// sentinel hash can never match a password, so a detached account cannot log in.
-	SuspendUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) error
+	SuspendUsersByAuthProvider(ctx context.Context, authProviderID UUID) error
 	TombstoneMissingNamespaces(ctx context.Context, arg TombstoneMissingNamespacesParams) error
 	// Tables the pass did not see were removed at the source.
 	TombstoneMissingTables(ctx context.Context, arg TombstoneMissingTablesParams) (int64, error)
-	TouchAPIKey(ctx context.Context, id pgtype.UUID) error
-	TouchAgentToken(ctx context.Context, id pgtype.UUID) error
+	TouchAPIKey(ctx context.Context, id UUID) error
+	TouchAgentToken(ctx context.Context, id UUID) error
 	// A table the source reported unchanged (same fingerprint, columns not
 	// loaded): it is still there.
 	TouchMetadataTable(ctx context.Context, arg TouchMetadataTableParams) (int64, error)
@@ -737,7 +735,7 @@ type Querier interface {
 	UpdateMigrationProgress(ctx context.Context, arg UpdateMigrationProgressParams) error
 	UpdateMigrationStatus(ctx context.Context, arg UpdateMigrationStatusParams) error
 	// Only a running execution transitions, so a late completion or failure can
-	// never overwrite a cancellation. Zero matched rows (pgx.ErrNoRows) means the
+	// never overwrite a cancellation. Zero matched rows (db.ErrNoRows) means the
 	// execution was already terminal; callers treat that as a no-op.
 	UpdateQueryExecution(ctx context.Context, arg UpdateQueryExecutionParams) (QueryExecution, error)
 	UpdateQueryFolder(ctx context.Context, arg UpdateQueryFolderParams) (QueryFolder, error)
@@ -804,5 +802,5 @@ type Querier interface {
 	// workspace a person must be in its team (a service account need not). The share lock on their team row makes
 	// a concurrent removal from the team either wait for this write or win.
 	UpsertWorkspaceMember(ctx context.Context, arg UpsertWorkspaceMemberParams) (int64, error)
-	UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error)
+	UserOwnsTeam(ctx context.Context, userID UUID) (bool, error)
 }

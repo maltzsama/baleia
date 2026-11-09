@@ -8,8 +8,6 @@ import (
 	"github.com/galileostudio/baleia/internal/agents/manage"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -35,7 +33,7 @@ func (r *Repo) ListAllAgents(ctx context.Context) ([]db.Agent, error) {
 }
 
 // ListAgentsByOwner returns the owner's external agents, newest first.
-func (r *Repo) ListAgentsByOwner(ctx context.Context, ownerID pgtype.UUID) ([]db.Agent, error) {
+func (r *Repo) ListAgentsByOwner(ctx context.Context, ownerID db.UUID) ([]db.Agent, error) {
 	var rows []model.Agent
 	if err := r.Users.db.WithContext(ctx).
 		Where("owner_id = ? AND kind = ?", UUIDString(ownerID), "external").
@@ -50,7 +48,7 @@ func (r *Repo) ListAgentsByOwner(ctx context.Context, ownerID pgtype.UUID) ([]db
 }
 
 // ListAgentWorkspaces returns the workspaces the agent is bound to, by name.
-func (r *Repo) ListAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) ([]db.Workspace, error) {
+func (r *Repo) ListAgentWorkspaces(ctx context.Context, agentID db.UUID) ([]db.Workspace, error) {
 	var rows []model.Workspace
 	if err := r.Users.db.WithContext(ctx).
 		Joins("JOIN agent_workspaces aw ON aw.workspace_id = workspaces.id").
@@ -66,7 +64,7 @@ func (r *Repo) ListAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) ([]
 }
 
 // ListAgentTokensByAgent returns the agent's tokens, newest first.
-func (r *Repo) ListAgentTokensByAgent(ctx context.Context, agentID pgtype.UUID) ([]db.AgentToken, error) {
+func (r *Repo) ListAgentTokensByAgent(ctx context.Context, agentID db.UUID) ([]db.AgentToken, error) {
 	var rows []model.AgentToken
 	if err := r.Users.db.WithContext(ctx).
 		Where("agent_id = ?", UUIDString(agentID)).
@@ -80,14 +78,14 @@ func (r *Repo) ListAgentTokensByAgent(ctx context.Context, agentID pgtype.UUID) 
 	return out, nil
 }
 
-// GetAgentTokenByID returns one of the agent's tokens or pgx.ErrNoRows.
+// GetAgentTokenByID returns one of the agent's tokens or db.ErrNoRows.
 func (r *Repo) GetAgentTokenByID(ctx context.Context, arg db.GetAgentTokenByIDParams) (db.AgentToken, error) {
 	var row model.AgentToken
 	err := r.Users.db.WithContext(ctx).
 		Where("id = ? AND agent_id = ?", UUIDString(arg.ID), UUIDString(arg.AgentID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.AgentToken{}, pgx.ErrNoRows
+		return db.AgentToken{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.AgentToken{}, err
@@ -96,7 +94,7 @@ func (r *Repo) GetAgentTokenByID(ctx context.Context, arg db.GetAgentTokenByIDPa
 }
 
 // ListBindingsByCatalog returns the bindings of a catalog, oldest first.
-func (r *Repo) ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error) {
+func (r *Repo) ListBindingsByCatalog(ctx context.Context, catalogID db.UUID) ([]db.CatalogBinding, error) {
 	var rows []model.CatalogBinding
 	if err := r.Users.db.WithContext(ctx).
 		Where("catalog_id = ?", UUIDString(catalogID)).
@@ -111,14 +109,14 @@ func (r *Repo) ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID)
 }
 
 // GetQueryExecutionByIDAndWorkspace returns a workspace-scoped execution or
-// pgx.ErrNoRows.
+// db.ErrNoRows.
 func (r *Repo) GetQueryExecutionByIDAndWorkspace(ctx context.Context, arg db.GetQueryExecutionByIDAndWorkspaceParams) (db.QueryExecution, error) {
 	var row model.QueryExecution
 	err := r.Users.db.WithContext(ctx).
 		Where("id = ? AND workspace_id = ?", UUIDString(arg.ID), UUIDString(arg.WorkspaceID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.QueryExecution{}, pgx.ErrNoRows
+		return db.QueryExecution{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.QueryExecution{}, err
@@ -168,7 +166,7 @@ func (r *Repo) SetAgentStatus(ctx context.Context, arg db.SetAgentStatusParams) 
 }
 
 // DeleteAgent removes the agent.
-func (r *Repo) DeleteAgent(ctx context.Context, id pgtype.UUID) error {
+func (r *Repo) DeleteAgent(ctx context.Context, id db.UUID) error {
 	return r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).Delete(&model.Agent{}).Error
 }
 
@@ -182,7 +180,7 @@ func (r *Repo) AddAgentWorkspace(ctx context.Context, arg db.AddAgentWorkspacePa
 }
 
 // ClearAgentWorkspaces removes every binding of the agent.
-func (r *Repo) ClearAgentWorkspaces(ctx context.Context, agentID pgtype.UUID) error {
+func (r *Repo) ClearAgentWorkspaces(ctx context.Context, agentID db.UUID) error {
 	return r.Users.db.WithContext(ctx).Where("agent_id = ?", UUIDString(agentID)).Delete(&model.AgentWorkspace{}).Error
 }
 

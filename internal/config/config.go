@@ -38,12 +38,8 @@ const (
 )
 
 type Config struct {
-	Port        string
-	DatabaseURL string
-	// StoreBackend selects the GORM dialector for Baleia's own store
-	// (postgres or mysql). Empty infers it from DatabaseURL; ADR 0020 prefers
-	// the explicit setting (BALEIA_STORE_BACKEND).
-	StoreBackend string
+	Port         string
+	DatabaseURL  string
 	TemporalHost string
 	// TemporalUIURL opens a maintenance run's workflow in the Temporal UI; empty
 	// disables the link. TemporalNamespace is the namespace those runs live in.
@@ -264,7 +260,6 @@ func Load() *Config {
 	return &Config{
 		Port:                              getEnv("PORT", "8080"),
 		DatabaseURL:                       getEnv("DATABASE_URL", "postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable"),
-		StoreBackend:                      getEnv("BALEIA_STORE_BACKEND", ""),
 		TemporalHost:                      getEnv("TEMPORAL_HOST", "localhost:7233"),
 		TemporalUIURL:                     getEnv("BALEIA_TEMPORAL_UI_URL", ""),
 		TemporalNamespace:                 getEnv("BALEIA_TEMPORAL_NAMESPACE", "default"),

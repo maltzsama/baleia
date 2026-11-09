@@ -9,8 +9,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/engines/manage"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store reads and writes connections, and lists engines to tell which
@@ -20,7 +18,7 @@ type Store interface {
 	ListEngines(ctx context.Context) ([]db.Engine, error)
 	CreateCatalogConnection(ctx context.Context, arg db.CreateCatalogConnectionParams) (db.CatalogConnection, error)
 	UpdateCatalogConnection(ctx context.Context, arg db.UpdateCatalogConnectionParams) (db.CatalogConnection, error)
-	DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) error
+	DeleteCatalogConnection(ctx context.Context, id db.UUID) error
 }
 
 var (
@@ -44,7 +42,7 @@ type Filter struct {
 
 // List returns every connection to an admin, and to anyone else the ones
 // they may see.
-func (s *Service) List(ctx context.Context, userID pgtype.UUID, admin bool, f Filter) ([]db.CatalogConnection, error) {
+func (s *Service) List(ctx context.Context, userID db.UUID, admin bool, f Filter) ([]db.CatalogConnection, error) {
 	all, err := s.store.ListVisibleCatalogConnections(ctx, db.ListVisibleCatalogConnectionsParams{IsAdmin: admin, UserID: userID})
 	if err != nil || !f.WithoutEngine {
 		return all, err
@@ -88,16 +86,16 @@ func (s *Service) Update(ctx context.Context, arg db.UpdateCatalogConnectionPara
 // isUniqueViolation reports a unique index violation; the name is the only
 // unique column a write can collide on.
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	pgErr, ok := db.AsPGError(err)
+	return ok && pgErr.Code == "23505"
 }
 
 // Delete removes a connection and, by cascade, its catalogs. A connection
 // an engine runs on is ErrBacksEngine.
-func (s *Service) Delete(ctx context.Context, id pgtype.UUID) error {
+func (s *Service) Delete(ctx context.Context, id db.UUID) error {
 	err := s.store.DeleteCatalogConnection(ctx, id)
-	var pgErr *pgconn.PgError
-	if manage.IsFKViolation(err) && errors.As(err, &pgErr) && pgErr.ConstraintName == "engines_connection_id_fkey" {
+	pgErr, ok := db.AsPGError(err)
+	if ok && manage.IsFKViolation(err) && pgErr.ConstraintName == "engines_connection_id_fkey" {
 		return ErrBacksEngine
 	}
 	return err

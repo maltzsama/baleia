@@ -11,7 +11,7 @@ Baleia's own schema is defined by GORM models and evolved by versioned Go migrat
 - `make store-migrate-status` (`-cmd=store-status`) prints the applied and pending versions; `make store-migrate-down` rolls back the last safe migration.
 - A store created by the former goose migrations is adopted as the baseline on the first `store-up`: the existing schema is recorded and only newer Go migrations run.
 
-`BALEIA_STORE_BACKEND` selects the backend, `postgres` (default) or `mysql` (MySQL 8 / MariaDB); see [Store backend](configuration.md#store-backend) for the DSNs and caveats. The query-execution path (Trino and the direct engines) is unaffected.
+`DATABASE_URL` selects the backend: a `postgres://` URL or the MySQL/MariaDB go-sql-driver DSN; see [Store backend](configuration.md#store-backend) for the DSNs and caveats. The query-execution path (Trino and the direct engines) is unaffected.
 
 The migration numbers in the upgrade notes below (`00060`, `00062`–`00077`, …) are historical: they describe the goose schema at those releases. Upgrades from a goose-managed version run through the baseline adoption above; no manual SQL step is needed.
 

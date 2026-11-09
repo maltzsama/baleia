@@ -8,21 +8,19 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store reads and updates accounts; *repo.Repo implements it.
 type Store interface {
-	GetUserByID(ctx context.Context, id pgtype.UUID) (db.User, error)
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
 	UpdateUser(ctx context.Context, arg db.UpdateUserParams) (db.User, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
-	PersonalWorkspaceID(ctx context.Context, ownerUserID pgtype.UUID) (pgtype.UUID, error)
+	PersonalWorkspaceID(ctx context.Context, ownerUserID db.UUID) (db.UUID, error)
 }
 
 // Sessions ends every session of an account; *session.Service implements it.
 type Sessions interface {
-	RevokeAll(ctx context.Context, userID pgtype.UUID)
+	RevokeAll(ctx context.Context, userID db.UUID)
 }
 
 // Config are the password settings, resolved by the caller.
@@ -61,9 +59,9 @@ func New(store Store, sessions Sessions, cfg Config) *Service {
 }
 
 // Get returns the account.
-func (s *Service) Get(ctx context.Context, id pgtype.UUID) (db.User, error) {
+func (s *Service) Get(ctx context.Context, id db.UUID) (db.User, error) {
 	user, err := s.store.GetUserByID(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.User{}, ErrNotFound
 	}
 	if err != nil {
@@ -74,20 +72,20 @@ func (s *Service) Get(ctx context.Context, id pgtype.UUID) (db.User, error) {
 
 // PersonalWorkspace returns the account's personal workspace; ok is false
 // when it has none. A store failure is an error, not "none".
-func (s *Service) PersonalWorkspace(ctx context.Context, id pgtype.UUID) (ws pgtype.UUID, ok bool, err error) {
+func (s *Service) PersonalWorkspace(ctx context.Context, id db.UUID) (ws db.UUID, ok bool, err error) {
 	ws, err = s.store.PersonalWorkspaceID(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return pgtype.UUID{}, false, nil
+	if errors.Is(err, db.ErrNoRows) {
+		return db.UUID{}, false, nil
 	}
 	if err != nil {
-		return pgtype.UUID{}, false, err
+		return db.UUID{}, false, err
 	}
 	return ws, true, nil
 }
 
 // UpdateProfile applies the non-nil fields of change. The caller validates
 // the locale against the supported ones.
-func (s *Service) UpdateProfile(ctx context.Context, id pgtype.UUID, change Profile) (db.User, error) {
+func (s *Service) UpdateProfile(ctx context.Context, id db.UUID, change Profile) (db.User, error) {
 	current, err := s.Get(ctx, id)
 	if err != nil {
 		return db.User{}, err
@@ -107,7 +105,7 @@ func (s *Service) UpdateProfile(ctx context.Context, id pgtype.UUID, change Prof
 
 // ChangePassword replaces the password after checking the current one, then
 // ends every session of the account (#51).
-func (s *Service) ChangePassword(ctx context.Context, id pgtype.UUID, current, next string) error {
+func (s *Service) ChangePassword(ctx context.Context, id db.UUID, current, next string) error {
 	user, err := s.Get(ctx, id)
 	if err != nil {
 		return err

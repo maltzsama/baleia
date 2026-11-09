@@ -30,7 +30,7 @@ func testDeps(t *testing.T) Deps {
 		t.Fatal(err)
 	}
 	return Deps{
-		Data:     DataDeps{Pool: pool, Store: openTestStore(t, pool)},
+		Data:     DataDeps{Store: pool},
 		Engines:  EngineDeps{Connections: testRegistry(t), Engines: testEngines(), Kinds: testKinds(t, nil), Dialects: dialect.NewRegistry(), Binder: bindtrino.New(slog.New(slog.DiscardHandler), nil, nil).WithProviders(testRegistry(t)), Dialer: d},
 		Settings: SettingsFromConfig(&config.Config{}),
 		Temporal: &fakeTemporalClient{},
@@ -46,7 +46,7 @@ func TestNewAPI_RequiresDependencies(t *testing.T) {
 	if err == nil {
 		t.Fatal("NewAPI with missing dependencies returned no error")
 	}
-	for _, want := range []string{"Data.Pool", "Data.Store", "Engines.Binder", "Engines.Dialer", "Storage", "Temporal"} {
+	for _, want := range []string{"Data.Store", "Engines.Binder", "Engines.Dialer", "Storage", "Temporal"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not name %s", err, want)
 		}

@@ -8,8 +8,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/version"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.temporal.io/sdk/client"
+	"gorm.io/gorm"
 )
 
 // systemStatusSectionTimeout bounds each dependency probe (#260). Baleia and
@@ -131,14 +131,14 @@ type schemaVersioner interface {
 	SchemaVersion(ctx context.Context) (int64, error)
 }
 
-// poolSchema reads the version from the store's schema_migrations ledger on
-// Baleia's pool.
-type poolSchema struct{ pool *pgxpool.Pool }
+// storeSchema reads the version from the store's schema_migrations ledger on
+// Baleia's GORM store.
+type storeSchema struct{ db *gorm.DB }
 
-func (p poolSchema) SchemaVersion(ctx context.Context) (int64, error) {
+func (s storeSchema) SchemaVersion(ctx context.Context) (int64, error) {
 	var v int64
 	// Raw SQL on purpose: the schema ledger is the store's own table, not
 	// part of any query package.
-	err := p.pool.QueryRow(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations WHERE NOT dirty`).Scan(&v)
+	err := s.db.WithContext(ctx).Raw(`SELECT COALESCE(MAX(version), 0) FROM schema_migrations WHERE NOT dirty`).Scan(&v).Error
 	return v, err
 }

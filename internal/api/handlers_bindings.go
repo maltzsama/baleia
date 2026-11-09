@@ -11,9 +11,6 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // The binding API (#80). Managed bindings are written here and by the catalog
@@ -60,7 +57,7 @@ func (t bindingTarget) primary() bool { return t.catalog.ClusterID == t.cluster.
 
 // bindingAccess resolves a catalog and an engine for a binding write: write
 // access to both, a source catalog and an engine with a binder.
-func (h *CatalogHandlers) bindingAccess(ctx context.Context, p authz.Principal, catalogID, engineID pgtype.UUID) (bindingTarget, *notFoundOrForbidden, *UnprocessableEntityJSONResponse, error) {
+func (h *CatalogHandlers) bindingAccess(ctx context.Context, p authz.Principal, catalogID, engineID db.UUID) (bindingTarget, *notFoundOrForbidden, *UnprocessableEntityJSONResponse, error) {
 	cat, conn, err := h.authz().Catalog(ctx, p, catalogID, authz.ActWrite)
 	if nf, fb := catalogAccessError(err); nf || fb {
 		return bindingTarget{}, &notFoundOrForbidden{notFound: nf, what: "catalog"}, nil, nil
@@ -82,7 +79,7 @@ func (h *CatalogHandlers) bindingAccess(ctx context.Context, p authz.Principal, 
 		return bindingTarget{}, nil, &u, nil
 	}
 	cluster, err := h.topology.ClusterOfEngine(ctx, eng.ID)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		u := unprocessable(ErrorCodeBindingUnsupported, "the engine has no Trino cluster")
 		return bindingTarget{}, nil, &u, nil
 	}
@@ -107,8 +104,8 @@ func (e *notFoundOrForbidden) forbiddenResponse() ForbiddenJSONResponse {
 
 // bindingConflict maps a unique violation of catalog_bindings to a 409.
 func bindingConflict(err error) (ConflictJSONResponse, bool) {
-	var pg *pgconn.PgError
-	if !errors.As(err, &pg) || pg.Code != "23505" {
+	pg, ok := db.AsPGError(err)
+	if !ok || pg.Code != "23505" {
 		return ConflictJSONResponse{}, false
 	}
 	if pg.ConstraintName == "catalog_bindings_catalog_id_engine_id_key" {
@@ -157,7 +154,7 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
 	body := *request.Body
-	t, denied, invalid, err := h.bindingAccess(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, pgtype.UUID{Bytes: body.EngineId, Valid: true})
+	t, denied, invalid, err := h.bindingAccess(ctx, p, db.UUID{Bytes: request.Id, Valid: true}, db.UUID{Bytes: body.EngineId, Valid: true})
 	switch {
 	case err != nil:
 		return nil, err
@@ -229,9 +226,9 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 
 // managedBinding loads a binding for a write: it must exist, be managed and
 // the caller must be allowed to write its catalog and engine.
-func (h *CatalogHandlers) managedBinding(ctx context.Context, p authz.Principal, id pgtype.UUID) (db.CatalogBinding, bindingTarget, *notFoundOrForbidden, *UnprocessableEntityJSONResponse, error) {
+func (h *CatalogHandlers) managedBinding(ctx context.Context, p authz.Principal, id db.UUID) (db.CatalogBinding, bindingTarget, *notFoundOrForbidden, *UnprocessableEntityJSONResponse, error) {
 	b, err := h.topology.Binding(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return db.CatalogBinding{}, bindingTarget{}, &notFoundOrForbidden{notFound: true, what: "binding"}, nil, nil
 	}
 	if err != nil {
@@ -256,9 +253,9 @@ func (h *CatalogHandlers) UpdateCatalogBinding(ctx context.Context, request Upda
 	if err != nil {
 		return UpdateCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	ev := audit.Event{Action: audit.BindingUpdate, ResourceType: "binding", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ev := audit.Event{Action: audit.BindingUpdate, ResourceType: "binding", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true})}
 	ctx = audit.WithAction(ctx, ev.Action)
-	cur, t, denied, invalid, err := h.managedBinding(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true})
+	cur, t, denied, invalid, err := h.managedBinding(ctx, p, db.UUID{Bytes: request.Id, Valid: true})
 	switch {
 	case err != nil:
 		return nil, err
@@ -328,7 +325,7 @@ func (h *CatalogHandlers) UpdateCatalogBinding(ctx context.Context, request Upda
 		updated = b
 		return syncPrimaryCatalog(ctx, qtx, t, b)
 	})
-	if errors.Is(txErr, pgx.ErrNoRows) {
+	if errors.Is(txErr, db.ErrNoRows) {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return UpdateCatalogBinding409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
 			Code: ErrorCodeConcurrentChange, Message: "the binding is " + cur.LifecycleState + "; retry when it settles",
@@ -376,9 +373,9 @@ func (h *CatalogHandlers) DeleteCatalogBinding(ctx context.Context, request Dele
 	if err != nil {
 		return DeleteCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	ev := audit.Event{Action: audit.BindingDelete, ResourceType: "binding", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ev := audit.Event{Action: audit.BindingDelete, ResourceType: "binding", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true})}
 	ctx = audit.WithAction(ctx, ev.Action)
-	cur, t, denied, invalid, err := h.managedBinding(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true})
+	cur, t, denied, invalid, err := h.managedBinding(ctx, p, db.UUID{Bytes: request.Id, Valid: true})
 	switch {
 	case err != nil:
 		return nil, err
@@ -430,9 +427,9 @@ func (h *CatalogHandlers) SyncCatalogBinding(ctx context.Context, request SyncCa
 	if err != nil {
 		return SyncCatalogBinding401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	ev := audit.Event{Action: audit.BindingSync, ResourceType: "binding", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ev := audit.Event{Action: audit.BindingSync, ResourceType: "binding", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true})}
 	ctx = audit.WithAction(ctx, ev.Action)
-	cur, t, denied, invalid, err := h.managedBinding(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true})
+	cur, t, denied, invalid, err := h.managedBinding(ctx, p, db.UUID{Bytes: request.Id, Valid: true})
 	switch {
 	case err != nil:
 		return nil, err
@@ -491,7 +488,7 @@ func (h *CatalogHandlers) GetEngineBindingSupport(ctx context.Context, request G
 	if err != nil {
 		return GetEngineBindingSupport401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	eng, _, err := h.authz().Engine(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
+	eng, _, err := h.authz().Engine(ctx, p, db.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
 	if errors.Is(err, authz.ErrNotFound) {
 		return GetEngineBindingSupport404JSONResponse{NotFoundJSONResponse: engineNotFound()}, nil
 	}

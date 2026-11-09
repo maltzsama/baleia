@@ -7,8 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -32,7 +30,7 @@ func (s *Teams) ListTeams(ctx context.Context) ([]db.Team, error) {
 }
 
 // ListTeamsByUser returns the teams the user belongs to, by name.
-func (s *Teams) ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]db.Team, error) {
+func (s *Teams) ListTeamsByUser(ctx context.Context, userID db.UUID) ([]db.Team, error) {
 	var rows []model.Team
 	if err := s.db.WithContext(ctx).
 		Joins("JOIN team_members tm ON tm.team_id = teams.id").
@@ -48,15 +46,15 @@ func (s *Teams) ListTeamsByUser(ctx context.Context, userID pgtype.UUID) ([]db.T
 	return out, nil
 }
 
-// GetTeamByID returns one team or pgx.ErrNoRows.
-func (s *Teams) GetTeamByID(ctx context.Context, id pgtype.UUID) (db.Team, error) {
+// GetTeamByID returns one team or db.ErrNoRows.
+func (s *Teams) GetTeamByID(ctx context.Context, id db.UUID) (db.Team, error) {
 	if !id.Valid {
-		return db.Team{}, pgx.ErrNoRows
+		return db.Team{}, db.ErrNoRows
 	}
 	var row model.Team
 	err := s.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Team{}, pgx.ErrNoRows
+		return db.Team{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Team{}, err
@@ -65,7 +63,7 @@ func (s *Teams) GetTeamByID(ctx context.Context, id pgtype.UUID) (db.Team, error
 }
 
 // ListTeamMembers returns the members with their user details, by name.
-func (s *Teams) ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]db.ListTeamMembersRow, error) {
+func (s *Teams) ListTeamMembers(ctx context.Context, teamID db.UUID) ([]db.ListTeamMembersRow, error) {
 	var rows []struct {
 		ID               model.UUID
 		TeamID           model.UUID
@@ -127,7 +125,7 @@ func (s *Teams) CreateTeam(ctx context.Context, arg db.CreateTeamParams) (db.Tea
 }
 
 // DeleteTeam removes the team.
-func (s *Teams) DeleteTeam(ctx context.Context, id pgtype.UUID) error {
+func (s *Teams) DeleteTeam(ctx context.Context, id db.UUID) error {
 	return s.db.WithContext(ctx).Where("id = ?", UUIDString(id)).Delete(&model.Team{}).Error
 }
 
@@ -159,7 +157,7 @@ func (s *Teams) UpdateTeamMemberRole(ctx context.Context, arg db.UpdateTeamMembe
 			Where("team_id = ? AND user_id = ?", UUIDString(arg.TeamID), UUIDString(arg.UserID)).
 			First(&row)
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		return res.Error
 	})

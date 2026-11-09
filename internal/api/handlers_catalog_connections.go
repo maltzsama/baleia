@@ -22,7 +22,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -79,7 +78,7 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 
 	// The connection id is generated here, not by the database default: the
 	// credentials are sealed with it as additional authenticated data.
-	connID := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	connID := db.UUID{Bytes: uuid.New(), Valid: true}
 	ev := audit.Event{Action: audit.ConnectionCreate, ResourceType: "connection", ResourceID: idString(connID)}
 	if !h.mayManageConnections(p) {
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
@@ -175,7 +174,7 @@ func (h *CatalogHandlers) GetCatalogConnection(ctx context.Context, request GetC
 
 	// Owner or global admin only; anyone else gets 404 so existence is not
 	// revealed.
-	conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
+	conn, err := h.authz().Connection(ctx, p, db.UUID{Bytes: request.Id, Valid: true}, authz.ActRead)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
 			return GetCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
@@ -193,7 +192,7 @@ func (h *CatalogHandlers) UpdateCatalogConnection(ctx context.Context, request U
 		return UpdateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	connID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	connID := db.UUID{Bytes: request.Id, Valid: true}
 	ev := audit.Event{Action: audit.ConnectionUpdate, ResourceType: "connection", ResourceID: idString(connID)}
 	ctx = audit.WithAction(ctx, ev.Action)
 	if !h.mayManageConnections(p) {
@@ -270,7 +269,7 @@ var resyncLocks sync.Map // [16]byte -> *sync.Mutex
 // whose projection cannot be built, or that the editor may not apply, is
 // logged and audited. It runs detached from the request, so a client that
 // disconnects does not leave bindings half applied.
-func (h *CatalogHandlers) resyncConnectionBindings(ctx context.Context, p authz.Principal, connID pgtype.UUID) {
+func (h *CatalogHandlers) resyncConnectionBindings(ctx context.Context, p authz.Principal, connID db.UUID) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resyncTimeout)
 	defer cancel()
 	mu, _ := resyncLocks.LoadOrStore(connID.Bytes, &sync.Mutex{})
@@ -299,7 +298,7 @@ func (h *CatalogHandlers) resyncConnectionBindings(ctx context.Context, p authz.
 	}
 }
 
-func (h *CatalogHandlers) resyncBinding(ctx context.Context, p authz.Principal, id pgtype.UUID) {
+func (h *CatalogHandlers) resyncBinding(ctx context.Context, p authz.Principal, id db.UUID) {
 	ev := audit.Event{Action: audit.BindingSync, ResourceType: "binding", ResourceID: idString(id)}
 	cur, t, denied, invalid, err := h.managedBinding(ctx, p, id)
 	switch {
@@ -346,7 +345,7 @@ func (h *CatalogHandlers) DeleteCatalogConnection(ctx context.Context, request D
 		return DeleteCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	connID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	connID := db.UUID{Bytes: request.Id, Valid: true}
 	ev := audit.Event{Action: audit.ConnectionDelete, ResourceType: "connection", ResourceID: idString(connID)}
 	ctx = audit.WithAction(ctx, ev.Action)
 	if _, err := h.authz().Connection(ctx, p, connID, authz.ActAdmin); err != nil {
@@ -378,9 +377,9 @@ func (h *CatalogHandlers) TestCatalogConnection(ctx context.Context, request Tes
 
 	// Only the owner (or a global admin) may trigger a probe with the stored
 	// credentials; checked before any outbound call.
-	ev := audit.Event{Action: audit.ConnectionTest, ResourceType: "connection", ResourceID: idString(pgtype.UUID{Bytes: request.Id, Valid: true})}
+	ev := audit.Event{Action: audit.ConnectionTest, ResourceType: "connection", ResourceID: idString(db.UUID{Bytes: request.Id, Valid: true})}
 	ctx = audit.WithAction(ctx, ev.Action)
-	conn, err := h.authz().Connection(ctx, p, pgtype.UUID{Bytes: request.Id, Valid: true}, authz.ActWrite)
+	conn, err := h.authz().Connection(ctx, p, db.UUID{Bytes: request.Id, Valid: true}, authz.ActWrite)
 	if err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
 			return TestCatalogConnection404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
@@ -441,7 +440,7 @@ func connectionTestError(err error) string {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-func (h *core) ensurePersonalWorkspace(ctx context.Context, userID pgtype.UUID) *db.Workspace {
+func (h *core) ensurePersonalWorkspace(ctx context.Context, userID db.UUID) *db.Workspace {
 	ws, err := h.access.PersonalWorkspace(ctx, userID)
 	if err != nil {
 		h.logger.WarnContext(ctx, "auto-create personal workspace failed", "err", err)
@@ -505,7 +504,7 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 		h.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "invalid user", nil)
 		return
 	}
-	var wsUUID pgtype.UUID
+	var wsUUID db.UUID
 	if err := wsUUID.Scan(wsID); err != nil || !wsUUID.Valid {
 		h.writeAPIError(w, r, http.StatusNotFound, "not_found", "workspace not found", nil)
 		return
@@ -610,7 +609,7 @@ func pathParam(r *http.Request, key string) (string, error) {
 	return url.PathUnescape(chi.URLParam(r, key))
 }
 
-func uuidStr(u pgtype.UUID) string {
+func uuidStr(u db.UUID) string {
 	return openapi_types.UUID(u.Bytes).String()
 }
 

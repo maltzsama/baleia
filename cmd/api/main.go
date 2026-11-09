@@ -15,11 +15,11 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/crypto"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/server"
 	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -78,10 +78,10 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 
 	// Set the baleia_trino password from BALEIA_TRINO_DB_PASSWORD so the role and
 	// the Trino plugin's connection stay in sync (no secret in a migration).
-	if err := bootstrap.EnsureTrinoRole(ctx, core.Pool); err != nil {
+	if err := bootstrap.EnsureTrinoRole(ctx, core.Store); err != nil {
 		return fmt.Errorf("baleia_trino role: %w", err)
 	}
-	if err := bootstrap.SetTrinoRolePassword(ctx, core.Pool, cfg.TrinoDBPassword); err != nil {
+	if err := bootstrap.SetTrinoRolePassword(ctx, core.Store, cfg.TrinoDBPassword); err != nil {
 		return fmt.Errorf("baleia_trino password: %w", err)
 	}
 
@@ -106,7 +106,7 @@ func run(cfg *config.Config, logger *slog.Logger) error {
 // runStoreMigrations applies the GORM store migrations on a dedicated
 // connection. The API no longer shells out to a generated migration runner.
 func runStoreMigrations(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
-	backend, err := store.ResolveBackend(cfg.StoreBackend, cfg.DatabaseURL)
+	backend, err := store.BackendFromDSN(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -130,11 +130,11 @@ func runStoreMigrations(ctx context.Context, cfg *config.Config, logger *slog.Lo
 
 // sealCredentials seals a connection's credentials with the keyring; nil when
 // no keyring is configured (config.Validate refuses a Trino password then).
-func sealCredentials(kr *crypto.Keyring) func([]byte, pgtype.UUID) (string, error) {
+func sealCredentials(kr *crypto.Keyring) func([]byte, db.UUID) (string, error) {
 	if kr == nil {
 		return nil
 	}
-	return func(plain []byte, id pgtype.UUID) (string, error) {
+	return func(plain []byte, id db.UUID) (string, error) {
 		return kr.Seal(plain, catalogs.CredentialsAAD(id))
 	}
 }

@@ -5,24 +5,23 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"gorm.io/gorm"
 )
 
 // failWrites makes every write matching event (e.g. "INSERT ON
 // password_reset_tokens") fail, so a test can break the second write of a
 // handler and check the first one was rolled back.
-func failWrites(t *testing.T, pool *pgxpool.Pool, event string) {
+func failWrites(t *testing.T, pool *gorm.DB, event string) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := pool.Exec(ctx, `CREATE FUNCTION test_fail_write() RETURNS trigger LANGUAGE plpgsql AS
-		$$ BEGIN RAISE EXCEPTION 'test: write refused'; END $$`); err != nil {
+	if err := pool.WithContext(ctx).Exec(`CREATE FUNCTION test_fail_write() RETURNS trigger LANGUAGE plpgsql AS
+		$$ BEGIN RAISE EXCEPTION 'test: write refused'; END $$`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `CREATE TRIGGER test_fail_write BEFORE `+event+` FOR EACH ROW EXECUTE FUNCTION test_fail_write()`); err != nil {
+	if err := pool.WithContext(ctx).Exec(`CREATE TRIGGER test_fail_write BEFORE ` + event + ` FOR EACH ROW EXECUTE FUNCTION test_fail_write()`).Error; err != nil {
 		t.Fatal(err)
 	}
 }
@@ -37,7 +36,7 @@ func TestInviteUser_TokenFailureLeavesNoUser(t *testing.T) {
 	if _, err := f.h.InviteUser(ctxAs(f.admin, "admin"), InviteUserRequestObject{Body: &InviteUserRequest{Email: "new@x.io", Role: "member"}}); err == nil {
 		t.Fatal("invite with a failed token write returned no error")
 	}
-	if _, err := repo.New(testdb.GORM(t, f.pool)).GetUserByEmail(context.Background(), "new@x.io"); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := repo.New(f.pool).GetUserByEmail(context.Background(), "new@x.io"); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("user after a failed invite: err = %v, want no rows", err)
 	}
 }
@@ -60,7 +59,7 @@ func TestUpdateAgent_StatusFailureKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := repo.New(testdb.GORM(t, f.pool)).GetAgentByID(context.Background(), id)
+	got, err := repo.New(f.pool).GetAgentByID(context.Background(), id)
 	if err != nil {
 		t.Fatal(err)
 	}

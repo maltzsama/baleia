@@ -5,7 +5,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/ws"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // wsStore is the workbench persistence the WebSocket handler reads.
@@ -31,7 +30,7 @@ func (a wsQuerier) CheckWorkspaceAccess(ctx context.Context, arg ws.QuerierCheck
 	})
 }
 
-func (a wsQuerier) GetQueryExecutionByIDAndWorkspace(ctx context.Context, id pgtype.UUID, workspaceID pgtype.UUID) (ws.QuerierQueryExecution, error) {
+func (a wsQuerier) GetQueryExecutionByIDAndWorkspace(ctx context.Context, id db.UUID, workspaceID db.UUID) (ws.QuerierQueryExecution, error) {
 	e, err := a.q.GetQueryExecutionByIDAndWorkspace(ctx, db.GetQueryExecutionByIDAndWorkspaceParams{ID: id, WorkspaceID: workspaceID})
 	if err != nil {
 		return ws.QuerierQueryExecution{}, err
@@ -55,7 +54,7 @@ func (a wsQuerier) GetQueryExecutionByIDAndWorkspace(ctx context.Context, id pgt
 	}, nil
 }
 
-func (a wsQuerier) ListQueryStatementsByWorkspace(ctx context.Context, executionID pgtype.UUID, workspaceID pgtype.UUID) ([]ws.QuerierQueryStatement, error) {
+func (a wsQuerier) ListQueryStatementsByWorkspace(ctx context.Context, executionID db.UUID, workspaceID db.UUID) ([]ws.QuerierQueryStatement, error) {
 	stmts, err := a.q.ListQueryStatementsByWorkspace(ctx, db.ListQueryStatementsByWorkspaceParams{ExecutionID: executionID, WorkspaceID: workspaceID})
 	if err != nil {
 		return nil, err

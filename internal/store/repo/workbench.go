@@ -10,7 +10,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -44,7 +43,7 @@ func (r *Repo) ListAllVisibleQueryFolders(ctx context.Context, arg db.ListAllVis
 	return r.listVisibleFolders(ctx, arg.WorkspaceID, arg.UserID, arg.SpaceID, nil, false)
 }
 
-func (r *Repo) listVisibleFolders(ctx context.Context, workspaceID, userID, spaceID pgtype.UUID, parent *pgtype.UUID, filterParent bool) ([]db.QueryFolder, error) {
+func (r *Repo) listVisibleFolders(ctx context.Context, workspaceID, userID, spaceID db.UUID, parent *db.UUID, filterParent bool) ([]db.QueryFolder, error) {
 	var out []db.QueryFolder
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		spaces, err := visibleSpaces(tx, workspaceID, userID)
@@ -162,7 +161,7 @@ func (r *Repo) MoveSavedQueriesInFolderSubtree(ctx context.Context, arg db.MoveS
 
 // folderSubtree returns the ids of the folder and its descendants, bounded by
 // the workspace.
-func (r *Repo) folderSubtree(ctx context.Context, id, workspaceID pgtype.UUID) ([]string, error) {
+func (r *Repo) folderSubtree(ctx context.Context, id, workspaceID db.UUID) ([]string, error) {
 	if !id.Valid || !workspaceID.Valid {
 		return nil, nil
 	}
@@ -215,7 +214,7 @@ func (r *Repo) SearchVisibleSavedQueries(ctx context.Context, arg db.SearchVisib
 	return r.listVisibleSavedQueries(ctx, arg.WorkspaceID, arg.UserID, arg.SpaceID, nil, arg.Q, arg.Lim)
 }
 
-func (r *Repo) listVisibleSavedQueries(ctx context.Context, workspaceID, userID, spaceID pgtype.UUID, folderID *pgtype.UUID, search *string, limit *int32) ([]db.SavedQuery, error) {
+func (r *Repo) listVisibleSavedQueries(ctx context.Context, workspaceID, userID, spaceID db.UUID, folderID *db.UUID, search *string, limit *int32) ([]db.SavedQuery, error) {
 	var out []db.SavedQuery
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		spaces, err := visibleSpaces(tx, workspaceID, userID)
@@ -256,7 +255,7 @@ func (r *Repo) listVisibleSavedQueries(ctx context.Context, workspaceID, userID,
 // ListSavedQueryVersions returns the latest content version of every saved
 // query in the workspace. The per-entity maximum is reduced in Go, so the
 // query needs no GROUP BY (ADR 0020).
-func (r *Repo) ListSavedQueryVersions(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListSavedQueryVersionsRow, error) {
+func (r *Repo) ListSavedQueryVersions(ctx context.Context, workspaceID db.UUID) ([]db.ListSavedQueryVersionsRow, error) {
 	var rows []model.ContentVersion
 	if err := r.Users.db.WithContext(ctx).
 		Where("workspace_id = ? AND entity_type = ?", UUIDString(workspaceID), "saved_query").
@@ -292,7 +291,7 @@ func (r *Repo) SavedQuerySlugExists(ctx context.Context, arg db.SavedQuerySlugEx
 // visibleSpaces returns the ids of the workspace's spaces the user may see,
 // reproducing baleia_effective_space_role(x) IS NOT NULL in Go (ADR 0020
 // removes the PL/pgSQL function).
-func visibleSpaces(tx *gorm.DB, workspaceID, userID pgtype.UUID) ([]string, error) {
+func visibleSpaces(tx *gorm.DB, workspaceID, userID db.UUID) ([]string, error) {
 	if !workspaceID.Valid || !userID.Valid {
 		return nil, nil
 	}

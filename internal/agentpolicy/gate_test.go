@@ -9,12 +9,11 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func uid(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }
+func uid(b byte) db.UUID { return db.UUID{Bytes: [16]byte{b}, Valid: true} }
 
-func ptr(id pgtype.UUID) *pgtype.UUID { return &id }
+func ptr(id db.UUID) *db.UUID { return &id }
 
 func str(s string) *string { return &s }
 
@@ -27,7 +26,7 @@ type fakeStore struct {
 	conn           db.CatalogConnection
 	running        int64
 	hourly         int64
-	oldest         pgtype.Timestamptz
+	oldest         db.Timestamptz
 	// role is the owner's workspace role (#653); empty means viewer.
 	role string
 }
@@ -39,7 +38,7 @@ func (s *fakeStore) GetWorkspaceMemberRole(context.Context, db.GetWorkspaceMembe
 	return s.role, nil
 }
 
-func (s *fakeStore) GetAgentByID(context.Context, pgtype.UUID) (db.Agent, error) {
+func (s *fakeStore) GetAgentByID(context.Context, db.UUID) (db.Agent, error) {
 	return s.agent, nil
 }
 func (s *fakeStore) AgentWorkspaceBound(context.Context, db.AgentWorkspaceBoundParams) (bool, error) {
@@ -51,25 +50,25 @@ func (s *fakeStore) CheckWorkspaceAccess(context.Context, db.CheckWorkspaceAcces
 func (s *fakeStore) CatalogGrantedToAgent(context.Context, db.CatalogGrantedToAgentParams) (bool, error) {
 	return s.catalogGranted, nil
 }
-func (s *fakeStore) GetEngineByID(context.Context, pgtype.UUID) (db.Engine, error) {
+func (s *fakeStore) GetEngineByID(context.Context, db.UUID) (db.Engine, error) {
 	return s.engine, nil
 }
-func (s *fakeStore) GetCatalogConnectionByID(context.Context, pgtype.UUID) (db.CatalogConnection, error) {
+func (s *fakeStore) GetCatalogConnectionByID(context.Context, db.UUID) (db.CatalogConnection, error) {
 	return s.conn, nil
 }
-func (s *fakeStore) CountRunningExecutionsByAgent(context.Context, pgtype.UUID) (int64, error) {
+func (s *fakeStore) CountRunningExecutionsByAgent(context.Context, db.UUID) (int64, error) {
 	return s.running, nil
 }
 func (s *fakeStore) CountExecutionsByAgentSince(context.Context, db.CountExecutionsByAgentSinceParams) (int64, error) {
 	return s.hourly, nil
 }
-func (s *fakeStore) OldestExecutionByAgentSince(context.Context, db.OldestExecutionByAgentSinceParams) (pgtype.Timestamptz, error) {
+func (s *fakeStore) OldestExecutionByAgentSince(context.Context, db.OldestExecutionByAgentSinceParams) (db.Timestamptz, error) {
 	return s.oldest, nil
 }
 
 type fakeEngines struct{ readOnly queryengine.ReadOnlySupport }
 
-func (f fakeEngines) ReadOnly(context.Context, pgtype.UUID) (queryengine.ReadOnlySupport, error) {
+func (f fakeEngines) ReadOnly(context.Context, db.UUID) (queryengine.ReadOnlySupport, error) {
 	return f.readOnly, nil
 }
 
@@ -77,9 +76,9 @@ type fixture struct {
 	store  *fakeStore
 	gate   *Gate
 	p      authz.Principal
-	ws     pgtype.UUID
-	cat    pgtype.UUID
-	engine pgtype.UUID
+	ws     db.UUID
+	cat    db.UUID
+	engine db.UUID
 	now    time.Time
 }
 
@@ -243,7 +242,7 @@ func TestConcurrencyAndHourlyQuota(t *testing.T) {
 
 	f = newFixture()
 	f.store.hourly = 120 // default max_queries_per_hour
-	f.store.oldest = pgtype.Timestamptz{Time: f.now.Add(-30 * time.Minute), Valid: true}
+	f.store.oldest = db.Timestamptz{Time: f.now.Add(-30 * time.Minute), Valid: true}
 	dec := f.check(t, f.call(ToolRunQuery, str("SELECT 1")))
 	if dec.Allowed || dec.Reason != ReasonQuota {
 		t.Fatalf("hourly = %+v, want quota", dec)
@@ -266,7 +265,7 @@ func TestConcurrencyWaitsWhenQueueing(t *testing.T) {
 
 	// The hourly quota still refuses while queueing.
 	f.store.hourly = 120 // default max_queries_per_hour
-	f.store.oldest = pgtype.Timestamptz{Time: f.now.Add(-30 * time.Minute), Valid: true}
+	f.store.oldest = db.Timestamptz{Time: f.now.Add(-30 * time.Minute), Valid: true}
 	dec := f.check(t, f.call(ToolRunQuery, str("SELECT 1")))
 	if dec.Allowed || dec.Reason != ReasonQuota {
 		t.Fatalf("queueing hourly = %+v, want quota", dec)

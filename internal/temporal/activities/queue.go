@@ -4,8 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 // MarkQueuedParams names the run that entered its engine's admission queue.
@@ -20,12 +19,12 @@ func MarkQueued(ctx context.Context, params MarkQueuedParams) error {
 }
 
 func (a *Activities) markQueued(ctx context.Context, params MarkQueuedParams) error {
-	var id pgtype.UUID
+	var id db.UUID
 	if err := id.Scan(params.ExecutionID); err != nil {
 		return err
 	}
 	_, err := a.workbench().QueueQueryExecution(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return nil
 	}
 	return err
@@ -42,12 +41,12 @@ func MarkAdmitted(ctx context.Context, params MarkAdmittedParams) error {
 }
 
 func (a *Activities) markAdmitted(ctx context.Context, params MarkAdmittedParams) error {
-	var id pgtype.UUID
+	var id db.UUID
 	if err := id.Scan(params.ExecutionID); err != nil {
 		return err
 	}
 	_, err := a.workbench().AdmitQueryExecution(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return nil
 	}
 	return err

@@ -8,8 +8,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -24,7 +22,7 @@ func (s *APIKeys) GetAPIKeyByHash(ctx context.Context, keyHash string) (db.ApiKe
 	var row model.APIKey
 	err := s.db.WithContext(ctx).Where("key_hash = ?", keyHash).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.ApiKey{}, pgx.ErrNoRows
+		return db.ApiKey{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.ApiKey{}, err
@@ -39,7 +37,7 @@ func (s *APIKeys) GetAPIKeyByID(ctx context.Context, arg db.GetAPIKeyByIDParams)
 		Where("id = ? AND user_id = ?", UUIDString(arg.ID), UUIDString(arg.UserID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.ApiKey{}, pgx.ErrNoRows
+		return db.ApiKey{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.ApiKey{}, err
@@ -48,7 +46,7 @@ func (s *APIKeys) GetAPIKeyByID(ctx context.Context, arg db.GetAPIKeyByIDParams)
 }
 
 // TouchAPIKey records that the key was used.
-func (s *APIKeys) TouchAPIKey(ctx context.Context, id pgtype.UUID) error {
+func (s *APIKeys) TouchAPIKey(ctx context.Context, id db.UUID) error {
 	return s.db.WithContext(ctx).Model(&model.APIKey{}).
 		Where("id = ?", UUIDString(id)).
 		Update("last_used_at", time.Now().UTC()).Error
@@ -63,7 +61,7 @@ func (s *Sessions) GetRefreshTokenByHash(ctx context.Context, tokenHash string) 
 		Where("token_hash = ? AND revoked = ? AND expires_at > ?", tokenHash, false, time.Now().UTC()).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.RefreshToken{}, pgx.ErrNoRows
+		return db.RefreshToken{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.RefreshToken{}, err
@@ -72,7 +70,7 @@ func (s *Sessions) GetRefreshTokenByHash(ctx context.Context, tokenHash string) 
 }
 
 // RevokeRefreshToken revokes one rotation member.
-func (s *Sessions) RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error {
+func (s *Sessions) RevokeRefreshToken(ctx context.Context, id db.UUID) error {
 	return s.db.WithContext(ctx).Model(&model.RefreshToken{}).
 		Where("id = ?", UUIDString(id)).
 		Update("revoked", true).Error
@@ -133,7 +131,7 @@ func (r *Repo) GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName
 		Where("polaris_catalog_name = ?", polarisCatalogName).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Workspace{}, pgx.ErrNoRows
+		return db.Workspace{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Workspace{}, err
@@ -144,7 +142,7 @@ func (r *Repo) GetWorkspaceByPolarisName(ctx context.Context, polarisCatalogName
 // ── agents ───────────────────────────────────────────────────────────────────
 
 // CountActiveAgentTokens counts live tokens of an agent.
-func (r *Repo) CountActiveAgentTokens(ctx context.Context, agentID pgtype.UUID) (int64, error) {
+func (r *Repo) CountActiveAgentTokens(ctx context.Context, agentID db.UUID) (int64, error) {
 	var n int64
 	err := r.Users.db.WithContext(ctx).Model(&model.AgentToken{}).
 		Where("agent_id = ? AND revoked_at IS NULL AND expires_at > ?", UUIDString(agentID), time.Now().UTC()).
@@ -153,7 +151,7 @@ func (r *Repo) CountActiveAgentTokens(ctx context.Context, agentID pgtype.UUID) 
 }
 
 // CountRunningExecutionsByAgent counts the agent's running statements.
-func (r *Repo) CountRunningExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error) {
+func (r *Repo) CountRunningExecutionsByAgent(ctx context.Context, agentID db.UUID) (int64, error) {
 	var n int64
 	err := r.Users.db.WithContext(ctx).Model(&model.QueryExecution{}).
 		Where("agent_id = ? AND status = ?", UUIDString(agentID), "running").
@@ -162,7 +160,7 @@ func (r *Repo) CountRunningExecutionsByAgent(ctx context.Context, agentID pgtype
 }
 
 // CountActiveExecutionsByAgent counts the runs holding an agent slot.
-func (r *Repo) CountActiveExecutionsByAgent(ctx context.Context, agentID pgtype.UUID) (int64, error) {
+func (r *Repo) CountActiveExecutionsByAgent(ctx context.Context, agentID db.UUID) (int64, error) {
 	var n int64
 	err := r.Users.db.WithContext(ctx).Model(&model.QueryExecution{}).
 		Where("agent_id = ? AND status IN ?", UUIDString(agentID), []string{"running", "queued"}).
@@ -183,7 +181,7 @@ func (r *Repo) CountExecutionsByAgentSince(ctx context.Context, arg db.CountExec
 }
 
 // OldestExecutionByAgentSince returns the oldest run started after the time.
-func (r *Repo) OldestExecutionByAgentSince(ctx context.Context, arg db.OldestExecutionByAgentSinceParams) (pgtype.Timestamptz, error) {
+func (r *Repo) OldestExecutionByAgentSince(ctx context.Context, arg db.OldestExecutionByAgentSinceParams) (db.Timestamptz, error) {
 	var row model.QueryExecution
 	q := r.Users.db.WithContext(ctx).Where("agent_id = ?", UUIDString(arg.AgentID))
 	if arg.StartedAt.Valid {
@@ -191,10 +189,10 @@ func (r *Repo) OldestExecutionByAgentSince(ctx context.Context, arg db.OldestExe
 	}
 	err := q.Order("started_at ASC").First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return pgtype.Timestamptz{}, pgx.ErrNoRows
+		return db.Timestamptz{}, db.ErrNoRows
 	}
 	if err != nil {
-		return pgtype.Timestamptz{}, err
+		return db.Timestamptz{}, err
 	}
 	return PGTime(row.StartedAt), nil
 }
@@ -235,18 +233,18 @@ func (r *Repo) CatalogGrantedToAgent(ctx context.Context, arg db.CatalogGrantedT
 // ── engines and bindings ─────────────────────────────────────────────────────
 
 // GetEngineWithConnection returns the engine and the connection it runs on.
-func (r *Repo) GetEngineWithConnection(ctx context.Context, id pgtype.UUID) (db.GetEngineWithConnectionRow, error) {
+func (r *Repo) GetEngineWithConnection(ctx context.Context, id db.UUID) (db.GetEngineWithConnectionRow, error) {
 	var row model.Engine
 	err := r.Users.db.WithContext(ctx).Preload("Connection").
 		Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetEngineWithConnectionRow{}, pgx.ErrNoRows
+		return db.GetEngineWithConnectionRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetEngineWithConnectionRow{}, err
 	}
 	if row.Connection == nil {
-		return db.GetEngineWithConnectionRow{}, pgx.ErrNoRows
+		return db.GetEngineWithConnectionRow{}, db.ErrNoRows
 	}
 	return db.GetEngineWithConnectionRow{
 		Engine:            toDBEngine(row),
@@ -259,25 +257,25 @@ func (r *Repo) GetDefaultTrinoEngine(ctx context.Context) (db.GetDefaultTrinoEng
 	var cluster model.TrinoCluster
 	err := r.Users.db.WithContext(ctx).Where("name = ?", "default").First(&cluster).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetDefaultTrinoEngineRow{}, pgx.ErrNoRows
+		return db.GetDefaultTrinoEngineRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetDefaultTrinoEngineRow{}, err
 	}
 	if cluster.EngineID == nil {
-		return db.GetDefaultTrinoEngineRow{}, pgx.ErrNoRows
+		return db.GetDefaultTrinoEngineRow{}, db.ErrNoRows
 	}
 	var row model.Engine
 	err = r.Users.db.WithContext(ctx).Preload("Connection").
 		Where("id = ?", string(*cluster.EngineID)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetDefaultTrinoEngineRow{}, pgx.ErrNoRows
+		return db.GetDefaultTrinoEngineRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetDefaultTrinoEngineRow{}, err
 	}
 	if row.Connection == nil {
-		return db.GetDefaultTrinoEngineRow{}, pgx.ErrNoRows
+		return db.GetDefaultTrinoEngineRow{}, db.ErrNoRows
 	}
 	return db.GetDefaultTrinoEngineRow{
 		Engine:            toDBEngine(row),
@@ -297,7 +295,7 @@ func (r *Repo) ListEnabledEnginesWithConnection(ctx context.Context) ([]db.ListE
 	if err := r.Users.db.WithContext(ctx).Find(&clusters).Error; err != nil {
 		return nil, err
 	}
-	clusterOf := make(map[string]pgtype.UUID, len(clusters))
+	clusterOf := make(map[string]db.UUID, len(clusters))
 	for _, c := range clusters {
 		if c.EngineID != nil {
 			clusterOf[string(*c.EngineID)] = PGUUID(string(c.ID))
@@ -318,18 +316,18 @@ func (r *Repo) ListEnabledEnginesWithConnection(ctx context.Context) ([]db.ListE
 }
 
 // GetBindingForTarget returns the engine and catalog an execution target needs.
-func (r *Repo) GetBindingForTarget(ctx context.Context, id pgtype.UUID) (db.GetBindingForTargetRow, error) {
+func (r *Repo) GetBindingForTarget(ctx context.Context, id db.UUID) (db.GetBindingForTargetRow, error) {
 	var row model.CatalogBinding
 	err := r.Users.db.WithContext(ctx).Preload("Engine").Preload("Catalog").
 		Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.GetBindingForTargetRow{}, pgx.ErrNoRows
+		return db.GetBindingForTargetRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetBindingForTargetRow{}, err
 	}
 	if row.Engine == nil || row.Catalog == nil {
-		return db.GetBindingForTargetRow{}, pgx.ErrNoRows
+		return db.GetBindingForTargetRow{}, db.ErrNoRows
 	}
 	return db.GetBindingForTargetRow{
 		BindingID:         PGUUID(string(row.ID)),
@@ -356,7 +354,7 @@ func (r *Repo) ListEnabledCatalogs(ctx context.Context) ([]db.Catalog, error) {
 }
 
 // ListBindingStatusByCatalog reproduces the binding_status_v view per binding.
-func (r *Repo) ListBindingStatusByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]db.BindingStatusV, error) {
+func (r *Repo) ListBindingStatusByCatalog(ctx context.Context, catalogID db.UUID) ([]db.BindingStatusV, error) {
 	var rows []model.CatalogBinding
 	if err := r.Users.db.WithContext(ctx).
 		Where("catalog_id = ?", UUIDString(catalogID)).
@@ -395,7 +393,7 @@ func (r *Repo) GetLatestClusterSnapshot(ctx context.Context) (db.ClusterSnapshot
 	var row model.ClusterSnapshot
 	err := r.Users.db.WithContext(ctx).Order("captured_at DESC").First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.ClusterSnapshot{}, pgx.ErrNoRows
+		return db.ClusterSnapshot{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.ClusterSnapshot{}, err
@@ -476,7 +474,7 @@ func (r *Repo) GetTableHealthSnapshot(ctx context.Context, arg db.GetTableHealth
 			UUIDString(arg.CatalogConnectionID), string(arg.Catalog), string(arg.Namespace), string(arg.TableName)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.TableHealthSnapshot{}, pgx.ErrNoRows
+		return db.TableHealthSnapshot{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.TableHealthSnapshot{}, err
@@ -559,11 +557,11 @@ func (r *Repo) ListLastMaintenanceRuns(ctx context.Context, arg db.ListLastMaint
 
 // GetRetrieverForRefresh returns a retriever without a workspace filter: the
 // refresh activity runs off the due list.
-func (r *Repo) GetRetrieverForRefresh(ctx context.Context, id pgtype.UUID) (db.Retriever, error) {
+func (r *Repo) GetRetrieverForRefresh(ctx context.Context, id db.UUID) (db.Retriever, error) {
 	var row model.Retriever
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Retriever{}, pgx.ErrNoRows
+		return db.Retriever{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Retriever{}, err
@@ -663,11 +661,11 @@ func (r *Repo) CreateMigration(ctx context.Context, arg db.CreateMigrationParams
 }
 
 // GetMigrationByID returns one migration job.
-func (r *Repo) GetMigrationByID(ctx context.Context, id pgtype.UUID) (db.Migration, error) {
+func (r *Repo) GetMigrationByID(ctx context.Context, id db.UUID) (db.Migration, error) {
 	var row model.Migration
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Migration{}, pgx.ErrNoRows
+		return db.Migration{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Migration{}, err
@@ -746,7 +744,7 @@ func (r *Repo) UpdateMigrationItem(ctx context.Context, arg db.UpdateMigrationIt
 }
 
 // ListMigrationItems lists a migration's tables in source order.
-func (r *Repo) ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]db.MigrationItem, error) {
+func (r *Repo) ListMigrationItems(ctx context.Context, migrationID db.UUID) ([]db.MigrationItem, error) {
 	var rows []model.MigrationItem
 	if err := r.Users.db.WithContext(ctx).
 		Where("migration_id = ?", UUIDString(migrationID)).
@@ -762,7 +760,7 @@ func (r *Repo) ListMigrationItems(ctx context.Context, migrationID pgtype.UUID) 
 }
 
 // ListPendingMigrationItems lists a migration's still-pending tables.
-func (r *Repo) ListPendingMigrationItems(ctx context.Context, migrationID pgtype.UUID) ([]db.MigrationItem, error) {
+func (r *Repo) ListPendingMigrationItems(ctx context.Context, migrationID db.UUID) ([]db.MigrationItem, error) {
 	var rows []model.MigrationItem
 	if err := r.Users.db.WithContext(ctx).
 		Where("migration_id = ? AND status = ?", UUIDString(migrationID), "pending").
@@ -825,7 +823,7 @@ func (r *Repo) UpdateServiceAccount(ctx context.Context, arg db.UpdateServiceAcc
 }
 
 // DeleteServiceAccount removes a non-human principal.
-func (r *Repo) DeleteServiceAccount(ctx context.Context, id pgtype.UUID) (int64, error) {
+func (r *Repo) DeleteServiceAccount(ctx context.Context, id db.UUID) (int64, error) {
 	return NewServiceAccounts(r.Users.db).DeleteServiceAccount(ctx, id)
 }
 
@@ -835,19 +833,19 @@ func (r *Repo) ListServiceAccounts(ctx context.Context) ([]db.User, error) {
 }
 
 // ListServiceAccountsOfWorkspaces lists the accounts of the given workspaces.
-func (r *Repo) ListServiceAccountsOfWorkspaces(ctx context.Context, workspaceIDs []pgtype.UUID) ([]db.User, error) {
+func (r *Repo) ListServiceAccountsOfWorkspaces(ctx context.Context, workspaceIDs []db.UUID) ([]db.User, error) {
 	return NewServiceAccounts(r.Users.db).ListServiceAccountsOfWorkspaces(ctx, workspaceIDs)
 }
 
 // ListAdminWorkspaceIDs lists the workspaces a service account administers.
-func (r *Repo) ListAdminWorkspaceIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+func (r *Repo) ListAdminWorkspaceIDs(ctx context.Context, userID db.UUID) ([]db.UUID, error) {
 	return NewServiceAccounts(r.Users.db).ListAdminWorkspaceIDs(ctx, userID)
 }
 
 // ── metadata and statements ──────────────────────────────────────────────────
 
 // ListSyncableCatalogs returns the catalogs the scheduled sync refreshes.
-func (r *Repo) ListSyncableCatalogs(ctx context.Context) ([]pgtype.UUID, error) {
+func (r *Repo) ListSyncableCatalogs(ctx context.Context) ([]db.UUID, error) {
 	var catalogs []model.Catalog
 	if err := r.Users.db.WithContext(ctx).
 		Where("enabled").
@@ -864,7 +862,7 @@ func (r *Repo) ListSyncableCatalogs(ctx context.Context) ([]pgtype.UUID, error) 
 	for _, id := range bound {
 		withBinding[string(id)] = true
 	}
-	out := make([]pgtype.UUID, 0, len(catalogs))
+	out := make([]db.UUID, 0, len(catalogs))
 	for _, c := range catalogs {
 		if string(c.Origin) == "source" || withBinding[string(c.ID)] {
 			out = append(out, PGUUID(string(c.ID)))

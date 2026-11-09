@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // StreamMonitoringEvents streams a small "changed" signal when an engine's
@@ -23,7 +23,7 @@ func (h *OpsHandlers) StreamMonitoringEvents(ctx context.Context, request Stream
 	if err != nil {
 		return StreamMonitoringEvents401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	engineID := pgtype.UUID{Bytes: request.Id, Valid: true}
+	engineID := db.UUID{Bytes: request.Id, Valid: true}
 	if _, ok := h.engineForMonitoring(ctx, p, engineID, authz.ActRead); !ok {
 		return StreamMonitoringEvents404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "engine not found"}}, nil
 	}

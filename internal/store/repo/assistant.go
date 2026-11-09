@@ -6,10 +6,9 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/assistant"
+	"github.com/galileostudio/baleia/internal/db"
 	adb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -22,12 +21,12 @@ const staleTurnAge = 60 * time.Second
 
 // ── settings ──────────────────────────────────────────────────────────────────
 
-// GetAssistantSettings returns the single settings row or pgx.ErrNoRows.
+// GetAssistantSettings returns the single settings row or db.ErrNoRows.
 func (r *Repo) GetAssistantSettings(ctx context.Context) (adb.AssistantSetting, error) {
 	var row model.AssistantSetting
 	err := r.Users.db.WithContext(ctx).Where("id = ?", true).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return adb.AssistantSetting{}, pgx.ErrNoRows
+		return adb.AssistantSetting{}, db.ErrNoRows
 	}
 	if err != nil {
 		return adb.AssistantSetting{}, err
@@ -59,7 +58,7 @@ func (r *Repo) UpdateAssistantSettings(ctx context.Context, arg adb.UpdateAssist
 		var row model.AssistantSetting
 		if err := tx.Where("id = ?", true).First(&row).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return pgx.ErrNoRows
+				return db.ErrNoRows
 			}
 			return err
 		}
@@ -75,7 +74,7 @@ func (r *Repo) UpdateAssistantSettings(ctx context.Context, arg adb.UpdateAssist
 // ── assistant agent ───────────────────────────────────────────────────────────
 
 // FindAssistantAgent returns the owner × workspace assistant agent or
-// pgx.ErrNoRows.
+// db.ErrNoRows.
 func (r *Repo) FindAssistantAgent(ctx context.Context, arg adb.FindAssistantAgentParams) (adb.Agent, error) {
 	return findAssistantAgent(r.Users.db.WithContext(ctx), arg.OwnerID, arg.WorkspaceID)
 }
@@ -85,7 +84,7 @@ func (r *Repo) FindAssistantAgent(ctx context.Context, arg adb.FindAssistantAgen
 // concurrent first conversations for the same owner create one agent: the loser
 // waits, then finds the committed agent. A binding failure rolls the created
 // agent back (ADR 0020: row locks, never advisory locks).
-func (r *Repo) EnsureAssistantAgent(ctx context.Context, ownerID, workspaceID pgtype.UUID, name, description string) (adb.Agent, error) {
+func (r *Repo) EnsureAssistantAgent(ctx context.Context, ownerID, workspaceID db.UUID, name, description string) (adb.Agent, error) {
 	var out adb.Agent
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var owner model.User
@@ -94,7 +93,7 @@ func (r *Repo) EnsureAssistantAgent(ctx context.Context, ownerID, workspaceID pg
 			Where("id = ?", UUIDString(ownerID)).
 			First(&owner).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if err != nil {
 			return err
@@ -104,7 +103,7 @@ func (r *Repo) EnsureAssistantAgent(ctx context.Context, ownerID, workspaceID pg
 			out = found
 			return nil
 		}
-		if !errors.Is(err, pgx.ErrNoRows) {
+		if !errors.Is(err, db.ErrNoRows) {
 			return err
 		}
 		agent, err := createAssistantAgent(tx, adb.CreateAssistantAgentParams{
@@ -139,7 +138,7 @@ func (r *Repo) AddAssistantAgentWorkspace(ctx context.Context, arg adb.AddAssist
 	return addAssistantAgentWorkspace(r.Users.db.WithContext(ctx), arg)
 }
 
-func findAssistantAgent(db *gorm.DB, ownerID, workspaceID pgtype.UUID) (adb.Agent, error) {
+func findAssistantAgent(db *gorm.DB, ownerID, workspaceID db.UUID) (adb.Agent, error) {
 	var row model.Agent
 	err := db.
 		Joins("JOIN agent_workspaces aw ON aw.agent_id = agents.id").
@@ -147,7 +146,7 @@ func findAssistantAgent(db *gorm.DB, ownerID, workspaceID pgtype.UUID) (adb.Agen
 			UUIDString(ownerID), "assistant", UUIDString(workspaceID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return adb.Agent{}, pgx.ErrNoRows
+		return adb.Agent{}, gorm.ErrRecordNotFound
 	}
 	if err != nil {
 		return adb.Agent{}, err
@@ -205,17 +204,17 @@ func (r *Repo) CreateConversation(ctx context.Context, arg adb.CreateConversatio
 	return toAssistantConversation(row), nil
 }
 
-// GetConversation returns one of the caller's conversations or pgx.ErrNoRows.
+// GetConversation returns one of the caller's conversations or db.ErrNoRows.
 func (r *Repo) GetConversation(ctx context.Context, arg adb.GetConversationParams) (adb.AssistantConversation, error) {
 	if !arg.ID.Valid || !arg.UserID.Valid {
-		return adb.AssistantConversation{}, pgx.ErrNoRows
+		return adb.AssistantConversation{}, db.ErrNoRows
 	}
 	var row model.AssistantConversation
 	err := r.Users.db.WithContext(ctx).
 		Where("id = ? AND user_id = ?", UUIDString(arg.ID), UUIDString(arg.UserID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return adb.AssistantConversation{}, pgx.ErrNoRows
+		return adb.AssistantConversation{}, db.ErrNoRows
 	}
 	if err != nil {
 		return adb.AssistantConversation{}, err
@@ -251,7 +250,7 @@ func (r *Repo) DeleteConversation(ctx context.Context, arg adb.DeleteConversatio
 
 // ── turn lifecycle ────────────────────────────────────────────────────────────
 
-// ClaimConversation starts a turn or returns pgx.ErrNoRows when one is already
+// ClaimConversation starts a turn or returns db.ErrNoRows when one is already
 // running. The row lock makes the check and the transition one step.
 func (r *Repo) ClaimConversation(ctx context.Context, arg adb.ClaimConversationParams) (adb.AssistantConversation, error) {
 	var out adb.AssistantConversation
@@ -261,13 +260,13 @@ func (r *Repo) ClaimConversation(ctx context.Context, arg adb.ClaimConversationP
 			Where("id = ? AND user_id = ?", UUIDString(arg.ID), UUIDString(arg.UserID)).
 			First(&row).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if err != nil {
 			return err
 		}
 		if row.State == "running" {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		now := time.Now().UTC()
 		if err := tx.Model(&model.AssistantConversation{}).
@@ -296,7 +295,7 @@ func (r *Repo) ClaimConversation(ctx context.Context, arg adb.ClaimConversationP
 // ReleaseConversation returns a conversation to idle after a turn. The turn
 // token must still be the owner, so a runner that lost the conversation to a
 // reclaim cannot release the new turn.
-func (r *Repo) ReleaseConversation(ctx context.Context, id pgtype.UUID, turnOwner string) error {
+func (r *Repo) ReleaseConversation(ctx context.Context, id db.UUID, turnOwner string) error {
 	if !id.Valid {
 		return nil
 	}
@@ -312,7 +311,7 @@ func (r *Repo) ReleaseConversation(ctx context.Context, id pgtype.UUID, turnOwne
 
 // SetConversationInterrupted marks a conversation interrupted (cancel, crash
 // recovery).
-func (r *Repo) SetConversationInterrupted(ctx context.Context, id pgtype.UUID) error {
+func (r *Repo) SetConversationInterrupted(ctx context.Context, id db.UUID) error {
 	if !id.Valid {
 		return nil
 	}
@@ -329,7 +328,7 @@ func (r *Repo) SetConversationInterrupted(ctx context.Context, id pgtype.UUID) e
 // HeartbeatConversation refreshes the turn lease while the turn is running. It
 // deliberately does not touch updated_at: listing order follows the last real
 // activity, not the beat.
-func (r *Repo) HeartbeatConversation(ctx context.Context, id pgtype.UUID) error {
+func (r *Repo) HeartbeatConversation(ctx context.Context, id db.UUID) error {
 	if !id.Valid {
 		return nil
 	}
@@ -340,8 +339,8 @@ func (r *Repo) HeartbeatConversation(ctx context.Context, id pgtype.UUID) error 
 
 // InterruptStaleConversations marks turns whose replica stopped heartbeating as
 // interrupted and returns their ids.
-func (r *Repo) InterruptStaleConversations(ctx context.Context) ([]pgtype.UUID, error) {
-	var ids []pgtype.UUID
+func (r *Repo) InterruptStaleConversations(ctx context.Context) ([]db.UUID, error) {
+	var ids []db.UUID
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var stale []model.AssistantConversation
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -367,7 +366,7 @@ func (r *Repo) InterruptStaleConversations(ctx context.Context) ([]pgtype.UUID, 
 			}).Error; err != nil {
 			return err
 		}
-		ids = make([]pgtype.UUID, len(stale))
+		ids = make([]db.UUID, len(stale))
 		for i, row := range stale {
 			ids[i] = PGUUID(string(row.ID))
 		}
@@ -405,7 +404,7 @@ func (r *Repo) AppendMessage(ctx context.Context, arg adb.AppendMessageParams) (
 			Where("id = ?", UUIDString(arg.ConversationID)).
 			First(&conv).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if err != nil {
 			return err
@@ -459,10 +458,10 @@ func (r *Repo) ListMessages(ctx context.Context, arg adb.ListMessagesParams) ([]
 }
 
 // LatestConversationMessage returns the conversation's newest message or
-// pgx.ErrNoRows.
-func (r *Repo) LatestConversationMessage(ctx context.Context, conversationID pgtype.UUID) (adb.AssistantMessage, error) {
+// db.ErrNoRows.
+func (r *Repo) LatestConversationMessage(ctx context.Context, conversationID db.UUID) (adb.AssistantMessage, error) {
 	if !conversationID.Valid {
-		return adb.AssistantMessage{}, pgx.ErrNoRows
+		return adb.AssistantMessage{}, db.ErrNoRows
 	}
 	var row model.AssistantMessage
 	err := r.Users.db.WithContext(ctx).
@@ -470,7 +469,7 @@ func (r *Repo) LatestConversationMessage(ctx context.Context, conversationID pgt
 		Order("seq DESC").
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return adb.AssistantMessage{}, pgx.ErrNoRows
+		return adb.AssistantMessage{}, db.ErrNoRows
 	}
 	if err != nil {
 		return adb.AssistantMessage{}, err

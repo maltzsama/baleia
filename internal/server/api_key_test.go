@@ -12,13 +12,12 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func apiKeyFixture(t *testing.T, expires *time.Time) (db.Querier, string, db.User, db.ApiKey) {
 	t.Helper()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	ctx := context.Background()
 	password := "not-used-by-api-keys"
 	user, err := q.CreateUser(ctx, db.CreateUserParams{
@@ -32,9 +31,9 @@ func apiKeyFixture(t *testing.T, expires *time.Time) (db.Querier, string, db.Use
 		t.Fatal(err)
 	}
 	const secret = "bal_test_secret"
-	var expiresAt pgtype.Timestamptz
+	var expiresAt db.Timestamptz
 	if expires != nil {
-		expiresAt = pgtype.Timestamptz{Time: *expires, Valid: true}
+		expiresAt = db.Timestamptz{Time: *expires, Valid: true}
 	}
 	key, err := q.CreateAPIKey(ctx, db.CreateAPIKeyParams{
 		UserID:    user.ID,

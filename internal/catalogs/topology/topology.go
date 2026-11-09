@@ -1,7 +1,7 @@
 // Package topology reads and edits how catalogs sit on engines (#38, #364):
 // engines, Trino clusters, bindings and their status, catalogs by connection,
 // grant or name, and a catalog's sync state and stored columns. Lookups
-// return the store's errors as they are (pgx.ErrNoRows for a missing row),
+// return the store's errors as they are (db.ErrNoRows for a missing row),
 // so callers keep deciding what a missing engine or binding means.
 package topology
 
@@ -9,40 +9,39 @@ import (
 	"context"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Engines reads engines and Trino clusters; *repo.Repo implements it.
 type Engines interface {
-	GetEngineByID(ctx context.Context, id pgtype.UUID) (db.Engine, error)
-	GetTrinoClusterByID(ctx context.Context, id pgtype.UUID) (db.TrinoCluster, error)
-	GetTrinoClusterByEngine(ctx context.Context, engineID pgtype.UUID) (db.TrinoCluster, error)
+	GetEngineByID(ctx context.Context, id db.UUID) (db.Engine, error)
+	GetTrinoClusterByID(ctx context.Context, id db.UUID) (db.TrinoCluster, error)
+	GetTrinoClusterByEngine(ctx context.Context, engineID db.UUID) (db.TrinoCluster, error)
 	GetDefaultTrinoCluster(ctx context.Context) (db.TrinoCluster, error)
-	GetCatalogConnectionByID(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error)
+	GetCatalogConnectionByID(ctx context.Context, id db.UUID) (db.CatalogConnection, error)
 }
 
 // Bindings reads and removes bindings; *repo.Repo implements it.
 type Bindings interface {
-	GetBinding(ctx context.Context, id pgtype.UUID) (db.CatalogBinding, error)
+	GetBinding(ctx context.Context, id db.UUID) (db.CatalogBinding, error)
 	GetManagedBindingOfCatalog(ctx context.Context, arg db.GetManagedBindingOfCatalogParams) (db.CatalogBinding, error)
-	GetBindingStatus(ctx context.Context, bindingID pgtype.UUID) (db.BindingStatusV, error)
-	ListBindingsByEngine(ctx context.Context, engineID pgtype.UUID) ([]db.CatalogBinding, error)
-	ListBindingsByCatalog(ctx context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error)
+	GetBindingStatus(ctx context.Context, bindingID db.UUID) (db.BindingStatusV, error)
+	ListBindingsByEngine(ctx context.Context, engineID db.UUID) ([]db.CatalogBinding, error)
+	ListBindingsByCatalog(ctx context.Context, catalogID db.UUID) ([]db.CatalogBinding, error)
 	CountManagedBindingsByState(ctx context.Context) ([]db.CountManagedBindingsByStateRow, error)
-	DeleteBinding(ctx context.Context, id pgtype.UUID) error
+	DeleteBinding(ctx context.Context, id db.UUID) error
 }
 
 // Catalogs reads and edits catalogs; *repo.Repo implements it.
 type Catalogs interface {
 	ListVisibleCatalogs(ctx context.Context, arg db.ListVisibleCatalogsParams) ([]db.Catalog, error)
-	ListCatalogGrants(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogGrantsRow, error)
-	ListCatalogsByConnection(ctx context.Context, connectionID pgtype.UUID) ([]db.Catalog, error)
-	ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]db.CatalogConnection, error)
-	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListGrantedCatalogsOfWorkspaceRow, error)
+	ListCatalogGrants(ctx context.Context, catalogID db.UUID) ([]db.ListCatalogGrantsRow, error)
+	ListCatalogsByConnection(ctx context.Context, connectionID db.UUID) ([]db.Catalog, error)
+	ListCatalogConnections(ctx context.Context, createdBy db.UUID) ([]db.CatalogConnection, error)
+	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID db.UUID) ([]db.ListGrantedCatalogsOfWorkspaceRow, error)
 	GetCatalogByTrinoName(ctx context.Context, arg db.GetCatalogByTrinoNameParams) (db.Catalog, error)
-	GetCatalogSyncState(ctx context.Context, catalogID pgtype.UUID) (db.GetCatalogSyncStateRow, error)
-	GetMetadataTableByName(ctx context.Context, arg db.GetMetadataTableByNameParams) (pgtype.UUID, error)
-	ListMetadataColumns(ctx context.Context, tableID pgtype.UUID) ([]db.ListMetadataColumnsRow, error)
+	GetCatalogSyncState(ctx context.Context, catalogID db.UUID) (db.GetCatalogSyncStateRow, error)
+	GetMetadataTableByName(ctx context.Context, arg db.GetMetadataTableByNameParams) (db.UUID, error)
+	ListMetadataColumns(ctx context.Context, tableID db.UUID) ([]db.ListMetadataColumnsRow, error)
 	UpdateCatalog(ctx context.Context, arg db.UpdateCatalogParams) (db.Catalog, error)
 	SetCatalogEnabled(ctx context.Context, arg db.SetCatalogEnabledParams) error
 }
@@ -64,17 +63,17 @@ func New(store Store) *Service { return &Service{store: store} }
 func (s *Service) Available() bool { return s != nil && s.store != nil }
 
 // Engine returns an engine.
-func (s *Service) Engine(ctx context.Context, id pgtype.UUID) (db.Engine, error) {
+func (s *Service) Engine(ctx context.Context, id db.UUID) (db.Engine, error) {
 	return s.store.GetEngineByID(ctx, id)
 }
 
 // Cluster returns a Trino cluster.
-func (s *Service) Cluster(ctx context.Context, id pgtype.UUID) (db.TrinoCluster, error) {
+func (s *Service) Cluster(ctx context.Context, id db.UUID) (db.TrinoCluster, error) {
 	return s.store.GetTrinoClusterByID(ctx, id)
 }
 
 // ClusterOfEngine returns the Trino cluster an engine runs.
-func (s *Service) ClusterOfEngine(ctx context.Context, engineID pgtype.UUID) (db.TrinoCluster, error) {
+func (s *Service) ClusterOfEngine(ctx context.Context, engineID db.UUID) (db.TrinoCluster, error) {
 	return s.store.GetTrinoClusterByEngine(ctx, engineID)
 }
 
@@ -84,32 +83,32 @@ func (s *Service) DefaultCluster(ctx context.Context) (db.TrinoCluster, error) {
 }
 
 // Connection returns a catalog connection, without checking access.
-func (s *Service) Connection(ctx context.Context, id pgtype.UUID) (db.CatalogConnection, error) {
+func (s *Service) Connection(ctx context.Context, id db.UUID) (db.CatalogConnection, error) {
 	return s.store.GetCatalogConnectionByID(ctx, id)
 }
 
 // Binding returns a binding.
-func (s *Service) Binding(ctx context.Context, id pgtype.UUID) (db.CatalogBinding, error) {
+func (s *Service) Binding(ctx context.Context, id db.UUID) (db.CatalogBinding, error) {
 	return s.store.GetBinding(ctx, id)
 }
 
 // ManagedBinding returns the managed binding of a catalog on an engine.
-func (s *Service) ManagedBinding(ctx context.Context, catalogID, engineID pgtype.UUID) (db.CatalogBinding, error) {
+func (s *Service) ManagedBinding(ctx context.Context, catalogID, engineID db.UUID) (db.CatalogBinding, error) {
 	return s.store.GetManagedBindingOfCatalog(ctx, db.GetManagedBindingOfCatalogParams{CatalogID: catalogID, EngineID: engineID})
 }
 
 // BindingStatus returns what the engine last reported about a binding.
-func (s *Service) BindingStatus(ctx context.Context, bindingID pgtype.UUID) (db.BindingStatusV, error) {
+func (s *Service) BindingStatus(ctx context.Context, bindingID db.UUID) (db.BindingStatusV, error) {
 	return s.store.GetBindingStatus(ctx, bindingID)
 }
 
 // BindingsOfEngine lists an engine's bindings.
-func (s *Service) BindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]db.CatalogBinding, error) {
+func (s *Service) BindingsOfEngine(ctx context.Context, engineID db.UUID) ([]db.CatalogBinding, error) {
 	return s.store.ListBindingsByEngine(ctx, engineID)
 }
 
 // BindingsOfCatalog lists a catalog's bindings.
-func (s *Service) BindingsOfCatalog(ctx context.Context, catalogID pgtype.UUID) ([]db.CatalogBinding, error) {
+func (s *Service) BindingsOfCatalog(ctx context.Context, catalogID db.UUID) ([]db.CatalogBinding, error) {
 	return s.store.ListBindingsByCatalog(ctx, catalogID)
 }
 
@@ -119,33 +118,33 @@ func (s *Service) BindingStates(ctx context.Context) ([]db.CountManagedBindingsB
 }
 
 // DeleteBinding removes a binding row.
-func (s *Service) DeleteBinding(ctx context.Context, id pgtype.UUID) error {
+func (s *Service) DeleteBinding(ctx context.Context, id db.UUID) error {
 	return s.store.DeleteBinding(ctx, id)
 }
 
 // VisibleCatalogs lists every catalog to an admin, and to anyone else the
 // catalogs they may see.
-func (s *Service) VisibleCatalogs(ctx context.Context, userID pgtype.UUID, admin bool) ([]db.Catalog, error) {
+func (s *Service) VisibleCatalogs(ctx context.Context, userID db.UUID, admin bool) ([]db.Catalog, error) {
 	return s.store.ListVisibleCatalogs(ctx, db.ListVisibleCatalogsParams{IsAdmin: admin, UserID: userID})
 }
 
 // Grants lists the workspaces a catalog is granted to.
-func (s *Service) Grants(ctx context.Context, catalogID pgtype.UUID) ([]db.ListCatalogGrantsRow, error) {
+func (s *Service) Grants(ctx context.Context, catalogID db.UUID) ([]db.ListCatalogGrantsRow, error) {
 	return s.store.ListCatalogGrants(ctx, catalogID)
 }
 
 // CatalogsOfConnection lists a connection's catalogs.
-func (s *Service) CatalogsOfConnection(ctx context.Context, connID pgtype.UUID) ([]db.Catalog, error) {
+func (s *Service) CatalogsOfConnection(ctx context.Context, connID db.UUID) ([]db.Catalog, error) {
 	return s.store.ListCatalogsByConnection(ctx, connID)
 }
 
 // ConnectionsOf lists the connections a user created.
-func (s *Service) ConnectionsOf(ctx context.Context, userID pgtype.UUID) ([]db.CatalogConnection, error) {
+func (s *Service) ConnectionsOf(ctx context.Context, userID db.UUID) ([]db.CatalogConnection, error) {
 	return s.store.ListCatalogConnections(ctx, userID)
 }
 
 // GrantedToWorkspace lists the catalogs granted to a workspace.
-func (s *Service) GrantedToWorkspace(ctx context.Context, ws pgtype.UUID) ([]db.ListGrantedCatalogsOfWorkspaceRow, error) {
+func (s *Service) GrantedToWorkspace(ctx context.Context, ws db.UUID) ([]db.ListGrantedCatalogsOfWorkspaceRow, error) {
 	return s.store.ListGrantedCatalogsOfWorkspace(ctx, ws)
 }
 
@@ -155,7 +154,7 @@ func (s *Service) CatalogByTrinoName(ctx context.Context, arg db.GetCatalogByTri
 }
 
 // SyncState returns a catalog's metadata sync state.
-func (s *Service) SyncState(ctx context.Context, catalogID pgtype.UUID) (db.GetCatalogSyncStateRow, error) {
+func (s *Service) SyncState(ctx context.Context, catalogID db.UUID) (db.GetCatalogSyncStateRow, error) {
 	return s.store.GetCatalogSyncState(ctx, catalogID)
 }
 
@@ -174,6 +173,6 @@ func (s *Service) UpdateCatalog(ctx context.Context, arg db.UpdateCatalogParams)
 }
 
 // Disable disables a catalog.
-func (s *Service) Disable(ctx context.Context, catalogID pgtype.UUID) error {
+func (s *Service) Disable(ctx context.Context, catalogID db.UUID) error {
 	return s.store.SetCatalogEnabled(ctx, db.SetCatalogEnabledParams{ID: catalogID, Enabled: false})
 }

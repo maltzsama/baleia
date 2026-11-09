@@ -10,24 +10,23 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 // queuesAPI builds handlers over a real pool and transaction, so the switch,
 // the capacities and the published resource groups commit together, with the
 // resource groups written under environment.
-func queuesAPI(t *testing.T, pool *pgxpool.Pool, environment string) *API {
+func queuesAPI(t *testing.T, pool *gorm.DB, environment string) *API {
 	t.Helper()
 	settings := Settings{Execution: ExecutionSettings{TrinoResourceGroupsEnvironment: environment}}
-	return testAPI(handlerFields{queries: repo.New(testdb.GORM(t, pool)), pool: pool, tx: poolTx{pool: pool}, settings: settings})
+	return testAPI(handlerFields{queries: repo.New(pool), tx: storeTx{db: pool}, settings: settings})
 }
 
 // queuesEngine inserts an engine of kind over its own connection.
-func queuesEngine(t *testing.T, pool *pgxpool.Pool, name, kind string) pgtype.UUID {
+func queuesEngine(t *testing.T, pool *gorm.DB, name, kind string) db.UUID {
 	t.Helper()
 	ctx := context.Background()
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	conn, err := q.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
 		ID: repo.PGUUID(repo.NewUUID()), Name: name + "-conn", Type: kind, Url: "http://engine",
 	})
@@ -65,7 +64,7 @@ func queuesAdminCtx() context.Context {
 	return context.WithValue(ctx, auth.ContextKeyUserID, "00000000-0000-0000-0000-0000000000a1")
 }
 
-func putQueues(t *testing.T, h *API, engine pgtype.UUID, body *PutEngineQueuesJSONRequestBody) PutEngineQueuesResponseObject {
+func putQueues(t *testing.T, h *API, engine db.UUID, body *PutEngineQueuesJSONRequestBody) PutEngineQueuesResponseObject {
 	t.Helper()
 	resp, err := h.PutEngineQueues(queuesAdminCtx(), PutEngineQueuesRequestObject{Id: engine.Bytes, Body: body})
 	if err != nil {
@@ -88,9 +87,9 @@ func refusalCode(resp PutEngineQueuesResponseObject) ErrorCode {
 }
 
 // resourceGroupNames lists the group names published under environment.
-func resourceGroupNames(t *testing.T, pool *pgxpool.Pool, environment string) []string {
+func resourceGroupNames(t *testing.T, pool *gorm.DB, environment string) []string {
 	t.Helper()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	var groups []model.ResourceGroup
 	if err := gdb.Where("environment = ?", environment).Order("name").Find(&groups).Error; err != nil {
 		t.Fatal(err)
@@ -102,19 +101,19 @@ func resourceGroupNames(t *testing.T, pool *pgxpool.Pool, environment string) []
 	return out
 }
 
-func resourceGroupRevisions(t *testing.T, pool *pgxpool.Pool, engine pgtype.UUID) int64 {
+func resourceGroupRevisions(t *testing.T, pool *gorm.DB, engine db.UUID) int64 {
 	t.Helper()
 	var n int64
-	if err := testdb.GORM(t, pool).Model(&model.TrinoResourceGroupRevision{}).
+	if err := pool.Model(&model.TrinoResourceGroupRevision{}).
 		Where("engine_id = ?", repo.UUIDString(engine)).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
 	return n
 }
 
-func engineHandover(t *testing.T, pool *pgxpool.Pool, engine pgtype.UUID) bool {
+func engineHandover(t *testing.T, pool *gorm.DB, engine db.UUID) bool {
 	t.Helper()
-	eng, err := repo.New(testdb.GORM(t, pool)).GetEngineByID(context.Background(), engine)
+	eng, err := repo.New(pool).GetEngineByID(context.Background(), engine)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +145,7 @@ func TestPutEngineQueues_PublishesResourceGroups(t *testing.T) {
 		t.Fatalf("capacity change = %#v, want 200", resp)
 	}
 	var group model.ResourceGroup
-	if err := testdb.GORM(t, pool).Where("environment = ? AND name = ?", "staging", "background").
+	if err := pool.Where("environment = ? AND name = ?", "staging", "background").
 		First(&group).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +229,7 @@ func TestPutEngineQueues_PublishFailureChangesNothing(t *testing.T) {
 	if engineHandover(t, pool, engine) {
 		t.Fatal("a failed publish left the switch on")
 	}
-	capacities, err := repo.New(testdb.GORM(t, pool)).ListEngineQueueCapacities(context.Background(), engine)
+	capacities, err := repo.New(pool).ListEngineQueueCapacities(context.Background(), engine)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +247,7 @@ func TestPutEngineQueues_ConcurrentHandoverHasOneOwner(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	h := queuesAPI(t, pool, "")
-	engines := []pgtype.UUID{
+	engines := []db.UUID{
 		queuesEngine(t, pool, "trino-a", "trino"),
 		queuesEngine(t, pool, "trino-b", "trino"),
 	}

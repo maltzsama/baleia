@@ -8,11 +8,9 @@ import (
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 // fakeStore has live entities by id and the latest version of each history.
 type fakeStore struct {
@@ -28,22 +26,22 @@ func (f *fakeStore) GetSavedQueryByID(_ context.Context, arg db.GetSavedQueryByI
 	if q, ok := f.queries[arg.ID.Bytes]; ok {
 		return q, nil
 	}
-	return db.SavedQuery{}, pgx.ErrNoRows
+	return db.SavedQuery{}, db.ErrNoRows
 }
 
 func (f *fakeStore) GetSemanticMetric(context.Context, db.GetSemanticMetricParams) (db.SemanticMetric, error) {
-	return db.SemanticMetric{}, pgx.ErrNoRows
+	return db.SemanticMetric{}, db.ErrNoRows
 }
 
 func (f *fakeStore) GetSemanticModel(context.Context, db.GetSemanticModelParams) (db.SemanticModel, error) {
-	return db.SemanticModel{}, pgx.ErrNoRows
+	return db.SemanticModel{}, db.ErrNoRows
 }
 
 func (f *fakeStore) LatestContentVersion(_ context.Context, arg db.LatestContentVersionParams) (db.ContentVersion, error) {
 	if v, ok := f.latest[arg.EntityID.Bytes]; ok {
 		return v, nil
 	}
-	return db.ContentVersion{}, pgx.ErrNoRows
+	return db.ContentVersion{}, db.ErrNoRows
 }
 
 func (f *fakeStore) ListContentVersions(context.Context, db.ListContentVersionsParams) ([]db.ListContentVersionsRow, error) {
@@ -51,7 +49,7 @@ func (f *fakeStore) ListContentVersions(context.Context, db.ListContentVersionsP
 }
 
 func (f *fakeStore) GetContentVersion(context.Context, db.GetContentVersionParams) (db.GetContentVersionRow, error) {
-	return db.GetContentVersionRow{}, pgx.ErrNoRows
+	return db.GetContentVersionRow{}, db.ErrNoRows
 }
 
 func (f *fakeStore) ListDeletedContent(context.Context, db.ListDeletedContentParams) ([]db.ListDeletedContentRow, error) {

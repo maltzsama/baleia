@@ -14,8 +14,6 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeStore struct {
@@ -24,11 +22,11 @@ type fakeStore struct {
 	attempts        map[string]db.OidcLoginAttempt
 }
 
-func (f *fakeStore) GetAuthProviderByID(_ context.Context, id pgtype.UUID) (db.AuthProvider, error) {
+func (f *fakeStore) GetAuthProviderByID(_ context.Context, id db.UUID) (db.AuthProvider, error) {
 	if ap, ok := f.providers[id.Bytes]; ok {
 		return ap, nil
 	}
-	return db.AuthProvider{}, pgx.ErrNoRows
+	return db.AuthProvider{}, db.ErrNoRows
 }
 
 func (f *fakeStore) ListAuthProviders(context.Context) ([]db.AuthProvider, error) {
@@ -45,7 +43,7 @@ func (f *fakeStore) GetServiceAccountByClient(_ context.Context, a db.GetService
 	if sa, ok := f.serviceAccounts[a.ExternalID]; ok && sa.AuthProviderID == a.AuthProviderID {
 		return sa, nil
 	}
-	return db.User{}, pgx.ErrNoRows
+	return db.User{}, db.ErrNoRows
 }
 
 func (f *fakeStore) CreateOIDCLoginAttempt(_ context.Context, arg db.CreateOIDCLoginAttemptParams) error {
@@ -56,7 +54,7 @@ func (f *fakeStore) CreateOIDCLoginAttempt(_ context.Context, arg db.CreateOIDCL
 func (f *fakeStore) ConsumeOIDCLoginAttempt(_ context.Context, state string) (db.OidcLoginAttempt, error) {
 	a, ok := f.attempts[state]
 	if !ok {
-		return db.OidcLoginAttempt{}, pgx.ErrNoRows
+		return db.OidcLoginAttempt{}, db.ErrNoRows
 	}
 	delete(f.attempts, state)
 	return a, nil
@@ -68,7 +66,7 @@ func (f *fakeAccounts) GetUserByExternalID(_ context.Context, arg db.GetUserByEx
 	if u, ok := f.bySubject[*arg.ExternalID]; ok {
 		return u, nil
 	}
-	return db.User{}, pgx.ErrNoRows
+	return db.User{}, db.ErrNoRows
 }
 
 func (f *fakeAccounts) CreateUser(context.Context, db.CreateUserParams) (db.User, error) {
@@ -123,7 +121,7 @@ type fixture struct {
 	s         *Service
 	store     *fakeStore
 	provider  *fakeProvider
-	id        pgtype.UUID
+	id        db.UUID
 	discovers int
 }
 
@@ -133,7 +131,7 @@ func newFixture(t *testing.T, status string) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fixture{id: pgtype.UUID{Bytes: uuid.New(), Valid: true}, provider: &fakeProvider{subject: "sub-1"}}
+	f := &fixture{id: db.UUID{Bytes: uuid.New(), Valid: true}, provider: &fakeProvider{subject: "sub-1"}}
 	enc, err := auth.SealOIDCConfig(kr, f.id.String(), auth.OIDCProviderConfig{IssuerURL: "https://idp.example", ClientID: "c", ClientSecret: "s"})
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +140,7 @@ func newFixture(t *testing.T, status string) *fixture {
 		providers: map[[16]byte]db.AuthProvider{f.id.Bytes: {ID: f.id, Type: "oidc", ConfigEnc: enc, Enabled: true}},
 		attempts:  map[string]db.OidcLoginAttempt{},
 	}
-	accounts := &fakeAccounts{bySubject: map[string]db.User{"sub-1": {ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Status: status}}}
+	accounts := &fakeAccounts{bySubject: map[string]db.User{"sub-1": {ID: db.UUID{Bytes: uuid.New(), Valid: true}, Status: status}}}
 	discover := func(context.Context, auth.OIDCConfig) (Provider, error) {
 		f.discovers++
 		return f.provider, nil
@@ -202,13 +200,13 @@ func TestFinish_Rejections(t *testing.T) {
 	if _, _, err := f.s.Finish(ctx, f.id, state, state, "bad"); !errors.Is(err, ErrExchange) {
 		t.Errorf("bad code = %v, want ErrExchange", err)
 	}
-	if _, _, err := f.s.Finish(ctx, pgtype.UUID{Bytes: uuid.New(), Valid: true}, "s", "s", "good"); !errors.Is(err, ErrUnavailable) {
+	if _, _, err := f.s.Finish(ctx, db.UUID{Bytes: uuid.New(), Valid: true}, "s", "s", "good"); !errors.Is(err, ErrUnavailable) {
 		t.Errorf("unknown provider = %v, want ErrUnavailable", err)
 	}
 
 	// A state issued for one provider cannot finish another's login.
 	// The other provider is usable, so the rejection is the state check.
-	other := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	other := db.UUID{Bytes: uuid.New(), Valid: true}
 	kr, err := crypto.NewKeyring("test-secret-0123456789abcdef-0123456789", "")
 	if err != nil {
 		t.Fatal(err)
@@ -245,7 +243,7 @@ func TestProvider_FailsClosed(t *testing.T) {
 	f := newFixture(t, "active")
 	ap := f.store.providers[f.id.Bytes]
 	ap.ConfigEnc = `{"issuer_url":"http://issuer.example","client_id":"c","client_secret":"s"}`
-	ap.UpdatedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	ap.UpdatedAt = db.Timestamptz{Time: time.Now(), Valid: true}
 	f.store.providers[f.id.Bytes] = ap
 	if _, _, err := f.s.Provider(context.Background(), f.id); err == nil {
 		t.Fatal("a plaintext config was accepted")
@@ -285,16 +283,16 @@ func TestProvider_OnlyEnabledOIDC(t *testing.T) {
 }
 
 type savedTokens struct {
-	user, provider pgtype.UUID
+	user, provider db.UUID
 	tok            auth.IDPTokens
 }
 
-func (s *savedTokens) Save(_ context.Context, userID, providerID pgtype.UUID, tok auth.IDPTokens) error {
+func (s *savedTokens) Save(_ context.Context, userID, providerID db.UUID, tok auth.IDPTokens) error {
 	s.user, s.provider, s.tok = userID, providerID, tok
 	return nil
 }
 
-func (s *savedTokens) Forget(context.Context, pgtype.UUID) error { return nil }
+func (s *savedTokens) Forget(context.Context, db.UUID) error { return nil }
 
 // TestFinish_KeepsTokens (#648): a sign-in keeps its identity-provider tokens
 // for the user, and Refresh goes to the provider that issued them.
@@ -319,7 +317,7 @@ func TestFinish_KeepsTokens(t *testing.T) {
 	if err != nil || tok.AccessToken != "at-refreshed" {
 		t.Fatalf("Refresh = %v, %v", tok, err)
 	}
-	if _, err := f.s.Refresh(ctx, pgtype.UUID{Bytes: uuid.New(), Valid: true}, "rt"); !errors.Is(err, ErrUnavailable) {
+	if _, err := f.s.Refresh(ctx, db.UUID{Bytes: uuid.New(), Valid: true}, "rt"); !errors.Is(err, ErrUnavailable) {
 		t.Errorf("unknown provider = %v", err)
 	}
 }
@@ -336,7 +334,7 @@ func TestServiceAccountForToken(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newFixture(t, "active")
-	sa := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Kind: "service_account", AuthProviderID: f.id}
+	sa := db.User{ID: db.UUID{Bytes: uuid.New(), Valid: true}, Kind: "service_account", AuthProviderID: f.id}
 	f.store.serviceAccounts = map[string]db.User{"client:reporting-bot": sa}
 	saved := &savedTokens{}
 	f.s.SetTokens(saved)

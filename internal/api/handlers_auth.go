@@ -19,7 +19,6 @@ import (
 	"github.com/galileostudio/baleia/internal/identity/setup"
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/version"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -163,7 +162,7 @@ func (h *AuthHandlers) loginLDAP(ctx context.Context, body *LoginRequest, ev aud
 	if body.Username != nil {
 		username = strings.TrimSpace(*body.Username)
 	}
-	user, err := h.logins.Directory(ctx, pgtype.UUID{Bytes: *body.ProviderId, Valid: true}, username, body.Password)
+	user, err := h.logins.Directory(ctx, db.UUID{Bytes: *body.ProviderId, Valid: true}, username, body.Password)
 	if errors.Is(err, login.ErrInvalidCredentials) {
 		h.loginDelay().Failure(identifier)
 		failed("invalid_credentials")
@@ -349,7 +348,7 @@ func (h *AuthHandlers) OidcRedirect(ctx context.Context, request OidcRedirectReq
 	if request.Params.Next != nil && safeRelativePath(*request.Params.Next) {
 		redirect = request.Params.Next
 	}
-	authURL, state, err := h.oidc.Begin(ctx, pgtype.UUID{Bytes: request.ProviderId, Valid: true}, redirect)
+	authURL, state, err := h.oidc.Begin(ctx, db.UUID{Bytes: request.ProviderId, Valid: true}, redirect)
 	if errors.Is(err, oidclogin.ErrUnavailable) {
 		return OidcRedirect503JSONResponse{ServiceUnavailableJSONResponse: ServiceUnavailableJSONResponse{
 			Code: ErrorCodeIdpUnavailable, Message: "identity provider unavailable",
@@ -385,7 +384,7 @@ func (h *AuthHandlers) OidcCallback(ctx context.Context, request OidcCallbackReq
 		h.audited(audit.WithAuthMethod(ctx, audit.AuthOIDC), audit.Event{Action: audit.AuthLogin, ResourceType: "user", Outcome: audit.Denied, Reason: reason})
 	}
 
-	user, redirect, err := h.oidc.Finish(ctx, pgtype.UUID{Bytes: request.ProviderId, Valid: true},
+	user, redirect, err := h.oidc.Finish(ctx, db.UUID{Bytes: request.ProviderId, Valid: true},
 		request.Params.State, auth.OIDCCookieFromContext(ctx), request.Params.Code)
 	switch {
 	case errors.Is(err, oidclogin.ErrUnavailable):

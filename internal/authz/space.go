@@ -5,8 +5,6 @@ import (
 	"errors"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // SpaceRole is a caller's effective role in a space (#40). The order matters:
@@ -52,14 +50,14 @@ func spaceRoleFromString(s string) SpaceRole {
 // role when it is workspace-visible, and explicit user/team entries may raise
 // it. Anyone else has no role, even with a stale entry (the workspace has to be
 // visible first). SpaceNone means the space is invisible.
-func (c *Checker) EffectiveSpaceRole(ctx context.Context, p Principal, workspaceID, spaceID pgtype.UUID) (SpaceRole, error) {
+func (c *Checker) EffectiveSpaceRole(ctx context.Context, p Principal, workspaceID, spaceID db.UUID) (SpaceRole, error) {
 	role, err := c.q.GetEffectiveSpaceRole(ctx, db.GetEffectiveSpaceRoleParams{
 		WorkspaceID: workspaceID,
 		SpaceID:     spaceID,
 		UserID:      p.UserID,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return SpaceNone, nil
 		}
 		return SpaceNone, err
@@ -68,9 +66,9 @@ func (c *Checker) EffectiveSpaceRole(ctx context.Context, p Principal, workspace
 }
 
 // RequireSpace returns ErrNotFound when the caller has no role (no existence
-// oracle) and ErrForbidden when the role is below min. It reports refusals
+// oracle) and ErrForbidden when the role is below required. It reports refusals
 // through the Checker's hooks like every other check.
-func (c *Checker) RequireSpace(ctx context.Context, p Principal, workspaceID, spaceID pgtype.UUID, min SpaceRole) (SpaceRole, error) {
+func (c *Checker) RequireSpace(ctx context.Context, p Principal, workspaceID, spaceID db.UUID, required SpaceRole) (SpaceRole, error) {
 	role, err := c.EffectiveSpaceRole(ctx, p, workspaceID, spaceID)
 	if err != nil {
 		return SpaceNone, err
@@ -80,7 +78,7 @@ func (c *Checker) RequireSpace(ctx context.Context, p Principal, workspaceID, sp
 		err := ErrNotFound
 		c.observe(ctx, "space", spaceID, &err)
 		return SpaceNone, err
-	case role < min:
+	case role < required:
 		err := ErrForbidden
 		c.observe(ctx, "space", spaceID, &err)
 		return role, err

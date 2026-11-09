@@ -12,8 +12,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	adb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -22,9 +20,9 @@ import (
 type assistantFixture struct {
 	gdb     *gorm.DB
 	r       *Repo
-	user    pgtype.UUID
-	ws      pgtype.UUID
-	agentID pgtype.UUID
+	user    db.UUID
+	ws      db.UUID
+	agentID db.UUID
 }
 
 func newAssistantFixture(t *testing.T) *assistantFixture {
@@ -136,8 +134,8 @@ func TestAssistantAgentBootstrap(t *testing.T) {
 		t.Fatalf("CreateWorkspace(other): %v", err)
 	}
 
-	if _, err := r.FindAssistantAgent(ctx, adb.FindAssistantAgentParams{OwnerID: userID, WorkspaceID: ws.ID}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("FindAssistantAgent before bind: err = %v, want pgx.ErrNoRows", err)
+	if _, err := r.FindAssistantAgent(ctx, adb.FindAssistantAgentParams{OwnerID: userID, WorkspaceID: ws.ID}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("FindAssistantAgent before bind: err = %v, want db.ErrNoRows", err)
 	}
 	agent, err := r.CreateAssistantAgent(ctx, adb.CreateAssistantAgentParams{
 		OwnerID: userID, Name: "Assistant", Description: "Embedded assistant",
@@ -167,8 +165,8 @@ func TestAssistantAgentBootstrap(t *testing.T) {
 		t.Fatalf("FindAssistantAgent = %s, want %s", found.ID, agent.ID)
 	}
 	// The agent is scoped to the workspace it was bound to.
-	if _, err := r.FindAssistantAgent(ctx, adb.FindAssistantAgentParams{OwnerID: userID, WorkspaceID: other.ID}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("FindAssistantAgent(other workspace): err = %v, want pgx.ErrNoRows", err)
+	if _, err := r.FindAssistantAgent(ctx, adb.FindAssistantAgentParams{OwnerID: userID, WorkspaceID: other.ID}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("FindAssistantAgent(other workspace): err = %v, want db.ErrNoRows", err)
 	}
 }
 
@@ -191,7 +189,7 @@ func TestEnsureAssistantAgentIsSerialized(t *testing.T) {
 	}
 
 	const callers = 6
-	ids := make(chan pgtype.UUID, callers)
+	ids := make(chan db.UUID, callers)
 	errs := make(chan error, callers)
 	var wg sync.WaitGroup
 	for i := 0; i < callers; i++ {
@@ -212,7 +210,7 @@ func TestEnsureAssistantAgentIsSerialized(t *testing.T) {
 	for err := range errs {
 		t.Fatalf("EnsureAssistantAgent: %v", err)
 	}
-	var want pgtype.UUID
+	var want db.UUID
 	seen := 0
 	for id := range ids {
 		if seen == 0 {
@@ -282,8 +280,8 @@ func TestAssistantConversationStore(t *testing.T) {
 		t.Fatalf("GetConversation = %+v, %v", got, err)
 	}
 	other := createAPIKeyUser(t, f.gdb, fmt.Sprintf("intruder-%s@example.test", NewUUID()[:8]))
-	if _, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: first.ID, UserID: PGUUID(string(other.ID))}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("GetConversation(foreign user): err = %v, want pgx.ErrNoRows", err)
+	if _, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: first.ID, UserID: PGUUID(string(other.ID))}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("GetConversation(foreign user): err = %v, want db.ErrNoRows", err)
 	}
 
 	// Make the ordering deterministic: the first conversation is older.
@@ -328,11 +326,11 @@ func TestAssistantConversationStore(t *testing.T) {
 	if err := f.r.DeleteConversation(ctx, adb.DeleteConversationParams{ID: first.ID, UserID: f.user}); err != nil {
 		t.Fatalf("DeleteConversation: %v", err)
 	}
-	if _, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: first.ID, UserID: f.user}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("GetConversation after delete: err = %v, want pgx.ErrNoRows", err)
+	if _, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: first.ID, UserID: f.user}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("GetConversation after delete: err = %v, want db.ErrNoRows", err)
 	}
-	if _, err := f.r.LatestConversationMessage(ctx, first.ID); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("LatestConversationMessage after delete: err = %v, want pgx.ErrNoRows", err)
+	if _, err := f.r.LatestConversationMessage(ctx, first.ID); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("LatestConversationMessage after delete: err = %v, want db.ErrNoRows", err)
 	}
 }
 
@@ -352,8 +350,8 @@ func TestAssistantTurnLifecycle(t *testing.T) {
 	if claimed.State != "running" || claimed.TurnOwner == nil || *claimed.TurnOwner != owner || !claimed.TurnHeartbeatAt.Valid {
 		t.Fatalf("claimed = %+v", claimed)
 	}
-	if _, err := f.r.ClaimConversation(ctx, adb.ClaimConversationParams{ID: conv.ID, UserID: f.user, TurnOwner: &owner}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("second claim: err = %v, want pgx.ErrNoRows", err)
+	if _, err := f.r.ClaimConversation(ctx, adb.ClaimConversationParams{ID: conv.ID, UserID: f.user, TurnOwner: &owner}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("second claim: err = %v, want db.ErrNoRows", err)
 	}
 
 	time.Sleep(5 * time.Millisecond)
@@ -417,7 +415,7 @@ func TestAssistantInterruptStale(t *testing.T) {
 	stale := f.conversation(t)
 	fresh := f.conversation(t)
 	owner := "replica-1"
-	for _, id := range []pgtype.UUID{stale.ID, fresh.ID} {
+	for _, id := range []db.UUID{stale.ID, fresh.ID} {
 		if _, err := f.r.ClaimConversation(ctx, adb.ClaimConversationParams{ID: id, UserID: f.user, TurnOwner: &owner}); err != nil {
 			t.Fatalf("ClaimConversation: %v", err)
 		}
@@ -499,8 +497,8 @@ func TestAssistantMessageStore(t *testing.T) {
 	}
 	if _, err := f.r.AppendMessage(ctx, adb.AppendMessageParams{
 		ConversationID: PGUUID(NewUUID()), Role: "user", Content: []byte(`{"text":"x"}`),
-	}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("AppendMessage(missing conversation): err = %v, want pgx.ErrNoRows", err)
+	}); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("AppendMessage(missing conversation): err = %v, want db.ErrNoRows", err)
 	}
 }
 
@@ -557,7 +555,7 @@ func TestAssistantTokenCount(t *testing.T) {
 	conv := f.conversation(t)
 	other := f.conversation(t)
 
-	appendTokens := func(id pgtype.UUID, in, out *int32) {
+	appendTokens := func(id db.UUID, in, out *int32) {
 		t.Helper()
 		if _, err := f.r.AppendMessage(ctx, adb.AppendMessageParams{
 			ConversationID: id, Role: "assistant", Content: []byte(`{"text":"x"}`),
@@ -614,7 +612,7 @@ func TestAssistantTokenCount(t *testing.T) {
 	}
 
 	used, err := f.r.CountUserTokensSince(ctx, adb.CountUserTokensSinceParams{
-		UserID: f.user, CreatedAt: pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+		UserID: f.user, CreatedAt: db.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("CountUserTokensSince: %v", err)
@@ -623,7 +621,7 @@ func TestAssistantTokenCount(t *testing.T) {
 		t.Fatalf("used = %d, want %d", used, want)
 	}
 	future, err := f.r.CountUserTokensSince(ctx, adb.CountUserTokensSinceParams{
-		UserID: f.user, CreatedAt: pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
+		UserID: f.user, CreatedAt: db.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
 	})
 	if err != nil || future != 0 {
 		t.Fatalf("future window = %d, %v", future, err)

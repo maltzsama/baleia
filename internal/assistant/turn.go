@@ -15,10 +15,10 @@ import (
 	"github.com/galileostudio/baleia/internal/agentpolicy"
 	"github.com/galileostudio/baleia/internal/assistant/llm"
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/db"
 	adb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -122,7 +122,9 @@ func (r *Runner) SetProvider(p llm.Provider) {
 // Start claims the conversation, persists the user message and runs the turn in
 // the background (never in the HTTP request context). It returns the sequence
 // number of the accepted user message.
-func (r *Runner) Start(ctx context.Context, userID, id pgtype.UUID, text string) (int32, error) {
+//
+//nolint:contextcheck // the background turn deliberately starts a fresh context, not the request's.
+func (r *Runner) Start(ctx context.Context, userID, id db.UUID, text string) (int32, error) {
 	if _, err := r.svc.GetConversation(ctx, userID, id); err != nil {
 		return 0, err
 	}
@@ -175,7 +177,7 @@ func (r *Runner) Start(ctx context.Context, userID, id pgtype.UUID, text string)
 }
 
 // Cancel stops the running turn, if any.
-func (r *Runner) Cancel(id pgtype.UUID) bool {
+func (r *Runner) Cancel(id db.UUID) bool {
 	r.mu.Lock()
 	cancel, ok := r.cancels[id.Bytes]
 	r.mu.Unlock()
@@ -319,7 +321,7 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 	}
 }
 
-func (r *Runner) heartbeat(ctx context.Context, id pgtype.UUID, stop <-chan struct{}) {
+func (r *Runner) heartbeat(ctx context.Context, id db.UUID, stop <-chan struct{}) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -335,7 +337,7 @@ func (r *Runner) heartbeat(ctx context.Context, id pgtype.UUID, stop <-chan stru
 	}
 }
 
-func (r *Runner) append(ctx context.Context, id pgtype.UUID, role string, content any, in, out *int32) (adb.AssistantMessage, error) {
+func (r *Runner) append(ctx context.Context, id db.UUID, role string, content any, in, out *int32) (adb.AssistantMessage, error) {
 	msg, err := r.svc.AppendMessage(ctx, id, role, content, in, out)
 	if err != nil {
 		return msg, err
@@ -344,7 +346,7 @@ func (r *Runner) append(ctx context.Context, id pgtype.UUID, role string, conten
 	return msg, nil
 }
 
-func (r *Runner) notice(ctx context.Context, id pgtype.UUID, kind, detail string) {
+func (r *Runner) notice(ctx context.Context, id db.UUID, kind, detail string) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, _ = r.append(ctx, id, "notice", map[string]any{"kind": kind, "detail": detail}, nil, nil)
@@ -419,7 +421,7 @@ func titleFrom(text string) string {
 	return string(runes)
 }
 
-func uuidString(id pgtype.UUID) string {
+func uuidString(id db.UUID) string {
 	if !id.Valid {
 		return ""
 	}

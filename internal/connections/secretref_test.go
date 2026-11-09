@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/galileostudio/baleia/internal/db"
 )
 
 func TestIsSecretReference(t *testing.T) {
@@ -117,7 +117,7 @@ func TestRegistryConfig_ResolvesWithTheRegistrySecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := reg.WithSecrets(SecretResolver{FileBaseDir: dir}).NewConfig(pgtype.UUID{}, KindPostgreSQL)
+	cfg := reg.WithSecrets(SecretResolver{FileBaseDir: dir}).NewConfig(db.UUID{}, KindPostgreSQL)
 	cfg.Secrets["password"] = "@baleia-secret[file:token.txt]"
 	if got := cfg.Secret("password"); got != "from-file" {
 		t.Fatalf("Secret = %q, want from-file", got)

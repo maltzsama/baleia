@@ -7,8 +7,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -44,7 +42,7 @@ func (s *Sessions) ConsumeRefreshToken(ctx context.Context, tokenHash string) (d
 			Where("token_hash = ? AND revoked = ? AND expires_at > ?", tokenHash, false, time.Now().UTC()).
 			First(&row)
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if res.Error != nil {
 			return res.Error
@@ -69,7 +67,7 @@ func (s *Sessions) GetRefreshTokenByHashAny(ctx context.Context, tokenHash strin
 	var row model.RefreshToken
 	err := s.db.WithContext(ctx).Where("token_hash = ?", tokenHash).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.RefreshToken{}, pgx.ErrNoRows
+		return db.RefreshToken{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.RefreshToken{}, err
@@ -78,14 +76,14 @@ func (s *Sessions) GetRefreshTokenByHashAny(ctx context.Context, tokenHash strin
 }
 
 // RevokeRefreshFamily revokes every live token in the family.
-func (s *Sessions) RevokeRefreshFamily(ctx context.Context, familyID pgtype.UUID) error {
+func (s *Sessions) RevokeRefreshFamily(ctx context.Context, familyID db.UUID) error {
 	return s.db.WithContext(ctx).Model(&model.RefreshToken{}).
 		Where("family_id = ? AND revoked = ?", UUIDString(familyID), false).
 		Update("revoked", true).Error
 }
 
 // RevokeUserRefreshTokens revokes every live token of the account.
-func (s *Sessions) RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error {
+func (s *Sessions) RevokeUserRefreshTokens(ctx context.Context, userID db.UUID) error {
 	return s.db.WithContext(ctx).Model(&model.RefreshToken{}).
 		Where("user_id = ? AND revoked = ?", UUIDString(userID), false).
 		Update("revoked", true).Error

@@ -11,9 +11,8 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/crypto"
+	"github.com/galileostudio/baleia/internal/db"
 	adb "github.com/galileostudio/baleia/internal/db/assistant"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // apiKeyAAD is the keyring AAD for the provider API key (#19). It is a
@@ -47,7 +46,7 @@ func New(store Store, keyring *crypto.Keyring) *Service {
 // Settings returns the single settings row.
 func (s *Service) Settings(ctx context.Context) (adb.AssistantSetting, error) {
 	row, err := s.store.GetAssistantSettings(ctx)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return adb.AssistantSetting{}, ErrNotFound
 	}
 	return row, err
@@ -66,7 +65,7 @@ type SettingsInput struct {
 	MaxToolCallsPerTurn     int32
 	MaxOutputTokensPerTurn  int32
 	DailyTokenBudgetPerUser int64
-	UpdatedBy               pgtype.UUID
+	UpdatedBy               db.UUID
 }
 
 // UpdateSettings merges the input over the current row and seals a new API key
@@ -126,7 +125,7 @@ func (s *Service) APIKey(ctx context.Context) (string, error) {
 
 // EnsureAgent returns the assistant agent for a user × workspace, creating it
 // on first use. The agent is never listed or minted by the agents API.
-func (s *Service) EnsureAgent(ctx context.Context, ownerID, workspaceID pgtype.UUID) (adb.Agent, error) {
+func (s *Service) EnsureAgent(ctx context.Context, ownerID, workspaceID db.UUID) (adb.Agent, error) {
 	return s.store.EnsureAssistantAgent(ctx, ownerID, workspaceID,
 		"Assistant", "Embedded assistant acting on behalf of its owner")
 }
@@ -134,7 +133,7 @@ func (s *Service) EnsureAgent(ctx context.Context, ownerID, workspaceID pgtype.U
 // ── conversations ───────────────────────────────────────────────────────────
 
 // CreateConversation provisions the agent and starts an empty conversation.
-func (s *Service) CreateConversation(ctx context.Context, userID, workspaceID pgtype.UUID) (adb.AssistantConversation, error) {
+func (s *Service) CreateConversation(ctx context.Context, userID, workspaceID db.UUID) (adb.AssistantConversation, error) {
 	agent, err := s.EnsureAgent(ctx, userID, workspaceID)
 	if err != nil {
 		return adb.AssistantConversation{}, err
@@ -146,9 +145,9 @@ func (s *Service) CreateConversation(ctx context.Context, userID, workspaceID pg
 
 // GetConversation is scoped to the caller: another user's conversation is a
 // 404, admins included.
-func (s *Service) GetConversation(ctx context.Context, userID, id pgtype.UUID) (adb.AssistantConversation, error) {
+func (s *Service) GetConversation(ctx context.Context, userID, id db.UUID) (adb.AssistantConversation, error) {
 	row, err := s.store.GetConversation(ctx, adb.GetConversationParams{ID: id, UserID: userID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return adb.AssistantConversation{}, ErrNotFound
 	}
 	return row, err
@@ -156,7 +155,7 @@ func (s *Service) GetConversation(ctx context.Context, userID, id pgtype.UUID) (
 
 // ListConversations returns the caller's conversations in a workspace, newest
 // first.
-func (s *Service) ListConversations(ctx context.Context, userID, workspaceID pgtype.UUID, limit int32) ([]adb.AssistantConversation, error) {
+func (s *Service) ListConversations(ctx context.Context, userID, workspaceID db.UUID, limit int32) ([]adb.AssistantConversation, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
@@ -166,7 +165,7 @@ func (s *Service) ListConversations(ctx context.Context, userID, workspaceID pgt
 }
 
 // DeleteConversation hard-deletes the caller's conversation and its messages.
-func (s *Service) DeleteConversation(ctx context.Context, userID, id pgtype.UUID) error {
+func (s *Service) DeleteConversation(ctx context.Context, userID, id db.UUID) error {
 	if _, err := s.GetConversation(ctx, userID, id); err != nil {
 		return err
 	}
@@ -177,7 +176,7 @@ func (s *Service) DeleteConversation(ctx context.Context, userID, id pgtype.UUID
 
 // AppendMessage persists one typed message and returns the stored row with its
 // sequence number. content is marshalled as JSON.
-func (s *Service) AppendMessage(ctx context.Context, conversationID pgtype.UUID, role string, content any, inputTokens, outputTokens *int32) (adb.AssistantMessage, error) {
+func (s *Service) AppendMessage(ctx context.Context, conversationID db.UUID, role string, content any, inputTokens, outputTokens *int32) (adb.AssistantMessage, error) {
 	raw, err := json.Marshal(content)
 	if err != nil {
 		return adb.AssistantMessage{}, err
@@ -192,7 +191,7 @@ func (s *Service) AppendMessage(ctx context.Context, conversationID pgtype.UUID,
 }
 
 // ListMessages returns messages after a sequence number, oldest first.
-func (s *Service) ListMessages(ctx context.Context, conversationID pgtype.UUID, afterSeq, limit int32) ([]adb.AssistantMessage, error) {
+func (s *Service) ListMessages(ctx context.Context, conversationID db.UUID, afterSeq, limit int32) ([]adb.AssistantMessage, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
@@ -204,11 +203,11 @@ func (s *Service) ListMessages(ctx context.Context, conversationID pgtype.UUID, 
 // ── turn lifecycle ──────────────────────────────────────────────────────────
 
 // Claim starts a turn or returns ErrTurnRunning when one is already in flight.
-func (s *Service) Claim(ctx context.Context, userID, id pgtype.UUID, owner string) (adb.AssistantConversation, error) {
+func (s *Service) Claim(ctx context.Context, userID, id db.UUID, owner string) (adb.AssistantConversation, error) {
 	row, err := s.store.ClaimConversation(ctx, adb.ClaimConversationParams{
 		ID: id, UserID: userID, TurnOwner: &owner,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return adb.AssistantConversation{}, ErrTurnRunning
 	}
 	return row, err
@@ -217,39 +216,39 @@ func (s *Service) Claim(ctx context.Context, userID, id pgtype.UUID, owner strin
 // Release returns a conversation to idle after a turn. turnOwner is the token
 // the claim returned; a stale runner that lost the conversation cannot release
 // the reclaimed turn.
-func (s *Service) Release(ctx context.Context, id pgtype.UUID, turnOwner string) error {
+func (s *Service) Release(ctx context.Context, id db.UUID, turnOwner string) error {
 	return s.store.ReleaseConversation(ctx, id, turnOwner)
 }
 
 // Interrupt marks a conversation interrupted (cancel, crash recovery).
-func (s *Service) Interrupt(ctx context.Context, id pgtype.UUID) error {
+func (s *Service) Interrupt(ctx context.Context, id db.UUID) error {
 	return s.store.SetConversationInterrupted(ctx, id)
 }
 
 // Heartbeat refreshes the turn lease.
-func (s *Service) Heartbeat(ctx context.Context, id pgtype.UUID) error {
+func (s *Service) Heartbeat(ctx context.Context, id db.UUID) error {
 	return s.store.HeartbeatConversation(ctx, id)
 }
 
 // InterruptStale recovers turns whose replica stopped heartbeating.
-func (s *Service) InterruptStale(ctx context.Context) ([]pgtype.UUID, error) {
+func (s *Service) InterruptStale(ctx context.Context) ([]db.UUID, error) {
 	return s.store.InterruptStaleConversations(ctx)
 }
 
 // SetTitle names a conversation once, from its first user message.
-func (s *Service) SetTitle(ctx context.Context, id pgtype.UUID, title string) error {
+func (s *Service) SetTitle(ctx context.Context, id db.UUID, title string) error {
 	return s.store.SetConversationTitle(ctx, adb.SetConversationTitleParams{ID: id, Title: title})
 }
 
 // OverBudget reports whether the user's last 24 h of tokens reached the
 // instance budget. A zero budget disables the check.
-func (s *Service) OverBudget(ctx context.Context, userID pgtype.UUID, budget int64) (bool, error) {
+func (s *Service) OverBudget(ctx context.Context, userID db.UUID, budget int64) (bool, error) {
 	if budget <= 0 {
 		return false, nil
 	}
 	used, err := s.store.CountUserTokensSince(ctx, adb.CountUserTokensSinceParams{
 		UserID:    userID,
-		CreatedAt: pgtype.Timestamptz{Time: time.Now().Add(-24 * time.Hour), Valid: true},
+		CreatedAt: db.Timestamptz{Time: time.Now().Add(-24 * time.Hour), Valid: true},
 	})
 	if err != nil {
 		return false, err

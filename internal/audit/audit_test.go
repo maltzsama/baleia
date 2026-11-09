@@ -170,7 +170,7 @@ func TestKeysetPagination(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
 	ctx := context.Background()
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	at := time.Now().UTC().Truncate(time.Second)
 	for i := range 5 {
 		resource := model.Text(fmt.Sprint(i))

@@ -8,8 +8,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 )
 
@@ -31,15 +29,15 @@ func (r *Repo) AgentWorkspaceBound(ctx context.Context, arg db.AgentWorkspaceBou
 	return count > 0, err
 }
 
-// GetWorkspaceByID returns one workspace or pgx.ErrNoRows.
-func (r *Repo) GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (db.Workspace, error) {
+// GetWorkspaceByID returns one workspace or db.ErrNoRows.
+func (r *Repo) GetWorkspaceByID(ctx context.Context, id db.UUID) (db.Workspace, error) {
 	if !id.Valid {
-		return db.Workspace{}, pgx.ErrNoRows
+		return db.Workspace{}, db.ErrNoRows
 	}
 	var row model.Workspace
 	err := r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Workspace{}, pgx.ErrNoRows
+		return db.Workspace{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Workspace{}, err
@@ -48,7 +46,7 @@ func (r *Repo) GetWorkspaceByID(ctx context.Context, id pgtype.UUID) (db.Workspa
 }
 
 // ListWorkspaceTargets lists every binding of a catalog the workspace may use.
-func (r *Repo) ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+func (r *Repo) ListWorkspaceTargets(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceTargetsRow, error) {
 	var rows []struct {
 		BindingID         model.UUID
 		EngineCatalogName string
@@ -128,7 +126,7 @@ func (r *Repo) ListWorkspacePrincipalUsers(ctx context.Context, arg db.ListWorks
 }
 
 // UserOwnsTeam reports whether the user owns at least one team.
-func (r *Repo) UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, error) {
+func (r *Repo) UserOwnsTeam(ctx context.Context, userID db.UUID) (bool, error) {
 	var count int64
 	err := r.Users.db.WithContext(ctx).Model(&model.TeamMember{}).
 		Where("user_id = ? AND role = ?", UUIDString(userID), "owner").
@@ -137,7 +135,7 @@ func (r *Repo) UserOwnsTeam(ctx context.Context, userID pgtype.UUID) (bool, erro
 }
 
 // ListWorkspacesByUser lists the workspaces the user is a member of, by name.
-func (r *Repo) ListWorkspacesByUser(ctx context.Context, userID pgtype.UUID) ([]db.Workspace, error) {
+func (r *Repo) ListWorkspacesByUser(ctx context.Context, userID db.UUID) ([]db.Workspace, error) {
 	var out []db.Workspace
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var rows []model.Workspace
@@ -210,12 +208,12 @@ func (r *Repo) CreateWorkspace(ctx context.Context, arg db.CreateWorkspaceParams
 	return out, nil
 }
 
-// GetDefaultTrinoCluster returns the default cluster or pgx.ErrNoRows.
+// GetDefaultTrinoCluster returns the default cluster or db.ErrNoRows.
 func (r *Repo) GetDefaultTrinoCluster(ctx context.Context) (db.TrinoCluster, error) {
 	var row model.TrinoCluster
 	err := r.Users.db.WithContext(ctx).Where("name = ?", "default").First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.TrinoCluster{}, pgx.ErrNoRows
+		return db.TrinoCluster{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.TrinoCluster{}, err
@@ -280,7 +278,7 @@ func (r *Repo) GetWorkspaceMemberRole(ctx context.Context, arg db.GetWorkspaceMe
 	return r.WorkspaceRole(ctx, UUIDString(arg.ID), UUIDString(arg.UserID))
 }
 
-// GetTeamMemberRole returns the user's team role, or pgx.ErrNoRows when the
+// GetTeamMemberRole returns the user's team role, or db.ErrNoRows when the
 // user is not a member.
 func (r *Repo) GetTeamMemberRole(ctx context.Context, arg db.GetTeamMemberRoleParams) (string, error) {
 	var row model.TeamMember
@@ -288,7 +286,7 @@ func (r *Repo) GetTeamMemberRole(ctx context.Context, arg db.GetTeamMemberRolePa
 		Where("team_id = ? AND user_id = ?", UUIDString(arg.TeamID), UUIDString(arg.UserID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", pgx.ErrNoRows
+		return "", db.ErrNoRows
 	}
 	if err != nil {
 		return "", err

@@ -7,8 +7,6 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -29,20 +27,20 @@ func nilOrStr(s string) *string {
 func actionsPtr(s ...string) *[]string { return &s }
 
 // workspaceAdmin reports whether the caller administers the workspace.
-func (h *core) workspaceAdmin(ctx context.Context, p authz.Principal, wsID pgtype.UUID) bool {
+func (h *core) workspaceAdmin(ctx context.Context, p authz.Principal, wsID db.UUID) bool {
 	_, err := h.authz().Workspace(ctx, p, wsID, authz.ActAdmin)
 	return err == nil
 }
 
 // catalogOwner reports whether the caller owns the catalog's connection (or is
 // a global admin): the "catalog" side of a grant.
-func (h *core) catalogOwner(ctx context.Context, p authz.Principal, catID pgtype.UUID) bool {
+func (h *core) catalogOwner(ctx context.Context, p authz.Principal, catID db.UUID) bool {
 	_, _, err := h.authz().Catalog(ctx, p, catID, authz.ActAdmin)
 	return err == nil
 }
 
 // activeItem builds the active-grant item for a (workspace, catalog) pair.
-func (h *core) activeItem(ctx context.Context, wsID, catID pgtype.UUID) CatalogGrantItem {
+func (h *core) activeItem(ctx context.Context, wsID, catID db.UUID) CatalogGrantItem {
 	store := h.catalogGrants()
 	item := CatalogGrantItem{
 		WorkspaceId:    openapi_types.UUID(wsID.Bytes),
@@ -78,7 +76,7 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 
 	out := make([]CatalogGrantItem, 0, 4)
 	if params.WorkspaceId != nil {
-		wsID := pgtype.UUID{Bytes: *params.WorkspaceId, Valid: true}
+		wsID := db.UUID{Bytes: *params.WorkspaceId, Valid: true}
 		if _, err := h.authz().Workspace(ctx, p, wsID, authz.ActRead); err != nil {
 			return ListCatalogGrantItems404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
 		}
@@ -108,9 +106,9 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 			out = append(out, requestItem(r.CatalogID, r.InitiatedBySide, r.RequestedBy, r.RequestedAt, r.CatalogName, r.EngineCatalogName, r.ConnectionName))
 		}
 	} else {
-		catID := pgtype.UUID{Bytes: *params.CatalogId, Valid: true}
+		catID := db.UUID{Bytes: *params.CatalogId, Valid: true}
 		if _, err := store.GetCatalogByID(ctx, catID); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, db.ErrNoRows) {
 				return ListCatalogGrantItems404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 			}
 			return nil, err
@@ -151,7 +149,7 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 
 // requestItem builds a pending-request item (the workspace side fills the
 // catalog/connection names).
-func requestItem(catID pgtype.UUID, side string, requestedBy pgtype.UUID, requestedAt pgtype.Timestamptz, catalogName, engineName, connName string) CatalogGrantItem {
+func requestItem(catID db.UUID, side string, requestedBy db.UUID, requestedAt db.Timestamptz, catalogName, engineName, connName string) CatalogGrantItem {
 	s := CatalogGrantItemInitiatedBySide(side)
 	item := CatalogGrantItem{
 		CatalogId:         openapi_types.UUID(catID.Bytes),
@@ -185,8 +183,8 @@ func (h *CatalogHandlers) CreateCatalogGrant(ctx context.Context, request Create
 	if request.Body == nil {
 		return CreateCatalogGrant404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "missing body"}}, nil
 	}
-	wsID := pgtype.UUID{Bytes: request.Body.WorkspaceId, Valid: true}
-	catID := pgtype.UUID{Bytes: request.Body.CatalogId, Valid: true}
+	wsID := db.UUID{Bytes: request.Body.WorkspaceId, Valid: true}
+	catID := db.UUID{Bytes: request.Body.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.GrantCreate, ResourceType: "grant", ResourceID: idString(catID), WorkspaceID: idString(wsID)}
 	ctx = audit.WithAction(ctx, ev.Action)
 
@@ -210,7 +208,7 @@ func (h *CatalogHandlers) CreateCatalogGrant(ctx context.Context, request Create
 		side = "catalog"
 	}
 	if _, err := store.GetCatalogByID(ctx, catID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return CreateCatalogGrant404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		}
 		return nil, err
@@ -234,14 +232,14 @@ func (h *CatalogHandlers) ApproveCatalogGrant(ctx context.Context, request Appro
 	if err != nil {
 		return ApproveCatalogGrant401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	wsID := pgtype.UUID{Bytes: request.WorkspaceId, Valid: true}
-	catID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	wsID := db.UUID{Bytes: request.WorkspaceId, Valid: true}
+	catID := db.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.GrantCreate, ResourceType: "grant", ResourceID: idString(catID), WorkspaceID: idString(wsID)}
 	ctx = audit.WithAction(ctx, ev.Action)
 
 	req, err := store.GetCatalogGrantRequest(ctx, db.GetCatalogGrantRequestParams{WorkspaceID: wsID, CatalogID: catID})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, db.ErrNoRows) {
 			return ApproveCatalogGrant404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "no pending request"}}, nil
 		}
 		return nil, err
@@ -279,8 +277,8 @@ func (h *CatalogHandlers) DeleteCatalogGrant(ctx context.Context, request Delete
 	if err != nil {
 		return DeleteCatalogGrant401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	wsID := pgtype.UUID{Bytes: request.WorkspaceId, Valid: true}
-	catID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	wsID := db.UUID{Bytes: request.WorkspaceId, Valid: true}
+	catID := db.UUID{Bytes: request.CatalogId, Valid: true}
 	ev := audit.Event{Action: audit.GrantRevoke, ResourceType: "grant", ResourceID: idString(catID), WorkspaceID: idString(wsID)}
 	ctx = audit.WithAction(ctx, ev.Action)
 
@@ -314,7 +312,7 @@ func (h *CatalogHandlers) ListGrantableWorkspaces(ctx context.Context, request L
 	if err != nil {
 		return ListGrantableWorkspaces401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	catID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	catID := db.UUID{Bytes: request.CatalogId, Valid: true}
 	if !h.catalogOwner(ctx, p, catID) {
 		return ListGrantableWorkspaces404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}
@@ -339,7 +337,7 @@ func (h *CatalogHandlers) SetCatalogDiscoverable(ctx context.Context, request Se
 	if request.Body == nil {
 		return SetCatalogDiscoverable404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "missing body"}}, nil
 	}
-	catID := pgtype.UUID{Bytes: request.CatalogId, Valid: true}
+	catID := db.UUID{Bytes: request.CatalogId, Valid: true}
 	if !h.catalogOwner(ctx, p, catID) {
 		return SetCatalogDiscoverable404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 	}

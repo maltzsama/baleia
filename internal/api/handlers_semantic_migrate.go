@@ -18,15 +18,13 @@ import (
 	"github.com/galileostudio/baleia/internal/semantic/models"
 	slugs "github.com/galileostudio/baleia/internal/slug"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // migrationTable is one table used by v1 metrics: the unit the v1 -> v2
 // migration turns into a model (#91, #121).
 type migrationTable struct {
-	catalogID pgtype.UUID
+	catalogID db.UUID
 	namespace []string
 	table     string
 	metrics   []db.SemanticMetric
@@ -39,8 +37,8 @@ func (t migrationTable) key() string {
 // migrationGuards are the handler's authorization checks, handed to the
 // per-table step.
 type migrationGuards struct {
-	granted func(catalog pgtype.UUID) (bool, error)
-	canEdit func(space pgtype.UUID) (bool, error)
+	granted func(catalog db.UUID) (bool, error)
+	canEdit func(space db.UUID) (bool, error)
 }
 
 // MigrateSemanticMetricsV1 — POST /workspaces/{id}/semantic/models/migrate-v1
@@ -70,7 +68,7 @@ func (h *SemanticHandlers) MigrateSemanticMetricsV1(ctx context.Context, request
 		}
 		if request.Body.Tables != nil {
 			for _, t := range *request.Body.Tables {
-				key := migrationTable{catalogID: pgtype.UUID{Bytes: t.CatalogId, Valid: true}, namespace: t.Namespace, table: t.Table}.key()
+				key := migrationTable{catalogID: db.UUID{Bytes: t.CatalogId, Valid: true}, namespace: t.Namespace, table: t.Table}.key()
 				choices[key] = t.PrimaryKey
 			}
 		}
@@ -98,7 +96,7 @@ func (h *SemanticHandlers) MigrateSemanticMetricsV1(ctx context.Context, request
 		tables = append(tables, &t)
 	}
 
-	modelRows, err := h.modelDefs.List(ctx, ws, userID, pgtype.UUID{})
+	modelRows, err := h.modelDefs.List(ctx, ws, userID, db.UUID{})
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +110,11 @@ func (h *SemanticHandlers) MigrateSemanticMetricsV1(ctx context.Context, request
 	// metric visibility is the space role only, so reading a table's columns
 	// and writing a model also need the catalog grant and an editable space.
 	guards := migrationGuards{
-		granted: func(catalog pgtype.UUID) (bool, error) {
+		granted: func(catalog db.UUID) (bool, error) {
 			nf, err := h.semanticCatalog(ctx, ws, openapi_types.UUID(catalog.Bytes))
 			return !nf, err
 		},
-		canEdit: func(space pgtype.UUID) (bool, error) {
+		canEdit: func(space db.UUID) (bool, error) {
 			se, err := h.contentSpace(ctx, ws, space, authz.SpaceEditor)
 			return err == nil && se == nil, err
 		},
@@ -133,7 +131,7 @@ func (h *SemanticHandlers) MigrateSemanticMetricsV1(ctx context.Context, request
 	return MigrateSemanticMetricsV1200JSONResponse(MigrateV1Report{DryRun: dryRun, Items: items}), nil
 }
 
-func (h *SemanticHandlers) migrateTable(ctx context.Context, ws, userID pgtype.UUID, guards migrationGuards, t migrationTable, modelRows []db.SemanticModel, visible map[string]semantic.Model, reserved map[string]bool, primaryKey []string, dryRun bool) (MigrateV1Item, error) {
+func (h *SemanticHandlers) migrateTable(ctx context.Context, ws, userID db.UUID, guards migrationGuards, t migrationTable, modelRows []db.SemanticModel, visible map[string]semantic.Model, reserved map[string]bool, primaryKey []string, dryRun bool) (MigrateV1Item, error) {
 	item := MigrateV1Item{
 		CatalogId: openapi_types.UUID(t.catalogID.Bytes),
 		Namespace: t.namespace,
@@ -181,7 +179,7 @@ func (h *SemanticHandlers) migrateTable(ctx context.Context, ws, userID pgtype.U
 	}
 
 	var model semantic.Model
-	var spaceID pgtype.UUID
+	var spaceID db.UUID
 	if existing != nil {
 		def, _ := models.ParseStored(existing.Definition)
 		model = def
@@ -357,7 +355,7 @@ func (h *SemanticHandlers) migrationColumns(ctx context.Context, t migrationTabl
 	rows, err := h.topology.Columns(ctx, db.GetMetadataTableByNameParams{
 		CatalogID: t.catalogID, Namespace: t.namespace, Name: t.table,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -380,7 +378,7 @@ func (h *SemanticHandlers) migrationColumns(ctx context.Context, t migrationTabl
 }
 
 // migrationSlug derives a free model slug from the table name.
-func (h *SemanticHandlers) migrationSlug(ctx context.Context, ws pgtype.UUID, table string, reserved map[string]bool) (string, error) {
+func (h *SemanticHandlers) migrationSlug(ctx context.Context, ws db.UUID, table string, reserved map[string]bool) (string, error) {
 	slug, err := slugs.Unique(ctx, table, func(ctx context.Context, s string) (bool, error) {
 		if reserved[s] {
 			return true, nil

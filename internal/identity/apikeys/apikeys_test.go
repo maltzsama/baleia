@@ -10,7 +10,6 @@ import (
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeStore struct {
@@ -18,7 +17,7 @@ type fakeStore struct {
 	deleteErr error
 }
 
-func (f *fakeStore) ListAPIKeysByUser(_ context.Context, user pgtype.UUID) ([]db.ApiKey, error) {
+func (f *fakeStore) ListAPIKeysByUser(_ context.Context, user db.UUID) ([]db.ApiKey, error) {
 	var out []db.ApiKey
 	for _, k := range f.keys {
 		if k.UserID == user {
@@ -29,7 +28,7 @@ func (f *fakeStore) ListAPIKeysByUser(_ context.Context, user pgtype.UUID) ([]db
 }
 
 func (f *fakeStore) CreateAPIKey(_ context.Context, arg db.CreateAPIKeyParams) (db.ApiKey, error) {
-	k := db.ApiKey{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, UserID: arg.UserID, Name: arg.Name, KeyHash: arg.KeyHash, Prefix: arg.Prefix, Scopes: arg.Scopes, ExpiresAt: arg.ExpiresAt}
+	k := db.ApiKey{ID: db.UUID{Bytes: uuid.New(), Valid: true}, UserID: arg.UserID, Name: arg.Name, KeyHash: arg.KeyHash, Prefix: arg.Prefix, Scopes: arg.Scopes, ExpiresAt: arg.ExpiresAt}
 	f.keys = append(f.keys, k)
 	return k, nil
 }
@@ -40,7 +39,7 @@ func TestCreate_StoresOnlyTheHash(t *testing.T) {
 	t.Parallel()
 	st := &fakeStore{}
 	s := New(st)
-	user := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	user := db.UUID{Bytes: uuid.New(), Valid: true}
 	exp := time.Now().Add(time.Hour)
 
 	key, secret, err := s.Create(context.Background(), user, "ci", &exp)
@@ -70,7 +69,7 @@ func TestDelete(t *testing.T) {
 	t.Parallel()
 	st := &fakeStore{}
 	s := New(st)
-	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	id := db.UUID{Bytes: uuid.New(), Valid: true}
 	if err := s.Delete(context.Background(), id, id); err != nil {
 		t.Fatal(err)
 	}

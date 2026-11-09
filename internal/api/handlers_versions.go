@@ -10,9 +10,9 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content"
 	"github.com/galileostudio/baleia/internal/content/history"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/semantic/metrics"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -50,11 +50,11 @@ func versionArg(v int) int32 {
 	return int32(v)
 }
 
-func pgUUIDFromPtr(id *uuid.UUID) pgtype.UUID {
+func pgUUIDFromPtr(id *uuid.UUID) db.UUID {
 	if id == nil {
-		return pgtype.UUID{}
+		return db.UUID{}
 	}
-	return pgtype.UUID{Bytes: *id, Valid: true}
+	return db.UUID{Bytes: *id, Valid: true}
 }
 
 // unauthorized maps an authz/unauthenticated error to the endpoint's 401.
@@ -64,7 +64,7 @@ func unauthorized(err error) bool { return errors.Is(err, authz.ErrUnauthenticat
 
 func (h *SemanticHandlers) ListSavedQueryVersions(ctx context.Context, request ListSavedQueryVersionsRequestObject) (ListSavedQueryVersionsResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
-	id := pgtype.UUID{Bytes: request.QueryId, Valid: true}
+	id := db.UUID{Bytes: request.QueryId, Valid: true}
 	spaceID, err := h.history.SpaceOf(ctx, ws, content.EntitySavedQuery, id)
 	if errors.Is(err, history.ErrNotFound) {
 		return ListSavedQueryVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("saved query not found")}, nil
@@ -99,7 +99,7 @@ func (h *SemanticHandlers) ListSavedQueryVersions(ctx context.Context, request L
 
 func (h *SemanticHandlers) GetSavedQueryVersion(ctx context.Context, request GetSavedQueryVersionRequestObject) (GetSavedQueryVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
-	id := pgtype.UUID{Bytes: request.QueryId, Valid: true}
+	id := db.UUID{Bytes: request.QueryId, Valid: true}
 	v, err := h.history.Get(ctx, ws, content.EntitySavedQuery, id, versionArg(request.Version))
 	if errors.Is(err, history.ErrNotFound) {
 		return GetSavedQueryVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
@@ -129,7 +129,7 @@ func (h *SemanticHandlers) GetSavedQueryVersion(ctx context.Context, request Get
 
 func (h *SemanticHandlers) RestoreSavedQueryVersion(ctx context.Context, request RestoreSavedQueryVersionRequestObject) (RestoreSavedQueryVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
-	id := pgtype.UUID{Bytes: request.QueryId, Valid: true}
+	id := db.UUID{Bytes: request.QueryId, Valid: true}
 	v, err := h.history.Get(ctx, ws, content.EntitySavedQuery, id, versionArg(request.Version))
 	if errors.Is(err, history.ErrNotFound) {
 		return RestoreSavedQueryVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
@@ -149,9 +149,9 @@ func (h *SemanticHandlers) RestoreSavedQueryVersion(ctx context.Context, request
 		return RestoreSavedQueryVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
 
-	var spaceID *pgtype.UUID
+	var spaceID *db.UUID
 	if request.Body != nil && request.Body.SpaceId != nil {
-		dest := pgtype.UUID{Bytes: *request.Body.SpaceId, Valid: true}
+		dest := db.UUID{Bytes: *request.Body.SpaceId, Valid: true}
 		if se, err := h.contentSpace(ctx, ws, dest, authz.SpaceEditor); err != nil {
 			return nil, err
 		} else if se != nil {
@@ -189,7 +189,7 @@ func (h *SemanticHandlers) RestoreSavedQueryVersion(ctx context.Context, request
 
 func (h *SemanticHandlers) ListSemanticMetricVersions(ctx context.Context, request ListSemanticMetricVersionsRequestObject) (ListSemanticMetricVersionsResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
-	id := pgtype.UUID{Bytes: request.MetricId, Valid: true}
+	id := db.UUID{Bytes: request.MetricId, Valid: true}
 	spaceID, err := h.history.SpaceOf(ctx, ws, content.EntitySemanticMetric, id)
 	if errors.Is(err, history.ErrNotFound) {
 		return ListSemanticMetricVersions404JSONResponse{NotFoundJSONResponse: metadataNotFound("metric not found")}, nil
@@ -224,7 +224,7 @@ func (h *SemanticHandlers) ListSemanticMetricVersions(ctx context.Context, reque
 
 func (h *SemanticHandlers) GetSemanticMetricVersion(ctx context.Context, request GetSemanticMetricVersionRequestObject) (GetSemanticMetricVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
-	id := pgtype.UUID{Bytes: request.MetricId, Valid: true}
+	id := db.UUID{Bytes: request.MetricId, Valid: true}
 	v, err := h.history.Get(ctx, ws, content.EntitySemanticMetric, id, versionArg(request.Version))
 	if errors.Is(err, history.ErrNotFound) {
 		return GetSemanticMetricVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
@@ -254,7 +254,7 @@ func (h *SemanticHandlers) GetSemanticMetricVersion(ctx context.Context, request
 
 func (h *SemanticHandlers) RestoreSemanticMetricVersion(ctx context.Context, request RestoreSemanticMetricVersionRequestObject) (RestoreSemanticMetricVersionResponseObject, error) {
 	ws := workspaceIDFromRequest(request.Id)
-	id := pgtype.UUID{Bytes: request.MetricId, Valid: true}
+	id := db.UUID{Bytes: request.MetricId, Valid: true}
 	v, err := h.history.Get(ctx, ws, content.EntitySemanticMetric, id, versionArg(request.Version))
 	if errors.Is(err, history.ErrNotFound) {
 		return RestoreSemanticMetricVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
@@ -273,9 +273,9 @@ func (h *SemanticHandlers) RestoreSemanticMetricVersion(ctx context.Context, req
 		}
 		return RestoreSemanticMetricVersion404JSONResponse{NotFoundJSONResponse: metadataNotFound("version not found")}, nil
 	}
-	var spaceID *pgtype.UUID
+	var spaceID *db.UUID
 	if request.Body != nil && request.Body.SpaceId != nil {
-		dest := pgtype.UUID{Bytes: *request.Body.SpaceId, Valid: true}
+		dest := db.UUID{Bytes: *request.Body.SpaceId, Valid: true}
 		if se, err := h.contentSpace(ctx, ws, dest, authz.SpaceEditor); err != nil {
 			return nil, err
 		} else if se != nil {
@@ -301,7 +301,7 @@ func (h *SemanticHandlers) RestoreSemanticMetricVersion(ctx context.Context, req
 	if err != nil {
 		return nil, err
 	}
-	catalogID := pgtype.UUID{Bytes: snap.CatalogID, Valid: true}
+	catalogID := db.UUID{Bytes: snap.CatalogID, Valid: true}
 	if err := h.validateSemanticMetric(ctx, ws, catalogID, pgUUIDFromPtr(snap.BindingID), actor, def, snap.Namespace, snap.Table, snap.Slug); err != nil {
 		if te, ok := asTargetError(err); ok {
 			return RestoreSemanticMetricVersion422JSONResponse{UnprocessableEntityJSONResponse: te.unprocessable()}, nil
@@ -389,7 +389,7 @@ func (h *SemanticHandlers) ListTrash(ctx context.Context, request ListTrashReque
 
 // ── converters ──────────────────────────────────────────────────────────────────
 
-func contentVersionToPublic(version int32, kind string, authorID pgtype.UUID, authorName *string, restoredFrom *int32, createdAt pgtype.Timestamptz) ContentVersion {
+func contentVersionToPublic(version int32, kind string, authorID db.UUID, authorName *string, restoredFrom *int32, createdAt db.Timestamptz) ContentVersion {
 	out := ContentVersion{
 		Version:    int(version),
 		ChangeKind: ContentVersionChangeKind(kind),
@@ -405,7 +405,7 @@ func contentVersionToPublic(version int32, kind string, authorID pgtype.UUID, au
 	return out
 }
 
-func contentVersionDetail(version int32, kind string, authorID pgtype.UUID, authorName *string, restoredFrom *int32, createdAt pgtype.Timestamptz, snapshot []byte) (ContentVersionDetail, error) {
+func contentVersionDetail(version int32, kind string, authorID db.UUID, authorName *string, restoredFrom *int32, createdAt db.Timestamptz, snapshot []byte) (ContentVersionDetail, error) {
 	var snap map[string]any
 	if err := json.Unmarshal(snapshot, &snap); err != nil {
 		return ContentVersionDetail{}, err

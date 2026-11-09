@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store is the narrow persistence surface the content service writes through
@@ -20,11 +19,11 @@ type Store interface {
 	DeleteSavedQuery(ctx context.Context, arg db.DeleteSavedQueryParams) (int64, error)
 	DeleteSemanticMetric(ctx context.Context, arg db.DeleteSemanticMetricParams) (int64, error)
 	DeleteSemanticModel(ctx context.Context, arg db.DeleteSemanticModelParams) (int64, error)
-	GetBindingTargetNames(ctx context.Context, id pgtype.UUID) (db.GetBindingTargetNamesRow, error)
-	GetCatalogNameByID(ctx context.Context, id pgtype.UUID) (string, error)
+	GetBindingTargetNames(ctx context.Context, id db.UUID) (db.GetBindingTargetNamesRow, error)
+	GetCatalogNameByID(ctx context.Context, id db.UUID) (string, error)
 	GetContentVersion(ctx context.Context, arg db.GetContentVersionParams) (db.GetContentVersionRow, error)
 	GetFolderBySlug(ctx context.Context, arg db.GetFolderBySlugParams) (db.QueryFolder, error)
-	GetGrantedCatalogByName(ctx context.Context, arg db.GetGrantedCatalogByNameParams) (pgtype.UUID, error)
+	GetGrantedCatalogByName(ctx context.Context, arg db.GetGrantedCatalogByNameParams) (db.UUID, error)
 	GetQueryFolderByID(ctx context.Context, arg db.GetQueryFolderByIDParams) (db.QueryFolder, error)
 	GetSavedQueryByID(ctx context.Context, arg db.GetSavedQueryByIDParams) (db.SavedQuery, error)
 	GetSavedQueryBySlug(ctx context.Context, arg db.GetSavedQueryBySlugParams) (db.SavedQuery, error)
@@ -40,11 +39,11 @@ type Store interface {
 	LatestContentVersion(ctx context.Context, arg db.LatestContentVersionParams) (db.ContentVersion, error)
 	ListContentVersions(ctx context.Context, arg db.ListContentVersionsParams) ([]db.ListContentVersionsRow, error)
 	ListDeletedContent(ctx context.Context, arg db.ListDeletedContentParams) ([]db.ListDeletedContentRow, error)
-	ListSpaceFolders(ctx context.Context, spaceID pgtype.UUID) ([]db.QueryFolder, error)
-	ListSpaceMetrics(ctx context.Context, spaceID pgtype.UUID) ([]db.SemanticMetric, error)
-	ListSpaceModels(ctx context.Context, spaceID pgtype.UUID) ([]db.SemanticModel, error)
-	ListSpaceSavedQueries(ctx context.Context, spaceID pgtype.UUID) ([]db.SavedQuery, error)
-	ListWorkspaceTargets(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error)
+	ListSpaceFolders(ctx context.Context, spaceID db.UUID) ([]db.QueryFolder, error)
+	ListSpaceMetrics(ctx context.Context, spaceID db.UUID) ([]db.SemanticMetric, error)
+	ListSpaceModels(ctx context.Context, spaceID db.UUID) ([]db.SemanticModel, error)
+	ListSpaceSavedQueries(ctx context.Context, spaceID db.UUID) ([]db.SavedQuery, error)
+	ListWorkspaceTargets(ctx context.Context, workspaceID db.UUID) ([]db.ListWorkspaceTargetsRow, error)
 	NextContentVersion(ctx context.Context, arg db.NextContentVersionParams) (int32, error)
 	RestoreSavedQuery(ctx context.Context, arg db.RestoreSavedQueryParams) (db.SavedQuery, error)
 	RestoreSemanticMetric(ctx context.Context, arg db.RestoreSemanticMetricParams) (db.SemanticMetric, error)

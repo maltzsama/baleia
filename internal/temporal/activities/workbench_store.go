@@ -5,26 +5,25 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // workbenchStore is the query_editor and statement_refs persistence the
 // activities need. *repo.Repo implements it on the GORM store.
 type workbenchStore interface {
-	GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (db.QueryExecution, error)
+	GetQueryExecutionByID(ctx context.Context, id db.UUID) (db.QueryExecution, error)
 	UpdateQueryExecution(ctx context.Context, arg db.UpdateQueryExecutionParams) (db.QueryExecution, error)
 	FailQueryExecution(ctx context.Context, arg db.FailQueryExecutionParams) (db.QueryExecution, error)
-	QueueQueryExecution(ctx context.Context, id pgtype.UUID) (db.QueryExecution, error)
-	AdmitQueryExecution(ctx context.Context, id pgtype.UUID) (db.QueryExecution, error)
+	QueueQueryExecution(ctx context.Context, id db.UUID) (db.QueryExecution, error)
+	AdmitQueryExecution(ctx context.Context, id db.UUID) (db.QueryExecution, error)
 	SetExecutionResult(ctx context.Context, arg db.SetExecutionResultParams) error
-	ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]db.QueryStatement, error)
+	ListQueryStatements(ctx context.Context, executionID db.UUID) ([]db.QueryStatement, error)
 	CreateQueryStatement(ctx context.Context, arg db.CreateQueryStatementParams) (db.QueryStatement, error)
 	UpdateQueryStatement(ctx context.Context, arg db.UpdateQueryStatementParams) (db.QueryStatement, error)
 	StartQueryStatement(ctx context.Context, arg db.StartQueryStatementParams) (int64, error)
-	SkipPendingStatements(ctx context.Context, executionID pgtype.UUID) error
+	SkipPendingStatements(ctx context.Context, executionID db.UUID) error
 	AbandonRunningStatements(ctx context.Context, arg db.AbandonRunningStatementsParams) ([]db.AbandonRunningStatementsRow, error)
 	SetStatementQueryHandle(ctx context.Context, arg db.SetStatementQueryHandleParams) error
-	ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]db.ListRunningStatementHandlesRow, error)
+	ListRunningStatementHandles(ctx context.Context, executionID db.UUID) ([]db.ListRunningStatementHandlesRow, error)
 	GetStatementReferenceTarget(ctx context.Context, arg db.GetStatementReferenceTargetParams) (db.GetStatementReferenceTargetRow, error)
 }
 

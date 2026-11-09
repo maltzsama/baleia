@@ -15,32 +15,30 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/testdb"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"gorm.io/gorm"
 )
 
 type agentsFixture struct {
-	pool    *pgxpool.Pool
+	pool    *gorm.DB
 	gdb     *gorm.DB
 	h       *API
 	owner   context.Context
 	other   context.Context
 	admin   context.Context
-	ownerID pgtype.UUID
-	otherID pgtype.UUID
-	wsID    pgtype.UUID
+	ownerID db.UUID
+	otherID db.UUID
+	wsID    db.UUID
 }
 
 func newAgentsFixture(t *testing.T, enabled bool) *agentsFixture {
 	t.Helper()
 	pool := testdb.New(t)
-	gdb := testdb.GORM(t, pool)
+	gdb := pool
 	q := repo.New(gdb)
 	f := &agentsFixture{pool: pool, gdb: gdb}
 
-	user := func(email, role string) pgtype.UUID {
+	user := func(email, role string) db.UUID {
 		password := "x"
 		row := model.User{
 			ID: model.UUID(repo.NewUUID()), Name: email, Email: model.Text(email),
@@ -72,8 +70,7 @@ func newAgentsFixture(t *testing.T, enabled bool) *agentsFixture {
 
 	f.h = testAPI(handlerFields{
 		queries:  q,
-		pool:     pool,
-		tx:       poolTx{pool: pool},
+		tx:       storeTx{db: pool},
 		settings: SettingsFromConfig(&config.Config{AgentsEnabled: enabled}),
 	})
 	return f
@@ -311,7 +308,7 @@ func TestRunQuery_AgentFollowsRole(t *testing.T) {
 		t.Run(tc.role+"/"+tc.kind, func(t *testing.T) {
 			t.Parallel()
 			fake := &fakeRunQueryQuerier{
-				exec:       db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
+				exec:       db.QueryExecution{ID: db.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
 				targets:    []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true)},
 				agentBound: true,
 				role:       tc.role,
@@ -463,7 +460,7 @@ func TestAgentPolicy_Scope(t *testing.T) {
 func TestRunQuery_AgentScopeOnResolvedTarget(t *testing.T) {
 	t.Parallel()
 	fake := &fakeRunQueryQuerier{
-		exec:       db.QueryExecution{ID: pgtype.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
+		exec:       db.QueryExecution{ID: db.UUID{Bytes: [16]byte{0xBB}, Valid: true}, Status: "running"},
 		targets:    []db.ListWorkspaceTargetsRow{targetRow(1, 1, "trino", true)},
 		agentBound: true,
 		role:       "editor",

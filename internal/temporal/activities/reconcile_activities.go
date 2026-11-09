@@ -9,13 +9,12 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 )
 
 // engineReconciler reconciles one federated engine's managed bindings
 // (bindings.Reconciler); it is wired in cmd/worker, where the binder is.
-type engineReconciler func(ctx context.Context, eng db.Engine, clusterID pgtype.UUID, dryRun bool, onAction func(context.Context, bindings.Action)) (bindings.Report, error)
+type engineReconciler func(ctx context.Context, eng db.Engine, clusterID db.UUID, dryRun bool, onAction func(context.Context, bindings.Action)) (bindings.Report, error)
 
 // SetEngineReconciler wires binding reconciliation (#37).
 func (a *Activities) SetEngineReconciler(r engineReconciler) { a.reconcileEngine = r }

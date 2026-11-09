@@ -14,7 +14,6 @@ import (
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Directory reconciliation (#257). A pass pages every enabled LDAP provider,
@@ -83,7 +82,7 @@ func (a *Activities) reconcileDirectories(ctx context.Context) (*DirectoryReconc
 
 // reconcilableUser is the subset of a linked user the planner needs.
 type reconcilableUser struct {
-	ID              pgtype.UUID
+	ID              db.UUID
 	ExternalID      string
 	Role            string
 	Status          string
@@ -91,12 +90,12 @@ type reconcilableUser struct {
 }
 
 type roleChange struct {
-	UserID pgtype.UUID
+	UserID db.UUID
 	Role   string
 }
 
 type teamChange struct {
-	UserID   pgtype.UUID
+	UserID   db.UUID
 	TeamID   string
 	TeamRole string
 }
@@ -306,9 +305,9 @@ func (a *Activities) applyReconcilePlan(ctx context.Context, plan reconcilePlan,
 // implements it on the GORM path (ADR 0020, #774).
 type directoryReads interface {
 	ListEnabledLDAPProviders(ctx context.Context) ([]db.AuthProvider, error)
-	CreateDirectoryReconcileRun(ctx context.Context, providerID pgtype.UUID) (db.DirectoryReconcileRun, error)
+	CreateDirectoryReconcileRun(ctx context.Context, providerID db.UUID) (db.DirectoryReconcileRun, error)
 	FinishDirectoryReconcileRun(ctx context.Context, arg db.FinishDirectoryReconcileRunParams) error
-	ListUsersByAuthProvider(ctx context.Context, authProviderID pgtype.UUID) ([]db.User, error)
+	ListUsersByAuthProvider(ctx context.Context, authProviderID db.UUID) ([]db.User, error)
 }
 
 func (a *Activities) directoryReads() directoryReads {
@@ -322,12 +321,12 @@ func (a *Activities) directoryReads() directoryReads {
 // directoryWrites is the write side of one pass.
 type directoryWrites interface {
 	SuspendUser(ctx context.Context, arg db.SuspendUserParams) (db.User, error)
-	RevokeUserRefreshTokens(ctx context.Context, userID pgtype.UUID) error
-	DeleteAPIKeysByUser(ctx context.Context, userID pgtype.UUID) error
-	ReinstateDirectoryUser(ctx context.Context, id pgtype.UUID) error
+	RevokeUserRefreshTokens(ctx context.Context, userID db.UUID) error
+	DeleteAPIKeysByUser(ctx context.Context, userID db.UUID) error
+	ReinstateDirectoryUser(ctx context.Context, id db.UUID) error
 	UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error
 	UpsertTeamMember(ctx context.Context, arg db.UpsertTeamMemberParams) error
-	MarkDirectorySynced(ctx context.Context, id pgtype.UUID) error
+	MarkDirectorySynced(ctx context.Context, id db.UUID) error
 }
 
 // directoryWrites runs fn in one transaction over the GORM directory store.
@@ -372,9 +371,9 @@ func (a *Activities) auditChange(ctx context.Context, ev audit.Event) {
 	_ = a.audit.Record(audit.WithService(ctx, "directory-reconciler"), ev)
 }
 
-// uuidFromString parses a UUID string into the pgtype shape.
-func uuidFromString(s string) (pgtype.UUID, error) {
-	var id pgtype.UUID
+// uuidFromString parses a UUID string into the db.UUID shape.
+func uuidFromString(s string) (db.UUID, error) {
+	var id db.UUID
 	err := id.Scan(s)
 	return id, err
 }

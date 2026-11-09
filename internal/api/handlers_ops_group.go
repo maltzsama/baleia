@@ -17,7 +17,7 @@ import (
 // OpsHandlers serves monitoring, system status, attention items and the audit log (#365).
 type OpsHandlers struct {
 	*core
-	// schema reports the applied migration version (poolSchema outside tests).
+	// schema reports the applied migration version (storeSchema outside tests).
 	schema schemaVersioner
 	// schedules and engineStatus are the status page's probes (#291); tests
 	// give fakes so it runs without a Temporal server or an engine. A nil

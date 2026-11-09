@@ -19,7 +19,6 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/sqlref"
 	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 )
@@ -115,7 +114,7 @@ type script struct {
 	ctx    context.Context
 	bk     context.Context // bookkeeping: survives the activity's cancellation
 	p      ExecuteScriptParams
-	execID pgtype.UUID
+	execID db.UUID
 	eng    queryengine.Engine
 
 	mu      sync.Mutex // guards current
@@ -481,7 +480,7 @@ func (s *script) persistHandle(position int32, h queryengine.QueryHandle) {
 // AbandonStatementsParams ends what a stopped script left behind.
 type AbandonStatementsParams struct {
 	ExecutionID string
-	EngineID    pgtype.UUID
+	EngineID    db.UUID
 	Status      string // "cancelled" or "failed"
 	ErrorCode   string
 	Error       string
@@ -496,7 +495,7 @@ func AbandonStatements(ctx context.Context, params AbandonStatementsParams) erro
 }
 
 func (a *Activities) abandonStatements(ctx context.Context, p AbandonStatementsParams) error {
-	var execID pgtype.UUID
+	var execID db.UUID
 	if err := execID.Scan(p.ExecutionID); err != nil {
 		return temporal.NewNonRetryableApplicationError("invalid execution id", "invalid_input", err)
 	}
@@ -671,7 +670,7 @@ func (s *resultSink) abort() {
 // became a viewer or left the workspace, the agent was disabled or unbound
 // from the workspace, or its policy stopped allowing the target.
 func (a *Activities) agentStillWrites(ctx context.Context, executionID string) (bool, error) {
-	var id pgtype.UUID
+	var id db.UUID
 	if err := id.Scan(executionID); err != nil {
 		return false, nil
 	}

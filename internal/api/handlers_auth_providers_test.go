@@ -16,7 +16,7 @@ import (
 func TestListAuthProviders_OnlyEnabled(t *testing.T) {
 	t.Parallel()
 	pool := testdb.New(t)
-	q := repo.New(testdb.GORM(t, pool))
+	q := repo.New(pool)
 	h := testAPI(handlerFields{queries: q, tx: directTx{q: q}})
 	ctx := context.Background()
 

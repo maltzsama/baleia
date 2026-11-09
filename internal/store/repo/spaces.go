@@ -9,8 +9,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/workspaces/spaces"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -23,17 +21,17 @@ func (r *Repo) TxSpaces(ctx context.Context, fn func(spaces.TxStore) error) erro
 	})
 }
 
-// GetSpace returns one space or pgx.ErrNoRows.
+// GetSpace returns one space or db.ErrNoRows.
 func (r *Repo) GetSpace(ctx context.Context, arg db.GetSpaceParams) (db.Space, error) {
 	if !arg.WorkspaceID.Valid || !arg.ID.Valid {
-		return db.Space{}, pgx.ErrNoRows
+		return db.Space{}, db.ErrNoRows
 	}
 	var row model.Space
 	err := r.Users.db.WithContext(ctx).
 		Where("workspace_id = ? AND id = ?", UUIDString(arg.WorkspaceID), UUIDString(arg.ID)).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Space{}, pgx.ErrNoRows
+		return db.Space{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Space{}, err
@@ -41,14 +39,14 @@ func (r *Repo) GetSpace(ctx context.Context, arg db.GetSpaceParams) (db.Space, e
 	return toDBSpace(row), nil
 }
 
-// GetDefaultSpace returns the workspace's default space or pgx.ErrNoRows.
-func (r *Repo) GetDefaultSpace(ctx context.Context, workspaceID pgtype.UUID) (db.Space, error) {
+// GetDefaultSpace returns the workspace's default space or db.ErrNoRows.
+func (r *Repo) GetDefaultSpace(ctx context.Context, workspaceID db.UUID) (db.Space, error) {
 	var row model.Space
 	err := r.Users.db.WithContext(ctx).
 		Where("workspace_id = ? AND is_default = ?", UUIDString(workspaceID), true).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Space{}, pgx.ErrNoRows
+		return db.Space{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.Space{}, err
@@ -103,7 +101,7 @@ func (r *Repo) SpaceSlugExists(ctx context.Context, arg db.SpaceSlugExistsParams
 }
 
 // CountSpaceContent counts every piece of content that lives in the space.
-func (r *Repo) CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int32, error) {
+func (r *Repo) CountSpaceContent(ctx context.Context, spaceID db.UUID) (int32, error) {
 	id := UUIDString(spaceID)
 	var total int64
 	for _, m := range []any{&model.QueryFolder{}, &model.SavedQuery{}, &model.SemanticMetric{}, &model.SemanticModel{}} {
@@ -117,7 +115,7 @@ func (r *Repo) CountSpaceContent(ctx context.Context, spaceID pgtype.UUID) (int3
 }
 
 // CountSpaceContentKinds counts the space's content by kind.
-func (r *Repo) CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) (db.CountSpaceContentKindsRow, error) {
+func (r *Repo) CountSpaceContentKinds(ctx context.Context, spaceID db.UUID) (db.CountSpaceContentKindsRow, error) {
 	id := UUIDString(spaceID)
 	var out db.CountSpaceContentKindsRow
 	for _, c := range []struct {
@@ -137,7 +135,7 @@ func (r *Repo) CountSpaceContentKinds(ctx context.Context, spaceID pgtype.UUID) 
 }
 
 // ListSpaceMembers returns the space's access list.
-func (r *Repo) ListSpaceMembers(ctx context.Context, spaceID pgtype.UUID) ([]db.SpaceMember, error) {
+func (r *Repo) ListSpaceMembers(ctx context.Context, spaceID db.UUID) ([]db.SpaceMember, error) {
 	var rows []model.SpaceMember
 	if err := r.Users.db.WithContext(ctx).
 		Where("space_id = ?", UUIDString(spaceID)).

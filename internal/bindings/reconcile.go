@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Reconcile action kinds and results (#37).
@@ -58,8 +57,8 @@ func (r Report) Mutating() int {
 
 // ReconcileStore is the slice of the database the reconciler reads.
 type ReconcileStore interface {
-	ListManagedBindingsOfEngine(ctx context.Context, engineID pgtype.UUID) ([]db.CatalogBinding, error)
-	ObservedManagedNamesOfEngine(ctx context.Context, engineID pgtype.UUID) ([]string, error)
+	ListManagedBindingsOfEngine(ctx context.Context, engineID db.UUID) ([]db.CatalogBinding, error)
+	ObservedManagedNamesOfEngine(ctx context.Context, engineID db.UUID) ([]string, error)
 }
 
 // Reconciler repairs the managed drift of one federated engine and reports

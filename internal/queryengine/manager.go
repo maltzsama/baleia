@@ -13,12 +13,11 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Store is the slice of the database the manager reads.
 type Store interface {
-	GetEngineWithConnection(ctx context.Context, id pgtype.UUID) (db.GetEngineWithConnectionRow, error)
+	GetEngineWithConnection(ctx context.Context, id db.UUID) (db.GetEngineWithConnectionRow, error)
 	GetDefaultTrinoEngine(ctx context.Context) (db.GetDefaultTrinoEngineRow, error)
 }
 
@@ -65,7 +64,7 @@ func (m *Manager) Transient(ctx context.Context, kind string, cfg connections.Co
 }
 
 // Get returns the engine of an `engines` row.
-func (m *Manager) Get(ctx context.Context, engineID pgtype.UUID) (Engine, error) {
+func (m *Manager) Get(ctx context.Context, engineID db.UUID) (Engine, error) {
 	row, err := m.store.GetEngineWithConnection(ctx, engineID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, NewError(CodeNotFound, "", "", "engine not found")
@@ -181,7 +180,7 @@ func (m *Manager) connectionConfig(conn db.CatalogConnection) (connections.Confi
 	return cfg, nil
 }
 
-func uuidString(u pgtype.UUID) string {
+func uuidString(u db.UUID) string {
 	b := u.Bytes
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }

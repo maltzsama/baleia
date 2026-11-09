@@ -13,8 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/testsuite"
@@ -23,7 +21,7 @@ import (
 
 // stmtRow is one query_statements row of statementStore.
 type stmtRow struct {
-	id     pgtype.UUID
+	id     db.UUID
 	status string
 	code   string
 	handle []byte
@@ -43,7 +41,7 @@ type statementStore struct {
 func newStatementStore(n int) *statementStore {
 	st := &statementStore{rows: map[int32]*stmtRow{}}
 	for i := int32(1); i <= int32(n); i++ {
-		st.rows[i] = &stmtRow{id: pgtype.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, status: "pending"}
+		st.rows[i] = &stmtRow{id: db.UUID{Bytes: [16]byte{byte(i)}, Valid: true}, status: "pending"}
 	}
 	return st
 }
@@ -64,8 +62,8 @@ func (st *statementStore) row(pos int32) stmtRow {
 	return *st.rows[pos]
 }
 
-func (st *statementStore) GetQueryExecutionByID(_ context.Context, id pgtype.UUID) (db.QueryExecution, error) {
-	return db.QueryExecution{ID: id, WorkspaceID: pgtype.UUID{Bytes: [16]byte{0xB1}, Valid: true}}, nil
+func (st *statementStore) GetQueryExecutionByID(_ context.Context, id db.UUID) (db.QueryExecution, error) {
+	return db.QueryExecution{ID: id, WorkspaceID: db.UUID{Bytes: [16]byte{0xB1}, Valid: true}}, nil
 }
 
 func (st *statementStore) StartQueryStatement(_ context.Context, p db.StartQueryStatementParams) (int64, error) {
@@ -78,7 +76,7 @@ func (st *statementStore) StartQueryStatement(_ context.Context, p db.StartQuery
 	return 0, nil
 }
 
-func (st *statementStore) ListQueryStatements(context.Context, pgtype.UUID) ([]db.QueryStatement, error) {
+func (st *statementStore) ListQueryStatements(context.Context, db.UUID) ([]db.QueryStatement, error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	var out []db.QueryStatement
@@ -96,7 +94,7 @@ func (st *statementStore) UpdateQueryStatement(_ context.Context, p db.UpdateQue
 			continue
 		}
 		if r.status != "running" {
-			return db.QueryStatement{}, pgx.ErrNoRows
+			return db.QueryStatement{}, db.ErrNoRows
 		}
 		r.status = p.Status
 		if p.ErrorCode != nil {
@@ -107,7 +105,7 @@ func (st *statementStore) UpdateQueryStatement(_ context.Context, p db.UpdateQue
 		}
 		return db.QueryStatement{}, nil
 	}
-	return db.QueryStatement{}, pgx.ErrNoRows
+	return db.QueryStatement{}, db.ErrNoRows
 }
 
 func (st *statementStore) SetExecutionResult(_ context.Context, p db.SetExecutionResultParams) error {
@@ -126,7 +124,7 @@ func (st *statementStore) SetStatementQueryHandle(_ context.Context, p db.SetSta
 	return st.handleErr
 }
 
-func (st *statementStore) SkipPendingStatements(context.Context, pgtype.UUID) error {
+func (st *statementStore) SkipPendingStatements(context.Context, db.UUID) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	for _, r := range st.rows {
@@ -137,7 +135,7 @@ func (st *statementStore) SkipPendingStatements(context.Context, pgtype.UUID) er
 	return nil
 }
 
-func (st *statementStore) ListRunningStatementHandles(context.Context, pgtype.UUID) ([]db.ListRunningStatementHandlesRow, error) {
+func (st *statementStore) ListRunningStatementHandles(context.Context, db.UUID) ([]db.ListRunningStatementHandlesRow, error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	var out []db.ListRunningStatementHandlesRow
@@ -165,7 +163,7 @@ func (st *statementStore) AbandonRunningStatements(_ context.Context, p db.Aband
 	return out, nil
 }
 
-var testEngineID = pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true}
+var testEngineID = db.UUID{Bytes: [16]byte{0xE1}, Valid: true}
 
 func scriptParams(sqls ...string) ExecuteScriptParams {
 	refs := make([]StatementRef, len(sqls))
@@ -293,7 +291,7 @@ func TestExecuteScript_NoEngineFailsFirst(t *testing.T) {
 	fake := &fakeEngine{Engine: testTrino}
 	store := newStatementStore(2)
 	p := scriptParams("SELECT 1", "SELECT 2")
-	p.Target.EngineID = pgtype.UUID{}
+	p.Target.EngineID = db.UUID{}
 	if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), store: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
 		t.Fatal(err)
 	}
@@ -696,19 +694,19 @@ func (s *agentRoleStore) AgentWorkspaceBound(context.Context, db.AgentWorkspaceB
 	return !s.unbound, nil
 }
 
-func (s *agentRoleStore) GetQueryExecutionByID(_ context.Context, id pgtype.UUID) (db.QueryExecution, error) {
+func (s *agentRoleStore) GetQueryExecutionByID(_ context.Context, id db.UUID) (db.QueryExecution, error) {
 	return db.QueryExecution{
-		ID: id, AgentID: pgtype.UUID{Bytes: [16]byte{0xA1}, Valid: true}, WorkspaceID: pgtype.UUID{Bytes: [16]byte{0xB1}, Valid: true},
-		TargetCatalogID: pgtype.UUID{Bytes: [16]byte{0xD1}, Valid: true}, EngineID: pgtype.UUID{Bytes: [16]byte{0xE1}, Valid: true},
+		ID: id, AgentID: db.UUID{Bytes: [16]byte{0xA1}, Valid: true}, WorkspaceID: db.UUID{Bytes: [16]byte{0xB1}, Valid: true},
+		TargetCatalogID: db.UUID{Bytes: [16]byte{0xD1}, Valid: true}, EngineID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true},
 	}, nil
 }
 
-func (s *agentRoleStore) GetAgentByID(_ context.Context, id pgtype.UUID) (db.Agent, error) {
+func (s *agentRoleStore) GetAgentByID(_ context.Context, id db.UUID) (db.Agent, error) {
 	policy := s.policy
 	if policy == "" {
 		policy = "{}"
 	}
-	return db.Agent{ID: id, OwnerID: pgtype.UUID{Bytes: [16]byte{0xC1}, Valid: true}, Kind: s.kind, Status: s.status, Policy: []byte(policy)}, nil
+	return db.Agent{ID: id, OwnerID: db.UUID{Bytes: [16]byte{0xC1}, Valid: true}, Kind: s.kind, Status: s.status, Policy: []byte(policy)}, nil
 }
 
 func (s *agentRoleStore) GetWorkspaceMemberRole(context.Context, db.GetWorkspaceMemberRoleParams) (string, error) {

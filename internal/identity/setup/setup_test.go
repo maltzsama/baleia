@@ -8,7 +8,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -24,7 +23,7 @@ func (f *fakeStore) HasUsers(context.Context) (bool, error) { return len(f.users
 func (f *fakeStore) LockFirstAdminSetup(context.Context) error { return nil }
 
 func (f *fakeStore) CreateUser(_ context.Context, arg db.CreateUserParams) (db.User, error) {
-	u := db.User{ID: pgtype.UUID{Bytes: uuid.New(), Valid: true}, Name: arg.Name, Email: arg.Email, PasswordHash: arg.PasswordHash, Role: arg.Role, AuthProvider: arg.AuthProvider}
+	u := db.User{ID: db.UUID{Bytes: uuid.New(), Valid: true}, Name: arg.Name, Email: arg.Email, PasswordHash: arg.PasswordHash, Role: arg.Role, AuthProvider: arg.AuthProvider}
 	f.users = append(f.users, u)
 	return u, nil
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 )
@@ -21,7 +20,7 @@ import (
 // metadataSyncer stores a catalog's metadata snapshot; *metadata.Syncer
 // implements it.
 type metadataSyncer interface {
-	Sync(ctx context.Context, catalogID pgtype.UUID, progress func(seen int)) (metadata.RunStats, error)
+	Sync(ctx context.Context, catalogID db.UUID, progress func(seen int)) (metadata.RunStats, error)
 }
 
 // SetMetadataSyncer wires the metadata sync (#15).
@@ -81,7 +80,7 @@ func (a *Activities) syncCatalogMetadata(ctx context.Context, p SyncCatalogMetad
 		}
 	}()
 	start := time.Now()
-	stats, err := a.metadata.Sync(ctx, pgtype.UUID{Bytes: id, Valid: true}, progress)
+	stats, err := a.metadata.Sync(ctx, db.UUID{Bytes: id, Valid: true}, progress)
 	close(done)
 	<-beating
 	if !errors.Is(err, metadata.ErrSyncInProgress) {
@@ -103,7 +102,7 @@ func (a *Activities) syncCatalogMetadata(ctx context.Context, p SyncCatalogMetad
 // engineObserver records what a federated engine reports and adopts the
 // catalogs Baleia did not create (bindings.Lifecycle.Observe); it is wired in
 // cmd/worker, where the engine's binder is built.
-type engineObserver func(ctx context.Context, eng db.Engine, clusterID pgtype.UUID) error
+type engineObserver func(ctx context.Context, eng db.Engine, clusterID db.UUID) error
 
 // SetEngineObserver wires the federated engines' catalog observation.
 func (a *Activities) SetEngineObserver(o engineObserver) { a.observeEngine = o }

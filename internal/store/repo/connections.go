@@ -6,8 +6,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ── catalog connections ───────────────────────────────────────────────────────
@@ -36,7 +34,7 @@ func (r *Repo) CreateCatalogConnection(ctx context.Context, arg db.CreateCatalog
 }
 
 // ListCatalogConnections lists the connections one user created.
-func (r *Repo) ListCatalogConnections(ctx context.Context, createdBy pgtype.UUID) ([]db.CatalogConnection, error) {
+func (r *Repo) ListCatalogConnections(ctx context.Context, createdBy db.UUID) ([]db.CatalogConnection, error) {
 	var rows []model.CatalogConnection
 	if err := r.Users.db.WithContext(ctx).
 		Where("created_by = ?", uuidText(createdBy)).
@@ -72,7 +70,7 @@ func (r *Repo) ListVisibleCatalogConnections(ctx context.Context, arg db.ListVis
 // value, so concurrent patches to different fields do not overwrite each other.
 func (r *Repo) UpdateCatalogConnection(ctx context.Context, arg db.UpdateCatalogConnectionParams) (db.CatalogConnection, error) {
 	if !arg.ID.Valid {
-		return db.CatalogConnection{}, pgx.ErrNoRows
+		return db.CatalogConnection{}, db.ErrNoRows
 	}
 	changes := map[string]any{"updated_at": time.Now().UTC()}
 	if arg.Name != nil {
@@ -97,13 +95,13 @@ func (r *Repo) UpdateCatalogConnection(ctx context.Context, arg db.UpdateCatalog
 		return db.CatalogConnection{}, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.CatalogConnection{}, pgx.ErrNoRows
+		return db.CatalogConnection{}, db.ErrNoRows
 	}
 	return r.GetCatalogConnectionByID(ctx, arg.ID)
 }
 
 // DeleteCatalogConnection removes a connection; its catalogs cascade.
-func (r *Repo) DeleteCatalogConnection(ctx context.Context, id pgtype.UUID) error {
+func (r *Repo) DeleteCatalogConnection(ctx context.Context, id db.UUID) error {
 	return r.Users.db.WithContext(ctx).
 		Where("id = ?", UUIDString(id)).
 		Delete(&model.CatalogConnection{}).Error

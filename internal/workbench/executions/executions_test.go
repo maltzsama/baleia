@@ -13,13 +13,11 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/workload"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 type fakeStore struct {
 	execs   map[[16]byte]db.QueryExecution
@@ -56,13 +54,13 @@ func (f *fakeStore) GetQueryExecutionByIDAndWorkspace(_ context.Context, arg db.
 	if e, ok := f.execs[arg.ID.Bytes]; ok && e.WorkspaceID == arg.WorkspaceID {
 		return e, nil
 	}
-	return db.QueryExecution{}, pgx.ErrNoRows
+	return db.QueryExecution{}, db.ErrNoRows
 }
 
 func (f *fakeStore) CancelQueryExecution(_ context.Context, arg db.CancelQueryExecutionParams) (db.QueryExecution, error) {
 	e, ok := f.execs[arg.ID.Bytes]
 	if !ok || e.WorkspaceID != arg.WorkspaceID || e.Status != "running" {
-		return db.QueryExecution{}, pgx.ErrNoRows
+		return db.QueryExecution{}, db.ErrNoRows
 	}
 	e.Status = "cancelled"
 	f.execs[arg.ID.Bytes] = e
@@ -72,7 +70,7 @@ func (f *fakeStore) CancelQueryExecution(_ context.Context, arg db.CancelQueryEx
 func (f *fakeStore) FailQueryExecution(_ context.Context, arg db.FailQueryExecutionParams) (db.QueryExecution, error) {
 	e, ok := f.execs[arg.ID.Bytes]
 	if !ok {
-		return db.QueryExecution{}, pgx.ErrNoRows
+		return db.QueryExecution{}, db.ErrNoRows
 	}
 	e.Status = "failed"
 	if arg.ErrorCode != nil {
@@ -82,7 +80,7 @@ func (f *fakeStore) FailQueryExecution(_ context.Context, arg db.FailQueryExecut
 	return e, nil
 }
 
-func (f *fakeStore) ListRunningStatementHandles(context.Context, pgtype.UUID) ([]db.ListRunningStatementHandlesRow, error) {
+func (f *fakeStore) ListRunningStatementHandles(context.Context, db.UUID) ([]db.ListRunningStatementHandlesRow, error) {
 	return f.handles, nil
 }
 
@@ -103,10 +101,10 @@ func (f *fakeStore) ListQueryStatementsByWorkspace(context.Context, db.ListQuery
 }
 
 func (f *fakeStore) GetQueryStatementByPosition(context.Context, db.GetQueryStatementByPositionParams) (db.QueryStatement, error) {
-	return db.QueryStatement{}, pgx.ErrNoRows
+	return db.QueryStatement{}, db.ErrNoRows
 }
 
-func (f *fakeStore) ListEngineQueueCapacities(context.Context, pgtype.UUID) ([]db.EngineQueueCapacity, error) {
+func (f *fakeStore) ListEngineQueueCapacities(context.Context, db.UUID) ([]db.EngineQueueCapacity, error) {
 	return f.capacities, nil
 }
 
@@ -114,11 +112,11 @@ func (f *fakeStore) ListWorkloadRules(context.Context) ([]db.WorkloadRule, error
 	return f.rules, nil
 }
 
-func (f *fakeStore) GetEngineByID(_ context.Context, id pgtype.UUID) (db.Engine, error) {
+func (f *fakeStore) GetEngineByID(_ context.Context, id db.UUID) (db.Engine, error) {
 	return db.Engine{ID: id, Class: "federated"}, nil
 }
 
-func (f *fakeStore) ListWorkspaceTargets(context.Context, pgtype.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+func (f *fakeStore) ListWorkspaceTargets(context.Context, db.UUID) ([]db.ListWorkspaceTargetsRow, error) {
 	return nil, nil
 }
 
@@ -160,8 +158,8 @@ func (e *fakeEngine) Cancel(_ context.Context, h queryengine.QueryHandle) error 
 
 type fakeEngines struct{ e *fakeEngine }
 
-func (f fakeEngines) Get(context.Context, pgtype.UUID) (queryengine.Engine, error) { return f.e, nil }
-func (f fakeEngines) DefaultTrino(context.Context) (queryengine.Engine, error)     { return f.e, nil }
+func (f fakeEngines) Get(context.Context, db.UUID) (queryengine.Engine, error) { return f.e, nil }
+func (f fakeEngines) DefaultTrino(context.Context) (queryengine.Engine, error) { return f.e, nil }
 
 func setup() (*Service, *fakeStore, *fakeWorkflows, *fakeEngine) {
 	st, wf, eng := newStore(), &fakeWorkflows{}, &fakeEngine{}

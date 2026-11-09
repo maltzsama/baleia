@@ -12,8 +12,6 @@ import (
 	"github.com/galileostudio/baleia/internal/identity"
 	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -29,21 +27,21 @@ func (f *fakeStore) GetUserByEmail(_ context.Context, email string) (db.User, er
 	if u, ok := f.byEmail[email]; ok {
 		return u, nil
 	}
-	return db.User{}, pgx.ErrNoRows
+	return db.User{}, db.ErrNoRows
 }
 
-func (f *fakeStore) GetAuthProviderByID(_ context.Context, id pgtype.UUID) (db.AuthProvider, error) {
+func (f *fakeStore) GetAuthProviderByID(_ context.Context, id db.UUID) (db.AuthProvider, error) {
 	if ap, ok := f.providers[id.Bytes]; ok {
 		return ap, nil
 	}
-	return db.AuthProvider{}, pgx.ErrNoRows
+	return db.AuthProvider{}, db.ErrNoRows
 }
 
 func (f *fakeStore) GetUserByExternalID(_ context.Context, arg db.GetUserByExternalIDParams) (db.User, error) {
 	if u, ok := f.byExternal[*arg.ExternalID]; ok && u.AuthProviderID == arg.AuthProviderID {
 		return u, nil
 	}
-	return db.User{}, pgx.ErrNoRows
+	return db.User{}, db.ErrNoRows
 }
 
 func (f *fakeStore) UpdateUserRole(_ context.Context, arg db.UpdateUserRoleParams) error {
@@ -69,7 +67,7 @@ func (d fakeDirectory) Authenticate(_ context.Context, _ identityldap.Config, us
 	return nil, errors.New("bind failed")
 }
 
-func newID() pgtype.UUID { return pgtype.UUID{Bytes: uuid.New(), Valid: true} }
+func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }
 
 func hash(t *testing.T, password string) *string {
 	t.Helper()
@@ -157,7 +155,7 @@ func TestDirectory(t *testing.T) {
 
 	for _, c := range []struct {
 		name               string
-		provider           pgtype.UUID
+		provider           db.UUID
 		username, password string
 	}{
 		{"wrong password", ap.ID, "ana", "wrong"},
@@ -185,7 +183,7 @@ func (brokenStore) GetUserByEmail(context.Context, string) (db.User, error) {
 	return db.User{}, errDown
 }
 
-func (brokenStore) GetAuthProviderByID(context.Context, pgtype.UUID) (db.AuthProvider, error) {
+func (brokenStore) GetAuthProviderByID(context.Context, db.UUID) (db.AuthProvider, error) {
 	return db.AuthProvider{}, errDown
 }
 

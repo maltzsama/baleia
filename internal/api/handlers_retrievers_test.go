@@ -6,8 +6,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // fakeRetrieverQuerier supports CreateRetriever by giving the workspace an
@@ -35,35 +33,35 @@ func (f *fakeRetrieverQuerier) CheckWorkspaceAccess(context.Context, db.CheckWor
 	return true, nil
 }
 
-func (f *fakeRetrieverQuerier) GetWorkspaceByID(_ context.Context, id pgtype.UUID) (db.Workspace, error) {
-	return db.Workspace{ID: id, OwnerUserID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}}, nil
+func (f *fakeRetrieverQuerier) GetWorkspaceByID(_ context.Context, id db.UUID) (db.Workspace, error) {
+	return db.Workspace{ID: id, OwnerUserID: db.UUID{Bytes: [16]byte{1}, Valid: true}}, nil
 }
 
-func (f *fakeRetrieverQuerier) ListCatalogConnections(context.Context, pgtype.UUID) ([]db.CatalogConnection, error) {
-	return []db.CatalogConnection{{ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true}, Type: "polaris"}}, nil
+func (f *fakeRetrieverQuerier) ListCatalogConnections(context.Context, db.UUID) ([]db.CatalogConnection, error) {
+	return []db.CatalogConnection{{ID: db.UUID{Bytes: [16]byte{2}, Valid: true}, Type: "polaris"}}, nil
 }
 
-func (f *fakeRetrieverQuerier) ListCatalogsByConnection(context.Context, pgtype.UUID) ([]db.Catalog, error) {
+func (f *fakeRetrieverQuerier) ListCatalogsByConnection(context.Context, db.UUID) ([]db.Catalog, error) {
 	return []db.Catalog{
 		{Name: "tpch", TrinoCatalogName: strp("tpch"), Enabled: true},
 	}, nil
 }
 
-func (f *fakeRetrieverQuerier) ListRetrieverDestinations(context.Context, pgtype.UUID) ([]db.ListRetrieverDestinationsRow, error) {
+func (f *fakeRetrieverQuerier) ListRetrieverDestinations(context.Context, db.UUID) ([]db.ListRetrieverDestinationsRow, error) {
 	return []db.ListRetrieverDestinationsRow{{
-		BindingID:         pgtype.UUID{Bytes: [16]byte{3}, Valid: true},
+		BindingID:         db.UUID{Bytes: [16]byte{3}, Valid: true},
 		EngineCatalogName: "tpch",
 		Connector:         "iceberg",
-		CatalogID:         pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
+		CatalogID:         db.UUID{Bytes: [16]byte{2}, Valid: true},
 		CatalogName:       "tpch",
-		EngineID:          pgtype.UUID{Bytes: [16]byte{4}, Valid: true},
+		EngineID:          db.UUID{Bytes: [16]byte{4}, Valid: true},
 		EngineName:        "trino",
 		EngineKind:        "trino",
 	}}, nil
 }
 
-func (f *fakeRetrieverQuerier) LatestRetrieverRefresh(context.Context, pgtype.UUID) (db.LatestRetrieverRefreshRow, error) {
-	return db.LatestRetrieverRefreshRow{}, pgx.ErrNoRows
+func (f *fakeRetrieverQuerier) LatestRetrieverRefresh(context.Context, db.UUID) (db.LatestRetrieverRefreshRow, error) {
+	return db.LatestRetrieverRefreshRow{}, db.ErrNoRows
 }
 
 func (f *fakeRetrieverQuerier) CreateRetriever(_ context.Context, arg db.CreateRetrieverParams) (db.Retriever, error) {

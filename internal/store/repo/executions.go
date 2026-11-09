@@ -8,8 +8,6 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -44,10 +42,10 @@ func (r *Repo) CreateQueryExecution(ctx context.Context, arg db.CreateQueryExecu
 	return toDBQueryExecution(row), nil
 }
 
-// GetQueryExecutionByID returns one execution or pgx.ErrNoRows.
-func (r *Repo) GetQueryExecutionByID(ctx context.Context, id pgtype.UUID) (db.QueryExecution, error) {
+// GetQueryExecutionByID returns one execution or db.ErrNoRows.
+func (r *Repo) GetQueryExecutionByID(ctx context.Context, id db.UUID) (db.QueryExecution, error) {
 	if !id.Valid {
-		return db.QueryExecution{}, pgx.ErrNoRows
+		return db.QueryExecution{}, db.ErrNoRows
 	}
 	return r.getExecution(ctx, "id = ?", UUIDString(id))
 }
@@ -73,10 +71,10 @@ func (r *Repo) ListQueryExecutionsByWorkspace(ctx context.Context, arg db.ListQu
 
 // UpdateQueryExecution ends a running execution. Only a running row
 // transitions, so a late completion never overwrites a cancellation; zero
-// matched rows is pgx.ErrNoRows.
+// matched rows is db.ErrNoRows.
 func (r *Repo) UpdateQueryExecution(ctx context.Context, arg db.UpdateQueryExecutionParams) (db.QueryExecution, error) {
 	if !arg.ID.Valid {
-		return db.QueryExecution{}, pgx.ErrNoRows
+		return db.QueryExecution{}, db.ErrNoRows
 	}
 	var out db.QueryExecution
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -93,7 +91,7 @@ func (r *Repo) UpdateQueryExecution(ctx context.Context, arg db.UpdateQueryExecu
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		row, err := getExecutionTx(ctx, tx, "id = ?", UUIDString(arg.ID))
 		out = row
@@ -106,7 +104,7 @@ func (r *Repo) UpdateQueryExecution(ctx context.Context, arg db.UpdateQueryExecu
 // rows means it is gone, foreign, or already terminal.
 func (r *Repo) CancelQueryExecution(ctx context.Context, arg db.CancelQueryExecutionParams) (db.QueryExecution, error) {
 	if !arg.ID.Valid || !arg.WorkspaceID.Valid {
-		return db.QueryExecution{}, pgx.ErrNoRows
+		return db.QueryExecution{}, db.ErrNoRows
 	}
 	var out db.QueryExecution
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -117,7 +115,7 @@ func (r *Repo) CancelQueryExecution(ctx context.Context, arg db.CancelQueryExecu
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		row, err := getExecutionTx(ctx, tx, "id = ?", UUIDString(arg.ID))
 		out = row
@@ -130,7 +128,7 @@ func (r *Repo) CancelQueryExecution(ctx context.Context, arg db.CancelQueryExecu
 // statement ran; only a running or queued row transitions.
 func (r *Repo) FailQueryExecution(ctx context.Context, arg db.FailQueryExecutionParams) (db.QueryExecution, error) {
 	if !arg.ID.Valid {
-		return db.QueryExecution{}, pgx.ErrNoRows
+		return db.QueryExecution{}, db.ErrNoRows
 	}
 	var out db.QueryExecution
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -145,7 +143,7 @@ func (r *Repo) FailQueryExecution(ctx context.Context, arg db.FailQueryExecution
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		row, err := getExecutionTx(ctx, tx, "id = ?", UUIDString(arg.ID))
 		out = row
@@ -155,9 +153,9 @@ func (r *Repo) FailQueryExecution(ctx context.Context, arg db.FailQueryExecution
 }
 
 // QueueQueryExecution moves a running execution into its admission queue.
-func (r *Repo) QueueQueryExecution(ctx context.Context, id pgtype.UUID) (db.QueryExecution, error) {
+func (r *Repo) QueueQueryExecution(ctx context.Context, id db.UUID) (db.QueryExecution, error) {
 	if !id.Valid {
-		return db.QueryExecution{}, pgx.ErrNoRows
+		return db.QueryExecution{}, db.ErrNoRows
 	}
 	var out db.QueryExecution
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -168,7 +166,7 @@ func (r *Repo) QueueQueryExecution(ctx context.Context, id pgtype.UUID) (db.Quer
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		row, err := getExecutionTx(ctx, tx, "id = ?", UUIDString(id))
 		out = row
@@ -179,9 +177,9 @@ func (r *Repo) QueueQueryExecution(ctx context.Context, id pgtype.UUID) (db.Quer
 
 // AdmitQueryExecution moves a queued execution back to running and records
 // the wait.
-func (r *Repo) AdmitQueryExecution(ctx context.Context, id pgtype.UUID) (db.QueryExecution, error) {
+func (r *Repo) AdmitQueryExecution(ctx context.Context, id db.UUID) (db.QueryExecution, error) {
 	if !id.Valid {
-		return db.QueryExecution{}, pgx.ErrNoRows
+		return db.QueryExecution{}, db.ErrNoRows
 	}
 	var out db.QueryExecution
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -190,13 +188,13 @@ func (r *Repo) AdmitQueryExecution(ctx context.Context, id pgtype.UUID) (db.Quer
 			Where("id = ?", UUIDString(id)).
 			First(&row).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		if err != nil {
 			return err
 		}
 		if string(row.Status) != "queued" {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		now := time.Now().UTC()
 		var wait int64
@@ -309,7 +307,7 @@ func (r *Repo) IsWorkspaceStructuralOwner(ctx context.Context, arg db.IsWorkspac
 
 // ListRunningStatementHandles returns the persisted handles of an execution's
 // running statements, by position.
-func (r *Repo) ListRunningStatementHandles(ctx context.Context, executionID pgtype.UUID) ([]db.ListRunningStatementHandlesRow, error) {
+func (r *Repo) ListRunningStatementHandles(ctx context.Context, executionID db.UUID) ([]db.ListRunningStatementHandlesRow, error) {
 	var rows []model.QueryStatement
 	if err := r.Users.db.WithContext(ctx).
 		Where("execution_id = ? AND query_handle IS NOT NULL AND status = ?", UUIDString(executionID), "running").
@@ -344,7 +342,7 @@ func (r *Repo) CreateQueryStatement(ctx context.Context, arg db.CreateQueryState
 }
 
 // ListQueryStatements returns an execution's statements by position.
-func (r *Repo) ListQueryStatements(ctx context.Context, executionID pgtype.UUID) ([]db.QueryStatement, error) {
+func (r *Repo) ListQueryStatements(ctx context.Context, executionID db.UUID) ([]db.QueryStatement, error) {
 	var rows []model.QueryStatement
 	if err := r.Users.db.WithContext(ctx).
 		Where("execution_id = ?", UUIDString(executionID)).
@@ -369,17 +367,17 @@ func (r *Repo) ListQueryStatementsByWorkspace(ctx context.Context, arg db.ListQu
 }
 
 // GetQueryStatementByPosition returns one statement of an execution of the
-// workspace or pgx.ErrNoRows.
+// workspace or db.ErrNoRows.
 func (r *Repo) GetQueryStatementByPosition(ctx context.Context, arg db.GetQueryStatementByPositionParams) (db.QueryStatement, error) {
 	if !r.executionInWorkspace(ctx, arg.ExecutionID, arg.WorkspaceID) {
-		return db.QueryStatement{}, pgx.ErrNoRows
+		return db.QueryStatement{}, db.ErrNoRows
 	}
 	var row model.QueryStatement
 	err := r.Users.db.WithContext(ctx).
 		Where("execution_id = ? AND position = ?", UUIDString(arg.ExecutionID), arg.Position).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.QueryStatement{}, pgx.ErrNoRows
+		return db.QueryStatement{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.QueryStatement{}, err
@@ -388,10 +386,10 @@ func (r *Repo) GetQueryStatementByPosition(ctx context.Context, arg db.GetQueryS
 }
 
 // UpdateQueryStatement ends a running statement. Zero matched rows is
-// pgx.ErrNoRows.
+// db.ErrNoRows.
 func (r *Repo) UpdateQueryStatement(ctx context.Context, arg db.UpdateQueryStatementParams) (db.QueryStatement, error) {
 	if !arg.ID.Valid {
-		return db.QueryStatement{}, pgx.ErrNoRows
+		return db.QueryStatement{}, db.ErrNoRows
 	}
 	resultSets := arg.ResultSets
 	if resultSets == nil {
@@ -418,7 +416,7 @@ func (r *Repo) UpdateQueryStatement(ctx context.Context, arg db.UpdateQueryState
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
-			return pgx.ErrNoRows
+			return db.ErrNoRows
 		}
 		var row model.QueryStatement
 		if err := tx.Where("id = ?", UUIDString(arg.ID)).First(&row).Error; err != nil {
@@ -440,7 +438,7 @@ func (r *Repo) StartQueryStatement(ctx context.Context, arg db.StartQueryStateme
 }
 
 // SkipPendingStatements skips the statements that never ran.
-func (r *Repo) SkipPendingStatements(ctx context.Context, executionID pgtype.UUID) error {
+func (r *Repo) SkipPendingStatements(ctx context.Context, executionID db.UUID) error {
 	return r.Users.db.WithContext(ctx).Model(&model.QueryStatement{}).
 		Where("execution_id = ? AND status = ?", UUIDString(executionID), "pending").
 		Updates(map[string]any{"status": "skipped", "finished_at": time.Now().UTC()}).Error
@@ -489,7 +487,7 @@ func (r *Repo) SetStatementQueryHandle(ctx context.Context, arg db.SetStatementQ
 // ── queues and workloads ──────────────────────────────────────────────────────
 
 // ListEngineQueueCapacities returns the per-class capacities of one engine.
-func (r *Repo) ListEngineQueueCapacities(ctx context.Context, engineID pgtype.UUID) ([]db.EngineQueueCapacity, error) {
+func (r *Repo) ListEngineQueueCapacities(ctx context.Context, engineID db.UUID) ([]db.EngineQueueCapacity, error) {
 	var rows []model.EngineQueueCapacity
 	if err := r.Users.db.WithContext(ctx).
 		Where("engine_id = ?", UUIDString(engineID)).
@@ -536,7 +534,7 @@ func getExecutionTx(ctx context.Context, tx *gorm.DB, where string, args ...any)
 	var row model.QueryExecution
 	err := tx.WithContext(ctx).Where(where, args...).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.QueryExecution{}, pgx.ErrNoRows
+		return db.QueryExecution{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.QueryExecution{}, err
@@ -545,7 +543,7 @@ func getExecutionTx(ctx context.Context, tx *gorm.DB, where string, args ...any)
 }
 
 // executionInWorkspace reports whether an execution belongs to the workspace.
-func (r *Repo) executionInWorkspace(ctx context.Context, executionID, workspaceID pgtype.UUID) bool {
+func (r *Repo) executionInWorkspace(ctx context.Context, executionID, workspaceID db.UUID) bool {
 	if !executionID.Valid || !workspaceID.Valid {
 		return false
 	}
