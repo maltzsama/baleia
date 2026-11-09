@@ -227,14 +227,45 @@ func AllMigrations() (*Registry, error) {
 				// Drop and add in one statement: the two actions commit together,
 				// so an interruption cannot leave the table without the check
 				// (ADR 0021 CR-11).
+				drop := "DROP CONSTRAINT ?"
+				oldMySQL, err := mysqlBeforeCheckDropConstraint(db)
+				if err != nil {
+					return err
+				}
+				if oldMySQL {
+					// MySQL 8.0.16-8.0.18 create CHECK constraints but only drop
+					// them with DROP CHECK; DROP CONSTRAINT arrived in 8.0.19.
+					drop = "DROP CHECK ?"
+				}
 				args := append([]any{clause.Table{Name: stmt.Table}, clause.Column{Name: chk.Name}}, values...)
-				if err := db.Exec("ALTER TABLE ? DROP CONSTRAINT ?, ADD "+add, args...).Error; err != nil {
+				if err := db.Exec("ALTER TABLE ? "+drop+", ADD "+add, args...).Error; err != nil {
 					return fmt.Errorf("replace connection type check: %w", err)
 				}
 				return nil
 			},
 		},
 	)
+}
+
+// mysqlBeforeCheckDropConstraint reports whether the server is MySQL (not
+// MariaDB) older than 8.0.19, where a CHECK constraint is dropped with DROP
+// CHECK rather than DROP CONSTRAINT.
+func mysqlBeforeCheckDropConstraint(db *gorm.DB) (bool, error) {
+	if db.Name() != "mysql" {
+		return false, nil
+	}
+	var version string
+	if err := db.Raw("SELECT VERSION()").Scan(&version).Error; err != nil {
+		return false, err
+	}
+	if strings.Contains(version, "MariaDB") {
+		return false, nil
+	}
+	var major, minor, patch int
+	if _, err := fmt.Sscanf(version, "%d.%d.%d", &major, &minor, &patch); err != nil {
+		return false, nil
+	}
+	return major == 8 && minor == 0 && patch < 19, nil
 }
 
 // seedDefaults creates the rows a fresh goose database used to seed: the

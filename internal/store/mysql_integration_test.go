@@ -132,11 +132,27 @@ func testMySQLAllMigrations(t *testing.T, env string) {
 	t.Helper()
 	ctx := context.Background()
 	db := openMySQLTestStore(t, env)
-	reg, err := AllMigrations()
+	all, err := AllMigrations()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewRunner(db, reg, slog.New(slog.DiscardHandler)).Up(ctx); err != nil {
+	// Apply the schema up to migration 5, then install the older constraint so
+	// migration 6 has to expand it instead of finding the current list.
+	first, err := NewRegistry(all.All()[:5]...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewRunner(db, first, slog.New(slog.DiscardHandler)).Up(ctx); err != nil {
+		t.Fatalf("Up to migration 5: %v", err)
+	}
+	if err := db.Exec("ALTER TABLE catalog_connections DROP CONSTRAINT catalog_connections_type_check").Error; err != nil {
+		t.Fatalf("drop current type check: %v", err)
+	}
+	oldCheck := "type IN ('polaris','nessie','iceberg','lakekeeper','unity','hive','glue','postgresql','mysql','mariadb','sqlserver','oracle','sqlite','clickhouse','flightsql','trino','doris','starrocks')"
+	if err := db.Exec("ALTER TABLE catalog_connections ADD CONSTRAINT catalog_connections_type_check CHECK (" + oldCheck + ")").Error; err != nil {
+		t.Fatalf("install old type check: %v", err)
+	}
+	if _, err := NewRunner(db, all, slog.New(slog.DiscardHandler)).Up(ctx); err != nil {
 		t.Fatalf("Up: %v", err)
 	}
 	now := time.Now().UTC()

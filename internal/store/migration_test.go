@@ -141,6 +141,26 @@ func TestRunnerReportsFailure(t *testing.T) {
 	if _, err := runner.Up(ctx); err == nil || !strings.Contains(err.Error(), "interrupted") {
 		t.Fatalf("second Up error = %v, want a retry refusal until reconciliation", err)
 	}
+
+	// Recovery: once the operator reconciles the schema and clears the dirty
+	// row, the migration runs again instead of being permanently blocked.
+	if err := db.Where("version = ?", 1).Delete(&SchemaMigration{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := NewRegistry(Migration{
+		Version: 1,
+		Name:    "boom",
+		Up:      func(db *gorm.DB) error { return db.AutoMigrate(&runnerTestRow{}) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewRunner(db, recovered, slog.New(slog.DiscardHandler)).Up(ctx); err != nil {
+		t.Fatalf("recovery Up: %v", err)
+	}
+	if !db.Migrator().HasTable(&runnerTestRow{}) {
+		t.Fatal("recovery Up did not run the migration")
+	}
 }
 
 func TestRunnerStatusIsReadOnly(t *testing.T) {
