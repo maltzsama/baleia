@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/realtime"
 	"golang.org/x/time/rate"
 )
 
@@ -22,23 +24,34 @@ type ipLimiter struct {
 }
 
 type RateLimiter struct {
-	mu    sync.Mutex
-	perIP map[string]*ipLimiter
-	cfg   RateLimiterConfig
-	done  chan struct{}
+	mu     sync.Mutex
+	perIP  map[string]*ipLimiter
+	cfg    RateLimiterConfig
+	shared *realtime.Client
+	done   chan struct{}
 }
 
-func NewRateLimiter(cfg RateLimiterConfig) *RateLimiter {
+func NewRateLimiter(cfg RateLimiterConfig, shared *realtime.Client) *RateLimiter {
 	rl := &RateLimiter{
-		perIP: make(map[string]*ipLimiter),
-		cfg:   cfg,
-		done:  make(chan struct{}),
+		perIP:  make(map[string]*ipLimiter),
+		cfg:    cfg,
+		shared: shared,
+		done:   make(chan struct{}),
 	}
 	go rl.cleanup(5 * time.Minute)
 	return rl
 }
 
-func (rl *RateLimiter) Allow(ip string) bool {
+// Allow spends one request for ip. With the shared layer enabled the bucket
+// lives in Redis, so the limit holds across replicas; a Redis error falls back
+// to the local bucket (still better than no limit).
+func (rl *RateLimiter) Allow(ctx context.Context, ip string) bool {
+	if rl.shared.Enabled() {
+		allowed, _, err := rl.shared.Allow(ctx, "generic:"+ip, float64(rl.cfg.RequestsPerSecond), rl.cfg.Burst)
+		if err == nil {
+			return allowed
+		}
+	}
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
@@ -88,8 +101,8 @@ func (rl *RateLimiter) cleanup(interval time.Duration) {
 }
 
 // AuthRouteLimit is one strict, per-IP token bucket on an auth route (#51):
-// Burst requests per Every. These limits are per process; a multi-replica
-// deployment enforces them per replica until a shared limiter exists.
+// Burst requests per Every. With the shared limiter enabled the bucket lives
+// in Redis and holds across the fleet; without it the limit is per replica.
 type AuthRouteLimit struct {
 	// Path is the exact request path the bucket applies to.
 	Path string
@@ -103,9 +116,10 @@ type AuthRouteLimit struct {
 }
 
 type routeBucket struct {
-	limit AuthRouteLimit
-	mu    sync.Mutex
-	perIP map[string]*ipLimiter
+	limit  AuthRouteLimit
+	shared *realtime.Client
+	mu     sync.Mutex
+	perIP  map[string]*ipLimiter
 }
 
 // AuthRouteLimiter enforces one token bucket per route and client IP. The
@@ -118,13 +132,13 @@ type AuthRouteLimiter struct {
 
 // NewAuthRouteLimiter builds the strict auth-route limiter. onLimited, when
 // set, observes the kind of every refused request.
-func NewAuthRouteLimiter(limits []AuthRouteLimit, onLimited func(kind string)) *AuthRouteLimiter {
+func NewAuthRouteLimiter(limits []AuthRouteLimit, onLimited func(kind string), shared *realtime.Client) *AuthRouteLimiter {
 	l := &AuthRouteLimiter{onLimited: onLimited, done: make(chan struct{})}
 	for _, limit := range limits {
 		if limit.Every <= 0 || limit.Burst <= 0 {
 			continue
 		}
-		l.buckets = append(l.buckets, &routeBucket{limit: limit, perIP: make(map[string]*ipLimiter)})
+		l.buckets = append(l.buckets, &routeBucket{limit: limit, shared: shared, perIP: make(map[string]*ipLimiter)})
 	}
 	go l.cleanup(5 * time.Minute)
 	return l
@@ -143,7 +157,7 @@ func (l *AuthRouteLimiter) Middleware(next http.Handler) http.Handler {
 		if ip == "" {
 			ip = r.RemoteAddr
 		}
-		if retryAfter, ok := bucket.allow(ip); !ok {
+		if retryAfter, ok := bucket.allow(r.Context(), ip); !ok {
 			if l.onLimited != nil {
 				l.onLimited(bucket.limit.Kind)
 			}
@@ -201,7 +215,14 @@ func (l *AuthRouteLimiter) cleanup(interval time.Duration) {
 }
 
 // allow reports whether the IP may proceed, and when it may retry otherwise.
-func (b *routeBucket) allow(ip string) (time.Duration, bool) {
+func (b *routeBucket) allow(ctx context.Context, ip string) (time.Duration, bool) {
+	if b.shared.Enabled() {
+		perSecond := float64(b.limit.Burst) / b.limit.Every.Seconds()
+		allowed, retry, err := b.shared.Allow(ctx, "auth:"+b.limit.Kind+":"+ip, perSecond, b.limit.Burst)
+		if err == nil {
+			return retry, allowed
+		}
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -238,7 +259,7 @@ func RateLimitRefreshMiddleware(rl *RateLimiter, onRefreshLimited func()) func(h
 				ip = r.RemoteAddr
 			}
 
-			if !rl.Allow(ip) {
+			if !rl.Allow(r.Context(), ip) {
 				if onRefreshLimited != nil && r.URL.Path == "/api/v1/auth/refresh" {
 					onRefreshLimited()
 				}

@@ -17,6 +17,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/monitoring/events"
+	"github.com/galileostudio/baleia/internal/realtime"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
@@ -31,6 +32,9 @@ import (
 type core struct {
 	// logger is the process logger (#379); every group logs through it.
 	logger *slog.Logger
+	// rt is the shared cross-replica backbone (ADR 0022); nil/disabled keeps
+	// every cache and limiter process-local.
+	rt *realtime.Client
 	// queries is the GORM store under the sqlc-shaped interface the services
 	// consume. Tests may inject a fake; production always holds *repo.Repo.
 	queries db.Querier
@@ -50,13 +54,13 @@ type core struct {
 	oidcLogin      *oidclogin.Service
 	idpTokens      *idptoken.Tokens
 	temporalClient client.Client
-	catalogCache   *TTLStore[[]workspaceCatalogEntry]
+	catalogCache   cacheStore[[]workspaceCatalogEntry]
 	// versionCache: engine id@updated_at → version and health, read by the
 	// engine listing, the status page and the attention items.
-	versionCache *TTLStore[engineProbe]
+	versionCache cacheStore[engineProbe]
 	// functionsCache: binding id → the engine's function catalog (#788),
 	// introspected on demand and refreshed hourly.
-	functionsCache *TTLStore[[]metadata.FunctionReference]
+	functionsCache cacheStore[[]metadata.FunctionReference]
 	// s3 holds query results and exports (object storage).
 	s3 *storage.S3Client
 	// connections holds every connection provider (docs/adr/0002).
