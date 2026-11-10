@@ -95,6 +95,9 @@ func (r *Repo) UpdateQueryExecution(ctx context.Context, arg db.UpdateQueryExecu
 		}
 		row, err := getExecutionTx(ctx, tx, "id = ?", UUIDString(arg.ID))
 		out = row
+		if err == nil {
+			r.enqueueTx(tx, "execution", UUIDString(arg.ID))
+		}
 		return err
 	})
 	return out, err
@@ -119,6 +122,9 @@ func (r *Repo) CancelQueryExecution(ctx context.Context, arg db.CancelQueryExecu
 		}
 		row, err := getExecutionTx(ctx, tx, "id = ?", UUIDString(arg.ID))
 		out = row
+		if err == nil {
+			r.enqueueTx(tx, "execution", UUIDString(arg.ID))
+		}
 		return err
 	})
 	return out, err
@@ -147,6 +153,9 @@ func (r *Repo) FailQueryExecution(ctx context.Context, arg db.FailQueryExecution
 		}
 		row, err := getExecutionTx(ctx, tx, "id = ?", UUIDString(arg.ID))
 		out = row
+		if err == nil {
+			r.enqueueTx(tx, "execution", UUIDString(arg.ID))
+		}
 		return err
 	})
 	return out, err
@@ -170,6 +179,9 @@ func (r *Repo) QueueQueryExecution(ctx context.Context, id db.UUID) (db.QueryExe
 		}
 		row, err := getExecutionTx(ctx, tx, "id = ?", UUIDString(id))
 		out = row
+		if err == nil {
+			r.enqueueTx(tx, "execution", UUIDString(id))
+		}
 		return err
 	})
 	return out, err
@@ -214,6 +226,7 @@ func (r *Repo) AdmitQueryExecution(ctx context.Context, id db.UUID) (db.QueryExe
 		row.AdmittedAt = &now
 		row.QueueWaitMs = &wait
 		out = toDBQueryExecution(row)
+		r.enqueueTx(tx, "execution", UUIDString(id))
 		return nil
 	})
 	return out, err
@@ -423,6 +436,7 @@ func (r *Repo) UpdateQueryStatement(ctx context.Context, arg db.UpdateQueryState
 			return err
 		}
 		out = toDBQueryStatement(row)
+		r.enqueueTx(tx, "execution", string(row.ExecutionID))
 		return nil
 	})
 	return out, err
@@ -431,17 +445,31 @@ func (r *Repo) UpdateQueryStatement(ctx context.Context, arg db.UpdateQueryState
 // StartQueryStatement turns a pending statement into the running one; zero
 // rows means it is no longer pending.
 func (r *Repo) StartQueryStatement(ctx context.Context, arg db.StartQueryStatementParams) (int64, error) {
-	res := r.Users.db.WithContext(ctx).Model(&model.QueryStatement{}).
-		Where("execution_id = ? AND position = ? AND status = ?", UUIDString(arg.ExecutionID), arg.Position, "pending").
-		Updates(map[string]any{"status": "running", "started_at": time.Now().UTC()})
-	return res.RowsAffected, res.Error
+	var affected int64
+	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&model.QueryStatement{}).
+			Where("execution_id = ? AND position = ? AND status = ?", UUIDString(arg.ExecutionID), arg.Position, "pending").
+			Updates(map[string]any{"status": "running", "started_at": time.Now().UTC()})
+		affected = res.RowsAffected
+		if res.Error == nil && affected > 0 {
+			r.enqueueTx(tx, "execution", UUIDString(arg.ExecutionID))
+		}
+		return res.Error
+	})
+	return affected, err
 }
 
 // SkipPendingStatements skips the statements that never ran.
 func (r *Repo) SkipPendingStatements(ctx context.Context, executionID db.UUID) error {
-	return r.Users.db.WithContext(ctx).Model(&model.QueryStatement{}).
-		Where("execution_id = ? AND status = ?", UUIDString(executionID), "pending").
-		Updates(map[string]any{"status": "skipped", "finished_at": time.Now().UTC()}).Error
+	return r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&model.QueryStatement{}).
+			Where("execution_id = ? AND status = ?", UUIDString(executionID), "pending").
+			Updates(map[string]any{"status": "skipped", "finished_at": time.Now().UTC()})
+		if res.Error == nil && res.RowsAffected > 0 {
+			r.enqueueTx(tx, "execution", UUIDString(executionID))
+		}
+		return res.Error
+	})
 }
 
 // AbandonRunningStatements ends the statements still running and returns
@@ -465,14 +493,18 @@ func (r *Repo) AbandonRunningStatements(ctx context.Context, arg db.AbandonRunni
 			ids[i] = string(row.ID)
 			out[i] = db.AbandonRunningStatementsRow{Position: row.Position, QueryHandle: []byte(modelJSONValue(row.QueryHandle))}
 		}
-		return tx.Model(&model.QueryStatement{}).
+		if err := tx.Model(&model.QueryStatement{}).
 			Where("id IN ?", ids).
 			Updates(map[string]any{
 				"status":        arg.Status,
 				"error_code":    arg.ErrorCode,
 				"error_message": arg.ErrorMessage,
 				"finished_at":   time.Now().UTC(),
-			}).Error
+			}).Error; err != nil {
+			return err
+		}
+		r.enqueueTx(tx, "execution", UUIDString(arg.ExecutionID))
+		return nil
 	})
 	return out, err
 }

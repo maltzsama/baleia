@@ -10,6 +10,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/realtime"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/google/uuid"
@@ -24,6 +25,10 @@ const (
 	pollInterval  = 1 * time.Second
 	maxDuration   = 30 * time.Minute
 	maxWriteRetry = 3
+	// queueRefreshInterval re-derives a queued run's position from the
+	// admission workflow; a position shift writes no execution row, so the
+	// bus has no notification for it (ADR 0022).
+	queueRefreshInterval = 10 * time.Second
 )
 
 var upgrader = websocket.Upgrader{
@@ -84,6 +89,7 @@ type Handler struct {
 	jwtSecret   string
 	tickets     *wsticket.Store
 	temporal    client.Client
+	bus         *realtime.Client
 	s3Endpoint  string
 	s3AccessKey string
 	s3SecretKey string
@@ -93,6 +99,10 @@ type Handler struct {
 
 // SetTickets wires the shared single-use ticket store (#26).
 func (h *Handler) SetTickets(store *wsticket.Store) { h.tickets = store }
+
+// SetBus wires the shared bus (ADR 0022): with it the stream is event-driven,
+// without it it keeps the per-connection poll.
+func (h *Handler) SetBus(bus *realtime.Client) { h.bus = bus }
 
 func New(logger *slog.Logger, queries Querier, jwtSecret string, temporal client.Client, s3Endpoint, s3AccessKey, s3SecretKey, s3Bucket string, s3UseSSL bool) *Handler {
 	return &Handler{
@@ -238,13 +248,29 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), maxDuration)
 	defer cancel()
 
-	var lastStatus string
-	var lastQueuePos int
-	var seenStatements map[int32]string
-	var seq int64
+	st := &streamState{}
+	updates := make(chan struct{}, 1)
+	wake := func() {
+		select {
+		case updates <- struct{}{}:
+		default:
+		}
+	}
 
-	pollTicker := time.NewTicker(pollInterval)
-	defer pollTicker.Stop()
+	// With the bus, a status change publishes a wake-up and the handler
+	// re-reads the DB; without it, the per-connection poll remains.
+	var pollC <-chan time.Time
+	if !h.bus.Enabled() {
+		pollTicker := time.NewTicker(pollInterval)
+		defer pollTicker.Stop()
+		pollC = pollTicker.C
+	}
+	var queueC <-chan time.Time
+	if h.bus.Enabled() {
+		queueTicker := time.NewTicker(queueRefreshInterval)
+		defer queueTicker.Stop()
+		queueC = queueTicker.C
+	}
 
 	pingTicker := time.NewTicker(pingInterval)
 	defer pingTicker.Stop()
@@ -259,35 +285,105 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	if h.bus.Enabled() {
+		unsubscribe := h.subscribe(ctx, "execution:"+executionID, wake)
+		defer unsubscribe()
+	}
+
+	// Send the opening snapshot and learn the execution's engine for the queue
+	// reconciliation. The subscription starts before it, so a change in
+	// between is a queued wake-up, not a lost one.
+	if !h.poll(ctx, conn, executionID, wsID, st) {
+		return
+	}
+
 	for {
 		select {
 		case <-done:
 			return
 		case <-ctx.Done():
-			sendExecutionStatus(h.logger, conn, executionID, &seq, "failed", strPtr("timeout"))
+			sendExecutionStatus(h.logger, conn, executionID, &st.seq, "failed", strPtr("timeout"))
 			return
 		case <-pingTicker.C:
 			conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
-		case <-pollTicker.C:
-			if !h.poll(ctx, conn, executionID, wsID, &lastStatus, &lastQueuePos, &seenStatements, &seq) {
+		case <-pollC:
+			if !h.poll(ctx, conn, executionID, wsID, st) {
+				return
+			}
+		case <-updates:
+			if !h.poll(ctx, conn, executionID, wsID, st) {
+				return
+			}
+		case <-queueC:
+			if st.lastStatus == "queued" && !h.refreshQueue(ctx, conn, executionID, st) {
 				return
 			}
 		}
 	}
 }
 
-func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID string, workspaceID db.UUID, lastStatus *string, lastQueuePos *int, seenStatements *map[int32]string, seq *int64) bool {
+// streamState is the per-connection diff the poll keeps between events.
+type streamState struct {
+	lastStatus     string
+	lastQueuePos   int
+	seenStatements map[int32]string
+	seq            int64
+	execution      QuerierQueryExecution
+}
+
+// subscribe relays a bus channel into wake until it is canceled, reconnecting
+// with a short backoff when the connection drops.
+func (h *Handler) subscribe(ctx context.Context, channel string, wake func()) func() {
+	cctx, cancel := context.WithCancel(ctx)
+	go func() {
+		for cctx.Err() == nil {
+			err := h.bus.SubscribeError(cctx, channel, func([]byte) { wake() })
+			if cctx.Err() != nil {
+				return
+			}
+			if err != nil {
+				time.Sleep(time.Second)
+			}
+		}
+	}()
+	return cancel
+}
+
+// refreshQueue re-derives a queued run's position from the admission workflow
+// without reading the database: the position changes when other runs leave the
+// queue, which writes no row for this execution.
+func (h *Handler) refreshQueue(ctx context.Context, conn *websocket.Conn, executionID string, st *streamState) bool {
+	if !st.execution.EngineID.Valid || st.execution.QueueClass == nil {
+		return true
+	}
+	queue := h.queueSnapshot(ctx, st.execution)
+	if queue.Position == st.lastQueuePos {
+		return true
+	}
+	st.lastQueuePos = queue.Position
+	sendEvent(h.logger, conn, WSEvent{
+		Type:        "queue_position",
+		ExecutionID: executionID,
+		Seq:         nextSeq(&st.seq),
+		TS:          now(),
+		Queue:       &queue,
+	})
+	return true
+}
+
+func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID string, workspaceID db.UUID, st *streamState) bool {
 	var execID db.UUID
 	execID.Scan(executionID)
 
 	execution, err := h.queries.GetQueryExecutionByIDAndWorkspace(ctx, execID, workspaceID)
 	if err != nil {
-		sendExecutionStatus(h.logger, conn, executionID, seq, "failed", strPtr("not_found"))
+		sendExecutionStatus(h.logger, conn, executionID, &st.seq, "failed", strPtr("not_found"))
 		return false
 	}
+	st.execution = execution
 
 	statements, err := h.queries.ListQueryStatementsByWorkspace(ctx, execID, workspaceID)
 	if err != nil {
@@ -295,39 +391,39 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 	}
 
 	// The first message of every connection replaces the client state.
-	if *lastStatus == "" {
+	if st.lastStatus == "" {
 		snapshot := h.snapshot(ctx, execution)
 		sendEvent(h.logger, conn, WSEvent{
 			Type:        "snapshot",
 			ExecutionID: executionID,
-			Seq:         nextSeq(seq),
+			Seq:         nextSeq(&st.seq),
 			TS:          now(),
 			Execution:   &snapshot,
 			Statements:  statementSnapshots(statements),
 		})
-		*seenStatements = make(map[int32]string, len(statements))
+		st.seenStatements = make(map[int32]string, len(statements))
 		for _, stmt := range statements {
-			(*seenStatements)[stmt.Position] = stmt.Status
+			st.seenStatements[stmt.Position] = stmt.Status
 		}
-		*lastStatus = execution.Status
+		st.lastStatus = execution.Status
 		if execution.Status == "queued" {
-			*lastQueuePos = h.queuePosition(ctx, execution)
+			st.lastQueuePos = h.queuePosition(ctx, execution)
 		}
 		return !terminal(execution.Status)
 	}
 
 	for _, stmt := range statements {
-		if (*seenStatements)[stmt.Position] == stmt.Status {
+		if st.seenStatements[stmt.Position] == stmt.Status {
 			continue
 		}
-		(*seenStatements)[stmt.Position] = stmt.Status
+		st.seenStatements[stmt.Position] = stmt.Status
 		snapshot := statementSnapshot(stmt)
 		count := snapshot.ResultCount
 		truncated := snapshot.Truncated
 		sendEvent(h.logger, conn, WSEvent{
 			Type:         "statement_status",
 			ExecutionID:  executionID,
-			Seq:          nextSeq(seq),
+			Seq:          nextSeq(&st.seq),
 			TS:           now(),
 			Position:     intPtr(int(stmt.Position)),
 			Status:       stmt.Status,
@@ -344,32 +440,32 @@ func (h *Handler) poll(ctx context.Context, conn *websocket.Conn, executionID st
 	// transition out of `queued` is its admission (#399).
 	if execution.Status == "queued" {
 		queue := h.queueSnapshot(ctx, execution)
-		if *lastQueuePos != queue.Position {
-			*lastQueuePos = queue.Position
+		if st.lastQueuePos != queue.Position {
+			st.lastQueuePos = queue.Position
 			sendEvent(h.logger, conn, WSEvent{
 				Type:        "queue_position",
 				ExecutionID: executionID,
-				Seq:         nextSeq(seq),
+				Seq:         nextSeq(&st.seq),
 				TS:          now(),
 				Queue:       &queue,
 			})
 		}
-	} else if *lastStatus == "queued" && execution.Status == "running" {
+	} else if st.lastStatus == "queued" && execution.Status == "running" {
 		queue := h.queueSnapshot(ctx, execution)
 		queue.Position = 0
-		*lastQueuePos = 0
+		st.lastQueuePos = 0
 		sendEvent(h.logger, conn, WSEvent{
 			Type:        "admitted",
 			ExecutionID: executionID,
-			Seq:         nextSeq(seq),
+			Seq:         nextSeq(&st.seq),
 			TS:          now(),
 			Queue:       &queue,
 		})
 	}
 
-	if execution.Status != *lastStatus {
-		*lastStatus = execution.Status
-		sendExecutionStatus(h.logger, conn, executionID, seq, execution.Status, execution.ErrorCode)
+	if execution.Status != st.lastStatus {
+		st.lastStatus = execution.Status
+		sendExecutionStatus(h.logger, conn, executionID, &st.seq, execution.Status, execution.ErrorCode)
 		if terminal(execution.Status) {
 			return false
 		}

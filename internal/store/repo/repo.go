@@ -17,6 +17,20 @@ type Repo struct {
 	*APIKeys
 	*Teams
 	*Agents
+	// enqueue records a durable notification in the writer's transaction
+	// (ADR 0022); nil when no shared layer is configured.
+	enqueue func(tx *gorm.DB, channel, payload string) error
+}
+
+// SetEnqueue wires the durable notification hook. Call it once, at startup.
+func (r *Repo) SetEnqueue(fn func(tx *gorm.DB, channel, payload string) error) { r.enqueue = fn }
+
+// enqueueTx records a notification in tx when a hook is set. It is
+// best-effort: a failed insert must not fail the domain write it accompanies.
+func (r *Repo) enqueueTx(tx *gorm.DB, channel, payload string) {
+	if r.enqueue != nil {
+		_ = r.enqueue(tx, channel, payload)
+	}
 }
 
 // New builds every domain store over one connection.
