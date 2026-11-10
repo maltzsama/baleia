@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import { apiFetch, client } from '$lib/api/client';
+	import { apiErrorMessage, apiFetch, client } from '$lib/api/client';
+	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { editor } from '$lib/stores/editor.svelte';
 	import { toasts } from '$lib/ui/toast.svelte';
 	import { poll } from '$lib/util/poll';
+	import { canOpenInBI } from '$lib/ui/patterns/kindIcon';
 	import { loadTable, type MetadataTableDetail, type TableRef } from '$lib/metadata/client';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -120,6 +122,55 @@
 	});
 
 	const hasBindings = $derived((table?.bindings.length ?? 0) > 1);
+	const selectedBinding = $derived(
+		table?.bindings.find((binding) => binding.binding_id === bindingId) ?? table?.bindings[0]
+	);
+	// The BI file points at the gateway (ADR 0017), so it needs the selected
+	// target to be Trino, the gateway configured and BI on for the workspace.
+	const biFileAvailable = $derived(
+		!!selectedBinding &&
+			canOpenInBI(selectedBinding.engine_kind) &&
+			(authStore.user?.features?.bi_gateway ?? false) &&
+			(workspaceStore.current?.bi_enabled ?? false)
+	);
+
+	// openInBI downloads a Tableau (.tds) or Power BI (.pbids) data source
+	// pointing at the gateway. The file has no credentials: the tool signs in
+	// with a workspace-bound BI key.
+	async function openInBI(tool: 'tableau' | 'powerbi') {
+		const ref = table;
+		const binding = selectedBinding;
+		if (!ref || !binding) return;
+		const schema = ref.namespace.join('.');
+		try {
+			const { data, error, response } = await client.GET('/workspaces/{id}/bi/{tool}', {
+				params: {
+					path: { id: workspaceId, tool },
+					query: {
+						engine_id: binding.engine_id,
+						catalog: binding.engine_catalog_name,
+						table: ref.tableName,
+						...(schema ? { schema } : {})
+					}
+				}
+			});
+			if (!response.ok) {
+				throw new Error(apiErrorMessage(error, m.components_tabledetail_bi_file_failed()));
+			}
+			const blob = new Blob([data ?? ''], { type: 'text/plain' });
+			const href = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = href;
+			link.download = `${ref.tableName}.${tool === 'tableau' ? 'tds' : 'pbids'}`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(href);
+		} catch (e) {
+			toasts.error(e instanceof Error ? e.message : String(e));
+		}
+	}
+
 	function insertName() {
 		if (!detailCurrent || !detail?.qualified_name) return;
 		editor.insert(detail.qualified_name);
@@ -291,6 +342,14 @@
 					disabled={!detailCurrent || !detail.qualified_name}
 					onclick={insertName}>{m.components_tabledetail_insert_name()}</Button
 				>
+				{#if biFileAvailable}
+					<Button variant="secondary" size="sm" onclick={() => openInBI('tableau')}
+						>{m.components_tabledetail_open_in_tableau()}</Button
+					>
+					<Button variant="secondary" size="sm" onclick={() => openInBI('powerbi')}
+						>{m.components_tabledetail_open_in_powerbi()}</Button
+					>
+				{/if}
 				{#if detail.qualified_name}
 					<span class="inline-flex items-center gap-1 text-[11px] text-text-muted">
 						<code class="font-mono">{detail.qualified_name}</code>

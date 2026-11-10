@@ -2613,6 +2613,7 @@
 	"engines_external_url_saved": "URL externa salva",
 	"components_tabledetail_open_in_tableau": "Abrir no Tableau",
 	"components_tabledetail_open_in_powerbi": "Abrir no Power BI",
+	"components_tabledetail_bi_file_failed": "Não foi possível baixar o arquivo de fonte de dados.",
 	"components_tabledetail_set_the_engine_external_url": "Defina a URL externa do motor nas configurações primeiro.",
 	"data_search_filter_type": "tipo: {value}",
 	"data_search_filter_tag": "tag: {value}",
