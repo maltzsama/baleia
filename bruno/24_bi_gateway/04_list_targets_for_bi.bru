@@ -1,0 +1,24 @@
+meta {
+  name: List Targets for the BI File
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/targets
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+vars:post-response {
+  bi_engine_catalog: res.body.find(t => t.engine_id === bru.getVar("trino_engine_id") && t.engine_kind === "trino").engine_catalog_name
+}
