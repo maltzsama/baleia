@@ -16,6 +16,12 @@ const version = (
   ) as Record<string, string>
 )['.'];
 
+// Umami Cloud website id (a public identifier, not a secret). The docs site is
+// the only surface that is measured; the product app carries no analytics. Set
+// it as the UMAMI environment variable at build time (the docs-site workflow
+// reads the UMAMI repository variable); without it no tracking script is added.
+const umami = process.env.UMAMI;
+
 // The site renders the repository's docs/ folder as is, under /docs, so the
 // same Markdown reads well on GitHub and here. Links that leave docs/ go to
 // GitHub. The landing page is src/pages/index.tsx.
@@ -49,6 +55,10 @@ const config: Config = {
   // The released version, read above; the landing page renders it.
   customFields: { version },
 
+  scripts: umami
+    ? [{ src: 'https://cloud.umami.is/script.js', defer: true, 'data-website-id': umami }]
+    : [],
+
   presets: [
     [
       'classic',
@@ -58,11 +68,16 @@ const config: Config = {
           routeBasePath: '/docs',
           sidebarPath: './sidebars.ts',
           exclude: ['adr/template.md'],
+          showLastUpdateTime: true,
+          showLastUpdateAuthor: false,
           editUrl: `${repo}/edit/main/`,
           beforeDefaultRemarkPlugins: [
             [githubLinks, { repo, docsDir: 'docs', githubOnly: ['adr/template.md'] }]
           ]
         },
+        // Real git dates in <lastmod>; the ADRs stay out of the sitemap but
+        // not behind a Disallow (a blocked URL cannot be de-indexed later).
+        sitemap: { lastmod: 'date', ignorePatterns: ['/docs/adr/**'] },
         blog: false,
         theme: { customCss: './src/css/custom.css' }
       } satisfies Preset.Options
