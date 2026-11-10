@@ -421,6 +421,8 @@ type QueryExecution struct {
 	UserID          UUID        `json:"user_id"`
 	SavedQueryID    UUID        `json:"saved_query_id"`
 	Status          string      `json:"status"`
+	Origin          string      `json:"origin"`
+	BIKeyID         UUID        `json:"bi_key_id"`
 	Sql             string      `json:"sql"`
 	EngineQueryID   *string     `json:"engine_query_id"`
 	RowsReturned    *int64      `json:"rows_returned"`
@@ -856,6 +858,14 @@ type Workspace struct {
 	UpdatedAt          Timestamptz `json:"updated_at"`
 	DefaultBindingID   UUID        `json:"default_binding_id"`
 	DefaultSchema      *string     `json:"default_schema"`
+	BIEnabled          bool        `json:"bi_enabled"`
+}
+
+// BIGatewaySetting is the global BI gateway runtime switch (ADR 0017).
+type BIGatewaySetting struct {
+	Enabled   bool        `json:"enabled"`
+	UpdatedBy UUID        `json:"updated_by"`
+	UpdatedAt Timestamptz `json:"updated_at"`
 }
 
 type WorkspaceCatalogGrant struct {

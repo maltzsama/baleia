@@ -140,6 +140,20 @@ func AllMigrations() (*Registry, error) {
 				return createForeignKeys(db, []any{&model.APIKey{}})
 			},
 		},
+		Migration{
+			Version: 11,
+			Name:    "add bi gateway executions and switches",
+			Up: func(db *gorm.DB) error {
+				if err := AutoMigrate(db, &model.QueryExecution{}, &model.Workspace{}, &model.BIGatewaySetting{}); err != nil {
+					return err
+				}
+				if err := createForeignKeys(db, []any{&model.QueryExecution{}}); err != nil {
+					return err
+				}
+				return db.Clauses(clause.OnConflict{DoNothing: true}).
+					Create(&model.BIGatewaySetting{ID: true, Enabled: true, UpdatedAt: time.Now().UTC()}).Error
+			},
+		},
 	)
 }
 

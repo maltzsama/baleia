@@ -250,6 +250,8 @@ func toDBQueryExecution(e model.QueryExecution) db.QueryExecution {
 		UserID:          PGUUID(string(e.UserID)),
 		SavedQueryID:    uuidPtr(e.SavedQueryID),
 		Status:          string(e.Status),
+		Origin:          string(e.Origin),
+		BIKeyID:         uuidPtr(e.BIKeyID),
 		Sql:             string(e.SQL),
 		EngineQueryID:   e.EngineQueryID,
 		RowsReturned:    e.RowsReturned,

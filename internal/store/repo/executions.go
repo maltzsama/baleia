@@ -18,12 +18,18 @@ import (
 // CreateQueryExecution inserts a running execution with an application-
 // generated id and now's start time.
 func (r *Repo) CreateQueryExecution(ctx context.Context, arg db.CreateQueryExecutionParams) (db.QueryExecution, error) {
+	origin := arg.Origin
+	if origin == "" {
+		origin = "editor"
+	}
 	row := model.QueryExecution{
 		ID:              model.UUID(NewUUID()),
 		WorkspaceID:     model.UUID(UUIDString(arg.WorkspaceID)),
 		UserID:          model.UUID(UUIDString(arg.UserID)),
 		SavedQueryID:    modelUUIDPtr(arg.SavedQueryID),
 		Status:          model.Text(arg.Status),
+		Origin:          model.Text(origin),
+		BIKeyID:         modelUUIDPtr(arg.BIKeyID),
 		SQL:             model.Text(arg.Sql),
 		StartedAt:       time.Now().UTC(),
 		TrinoCatalog:    arg.TrinoCatalog,
@@ -151,13 +157,17 @@ func (r *Repo) FailQueryExecution(ctx context.Context, arg db.FailQueryExecution
 	}
 	var out db.QueryExecution
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		changes := map[string]any{
+			"status":      "failed",
+			"error_code":  arg.ErrorCode,
+			"finished_at": time.Now().UTC(),
+		}
+		if arg.EngineQueryID != nil {
+			changes["engine_query_id"] = *arg.EngineQueryID
+		}
 		res := tx.Model(&model.QueryExecution{}).
 			Where("id = ? AND status IN ?", UUIDString(arg.ID), []string{"running", "queued"}).
-			Updates(map[string]any{
-				"status":      "failed",
-				"error_code":  arg.ErrorCode,
-				"finished_at": time.Now().UTC(),
-			})
+			Updates(changes)
 		if res.Error != nil {
 			return res.Error
 		}
@@ -683,6 +693,7 @@ func toDBListExecutionHistoryRow(e model.QueryExecution, userName string) db.Lis
 		UserName:        userName,
 		SavedQueryID:    uuidPtr(e.SavedQueryID),
 		Status:          string(e.Status),
+		Origin:          string(e.Origin),
 		Sql:             string(e.SQL),
 		EngineQueryID:   e.EngineQueryID,
 		RowsReturned:    e.RowsReturned,
