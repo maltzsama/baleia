@@ -89,6 +89,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("e2e-seed: target: %v", err)
 	}
+	if err := ensureBIKey(ctx, q, admin); err != nil {
+		log.Fatalf("e2e-seed: bi key: %v", err)
+	}
 	if err := ensureQueueCapacity(ctx, q); err != nil {
 		log.Fatalf("e2e-seed: queue capacity: %v", err)
 	}

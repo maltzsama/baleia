@@ -7,6 +7,10 @@ on:
       - "api/swagger.yaml"
       - "cmd/e2e-seed/**"
       - "deploy/**"
+      - "internal/bigateway/**"
+      - "internal/config/**"
+      - "internal/server/**"
+      - "scripts/bi-e2e/**"
       - ".github/workflows/web-e2e.yml"
   schedule:
     - cron: "0 3 * * *"
@@ -24,6 +28,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      # The Trino JDBC e2e client (make e2e-bi) needs a JDK.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
 
       - uses: actions/setup-node@v4
         with:

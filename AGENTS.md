@@ -15,7 +15,7 @@ the phase-3 issues reference as **FD1–FD16**.
 | `make vuln` | `govulncheck`. |
 | `cd website && npm ci && npm run build` | Build the documentation site (Docusaurus over `docs/`); `npm start` serves it with reload. |
 | `make build` / `build-web` / `build-all` | Compile binaries / frontend / both. |
-| `make e2e` | minikube (`make k8s-up`) + `cmd/e2e-seed` + Playwright (`web/e2e`). |
+| `make e2e` | minikube (`make k8s-up`) + `cmd/e2e-seed` + the BI gateway JDBC e2e (`make e2e-bi`) + Playwright (`web/e2e`). |
 | `make e2e-down` | Tear minikube down (`k8s-down` with `K8S_PURGE=1`). |
 
 Backend definition of done (`DoD-standard`): `go vet ./...`, `go test -race
@@ -173,10 +173,14 @@ server.use(http.get('/workspaces', ({ response }) => response(200).json([makeWor
 ### Smoke tests (Playwright)
 
 - `web/e2e/` runs against the **minikube dev cluster** (not compose);
-  `make e2e` runs `k8s-up`, port-forwards the API/Postgres/Trino, seeds with
-  `cmd/e2e-seed` and runs the suite. `make e2e-down` purges the cluster.
+  `make e2e` runs `k8s-up`, port-forwards the API/Postgres/Trino/gateway, seeds
+  with `cmd/e2e-seed`, runs the JDBC e2e and then the suite. `make e2e-down`
+  purges the cluster.
 - Tag every spec with `@issue-<number>` in the title and run one with
   `npm run e2e -- --grep @issue-118`.
+- `make e2e-bi` drives the BI gateway (`scripts/bi-e2e/BiGatewayE2E.java`) with
+  the Trino JDBC driver: Basic auth, a query, follows on every API replica,
+  cancellation and a scope-denied catalog.
 - `loginAs('admin' | 'member' | 'viewer')` and
   `expectNoA11yViolations(page)` come from `e2e/fixtures.ts`.
 - Seeded accounts: `admin@e2e.test`, `member@e2e.test`, `viewer@e2e.test`

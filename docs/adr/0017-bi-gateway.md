@@ -1,6 +1,6 @@
 # 0017. BI tools reach the engines only through Baleia (the BI gateway)
 
-- Status: Proposed. Amends [0001](0001-control-plane-only.md) when accepted.
+- Status: Accepted. Amends [0001](0001-control-plane-only.md).
 - Date: 2026-11-05
 - Issues: #560 (BI files, removed in 0.6.2); design `DESIGN-catalog-scope.md` §6, §9.5
 
@@ -134,17 +134,41 @@ Facts the design must respect:
 
 ## Current compliance
 
-Not implemented. In 0.6.2 the BI file endpoint is removed and the guard denies any identity that
-does not come through Baleia, so the invariant holds with no BI path at all. This ADR is
-implemented by: workspace-bound BI keys, the gateway listener and proxy, URI signing, execution
-records of origin `bi`, chart Service/Ingress, the BI file pointing at the gateway, and an e2e
-test with the Trino JDBC driver (Tableau and Power BI both use the Trino protocol, so the JDBC
-driver is the reference client).
+Implemented (0.7.0):
 
-To verify while implementing: which `/v1/*` endpoints the Tableau and Power BI connectors call
-beyond `/v1/statement` and `/v1/info`; that both send Basic credentials on every request; and
-that a client with spooling support falls back to the inline protocol when the encoding header is
-removed.
+| Part | Where |
+|---|---|
+| Workspace-bound BI key | `internal/identity/bikeys`, `api_keys.workspace_id`/`engine_id`, `POST /workspaces/{id}/bi-keys` |
+| Listener, scope and read-only relay | `internal/bigateway` (`BALEIA_BI_GATEWAY_ADDR`), `baleia.mode=readonly`, catalog guard |
+| Stateless follows across replicas | HMAC over (query id, path, key id, expiry, execution) with `BALEIA_BI_GATEWAY_SECRET` |
+| Executions of origin `bi`, limits, switches | `query_executions.origin`, `BALEIA_BI_MAX_CONCURRENT_*`, `/admin/bi-gateway`, `workspaces.bi_enabled` |
+| Service and Ingress | chart `biGateway`, a dedicated Service at the server root |
+| BI data-source file | `GET /workspaces/{id}/bi/{tool}` and **Open in Tableau/Power BI** |
+| Reference-client e2e | `make e2e-bi`, `scripts/bi-e2e/BiGatewayE2E.java` (Trino JDBC) |
+
+Verification:
+
+- The Trino JDBC driver, the reference Trino-protocol client (Tableau and Power BI speak the same
+  protocol), runs in the minikube e2e: Basic auth with a key, a multi-page result, a `nextUri`
+  signed by one API replica served by every other replica, cancellation, a catalog outside the
+  workspace scope, `GET /v1/info`, 404 for any other path, and inline pages despite a spooling
+  encoding header.
+- **Protocol surface.** The gateway serves exactly `POST /v1/statement`, `GET`/`DELETE` on the
+  URIs it issued, and `GET /v1/info`. Everything else, including `infoUri`, is 404, so a client
+  that needs another endpoint fails closed rather than reaching Trino. The JDBC e2e fails if a
+  follow URI is refused; a Tableau or Power BI connector that probed another path would fail
+  visibly against the gateway.
+- **Basic on every request.** The gateway authenticates each request independently; it trusts no
+  session or connection. A client that sends credentials only once gets 401 on the next request,
+  so it fails closed. The JDBC e2e sends Basic on every statement, follow and cancel.
+- **Spooling.** The gateway drops `X-Trino-Query-Data-Encoding`, so it never reaches Trino and a
+  spooling-capable client gets inline pages. The e2e pins this with a request that asks for
+  spooling and asserts the response has no `segments`.
+- **Connectors that cannot run in CI.** Tableau and Power BI are proprietary clients, so their
+  check is a manual operator checklist: connect to the gateway host and port with Basic (the key
+  owner's e-mail and a BI key), run and page through a query, cancel it, try a catalog outside the
+  workspace (it must be denied), and confirm the data-source file names the gateway and carries
+  no credentials.
 
 ## Alternatives considered
 
