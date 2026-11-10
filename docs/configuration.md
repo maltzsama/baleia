@@ -27,6 +27,8 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `POLARIS_URL` | `http://localhost:8181` | Polaris REST API endpoint |
 | `POLARIS_CLIENT_ID` / `POLARIS_CLIENT_SECRET` | _(unset)_ | Credentials stored for a `polaris` connection created without any; both must be set |
 | `PUBLIC_URL` | `http://localhost:8080` | Externally reachable URL (used for presigned links) |
+| `BALEIA_ANALYTICS_UMAMI_WEBSITE_ID` | _(unset)_ | The operator's own [Umami](https://umami.is) website id, for measuring how an instance is used (for example a public demo). Unset, the default, Baleia sends nothing anywhere. Set, every page of the app loads the Umami tracker, which counts page views without cookies; query strings (workspace, catalog, table, Explore query) are never sent. It must be a UUID: an invalid value stops the server at startup |
+| `BALEIA_ANALYTICS_UMAMI_SCRIPT_URL` | `https://cloud.umami.is/script.js` | The tracker script. Set it to your own Umami's `/script.js` when you host it; it must be an absolute `http(s)` URL without credentials. Only used when the website id is set |
 | `S3_ENDPOINT` | `localhost:9000` | Endpoint of any S3-compatible store (AWS S3, RustFS, MinIO, Ceph RGW, Google Cloud Storage, Oracle Object Storage), as host[:port] |
 | `S3_ACCESS_KEY` | `rustfsadmin` | S3 access key |
 | `S3_SECRET_KEY` | `rustfsadmin` | S3 secret key |

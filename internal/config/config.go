@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // DefaultJWTSecret is the insecure placeholder shipped for local development.
@@ -18,6 +20,10 @@ const DefaultJWTSecret = "change-me-in-production"
 // MinJWTSecretLen is the minimum accepted length for JWT_SECRET. Short secrets
 // are guessable.
 const MinJWTSecretLen = 16
+
+// DefaultUmamiScriptURL is Umami Cloud's tracker script, the default of
+// BALEIA_ANALYTICS_UMAMI_SCRIPT_URL.
+const DefaultUmamiScriptURL = "https://cloud.umami.is/script.js"
 
 // MinEncryptionKeyLen is the minimum accepted length for BALEIA_ENCRYPTION_KEY.
 const MinEncryptionKeyLen = 32
@@ -278,12 +284,22 @@ type Config struct {
 	// MCPAllowedOrigins is the Origin allow-list for /mcp; empty rejects any
 	// request that carries an Origin header (native MCP clients omit it).
 	MCPAllowedOrigins []string
+	// AnalyticsUmamiWebsiteID turns on the Umami tracker in the app shell
+	// (BALEIA_ANALYTICS_UMAMI_WEBSITE_ID). It is the operator's own measurement,
+	// such as a public demo: empty (the default) sends nothing anywhere.
+	AnalyticsUmamiWebsiteID string
+	// AnalyticsUmamiScriptURL is the tracker script
+	// (BALEIA_ANALYTICS_UMAMI_SCRIPT_URL): Umami Cloud's by default, or a
+	// self-hosted Umami's own.
+	AnalyticsUmamiScriptURL string
 }
 
 func Load() *Config {
 	return &Config{
 		Port:                              getEnv("PORT", "8080"),
 		BIGatewayAddr:                     getEnv("BALEIA_BI_GATEWAY_ADDR", ""),
+		AnalyticsUmamiWebsiteID:           getEnv("BALEIA_ANALYTICS_UMAMI_WEBSITE_ID", ""),
+		AnalyticsUmamiScriptURL:           getEnv("BALEIA_ANALYTICS_UMAMI_SCRIPT_URL", DefaultUmamiScriptURL),
 		BIGatewayURL:                      getEnv("BALEIA_BI_GATEWAY_URL", ""),
 		BIGatewaySecret:                   getEnv("BALEIA_BI_GATEWAY_SECRET", ""),
 		BIMaxConcurrentPerKey:             getEnvInt("BALEIA_BI_MAX_CONCURRENT_PER_KEY", 5),
@@ -522,6 +538,23 @@ func (c *Config) Validate() error {
 	}
 	if c.BcryptCost != 0 && (c.BcryptCost < MinBcryptCost || c.BcryptCost > MaxBcryptCost) {
 		return fmt.Errorf("BALEIA_BCRYPT_COST must be between %d and %d (got %d)", MinBcryptCost, MaxBcryptCost, c.BcryptCost)
+	}
+	return c.validateAnalytics()
+}
+
+// validateAnalytics checks the Umami settings only when the tracker is on: a
+// typo must stop the server at startup, not silently drop the analytics.
+func (c *Config) validateAnalytics() error {
+	id := c.AnalyticsUmamiWebsiteID
+	if id == "" {
+		return nil
+	}
+	if _, err := uuid.Parse(id); err != nil || len(id) != len(uuid.Nil.String()) {
+		return fmt.Errorf("BALEIA_ANALYTICS_UMAMI_WEBSITE_ID must be a UUID (got %q)", id)
+	}
+	u, err := url.Parse(c.AnalyticsUmamiScriptURL)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
+		return errors.New("BALEIA_ANALYTICS_UMAMI_SCRIPT_URL must be an absolute http(s) URL without credentials")
 	}
 	return nil
 }
