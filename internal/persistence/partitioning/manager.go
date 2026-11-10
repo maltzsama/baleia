@@ -63,9 +63,10 @@ type Manager interface {
 }
 
 // New resolves the adapter from the GORM dialector. The registry covers every
-// backend ADR 0023 names; SQLite has no native partitioning and is unsupported,
-// and the engines whose adapter has not shipped return ErrNotImplemented rather
-// than pretending parity.
+// backend ADR 0023 names: PostgreSQL and GaussDB (native), MySQL/MariaDB
+// (native, foreign keys dropped), SQLite (emulated), and TiDB, SQL Server and
+// Oracle (not yet shipped, returning ErrNotImplemented rather than pretending
+// parity).
 func New(db *gorm.DB) (Manager, error) {
 	if db == nil {
 		return nil, errors.New("partitioning: nil database")
@@ -74,7 +75,9 @@ func New(db *gorm.DB) (Manager, error) {
 	switch name {
 	case "postgres", "gaussdb":
 		return &postgresManager{db: db}, nil
-	case "mysql", "tidb", "sqlserver", "oracle":
+	case "mysql":
+		return &mysqlManager{db: db}, nil
+	case "tidb", "sqlserver", "oracle":
 		return nil, fmt.Errorf("%w: %q", ErrNotImplemented, name)
 	case "sqlite":
 		return &sqliteManager{db: db}, nil
@@ -89,9 +92,13 @@ func capabilitiesFor(dialector string) Capabilities {
 	case "postgres", "gaussdb":
 		// GaussDB speaks the PostgreSQL protocol and supports PARTITION BY RANGE.
 		return Capabilities{NativeRange: true, ForeignKeysOnPartitioned: true, Implemented: true}
-	case "mysql", "tidb":
-		// MySQL/MariaDB InnoDB and TiDB do not allow foreign keys on
-		// partitioned tables (TiDB support is version-dependent).
+	case "mysql":
+		// MySQL/MariaDB InnoDB do not allow foreign keys on partitioned
+		// tables (the query-history foreign keys are dropped there).
+		return Capabilities{NativeRange: true, ForeignKeysOnPartitioned: false, Implemented: true}
+	case "tidb":
+		// TiDB native range partitioning is version-dependent and, like
+		// MySQL, forbids foreign keys on partitioned tables.
 		return Capabilities{NativeRange: true, ForeignKeysOnPartitioned: false}
 	case "sqlserver", "oracle":
 		// Both support native partitioning but with a different model
