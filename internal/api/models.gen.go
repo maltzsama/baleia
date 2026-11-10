@@ -389,6 +389,14 @@ const (
 	CreateSpaceRequestVisibilityWorkspace  CreateSpaceRequestVisibility = "workspace"
 )
 
+// Defines values for CreateWebhookRequestEvents.
+const (
+	Asterisk          CreateWebhookRequestEvents = "*"
+	Audit             CreateWebhookRequestEvents = "audit"
+	CatalogSynced     CreateWebhookRequestEvents = "catalog.synced"
+	ExecutionFinished CreateWebhookRequestEvents = "execution.finished"
+)
+
 // Defines values for CreateWorkloadRuleRequestClass.
 const (
 	CreateWorkloadRuleRequestClassBackground  CreateWorkloadRuleRequestClass = "background"
@@ -2460,6 +2468,15 @@ type CreateTeamRequest struct {
 	Name        string  `json:"name"`
 }
 
+// CreateWebhookRequest defines model for CreateWebhookRequest.
+type CreateWebhookRequest struct {
+	Events []CreateWebhookRequestEvents `json:"events"`
+	Url    string                       `json:"url"`
+}
+
+// CreateWebhookRequestEvents defines model for CreateWebhookRequest.Events.
+type CreateWebhookRequestEvents string
+
 // CreateWorkloadRuleRequest defines model for CreateWorkloadRuleRequest.
 type CreateWorkloadRuleRequest struct {
 	Class   CreateWorkloadRuleRequestClass `json:"class"`
@@ -2492,6 +2509,17 @@ type CreateWorkspaceRequest struct {
 
 // CreateWorkspaceRequestType defines model for CreateWorkspaceRequest.Type.
 type CreateWorkspaceRequestType string
+
+// CreatedWebhook defines model for CreatedWebhook.
+type CreatedWebhook struct {
+	CreatedAt time.Time          `json:"created_at"`
+	Enabled   bool               `json:"enabled"`
+	Events    []string           `json:"events"`
+	Id        openapi_types.UUID `json:"id"`
+	Secret    string             `json:"secret"`
+	UpdatedAt *time.Time         `json:"updated_at,omitempty"`
+	Url       string             `json:"url"`
+}
 
 // CronPreviewRequest defines model for CronPreviewRequest.
 type CronPreviewRequest struct {
@@ -5100,6 +5128,16 @@ type ValidationError struct {
 	Message string        `json:"message"`
 }
 
+// Webhook defines model for Webhook.
+type Webhook struct {
+	CreatedAt time.Time          `json:"created_at"`
+	Enabled   bool               `json:"enabled"`
+	Events    []string           `json:"events"`
+	Id        openapi_types.UUID `json:"id"`
+	UpdatedAt *time.Time         `json:"updated_at,omitempty"`
+	Url       string             `json:"url"`
+}
+
 // WorkloadRule defines model for WorkloadRule.
 type WorkloadRule struct {
 	Class     WorkloadRuleClass  `json:"class"`
@@ -6054,6 +6092,9 @@ type ImportSpaceBundleJSONRequestBody ImportSpaceBundleJSONBody
 
 // SetSpaceMemberJSONRequestBody defines body for SetSpaceMember for application/json ContentType.
 type SetSpaceMemberJSONRequestBody = SetSpaceMemberRequest
+
+// CreateWebhookJSONRequestBody defines body for CreateWebhook for application/json ContentType.
+type CreateWebhookJSONRequestBody = CreateWebhookRequest
 
 // IssueWsTicketJSONRequestBody defines body for IssueWsTicket for application/json ContentType.
 type IssueWsTicketJSONRequestBody = WsTicketRequest

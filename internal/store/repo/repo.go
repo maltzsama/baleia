@@ -17,6 +17,7 @@ type Repo struct {
 	*APIKeys
 	*Teams
 	*Agents
+	*Webhooks
 	// enqueue records a durable notification in the writer's transaction
 	// (ADR 0022); nil when no shared layer is configured.
 	enqueue func(tx *gorm.DB, channel, payload string) error
@@ -45,5 +46,6 @@ func New(db *gorm.DB) *Repo {
 		APIKeys:   NewAPIKeys(db),
 		Teams:     NewTeams(db),
 		Agents:    NewAgents(db),
+		Webhooks:  NewWebhooks(db),
 	}
 }
