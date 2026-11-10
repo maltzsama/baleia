@@ -45,11 +45,29 @@ flight.
      (`resolveReviewThread` in the GitHub GraphQL API); do not leave a fixed
      finding open.
    - If it is rate-limited or skips the review, merge based on the rest of CI.
-4. **Merge with a merge commit**, never squash or rebase:
-   `gh pr merge <n> --merge --delete-branch`. The repository history keeps the
-   PR's commits and a merge commit.
+4. **Merge with a merge commit, and only a merge commit.** Squash and rebase
+   merges are never used here: `gh pr merge <n> --merge --delete-branch`. The
+   repository history keeps the PR's atomic commits and a merge commit.
 5. After merging, switch to `main`, `git pull --ff-only`, and verify each
    `Closes` issue is closed before starting the next PR.
+
+### Titles, commits and the changelog
+
+release-please builds `CHANGELOG.md` from the commits that reach `main`, and it
+turns each merge commit into an entry too, using the PR title. A PR title that
+is itself a conventional commit therefore repeats its own commits in the
+changelog, as does a subject that two commits of a PR share.
+
+- Every commit is atomic and conventional: `type(scope): subject`.
+- The **PR title is a plain sentence, not a conventional commit**: no
+  `feat:` or `fix(scope):` prefix (for example `Federated search, glossary,
+  palette and MCP`). The merge commit then carries no changelog entry of its
+  own and the PR's commits are what the changelog lists.
+- **No two commits of a PR share a subject**, and none repeats the PR title.
+  Fold a fixup into the commit it fixes (`git commit --fixup=<sha>`, then
+  `git rebase -i --autosquash origin/main`) before the PR is merged. Rewriting
+  your own unmerged branch is fine (`git push --force-with-lease`); `main` is
+  never rewritten.
 
 ## Frontend
 
