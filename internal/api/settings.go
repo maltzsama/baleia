@@ -17,6 +17,14 @@ type Settings struct {
 	Execution   ExecutionSettings
 	Ops         OpsSettings
 	Connections ConnectionSettings
+	BIGateway   BIGatewaySettings
+}
+
+// BIGatewaySettings describe what the BI data-source file points at (ADR
+// 0017): the listener must be on and have a public URL the BI tool can reach.
+type BIGatewaySettings struct {
+	Enabled bool
+	URL     string
 }
 
 // AuthSettings are the token and password settings.
@@ -135,5 +143,6 @@ func SettingsFromConfig(c *config.Config) Settings {
 			TemporalNamespace:   c.TemporalNamespace,
 		},
 		Connections: ConnectionSettings{AdminsOnly: c.ConnectionsCreate == "admins"},
+		BIGateway:   BIGatewaySettings{Enabled: c.BIGatewayAddr != "" && c.BIGatewayURL != "", URL: c.BIGatewayURL},
 	}
 }

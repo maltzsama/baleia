@@ -195,6 +195,7 @@ var operationAccess = map[string]access{
 	"GetWorkspace":               {kind: kindChecked, calls: wsMember},
 	"ListWorkspaceTargets":       {kind: kindChecked, calls: wsMember},
 	"ListBiKeys":                 {kind: kindChecked, calls: wsMember},
+	"GetWorkspaceBIFile":         {kind: kindChecked, calls: wsMember},
 	"CreateBiKey":                {kind: kindChecked, calls: []string{"requireWorkspaceAccess", "PrincipalFromContext"}},
 	"DeleteBiKey":                {kind: kindChecked, calls: []string{"requireWorkspaceAccess", "PrincipalFromContext"}},
 	"UpdateWorkspace":            checked("Workspace"),
