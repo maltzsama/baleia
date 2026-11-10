@@ -1,0 +1,42 @@
+meta {
+  name: Create BI Key
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/bi-keys
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Tableau",
+    "engine_id": "{{trino_engine_id}}"
+  }
+}
+
+vars:post-response {
+  bi_key_id: res.body.id
+  bi_key_secret: res.body.secret
+}
+
+assert {
+  res.status: eq 201
+  res.body.workspace_id: eq {{workspace_id}}
+  res.body.engine_id: eq {{trino_engine_id}}
+  res.body.key_prefix: isString
+  res.body.secret: isString
+}
+
+tests {
+  test("the secret is shown once and the key is workspace+engine bound", function () {
+    expect(res.body.secret).to.match(/^bal_/);
+    expect(res.body.owner_email).to.be.a("string");
+  });
+}

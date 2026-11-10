@@ -1,0 +1,19 @@
+meta {
+  name: Revoke BI Key
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{base_url}}/workspaces/{{workspace_id}}/bi-keys/{{bi_key_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}

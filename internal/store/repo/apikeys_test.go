@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -101,4 +102,91 @@ func createAPIKeyUser(t *testing.T, gdb *gorm.DB, email string) model.User {
 		t.Fatalf("create user %s: %v", email, err)
 	}
 	return user
+}
+
+// TestBIKeysStore covers the workspace-bound key kind (#708): a BI key is
+// listed by workspace, never by the personal key listing, and deleting a
+// personal key cannot remove it.
+func TestBIKeysStore(t *testing.T) {
+	t.Parallel()
+	gdb := testdb.New(t)
+	ctx := context.Background()
+	store := NewAPIKeys(gdb)
+	user := createAPIKeyUser(t, gdb, "bi@example.test")
+	userID := PGUUID(string(user.ID))
+
+	now := time.Now().UTC()
+	conn := model.CatalogConnection{ID: model.UUID(NewUUID()), Name: model.Text("bi-" + NewUUID()[:8]), Type: "trino", URL: "http://trino.test", CreatedAt: now, UpdatedAt: now}
+	if err := gdb.Create(&conn).Error; err != nil {
+		t.Fatal(err)
+	}
+	engine := model.Engine{ID: model.UUID(NewUUID()), Name: model.Text("bi-" + NewUUID()[:8]), Kind: "trino", Class: "federated", ConnectionID: conn.ID, CreatedAt: now, UpdatedAt: now}
+	if err := gdb.Create(&engine).Error; err != nil {
+		t.Fatal(err)
+	}
+	ws := model.Workspace{ID: model.UUID(NewUUID()), Name: "BI", Type: "personal", PolarisCatalogName: model.Text("ws_bi_" + NewUUID()[:8]), OwnerUserID: &user.ID, CreatedAt: now, UpdatedAt: now}
+	if err := gdb.Create(&ws).Error; err != nil {
+		t.Fatal(err)
+	}
+	catalog := model.Catalog{ID: model.UUID(NewUUID()), ConnectionID: conn.ID, Name: model.Text("lake"), Origin: "native", Enabled: true, CreatedAt: now, UpdatedAt: now}
+	if err := gdb.Create(&catalog).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := gdb.Create(&model.CatalogBinding{ID: model.UUID(NewUUID()), CatalogID: catalog.ID, EngineID: engine.ID, EngineCatalogName: "lake", Mode: "native", Enabled: true, LifecycleState: "active", CreatedAt: now, UpdatedAt: now, StateChangedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := gdb.Create(&model.WorkspaceCatalogGrant{WorkspaceID: ws.ID, CatalogID: catalog.ID, GrantedBy: user.ID, GrantedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	personal, err := store.CreateAPIKey(ctx, db.CreateAPIKeyParams{UserID: userID, Name: "personal", KeyHash: "hash-personal", Prefix: "bal_", Scopes: []string{"*"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wsID := PGUUID(string(ws.ID))
+	engineID := PGUUID(string(engine.ID))
+	bi, err := store.CreateAPIKey(ctx, db.CreateAPIKeyParams{
+		UserID: userID, Kind: "bi", WorkspaceID: wsID, EngineID: engineID,
+		Name: "bi", KeyHash: "hash-bi", Prefix: "bal_", Scopes: []string{"bi"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bi.Kind != "bi" || !bi.WorkspaceID.Valid || !bi.EngineID.Valid || bi.WorkspaceID.Bytes != wsID.Bytes || bi.EngineID.Bytes != engineID.Bytes {
+		t.Fatalf("bi key = %+v", bi)
+	}
+	got, err := store.GetAPIKeyByHash(ctx, "hash-bi")
+	if err != nil || got.Kind != "bi" {
+		t.Fatalf("GetAPIKeyByHash = %+v, %v", got, err)
+	}
+
+	personalKeys, err := store.ListAPIKeysByUser(ctx, userID)
+	if err != nil || len(personalKeys) != 1 || personalKeys[0].ID.Bytes != personal.ID.Bytes {
+		t.Fatalf("personal keys = %+v, %v", personalKeys, err)
+	}
+	biKeys, err := store.ListBIKeysByWorkspace(ctx, wsID)
+	if err != nil || len(biKeys) != 1 || biKeys[0].ID.Bytes != bi.ID.Bytes {
+		t.Fatalf("workspace keys = %+v, %v", biKeys, err)
+	}
+	ownKeys, err := store.ListBIKeysByWorkspaceOwner(ctx, wsID, userID)
+	if err != nil || len(ownKeys) != 1 {
+		t.Fatalf("owner keys = %+v, %v", ownKeys, err)
+	}
+	if _, err := store.GetBIKeyByID(ctx, bi.ID, PGUUID(NewUUID())); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("foreign workspace = %v", err)
+	}
+
+	// The personal delete path leaves the BI key alone.
+	if err := store.DeleteAPIKey(ctx, db.DeleteAPIKeyParams{ID: bi.ID, UserID: userID}); err != nil {
+		t.Fatal(err)
+	}
+	if biKeys, _ := store.ListBIKeysByWorkspace(ctx, wsID); len(biKeys) != 1 {
+		t.Fatal("a personal delete removed a BI key")
+	}
+	if n, err := store.DeleteBIKey(ctx, bi.ID, wsID); err != nil || n != 1 {
+		t.Fatalf("DeleteBIKey = %d, %v", n, err)
+	}
+	if biKeys, _ := store.ListBIKeysByWorkspace(ctx, wsID); len(biKeys) != 0 {
+		t.Fatal("the BI key survived its delete")
+	}
 }
