@@ -3,6 +3,7 @@ import type { Config } from '@docusaurus/types';
 import { themes as prismThemes } from 'prism-react-renderer';
 import { readFileSync } from 'node:fs';
 import githubLinks from './src/remark/github-links';
+import llmsTxt from './plugins/llms-txt';
 
 const repo = 'https://github.com/maltzsama/baleia';
 const demo = 'https://demo.baleia.galileostd.io';
@@ -87,6 +88,7 @@ const config: Config = {
   // The docs were served at the site root until they moved under /docs: keep
   // every old address working.
   plugins: [
+    llmsTxt,
     [
       '@docusaurus/plugin-client-redirects',
       {
