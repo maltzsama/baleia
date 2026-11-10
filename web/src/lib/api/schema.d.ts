@@ -61,6 +61,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/bi-gateway": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Global BI gateway switch — admin only */
+        get: operations["getBIGateway"];
+        /** Turn the BI gateway on or off globally — admin only */
+        put: operations["putBIGateway"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/directory-reconcile-runs": {
         parameters: {
             query?: never;
@@ -4798,6 +4816,12 @@ export interface components {
             /** @enum {string} */
             role: "owner" | "member";
         };
+        BIGatewaySetting: {
+            enabled: boolean;
+        };
+        UpdateBIGatewayRequest: {
+            enabled: boolean;
+        };
         Workspace: {
             readonly allowed_actions: components["schemas"]["WorkspaceAllowedAction"][];
             /** Format: uuid */
@@ -4827,6 +4851,8 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at?: string;
+            /** @description Whether the BI gateway may run statements in this workspace (ADR 0017); on by default */
+            bi_enabled?: boolean;
         };
         /**
          * @description What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and run queries, editors also create and edit content, admins also manage the workspace. What they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
@@ -4879,6 +4905,8 @@ export interface components {
                 binding_id?: string | null;
                 schema?: string | null;
             };
+            /** @description Turn the BI gateway off or on for this workspace (ADR 0017). Omitted, unchanged. */
+            bi_enabled?: boolean;
         };
         /** @description Where to run. binding_id names a target; catalog_id picks the catalog's only enabled binding, or the one on engine_id when it has several. Omitted, the workspace default applies, else the workspace's only target; otherwise 422 target_required. */
         TargetRequest: {
@@ -6499,6 +6527,8 @@ export interface components {
             /** @description The target ran in a read-only session */
             read_only?: boolean;
             error_code?: string | null;
+            /** @description Where the run came from: editor, agent, explore, retriever, metadata, maintenance, export, download or bi */
+            origin?: string;
             queue?: components["schemas"]["ExecutionQueue"];
         };
         /** @description The workload queue of a run (#399). Present while the execution is `queued`; `position` is only the caller's own position. */
@@ -7520,6 +7550,55 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getBIGateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The global BI gateway switch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BIGatewaySetting"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putBIGateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBIGatewayRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated global BI gateway switch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BIGatewaySetting"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listDirectoryReconcileRuns: {

@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/execscope"
@@ -37,6 +38,13 @@ type Deps struct {
 	Scope      execscope.Store
 	Rules      Rules
 	Workspaces Workspaces
+	Executions Executions
+	Settings   Settings
+	Audit      audit.Recorder
+	// MaxPerKey and MaxPerWorkspace bound running BI statements; 0 disables
+	// the limit.
+	MaxPerKey       int
+	MaxPerWorkspace int
 	// TrinoIdentity maps a Baleia user to the X-Trino-User of the session.
 	TrinoIdentity TrinoIdentity
 	// CatalogCredentials fills the per-user catalog token (ADR 0015); nil
@@ -65,9 +73,25 @@ type Rules interface {
 	ListWorkloadRules(ctx context.Context) ([]db.WorkloadRule, error)
 }
 
-// Workspaces reads the workspace whose owner team feeds the workload rules.
+// Workspaces reads the workspace whose owner team feeds the workload rules
+// and whose BI switch gates the request.
 type Workspaces interface {
 	GetWorkspaceByID(ctx context.Context, id db.UUID) (db.Workspace, error)
+}
+
+// Executions records BI statements in the shared execution history and counts
+// their running rows for the concurrency limits; *repo.Repo implements it.
+type Executions interface {
+	CreateQueryExecution(ctx context.Context, arg db.CreateQueryExecutionParams) (db.QueryExecution, error)
+	UpdateQueryExecution(ctx context.Context, arg db.UpdateQueryExecutionParams) (db.QueryExecution, error)
+	FailQueryExecution(ctx context.Context, arg db.FailQueryExecutionParams) (db.QueryExecution, error)
+	CountRunningBIExecutionsByKey(ctx context.Context, keyID db.UUID) (int64, error)
+	CountRunningBIExecutionsByWorkspace(ctx context.Context, workspaceID db.UUID) (int64, error)
+}
+
+// Settings reads the global BI gateway switch.
+type Settings interface {
+	GetBIGatewaySetting(ctx context.Context) (db.BIGatewaySetting, error)
 }
 
 // TrinoIdentity maps a user to their Trino identity.
@@ -94,7 +118,8 @@ const maxPageBytes = 16 << 20
 
 // New builds the gateway.
 func New(d Deps) (*Gateway, error) {
-	if d.Keys == nil || d.Engines == nil || d.Scope == nil || d.Dialect == nil || d.TrinoIdentity == nil {
+	if d.Keys == nil || d.Engines == nil || d.Scope == nil || d.Dialect == nil || d.TrinoIdentity == nil ||
+		d.Workspaces == nil || d.Executions == nil || d.Settings == nil {
 		return nil, errors.New("bi gateway: missing dependencies")
 	}
 	if len(d.Secret) < 32 {
@@ -139,7 +164,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // info proxies the coordinator's /v1/info after authenticating the key.
 func (g *Gateway) info(w http.ResponseWriter, r *http.Request) {
-	cred, ok := g.authenticate(w, r)
+	cred, ok := g.authorize(w, r)
 	if !ok {
 		return
 	}
@@ -160,7 +185,7 @@ func (g *Gateway) info(w http.ResponseWriter, r *http.Request) {
 
 // statement authenticates, rejects writes and relays one Trino statement.
 func (g *Gateway) statement(w http.ResponseWriter, r *http.Request) {
-	cred, ok := g.authenticate(w, r)
+	cred, ok := g.authorize(w, r)
 	if !ok {
 		return
 	}
@@ -174,21 +199,30 @@ func (g *Gateway) statement(w http.ResponseWriter, r *http.Request) {
 		g.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", "the BI gateway only accepts read-only statements")
 		return
 	}
-	g.relay(w, r, cred, "/v1/statement", sql)
+	if !g.withinLimits(w, r, cred) {
+		return
+	}
+	execID, ok := g.createExecution(w, r, cred, string(sql))
+	if !ok {
+		return
+	}
+	g.relay(w, r, cred, "/v1/statement", sql, execID)
 }
 
 // follow relays GET/DELETE on a URI this gateway issued.
 func (g *Gateway) follow(w http.ResponseWriter, r *http.Request) {
-	cred, ok := g.authenticate(w, r)
+	cred, ok := g.authorize(w, r)
 	if !ok {
 		return
 	}
 	q := r.URL.Query()
-	if !g.validQueryURI(q, r.URL.Path, cred.Key.ID) {
+	execID, ok := g.validQueryURI(q, r.URL.Path, cred.Key.ID)
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 	// Our parameters are not part of the Trino request.
+	q.Del("baleia_exec")
 	q.Del("baleia_qid")
 	q.Del("baleia_key")
 	q.Del("baleia_exp")
@@ -198,45 +232,52 @@ func (g *Gateway) follow(w http.ResponseWriter, r *http.Request) {
 		// No statement body on cancel.
 		body = nil
 	}
-	g.relayWithQuery(w, r, cred, r.URL.Path, q, body)
+	g.relayWithQuery(w, r, cred, r.URL.Path, q, body, execID)
 }
 
 // relay builds the Trino request for path and forwards it.
-func (g *Gateway) relay(w http.ResponseWriter, r *http.Request, cred bikeys.Credential, path string, body []byte) {
-	g.relayWithQuery(w, r, cred, path, r.URL.Query(), body)
+func (g *Gateway) relay(w http.ResponseWriter, r *http.Request, cred bikeys.Credential, path string, body []byte, execID db.UUID) {
+	g.relayWithQuery(w, r, cred, path, r.URL.Query(), body, execID)
 }
 
 // relayWithQuery forwards one statement or follow request after resolving the
 // workspace scope, the owner's Trino identity and the per-user catalog token.
-func (g *Gateway) relayWithQuery(w http.ResponseWriter, r *http.Request, cred bikeys.Credential, path string, query url.Values, body []byte) {
+func (g *Gateway) relayWithQuery(w http.ResponseWriter, r *http.Request, cred bikeys.Credential, path string, query url.Values, body []byte, execID db.UUID) {
 	base, client, ok := g.target(r.Context(), w, cred)
 	if !ok {
+		g.failExecution(r.Context(), execID, "engine_unavailable")
 		return
 	}
 	scope, err := execscope.For(g.deps.Scope, cred.Key.WorkspaceID, cred.Key.EngineID)(r.Context())
 	if err != nil {
+		g.failExecution(r.Context(), execID, "internal")
 		g.writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "the workspace scope is unavailable")
 		return
 	}
 	if len(scope) == 0 {
+		g.failExecution(r.Context(), execID, "permission_denied")
 		g.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", "the workspace has no catalog on this engine")
 		return
 	}
 	trinoUser, err := g.deps.TrinoIdentity(r.Context(), cred.User.ID)
 	if err != nil {
+		g.failExecution(r.Context(), execID, "permission_denied")
 		g.writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "the key owner no longer exists")
 		return
 	}
 	headers, ok := g.requestHeaders(w, r, cred, scope, trinoUser, body)
 	if !ok {
+		g.failExecution(r.Context(), execID, "internal")
 		return
 	}
 	up, err := g.do(r.Context(), client, r.Method, base, path, query, body, headers)
 	if err != nil {
+		g.failExecution(r.Context(), execID, "engine_unavailable")
 		g.writeError(w, http.StatusBadGateway, "BAD_GATEWAY", "the coordinator is unreachable")
 		return
 	}
-	page := g.rewritePage(r, cred, up.body)
+	g.recordPage(r.Context(), execID, up.body, r.Method, up.status)
+	page := g.rewritePage(r, cred, execID, up.body)
 	g.write(w, up, page)
 }
 

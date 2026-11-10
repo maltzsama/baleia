@@ -149,6 +149,8 @@ var operationAccess = map[string]access{
 	"TestIdentityProviderTransient": {kind: kindAdmin, calls: adminRole},
 	"PreviewIdentityMapping":        {kind: kindAdmin, calls: adminRole},
 	"GetSystemStatus":               {kind: kindAdmin, calls: []string{"RequireAdmin"}},
+	"GetBIGateway":                  {kind: kindAdmin, calls: adminRole},
+	"PutBIGateway":                  {kind: kindAdmin, calls: adminRole},
 
 	// ── workload management (#399, #539)
 	"ListWorkloadRules":  {kind: kindAdmin, calls: adminRole},

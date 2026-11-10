@@ -288,6 +288,8 @@ type CreateQueryExecutionParams struct {
 	UserID          UUID    `json:"user_id"`
 	SavedQueryID    UUID    `json:"saved_query_id"`
 	Status          string  `json:"status"`
+	Origin          string  `json:"origin"`
+	BIKeyID         UUID    `json:"bi_key_id"`
 	Sql             string  `json:"sql"`
 	TrinoCatalog    *string `json:"trino_catalog"`
 	RequestID       *string `json:"request_id"`
@@ -538,8 +540,9 @@ type DisableMissingNativeBindingsParams struct {
 }
 
 type FailQueryExecutionParams struct {
-	ID        UUID    `json:"id"`
-	ErrorCode *string `json:"error_code"`
+	ID            UUID    `json:"id"`
+	ErrorCode     *string `json:"error_code"`
+	EngineQueryID *string `json:"engine_query_id"`
 }
 
 type FinishDirectoryReconcileRunParams struct {
@@ -1367,6 +1370,7 @@ type ListExecutionHistoryRow struct {
 	UserName        string      `json:"user_name"`
 	SavedQueryID    UUID        `json:"saved_query_id"`
 	Status          string      `json:"status"`
+	Origin          string      `json:"origin"`
 	Sql             string      `json:"sql"`
 	EngineQueryID   *string     `json:"engine_query_id"`
 	RowsReturned    *int64      `json:"rows_returned"`
@@ -2065,6 +2069,11 @@ type SetAgentStatusParams struct {
 	Status string `json:"status"`
 }
 
+type SetBIGatewayEnabledParams struct {
+	Enabled   bool `json:"enabled"`
+	UpdatedBy UUID `json:"updated_by"`
+}
+
 type SetAuditExportCursorParams struct {
 	Sink       string      `json:"sink"`
 	OccurredAt Timestamptz `json:"occurred_at"`
@@ -2499,6 +2508,7 @@ type UpdateWorkspaceParams struct {
 	ID          UUID    `json:"id"`
 	Name        string  `json:"name"`
 	Description *string `json:"description"`
+	BIEnabled   *bool   `json:"bi_enabled"`
 }
 
 type UpsertAdoptedBindingParams struct {

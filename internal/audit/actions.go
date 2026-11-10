@@ -108,6 +108,9 @@ const (
 
 	WorkloadUpdate Action = "workload.update"
 
+	// BIGatewayUpdate changes the global BI gateway switch (ADR 0017).
+	BIGatewayUpdate Action = "bi_gateway.update"
+
 	WorkloadRuleCreate Action = "workload.rule_create"
 	WorkloadRuleUpdate Action = "workload.rule_update"
 	WorkloadRuleDelete Action = "workload.rule_delete"
@@ -138,6 +141,7 @@ var allActions = []Action{
 	SpaceCreate, SpaceUpdate, SpaceDelete, SpaceMemberSet, SpaceMemberRemove,
 	SavedQueryCreate, SavedQueryUpdate, SavedQueryDelete, FolderCreate, FolderDelete,
 	WorkloadUpdate,
+	BIGatewayUpdate,
 	WorkloadRuleCreate, WorkloadRuleUpdate, WorkloadRuleDelete,
 }
 

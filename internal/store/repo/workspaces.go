@@ -152,9 +152,13 @@ func (r *Repo) UpsertWorkspaceCatalogGrant(ctx context.Context, arg db.UpsertWor
 
 // UpdateWorkspace updates the name and description and returns the workspace.
 func (r *Repo) UpdateWorkspace(ctx context.Context, arg db.UpdateWorkspaceParams) (db.Workspace, error) {
+	changes := map[string]any{"name": arg.Name, "description": arg.Description, "updated_at": time.Now().UTC()}
+	if arg.BIEnabled != nil {
+		changes["bi_enabled"] = *arg.BIEnabled
+	}
 	if err := r.Users.db.WithContext(ctx).Model(&model.Workspace{}).
 		Where("id = ?", UUIDString(arg.ID)).
-		Updates(map[string]any{"name": arg.Name, "description": arg.Description, "updated_at": time.Now().UTC()}).Error; err != nil {
+		Updates(changes).Error; err != nil {
 		return db.Workspace{}, err
 	}
 	return r.GetWorkspaceByID(ctx, arg.ID)

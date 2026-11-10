@@ -10,6 +10,7 @@ func All() []any {
 		&AssistantConversation{},
 		&AssistantMessage{},
 		&AssistantSetting{},
+		&BIGatewaySetting{},
 		&AuditEvent{},
 		&AuditExportCursor{},
 		&AuthProvider{},

@@ -98,6 +98,24 @@ type core struct {
 	biKeys *bikeys.Service
 }
 
+// biSettingsStore is the global BI gateway switch persistence (#711).
+type biSettingsStore interface {
+	GetBIGatewaySetting(ctx context.Context) (db.BIGatewaySetting, error)
+	SetBIGatewayEnabled(ctx context.Context, arg db.SetBIGatewayEnabledParams) (db.BIGatewaySetting, error)
+}
+
+// biSettings returns the GORM-backed global BI gateway switch, constructing
+// one for handlers built by tests without NewAPI.
+func (h *core) biSettings() biSettingsStore {
+	if s, ok := h.queries.(biSettingsStore); ok {
+		return s
+	}
+	if h.store != nil {
+		return repo.New(h.store)
+	}
+	return nil
+}
+
 // spacesOver builds the spaces service over store, creating a space and its
 // first manager in one transaction of c.
 func spacesOver(c *core, store spaces.Store) *spaces.Service {

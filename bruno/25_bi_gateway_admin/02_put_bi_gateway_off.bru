@@ -1,0 +1,26 @@
+meta {
+  name: Turn BI Gateway Off
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{base_url}}/admin/bi-gateway
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "enabled": false
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.enabled: eq false
+}

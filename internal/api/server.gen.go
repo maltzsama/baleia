@@ -27,6 +27,12 @@ type ServerInterface interface {
 	// Send a one-token prompt to the configured provider (G-admin)
 	// (POST /admin/assistant/test)
 	TestAssistant(w http.ResponseWriter, r *http.Request)
+	// Global BI gateway switch — admin only
+	// (GET /admin/bi-gateway)
+	GetBIGateway(w http.ResponseWriter, r *http.Request)
+	// Turn the BI gateway on or off globally — admin only
+	// (PUT /admin/bi-gateway)
+	PutBIGateway(w http.ResponseWriter, r *http.Request)
 	// Directory reconciliation runs — admin only
 	// (GET /admin/directory-reconcile-runs)
 	ListDirectoryReconcileRuns(w http.ResponseWriter, r *http.Request, params ListDirectoryReconcileRunsParams)
@@ -834,6 +840,18 @@ func (_ Unimplemented) PutAssistantSettings(w http.ResponseWriter, r *http.Reque
 // Send a one-token prompt to the configured provider (G-admin)
 // (POST /admin/assistant/test)
 func (_ Unimplemented) TestAssistant(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Global BI gateway switch — admin only
+// (GET /admin/bi-gateway)
+func (_ Unimplemented) GetBIGateway(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Turn the BI gateway on or off globally — admin only
+// (PUT /admin/bi-gateway)
+func (_ Unimplemented) PutBIGateway(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2475,6 +2493,50 @@ func (siw *ServerInterfaceWrapper) TestAssistant(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestAssistant(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBIGateway operation middleware
+func (siw *ServerInterfaceWrapper) GetBIGateway(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBIGateway(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutBIGateway operation middleware
+func (siw *ServerInterfaceWrapper) PutBIGateway(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutBIGateway(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12944,6 +13006,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/admin/assistant/test", wrapper.TestAssistant)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/bi-gateway", wrapper.GetBIGateway)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/bi-gateway", wrapper.PutBIGateway)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/directory-reconcile-runs", wrapper.ListDirectoryReconcileRuns)
 	})
 	r.Group(func(r chi.Router) {
@@ -13887,6 +13955,86 @@ type TestAssistant422JSONResponse struct {
 }
 
 func (response TestAssistant422JSONResponse) VisitTestAssistantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetBIGatewayRequestObject struct {
+}
+
+type GetBIGatewayResponseObject interface {
+	VisitGetBIGatewayResponse(w http.ResponseWriter) error
+}
+
+type GetBIGateway200JSONResponse BIGatewaySetting
+
+func (response GetBIGateway200JSONResponse) VisitGetBIGatewayResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetBIGateway401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetBIGateway401JSONResponse) VisitGetBIGatewayResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetBIGateway403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetBIGateway403JSONResponse) VisitGetBIGatewayResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutBIGatewayRequestObject struct {
+	Body *PutBIGatewayJSONRequestBody
+}
+
+type PutBIGatewayResponseObject interface {
+	VisitPutBIGatewayResponse(w http.ResponseWriter) error
+}
+
+type PutBIGateway200JSONResponse BIGatewaySetting
+
+func (response PutBIGateway200JSONResponse) VisitPutBIGatewayResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutBIGateway401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PutBIGateway401JSONResponse) VisitPutBIGatewayResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutBIGateway403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutBIGateway403JSONResponse) VisitPutBIGatewayResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutBIGateway422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response PutBIGateway422JSONResponse) VisitPutBIGatewayResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
 
@@ -25448,6 +25596,12 @@ type StrictServerInterface interface {
 	// Send a one-token prompt to the configured provider (G-admin)
 	// (POST /admin/assistant/test)
 	TestAssistant(ctx context.Context, request TestAssistantRequestObject) (TestAssistantResponseObject, error)
+	// Global BI gateway switch — admin only
+	// (GET /admin/bi-gateway)
+	GetBIGateway(ctx context.Context, request GetBIGatewayRequestObject) (GetBIGatewayResponseObject, error)
+	// Turn the BI gateway on or off globally — admin only
+	// (PUT /admin/bi-gateway)
+	PutBIGateway(ctx context.Context, request PutBIGatewayRequestObject) (PutBIGatewayResponseObject, error)
 	// Directory reconciliation runs — admin only
 	// (GET /admin/directory-reconcile-runs)
 	ListDirectoryReconcileRuns(ctx context.Context, request ListDirectoryReconcileRunsRequestObject) (ListDirectoryReconcileRunsResponseObject, error)
@@ -26337,6 +26491,61 @@ func (sh *strictHandler) TestAssistant(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TestAssistantResponseObject); ok {
 		if err := validResponse.VisitTestAssistantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBIGateway operation middleware
+func (sh *strictHandler) GetBIGateway(w http.ResponseWriter, r *http.Request) {
+	var request GetBIGatewayRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBIGateway(ctx, request.(GetBIGatewayRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBIGateway")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBIGatewayResponseObject); ok {
+		if err := validResponse.VisitGetBIGatewayResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutBIGateway operation middleware
+func (sh *strictHandler) PutBIGateway(w http.ResponseWriter, r *http.Request) {
+	var request PutBIGatewayRequestObject
+
+	var body PutBIGatewayJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutBIGateway(ctx, request.(PutBIGatewayRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutBIGateway")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutBIGatewayResponseObject); ok {
+		if err := validResponse.VisitPutBIGatewayResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

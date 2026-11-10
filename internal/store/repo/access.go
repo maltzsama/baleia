@@ -173,6 +173,7 @@ func (r *Repo) CreateWorkspace(ctx context.Context, arg db.CreateWorkspaceParams
 			OwnerTeamID:        modelUUIDPtr(arg.OwnerTeamID),
 			CreatedAt:          now,
 			UpdatedAt:          now,
+			BIEnabled:          true,
 		}
 		if err := tx.Create(&row).Error; err != nil {
 			return err
@@ -307,5 +308,6 @@ func toDBWorkspace(w model.Workspace) db.Workspace {
 		UpdatedAt:          PGTime(w.UpdatedAt),
 		DefaultBindingID:   uuidPtr(w.DefaultBindingID),
 		DefaultSchema:      w.DefaultSchema,
+		BIEnabled:          w.BIEnabled,
 	}
 }

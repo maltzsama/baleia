@@ -194,6 +194,7 @@ func (s *Service) Start(ctx context.Context, r Run) (db.QueryExecution, error) {
 		UserID:       r.UserID,
 		SavedQueryID: r.SavedQueryID,
 		Status:       "running",
+		Origin:       string(r.Origin),
 		Sql:          r.SQL,
 		TrinoCatalog: &catalog,
 		RequestID:    requestID,

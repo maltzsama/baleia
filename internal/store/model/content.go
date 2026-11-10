@@ -78,10 +78,12 @@ func (QueryFolder) TableName() string { return "query_folders" }
 // QueryExecution is the query_executions table.
 type QueryExecution struct {
 	ID              UUID            `gorm:"column:id;primaryKey;not null;index:query_executions_ws_started,priority:3;check:query_executions_status_check,((status IN ('running', 'finished', 'failed', 'cancelled', 'queued')))"`
-	WorkspaceID     UUID            `gorm:"column:workspace_id;not null;index:idx_query_executions_workspace,priority:1;index:query_executions_ws_started,priority:1;check:query_executions_queue_class_check,(((queue_class IS NULL) OR (queue_class IN ('interactive', 'heavy', 'background'))))"`
+	WorkspaceID     UUID            `gorm:"column:workspace_id;not null;index:idx_query_executions_workspace,priority:1;index:query_executions_ws_started,priority:1;index:idx_query_executions_ws_origin_status,priority:1;check:query_executions_queue_class_check,(((queue_class IS NULL) OR (queue_class IN ('interactive', 'heavy', 'background'))))"`
 	UserID          UUID            `gorm:"column:user_id;not null;index:idx_query_executions_user,priority:1"`
 	SavedQueryID    *UUID           `gorm:"column:saved_query_id"`
-	Status          Text            `gorm:"column:status;not null;size:128;index:idx_query_executions_status,priority:1"`
+	Status          Text            `gorm:"column:status;not null;size:128;index:idx_query_executions_status,priority:1;index:idx_query_executions_bi_key_status,priority:2;index:idx_query_executions_ws_origin_status,priority:3"`
+	Origin          Text            `gorm:"column:origin;not null;size:32;default:'editor';index:idx_query_executions_ws_origin_status,priority:2"`
+	BIKeyID         *UUID           `gorm:"column:bi_key_id;index:idx_query_executions_bi_key_status,priority:1"`
 	SQL             Text            `gorm:"column:sql;not null;size:128;index:query_executions_sql_trgm,priority:1"`
 	EngineQueryID   *string         `gorm:"column:engine_query_id"`
 	RowsReturned    *int64          `gorm:"column:rows_returned"`
@@ -97,6 +99,7 @@ type QueryExecution struct {
 	TargetSchema    *string         `gorm:"column:target_schema"`
 	TargetSnapshot  *JSON           `gorm:"column:target_snapshot"`
 	AgentID         *UUID           `gorm:"column:agent_id;index:idx_query_executions_agent,priority:1;index:idx_query_executions_agent_started,priority:1"`
+	BIKey           *APIKey         `gorm:"foreignKey:BIKeyID;references:ID;constraint:OnDelete:SET NULL"`
 	QueueClass      *string         `gorm:"column:queue_class"`
 	QueueReason     *string         `gorm:"column:queue_reason"`
 	FairnessKey     *string         `gorm:"column:fairness_key"`

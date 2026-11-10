@@ -211,20 +211,23 @@ func (WorkspaceMember) TableName() string { return "workspace_members" }
 
 // Workspace is the workspaces table.
 type Workspace struct {
-	ID                 UUID            `gorm:"column:id;primaryKey;not null;check:workspaces_type_check,((type IN ('personal', 'shared')))"`
-	Name               string          `gorm:"column:name;not null;check:chk_workspace_owner,((((type = 'personal') AND (owner_user_id IS NOT NULL) AND (owner_team_id IS NULL)) OR ((type = 'shared') AND (owner_team_id IS NOT NULL) AND (owner_user_id IS NULL))))"`
-	Description        *string         `gorm:"column:description"`
-	Type               string          `gorm:"column:type;not null"`
-	PolarisCatalogName Text            `gorm:"column:polaris_catalog_name;not null;size:128;uniqueIndex:workspaces_polaris_catalog_name_key,priority:1"`
-	OwnerUserID        *UUID           `gorm:"column:owner_user_id;index:idx_workspaces_owner_user,priority:1"`
-	OwnerTeamID        *UUID           `gorm:"column:owner_team_id;index:idx_workspaces_owner_team,priority:1"`
-	CreatedAt          time.Time       `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt          time.Time       `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3)"`
-	DefaultBindingID   *UUID           `gorm:"column:default_binding_id"`
-	DefaultSchema      *string         `gorm:"column:default_schema"`
-	OwnerUser          *User           `gorm:"foreignKey:OwnerUserID;references:ID;constraint:OnDelete:RESTRICT"`
-	OwnerTeam          *Team           `gorm:"foreignKey:OwnerTeamID;references:ID;constraint:OnDelete:RESTRICT"`
-	DefaultBinding     *CatalogBinding `gorm:"foreignKey:DefaultBindingID;references:ID;constraint:OnDelete:SET NULL"`
+	ID                 UUID      `gorm:"column:id;primaryKey;not null;check:workspaces_type_check,((type IN ('personal', 'shared')))"`
+	Name               string    `gorm:"column:name;not null;check:chk_workspace_owner,((((type = 'personal') AND (owner_user_id IS NOT NULL) AND (owner_team_id IS NULL)) OR ((type = 'shared') AND (owner_team_id IS NOT NULL) AND (owner_user_id IS NULL))))"`
+	Description        *string   `gorm:"column:description"`
+	Type               string    `gorm:"column:type;not null"`
+	PolarisCatalogName Text      `gorm:"column:polaris_catalog_name;not null;size:128;uniqueIndex:workspaces_polaris_catalog_name_key,priority:1"`
+	OwnerUserID        *UUID     `gorm:"column:owner_user_id;index:idx_workspaces_owner_user,priority:1"`
+	OwnerTeamID        *UUID     `gorm:"column:owner_team_id;index:idx_workspaces_owner_team,priority:1"`
+	CreatedAt          time.Time `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
+	UpdatedAt          time.Time `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3)"`
+	DefaultBindingID   *UUID     `gorm:"column:default_binding_id"`
+	DefaultSchema      *string   `gorm:"column:default_schema"`
+	// BIEnabled lets a workspace admin turn the BI gateway off for this
+	// workspace (ADR 0017); it is on by default.
+	BIEnabled      bool            `gorm:"column:bi_enabled;not null;default:true"`
+	OwnerUser      *User           `gorm:"foreignKey:OwnerUserID;references:ID;constraint:OnDelete:RESTRICT"`
+	OwnerTeam      *Team           `gorm:"foreignKey:OwnerTeamID;references:ID;constraint:OnDelete:RESTRICT"`
+	DefaultBinding *CatalogBinding `gorm:"foreignKey:DefaultBindingID;references:ID;constraint:OnDelete:SET NULL"`
 }
 
 func (Workspace) TableName() string { return "workspaces" }
