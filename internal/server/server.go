@@ -21,9 +21,11 @@ import (
 	assistantllm "github.com/galileostudio/baleia/internal/assistant/llm"
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/galileostudio/baleia/internal/bigateway"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/mcp"
 	"github.com/galileostudio/baleia/internal/metrics"
 	monitoringevents "github.com/galileostudio/baleia/internal/monitoring/events"
@@ -31,6 +33,7 @@ import (
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/realtime"
+	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/galileostudio/baleia/internal/ws"
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/go-chi/chi/v5"
@@ -59,6 +62,9 @@ type Server struct {
 	strict      api.ServerInterface
 	ws          *ws.Handler
 	mcp         *mcp.Server // nil unless agents are enabled
+	// biGateway is the separate BI listener (ADR 0017); nil unless
+	// BALEIA_BI_GATEWAY_ADDR is set.
+	biGateway http.Handler
 	// rl and authLimiter run cleanup goroutines; Run stops them on shutdown.
 	rl               *RateLimiter
 	authLimiter      *AuthRouteLimiter
@@ -114,6 +120,30 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	}
 	s.handlers = h
 	s.background = h
+	if cfg.BIGatewayAddr != "" {
+		trinoDialect, ok := core.Dialects.ForEngineKind(dialect.Trino)
+		if !ok {
+			return nil, errors.New("bi gateway: the trino dialect is not registered")
+		}
+		gw, err := bigateway.New(bigateway.Deps{
+			Keys:       h.BIKeyService(),
+			Engines:    core.Engines,
+			Scope:      core.StoreRepo,
+			Rules:      core.StoreRepo,
+			Workspaces: core.StoreRepo,
+			TrinoIdentity: func(ctx context.Context, uid db.UUID) (string, error) {
+				return trinoidentity.For(ctx, core.Queries, cfg.TrinoUserIdentity, uid)
+			},
+			CatalogCredentials: core.CatalogCredentials,
+			Dialect:            trinoDialect,
+			PublicURL:          cfg.BIGatewayURL,
+			Logger:             core.Logger,
+		})
+		if err != nil {
+			return nil, err
+		}
+		s.biGateway = gw
+	}
 	if cfg.TrinoEventsToken != "" {
 		var snapshotStore queryevents.Store = core.Queries
 		if core.StoreRepo != nil {
@@ -601,6 +631,9 @@ func extractToken(r *http.Request) string {
 // stop when Run returns.
 func (s *Server) Run(ctx context.Context) error {
 	defer s.stopLimiters()
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	srv := &http.Server{
 		Addr:    ":" + s.cfg.Port,
 		Handler: obs.HTTPHandler(s.mux, "http.server"),
@@ -609,25 +642,51 @@ func (s *Server) Run(ctx context.Context) error {
 		ReadHeaderTimeout: s.cfg.HTTPReadHeaderTimeout,
 		IdleTimeout:       s.cfg.HTTPIdleTimeout,
 	}
+	servers := []*http.Server{srv}
+	if s.biGateway != nil {
+		servers = append(servers, &http.Server{
+			Addr:              s.cfg.BIGatewayAddr,
+			Handler:           obs.HTTPHandler(s.biGateway, "http.bi_gateway"),
+			ReadHeaderTimeout: s.cfg.HTTPReadHeaderTimeout,
+			IdleTimeout:       s.cfg.HTTPIdleTimeout,
+		})
+	}
+
+	serveErr := make(chan error, len(servers))
+	for _, server := range servers {
+		server := server
+		go func() { serveErr <- server.ListenAndServe() }()
+	}
+
 	shutdown := make(chan error, 1)
 	go func() {
-		<-ctx.Done()
+		<-runCtx.Done()
 		// Zero drains with no deadline.
-		sctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+		sctx, stop := context.WithCancel(context.WithoutCancel(ctx))
 		if s.cfg.HTTPShutdownTimeout > 0 {
-			sctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), s.cfg.HTTPShutdownTimeout)
+			sctx, stop = context.WithTimeout(context.WithoutCancel(ctx), s.cfg.HTTPShutdownTimeout)
 		}
-		defer cancel()
-		err := srv.Shutdown(sctx)
+		defer stop()
+		var errs []error
+		for _, server := range servers {
+			if err := server.Shutdown(sctx); err != nil {
+				errs = append(errs, err)
+			}
+		}
 		if s.background != nil {
 			if derr := s.background.Drain(sctx); derr != nil {
 				s.logger.WarnContext(sctx, "background work still running at shutdown", "err", derr)
 			}
 		}
-		shutdown <- err
+		shutdown <- errors.Join(errs...)
 	}()
-	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-		return err
+
+	for range servers {
+		if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			cancel()
+			<-shutdown
+			return err
+		}
 	}
 	return <-shutdown
 }
