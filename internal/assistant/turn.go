@@ -93,7 +93,7 @@ func (h *Hub) Subscribe(id [16]byte) (<-chan Event, func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		for ctx.Err() == nil {
-			err := bus.SubscribeError(ctx, channel(id), func(payload []byte) {
+			err := bus.SubscribeError(ctx, channel(id), nil, func(payload []byte) {
 				var ev Event
 				if json.Unmarshal(payload, &ev) != nil {
 					return

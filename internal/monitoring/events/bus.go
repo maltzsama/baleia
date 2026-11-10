@@ -20,13 +20,10 @@ func (b *Bus) Notify(ctx context.Context, channel, payload string) error {
 }
 
 // Listen relays every change on channel until ctx ends. It reports connected
-// before subscribing; a dropped connection returns so the caller reconnects
-// and resyncs the subscribers.
+// after each subscription acknowledgement; a dropped connection returns so the
+// caller reconnects and resyncs the subscribers.
 func (b *Bus) Listen(ctx context.Context, channel string, onConnected func(), deliver func(payload string)) error {
-	if onConnected != nil {
-		onConnected()
-	}
-	return b.client.SubscribeError(ctx, channel, func(payload []byte) {
+	return b.client.SubscribeError(ctx, channel, onConnected, func(payload []byte) {
 		deliver(string(payload))
 	})
 }

@@ -202,6 +202,14 @@ func (h *Handler) StreamExecution(w http.ResponseWriter, r *http.Request) {
 
 	workspaceID := r.PathValue("id")
 	executionID := r.PathValue("execution_id")
+	// Canonicalize the execution id: the relay publishes the canonical form,
+	// and an unbound ticket permits a non-canonical path.
+	var execID db.UUID
+	if err := execID.Scan(executionID); err != nil {
+		http.Error(w, "invalid execution id", http.StatusBadRequest)
+		return
+	}
+	executionID = uuidString(execID)
 	if ticket.ExecutionID != "" && ticket.ExecutionID != executionID {
 		http.Error(w, "ticket is for another execution", http.StatusUnauthorized)
 		return
@@ -340,7 +348,7 @@ func (h *Handler) subscribe(ctx context.Context, channel string, wake func()) fu
 	cctx, cancel := context.WithCancel(ctx)
 	go func() {
 		for cctx.Err() == nil {
-			err := h.bus.SubscribeError(cctx, channel, func([]byte) { wake() })
+			err := h.bus.SubscribeError(cctx, channel, wake, func([]byte) { wake() })
 			if cctx.Err() != nil {
 				return
 			}

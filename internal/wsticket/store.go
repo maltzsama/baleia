@@ -81,14 +81,15 @@ func (s *Store) Consume(token string) (Ticket, bool) {
 	s.mu.Unlock()
 	if bus.Enabled() {
 		raw, ok, err := bus.CacheGetDel(context.Background(), "wsticket:"+token)
-		if err != nil || !ok {
-			return Ticket{}, false
+		if err == nil && ok {
+			var ticket Ticket
+			if json.Unmarshal(raw, &ticket) != nil || s.now().After(ticket.ExpiresAt) {
+				return Ticket{}, false
+			}
+			return ticket, true
 		}
-		var ticket Ticket
-		if json.Unmarshal(raw, &ticket) != nil || s.now().After(ticket.ExpiresAt) {
-			return Ticket{}, false
-		}
-		return ticket, true
+		// Shared miss or error: the ticket may be the local fallback Issue
+		// stored when the shared write failed.
 	}
 
 	s.mu.Lock()
