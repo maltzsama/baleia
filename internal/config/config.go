@@ -38,8 +38,15 @@ const (
 )
 
 type Config struct {
-	Port         string
-	DatabaseURL  string
+	Port        string
+	DatabaseURL string
+	// BIGatewayAddr is the BI gateway's own listener (BALEIA_BI_GATEWAY_ADDR,
+	// e.g. ":8443"); empty disables the gateway (ADR 0017).
+	BIGatewayAddr string
+	// BIGatewayURL is the externally reachable base URL of that listener, used
+	// to rewrite Trino URIs and, later, BI files. Empty derives the scheme and
+	// host from each request.
+	BIGatewayURL string
 	TemporalHost string
 	// TemporalUIURL opens a maintenance run's workflow in the Temporal UI; empty
 	// disables the link. TemporalNamespace is the namespace those runs live in.
@@ -55,7 +62,7 @@ type Config struct {
 	// WebhooksEnabled turns on workspace webhook registration and delivery
 	// (ADR 0022). Off drops webhook events at the producer.
 	WebhooksEnabled bool
-	PolarisURL  string
+	PolarisURL      string
 	// PolarisClientID/Secret seed the credentials of a polaris connection
 	// created without any (POLARIS_CLIENT_ID, POLARIS_CLIENT_SECRET).
 	PolarisClientID     string
@@ -269,6 +276,8 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		Port:                              getEnv("PORT", "8080"),
+		BIGatewayAddr:                     getEnv("BALEIA_BI_GATEWAY_ADDR", ""),
+		BIGatewayURL:                      getEnv("BALEIA_BI_GATEWAY_URL", ""),
 		DatabaseURL:                       getEnv("DATABASE_URL", "postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable"),
 		TemporalHost:                      getEnv("TEMPORAL_HOST", "localhost:7233"),
 		TemporalUIURL:                     getEnv("BALEIA_TEMPORAL_UI_URL", ""),
