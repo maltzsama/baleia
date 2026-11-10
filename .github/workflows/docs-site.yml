@@ -29,6 +29,9 @@ jobs:
         working-directory: website
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so lastmod and "last updated" come from real git dates.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -37,6 +40,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+        env:
+          # Umami website id (public): the repository variable of the same name.
+          UMAMI: ${{ vars.UMAMI }}
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
