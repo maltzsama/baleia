@@ -24,6 +24,7 @@ config:
   S3_ENDPOINT: rustfs.baleia-dev.svc:9000
   S3_BUCKET: baleia
   S3_USE_SSL: "false"
+  BALEIA_REDIS_URL: redis://redis.baleia-dev.svc:6379/0
   SMTP_HOST: mailpit.baleia-dev.svc
   SMTP_PORT: "1025"
   SMTP_FROM: noreply@baleia.io

@@ -36,6 +36,7 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/oracle"
 	sqliteengine "github.com/galileostudio/baleia/internal/queryengine/sqlite"
+	"github.com/galileostudio/baleia/internal/realtime"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/store/repo"
@@ -63,6 +64,9 @@ type Core struct {
 	Metrics *metrics.Registry
 	// Notifier is the cross-process monitoring outbox for SSE changes (#733).
 	Notifier *events.Outbox
+	// Realtime is the shared cross-replica backbone (ADR 0022). A disabled
+	// client (no BALEIA_REDIS_URL) falls back to in-process state.
+	Realtime *realtime.Client
 	// Queries is the GORM-backed store, kept under the sqlc-shaped interface
 	// the services still consume (stage A of #761, ADR 0020).
 	Queries db.Querier
@@ -148,6 +152,12 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.StoreRepo = repo.New(c.Store)
 	c.Queries = c.StoreRepo
 	c.Notifier = events.NewOutbox(c.Store)
+
+	c.Realtime, err = realtime.Open(ctx, realtime.Options{URL: cfg.RedisURL, Prefix: cfg.RedisPrefix})
+	if err != nil {
+		return nil, fmt.Errorf("redis: %w", err)
+	}
+	c.onClose(func() { _ = c.Realtime.Close() })
 
 	// Credentials are sealed with BALEIA_ENCRYPTION_KEY (never JWT_SECRET).
 	// With stored credentials and no key, refuse to start rather than serve

@@ -45,7 +45,14 @@ type Config struct {
 	// disables the link. TemporalNamespace is the namespace those runs live in.
 	TemporalUIURL     string
 	TemporalNamespace string
-	PolarisURL        string
+	// RedisURL is the shared real-time, cache and rate-limit backbone
+	// (ADR 0022). Empty disables it and the app falls back to in-process
+	// state; a multi-replica deployment must set it.
+	RedisURL string
+	// RedisPrefix namespaces Redis keys and channels when one instance serves
+	// more than one deployment. Empty uses "baleia".
+	RedisPrefix string
+	PolarisURL  string
 	// PolarisClientID/Secret seed the credentials of a polaris connection
 	// created without any (POLARIS_CLIENT_ID, POLARIS_CLIENT_SECRET).
 	PolarisClientID     string
@@ -263,6 +270,8 @@ func Load() *Config {
 		TemporalHost:                      getEnv("TEMPORAL_HOST", "localhost:7233"),
 		TemporalUIURL:                     getEnv("BALEIA_TEMPORAL_UI_URL", ""),
 		TemporalNamespace:                 getEnv("BALEIA_TEMPORAL_NAMESPACE", "default"),
+		RedisURL:                          getEnv("BALEIA_REDIS_URL", ""),
+		RedisPrefix:                       getEnv("BALEIA_REDIS_PREFIX", "baleia"),
 		PolarisURL:                        getEnv("POLARIS_URL", "http://localhost:8181"),
 		PolarisClientID:                   getEnv("POLARIS_CLIENT_ID", ""),
 		PolarisClientSecret:               getEnv("POLARIS_CLIENT_SECRET", ""),
