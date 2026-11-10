@@ -131,6 +131,16 @@ const config: Config = {
           ]
         },
         {
+          title: 'Features',
+          items: [
+            { label: 'SQL workbench', to: '/features/workbench' },
+            { label: 'Data catalog', to: '/features/data-catalog' },
+            { label: 'Semantic layer', to: '/features/semantic-layer' },
+            { label: 'Lineage', to: '/features/lineage' },
+            { label: 'MCP server', to: '/features/mcp' }
+          ]
+        },
+        {
           title: 'Community',
           items: [
             { label: 'GitHub', href: repo },
