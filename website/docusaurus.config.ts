@@ -101,6 +101,8 @@ const config: Config = {
   ],
 
   themeConfig: {
+    // Social card for og:image and twitter:image (1200x630).
+    image: 'img/baleia-og.png',
     colorMode: { respectPrefersColorScheme: true },
     navbar: {
       title: 'Baleia',

@@ -80,8 +80,17 @@
   gap: 1rem;
 }
 
-.githubButton {
-  border: none;
+/* Heading kept for the outline (h1 -> h2 -> h3) and for assistive tech. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .outlineButton {
