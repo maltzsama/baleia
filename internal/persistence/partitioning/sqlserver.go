@@ -182,7 +182,7 @@ func nextUsedStatement(ps string) string {
 }
 
 func splitRangeStatement(pf string, boundary time.Time) string {
-	return "ALTER PARTITION FUNCTION [" + pf + "] SPLIT RANGE (" + quoteTime(boundary) + ")"
+	return "ALTER PARTITION FUNCTION [" + pf + "]() SPLIT RANGE (" + quoteTime(boundary) + ")"
 }
 
 func truncatePartitionStatement(table string, n int) string {
@@ -190,7 +190,7 @@ func truncatePartitionStatement(table string, n int) string {
 }
 
 func mergeRangeStatement(pf string, boundary time.Time) string {
-	return "ALTER PARTITION FUNCTION [" + pf + "] MERGE RANGE (" + quoteTime(boundary) + ")"
+	return "ALTER PARTITION FUNCTION [" + pf + "]() MERGE RANGE (" + quoteTime(boundary) + ")"
 }
 
 func partitionNumber(bounds []time.Time, until time.Time) (int, bool) {

@@ -13,10 +13,12 @@ import (
 // oracleManager is the Oracle adapter: native RANGE monthly partitioning via
 // ALTER TABLE ... MODIFY PARTITION BY RANGE, with a MAXVALUE catch-all split
 // off as later months are added (mirrors the MySQL adapter). Native
-// partitioning requires the paid Partitioning option (ADR 0023), so this
-// adapter reports it as a capability but works only on editions that license
-// it. Oracle DDL auto-commits, so Provision does not wrap statements in a
-// transaction.
+// partitioning requires the paid Partitioning option (ADR 0023). Oracle DDL
+// auto-commits, so Provision does not wrap statements in a transaction.
+//
+// Identifiers are unquoted so they match how the GORM Oracle dialectors create
+// tables (unquoted, which Oracle stores upper-cased). The names are validated
+// identifiers, so writing them unquoted is safe.
 type oracleManager struct {
 	db *gorm.DB
 }
@@ -32,11 +34,14 @@ func (m *oracleManager) Provision(ctx context.Context, model any, spec Spec, fro
 	if err := spec.Validate(); err != nil {
 		return err
 	}
-	if !m.db.Migrator().HasTable(spec.Table) {
+	// Oracle stores unquoted identifiers upper-cased, so existence checks must
+	// use the upper-cased table name.
+	table := oracleIdent(spec.Table)
+	if !m.db.Migrator().HasTable(table) {
 		if err := m.db.Migrator().CreateTable(model); err != nil {
 			return fmt.Errorf("partitioning: create table %s: %w", spec.Table, err)
 		}
-		if !m.db.Migrator().HasTable(spec.Table) {
+		if !m.db.Migrator().HasTable(table) {
 			return fmt.Errorf("partitioning: model does not create table %q", spec.Table)
 		}
 	}
@@ -100,82 +105,88 @@ func (m *oracleManager) DropPartition(ctx context.Context, table string, from, u
 func (m *oracleManager) isPartitioned(ctx context.Context, table string) (bool, error) {
 	var n int64
 	if err := m.db.WithContext(ctx).Raw(
-		`SELECT COUNT(*) FROM user_part_tables WHERE table_name = ?`, table,
+		`SELECT COUNT(*) FROM user_part_tables WHERE table_name = UPPER(?)`, table,
 	).Scan(&n).Error; err != nil {
 		return false, fmt.Errorf("partitioning: read user_part_tables: %w", err)
 	}
 	return n > 0, nil
 }
 
+// partitionNames returns the partition names of table, lower-cased so they
+// match the spec's naming (Oracle stores unquoted identifiers upper-cased).
 func (m *oracleManager) partitionNames(ctx context.Context, table string) (map[string]bool, error) {
 	var names []string
 	if err := m.db.WithContext(ctx).Raw(
-		`SELECT partition_name FROM user_tab_partitions WHERE table_name = ?`, table,
+		`SELECT partition_name FROM user_tab_partitions WHERE table_name = UPPER(?)`, table,
 	).Scan(&names).Error; err != nil {
 		return nil, fmt.Errorf("partitioning: list oracle partitions: %w", err)
 	}
 	set := make(map[string]bool, len(names))
 	for _, n := range names {
-		set[n] = true
+		set[strings.ToLower(n)] = true
 	}
 	return set, nil
 }
+
+// oracleIdent upper-cases a validated identifier for unquoted Oracle DDL.
+func oracleIdent(s string) string { return strings.ToUpper(s) }
 
 // oraclePartitionByStatement builds the single ALTER that partitions a plain
 // table, covering months and ending with the MAXVALUE catch-all.
 func oraclePartitionByStatement(spec Spec, months []Partition) string {
 	var b strings.Builder
-	b.WriteString(`ALTER TABLE "`)
-	b.WriteString(spec.Table)
-	b.WriteString(`" MODIFY PARTITION BY RANGE ("`)
-	b.WriteString(spec.Column)
-	b.WriteString(`") (`)
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(oracleIdent(spec.Table))
+	b.WriteString(" MODIFY PARTITION BY RANGE (")
+	b.WriteString(oracleIdent(spec.Column))
+	b.WriteString(") (")
 	for i, p := range months {
 		if i > 0 {
 			b.WriteString(", ")
 		}
 		writeOracleRangePartition(&b, p.Name, p.Until)
 	}
-	b.WriteString(` , PARTITION "`)
-	b.WriteString(spec.Table)
+	b.WriteString(", PARTITION ")
+	b.WriteString(oracleIdent(spec.Table))
 	b.WriteString("_")
-	b.WriteString(pmax)
-	b.WriteString(`" VALUES LESS THAN (MAXVALUE))`)
+	b.WriteString(oracleIdent(pmax))
+	b.WriteString(" VALUES LESS THAN (MAXVALUE))")
 	return b.String()
 }
 
 // oracleSplitStatement splits the MAXVALUE catch-all so p becomes the next
-// month, immediately after the current leading bound.
+// month. Oracle's SPLIT PARTITION takes no VALUES LESS THAN: the AT value is
+// the boundary, and the partitions inherit their bounds from the original.
 func oracleSplitStatement(table string, p Partition) string {
 	var b strings.Builder
-	b.WriteString(`ALTER TABLE "`)
-	b.WriteString(table)
-	b.WriteString(`" SPLIT PARTITION "`)
-	b.WriteString(table)
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(oracleIdent(table))
+	b.WriteString(" SPLIT PARTITION ")
+	b.WriteString(oracleIdent(table))
 	b.WriteString("_")
-	b.WriteString(pmax)
-	b.WriteString(`" AT (`)
+	b.WriteString(oracleIdent(pmax))
+	b.WriteString(" AT (")
 	b.WriteString(oracleDate(p.Until))
-	b.WriteString(") INTO (")
-	writeOracleRangePartition(&b, p.Name, p.Until)
-	b.WriteString(` , PARTITION "`)
-	b.WriteString(table)
+	b.WriteString(") INTO (PARTITION ")
+	b.WriteString(oracleIdent(p.Name))
+	b.WriteString(", PARTITION ")
+	b.WriteString(oracleIdent(table))
 	b.WriteString("_")
-	b.WriteString(pmax)
-	b.WriteString(`" VALUES LESS THAN (MAXVALUE))`)
+	b.WriteString(oracleIdent(pmax))
+	b.WriteString(")")
 	return b.String()
 }
 
 func oracleDropStatement(table, name string) string {
-	return `ALTER TABLE "` + table + `" DROP PARTITION "` + name + `"`
+	return "ALTER TABLE " + oracleIdent(table) + " DROP PARTITION " + oracleIdent(name)
 }
 
 func writeOracleRangePartition(b *strings.Builder, name string, until time.Time) {
-	b.WriteString(`PARTITION "`)
-	b.WriteString(name)
-	b.WriteString(`" VALUES LESS THAN (`)
+	b.WriteString("PARTITION ")
+	b.WriteString(oracleIdent(name))
+	b.WriteString(" VALUES LESS THAN (")
 	b.WriteString(oracleDate(until))
-	b.WriteString(`)`)
+	b.WriteString(")")
 }
 
 // oracleDate renders a month boundary as an Oracle DATE literal.

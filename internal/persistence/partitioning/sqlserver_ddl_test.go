@@ -36,10 +36,10 @@ func TestSplitMergeTruncateStatements(t *testing.T) {
 	if got, want := nextUsedStatement("ps_x"), "ALTER PARTITION SCHEME [ps_x] NEXT USED [PRIMARY]"; got != want {
 		t.Errorf("nextUsedStatement = %q, want %q", got, want)
 	}
-	if got, want := splitRangeStatement("pf_x", b), "ALTER PARTITION FUNCTION [pf_x] SPLIT RANGE ('2026-04-01')"; got != want {
+	if got, want := splitRangeStatement("pf_x", b), "ALTER PARTITION FUNCTION [pf_x]() SPLIT RANGE ('2026-04-01')"; got != want {
 		t.Errorf("splitRangeStatement = %q, want %q", got, want)
 	}
-	if got, want := mergeRangeStatement("pf_x", b), "ALTER PARTITION FUNCTION [pf_x] MERGE RANGE ('2026-04-01')"; got != want {
+	if got, want := mergeRangeStatement("pf_x", b), "ALTER PARTITION FUNCTION [pf_x]() MERGE RANGE ('2026-04-01')"; got != want {
 		t.Errorf("mergeRangeStatement = %q, want %q", got, want)
 	}
 	if got, want := truncatePartitionStatement("audit_events", 3), "TRUNCATE TABLE [audit_events] WITH (PARTITIONS (3))"; got != want {

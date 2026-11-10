@@ -11,6 +11,17 @@ import (
 	"gorm.io/gorm"
 )
 
+// oracleEvent is the Oracle test table. The partition column is TIMESTAMP
+// (not TIMESTAMP WITH TIME ZONE), because Oracle forbids the latter in a
+// primary key, and the partition key must be part of the key.
+type oracleEvent struct {
+	ID         int64     `gorm:"column:id;primaryKey"`
+	OccurredAt time.Time `gorm:"column:occurred_at;primaryKey;not null;type:timestamp"`
+	Name       string    `gorm:"column:name"`
+}
+
+func (oracleEvent) TableName() string { return "partitioning_test_events" }
+
 // TestOraclePartitions exercises the Oracle adapter against a live server named
 // by BALEIA_TEST_ORACLE_URL (a go-ora URL); it skips otherwise. It uses the
 // pure-Go go-ora dialector, so it needs no Oracle Instant Client.
@@ -41,13 +52,13 @@ func TestOraclePartitions(t *testing.T) {
 	}
 	jan := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	apr := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
-	if err := pm.Provision(ctx, &testEvent{}, spec, jan, apr); err != nil {
+	if err := pm.Provision(ctx, &oracleEvent{}, spec, jan, apr); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
-	t.Cleanup(func() { _ = db.Exec(`DROP TABLE "partitioning_test_events"`).Error })
+	t.Cleanup(func() { _ = db.Exec(`DROP TABLE partitioning_test_events`).Error })
 	// Extend by a month: splits April off the MAXVALUE catch-all.
 	may := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	if err := pm.Provision(ctx, &testEvent{}, spec, jan, may); err != nil {
+	if err := pm.Provision(ctx, &oracleEvent{}, spec, jan, may); err != nil {
 		t.Fatalf("Provision (extend): %v", err)
 	}
 
@@ -65,12 +76,12 @@ func TestOraclePartitions(t *testing.T) {
 		time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC),
 		time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC),
 	} {
-		if err := db.Create(&testEvent{ID: int64(i + 1), OccurredAt: m, Name: "x"}).Error; err != nil {
+		if err := db.Create(&oracleEvent{ID: int64(i + 1), OccurredAt: m, Name: "x"}).Error; err != nil {
 			t.Fatalf("insert month %v: %v", m, err)
 		}
 	}
 	var n int64
-	if err := db.Model(&testEvent{}).Count(&n).Error; err != nil {
+	if err := db.Model(&oracleEvent{}).Count(&n).Error; err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	if n != 4 {
@@ -82,7 +93,7 @@ func TestOraclePartitions(t *testing.T) {
 	if err := pm.DropPartition(ctx, spec.Table, feb, mar); err != nil {
 		t.Fatalf("DropPartition: %v", err)
 	}
-	if err := db.Model(&testEvent{}).Count(&n).Error; err != nil {
+	if err := db.Model(&oracleEvent{}).Count(&n).Error; err != nil {
 		t.Fatalf("count after drop: %v", err)
 	}
 	if n != 3 {
