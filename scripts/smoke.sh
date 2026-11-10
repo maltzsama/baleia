@@ -68,8 +68,8 @@ TOKEN=$(jq -r '.token' <<<"$resp")
 step "seed tpch_test"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ "$STACK" == "k8s" ]]; then
-  kubectl -n baleia-dev exec -i statefulset/postgres -- psql -U baleia -d baleia < "$ROOT/db/seed/tpch_test.sql" >/dev/null
-  kubectl -n baleia-dev exec -i statefulset/postgres -- psql -U baleia -d baleia -v email="$EMAIL" < "$ROOT/db/seed/smoke_target.sql" >/dev/null
+  kubectl -n baleia-dev exec -i statefulset/postgres -- psql -v ON_ERROR_STOP=1 -U baleia -d baleia < "$ROOT/db/seed/tpch_test.sql" >/dev/null
+  kubectl -n baleia-dev exec -i statefulset/postgres -- psql -v ON_ERROR_STOP=1 -U baleia -d baleia -v email="$EMAIL" < "$ROOT/db/seed/smoke_target.sql" >/dev/null
   # Trino loads catalogs from the registry at boot; restart it so it picks up
   # the row that was just seeded.
   kubectl -n baleia-dev rollout restart deploy/baleia-trino >/dev/null
@@ -77,7 +77,7 @@ if [[ "$STACK" == "k8s" ]]; then
 else
   (cd "$ROOT" && make seed-tpch >/dev/null)
   docker compose -f "$ROOT/docker-compose.yaml" exec -T postgres \
-    psql -U baleia -d baleia -v email="$EMAIL" < "$ROOT/db/seed/smoke_target.sql" >/dev/null
+    psql -v ON_ERROR_STOP=1 -U baleia -d baleia -v email="$EMAIL" < "$ROOT/db/seed/smoke_target.sql" >/dev/null
 fi
 
 # ── 4. Personal workspace ───────────────────────────────────────────────────
