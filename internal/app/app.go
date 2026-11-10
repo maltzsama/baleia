@@ -66,6 +66,10 @@ type Core struct {
 	// (#733): the shared bus when Redis is configured, the GORM outbox
 	// otherwise.
 	Notifier events.Transport
+	// Outbox is the durable cross-process outbox. It is the monitoring
+	// fallback and, with the bus on, the durable source of execution
+	// notifications the API relays onto the bus (ADR 0022).
+	Outbox *events.Outbox
 	// Realtime is the shared cross-replica backbone (ADR 0022). A disabled
 	// client (no BALEIA_REDIS_URL) falls back to in-process state.
 	Realtime *realtime.Client
@@ -153,6 +157,7 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.onClose(func() { _ = store.Close(c.Store) })
 	c.StoreRepo = repo.New(c.Store)
 	c.Queries = c.StoreRepo
+	c.Outbox = events.NewOutbox(c.Store)
 
 	c.Realtime, err = realtime.Open(ctx, realtime.Options{URL: cfg.RedisURL, Prefix: cfg.RedisPrefix})
 	if err != nil {
@@ -161,8 +166,11 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.onClose(func() { _ = c.Realtime.Close() })
 	if c.Realtime.Enabled() {
 		c.Notifier = events.NewBus(c.Realtime)
+		// A status write and its outbox row commit together; the API relays the
+		// row onto the bus (ADR 0022).
+		c.StoreRepo.SetEnqueue(c.Outbox.NotifyTx)
 	} else {
-		c.Notifier = events.NewOutbox(c.Store)
+		c.Notifier = c.Outbox
 	}
 
 	// Credentials are sealed with BALEIA_ENCRYPTION_KEY (never JWT_SECRET).
