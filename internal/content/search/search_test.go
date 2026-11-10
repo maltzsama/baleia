@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	textsearch "github.com/galileostudio/baleia/internal/search"
 	"github.com/google/uuid"
 )
 
@@ -18,6 +19,8 @@ type fakeStore struct {
 	queries []db.SavedQuery
 	metrics []db.SemanticMetric
 	models  []db.SemanticModel
+	// queryIDs is what the last saved-query read was restricted to.
+	queryIDs []db.UUID
 }
 
 func (f *fakeStore) ListSpacesForPrincipal(context.Context, db.ListSpacesForPrincipalParams) ([]db.ListSpacesForPrincipalRow, error) {
@@ -28,7 +31,8 @@ func (f *fakeStore) ListAllVisibleQueryFolders(context.Context, db.ListAllVisibl
 	return f.folders, nil
 }
 
-func (f *fakeStore) SearchVisibleSavedQueries(context.Context, db.SearchVisibleSavedQueriesParams) ([]db.SavedQuery, error) {
+func (f *fakeStore) SearchVisibleSavedQueries(_ context.Context, arg db.SearchVisibleSavedQueriesParams) ([]db.SavedQuery, error) {
+	f.queryIDs = arg.IDs
 	return f.queries, nil
 }
 
@@ -53,7 +57,7 @@ func TestSearch(t *testing.T) {
 		metrics: []db.SemanticMetric{{ID: newID(), SpaceID: space.ID, Label: "Revenue", Slug: "revenue", Certified: true}, {Label: "Orders", Slug: "orders"}},
 		models:  []db.SemanticModel{{ID: newID(), Label: "Customers", Slug: "customers"}},
 	}
-	s := New(st)
+	s := New(Unindexed{st})
 
 	hits, err := s.Search(ctx, newID(), newID(), Query{Text: " reven "})
 	if err != nil {
@@ -103,7 +107,7 @@ func TestSearch_RanksBeforeLimit(t *testing.T) {
 	}
 	st.metrics = []db.SemanticMetric{{ID: newID(), SpaceID: space.ID, Label: "Revenue", Slug: "revenue"}}
 
-	hits, err := New(st).Search(context.Background(), newID(), newID(), Query{Text: "revenue", Limit: 20})
+	hits, err := New(Unindexed{st}).Search(context.Background(), newID(), newID(), Query{Text: "revenue", Limit: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +124,7 @@ func TestSearch_FoldsCaseAndAccents(t *testing.T) {
 		metrics: []db.SemanticMetric{{ID: newID(), SpaceID: space.ID, Label: "Receita líquida", Slug: "receita_liquida"}},
 		models:  []db.SemanticModel{{ID: newID(), SpaceID: space.ID, Label: "Sessões web", Slug: "web"}},
 	}
-	s := New(st)
+	s := New(Unindexed{st})
 	for _, text := range []string{"RECEITA LIQUIDA", "liquida receita", "sessao"} {
 		hits, err := s.Search(context.Background(), newID(), newID(), Query{Text: text})
 		if err != nil {
@@ -177,7 +181,7 @@ func TestSearch_Boosts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			s := New(tt.store)
+			s := New(Unindexed{tt.store})
 			s.now = func() time.Time { return now }
 			hits, err := s.Search(context.Background(), newID(), user, Query{Text: "revenue", Kind: tt.kind})
 			if err != nil {
@@ -187,5 +191,56 @@ func TestSearch_Boosts(t *testing.T) {
 				t.Fatalf("hits = %+v; want %s first", hits, tt.boosted)
 			}
 		})
+	}
+}
+
+// indexedStore proposes fixed candidates, as the search index does.
+type indexedStore struct {
+	*fakeStore
+	candidates Candidates
+}
+
+func (i indexedStore) ContentCandidates(context.Context, db.UUID, textsearch.Pattern) (Candidates, error) {
+	return i.candidates, nil
+}
+
+// The service reads only the rows the index proposes, and none of a kind with
+// no candidates.
+func TestSearch_ReadsOnlyCandidates(t *testing.T) {
+	t.Parallel()
+	space := db.ListSpacesForPrincipalRow{ID: newID(), Name: "Finance"}
+	proposed := newID()
+	st := &fakeStore{
+		space:   space,
+		queries: []db.SavedQuery{{ID: proposed, SpaceID: space.ID, Name: "Revenue by month", Slug: "revenue_by_month"}},
+		metrics: []db.SemanticMetric{{ID: newID(), SpaceID: space.ID, Label: "Revenue", Slug: "revenue"}},
+	}
+	s := New(indexedStore{fakeStore: st, candidates: Candidates{SavedQueries: []db.UUID{proposed}}})
+	hits, err := s.Search(context.Background(), newID(), newID(), Query{Text: "revenue"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].Kind != KindSavedQuery {
+		t.Fatalf("hits = %+v; want only the proposed saved query", hits)
+	}
+	if len(st.queryIDs) != 1 || st.queryIDs[0] != proposed {
+		t.Errorf("saved queries were read for %v, want the proposed id", st.queryIDs)
+	}
+}
+
+// A saved query is also found by the words of its SQL, ranked below a name.
+func TestSearch_FindsSavedQueryBySQL(t *testing.T) {
+	t.Parallel()
+	space := db.ListSpacesForPrincipalRow{ID: newID(), Name: "Finance"}
+	st := &fakeStore{space: space, queries: []db.SavedQuery{
+		{ID: newID(), SpaceID: space.ID, Name: "Monthly report", Slug: "monthly_report", Sql: "SELECT * FROM sales.refunds"},
+		{ID: newID(), SpaceID: space.ID, Name: "Refunds", Slug: "refunds", Sql: "SELECT 1"},
+	}}
+	hits, err := New(Unindexed{st}).Search(context.Background(), newID(), newID(), Query{Text: "refunds"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 2 || hits[0].Title != "Refunds" || hits[1].Title != "Monthly report" {
+		t.Fatalf("hits = %+v; want the name match, then the SQL match", hits)
 	}
 }

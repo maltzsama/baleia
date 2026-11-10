@@ -177,24 +177,43 @@ func (r *Repo) DeleteSemanticDoc(ctx context.Context, arg db.DeleteSemanticDocPa
 }
 
 // SearchSemanticDocs finds docs of catalogs the workspace may use whose
-// description, table or column matches q (#941), scored in Go so search
-// stays portable (ADR 0020).
+// description, tags, table or column match q (#941). The docs index proposes
+// candidates (ADR 0023); they are read live, filtered by the catalogs granted
+// to the workspace, scored and ordered in Go so search stays portable
+// (ADR 0020).
 func (r *Repo) SearchSemanticDocs(ctx context.Context, arg db.SearchSemanticDocsParams) ([]db.SearchSemanticDocsRow, error) {
 	if !arg.WorkspaceID.Valid || arg.Lim <= 0 {
 		return nil, nil
 	}
+	workspace := UUIDString(arg.WorkspaceID)
+	owner := model.UUID(workspace)
+	if err := r.refreshScope(ctx, scopeDocs+workspace, scopeOwner{workspace: &owner}, docsBuilder(workspace)); err != nil {
+		return nil, err
+	}
+	pattern := textsearch.Compile(arg.Q)
 	var out []db.SearchSemanticDocsRow
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		visible, err := grantedCatalogIDs(tx, arg.WorkspaceID)
 		if err != nil || len(visible) == 0 {
 			return err
 		}
-		var rows []model.SemanticDoc
-		if err := tx.Where("workspace_id = ? AND catalog_id IN ?", UUIDString(arg.WorkspaceID), visible).
-			Find(&rows).Error; err != nil {
+		found, err := candidates(tx, []string{scopeDocs + workspace}, []string{kindDoc}, pattern, int(arg.Lim))
+		if err != nil || len(found[kindDoc]) == 0 {
 			return err
 		}
-		pattern := textsearch.Compile(arg.Q)
+		var rows []model.SemanticDoc
+		err = inChunks(found[kindDoc], func(chunk []string) error {
+			var part []model.SemanticDoc
+			if err := tx.Where("workspace_id = ? AND catalog_id IN ? AND id IN ?", workspace, visible, chunk).
+				Find(&part).Error; err != nil {
+				return err
+			}
+			rows = append(rows, part...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
 		hits := make([]db.SearchSemanticDocsRow, 0, len(rows))
 		for _, row := range rows {
 			if arg.Tag != nil && !containsString(row.Tags, *arg.Tag) {
@@ -210,6 +229,7 @@ func (r *Repo) SearchSemanticDocs(ctx context.Context, arg db.SearchSemanticDocs
 			fields := []textsearch.Field{
 				{Text: string(row.TableNameValue), Weight: 1},
 				{Text: string(row.Description), Weight: 1},
+				{Text: strings.Join(row.Tags, " "), Weight: tagWeight},
 			}
 			if row.ColumnName != nil {
 				fields = append(fields, textsearch.Field{Text: string(*row.ColumnName), Weight: 1})
@@ -231,9 +251,12 @@ func (r *Repo) SearchSemanticDocs(ctx context.Context, arg db.SearchSemanticDocs
 		}
 		out = hits
 		return nil
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	}, nil)
 	return out, err
 }
+
+// tagWeight scales a match on a doc's tags below its name and description.
+const tagWeight = 0.7
 
 // ListSemanticTags lists the tags of docs on catalogs the workspace may use,
 // prefix matches first, with their counts.
@@ -301,6 +324,9 @@ func (r *Repo) ListVisibleSemanticMetrics(ctx context.Context, arg db.ListVisibl
 		if arg.SpaceID.Valid {
 			q = q.Where("space_id = ?", UUIDString(arg.SpaceID))
 		}
+		if len(arg.IDs) > 0 {
+			q = q.Where("id IN ?", uuidStrings(arg.IDs))
+		}
 		var rows []model.SemanticMetric
 		if err := q.Order("label").Find(&rows).Error; err != nil {
 			return err
@@ -366,6 +392,9 @@ func (r *Repo) ListVisibleSemanticModels(ctx context.Context, arg db.ListVisible
 			UUIDString(arg.WorkspaceID), spaces, catalogs)
 		if arg.SpaceID.Valid {
 			q = q.Where("space_id = ?", UUIDString(arg.SpaceID))
+		}
+		if len(arg.IDs) > 0 {
+			q = q.Where("id IN ?", uuidStrings(arg.IDs))
 		}
 		var rows []model.SemanticModel
 		if err := q.Order("label").Find(&rows).Error; err != nil {

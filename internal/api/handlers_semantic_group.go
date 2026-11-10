@@ -26,7 +26,7 @@ func newSemanticHandlers(c *core) *SemanticHandlers {
 		docStore    docs.Store    = c.queries
 		metricStore metrics.Store = c.queries
 		modelStore  models.Store  = c.queries
-		searchStore search.Store  = c.queries
+		searchStore search.Store  = search.Unindexed{Reader: c.queries}
 	)
 	if c.store != nil {
 		r := repo.New(c.store)

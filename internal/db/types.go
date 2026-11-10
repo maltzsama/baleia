@@ -1849,12 +1849,16 @@ type ListVisibleSemanticMetricsParams struct {
 	WorkspaceID UUID `json:"workspace_id"`
 	UserID      UUID `json:"user_id"`
 	SpaceID     UUID `json:"space_id"`
+	// IDs, when not empty, restricts the result to these rows.
+	IDs []UUID `json:"ids"`
 }
 
 type ListVisibleSemanticModelsParams struct {
 	WorkspaceID UUID `json:"workspace_id"`
 	UserID      UUID `json:"user_id"`
 	SpaceID     UUID `json:"space_id"`
+	// IDs, when not empty, restricts the result to these rows.
+	IDs []UUID `json:"ids"`
 }
 
 type ListWorkspaceCatalogGrantsRow struct {
@@ -2062,6 +2066,8 @@ type SearchVisibleSavedQueriesParams struct {
 	SpaceID     UUID    `json:"space_id"`
 	Q           *string `json:"q"`
 	Lim         *int32  `json:"lim"`
+	// IDs, when not empty, restricts the result to these rows.
+	IDs []UUID `json:"ids"`
 }
 
 type SetAgentStatusParams struct {

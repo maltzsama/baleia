@@ -205,16 +205,16 @@ func (r *Repo) folderSubtree(ctx context.Context, id, workspaceID db.UUID) ([]st
 // ListVisibleSavedQueries returns the queries in one folder of spaces the user
 // may see.
 func (r *Repo) ListVisibleSavedQueries(ctx context.Context, arg db.ListVisibleSavedQueriesParams) ([]db.SavedQuery, error) {
-	return r.listVisibleSavedQueries(ctx, arg.WorkspaceID, arg.UserID, arg.SpaceID, &arg.FolderID, arg.Q, arg.Lim)
+	return r.listVisibleSavedQueries(ctx, arg.WorkspaceID, arg.UserID, arg.SpaceID, &arg.FolderID, arg.Q, arg.Lim, nil)
 }
 
 // SearchVisibleSavedQueries returns every visible saved query, optionally
 // filtered by space and text (#113).
 func (r *Repo) SearchVisibleSavedQueries(ctx context.Context, arg db.SearchVisibleSavedQueriesParams) ([]db.SavedQuery, error) {
-	return r.listVisibleSavedQueries(ctx, arg.WorkspaceID, arg.UserID, arg.SpaceID, nil, arg.Q, arg.Lim)
+	return r.listVisibleSavedQueries(ctx, arg.WorkspaceID, arg.UserID, arg.SpaceID, nil, arg.Q, arg.Lim, arg.IDs)
 }
 
-func (r *Repo) listVisibleSavedQueries(ctx context.Context, workspaceID, userID, spaceID db.UUID, folderID *db.UUID, search *string, limit *int32) ([]db.SavedQuery, error) {
+func (r *Repo) listVisibleSavedQueries(ctx context.Context, workspaceID, userID, spaceID db.UUID, folderID *db.UUID, search *string, limit *int32, ids []db.UUID) ([]db.SavedQuery, error) {
 	var out []db.SavedQuery
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		spaces, err := visibleSpaces(tx, workspaceID, userID)
@@ -231,6 +231,9 @@ func (r *Repo) listVisibleSavedQueries(ctx context.Context, workspaceID, userID,
 			} else {
 				q = q.Where("folder_id IS NULL")
 			}
+		}
+		if len(ids) > 0 {
+			q = q.Where("id IN ?", uuidStrings(ids))
 		}
 		if search != nil {
 			pattern := "%" + strings.ToLower(*search) + "%"
@@ -324,4 +327,13 @@ func visibleSpaces(tx *gorm.DB, workspaceID, userID db.UUID) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// uuidStrings renders ids for an IN list.
+func uuidStrings(ids []db.UUID) []string {
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = UUIDString(id)
+	}
+	return out
 }

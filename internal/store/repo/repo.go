@@ -2,6 +2,7 @@ package repo
 
 import (
 	"github.com/galileostudio/baleia/internal/db"
+	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 )
 
@@ -21,6 +22,9 @@ type Repo struct {
 	// enqueue records a durable notification in the writer's transaction
 	// (ADR 0022); nil when no shared layer is configured.
 	enqueue func(tx *gorm.DB, channel, payload string) error
+	// searchBuilds makes the searches of one scope share its index rebuild
+	// (ADR 0023).
+	searchBuilds singleflight.Group
 }
 
 // SetEnqueue wires the durable notification hook. Call it once, at startup.
