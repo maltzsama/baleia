@@ -29,7 +29,9 @@ const clean = (permalink: string) =>
 function short(text: string): string {
   const oneLine = text.replace(/\s+/g, ' ').trim();
   if (oneLine.length <= maxDescription) return oneLine;
-  return `${oneLine.slice(0, oneLine.lastIndexOf(' ', maxDescription))}...`;
+  const cut = oneLine.lastIndexOf(' ', maxDescription);
+  // No space to cut at (a long URL or token): hard cut instead of slice(0, -1).
+  return `${oneLine.slice(0, cut > 0 ? cut : maxDescription)}...`;
 }
 
 type Entry = { title: string; url: string; description: string; permalink: string };
