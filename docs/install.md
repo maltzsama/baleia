@@ -86,7 +86,7 @@ biGateway:
         hosts: ["bi.example.com"]
 ```
 
-Add `BALEIA_BI_GATEWAY_SECRET` to the Secret: at least 32 characters, the same on every API replica. It signs the Trino URIs the gateway hands back, so any replica can serve the next page of a query. With `secrets.create`, set `secrets.values.BALEIA_BI_GATEWAY_SECRET`; the chart refuses to render without it.
+Add `BALEIA_BI_GATEWAY_SECRET` to the Secret: at least 32 characters, the same on every API replica. It signs the Trino URIs the gateway hands back, so any replica can serve the next page of a query. With `secrets.create`, set `secrets.values.BALEIA_BI_GATEWAY_SECRET`; the chart refuses to render without it. With `existingSecret`, add the key to that Secret yourself: the chart cannot check an external Secret, and the API pod does not start until the key exists.
 
 BI tools sign in with HTTP Basic: the key owner's e-mail as the user and a workspace-bound BI key as the password (`POST /workspaces/{id}/bi-keys`), never a Trino credential. One key names one workspace and one engine; its statements are read-only and recorded in the history with origin `bi`. Only Trino engines are served: a direct engine (PostgreSQL, MySQL, …) has no gateway path.
 
