@@ -30,6 +30,7 @@ import (
 	"github.com/galileostudio/baleia/internal/monitoring/queryevents"
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/realtime"
 	"github.com/galileostudio/baleia/internal/ws"
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/go-chi/chi/v5"
@@ -160,7 +161,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		gate.SetObserver(core.Metrics.Agent())
 		gate.SetQueueing(cfg.WorkloadEnabled)
 		s.mcp = mcp.New(s.logger, h, gate, core.AgentTokens(), mcp.NewAuditHooks(core.Audit), cfg.MCPAllowedOrigins)
-		startAssistant(ctx, s.logger, h, s.mcp, core.Dialer, runner)
+		startAssistant(ctx, s.logger, h, s.mcp, core.Dialer, runner, core.Realtime)
 	}
 
 	s.routes()
@@ -178,6 +179,7 @@ func startAssistant(
 	mcpServer *mcp.Server,
 	dialer *connections.Dialer,
 	slot *assistant.RunnerSlot,
+	bus *realtime.Client,
 ) {
 	svc := h.AssistantService()
 	if svc == nil {
@@ -189,6 +191,7 @@ func startAssistant(
 		return
 	}
 	runner := assistant.NewRunner(logger, svc, nil, assistant.NewMCPToolCaller(session))
+	runner.SetBus(bus)
 	// Without stored settings the runner starts with no provider; saving the
 	// settings sets one.
 	sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
