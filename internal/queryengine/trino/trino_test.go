@@ -209,6 +209,64 @@ func TestSessionAppliesResponseHeaders(t *testing.T) {
 	}
 }
 
+// TestSessionScopeOnlyForUserIdentity pins the guard contract (#839): a user
+// identity carries baleia.catalogs resolved from the source, while the service
+// identity sends none and never resolves it.
+func TestSessionScopeOnlyForUserIdentity(t *testing.T) {
+	t.Parallel()
+	f := &fakeCoordinator{respond: func(string) (http.Header, map[string]any) {
+		return nil, map[string]any{"id": "20260101_000000_00001_abcde"}
+	}}
+	e := testEngine(t, f)
+	ctx := context.Background()
+
+	userCalls := 0
+	user, err := e.OpenSession(ctx, queryengine.SessionSpec{
+		Identity: queryengine.Identity{UserID: "u_1"},
+		AllowedCatalogsSource: func(context.Context) ([]string, error) {
+			userCalls++
+			return []string{"lake", "raw"}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := user.Execute(ctx, "SELECT 1", queryengine.Callbacks{}, &collect{}); err != nil {
+		t.Fatal(err)
+	}
+	_ = user.Close()
+	if userCalls != 1 {
+		t.Fatalf("user scope resolved %d times, want 1", userCalls)
+	}
+	if got := f.last().Get("X-Trino-Extra-Credential"); got != "baleia.catalogs=lake%2Craw" {
+		t.Fatalf("user extra credentials = %q, want the workspace scope", got)
+	}
+
+	svcCalls := 0
+	svc, err := e.OpenSession(ctx, queryengine.SessionSpec{
+		AllowedCatalogsSource: func(context.Context) ([]string, error) {
+			svcCalls++
+			return []string{"lake"}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Execute(ctx, "SELECT 2", queryengine.Callbacks{}, &collect{}); err != nil {
+		t.Fatal(err)
+	}
+	_ = svc.Close()
+	if svcCalls != 0 {
+		t.Fatalf("service identity resolved the scope %d times, want 0", svcCalls)
+	}
+	if got := f.last().Get("X-Trino-Extra-Credential"); got != "" {
+		t.Fatalf("service extra credentials = %q, want none", got)
+	}
+	if got := f.last().Get("X-Trino-User"); got != "svc" {
+		t.Fatalf("service user = %q, want the configured service identity", got)
+	}
+}
+
 func TestExecuteStreamsArrowAndReportsHandle(t *testing.T) {
 	t.Parallel()
 	f := &fakeCoordinator{respond: func(sql string) (http.Header, map[string]any) {

@@ -163,6 +163,85 @@ func (st *statementStore) AbandonRunningStatements(_ context.Context, p db.Aband
 	return out, nil
 }
 
+// TestExecuteScript_UserSessionCarriesWorkspaceScope pins ADR 0018 §5 on the
+// execution path: the session resolves the execution's workspace scope on the
+// statement's engine, so the guard allows the workspace's catalog (#839).
+func TestExecuteScript_UserSessionCarriesWorkspaceScope(t *testing.T) {
+	otherEngine := db.UUID{Bytes: [16]byte{0xE2}, Valid: true}
+	store := &scopeStore{
+		statementStore: newStatementStore(1),
+		targets: []db.ListWorkspaceTargetsRow{
+			{EngineID: testEngineID, EngineCatalogName: "tpch_test", BindingEnabled: true, EngineEnabled: true, CatalogEnabled: true},
+			{EngineID: otherEngine, EngineCatalogName: "elsewhere", BindingEnabled: true, EngineEnabled: true, CatalogEnabled: true},
+		},
+	}
+	eng := &scopeEngine{fakeEngine: &fakeEngine{Engine: testTrino}}
+	if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), store: store, engines: eng, s3: &fakeS3{}, cfg: testActivitiesConfig()},
+		scriptParams("SELECT count(*) FROM tpch_test.tiny.nation")); err != nil {
+		t.Fatal(err)
+	}
+	if eng.scopeErr != nil {
+		t.Fatalf("scope: %v", eng.scopeErr)
+	}
+	if len(eng.scope) != 1 || eng.scope[0] != "tpch_test" {
+		t.Fatalf("session scope = %v, want [tpch_test]", eng.scope)
+	}
+	// The scope is the execution's workspace, not the caller's or a default.
+	if want := (db.UUID{Bytes: [16]byte{0xB1}, Valid: true}); store.workspace != want {
+		t.Fatalf("scope resolved for workspace %v, want %v", store.workspace, want)
+	}
+}
+
+// TestExecuteScript_ServiceSessionLeavesScopeOut: the service identity runs
+// trusted, so the session carries no scope source and the activity does not
+// read the execution for one (ADR 0018 §5, #839).
+func TestExecuteScript_ServiceSessionLeavesScopeOut(t *testing.T) {
+	store := &scopeStore{statementStore: newStatementStore(1)}
+	eng := &scopeEngine{fakeEngine: &fakeEngine{Engine: testTrino}}
+	p := scriptParams("SELECT 1")
+	p.Identity = queryengine.Identity{}
+	if _, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), store: store, engines: eng, s3: &fakeS3{}, cfg: testActivitiesConfig()}, p); err != nil {
+		t.Fatal(err)
+	}
+	if eng.sourceSet {
+		t.Fatal("the service identity must not carry a catalog scope source")
+	}
+	if store.workspace.Valid {
+		t.Fatalf("the service identity must not resolve a workspace scope (got %v)", store.workspace)
+	}
+}
+
+// scopeStore adds the workspace catalog scope to a statement store.
+type scopeStore struct {
+	*statementStore
+	targets   []db.ListWorkspaceTargetsRow
+	workspace db.UUID
+}
+
+func (s *scopeStore) ListWorkspaceTargets(_ context.Context, workspaceID db.UUID) ([]db.ListWorkspaceTargetsRow, error) {
+	s.workspace = workspaceID
+	return s.targets, nil
+}
+
+// scopeEngine resolves the session's scope the way the Trino adapter does
+// before a request.
+type scopeEngine struct {
+	*fakeEngine
+	scope     []string
+	scopeErr  error
+	sourceSet bool
+}
+
+func (s *scopeEngine) Get(context.Context, db.UUID) (queryengine.Engine, error) { return s, nil }
+
+func (s *scopeEngine) OpenSession(ctx context.Context, spec queryengine.SessionSpec) (queryengine.Session, error) {
+	s.sourceSet = spec.AllowedCatalogsSource != nil
+	if spec.AllowedCatalogsSource != nil {
+		s.scope, s.scopeErr = spec.AllowedCatalogsSource(ctx)
+	}
+	return s.fakeEngine.OpenSession(ctx, spec)
+}
+
 var testEngineID = db.UUID{Bytes: [16]byte{0xE1}, Valid: true}
 
 func scriptParams(sqls ...string) ExecuteScriptParams {
