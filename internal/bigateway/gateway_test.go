@@ -23,6 +23,7 @@ var (
 	testKeyID  = db.UUID{Bytes: uuid.New(), Valid: true}
 	testWSID   = db.UUID{Bytes: uuid.New(), Valid: true}
 	testEngine = db.UUID{Bytes: uuid.New(), Valid: true}
+	testSecret = []byte("0123456789abcdef0123456789abcdef")
 )
 
 type fakeKeys struct {
@@ -142,10 +143,15 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	return newFixtureKind(t, "trino")
+	return newFixtureSecret(t, "trino", testSecret)
 }
 
 func newFixtureKind(t *testing.T, kind string) *fixture {
+	t.Helper()
+	return newFixtureSecret(t, kind, testSecret)
+}
+
+func newFixtureSecret(t *testing.T, kind string, secret []byte) *fixture {
 	t.Helper()
 	trino := &coordinator{}
 	trino.server = httptest.NewServer(trino)
@@ -165,6 +171,7 @@ func newFixtureKind(t *testing.T, kind string) *fixture {
 	f := &fixture{trino: trino, scope: scope, keys: fakeKeys{cred: cred}}
 	d := dialect.NewRegistry().MustGet(dialect.Trino)
 	gw, err := New(Deps{
+		Secret:             secret,
 		Keys:               f.keys,
 		Engines:            fakeEngines{eng: fakeEngine{url: trino.server.URL, hc: trino.server.Client(), kind: kind}},
 		Scope:              scope,
@@ -265,6 +272,9 @@ func TestStatementScopeHeadersAndURIs(t *testing.T) {
 		if !strings.Contains(uri, "baleia_key="+testKeyID.String()) || !strings.Contains(uri, "baleia_exp=") {
 			t.Errorf("%s = %q, missing key/expiry", field, uri)
 		}
+		if !strings.Contains(uri, "baleia_sig=") || !strings.Contains(uri, "baleia_qid=") {
+			t.Errorf("%s = %q, missing signature/query id", field, uri)
+		}
 	}
 }
 
@@ -345,6 +355,84 @@ func TestURIKeyAndExpiry(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expired = %d, want 404", resp.StatusCode)
+	}
+
+	for name, change := range map[string]func(url.Values){
+		"signature": func(q url.Values) { q.Set("baleia_sig", "forged") },
+		"query id":  func(q url.Values) { q.Set("baleia_qid", "other") },
+		"path":      func(q url.Values) { q.Set("slug", "2") },
+	} {
+		u, _ = url.Parse(next)
+		q = u.Query()
+		change(q)
+		u.RawQuery = q.Encode()
+		req, _ = http.NewRequest(http.MethodGet, u.String(), nil)
+		req.SetBasicAuth("bi@example.test", "secret")
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("tampered %s = %d, want 404", name, resp.StatusCode)
+		}
+	}
+}
+
+// TestCrossReplicaSignature: a URI signed by one replica validates on another
+// that shares the secret, and fails on a replica with a different secret.
+func TestCrossReplicaSignature(t *testing.T) {
+	t.Parallel()
+	a := newFixture(t)
+	b := newFixtureSecret(t, "trino", testSecret)
+	c := newFixtureSecret(t, "trino", []byte("ffffffffffffffffffffffffffffffff"))
+	_, _, body := a.post(t, "SELECT 1", nil)
+	var page map[string]any
+	if err := json.Unmarshal(body, &page); err != nil {
+		t.Fatal(err)
+	}
+	next := page["nextUri"].(string)
+	follow := func(f *fixture) int {
+		t.Helper()
+		u, err := url.Parse(next)
+		if err != nil {
+			t.Fatal(err)
+		}
+		base, err := url.Parse(f.gateway.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		u.Scheme, u.Host = base.Scheme, base.Host
+		req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.SetBasicAuth("bi@example.test", "secret")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	if got := follow(b); got != http.StatusOK {
+		t.Fatalf("same secret on another replica = %d, want 200", got)
+	}
+	if got := follow(c); got != http.StatusNotFound {
+		t.Fatalf("different secret = %d, want 404", got)
+	}
+}
+
+// TestNewRequiresSecret: the stateless URI signature needs the shared secret.
+func TestNewRequiresSecret(t *testing.T) {
+	t.Parallel()
+	_, err := New(Deps{
+		Keys: fakeKeys{}, Engines: fakeEngines{}, Scope: &fakeScope{},
+		TrinoIdentity: func(context.Context, db.UUID) (string, error) { return "", nil },
+		Dialect:       dialect.NewRegistry().MustGet(dialect.Trino),
+	})
+	if err == nil {
+		t.Fatal("New without a secret must fail")
 	}
 }
 
@@ -428,6 +516,7 @@ func TestWorkloadRuleTag(t *testing.T) {
 		User: db.User{ID: testUserID, Email: "bi@example.test", Status: "active", Role: "member"},
 	}
 	gw, err := New(Deps{
+		Secret:        testSecret,
 		Keys:          fakeKeys{cred: cred},
 		Engines:       fakeEngines{eng: fakeEngine{url: trino.server.URL, hc: trino.server.Client(), kind: "trino"}},
 		Scope:         &fakeScope{rows: []db.ListWorkspaceTargetsRow{{EngineID: testEngine, EngineCatalogName: "lake", EngineKind: "trino", BindingEnabled: true, EngineEnabled: true, CatalogEnabled: true}}},

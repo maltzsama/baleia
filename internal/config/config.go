@@ -47,7 +47,10 @@ type Config struct {
 	// to rewrite Trino URIs and, later, BI files. Empty derives the scheme and
 	// host from each request.
 	BIGatewayURL string
-	TemporalHost string
+	// BIGatewaySecret is the HMAC key shared by every gateway replica
+	// (BALEIA_BI_GATEWAY_SECRET); required when the listener is enabled.
+	BIGatewaySecret string
+	TemporalHost    string
 	// TemporalUIURL opens a maintenance run's workflow in the Temporal UI; empty
 	// disables the link. TemporalNamespace is the namespace those runs live in.
 	TemporalUIURL     string
@@ -278,6 +281,7 @@ func Load() *Config {
 		Port:                              getEnv("PORT", "8080"),
 		BIGatewayAddr:                     getEnv("BALEIA_BI_GATEWAY_ADDR", ""),
 		BIGatewayURL:                      getEnv("BALEIA_BI_GATEWAY_URL", ""),
+		BIGatewaySecret:                   getEnv("BALEIA_BI_GATEWAY_SECRET", ""),
 		DatabaseURL:                       getEnv("DATABASE_URL", "postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable"),
 		TemporalHost:                      getEnv("TEMPORAL_HOST", "localhost:7233"),
 		TemporalUIURL:                     getEnv("BALEIA_TEMPORAL_UI_URL", ""),

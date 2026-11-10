@@ -16,7 +16,6 @@ import (
 	"net/url"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +29,9 @@ import (
 
 // Deps is everything the gateway needs, built at the wiring site.
 type Deps struct {
+	// Secret is the HMAC key shared by every gateway replica; at least 32
+	// bytes. Rewritten URIs are stateless and validate on any replica.
+	Secret     []byte
 	Keys       Keys
 	Engines    Engines
 	Scope      execscope.Store
@@ -94,6 +96,9 @@ const maxPageBytes = 16 << 20
 func New(d Deps) (*Gateway, error) {
 	if d.Keys == nil || d.Engines == nil || d.Scope == nil || d.Dialect == nil || d.TrinoIdentity == nil {
 		return nil, errors.New("bi gateway: missing dependencies")
+	}
+	if len(d.Secret) < 32 {
+		return nil, errors.New("bi gateway: BALEIA_BI_GATEWAY_SECRET must be at least 32 bytes")
 	}
 	if d.PublicURL == "" && d.Logger != nil {
 		d.Logger.Warn("bi gateway: BALEIA_BI_GATEWAY_URL is unset; rewritten URIs use the request scheme and host. Set an https URL when TLS terminates before the gateway")
@@ -179,11 +184,12 @@ func (g *Gateway) follow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	if !g.validQueryURI(q, cred.Key.ID) {
+	if !g.validQueryURI(q, r.URL.Path, cred.Key.ID) {
 		http.NotFound(w, r)
 		return
 	}
 	// Our parameters are not part of the Trino request.
+	q.Del("baleia_qid")
 	q.Del("baleia_key")
 	q.Del("baleia_exp")
 	q.Del("baleia_sig")
@@ -503,15 +509,4 @@ func dropReservedTags(tags []string) []string {
 		out = append(out, tag)
 	}
 	return out
-}
-
-func (g *Gateway) validQueryURI(q url.Values, keyID db.UUID) bool {
-	if q.Get("baleia_key") != keyID.String() {
-		return false
-	}
-	exp, err := strconv.ParseInt(q.Get("baleia_exp"), 10, 64)
-	if err != nil || !g.now().Before(time.Unix(exp, 0)) {
-		return false
-	}
-	return true
 }
