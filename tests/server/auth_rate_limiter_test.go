@@ -15,7 +15,7 @@ func TestLogin_RateLimitedPerIP(t *testing.T) {
 	var limitedKind string
 	rl := server.NewAuthRouteLimiter([]server.AuthRouteLimit{
 		{Path: "/api/v1/auth/login", Kind: "password", Every: time.Minute, Burst: 10},
-	}, func(kind string) { limited++; limitedKind = kind })
+	}, func(kind string) { limited++; limitedKind = kind }, nil)
 	defer rl.Stop()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -60,7 +60,7 @@ func TestReset_RateLimitedPerIP(t *testing.T) {
 	rl := server.NewAuthRouteLimiter([]server.AuthRouteLimit{
 		{Path: "/api/v1/auth/password-reset/request", Kind: "password_reset_request", Every: 15 * time.Minute, Burst: 5},
 		{Path: "/api/v1/auth/password-reset/confirm", Kind: "password_reset_confirm", Every: 15 * time.Minute, Burst: 10},
-	}, nil)
+	}, nil, nil)
 	defer rl.Stop()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -107,7 +107,7 @@ func TestAuthRouteLimiterIgnoresOtherRoutes(t *testing.T) {
 	t.Parallel()
 	rl := server.NewAuthRouteLimiter([]server.AuthRouteLimit{
 		{Path: "/api/v1/auth/login", Kind: "password", Every: time.Minute, Burst: 1},
-	}, nil)
+	}, nil, nil)
 	defer rl.Stop()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

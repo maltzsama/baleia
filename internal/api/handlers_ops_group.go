@@ -25,7 +25,7 @@ type OpsHandlers struct {
 	schedules    scheduleDescriber
 	engineStatus engineStatusProber
 	// attentionCache caches the computed attention items for 30 s per user (#261).
-	attentionCache *TTLStore[[]AttentionItem]
+	attentionCache cacheStore[[]AttentionItem]
 	attentionOnce  sync.Once
 	// monitor reads engine and table snapshots and records maintenance runs
 	// (#117).

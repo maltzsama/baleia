@@ -1,8 +1,14 @@
 package api
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/json"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/galileostudio/baleia/internal/realtime"
 )
 
 type cacheEntry[T any] struct {
@@ -10,6 +16,8 @@ type cacheEntry[T any] struct {
 	expires time.Time
 }
 
+// TTLStore is the in-process cache. It is the fallback when the shared Redis
+// layer is disabled (ADR 0022).
 type TTLStore[T any] struct {
 	mu    sync.RWMutex
 	items map[string]cacheEntry[T]
@@ -50,4 +58,159 @@ func (s *TTLStore[T]) Clear() {
 	s.mu.Lock()
 	clear(s.items)
 	s.mu.Unlock()
+}
+
+// cacheStore is the Get/Set/Invalidate/Clear surface the handlers use: the
+// local TTLStore or the shared Redis-backed cache (ADR 0022).
+type cacheStore[T any] interface {
+	Get(key string) (T, bool)
+	Set(key string, value T)
+	Invalidate(key string)
+	Clear()
+}
+
+const (
+	// cacheTimeout bounds one shared-cache operation: a slow or unreachable
+	// Redis degrades to a miss instead of holding the request.
+	cacheTimeout = 200 * time.Millisecond
+	// cacheGenerationTTL is how long a replica reuses the generation it read;
+	// a Clear on another replica is therefore seen within this window.
+	cacheGenerationTTL = time.Second
+)
+
+// sharedCache is a cacheStore over the shared Redis layer. With a disabled
+// client it is exactly a local TTLStore. With Redis it reads and writes only
+// Redis (no local L1), so every replica sees the same value. Clear bumps a
+// generation key in O(1) instead of deleting every entry; old entries expire
+// on their TTL.
+type sharedCache[T any] struct {
+	client *realtime.Client
+	local  *TTLStore[T]
+	name   string
+	ttl    time.Duration
+
+	mu      sync.Mutex
+	gen     string
+	genTill time.Time
+}
+
+// newCache builds a cacheStore backed by the shared layer.
+func newCache[T any](client *realtime.Client, name string, ttl time.Duration) cacheStore[T] {
+	return &sharedCache[T]{client: client, local: NewTTLStore[T](ttl), name: name, ttl: ttl}
+}
+
+func (c *sharedCache[T]) Get(key string) (T, bool) {
+	if !c.client.Enabled() {
+		return c.local.Get(key)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cacheTimeout)
+	defer cancel()
+	cacheKey, ok := c.cacheKey(ctx, key)
+	if !ok {
+		var zero T
+		return zero, false
+	}
+	raw, ok, err := c.client.CacheGet(ctx, cacheKey)
+	if err != nil || !ok {
+		var zero T
+		return zero, false
+	}
+	var value T
+	if err := json.Unmarshal(raw, &value); err != nil {
+		var zero T
+		return zero, false
+	}
+	return value, true
+}
+
+func (c *sharedCache[T]) Set(key string, value T) {
+	if !c.client.Enabled() {
+		c.local.Set(key, value)
+		return
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cacheTimeout)
+	defer cancel()
+	cacheKey, ok := c.cacheKey(ctx, key)
+	if !ok {
+		return
+	}
+	_ = c.client.CacheSet(ctx, cacheKey, raw, c.ttl)
+}
+
+func (c *sharedCache[T]) Invalidate(key string) {
+	if !c.client.Enabled() {
+		c.local.Invalidate(key)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cacheTimeout)
+	defer cancel()
+	cacheKey, ok := c.cacheKey(ctx, key)
+	if !ok {
+		return
+	}
+	_ = c.client.CacheDel(ctx, cacheKey)
+}
+
+func (c *sharedCache[T]) Clear() {
+	if !c.client.Enabled() {
+		c.local.Clear()
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cacheTimeout)
+	defer cancel()
+	gen := rand.Text()
+	if err := c.client.CacheSet(ctx, c.key("gen"), []byte(gen), 0); err != nil {
+		// Keep the old generation: entries still expire on their TTL.
+		return
+	}
+	c.mu.Lock()
+	c.gen, c.genTill = gen, time.Now().Add(cacheGenerationTTL)
+	c.mu.Unlock()
+}
+
+// cacheKey namespaces key under the current generation. It reports false when
+// the generation could not be read, so the caller treats the operation as a
+// miss/no-op instead of writing under a wrong generation.
+func (c *sharedCache[T]) cacheKey(ctx context.Context, key string) (string, bool) {
+	gen, ok := c.generation(ctx)
+	if !ok {
+		return "", false
+	}
+	return c.name + ":" + gen + ":" + key, true
+}
+
+// generation returns the cache generation, reusing the last successful read
+// for a short time so a Get/Set is one Redis call, not two.
+func (c *sharedCache[T]) generation(ctx context.Context) (string, bool) {
+	c.mu.Lock()
+	if time.Now().Before(c.genTill) {
+		gen := c.gen
+		c.mu.Unlock()
+		return gen, true
+	}
+	c.mu.Unlock()
+
+	raw, ok, err := c.client.CacheGet(ctx, c.key("gen"))
+	if err != nil {
+		// A failed read is not a missing generation: using "0" here would
+		// resurrect entries a Clear removed. Do not cache the fallback.
+		return "", false
+	}
+	gen := "0"
+	if ok && len(raw) > 0 {
+		gen = string(raw)
+	}
+	c.mu.Lock()
+	c.gen, c.genTill = gen, time.Now().Add(cacheGenerationTTL)
+	c.mu.Unlock()
+	return gen, true
+}
+
+// key builds one of the cache's own keys (the generation key).
+func (c *sharedCache[T]) key(parts ...string) string {
+	return c.name + ":" + strings.Join(parts, ":")
 }
