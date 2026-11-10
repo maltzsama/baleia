@@ -325,6 +325,7 @@ CI runs `promtool check rules` and `promtool test rules deploy/prometheus/alerts
 | Catalogs (API) | `baleia_catalog_ddl_total`, `baleia_catalogs_by_state` | `action` (`create`, `replace`, `drop`), `outcome`, `state` |
 | Audit (API, worker) | `baleia_audit_write_failures_total` | — |
 | Metadata (worker) | `baleia_metadata_sync_duration_seconds`, `baleia_metadata_staleness_seconds_max` (the stalest enabled catalog; no catalog label) | `outcome` |
+| Search (API) | `baleia_search_requests_total`; the zero-result rate is `sum by (kind) (rate(baleia_search_requests_total{outcome="empty"}[1h])) / sum by (kind) (rate(baleia_search_requests_total[1h]))` | `kind` (`metadata`, `docs`, `content`), `outcome` (`hit`, `empty`); never the query text |
 | Storage | `baleia_storage_operations_total`, `baleia_storage_bytes_total` | `operation` (`put`, `get`), `outcome` |
 | Database pool | `baleia_db_pool_acquired_conns`, `baleia_db_pool_idle_conns`, `baleia_db_pool_max_conns`, `baleia_db_pool_acquire_duration_seconds` | `process` (`api`, `worker`) |
 | Build | `baleia_build_info` | `version`, `commit` |

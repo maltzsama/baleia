@@ -13,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/metadata/typemap"
+	"github.com/galileostudio/baleia/internal/metrics"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -342,6 +343,7 @@ func (h *CatalogHandlers) SearchMetadata(ctx context.Context, request SearchMeta
 	if err != nil {
 		return nil, err
 	}
+	h.metrics.search.Result(metrics.SearchMetadata, len(rows))
 	out := make(SearchMetadata200JSONResponse, 0, len(rows))
 	for _, r := range rows {
 		popularity := r.Popularity

@@ -134,6 +134,7 @@ type apiMetrics struct {
 	authz     *metrics.Authz
 	catalog   *metrics.Catalog
 	directory *metrics.Directory
+	search    *metrics.Search
 }
 
 // AuthMetrics is the authentication producer (for the server's rate limiter).
@@ -142,7 +143,9 @@ func (h *API) AuthMetrics() *metrics.Auth { return h.metrics.auth }
 // registerMetrics registers the API's producers on reg and exports bindings
 // by lifecycle state.
 func (h *core) registerMetrics(reg *metrics.Registry) {
-	h.metrics = apiMetrics{auth: reg.Auth(), authz: reg.Authz(), catalog: reg.Catalog(), directory: reg.Directory()}
+	h.metrics = apiMetrics{
+		auth: reg.Auth(), authz: reg.Authz(), catalog: reg.Catalog(), directory: reg.Directory(), search: reg.Search(),
+	}
 	reg.WatchBindingStates(h.logger, func(ctx context.Context) (map[string]int64, error) {
 		rows, err := h.topology.BindingStates(ctx)
 		if err != nil {

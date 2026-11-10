@@ -31,6 +31,9 @@ func registry(t *testing.T) *Registry {
 	workload.Timeout("e1", "interactive")
 	memory := 0.5
 	r.Monitoring().Cluster("trino", 3, 2, 1, 0, &memory)
+	search := r.Search()
+	search.Result(SearchMetadata, 3)
+	search.Result(SearchContent, 0)
 	return r
 }
 
@@ -86,6 +89,23 @@ func TestMetadataMetrics(t *testing.T) {
 			t.Errorf("scrape lacks %q", want)
 		}
 	}
+}
+
+// TestSearchMetrics: searches are counted by surface and by whether they
+// found anything, never by query text.
+func TestSearchMetrics(t *testing.T) {
+	t.Parallel()
+	_, body := scrape(t, registry(t).Handler(""), "")
+	for _, want := range []string{
+		`baleia_search_requests_total{kind="metadata",outcome="hit"} 1`,
+		`baleia_search_requests_total{kind="content",outcome="empty"} 1`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("scrape lacks %q", want)
+		}
+	}
+	var nilSearch *Search
+	nilSearch.Result(SearchDocs, 0) // a nil producer is a no-op
 }
 
 // TestWorkloadMetrics: the queue gauges, counter and histogram are exported

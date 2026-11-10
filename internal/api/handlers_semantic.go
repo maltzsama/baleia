@@ -16,6 +16,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/execscope"
+	obsmetrics "github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/semantic"
@@ -247,6 +248,7 @@ func (h *SemanticHandlers) SearchSemanticDocs(ctx context.Context, request Searc
 	if err != nil {
 		return nil, err
 	}
+	h.metrics.search.Result(obsmetrics.SearchDocs, len(rows))
 	out := make(SearchSemanticDocs200JSONResponse, 0, len(rows))
 	acts := h.docActions(ctx, ws)
 	for _, r := range rows {

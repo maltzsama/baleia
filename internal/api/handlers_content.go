@@ -7,6 +7,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/content/search"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -64,6 +65,7 @@ func (h *SemanticHandlers) SearchContent(ctx context.Context, request SearchCont
 	if err != nil {
 		return nil, err
 	}
+	h.metrics.search.Result(metrics.SearchContent, len(hits))
 	items := make([]ContentSearchItem, 0, len(hits))
 	for _, hit := range hits {
 		path := make([]ContentSearchFolderPath, 0, len(hit.FolderPath))
