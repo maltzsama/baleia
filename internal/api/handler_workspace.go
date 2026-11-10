@@ -161,7 +161,7 @@ func (h *WorkspaceHandlers) UpdateWorkspace(ctx context.Context, request UpdateW
 		}
 	}
 
-	edit := wsmanage.Edit{Name: request.Body.Name, Description: request.Body.Description}
+	edit := wsmanage.Edit{Name: request.Body.Name, Description: request.Body.Description, BIEnabled: request.Body.BiEnabled}
 	if newDefault || clearDefault {
 		edit.Default = &wsmanage.Default{Binding: defaultBinding, Schema: defaultSchema}
 	}
@@ -303,6 +303,7 @@ func dbWorkspaceToPublic(w db.Workspace) Workspace {
 		PolarisCatalogName: &w.PolarisCatalogName,
 		CreatedAt:          pgTimestampToTime(w.CreatedAt),
 		UpdatedAt:          func() *time.Time { t := pgTimestampToTime(w.UpdatedAt); return &t }(),
+		BiEnabled:          &w.BIEnabled,
 	}
 	if w.Description != nil {
 		ws.Description = w.Description

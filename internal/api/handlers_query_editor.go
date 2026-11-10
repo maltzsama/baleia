@@ -528,12 +528,14 @@ func historyRowToPublic(row db.ListExecutionHistoryRow) Execution {
 	uid := openapi_types.UUID(row.UserID.Bytes)
 	name := row.UserName
 	sql := row.Sql
+	origin := row.Origin
 	exec := Execution{
 		Id:          openapi_types.UUID(row.ID.Bytes),
 		WorkspaceId: openapi_types.UUID(row.WorkspaceID.Bytes),
 		UserId:      &uid,
 		UserName:    &name,
 		Status:      ExecutionStatus(row.Status),
+		Origin:      &origin,
 		Sql:         sql,
 		Target:      executionTargetFrom(row.TargetSnapshot, row.EngineID, row.TargetBindingID, row.TargetCatalogID),
 	}
@@ -1250,10 +1252,12 @@ func dbExecutionToPublic(e db.QueryExecution) Execution {
 	workspaceID := openapi_types.UUID(e.WorkspaceID.Bytes)
 	status := ExecutionStatus(e.Status)
 
+	origin := e.Origin
 	exec := Execution{
 		Id:          id,
 		WorkspaceId: workspaceID,
 		Status:      status,
+		Origin:      &origin,
 		Sql:         e.Sql,
 	}
 	if e.SavedQueryID.Valid {

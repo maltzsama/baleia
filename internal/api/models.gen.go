@@ -1738,6 +1738,11 @@ type AuthProvider struct {
 // AuthProviderType defines model for AuthProvider.Type.
 type AuthProviderType string
 
+// BIGatewaySetting defines model for BIGatewaySetting.
+type BIGatewaySetting struct {
+	Enabled bool `json:"enabled"`
+}
+
 // BiKey A workspace-bound BI key (ADR 0017). One key names one workspace and one engine; the BI tool authenticates with HTTP Basic using the owner's e-mail and the key secret.
 type BiKey struct {
 	CreatedAt   time.Time          `json:"created_at"`
@@ -2820,6 +2825,9 @@ type Execution struct {
 	ErrorCode     *string            `json:"error_code"`
 	FinishedAt    *time.Time         `json:"finished_at"`
 	Id            openapi_types.UUID `json:"id"`
+
+	// Origin Where the run came from: editor, agent, explore, retriever, metadata, maintenance, export, download or bi
+	Origin *string `json:"origin,omitempty"`
 
 	// Queue The workload queue of a run (#399). Present while the execution is `queued`; `position` is only the caller's own position.
 	Queue *ExecutionQueue `json:"queue,omitempty"`
@@ -4867,6 +4875,11 @@ type UpdateAssistantSettingsRequestDataSharing string
 // UpdateAssistantSettingsRequestProvider defines model for UpdateAssistantSettingsRequest.Provider.
 type UpdateAssistantSettingsRequestProvider string
 
+// UpdateBIGatewayRequest defines model for UpdateBIGatewayRequest.
+type UpdateBIGatewayRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
 // UpdateBindingRequest defines model for UpdateBindingRequest.
 type UpdateBindingRequest struct {
 	Enabled           *bool   `json:"enabled,omitempty"`
@@ -5110,6 +5123,9 @@ type UpdateWorkloadRuleRequestMaxClass string
 
 // UpdateWorkspaceRequest defines model for UpdateWorkspaceRequest.
 type UpdateWorkspaceRequest struct {
+	// BiEnabled Turn the BI gateway off or on for this workspace (ADR 0017). Omitted, unchanged.
+	BiEnabled *bool `json:"bi_enabled,omitempty"`
+
 	// DefaultTarget Sets the workspace default target ({"binding_id": null} clears it). The binding must be a target of the workspace (GET /workspaces/{id}/targets). Omitted, the default is unchanged.
 	DefaultTarget *struct {
 		BindingId *openapi_types.UUID `json:"binding_id"`
@@ -5252,7 +5268,10 @@ type WorkloadRuleTestResultClass string
 // Workspace defines model for Workspace.
 type Workspace struct {
 	AllowedActions *[]WorkspaceAllowedAction `json:"allowed_actions,omitempty"`
-	CreatedAt      time.Time                 `json:"created_at"`
+
+	// BiEnabled Whether the BI gateway may run statements in this workspace (ADR 0017); on by default
+	BiEnabled *bool     `json:"bi_enabled,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 
 	// DefaultBindingId Target used when a run names none (GET /workspaces/{id}/targets)
 	DefaultBindingId *openapi_types.UUID `json:"default_binding_id"`
@@ -5891,6 +5910,9 @@ type StreamExecutionParams struct {
 
 // PutAssistantSettingsJSONRequestBody defines body for PutAssistantSettings for application/json ContentType.
 type PutAssistantSettingsJSONRequestBody = UpdateAssistantSettingsRequest
+
+// PutBIGatewayJSONRequestBody defines body for PutBIGateway for application/json ContentType.
+type PutBIGatewayJSONRequestBody = UpdateBIGatewayRequest
 
 // CreateIdentityProviderJSONRequestBody defines body for CreateIdentityProvider for application/json ContentType.
 type CreateIdentityProviderJSONRequestBody = CreateIdentityProviderRequest

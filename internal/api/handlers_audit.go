@@ -321,6 +321,9 @@ func workspaceChanges(before, after db.Workspace, targetChanged bool) map[string
 	if targetChanged {
 		changes["default_binding_id"] = audit.Change{From: idString(before.DefaultBindingID), To: idString(after.DefaultBindingID)}
 	}
+	if before.BIEnabled != after.BIEnabled {
+		changes["bi_enabled"] = audit.Change{From: before.BIEnabled, To: after.BIEnabled}
+	}
 	if len(changes) == 0 {
 		return nil
 	}

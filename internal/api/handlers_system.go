@@ -6,7 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
+	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/version"
 	"go.temporal.io/sdk/client"
 	"gorm.io/gorm"
@@ -19,6 +22,62 @@ const systemStatusSectionTimeout = 2 * time.Second
 // processStartedAt is the API process start time reported in the baleia
 // section. Initialisation time is close enough to process start.
 var processStartedAt = time.Now().UTC()
+
+// GetBIGateway — GET /admin/bi-gateway (#711). Admins read the global switch;
+// a missing singleton means enabled.
+func (h *OpsHandlers) GetBIGateway(ctx context.Context, _ GetBIGatewayRequestObject) (GetBIGatewayResponseObject, error) {
+	if auth.RoleFromContext(ctx) != "admin" {
+		return GetBIGateway403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
+	}
+	store := h.biSettings()
+	if store == nil {
+		return nil, errors.New("bi gateway settings are unavailable without the store")
+	}
+	setting, err := store.GetBIGatewaySetting(ctx)
+	if errors.Is(err, db.ErrNoRows) {
+		return GetBIGateway200JSONResponse{Enabled: true}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return GetBIGateway200JSONResponse{Enabled: setting.Enabled}, nil
+}
+
+// PutBIGateway — PUT /admin/bi-gateway (#711). Admins turn the global gateway
+// on or off at runtime; the change applies at the next request.
+func (h *OpsHandlers) PutBIGateway(ctx context.Context, request PutBIGatewayRequestObject) (PutBIGatewayResponseObject, error) {
+	if auth.RoleFromContext(ctx) != "admin" {
+		return PutBIGateway403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
+	}
+	if request.Body == nil {
+		return PutBIGateway422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+			"enabled is required", FieldError{Field: "enabled", Code: FieldCodeRequired},
+		)}, nil
+	}
+	store := h.biSettings()
+	if store == nil {
+		return nil, errors.New("bi gateway settings are unavailable without the store")
+	}
+	old := true
+	if prev, err := store.GetBIGatewaySetting(ctx); err == nil {
+		old = prev.Enabled
+	} else if !errors.Is(err, db.ErrNoRows) {
+		return nil, err
+	}
+	var updatedBy db.UUID
+	if uid, err := uuidFromString(auth.UserIDFromContext(ctx)); err == nil {
+		updatedBy = uid
+	}
+	setting, err := store.SetBIGatewayEnabled(ctx, db.SetBIGatewayEnabledParams{Enabled: request.Body.Enabled, UpdatedBy: updatedBy})
+	if err != nil {
+		return nil, err
+	}
+	h.audited(ctx, audit.Event{
+		Action: audit.BIGatewayUpdate, ResourceType: "bi_gateway",
+		Changes: map[string]audit.Change{"enabled": {From: old, To: setting.Enabled}},
+	}.Allowed())
+	return PutBIGateway200JSONResponse{Enabled: setting.Enabled}, nil
+}
 
 // GetSystemStatus — GET /admin/system/status (#260). Admins only. Each
 // dependency is probed independently: a slow or broken section becomes

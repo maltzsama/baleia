@@ -1398,6 +1398,18 @@ components:
         role: { type: string, enum: [owner, member] }
 
     # ── Workspaces ─────────────────────────────────────────────
+    BIGatewaySetting:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+
+    UpdateBIGatewayRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+
     Workspace:
       type: object
       required: [id, name, type, created_at, allowed_actions]
@@ -1421,6 +1433,9 @@ components:
           description: "The caller's role in this workspace (#653); a global admin is admin everywhere"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        bi_enabled:
+          type: boolean
+          description: "Whether the BI gateway may run statements in this workspace (ADR 0017); on by default"
 
     WorkspaceRole:
       type: string
@@ -1494,6 +1509,9 @@ components:
           properties:
             binding_id: { type: string, format: uuid, nullable: true }
             schema: { type: string, nullable: true }
+        bi_enabled:
+          type: boolean
+          description: "Turn the BI gateway off or on for this workspace (ADR 0017). Omitted, unchanged."
 
     TargetRequest:
       type: object
@@ -3270,6 +3288,9 @@ components:
         target: { $ref: "#/components/schemas/ExecutionTarget" }
         read_only: { type: boolean, description: "The target ran in a read-only session" }
         error_code: { type: string, nullable: true }
+        origin:
+          type: string
+          description: "Where the run came from: editor, agent, explore, retriever, metadata, maintenance, export, download or bi"
         queue: { $ref: "#/components/schemas/ExecutionQueue" }
 
     ExecutionQueue:
@@ -4253,6 +4274,38 @@ paths:
               schema: { $ref: "#/components/schemas/SystemStatus" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/bi-gateway:
+    get:
+      tags: [Admin]
+      operationId: getBIGateway
+      summary: "Global BI gateway switch — admin only"
+      responses:
+        "200":
+          description: "The global BI gateway switch"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BIGatewaySetting" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [Admin]
+      operationId: putBIGateway
+      summary: "Turn the BI gateway on or off globally — admin only"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBIGatewayRequest" }
+      responses:
+        "200":
+          description: "The updated global BI gateway switch"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BIGatewaySetting" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /admin/directory-reconcile-runs:
     get:
