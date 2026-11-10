@@ -48,9 +48,9 @@ Lineage comes from the statements themselves, so it stays current as content cha
 
 ## Open in a BI tool
 
-On a Trino, PostgreSQL, MySQL or SQL Server engine, a table's detail offers **Open in Tableau** and **Open in Power BI**. Each downloads a data-source file (`.tds` or `.pbids`) that opens the table in that tool. The file carries no credentials: you sign in from the BI tool, which connects to the engine directly. The engine needs an **External URL** first: the address BI clients use to reach it, set in the engine's settings (**Connections → Engines**).
+On a Trino target, a table's detail offers **Open in Tableau** and **Open in Power BI**. Each downloads a data-source file (`.tds` or `.pbids`) that opens the table in that tool. The file points at the deployment's BI gateway ([ADR 0017](../adr/0017-bi-gateway.md)) with the target's catalog and schema, and carries no credentials.
 
-The engine must authenticate the BI tool's user itself. The Trino bundled with Baleia authenticates only Baleia's own login, which may act as any user ([Architecture](../architecture.md#trino-security-model)), so do not give it an External URL or hand that login to BI clients. Use an engine that authenticates each of its clients.
+The entry appears when the operator has enabled the BI gateway ([Install](../install.md#bi-gateway)) and BI is on for the workspace. Sign in from the BI tool with your e-mail as the user and a workspace-bound BI key as the password; issue one for the workspace (`POST /workspaces/{id}/bi-keys`, the secret is shown once) and revoke it when it is no longer needed. The gateway keeps the session read-only and applies the workspace's catalog scope; only Trino targets are served, so a table on a direct engine has no entry.
 
 ## Document
 
