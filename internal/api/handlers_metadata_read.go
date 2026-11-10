@@ -346,19 +346,24 @@ func (h *CatalogHandlers) SearchMetadata(ctx context.Context, request SearchMeta
 	h.metrics.search.Result(metrics.SearchMetadata, len(rows))
 	out := make(SearchMetadata200JSONResponse, 0, len(rows))
 	for _, r := range rows {
-		popularity := r.Popularity
-		res := MetadataSearchResult{
-			Kind: MetadataSearchResultKind(r.Kind), TableId: openapi_types.UUID(r.TableID.Bytes),
-			CatalogId: openapi_types.UUID(r.CatalogID.Bytes), Namespace: r.Namespace, Table: r.TableName,
-			Score: r.Score, Popularity: &popularity, MetadataSyncedAt: timePtr(r.MetadataSyncedAt),
-		}
-		if r.Kind == "column" {
-			col, typ := r.ColumnName, r.NativeType
-			res.Column, res.NativeType = &col, &typ
-		}
-		out = append(out, res)
+		out = append(out, metadataSearchResult(r))
 	}
 	return out, nil
+}
+
+// metadataSearchResult is the public form of one metadata search row.
+func metadataSearchResult(r db.SearchMetadataRow) MetadataSearchResult {
+	popularity := r.Popularity
+	res := MetadataSearchResult{
+		Kind: MetadataSearchResultKind(r.Kind), TableId: openapi_types.UUID(r.TableID.Bytes),
+		CatalogId: openapi_types.UUID(r.CatalogID.Bytes), Namespace: r.Namespace, Table: r.TableName,
+		Score: r.Score, Popularity: &popularity, MetadataSyncedAt: timePtr(r.MetadataSyncedAt),
+	}
+	if r.Kind == "column" {
+		col, typ := r.ColumnName, r.NativeType
+		res.Column, res.NativeType = &col, &typ
+	}
+	return res
 }
 
 // ListPopularTables — GET /workspaces/{id}/metadata/popular-tables

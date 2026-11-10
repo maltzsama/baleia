@@ -258,6 +258,7 @@ var operationAccess = map[string]access{
 	"UpsertSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
 	"DeleteSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
 	"SearchSemanticDocs": checked("metadataWorkspace", "docs.Search"),
+	"SearchWorkspace":    checked("metadataWorkspace", "PrincipalFromContext", "federatedHits"),
 	// Metrics are validated against a real engine in a read-only session
 	// (validateSemanticMetric); the catalog must be granted and the caller
 	// needs the space role (contentSpace wraps requireSpace).

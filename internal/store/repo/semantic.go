@@ -216,6 +216,9 @@ func (r *Repo) SearchSemanticDocs(ctx context.Context, arg db.SearchSemanticDocs
 		}
 		hits := make([]db.SearchSemanticDocsRow, 0, len(rows))
 		for _, row := range rows {
+			if arg.CatalogID.Valid && string(row.CatalogID) != UUIDString(arg.CatalogID) {
+				continue
+			}
 			if arg.Tag != nil && !containsString(row.Tags, *arg.Tag) {
 				continue
 			}

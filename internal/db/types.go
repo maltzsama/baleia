@@ -2039,7 +2039,9 @@ type SearchSemanticDocsParams struct {
 	Tag         *string `json:"tag"`
 	Certified   *bool   `json:"certified"`
 	OwnerID     UUID    `json:"owner_id"`
-	Lim         int32   `json:"lim"`
+	// CatalogID, when valid, narrows the docs to one catalog.
+	CatalogID UUID  `json:"catalog_id"`
+	Lim       int32 `json:"lim"`
 }
 
 type SearchSemanticDocsRow struct {

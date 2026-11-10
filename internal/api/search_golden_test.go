@@ -169,6 +169,18 @@ func goldenSearch(ctx context.Context, t *testing.T, f *metaFixture, g goldenQue
 		for _, h := range hits {
 			keys = append(keys, h.Kind+":"+h.Slug)
 		}
+	case "all":
+		r, err := f.h.SearchWorkspace(ctx, SearchWorkspaceRequestObject{Id: f.ws, Params: SearchWorkspaceParams{Q: g.Q, Limit: &limit}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, ok := r.(SearchWorkspace200JSONResponse)
+		if !ok {
+			t.Fatalf("all %q: %T", g.Q, r)
+		}
+		for _, item := range res.Items {
+			keys = append(keys, federatedKey(item))
+		}
 	case "docs":
 		r, err := f.h.SearchSemanticDocs(ctx, SearchSemanticDocsRequestObject{Id: f.ws, Params: SearchSemanticDocsParams{Q: g.Q, Limit: &limit}})
 		if err != nil {
@@ -304,6 +316,27 @@ func writeGoldenBaseline(t *testing.T, r goldenReport) {
 		t.Fatal(err)
 	}
 	t.Logf("recorded %s", goldenBaselineFile)
+}
+
+// federatedKey names a federated result like the surface it came from does.
+func federatedKey(item WorkspaceSearchItem) string {
+	switch {
+	case item.Metadata != nil:
+		key := string(item.Kind) + ":" + strings.Join(item.Metadata.Namespace, ".") + "." + item.Metadata.Table
+		if item.Metadata.Column != nil {
+			key += "." + *item.Metadata.Column
+		}
+		return key
+	case item.Doc != nil:
+		key := "doc:" + strings.Join(item.Doc.Namespace, ".") + "." + item.Doc.Table
+		if item.Doc.Column != nil {
+			key += "." + *item.Doc.Column
+		}
+		return key
+	case item.Content != nil:
+		return string(item.Kind) + ":" + item.Content.Slug
+	}
+	return string(item.Kind) + ":" + item.Id
 }
 
 func firstN(values []string, n int) []string {

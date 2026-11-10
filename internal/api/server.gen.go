@@ -693,6 +693,9 @@ type ServerInterface interface {
 	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID)
+	// One relevance-ranked search over tables, columns, docs, saved queries, metrics, models and folders
+	// (GET /workspaces/{id}/search)
+	SearchWorkspace(w http.ResponseWriter, r *http.Request, id PathId, params SearchWorkspaceParams)
 	// Delete a doc — workspace editors and admins (#653)
 	// (DELETE /workspaces/{id}/semantic/docs)
 	DeleteSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params DeleteSemanticDocParams)
@@ -2175,6 +2178,12 @@ func (_ Unimplemented) GetRetrieverHistory(w http.ResponseWriter, r *http.Reques
 // Trigger manual Retriever refresh
 // (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 func (_ Unimplemented) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Request, id PathId, retrieverId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One relevance-ranked search over tables, columns, docs, saved queries, metrics, models and folders
+// (GET /workspaces/{id}/search)
+func (_ Unimplemented) SearchWorkspace(w http.ResponseWriter, r *http.Request, id PathId, params SearchWorkspaceParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10857,6 +10866,89 @@ func (siw *ServerInterfaceWrapper) TriggerRetrieverRefresh(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// SearchWorkspace operation middleware
+func (siw *ServerInterfaceWrapper) SearchWorkspace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchWorkspaceParams
+
+	// ------------- Required query parameter "q" -------------
+
+	if paramValue := r.URL.Query().Get("q"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "catalog_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "catalog_id", r.URL.Query(), &params.CatalogId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "space_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "space_id", r.URL.Query(), &params.SpaceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "space_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchWorkspace(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteSemanticDoc operation middleware
 func (siw *ServerInterfaceWrapper) DeleteSemanticDoc(w http.ResponseWriter, r *http.Request) {
 
@@ -13770,6 +13862,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/workspaces/{id}/retrievers/{retriever_id}/refresh", wrapper.TriggerRetrieverRefresh)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/search", wrapper.SearchWorkspace)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/workspaces/{id}/semantic/docs", wrapper.DeleteSemanticDoc)
@@ -23641,6 +23736,53 @@ func (response TriggerRetrieverRefresh422JSONResponse) VisitTriggerRetrieverRefr
 	return json.NewEncoder(w).Encode(response)
 }
 
+type SearchWorkspaceRequestObject struct {
+	Id     PathId `json:"id"`
+	Params SearchWorkspaceParams
+}
+
+type SearchWorkspaceResponseObject interface {
+	VisitSearchWorkspaceResponse(w http.ResponseWriter) error
+}
+
+type SearchWorkspace200JSONResponse WorkspaceSearchResponse
+
+func (response SearchWorkspace200JSONResponse) VisitSearchWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchWorkspace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SearchWorkspace401JSONResponse) VisitSearchWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchWorkspace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SearchWorkspace404JSONResponse) VisitSearchWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchWorkspace422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SearchWorkspace422JSONResponse) VisitSearchWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteSemanticDocRequestObject struct {
 	Id     PathId `json:"id"`
 	Params DeleteSemanticDocParams
@@ -26423,6 +26565,9 @@ type StrictServerInterface interface {
 	// Trigger manual Retriever refresh
 	// (POST /workspaces/{id}/retrievers/{retriever_id}/refresh)
 	TriggerRetrieverRefresh(ctx context.Context, request TriggerRetrieverRefreshRequestObject) (TriggerRetrieverRefreshResponseObject, error)
+	// One relevance-ranked search over tables, columns, docs, saved queries, metrics, models and folders
+	// (GET /workspaces/{id}/search)
+	SearchWorkspace(ctx context.Context, request SearchWorkspaceRequestObject) (SearchWorkspaceResponseObject, error)
 	// Delete a doc — workspace editors and admins (#653)
 	// (DELETE /workspaces/{id}/semantic/docs)
 	DeleteSemanticDoc(ctx context.Context, request DeleteSemanticDocRequestObject) (DeleteSemanticDocResponseObject, error)
@@ -32897,6 +33042,33 @@ func (sh *strictHandler) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TriggerRetrieverRefreshResponseObject); ok {
 		if err := validResponse.VisitTriggerRetrieverRefreshResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchWorkspace operation middleware
+func (sh *strictHandler) SearchWorkspace(w http.ResponseWriter, r *http.Request, id PathId, params SearchWorkspaceParams) {
+	var request SearchWorkspaceRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchWorkspace(ctx, request.(SearchWorkspaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchWorkspace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchWorkspaceResponseObject); ok {
+		if err := validResponse.VisitSearchWorkspaceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
