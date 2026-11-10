@@ -549,6 +549,10 @@ func authenticateAPIKey(ctx context.Context, queries db.Querier, raw string) (co
 	if err != nil {
 		return ctx, false
 	}
+	// A BI key (ADR 0017) is only valid at the BI gateway, never on the API.
+	if key.Kind != "" && key.Kind != "user" {
+		return ctx, false
+	}
 	if key.ExpiresAt.Valid && !key.ExpiresAt.Time.After(time.Now()) {
 		return ctx, false
 	}
