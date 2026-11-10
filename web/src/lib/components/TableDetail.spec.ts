@@ -201,14 +201,25 @@ describe('BI data-source file', () => {
 		mockDetail();
 		authStore.set(makeMe({ features: features(true) }));
 		let requested = '';
+		const saved: Blob[] = [];
+		Object.defineProperty(URL, 'createObjectURL', {
+			value: vi.fn((blob: Blob) => {
+				saved.push(blob);
+				return 'blob:test';
+			}),
+			configurable: true
+		});
 		server.use(
-			http.get('/workspaces/{id}/bi/{tool}', ({ request, response }) => {
+			http.get('/workspaces/{id}/bi/{tool}', ({ params, request, response }) => {
 				requested = request.url;
-				return response(200).text('<datasource />');
+				return response(200).text(
+					params.tool === 'tableau' ? '<datasource />' : '{"version":"0.1"}'
+				);
 			})
 		);
 		render(TableDetail, { props: { table: tableRef() } });
 		await screen.findByText('orders');
+
 		await fireEvent.click(screen.getByRole('button', { name: 'Open in Tableau' }));
 		await waitFor(() => expect(requested).toContain('/bi/tableau'));
 		const params = new URL(requested).searchParams;
@@ -216,6 +227,15 @@ describe('BI data-source file', () => {
 		expect(params.get('catalog')).toBe('lake_t');
 		expect(params.get('schema')).toBe('sales');
 		expect(params.get('table')).toBe('orders');
+		await waitFor(() => expect(saved.length).toBe(1));
+		expect(await saved[0].text()).toBe('<datasource />');
+
+		// The Power BI body is JSON, but the response is text/plain: it must be
+		// saved verbatim, not parsed into an object.
+		await fireEvent.click(screen.getByRole('button', { name: 'Open in Power BI' }));
+		await waitFor(() => expect(requested).toContain('/bi/powerbi'));
+		await waitFor(() => expect(saved.length).toBe(2));
+		expect(await saved[1].text()).toBe('{"version":"0.1"}');
 	});
 
 	it('hides the file for a non-Trino target', async () => {

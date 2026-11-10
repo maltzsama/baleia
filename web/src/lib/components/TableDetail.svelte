@@ -144,6 +144,9 @@
 		const schema = ref.namespace.join('.');
 		try {
 			const { data, error, response } = await client.GET('/workspaces/{id}/bi/{tool}', {
+				// The file is text/plain even when its body is Power BI's JSON;
+				// the default JSON parser would fail or stringify an object.
+				parseAs: 'text',
 				params: {
 					path: { id: workspaceId, tool },
 					query: {
