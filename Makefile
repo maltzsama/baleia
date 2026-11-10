@@ -143,16 +143,20 @@ e2e-bi:
 	@BI_E2E_TLS_ADDR=127.0.0.1:8444 BI_E2E_TLS_TARGET=127.0.0.1:8443 \
 		$(BI_E2E_TLS_PROXY) > /tmp/baleia-bi-e2e-tls.log 2>&1 & \
 	proxy=$$!; \
+	pids=""; \
+	trap 'kill $$proxy $$pids 2>/dev/null' EXIT; \
 	api_pods="$$(kubectl -n $(K8S_NS) get pods -l app.kubernetes.io/component=api -o jsonpath='{.items[*].metadata.name}')"; \
-	pids=""; pods=""; port=8540; \
+	pods=""; port=8540; \
 	for pod in $$api_pods; do \
 		port=$$((port+1)); \
 		kubectl -n $(K8S_NS) port-forward pod/$$pod $$port:8443 >/dev/null 2>&1 & \
-		pids="$$pids $$!"; pods="$$pods,http://127.0.0.1:$$port"; \
+		pids="$$pids $$!"; \
+		for _ in $$(seq 1 50); do curl -s --max-time 2 -o /dev/null http://127.0.0.1:$$port/v1/info && break; sleep 0.2; done; \
+		curl -sS -o /dev/null http://127.0.0.1:$$port/v1/info || { echo "e2e-bi: pod $$pod is not reachable on port $$port" >&2; exit 1; }; \
+		pods="$$pods,http://127.0.0.1:$$port"; \
 	done; \
-	trap 'kill $$proxy $$pids 2>/dev/null' EXIT; \
-	for _ in $$(seq 1 50); do (echo > /dev/tcp/127.0.0.1/8444) 2>/dev/null && break; sleep 0.2; done; \
-	sleep 1; \
+	for _ in $$(seq 1 50); do curl -s --max-time 2 -k -o /dev/null $(BI_E2E_URL)/v1/info && break; sleep 0.2; done; \
+	curl -sSk -o /dev/null $(BI_E2E_URL)/v1/info || { echo "e2e-bi: the gateway is not reachable at $(BI_E2E_URL)" >&2; exit 1; }; \
 	BI_E2E_URL=$(BI_E2E_URL) BI_E2E_USER=admin@e2e.test \
 		BI_E2E_KEY_FILE=$(BI_E2E_KEY_FILE) BI_E2E_CATALOG=e2e_tpch BI_E2E_SCHEMA=tiny \
 		BI_E2E_PODS="$${pods#,}" \
