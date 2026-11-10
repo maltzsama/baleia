@@ -50,7 +50,11 @@ type Config struct {
 	// BIGatewaySecret is the HMAC key shared by every gateway replica
 	// (BALEIA_BI_GATEWAY_SECRET); required when the listener is enabled.
 	BIGatewaySecret string
-	TemporalHost    string
+	// BIMaxConcurrentPerKey and BIMaxConcurrentPerWorkspace bound the
+	// gateway's running statements (ADR 0017); 0 disables that limit.
+	BIMaxConcurrentPerKey       int
+	BIMaxConcurrentPerWorkspace int
+	TemporalHost                string
 	// TemporalUIURL opens a maintenance run's workflow in the Temporal UI; empty
 	// disables the link. TemporalNamespace is the namespace those runs live in.
 	TemporalUIURL     string
@@ -282,6 +286,8 @@ func Load() *Config {
 		BIGatewayAddr:                     getEnv("BALEIA_BI_GATEWAY_ADDR", ""),
 		BIGatewayURL:                      getEnv("BALEIA_BI_GATEWAY_URL", ""),
 		BIGatewaySecret:                   getEnv("BALEIA_BI_GATEWAY_SECRET", ""),
+		BIMaxConcurrentPerKey:             getEnvInt("BALEIA_BI_MAX_CONCURRENT_PER_KEY", 5),
+		BIMaxConcurrentPerWorkspace:       getEnvInt("BALEIA_BI_MAX_CONCURRENT_PER_WORKSPACE", 20),
 		DatabaseURL:                       getEnv("DATABASE_URL", "postgresql://baleia:baleia@localhost:5432/baleia?sslmode=disable"),
 		TemporalHost:                      getEnv("TEMPORAL_HOST", "localhost:7233"),
 		TemporalUIURL:                     getEnv("BALEIA_TEMPORAL_UI_URL", ""),

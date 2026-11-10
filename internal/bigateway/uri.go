@@ -17,7 +17,7 @@ import (
 
 // rewritePage rewrites the URIs of one Trino page to the gateway, signing
 // each with the shared HMAC key and the authenticated key's id.
-func (g *Gateway) rewritePage(r *http.Request, cred bikeys.Credential, body []byte) []byte {
+func (g *Gateway) rewritePage(r *http.Request, cred bikeys.Credential, execID db.UUID, body []byte) []byte {
 	if len(body) == 0 {
 		return body
 	}
@@ -38,7 +38,7 @@ func (g *Gateway) rewritePage(r *http.Request, cred bikeys.Credential, body []by
 		if json.Unmarshal(raw, &value) != nil || value == "" {
 			continue
 		}
-		rewritten, ok := g.rewriteURI(r, cred, qid, value)
+		rewritten, ok := g.rewriteURI(r, cred, qid, execID, value)
 		if !ok {
 			continue
 		}
@@ -71,15 +71,16 @@ func pageString(page map[string]json.RawMessage, field string) string {
 // rewriteURI turns an absolute Trino URI into the gateway's equivalent. The
 // path and query stay the same so follow can proxy them; the query id, key id,
 // expiry and HMAC travel as parameters.
-func (g *Gateway) rewriteURI(r *http.Request, cred bikeys.Credential, qid, raw string) (string, bool) {
+func (g *Gateway) rewriteURI(r *http.Request, cred bikeys.Credential, qid string, execID db.UUID, raw string) (string, bool) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Path == "" {
 		return "", false
 	}
 	original := u.Query()
 	expiry := g.now().Add(uriTTL)
-	sig := g.sign(qid, u.Path, original, cred.Key.ID, expiry)
+	sig := g.sign(qid, u.Path, original, cred.Key.ID, expiry, execID)
 	q := cloneValues(original)
+	q.Set("baleia_exec", execID.String())
 	q.Set("baleia_qid", qid)
 	q.Set("baleia_key", cred.Key.ID.String())
 	q.Set("baleia_exp", strconv.FormatInt(expiry.Unix(), 10))
@@ -107,39 +108,44 @@ func (g *Gateway) publicBase(r *http.Request) string {
 // sign returns the URL-safe HMAC of one rewritten URI. The payload covers the
 // Trino query id, the original path and query, the key id and the expiry, so a
 // replica that shares the secret can validate it without per-query state.
-func (g *Gateway) sign(qid, path string, query url.Values, keyID db.UUID, expiry time.Time) string {
+func (g *Gateway) sign(qid, path string, query url.Values, keyID db.UUID, expiry time.Time, execID db.UUID) string {
 	mac := hmac.New(sha256.New, g.deps.Secret)
-	_, _ = mac.Write([]byte(canonicalURI(qid, path, query, keyID, expiry)))
+	_, _ = mac.Write([]byte(canonicalURI(qid, path, query, keyID, expiry, execID)))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
 // canonicalURI is the exact string the signature covers. url.Values.Encode
 // sorts the keys, so rewrite and verify agree.
-func canonicalURI(qid, path string, query url.Values, keyID db.UUID, expiry time.Time) string {
+func canonicalURI(qid, path string, query url.Values, keyID db.UUID, expiry time.Time, execID db.UUID) string {
 	return "baleia-bi-uri-v1\n" +
 		qid + "\n" +
 		path + "\n" +
 		query.Encode() + "\n" +
 		keyID.String() + "\n" +
-		strconv.FormatInt(expiry.Unix(), 10)
+		strconv.FormatInt(expiry.Unix(), 10) + "\n" +
+		execID.String()
 }
 
 // validQueryURI checks the key binding, expiry and HMAC of a follow URI.
-func (g *Gateway) validQueryURI(q url.Values, path string, keyID db.UUID) bool {
+func (g *Gateway) validQueryURI(q url.Values, path string, keyID db.UUID) (db.UUID, bool) {
 	sig := q.Get("baleia_sig")
 	if sig == "" || q.Get("baleia_key") != keyID.String() {
-		return false
+		return db.UUID{}, false
+	}
+	var execID db.UUID
+	if err := execID.Scan(q.Get("baleia_exec")); err != nil || !execID.Valid {
+		return db.UUID{}, false
 	}
 	exp, err := strconv.ParseInt(q.Get("baleia_exp"), 10, 64)
 	if err != nil || !g.now().Before(time.Unix(exp, 0)) {
-		return false
+		return db.UUID{}, false
 	}
 	clean := cloneValues(q)
-	for _, name := range []string{"baleia_qid", "baleia_key", "baleia_exp", "baleia_sig"} {
+	for _, name := range []string{"baleia_exec", "baleia_qid", "baleia_key", "baleia_exp", "baleia_sig"} {
 		clean.Del(name)
 	}
-	want := g.sign(q.Get("baleia_qid"), path, clean, keyID, time.Unix(exp, 0))
-	return hmac.Equal([]byte(sig), []byte(want))
+	want := g.sign(q.Get("baleia_qid"), path, clean, keyID, time.Unix(exp, 0), execID)
+	return execID, hmac.Equal([]byte(sig), []byte(want))
 }
 
 // cloneValues copies a query so verification never mutates the request's.

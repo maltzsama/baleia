@@ -23,6 +23,7 @@ var (
 	testKeyID  = db.UUID{Bytes: uuid.New(), Valid: true}
 	testWSID   = db.UUID{Bytes: uuid.New(), Valid: true}
 	testEngine = db.UUID{Bytes: uuid.New(), Valid: true}
+	testExecID = db.UUID{Bytes: uuid.New(), Valid: true}
 	testSecret = []byte("0123456789abcdef0123456789abcdef")
 )
 
@@ -62,10 +63,21 @@ type fakeRules struct{ rows []db.WorkloadRule }
 
 func (f fakeRules) ListWorkloadRules(context.Context) ([]db.WorkloadRule, error) { return f.rows, nil }
 
-type fakeWorkspaces struct{ ws db.Workspace }
+type fakeWorkspaces struct {
+	mu sync.Mutex
+	ws db.Workspace
+}
 
-func (f fakeWorkspaces) GetWorkspaceByID(context.Context, db.UUID) (db.Workspace, error) {
+func (f *fakeWorkspaces) GetWorkspaceByID(context.Context, db.UUID) (db.Workspace, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.ws, nil
+}
+
+func (f *fakeWorkspaces) setBI(enabled bool) {
+	f.mu.Lock()
+	f.ws.BIEnabled = enabled
+	f.mu.Unlock()
 }
 
 type fakeEngine struct {
@@ -87,6 +99,66 @@ type fakeCreds struct{ token string }
 
 func (f fakeCreds) CatalogToken(context.Context, string, queryengine.SessionSpec) (string, error) {
 	return f.token, nil
+}
+
+type fakeSettings struct {
+	mu      sync.Mutex
+	enabled bool
+}
+
+func (f *fakeSettings) GetBIGatewaySetting(context.Context) (db.BIGatewaySetting, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return db.BIGatewaySetting{Enabled: f.enabled}, nil
+}
+
+func (f *fakeSettings) set(enabled bool) {
+	f.mu.Lock()
+	f.enabled = enabled
+	f.mu.Unlock()
+}
+
+type fakeExecutions struct {
+	mu         sync.Mutex
+	execID     db.UUID
+	created    []db.CreateQueryExecutionParams
+	updated    []db.UpdateQueryExecutionParams
+	failed     []db.FailQueryExecutionParams
+	runningKey map[[16]byte]int64
+	runningWS  map[[16]byte]int64
+}
+
+func (f *fakeExecutions) CreateQueryExecution(_ context.Context, arg db.CreateQueryExecutionParams) (db.QueryExecution, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.created = append(f.created, arg)
+	return db.QueryExecution{ID: f.execID, WorkspaceID: arg.WorkspaceID, UserID: arg.UserID, Status: arg.Status, Origin: arg.Origin, BIKeyID: arg.BIKeyID}, nil
+}
+
+func (f *fakeExecutions) UpdateQueryExecution(_ context.Context, arg db.UpdateQueryExecutionParams) (db.QueryExecution, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.updated = append(f.updated, arg)
+	return db.QueryExecution{ID: arg.ID}, nil
+}
+
+func (f *fakeExecutions) FailQueryExecution(_ context.Context, arg db.FailQueryExecutionParams) (db.QueryExecution, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failed = append(f.failed, arg)
+	return db.QueryExecution{ID: arg.ID}, nil
+}
+
+func (f *fakeExecutions) CountRunningBIExecutionsByKey(_ context.Context, keyID db.UUID) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.runningKey[keyID.Bytes], nil
+}
+
+func (f *fakeExecutions) CountRunningBIExecutionsByWorkspace(_ context.Context, workspaceID db.UUID) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.runningWS[workspaceID.Bytes], nil
 }
 
 type coordinator struct {
@@ -135,23 +207,31 @@ func (c *coordinator) count() int {
 }
 
 type fixture struct {
-	gateway *httptest.Server
-	trino   *coordinator
-	scope   *fakeScope
-	keys    fakeKeys
+	gateway    *httptest.Server
+	trino      *coordinator
+	scope      *fakeScope
+	keys       fakeKeys
+	execs      *fakeExecutions
+	settings   *fakeSettings
+	workspaces *fakeWorkspaces
 }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	return newFixtureSecret(t, "trino", testSecret)
+	return newFixtureAll(t, "trino", testSecret, 0, 0)
 }
 
 func newFixtureKind(t *testing.T, kind string) *fixture {
 	t.Helper()
-	return newFixtureSecret(t, kind, testSecret)
+	return newFixtureAll(t, kind, testSecret, 0, 0)
 }
 
 func newFixtureSecret(t *testing.T, kind string, secret []byte) *fixture {
+	t.Helper()
+	return newFixtureAll(t, kind, secret, 0, 0)
+}
+
+func newFixtureAll(t *testing.T, kind string, secret []byte, maxKey, maxWS int) *fixture {
 	t.Helper()
 	trino := &coordinator{}
 	trino.server = httptest.NewServer(trino)
@@ -168,7 +248,10 @@ func newFixtureSecret(t *testing.T, kind string, secret []byte) *fixture {
 		EngineID: testEngine, EngineCatalogName: "raw", EngineKind: "trino",
 		BindingEnabled: true, EngineEnabled: true, CatalogEnabled: true,
 	}}}
-	f := &fixture{trino: trino, scope: scope, keys: fakeKeys{cred: cred}}
+	execs := &fakeExecutions{execID: testExecID, runningKey: map[[16]byte]int64{}, runningWS: map[[16]byte]int64{}}
+	settings := &fakeSettings{enabled: true}
+	workspaces := &fakeWorkspaces{ws: db.Workspace{ID: testWSID, BIEnabled: true}}
+	f := &fixture{trino: trino, scope: scope, keys: fakeKeys{cred: cred}, execs: execs, settings: settings, workspaces: workspaces}
 	d := dialect.NewRegistry().MustGet(dialect.Trino)
 	gw, err := New(Deps{
 		Secret:             secret,
@@ -176,7 +259,11 @@ func newFixtureSecret(t *testing.T, kind string, secret []byte) *fixture {
 		Engines:            fakeEngines{eng: fakeEngine{url: trino.server.URL, hc: trino.server.Client(), kind: kind}},
 		Scope:              scope,
 		Rules:              fakeRules{},
-		Workspaces:         fakeWorkspaces{ws: db.Workspace{ID: testWSID}},
+		Workspaces:         workspaces,
+		Executions:         execs,
+		Settings:           settings,
+		MaxPerKey:          maxKey,
+		MaxPerWorkspace:    maxWS,
 		TrinoIdentity:      func(context.Context, db.UUID) (string, error) { return "u_owner", nil },
 		CatalogCredentials: fakeCreds{token: "tok"},
 		Dialect:            d,
@@ -260,6 +347,17 @@ func TestStatementScopeHeadersAndURIs(t *testing.T) {
 		t.Error("the response must drop X-Trino-Set-Authorization-User")
 	}
 
+	if len(f.execs.created) != 1 {
+		t.Fatalf("created executions = %d, want 1", len(f.execs.created))
+	}
+	created := f.execs.created[0]
+	if created.Origin != "bi" || created.BIKeyID.Bytes != testKeyID.Bytes || created.WorkspaceID.Bytes != testWSID.Bytes || created.UserID.Bytes != testUserID.Bytes {
+		t.Fatalf("execution = %+v", created)
+	}
+	if len(f.execs.updated) == 0 || f.execs.updated[len(f.execs.updated)-1].Status != "finished" {
+		t.Fatalf("execution was not finished: %+v", f.execs.updated)
+	}
+
 	var page map[string]any
 	if err := json.Unmarshal(body, &page); err != nil {
 		t.Fatalf("response: %v (%s)", err, body)
@@ -272,8 +370,8 @@ func TestStatementScopeHeadersAndURIs(t *testing.T) {
 		if !strings.Contains(uri, "baleia_key="+testKeyID.String()) || !strings.Contains(uri, "baleia_exp=") {
 			t.Errorf("%s = %q, missing key/expiry", field, uri)
 		}
-		if !strings.Contains(uri, "baleia_sig=") || !strings.Contains(uri, "baleia_qid=") {
-			t.Errorf("%s = %q, missing signature/query id", field, uri)
+		if !strings.Contains(uri, "baleia_sig=") || !strings.Contains(uri, "baleia_qid=") || !strings.Contains(uri, "baleia_exec="+testExecID.String()) {
+			t.Errorf("%s = %q, missing signature/query id/execution", field, uri)
 		}
 	}
 }
@@ -318,6 +416,49 @@ func TestFollowAndDelete(t *testing.T) {
 	if dresp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d", dresp.StatusCode)
 	}
+	cancelled := false
+	for _, update := range f.execs.updated {
+		if update.Status == "cancelled" {
+			cancelled = true
+		}
+	}
+	if !cancelled {
+		t.Fatalf("a DELETE must cancel the execution: %+v", f.execs.updated)
+	}
+}
+
+// TestOffSwitches: the global and workspace switches revoke at the next
+// request.
+func TestOffSwitches(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.settings.set(false)
+	if status, _, _ := f.post(t, "SELECT 1", nil); status != http.StatusForbidden {
+		t.Fatalf("global switch off = %d, want 403", status)
+	}
+
+	f = newFixture(t)
+	f.workspaces.setBI(false)
+	if status, _, _ := f.post(t, "SELECT 1", nil); status != http.StatusForbidden {
+		t.Fatalf("workspace switch off = %d, want 403", status)
+	}
+}
+
+// TestConcurrencyLimit: a key at its running limit gets 429.
+func TestConcurrencyLimit(t *testing.T) {
+	t.Parallel()
+	f := newFixtureAll(t, "trino", testSecret, 1, 0)
+	f.execs.runningKey[testKeyID.Bytes] = 1
+	status, header, _ := f.post(t, "SELECT 1", nil)
+	if status != http.StatusTooManyRequests {
+		t.Fatalf("limit = %d, want 429", status)
+	}
+	if header.Get("Retry-After") == "" {
+		t.Fatal("429 must carry Retry-After")
+	}
+	if len(f.execs.created) != 0 {
+		t.Fatal("a rejected statement must not create an execution")
+	}
 }
 
 func TestURIKeyAndExpiry(t *testing.T) {
@@ -360,6 +501,7 @@ func TestURIKeyAndExpiry(t *testing.T) {
 	for name, change := range map[string]func(url.Values){
 		"signature": func(q url.Values) { q.Set("baleia_sig", "forged") },
 		"query id":  func(q url.Values) { q.Set("baleia_qid", "other") },
+		"execution": func(q url.Values) { q.Set("baleia_exec", uuid.NewString()) },
 		"path":      func(q url.Values) { q.Set("slug", "2") },
 	} {
 		u, _ = url.Parse(next)
@@ -428,6 +570,9 @@ func TestNewRequiresSecret(t *testing.T) {
 	t.Parallel()
 	_, err := New(Deps{
 		Keys: fakeKeys{}, Engines: fakeEngines{}, Scope: &fakeScope{},
+		Workspaces:    &fakeWorkspaces{ws: db.Workspace{BIEnabled: true}},
+		Executions:    &fakeExecutions{execID: testExecID, runningKey: map[[16]byte]int64{}, runningWS: map[[16]byte]int64{}},
+		Settings:      &fakeSettings{enabled: true},
 		TrinoIdentity: func(context.Context, db.UUID) (string, error) { return "", nil },
 		Dialect:       dialect.NewRegistry().MustGet(dialect.Trino),
 	})
@@ -515,13 +660,16 @@ func TestWorkloadRuleTag(t *testing.T) {
 		Key:  db.ApiKey{ID: testKeyID, Kind: "bi", WorkspaceID: testWSID, EngineID: testEngine},
 		User: db.User{ID: testUserID, Email: "bi@example.test", Status: "active", Role: "member"},
 	}
+	execs := &fakeExecutions{execID: testExecID, runningKey: map[[16]byte]int64{}, runningWS: map[[16]byte]int64{}}
 	gw, err := New(Deps{
 		Secret:        testSecret,
 		Keys:          fakeKeys{cred: cred},
 		Engines:       fakeEngines{eng: fakeEngine{url: trino.server.URL, hc: trino.server.Client(), kind: "trino"}},
 		Scope:         &fakeScope{rows: []db.ListWorkspaceTargetsRow{{EngineID: testEngine, EngineCatalogName: "lake", EngineKind: "trino", BindingEnabled: true, EngineEnabled: true, CatalogEnabled: true}}},
 		Rules:         fakeRules{rows: []db.WorkloadRule{{ID: testKeyID, Enabled: true, Match: []byte(`{"origin":"bi"}`), Class: "heavy", Weight: 1}}},
-		Workspaces:    fakeWorkspaces{},
+		Workspaces:    &fakeWorkspaces{ws: db.Workspace{BIEnabled: true}},
+		Executions:    execs,
+		Settings:      &fakeSettings{enabled: true},
 		TrinoIdentity: func(context.Context, db.UUID) (string, error) { return "u_owner", nil },
 		Dialect:       dialect.NewRegistry().MustGet(dialect.Trino),
 	})
