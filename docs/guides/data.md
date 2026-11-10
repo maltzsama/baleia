@@ -24,7 +24,7 @@ Metadata is refreshed on a schedule (`BALEIA_METADATA_SYNC_INTERVAL`); an admin 
 
 ## Search
 
-The search box finds tables and columns by name, tolerating typos. Narrow it with filters, typed as `key:value` and shown as chips you can remove:
+The search box finds tables and columns by name or comment, tolerating typos, accents and plurals ([how search works](search.md)). Narrow it with filters, typed as `key:value` and shown as chips you can remove:
 
 | Filter | Example | Keeps |
 |---|---|---|
