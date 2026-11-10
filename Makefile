@@ -15,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down
+.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-forward e2e-bi e2e-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_AGENTS_ENABLED=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -97,6 +97,12 @@ seed-tpch:
 # ── End-to-end (#106) ─────────────────────────────────────────────────────────
 # The dev Trino's CA (#647), for the seed's HTTPS login.
 E2E_TRINO_CA ?= $(or $(TMPDIR),/tmp)/baleia-e2e-trino-ca.pem
+# The BI gateway JDBC e2e (ADR 0017): the reference Trino-protocol client.
+BI_E2E_JDBC_VERSION ?= 484
+BI_E2E_JDBC_JAR ?= $(or $(TMPDIR),/tmp)/trino-jdbc-$(BI_E2E_JDBC_VERSION).jar
+BI_E2E_KEY_FILE ?= $(or $(TMPDIR),/tmp)/baleia-e2e-bi-key.secret
+BI_E2E_URL ?= https://localhost:8444
+BI_E2E_TLS_PROXY ?= $(or $(TMPDIR),/tmp)/baleia-bi-e2e-tlsproxy
 # Runs against the minikube dev cluster (not compose). Port-forwards the API,
 # Postgres (for the seed) and Trino (for the run smoke).
 e2e:
@@ -114,13 +120,43 @@ e2e:
 		E2E_TRINO_URL=https://localhost:8081 \
 		E2E_TRINO_CA_FILE=$(E2E_TRINO_CA) \
 		E2E_TRINO_PASSWORD="$$pw" \
+		E2E_BI_KEY_FILE=$(BI_E2E_KEY_FILE) \
 		go run -tags e2e ./cmd/e2e-seed
+	$(MAKE) e2e-bi
 	cd web && E2E_BASE_URL=http://localhost:8080 npx playwright test
 
 e2e-forward:
 	kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080 &
 	kubectl -n $(K8S_NS) port-forward svc/postgres 5433:5432 &
 	kubectl -n $(K8S_NS) port-forward svc/baleia-trino 8081:8443 &
+	kubectl -n $(K8S_NS) port-forward svc/baleia-bi-gateway 8443:8443 &
+
+# Drives the Trino protocol through the gateway with the Trino JDBC driver:
+# Basic auth, a query, multi-page follows, every replica validating a nextUri,
+# cancellation, a scope-denied catalog, and inline pages despite the spooling
+# header. cmd/e2e-seed (called by e2e) wrote the BI key secret.
+e2e-bi:
+	@command -v java >/dev/null || { echo "e2e-bi: java (17+) is required" >&2; exit 1; }
+	@test -f $(BI_E2E_JDBC_JAR) || curl -fsSL -o $(BI_E2E_JDBC_JAR) \
+		https://repo1.maven.org/maven2/io/trino/trino-jdbc/$(BI_E2E_JDBC_VERSION)/trino-jdbc-$(BI_E2E_JDBC_VERSION).jar
+	@go build -o $(BI_E2E_TLS_PROXY) ./scripts/bi-e2e
+	@BI_E2E_TLS_ADDR=127.0.0.1:8444 BI_E2E_TLS_TARGET=127.0.0.1:8443 \
+		$(BI_E2E_TLS_PROXY) > /tmp/baleia-bi-e2e-tls.log 2>&1 & \
+	proxy=$$!; \
+	api_pods="$$(kubectl -n $(K8S_NS) get pods -l app.kubernetes.io/component=api -o jsonpath='{.items[*].metadata.name}')"; \
+	pids=""; pods=""; port=8540; \
+	for pod in $$api_pods; do \
+		port=$$((port+1)); \
+		kubectl -n $(K8S_NS) port-forward pod/$$pod $$port:8443 >/dev/null 2>&1 & \
+		pids="$$pids $$!"; pods="$$pods,http://127.0.0.1:$$port"; \
+	done; \
+	trap 'kill $$proxy $$pids 2>/dev/null' EXIT; \
+	for _ in $$(seq 1 50); do (echo > /dev/tcp/127.0.0.1/8444) 2>/dev/null && break; sleep 0.2; done; \
+	sleep 1; \
+	BI_E2E_URL=$(BI_E2E_URL) BI_E2E_USER=admin@e2e.test \
+		BI_E2E_KEY_FILE=$(BI_E2E_KEY_FILE) BI_E2E_CATALOG=e2e_tpch BI_E2E_SCHEMA=tiny \
+		BI_E2E_PODS="$${pods#,}" \
+		java -cp $(BI_E2E_JDBC_JAR) scripts/bi-e2e/BiGatewayE2E.java
 
 e2e-down:
 	K8S_PURGE=1 $(MAKE) k8s-down
