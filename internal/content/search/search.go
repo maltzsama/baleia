@@ -72,9 +72,10 @@ type Hit struct {
 	Score float64
 }
 
-// Ranking boosts: each multiplies the match score by 1 plus its value, so
-// together they stay below the gap between two match tiers and a better
-// match always ranks first.
+// Ranking boosts: each multiplies the match score by 1 plus its value, at
+// most 8% together. They mostly order hits within a match tier, but all of
+// them together can lift a hit just above the best hits of the next tier up
+// (a certified, own and fresh prefix match above a plain exact one).
 const (
 	certifiedBoost = 0.04
 	ownBoost       = 0.02

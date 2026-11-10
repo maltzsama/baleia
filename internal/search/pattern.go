@@ -179,6 +179,7 @@ func wordMatch(token string, tokenForms, words []string, wordForms [][]string) w
 	return out
 }
 
+// sharesForm reports whether two words have a singular form in common.
 func sharesForm(a, b []string) bool {
 	for _, x := range a {
 		if slices.Contains(b, x) {
@@ -188,6 +189,7 @@ func sharesForm(a, b []string) bool {
 	return false
 }
 
+// unique drops empty and repeated values, keeping the first of each.
 func unique(values []string) []string {
 	seen := make(map[string]struct{}, len(values))
 	out := make([]string, 0, len(values))

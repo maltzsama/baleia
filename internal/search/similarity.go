@@ -9,6 +9,8 @@ func Similarity(a, b string) float64 {
 	return similarity(trigrams(Fold(a)), trigrams(Fold(b)))
 }
 
+// similarity is the Jaccard index of two trigram sets, 0 when either is
+// empty.
 func similarity(left, right map[string]struct{}) float64 {
 	if len(left) == 0 || len(right) == 0 {
 		return 0
