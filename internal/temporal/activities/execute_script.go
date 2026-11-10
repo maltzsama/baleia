@@ -187,11 +187,9 @@ func (s *script) openSession() (queryengine.Session, error) {
 	}
 	// The execution's workspace owns its catalog scope (ADR 0018 §5); resolve
 	// it once here and hand the engine a source it re-reads per statement, so a
-	// revocation stops the next statement instead of the next run.
-	exec, err := s.a.workbench().GetQueryExecutionByID(s.ctx, s.execID)
-	if err != nil {
-		return nil, err
-	}
+	// revocation stops the next statement instead of the next run. A service
+	// identity runs trusted and leaves the scope out: the lookup would be
+	// wasted, and the guard lets a trusted identity through unscoped.
 	spec := queryengine.SessionSpec{
 		Catalog:  s.p.Target.EngineCatalog,
 		Identity: s.p.Identity,
@@ -201,9 +199,13 @@ func (s *script) openSession() (queryengine.Session, error) {
 		// to its engine's own mechanism.
 		Timeout: s.p.Timeout,
 		Tags:    queryengine.Tags{ExecutionID: s.p.ExecutionID, RequestID: s.p.RequestID, Source: source, Class: s.p.Class},
-		// A user identity must carry its scope; a service/agent identity leaves
-		// it nil (the guard lets trusted identities through anyway).
-		AllowedCatalogsSource: execscope.For(s.a.store, exec.WorkspaceID, s.p.Target.EngineID),
+	}
+	if s.p.Identity.UserID != "" {
+		exec, err := s.a.workbench().GetQueryExecutionByID(s.ctx, s.execID)
+		if err != nil {
+			return nil, err
+		}
+		spec.AllowedCatalogsSource = execscope.For(s.a.store, exec.WorkspaceID, s.p.Target.EngineID)
 	}
 	if s.p.Target.Schema != "" {
 		spec.Schema = []string{s.p.Target.Schema}
