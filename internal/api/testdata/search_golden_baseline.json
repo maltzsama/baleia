@@ -1,0 +1,5 @@
+{
+  "queries": 36,
+  "recall_at_10": 0.639,
+  "zero_result_rate": 0.333
+}

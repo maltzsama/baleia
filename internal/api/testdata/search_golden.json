@@ -1,0 +1,122 @@
+{
+  "tables": [
+    {
+      "namespace": ["crm"],
+      "name": "customers",
+      "comment": "Cadastro de clientes",
+      "columns": [
+        { "name": "customer_id" },
+        { "name": "email_address" },
+        { "name": "endereço", "comment": "Endereço de entrega" },
+        { "name": "customerLifetimeValue", "comment": "Valor total gasto pelo cliente" },
+        { "name": "is_lost", "comment": "Customer churned in the period" }
+      ]
+    },
+    {
+      "namespace": ["finance"],
+      "name": "billing_events",
+      "comment": "Eventos de cobrança já faturados",
+      "columns": [
+        { "name": "invoice_id" },
+        { "name": "net_revenue_brl", "comment": "Receita líquida em reais" }
+      ]
+    },
+    {
+      "namespace": ["finance"],
+      "name": "faturamento_região",
+      "comment": "Faturamento consolidado por região",
+      "columns": [{ "name": "região" }, { "name": "valor" }]
+    },
+    {
+      "namespace": ["ops2"],
+      "name": "inventory",
+      "comment": "Posição de estoque diária",
+      "columns": [{ "name": "sku" }, { "name": "quantity_on_hand" }]
+    },
+    {
+      "namespace": ["ops2"],
+      "name": "shipments",
+      "columns": [{ "name": "ship_date" }, { "name": "carrier" }]
+    },
+    {
+      "namespace": ["web"],
+      "name": "http_access_logs",
+      "columns": [{ "name": "status_code" }, { "name": "user_agent" }]
+    },
+    {
+      "namespace": ["web"],
+      "name": "sessões_web",
+      "comment": "Sessões de navegação",
+      "columns": [{ "name": "session_id" }, { "name": "duração_segundos" }]
+    },
+    {
+      "namespace": ["web"],
+      "name": "events",
+      "columns": [{ "name": "event_name" }, { "name": "event_ts" }]
+    },
+    {
+      "namespace": ["sales"],
+      "name": "pedidos",
+      "comment": "Pedidos de venda",
+      "columns": [{ "name": "pedido_id" }, { "name": "data_pedido" }]
+    }
+  ],
+  "docs": [
+    { "namespace": ["sales"], "table": "orders", "description": "Base oficial de faturamento" },
+    { "namespace": ["crm"], "table": "customers", "column": "email_address", "description": "Contato principal do cliente" }
+  ],
+  "folders": [{ "name": "Relatórios", "slug": "relatorios" }],
+  "queries": [
+    { "name": "Receita mensal por região", "slug": "receita_mensal_por_regiao" },
+    { "name": "Active customers by week", "slug": "active_customers_by_week" },
+    { "name": "Funil de conversão", "slug": "funil_de_conversao" },
+    { "name": "Top 10 products by revenue", "slug": "top_10_products_by_revenue" }
+  ],
+  "filler_queries": { "name": "A revenue backup %02d", "slug": "a_revenue_backup_%02d", "count": 22 },
+  "metrics": [
+    { "label": "Receita líquida", "slug": "receita_liquida", "certified": true },
+    { "label": "Churn rate", "slug": "churn_rate" },
+    { "label": "Customer lifetime value", "slug": "customer_ltv" },
+    { "label": "Average order value", "slug": "aov" },
+    { "label": "Revenue", "slug": "revenue" }
+  ],
+  "models": [{ "label": "Clientes ativos", "slug": "clientes_ativos" }],
+  "golden": [
+    { "surface": "metadata", "q": "ORDERS", "expect": ["table:sales.orders"] },
+    { "surface": "metadata", "q": "regiao", "expect": ["table:finance.faturamento_região", "column:finance.faturamento_região.região"] },
+    { "surface": "metadata", "q": "endereco", "expect": ["column:crm.customers.endereço"] },
+    { "surface": "metadata", "q": "lifetime value", "expect": ["column:crm.customers.customerLifetimeValue"] },
+    { "surface": "metadata", "q": "customer lifetime", "expect": ["column:crm.customers.customerLifetimeValue"] },
+    { "surface": "metadata", "q": "custmer", "expect": ["table:crm.customers"] },
+    { "surface": "metadata", "q": "faturados", "expect": ["table:finance.billing_events"] },
+    { "surface": "metadata", "q": "churn", "expect": ["column:crm.customers.is_lost"] },
+    { "surface": "metadata", "q": "order note", "expect": ["column:sales.orders.order_note"] },
+    { "surface": "metadata", "q": "ship date", "expect": ["column:ops2.shipments.ship_date"] },
+    { "surface": "metadata", "q": "estoque", "expect": ["table:ops2.inventory"] },
+    { "surface": "metadata", "q": "email", "expect": ["column:crm.customers.email_address"] },
+    { "surface": "metadata", "q": "net revenue", "expect": ["column:finance.billing_events.net_revenue_brl"] },
+    { "surface": "metadata", "q": "access logs", "expect": ["table:web.http_access_logs"] },
+    { "surface": "metadata", "q": "HTTP", "expect": ["table:web.http_access_logs"] },
+    { "surface": "metadata", "q": "sessao", "expect": ["table:web.sessões_web"] },
+    { "surface": "metadata", "q": "evnts", "expect": ["table:web.events"] },
+    { "surface": "metadata", "q": "PEDIDOS", "expect": ["table:sales.pedidos"] },
+    { "surface": "metadata", "q": "data pedido", "expect": ["column:sales.pedidos.data_pedido"] },
+    { "surface": "metadata", "q": "duracao", "expect": ["column:web.sessões_web.duração_segundos"] },
+    { "surface": "metadata", "q": "receita liquida", "expect": ["column:finance.billing_events.net_revenue_brl"] },
+    { "surface": "content", "q": "receita mensal", "expect": ["saved_query:receita_mensal_por_regiao"] },
+    { "surface": "content", "q": "RECEITA LIQUIDA", "expect": ["semantic_metric:receita_liquida"] },
+    { "surface": "content", "q": "churn", "expect": ["semantic_metric:churn_rate"] },
+    { "surface": "content", "q": "clientes ativos", "expect": ["semantic_model:clientes_ativos"] },
+    { "surface": "content", "q": "active customers", "expect": ["saved_query:active_customers_by_week"] },
+    { "surface": "content", "q": "conversao", "expect": ["saved_query:funil_de_conversao"] },
+    { "surface": "content", "q": "top products", "expect": ["saved_query:top_10_products_by_revenue"] },
+    { "surface": "content", "q": "relatorios", "expect": ["folder:relatorios"] },
+    { "surface": "content", "q": "ltv", "expect": ["semantic_metric:customer_ltv"] },
+    { "surface": "content", "q": "average order", "expect": ["semantic_metric:aov"] },
+    { "surface": "content", "q": "revenue", "expect": ["semantic_metric:revenue"] },
+    { "surface": "content", "q": "lifetme", "expect": ["semantic_metric:customer_ltv"] },
+    { "surface": "docs", "q": "faturamento", "expect": ["doc:sales.orders"] },
+    { "surface": "docs", "q": "contato cliente", "expect": ["doc:crm.customers.email_address"] },
+    { "surface": "docs", "q": "OFICIAL", "expect": ["doc:sales.orders"] }
+  ]
+}
