@@ -13,14 +13,39 @@ import (
 	textsearch "github.com/galileostudio/baleia/internal/search"
 )
 
-// Store reads the visible content and the space names; *repo.Repo
+// Reader reads the visible content and the space names; *repo.Repo
 // implements it.
-type Store interface {
+type Reader interface {
 	ListSpacesForPrincipal(ctx context.Context, arg db.ListSpacesForPrincipalParams) ([]db.ListSpacesForPrincipalRow, error)
 	ListAllVisibleQueryFolders(ctx context.Context, arg db.ListAllVisibleQueryFoldersParams) ([]db.QueryFolder, error)
 	SearchVisibleSavedQueries(ctx context.Context, arg db.SearchVisibleSavedQueriesParams) ([]db.SavedQuery, error)
 	ListVisibleSemanticMetrics(ctx context.Context, arg db.ListVisibleSemanticMetricsParams) ([]db.SemanticMetric, error)
 	ListVisibleSemanticModels(ctx context.Context, arg db.ListVisibleSemanticModelsParams) ([]db.SemanticModel, error)
+}
+
+// Store is a Reader that also proposes, from the search index, the content
+// that may match a query (ADR 0023); the Reader's lists read and filter it.
+type Store interface {
+	Reader
+	ContentCandidates(ctx context.Context, ws db.UUID, p textsearch.Pattern) (Candidates, error)
+}
+
+// Candidates are the ids of content whose indexed words match a query. All
+// means there is no index to ask: every visible row is a candidate.
+type Candidates struct {
+	All          bool
+	SavedQueries []db.UUID
+	Metrics      []db.UUID
+	Models       []db.UUID
+}
+
+// Unindexed makes a Reader that has no search index a Store: every visible
+// row is a candidate.
+type Unindexed struct{ Reader }
+
+// ContentCandidates proposes everything.
+func (Unindexed) ContentCandidates(context.Context, db.UUID, textsearch.Pattern) (Candidates, error) {
+	return Candidates{All: true}, nil
 }
 
 // Kinds of content a search returns.
@@ -121,6 +146,10 @@ func (s *Service) Search(ctx context.Context, ws, userID db.UUID, q Query) ([]Hi
 	paths := newPaths(folders)
 
 	pattern := textsearch.Compile(text)
+	candidates, err := s.store.ContentCandidates(ctx, ws, pattern)
+	if err != nil {
+		return nil, err
+	}
 	now := s.now()
 	want := func(kind string) bool { return q.Kind == "" || q.Kind == kind }
 	hits := make([]Hit, 0, limit)
@@ -154,41 +183,43 @@ func (s *Service) Search(ctx context.Context, ws, userID db.UUID, q Query) ([]Hi
 			}, db.UUID{})
 		}
 	}
-	if want(KindSavedQuery) {
-		// Every visible query is matched here: the store's LIKE cannot fold
-		// accents portably (ADR 0020).
-		queries, err := s.store.SearchVisibleSavedQueries(ctx, db.SearchVisibleSavedQueriesParams{WorkspaceID: ws, UserID: userID, SpaceID: q.SpaceID})
+	if want(KindSavedQuery) && (candidates.All || len(candidates.SavedQueries) > 0) {
+		queries, err := s.store.SearchVisibleSavedQueries(ctx, db.SearchVisibleSavedQueriesParams{WorkspaceID: ws, UserID: userID, SpaceID: q.SpaceID, IDs: candidates.SavedQueries})
 		if err != nil {
 			return nil, err
 		}
 		for _, sq := range queries {
-			add(nameAndSlug(sq.Name, sq.Slug), Hit{
+			add(pattern.Best(
+				textsearch.Field{Text: sq.Name, Weight: 1},
+				textsearch.Field{Text: sq.Slug, Weight: 1},
+				textsearch.Field{Text: clip(sq.Sql, maxSQLRunes), Weight: sqlWeight},
+			), Hit{
 				Kind: KindSavedQuery, ID: sq.ID, Slug: sq.Slug, Title: sq.Name, SpaceID: sq.SpaceID,
 				FolderPath: paths.to(sq.FolderID), UpdatedAt: sq.UpdatedAt.Time,
 			}, sq.CreatedBy)
 		}
 	}
-	if want(KindSemanticMetric) {
-		metrics, err := s.store.ListVisibleSemanticMetrics(ctx, db.ListVisibleSemanticMetricsParams{WorkspaceID: ws, UserID: userID, SpaceID: q.SpaceID})
+	if want(KindSemanticMetric) && (candidates.All || len(candidates.Metrics) > 0) {
+		metrics, err := s.store.ListVisibleSemanticMetrics(ctx, db.ListVisibleSemanticMetricsParams{WorkspaceID: ws, UserID: userID, SpaceID: q.SpaceID, IDs: candidates.Metrics})
 		if err != nil {
 			return nil, err
 		}
 		for _, m := range metrics {
 			certified := m.Certified
-			add(nameAndSlug(m.Label, m.Slug), Hit{
+			add(semanticScore(pattern, m.Label, m.Slug, m.Description, m.Definition), Hit{
 				Kind: KindSemanticMetric, ID: m.ID, Slug: m.Slug, Title: m.Label, SpaceID: m.SpaceID,
 				FolderPath: []Folder{}, UpdatedAt: m.UpdatedAt.Time, Certified: &certified,
 			}, m.OwnerUserID)
 		}
 	}
-	if want(KindSemanticModel) {
-		models, err := s.store.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{WorkspaceID: ws, UserID: userID, SpaceID: q.SpaceID})
+	if want(KindSemanticModel) && (candidates.All || len(candidates.Models) > 0) {
+		models, err := s.store.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{WorkspaceID: ws, UserID: userID, SpaceID: q.SpaceID, IDs: candidates.Models})
 		if err != nil {
 			return nil, err
 		}
 		for _, m := range models {
 			certified := m.Certified
-			add(nameAndSlug(m.Label, m.Slug), Hit{
+			add(semanticScore(pattern, m.Label, m.Slug, m.Description, m.Definition), Hit{
 				Kind: KindSemanticModel, ID: m.ID, Slug: m.Slug, Title: m.Label, SpaceID: m.SpaceID,
 				FolderPath: []Folder{}, UpdatedAt: m.UpdatedAt.Time, Certified: &certified,
 			}, m.OwnerUserID)
@@ -207,9 +238,37 @@ func (s *Service) Search(ctx context.Context, ws, userID db.UUID, q Query) ([]Hi
 	return hits, nil
 }
 
+// Weights of the texts of content other than its name and slug.
+const (
+	descriptionWeight = 0.6
+	fieldsWeight      = 0.5 // the names a metric or model definition mentions
+	sqlWeight         = 0.3 // a saved query's SQL
+	maxSQLRunes       = 4000
+)
+
+// semanticScore is how well a metric or model matches: its label and slug,
+// its description and the names inside its definition.
+func semanticScore(p textsearch.Pattern, label, slug, description string, definition []byte) float64 {
+	return p.Best(
+		textsearch.Field{Text: label, Weight: 1},
+		textsearch.Field{Text: slug, Weight: 1},
+		textsearch.Field{Text: description, Weight: descriptionWeight},
+		textsearch.Field{Text: strings.Join(textsearch.DefinitionWords(definition), " "), Weight: fieldsWeight},
+	)
+}
+
+// clip keeps the first n runes of s.
+func clip(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
+}
+
 // paths resolves folder paths from the visible folders.
 type paths map[[16]byte]db.QueryFolder
 
+// newPaths indexes the visible folders by id.
 func newPaths(folders []db.QueryFolder) paths {
 	p := make(paths, len(folders))
 	for _, f := range folders {

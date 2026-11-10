@@ -154,6 +154,15 @@ func AllMigrations() (*Registry, error) {
 					Create(&model.BIGatewaySetting{ID: true, Enabled: true, UpdatedAt: time.Now().UTC()}).Error
 			},
 		},
+		Migration{
+			// The index starts empty: each scope is built on its first
+			// search or metadata sync (ADR 0023).
+			Version: 12,
+			Name:    "create search index",
+			Up: func(db *gorm.DB) error {
+				return AutoMigrate(db, &model.SearchScope{}, &model.SearchTerm{})
+			},
+		},
 	)
 }
 

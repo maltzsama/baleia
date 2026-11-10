@@ -92,11 +92,11 @@ jobs:
       - name: MySQL
         env:
           BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3306)/
-        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate' ./internal/store ./internal/store/model
+        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate|TestSearchIndex_PortableLookups' ./internal/store ./internal/store/model ./internal/store/repo
       - name: MariaDB
         env:
           BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3307)/
-        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate' ./internal/store ./internal/store/model
+        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate|TestSearchIndex_PortableLookups' ./internal/store ./internal/store/model ./internal/store/repo
 
   lint:
     name: Lint
