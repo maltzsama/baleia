@@ -16,6 +16,7 @@ import (
 // partitions via a partition function + scheme and reclaims a month with
 // truncate + merge, which this test drives end to end.
 func TestSQLServerPartitions(t *testing.T) {
+	t.Parallel()
 	dsn := os.Getenv("BALEIA_TEST_SQLSERVER_URL")
 	if dsn == "" {
 		t.Skip("BALEIA_TEST_SQLSERVER_URL not set")

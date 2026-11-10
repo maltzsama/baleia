@@ -26,6 +26,7 @@ func (oracleEvent) TableName() string { return "partitioning_test_events" }
 // by BALEIA_TEST_ORACLE_URL (a go-ora URL); it skips otherwise. It uses the
 // pure-Go go-ora dialector, so it needs no Oracle Instant Client.
 func TestOraclePartitions(t *testing.T) {
+	t.Parallel()
 	dsn := os.Getenv("BALEIA_TEST_ORACLE_URL")
 	if dsn == "" {
 		t.Skip("BALEIA_TEST_ORACLE_URL not set")

@@ -41,7 +41,7 @@ func CapabilitiesFor(db *gorm.DB) Capabilities {
 	if db == nil {
 		return Capabilities{}
 	}
-	return capabilitiesFor(db.Dialector.Name())
+	return capabilitiesFor(db.Name())
 }
 
 // Manager owns the physical partitions of a table. It executes operations when
@@ -72,7 +72,7 @@ func New(db *gorm.DB) (Manager, error) {
 	if db == nil {
 		return nil, errors.New("partitioning: nil database")
 	}
-	name := db.Dialector.Name()
+	name := db.Name()
 	switch name {
 	case "postgres", "gaussdb":
 		return &postgresManager{db: db}, nil

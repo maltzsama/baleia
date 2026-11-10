@@ -7,6 +7,7 @@ import (
 )
 
 func TestOraclePartitionByStatement(t *testing.T) {
+	t.Parallel()
 	spec := Spec{Table: "audit_events", Column: "occurred_at", Strategy: Range, Interval: Monthly}
 	months := RangeMonths("audit_events",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -25,6 +26,7 @@ func TestOraclePartitionByStatement(t *testing.T) {
 }
 
 func TestOracleSplitStatement(t *testing.T) {
+	t.Parallel()
 	p := Partition{Name: "audit_events_202603", Until: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)}
 	got := oracleSplitStatement("audit_events", p)
 	want := "ALTER TABLE AUDIT_EVENTS SPLIT PARTITION AUDIT_EVENTS_PMAX AT (TO_DATE('2026-04-01','YYYY-MM-DD')) INTO (PARTITION AUDIT_EVENTS_202603, PARTITION AUDIT_EVENTS_PMAX)"
@@ -34,6 +36,7 @@ func TestOracleSplitStatement(t *testing.T) {
 }
 
 func TestOracleDropStatement(t *testing.T) {
+	t.Parallel()
 	got := oracleDropStatement("audit_events", "audit_events_202601")
 	want := "ALTER TABLE AUDIT_EVENTS DROP PARTITION AUDIT_EVENTS_202601"
 	if got != want {

@@ -14,8 +14,9 @@ import (
 // listing and a metadata drop. It runs only when the test database is
 // MySQL/MariaDB; otherwise it skips.
 func TestMySQLPartitions(t *testing.T) {
+	t.Parallel()
 	db := testdb.New(t)
-	if db.Dialector.Name() != "mysql" {
+	if db.Name() != "mysql" {
 		t.Skip("partitioning MySQL test requires a MySQL/MariaDB test database")
 	}
 	ctx := context.Background()

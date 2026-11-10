@@ -32,6 +32,7 @@ func openSQLite(t *testing.T) *gorm.DB {
 // SQLite has no native partitioning, so the adapter must report Emulated and
 // reclaim a month with a DELETE rather than a metadata drop.
 func TestSQLiteEmulatedPartitions(t *testing.T) {
+	t.Parallel()
 	db := openSQLite(t)
 	ctx := context.Background()
 
@@ -108,6 +109,7 @@ func TestSQLiteEmulatedPartitions(t *testing.T) {
 // TestSQLiteUnprovisionedTable reports no partitions for a table that was
 // never provisioned, and drops it without error.
 func TestSQLiteUnprovisionedTable(t *testing.T) {
+	t.Parallel()
 	db := openSQLite(t)
 	ctx := context.Background()
 	pm, err := partitioning.New(db)

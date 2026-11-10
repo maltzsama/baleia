@@ -402,6 +402,11 @@ func TestSQLDialectsOwnLimit(t *testing.T) {
 		if strings.HasPrefix(rel, "internal/audit/") {
 			return true
 		}
+		// The partitioning adapters (ADR 0024) each author one engine's DDL,
+		// including its LIMIT, so they are per-engine dialect code too.
+		if strings.HasPrefix(rel, "internal/persistence/") {
+			return true
+		}
 		rest, ok := strings.CutPrefix(rel, "internal/connections/")
 		return ok && strings.Contains(rest, "/")
 	}

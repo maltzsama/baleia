@@ -6,6 +6,7 @@ import (
 )
 
 func TestMonthHelpers(t *testing.T) {
+	t.Parallel()
 	d := time.Date(2026, 11, 10, 21, 30, 0, 0, time.UTC)
 	if got, want := MonthStart(d), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
 		t.Errorf("MonthStart = %v, want %v", got, want)
@@ -25,6 +26,7 @@ func TestMonthHelpers(t *testing.T) {
 }
 
 func TestRangeMonths(t *testing.T) {
+	t.Parallel()
 	from := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
 	until := time.Date(2027, 2, 3, 0, 0, 0, 0, time.UTC)
 	got := RangeMonths("audit_events", from, until)
@@ -43,6 +45,7 @@ func TestRangeMonths(t *testing.T) {
 }
 
 func TestRangeMonthsEmpty(t *testing.T) {
+	t.Parallel()
 	d := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	if got := RangeMonths("t", d, d); len(got) != 0 {
 		t.Errorf("RangeMonths with until == from = %v, want empty", got)
@@ -53,6 +56,7 @@ func TestRangeMonthsEmpty(t *testing.T) {
 }
 
 func TestSpecValidate(t *testing.T) {
+	t.Parallel()
 	valid := Spec{Table: "audit_events", Column: "occurred_at", Strategy: Range, Interval: Monthly}
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("valid spec rejected: %v", err)
@@ -73,6 +77,7 @@ func TestSpecValidate(t *testing.T) {
 }
 
 func TestNewRejectsNil(t *testing.T) {
+	t.Parallel()
 	if _, err := New(nil); err == nil {
 		t.Fatal("New(nil) returned no error")
 	}

@@ -7,6 +7,7 @@ import (
 )
 
 func TestCreatePartitionFunctionStatement(t *testing.T) {
+	t.Parallel()
 	months := RangeMonths("audit_events",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC))
@@ -24,6 +25,7 @@ func TestCreatePartitionFunctionStatement(t *testing.T) {
 }
 
 func TestCreatePartitionSchemeStatement(t *testing.T) {
+	t.Parallel()
 	got := createPartitionSchemeStatement("ps_audit_events", "pf_audit_events")
 	want := "CREATE PARTITION SCHEME [ps_audit_events] AS PARTITION [pf_audit_events] ALL TO ([PRIMARY])"
 	if got != want {
@@ -32,6 +34,7 @@ func TestCreatePartitionSchemeStatement(t *testing.T) {
 }
 
 func TestSplitMergeTruncateStatements(t *testing.T) {
+	t.Parallel()
 	b := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
 	if got, want := nextUsedStatement("ps_x"), "ALTER PARTITION SCHEME [ps_x] NEXT USED [PRIMARY]"; got != want {
 		t.Errorf("nextUsedStatement = %q, want %q", got, want)
@@ -48,6 +51,7 @@ func TestSplitMergeTruncateStatements(t *testing.T) {
 }
 
 func TestPartitionNumber(t *testing.T) {
+	t.Parallel()
 	bounds := []time.Time{
 		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
 		time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),

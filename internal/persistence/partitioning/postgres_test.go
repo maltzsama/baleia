@@ -22,6 +22,7 @@ func (testEvent) TableName() string { return "partitioning_test_events" }
 // dropping. It skips without BALEIA_TEST_DATABASE_URL, like the rest of the
 // DB-backed suite.
 func TestPostgresPartitions(t *testing.T) {
+	t.Parallel()
 	db := testdb.New(t)
 	ctx := context.Background()
 

@@ -7,6 +7,7 @@ import (
 )
 
 func TestPartitionByStatement(t *testing.T) {
+	t.Parallel()
 	spec := Spec{Table: "audit_events", Column: "occurred_at", Strategy: Range, Interval: Monthly}
 	months := RangeMonths("audit_events",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -25,6 +26,7 @@ func TestPartitionByStatement(t *testing.T) {
 }
 
 func TestReorganizeStatement(t *testing.T) {
+	t.Parallel()
 	p := Partition{
 		Name:  "audit_events_202603",
 		From:  time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
@@ -43,6 +45,7 @@ func TestReorganizeStatement(t *testing.T) {
 }
 
 func TestDropStatement(t *testing.T) {
+	t.Parallel()
 	got := dropStatement("audit_events", "audit_events_202601")
 	want := "ALTER TABLE `audit_events` DROP PARTITION `audit_events_202601`"
 	if got != want {

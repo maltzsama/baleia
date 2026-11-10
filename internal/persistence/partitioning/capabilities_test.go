@@ -3,6 +3,7 @@ package partitioning
 import "testing"
 
 func TestCapabilitiesFor(t *testing.T) {
+	t.Parallel()
 	cases := map[string]Capabilities{
 		"postgres":  {NativeRange: true, ForeignKeysOnPartitioned: true, Implemented: true},
 		"gaussdb":   {NativeRange: true, ForeignKeysOnPartitioned: true, Implemented: true},

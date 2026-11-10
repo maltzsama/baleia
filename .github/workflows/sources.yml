@@ -139,7 +139,11 @@ jobs:
           # engine conformance both use it; a serial run keeps their fixtures
           # apart. Everything else uses a dedicated database and could run in
           # parallel.
-          go test -count=1 -v -p 1 ./internal/connections/... ./internal/dialect/... ./internal/queryengine/clickhouse/... ./internal/queryengine/mysql/... ./internal/queryengine/oracle/... ./internal/queryengine/postgresql/... ./internal/queryengine/sqlserver/... ./internal/persistence/partitioning | tee test.log
+          go test -count=1 -v -p 1 ./internal/connections/... ./internal/dialect/... ./internal/queryengine/clickhouse/... ./internal/queryengine/mysql/... ./internal/queryengine/oracle/... ./internal/queryengine/postgresql/... ./internal/queryengine/sqlserver/... | tee test.log
+          # The partitioning adapters: only SQL Server and Oracle run here (the
+          # Postgres and MySQL adapters run in the main Test job and the
+          # store-mysql job, which set BALEIA_TEST_DATABASE_URL).
+          go test -count=1 -v -run 'TestSQLServerPartitions|TestOraclePartitions' ./internal/persistence/partitioning | tee -a test.log
           # Every integration test must have run, not been skipped (Polaris
           # needs its bootstrap; it is covered against the dev stack). A
           # conformance subtest may skip by design; only a skipped top-level
