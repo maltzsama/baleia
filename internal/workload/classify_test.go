@@ -15,6 +15,7 @@ func TestClassify(t *testing.T) {
 	}{
 		{OriginEditor, queryengine.ClassInteractive, "default:editor"},
 		{OriginExplore, queryengine.ClassInteractive, "origin:explore"},
+		{OriginBI, queryengine.ClassInteractive, "origin:bi"},
 		{OriginAgent, queryengine.ClassBackground, "origin:agent"},
 		{OriginRetriever, queryengine.ClassBackground, "origin:retriever"},
 		{OriginMetadata, queryengine.ClassBackground, "origin:metadata"},

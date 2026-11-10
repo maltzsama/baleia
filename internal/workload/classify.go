@@ -29,13 +29,15 @@ const (
 	OriginExport Origin = "export"
 	// OriginDownload is a user download of a stored result as a run.
 	OriginDownload Origin = "download"
+	// OriginBI is a statement through the BI gateway (ADR 0017).
+	OriginBI Origin = "bi"
 )
 
 // Valid reports whether o is one of the known origins.
 func (o Origin) Valid() bool {
 	switch o {
 	case OriginEditor, OriginAgent, OriginExplore, OriginRetriever, OriginMetadata, OriginMaintenance,
-		OriginExport, OriginDownload:
+		OriginExport, OriginDownload, OriginBI:
 		return true
 	default:
 		return false
@@ -112,6 +114,8 @@ func Classify(origin Origin) Decision {
 		return Decision{Class: queryengine.ClassHeavy, Reason: "origin:" + string(origin), Weight: 1}
 	case OriginExplore:
 		return Decision{Class: queryengine.ClassInteractive, Reason: "origin:explore", Weight: 1}
+	case OriginBI:
+		return Decision{Class: queryengine.ClassInteractive, Reason: "origin:bi", Weight: 1}
 	default:
 		return Decision{Class: queryengine.ClassInteractive, Reason: "default:editor", Weight: 1}
 	}
