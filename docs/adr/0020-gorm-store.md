@@ -1,6 +1,6 @@
 # 0020. GORM is the store ORM; no handwritten SQL survives in the data layer
 
-- Status: Accepted
+- Status: Accepted; amended by [0023](0023-cold-storage-and-retention.md) (table partitioning behind a `PartitionManager` seam)
 - Date: 2026-11-07
 - Issues: #758, #754
 
@@ -34,7 +34,7 @@ The query-execution path (Trino and the direct engines) runs user SQL against ex
 
 - **The models are the schema source of truth.** Migration code describes transitions between schema versions, not a second independent schema definition. Indexes, constraints and relationships belong in model declarations whenever GORM can represent them. Migration-specific operations exist only when necessary to evolve the schema.
 
-- **What GORM cannot express without handwritten SQL does not survive.** PostgreSQL-specific functions, triggers, table partitions and trigram search are removed or redesigned outside the store. Business validation and authorization remain in the application. Search-specific requirements belong to the search layer. No raw SQL, `Raw`, `Exec`, `gorm.Expr` or dialect-specific SQL fragments are permitted in the store implementation.
+- **What GORM cannot express without handwritten SQL does not survive.** PostgreSQL-specific functions, triggers and trigram search are removed or redesigned outside the store. **Table partitioning is the single carve-out**, re-introduced by [0023](0023-cold-storage-and-retention.md) behind a dedicated `PartitionManager` seam; the only code that authors dialect-specific partition DDL is that adapter, never a service or repository. Business validation and authorization remain in the application. Search-specific requirements belong to the search layer. No raw SQL, `Raw`, `Exec`, `gorm.Expr` or dialect-specific SQL fragments are permitted in the store implementation outside the `PartitionManager` adapter.
 
 - **Database integrity remains important.** Primary keys, foreign keys, unique constraints, NOT NULL constraints, defaults, indexes and CHECK constraints are retained where supported by GORM's models and migration APIs. Application-level validation does not replace database-level integrity guarantees.
 
@@ -68,7 +68,7 @@ This ADR was implemented by:
 - **#769–#774:** each domain's persistence operations migrated to GORM (accounts, service accounts, directory provisioning, content, workbench, connections/engines/catalogs, semantic/metadata/lineage, monitoring/ops, audit/agents/retrievers, assistant).
 - **#761:** the cut: generated sqlc code, goose, SQL queries and SQL migrations removed; the runtime and DB-backed tests run on GORM only.
 
-PostgreSQL, MySQL and MariaDB are supported through GORM's dialectors. Features GORM cannot express without handwritten SQL were removed or redesigned: PL/pgSQL functions and triggers (roles and effective membership computed in Go), table partitions (audit retention uses plain tables), `pg_trgm` (a portable Go search), and advisory locks (transaction/row locks instead).
+PostgreSQL, MySQL and MariaDB are supported through GORM's dialectors. Features GORM cannot express without handwritten SQL were removed or redesigned: PL/pgSQL functions and triggers (roles and effective membership computed in Go), `pg_trgm` (a portable Go search), and advisory locks (transaction/row locks instead). Table partitioning, originally removed here, was re-introduced by [0023](0023-cold-storage-and-retention.md) behind a `PartitionManager` seam; native range partitioning is supported on the engines that provide it, the PostgreSQL adapter ships first, SQLite has no native partitioning and is unsupported, and the remaining adapters report not-implemented rather than pretending parity.
 
 ## Alternatives considered
 
