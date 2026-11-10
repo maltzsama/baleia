@@ -159,3 +159,15 @@ non-empty one or TRINO_URL points at another Trino. */}}
   value: {{ include "baleia.trinoCAFile" . | quote }}
 {{- end }}
 {{- end }}
+
+{{/* BALEIA_BI_GATEWAY_ADDR (ADR 0017): empty when the gateway is off. The port
+comes from biGateway.port so the listener and its Service cannot disagree. */}}
+{{- define "baleia.biGatewayAddr" -}}
+{{- if .Values.biGateway.enabled }}:{{ .Values.biGateway.port | int }}{{ end }}
+{{- end }}
+
+{{/* BALEIA_BI_GATEWAY_URL: the base URL the gateway rewrites Trino URIs to.
+Required when the gateway is on: the BI tool follows those URIs. */}}
+{{- define "baleia.biGatewayURL" -}}
+{{- if .Values.biGateway.enabled }}{{ required "biGateway.publicURL is required when biGateway.enabled: it must be the URL BI tools reach, e.g. https://bi.example.com" .Values.biGateway.publicURL }}{{ end }}
+{{- end }}

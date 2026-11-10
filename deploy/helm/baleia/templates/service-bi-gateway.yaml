@@ -1,0 +1,22 @@
+{{- if .Values.biGateway.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "baleia.fullname" . }}-bi-gateway
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  {{- with .Values.biGateway.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.biGateway.service.type | default "ClusterIP" }}
+  selector:
+    {{- include "baleia.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  ports:
+    - name: trino
+      port: {{ .Values.biGateway.port | int }}
+      targetPort: bi-gateway
+{{- end }}

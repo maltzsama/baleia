@@ -1,0 +1,42 @@
+{{- if and .Values.biGateway.enabled .Values.biGateway.ingress.enabled }}
+{{- if not .Values.biGateway.ingress.hosts }}
+{{- fail "biGateway.ingress.hosts is required when biGateway.ingress.enabled" }}
+{{- end }}
+{{- if not (hasPrefix "https://" .Values.biGateway.publicURL) }}
+{{- fail "biGateway.publicURL must be an https URL when the Ingress is enabled: BI tools send the key as the Basic-auth password" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "baleia.fullname" . }}-bi-gateway
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  {{- with .Values.biGateway.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.biGateway.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.biGateway.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.biGateway.ingress.hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          {{- /* Trino's protocol lives at the server root, so it cannot share
+                 the /api/v1 Ingress. */}}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "baleia.fullname" $ }}-bi-gateway
+                port:
+                  name: trino
+    {{- end }}
+{{- end }}
