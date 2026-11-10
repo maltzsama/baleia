@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { http, server } from '../../test/server';
-import { makeMetadataCatalog, makeSearchResult, makeWorkspace } from '../../test/factories';
+import {
+	makeMetadataCatalog,
+	makeSearchItem,
+	makeSearchResponse,
+	makeSearchResult,
+	makeWorkspace
+} from '../../test/factories';
 import DataSourceTree from './DataSourceTree.svelte';
 import LeftSidebar from './LeftSidebar.svelte';
 
@@ -152,18 +158,34 @@ describe('DataSourceTree', () => {
 		expect(await screen.findByText('sales')).toBeTruthy();
 	});
 
-	it('debounces search and issues one metadata/search request', async () => {
+	it('debounces search and issues one workspace search request (#943)', async () => {
 		let searchCalls = 0;
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
 				response(200).json([makeMetadataCatalog()])
 			),
-			http.get('/workspaces/{id}/metadata/search', ({ response }) => {
+			http.get('/workspaces/{id}/search', ({ request, response }) => {
 				searchCalls += 1;
-				return response(200).json([
-					makeSearchResult(),
-					makeSearchResult({ kind: 'column', column: 'order_note', native_type: 'varchar' })
+				// The sidebar only wants tables and columns.
+				expect(new URL(request.url).searchParams.getAll('kind').sort()).toEqual([
+					'column',
+					'table'
 				]);
+				return response(200).json(
+					makeSearchResponse([
+						makeSearchItem(),
+						makeSearchItem({
+							kind: 'column',
+							id: 'order_note',
+							title: 'order_note',
+							metadata: makeSearchResult({
+								kind: 'column',
+								column: 'order_note',
+								native_type: 'varchar'
+							})
+						})
+					])
+				);
 			}),
 			// The reveal path expands the tree to the hit.
 			http.get(
@@ -224,5 +246,42 @@ describe('DataSourceTree', () => {
 				expect.objectContaining({ tableId: TABLE_ID, namespace: ['sales'] })
 			)
 		);
+	});
+	it('keeps the metadata search for the tag, certified and namespace filters', async () => {
+		let metadataCalls = 0;
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([makeMetadataCatalog()])
+			),
+			http.get('/workspaces/{id}/metadata/search', ({ request, response }) => {
+				metadataCalls += 1;
+				expect(new URL(request.url).searchParams.get('certified')).toBe('true');
+				return response(200).json([makeSearchResult()]);
+			})
+		);
+		render(LeftSidebar, { props: { onSelectTable: vi.fn() } });
+		await fireEvent.input(screen.getByLabelText('Search tables and columns'), {
+			target: { value: 'orders certified:true' }
+		});
+		await waitFor(() => expect(metadataCalls).toBe(1));
+		expect(await screen.findByText('Tables')).toBeTruthy();
+	});
+
+	it('says which glossary synonyms the search also looked for (#943)', async () => {
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([makeMetadataCatalog()])
+			),
+			http.get('/workspaces/{id}/search', ({ response }) =>
+				response(200).json(
+					makeSearchResponse([makeSearchItem()], { expanded_with: ['faturamento', 'revenue'] })
+				)
+			)
+		);
+		render(LeftSidebar, { props: { onSelectTable: vi.fn() } });
+		await fireEvent.input(screen.getByLabelText('Search tables and columns'), {
+			target: { value: 'receita' }
+		});
+		expect(await screen.findByText('Also searched: faturamento, revenue')).toBeTruthy();
 	});
 });
