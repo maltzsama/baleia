@@ -10,6 +10,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/content/search"
 	"github.com/galileostudio/baleia/internal/db"
+	textsearch "github.com/galileostudio/baleia/internal/search"
 	"github.com/galileostudio/baleia/internal/semantic/docs"
 	"github.com/galileostudio/baleia/internal/semantic/metrics"
 	"github.com/galileostudio/baleia/internal/semantic/models"
@@ -175,9 +176,9 @@ func (r *Repo) DeleteSemanticDoc(ctx context.Context, arg db.DeleteSemanticDocPa
 	return res.RowsAffected, res.Error
 }
 
-// SearchSemanticDocs finds docs of catalogs the workspace may use. The
-// similarity score of the sqlc query is reproduced in Go so search stays
-// portable (ADR 0020).
+// SearchSemanticDocs finds docs of catalogs the workspace may use whose
+// description, table or column matches q (#941), scored in Go so search
+// stays portable (ADR 0020).
 func (r *Repo) SearchSemanticDocs(ctx context.Context, arg db.SearchSemanticDocsParams) ([]db.SearchSemanticDocsRow, error) {
 	if !arg.WorkspaceID.Valid || arg.Lim <= 0 {
 		return nil, nil
@@ -193,7 +194,7 @@ func (r *Repo) SearchSemanticDocs(ctx context.Context, arg db.SearchSemanticDocs
 			Find(&rows).Error; err != nil {
 			return err
 		}
-		q := strings.ToLower(arg.Q)
+		pattern := textsearch.Compile(arg.Q)
 		hits := make([]db.SearchSemanticDocsRow, 0, len(rows))
 		for _, row := range rows {
 			if arg.Tag != nil && !containsString(row.Tags, *arg.Tag) {
@@ -206,22 +207,15 @@ func (r *Repo) SearchSemanticDocs(ctx context.Context, arg db.SearchSemanticDocs
 			if arg.OwnerID.Valid && (!owner.Valid || owner != arg.OwnerID) {
 				continue
 			}
-			description := string(row.Description)
-			column := ""
+			fields := []textsearch.Field{
+				{Text: string(row.TableNameValue), Weight: 1},
+				{Text: string(row.Description), Weight: 1},
+			}
 			if row.ColumnName != nil {
-				column = string(*row.ColumnName)
+				fields = append(fields, textsearch.Field{Text: string(*row.ColumnName), Weight: 1})
 			}
-			score := similarity(description, arg.Q)
-			if s := similarity(string(row.TableNameValue), arg.Q); s > score {
-				score = s
-			}
-			if s := similarity(column, arg.Q); s > score {
-				score = s
-			}
-			if !strings.Contains(strings.ToLower(description), q) &&
-				!strings.Contains(strings.ToLower(string(row.TableNameValue)), q) &&
-				!strings.Contains(strings.ToLower(column), q) &&
-				score <= 0.1 {
+			score := pattern.Best(fields...)
+			if score == 0 {
 				continue
 			}
 			hits = append(hits, toDBSearchSemanticDocsRow(row, score))

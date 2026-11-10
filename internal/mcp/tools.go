@@ -26,7 +26,7 @@ func (s *Server) registerTools() {
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolListSchemas, Description: "List the namespaces (schemas) of a catalog."}, s.listSchemas)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolListTables, Description: "List the tables of a schema."}, s.listTables)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolDescribeTable, Description: "Describe a table: columns, types, documentation and freshness."}, s.describeTable)
-	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolSearchMetadata, Description: "Search tables, columns and metrics visible in a workspace."}, s.searchMetadata)
+	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolSearchMetadata, Description: "Search the tables and columns visible in a workspace by name or comment, in any case and without accents."}, s.searchMetadata)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolListMetrics, Description: "List the semantic metrics of a workspace."}, s.listMetrics)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolRenderMetric, Description: "Render a metric's SQL for a binding; run it with run_query."}, s.renderMetric)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolListModels, Description: "List the semantic models visible in a workspace."}, s.listModels)
@@ -63,7 +63,7 @@ type tableIn struct {
 type searchIn struct {
 	WorkspaceID string `json:"workspace_id" jsonschema:"workspace UUID"`
 	Query       string `json:"query" jsonschema:"search text"`
-	Kind        string `json:"kind,omitempty" jsonschema:"table, column or metric"`
+	Kind        string `json:"kind,omitempty" jsonschema:"table, column or all (default all)"`
 	Limit       int    `json:"limit,omitempty" jsonschema:"maximum results (50)"`
 }
 type renderIn struct {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
@@ -348,6 +349,51 @@ func TestSearch_Ranking(t *testing.T) {
 		return !ok
 	}() {
 		t.Fatal("a one-character query is rejected")
+	}
+}
+
+// Every search surface counts whether it found anything, for the
+// zero-result rate (#941).
+func TestSearch_ZeroResultTelemetry(t *testing.T) {
+	t.Parallel()
+	f := newMetaFixture(t)
+	reg := metrics.New("api")
+	f.h.metrics.search = reg.Search()
+	ctx := f.as(f.owner)
+	if _, err := f.h.SearchMetadata(ctx, SearchMetadataRequestObject{Id: f.ws, Params: SearchMetadataParams{Q: "orders"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.h.SearchMetadata(ctx, SearchMetadataRequestObject{Id: f.ws, Params: SearchMetadataParams{Q: "zzzzzz"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.h.SearchContent(ctx, SearchContentRequestObject{Id: f.ws, Params: SearchContentParams{Q: "zzzzzz"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.h.SearchSemanticDocs(ctx, SearchSemanticDocsRequestObject{Id: f.ws, Params: SearchSemanticDocsParams{Q: "zzzzzz"}}); err != nil {
+		t.Fatal(err)
+	}
+	families, err := reg.Prometheus().Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]float64{}
+	for _, family := range families {
+		if family.GetName() != "baleia_search_requests_total" {
+			continue
+		}
+		for _, m := range family.GetMetric() {
+			labels := map[string]string{}
+			for _, l := range m.GetLabel() {
+				labels[l.GetName()] = l.GetValue()
+			}
+			got[labels["kind"]+"/"+labels["outcome"]] = m.GetCounter().GetValue()
+		}
+	}
+	want := map[string]float64{"metadata/hit": 1, "metadata/empty": 1, "content/empty": 1, "docs/empty": 1}
+	for key, n := range want {
+		if got[key] != n {
+			t.Errorf("baleia_search_requests_total %s = %v, want %v (all: %v)", key, got[key], n, got)
+		}
 	}
 }
 

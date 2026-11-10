@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	textsearch "github.com/galileostudio/baleia/internal/search"
 )
 
 // Store reads the visible content and the space names; *repo.Repo
@@ -66,16 +67,35 @@ type Hit struct {
 	UpdatedAt  time.Time
 	// Certified is set for semantic content.
 	Certified *bool
+	// Score ranks the hit: how well it matches, raised a little for
+	// certified, own and recent content (#941).
+	Score float64
 }
 
+// Ranking boosts: each multiplies the match score by 1 plus its value, at
+// most 8% together. They mostly order hits within a match tier, but all of
+// them together can lift a hit just above the best hits of the next tier up
+// (a certified, own and fresh prefix match above a plain exact one).
+const (
+	certifiedBoost = 0.04
+	ownBoost       = 0.02
+	recentBoost    = 0.02 // decays to 0 over recentWindow
+	recentWindow   = 90 * 24 * time.Hour
+)
+
 // Service searches content.
-type Service struct{ store Store }
+type Service struct {
+	store Store
+	now   func() time.Time
+}
 
 // New builds the service.
-func New(store Store) *Service { return &Service{store: store} }
+func New(store Store) *Service { return &Service{store: store, now: time.Now} }
 
-// Search returns the hits for q visible to userID, ordered by title. A query
-// shorter than MinQuery has no hits.
+// Search returns the hits for q visible to userID, best first: a hit's name
+// or slug matches q (case, accents and word order folded), then the ranking
+// boosts apply, and only then is the list cut to the limit. A query shorter
+// than MinQuery has no hits.
 func (s *Service) Search(ctx context.Context, ws, userID db.UUID, q Query) ([]Hit, error) {
 	text := strings.TrimSpace(q.Text)
 	if len([]rune(text)) < MinQuery {
@@ -100,35 +120,52 @@ func (s *Service) Search(ctx context.Context, ws, userID db.UUID, q Query) ([]Hi
 	}
 	paths := newPaths(folders)
 
-	lower := strings.ToLower(text)
-	matches := func(fields ...string) bool {
-		for _, f := range fields {
-			if strings.Contains(strings.ToLower(f), lower) {
-				return true
-			}
-		}
-		return false
-	}
+	pattern := textsearch.Compile(text)
+	now := s.now()
 	want := func(kind string) bool { return q.Kind == "" || q.Kind == kind }
-	hit := func(kind string, id db.UUID, slug, title string, space db.UUID, path []Folder, updated db.Timestamptz, certified *bool) Hit {
-		return Hit{Kind: kind, ID: id, Slug: slug, Title: title, SpaceID: space, SpaceName: spaceNames[space.Bytes], FolderPath: path, UpdatedAt: updated.Time, Certified: certified}
+	hits := make([]Hit, 0, limit)
+	add := func(match float64, h Hit, owner db.UUID) {
+		if match == 0 {
+			return
+		}
+		boost := 1.0
+		if h.Certified != nil && *h.Certified {
+			boost += certifiedBoost
+		}
+		if owner.Valid && owner == userID {
+			boost += ownBoost
+		}
+		if age := now.Sub(h.UpdatedAt); age >= 0 && age < recentWindow {
+			boost += recentBoost * (1 - float64(age)/float64(recentWindow))
+		}
+		h.Score = match * boost
+		h.SpaceName = spaceNames[h.SpaceID.Bytes]
+		hits = append(hits, h)
+	}
+	nameAndSlug := func(name, slug string) float64 {
+		return pattern.Best(textsearch.Field{Text: name, Weight: 1}, textsearch.Field{Text: slug, Weight: 1})
 	}
 
-	hits := make([]Hit, 0, limit)
 	if want(KindFolder) {
 		for _, f := range folders {
-			if matches(f.Name, f.Slug) {
-				hits = append(hits, hit(KindFolder, f.ID, f.Slug, f.Name, f.SpaceID, paths.to(f.ParentID), f.CreatedAt, nil))
-			}
+			add(nameAndSlug(f.Name, f.Slug), Hit{
+				Kind: KindFolder, ID: f.ID, Slug: f.Slug, Title: f.Name, SpaceID: f.SpaceID,
+				FolderPath: paths.to(f.ParentID), UpdatedAt: f.CreatedAt.Time,
+			}, db.UUID{})
 		}
 	}
 	if want(KindSavedQuery) {
-		queries, err := s.store.SearchVisibleSavedQueries(ctx, db.SearchVisibleSavedQueriesParams{WorkspaceID: ws, UserID: userID, SpaceID: q.SpaceID, Q: &text})
+		// Every visible query is matched here: the store's LIKE cannot fold
+		// accents portably (ADR 0020).
+		queries, err := s.store.SearchVisibleSavedQueries(ctx, db.SearchVisibleSavedQueriesParams{WorkspaceID: ws, UserID: userID, SpaceID: q.SpaceID})
 		if err != nil {
 			return nil, err
 		}
 		for _, sq := range queries {
-			hits = append(hits, hit(KindSavedQuery, sq.ID, sq.Slug, sq.Name, sq.SpaceID, paths.to(sq.FolderID), sq.UpdatedAt, nil))
+			add(nameAndSlug(sq.Name, sq.Slug), Hit{
+				Kind: KindSavedQuery, ID: sq.ID, Slug: sq.Slug, Title: sq.Name, SpaceID: sq.SpaceID,
+				FolderPath: paths.to(sq.FolderID), UpdatedAt: sq.UpdatedAt.Time,
+			}, sq.CreatedBy)
 		}
 	}
 	if want(KindSemanticMetric) {
@@ -137,10 +174,11 @@ func (s *Service) Search(ctx context.Context, ws, userID db.UUID, q Query) ([]Hi
 			return nil, err
 		}
 		for _, m := range metrics {
-			if matches(m.Label, m.Slug) {
-				certified := m.Certified
-				hits = append(hits, hit(KindSemanticMetric, m.ID, m.Slug, m.Label, m.SpaceID, []Folder{}, m.UpdatedAt, &certified))
-			}
+			certified := m.Certified
+			add(nameAndSlug(m.Label, m.Slug), Hit{
+				Kind: KindSemanticMetric, ID: m.ID, Slug: m.Slug, Title: m.Label, SpaceID: m.SpaceID,
+				FolderPath: []Folder{}, UpdatedAt: m.UpdatedAt.Time, Certified: &certified,
+			}, m.OwnerUserID)
 		}
 	}
 	if want(KindSemanticModel) {
@@ -149,14 +187,20 @@ func (s *Service) Search(ctx context.Context, ws, userID db.UUID, q Query) ([]Hi
 			return nil, err
 		}
 		for _, m := range models {
-			if matches(m.Label, m.Slug) {
-				certified := m.Certified
-				hits = append(hits, hit(KindSemanticModel, m.ID, m.Slug, m.Label, m.SpaceID, []Folder{}, m.UpdatedAt, &certified))
-			}
+			certified := m.Certified
+			add(nameAndSlug(m.Label, m.Slug), Hit{
+				Kind: KindSemanticModel, ID: m.ID, Slug: m.Slug, Title: m.Label, SpaceID: m.SpaceID,
+				FolderPath: []Folder{}, UpdatedAt: m.UpdatedAt.Time, Certified: &certified,
+			}, m.OwnerUserID)
 		}
 	}
 
-	sort.SliceStable(hits, func(i, j int) bool { return strings.ToLower(hits[i].Title) < strings.ToLower(hits[j].Title) })
+	sort.SliceStable(hits, func(i, j int) bool {
+		if hits[i].Score != hits[j].Score {
+			return hits[i].Score > hits[j].Score
+		}
+		return strings.ToLower(hits[i].Title) < strings.ToLower(hits[j].Title)
+	})
 	if len(hits) > limit {
 		hits = hits[:limit]
 	}
