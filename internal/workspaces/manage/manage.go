@@ -122,6 +122,7 @@ type Edit struct {
 	Name        *string
 	Description *string
 	Default     *Default
+	BIEnabled   *bool
 }
 
 // Update applies e to current, with its default target, in one transaction.
@@ -136,7 +137,7 @@ func (s *Service) Update(ctx context.Context, current db.Workspace, e Edit) (db.
 	var workspace db.Workspace
 	err := s.tx(ctx, func(q TxStore) error {
 		var err error
-		workspace, err = q.UpdateWorkspace(ctx, db.UpdateWorkspaceParams{ID: current.ID, Name: name, Description: desc})
+		workspace, err = q.UpdateWorkspace(ctx, db.UpdateWorkspaceParams{ID: current.ID, Name: name, Description: desc, BIEnabled: e.BIEnabled})
 		if err != nil || e.Default == nil {
 			return err
 		}
