@@ -174,7 +174,7 @@ func newFixture(t *testing.T) *fixture {
 	return f
 }
 
-func (f *fixture) post(t *testing.T, sql string, headers map[string]string) (*http.Response, []byte) {
+func (f *fixture) post(t *testing.T, sql string, headers map[string]string) (int, http.Header, []byte) {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, f.gateway.URL+"/v1/statement", strings.NewReader(sql))
 	if err != nil {
@@ -188,15 +188,15 @@ func (f *fixture) post(t *testing.T, sql string, headers map[string]string) (*ht
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
-	return resp, body
+	return resp.StatusCode, resp.Header.Clone(), body
 }
 
 func TestStatementScopeHeadersAndURIs(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	resp, body := f.post(t, "SELECT 1", map[string]string{
+	status, header, body := f.post(t, "SELECT 1", map[string]string{
 		"X-Trino-Catalog":             "lake",
 		"X-Trino-Schema":              "sales",
 		"X-Trino-Client-Tags":         "client-tag",
@@ -207,8 +207,8 @@ func TestStatementScopeHeadersAndURIs(t *testing.T) {
 		"X-Trino-Transaction-Id":      "tx-1",
 		"X-Trino-Query-Data-Encoding": "json+zstd",
 	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", status, body)
 	}
 	got := f.trino.last()
 	if got.method != http.MethodPost || got.path != "/v1/statement" || got.body != "SELECT 1" {
@@ -241,7 +241,7 @@ func TestStatementScopeHeadersAndURIs(t *testing.T) {
 	if got.header.Get("Authorization") != "" {
 		t.Error("Authorization reached Trino")
 	}
-	if resp.Header.Get("X-Trino-Set-Authorization-User") != "" {
+	if header.Get("X-Trino-Set-Authorization-User") != "" {
 		t.Error("the response must drop X-Trino-Set-Authorization-User")
 	}
 
@@ -263,7 +263,7 @@ func TestStatementScopeHeadersAndURIs(t *testing.T) {
 func TestFollowAndDelete(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	_, body := f.post(t, "SELECT 1", nil)
+	_, _, body := f.post(t, "SELECT 1", nil)
 	var page map[string]any
 	if err := json.Unmarshal(body, &page); err != nil {
 		t.Fatal(err)
@@ -302,7 +302,7 @@ func TestFollowAndDelete(t *testing.T) {
 func TestURIKeyAndExpiry(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	_, body := f.post(t, "SELECT 1", nil)
+	_, _, body := f.post(t, "SELECT 1", nil)
 	var page map[string]any
 	_ = json.Unmarshal(body, &page)
 	next := page["nextUri"].(string)
@@ -354,9 +354,9 @@ func TestAuthAndReadOnly(t *testing.T) {
 	}
 
 	for _, sql := range []string{"INSERT INTO t VALUES (1)", "CREATE TABLE t (x int)", "DROP TABLE t", "EXPLAIN ANALYZE SELECT 1", "SET SESSION x=1", "/* c */ DELETE FROM t"} {
-		resp, _ := f.post(t, sql, nil)
-		if resp.StatusCode != http.StatusForbidden {
-			t.Errorf("%q status = %d, want 403", sql, resp.StatusCode)
+		status, _, _ := f.post(t, sql, nil)
+		if status != http.StatusForbidden {
+			t.Errorf("%q status = %d, want 403", sql, status)
 		}
 	}
 	if f.trino.count() != 0 {
@@ -398,9 +398,9 @@ func TestScopeIsRechecked(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	f.scope.set(nil)
-	resp, _ := f.post(t, "SELECT 1", nil)
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("revoked scope = %d, want 403", resp.StatusCode)
+	status, _, _ := f.post(t, "SELECT 1", nil)
+	if status != http.StatusForbidden {
+		t.Fatalf("revoked scope = %d, want 403", status)
 	}
 	if f.trino.count() != 0 {
 		t.Fatal("a revoked scope reached Trino")

@@ -128,19 +128,19 @@ func (g *Gateway) info(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	base, client, ok := g.target(w, r.Context(), cred)
+	base, client, ok := g.target(r.Context(), w, cred)
 	if !ok {
 		return
 	}
 	headers := http.Header{}
 	headers.Set("Accept-Encoding", "identity")
 	headers.Set("User-Agent", "baleia-bi-gateway")
-	resp, body, err := g.do(r.Context(), client, http.MethodGet, base, "/v1/info", nil, nil, headers)
+	up, err := g.do(r.Context(), client, http.MethodGet, base, "/v1/info", nil, nil, headers)
 	if err != nil {
 		g.writeError(w, http.StatusBadGateway, "BAD_GATEWAY", "the coordinator is unreachable")
 		return
 	}
-	g.write(w, resp, body)
+	g.write(w, up, up.body)
 }
 
 // statement authenticates, rejects writes and relays one Trino statement.
@@ -191,7 +191,7 @@ func (g *Gateway) relay(w http.ResponseWriter, r *http.Request, cred bikeys.Cred
 }
 
 func (g *Gateway) relayWithQuery(w http.ResponseWriter, r *http.Request, cred bikeys.Credential, path string, query url.Values, body []byte) {
-	base, client, ok := g.target(w, r.Context(), cred)
+	base, client, ok := g.target(r.Context(), w, cred)
 	if !ok {
 		return
 	}
@@ -213,17 +213,17 @@ func (g *Gateway) relayWithQuery(w http.ResponseWriter, r *http.Request, cred bi
 	if !ok {
 		return
 	}
-	resp, page, err := g.do(r.Context(), client, r.Method, base, path, query, body, headers)
+	up, err := g.do(r.Context(), client, r.Method, base, path, query, body, headers)
 	if err != nil {
 		g.writeError(w, http.StatusBadGateway, "BAD_GATEWAY", "the coordinator is unreachable")
 		return
 	}
-	page = g.rewritePage(r, cred, page)
-	g.write(w, resp, page)
+	page := g.rewritePage(r, cred, up.body)
+	g.write(w, up, page)
 }
 
 // target resolves the key's coordinated Trino engine.
-func (g *Gateway) target(w http.ResponseWriter, ctx context.Context, cred bikeys.Credential) (string, *http.Client, bool) {
+func (g *Gateway) target(ctx context.Context, w http.ResponseWriter, cred bikeys.Credential) (string, *http.Client, bool) {
 	eng, err := g.deps.Engines.Get(ctx, cred.Key.EngineID)
 	if err != nil {
 		g.writeError(w, http.StatusNotFound, "CATALOG_NOT_FOUND", "the key's engine is unavailable")
@@ -364,11 +364,18 @@ func (g *Gateway) authenticate(w http.ResponseWriter, r *http.Request) (bikeys.C
 	return cred, true
 }
 
+// upstream is one page of a coordinator response.
+type upstream struct {
+	status int
+	header http.Header
+	body   []byte
+}
+
 // do sends one request and reads exactly one response page.
-func (g *Gateway) do(ctx context.Context, client *http.Client, method, base, path string, query url.Values, body []byte, headers http.Header) (*http.Response, []byte, error) {
+func (g *Gateway) do(ctx context.Context, client *http.Client, method, base, path string, query url.Values, body []byte, headers http.Header) (*upstream, error) {
 	u, err := url.Parse(base + path)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if len(query) > 0 {
 		u.RawQuery = query.Encode()
@@ -377,29 +384,29 @@ func (g *Gateway) do(ctx context.Context, client *http.Client, method, base, pat
 	if body != nil {
 		reader = bytes.NewReader(body)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), reader)
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), reader) //nolint:gosec // base is the configured coordinator; ServeHTTP restricts the path
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	req.Header = headers
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // the request targets the configured coordinator only
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	page, err := io.ReadAll(io.LimitReader(resp.Body, maxPageBytes+1))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if len(page) > maxPageBytes {
-		return nil, nil, fmt.Errorf("bi gateway: page exceeds %d bytes", maxPageBytes)
+		return nil, fmt.Errorf("bi gateway: page exceeds %d bytes", maxPageBytes)
 	}
-	return resp, page, nil
+	return &upstream{status: resp.StatusCode, header: resp.Header.Clone(), body: page}, nil
 }
 
 // write relays the upstream status and headers, replacing the body.
-func (g *Gateway) write(w http.ResponseWriter, resp *http.Response, body []byte) {
-	for name, values := range resp.Header {
+func (g *Gateway) write(w http.ResponseWriter, up *upstream, body []byte) {
+	for name, values := range up.header {
 		switch http.CanonicalHeaderKey(name) {
 		case "Content-Length", "Content-Encoding", "Transfer-Encoding", "Connection",
 			"X-Trino-Set-Authorization-User", "X-Trino-Reset-Authorization-User":
@@ -412,8 +419,8 @@ func (g *Gateway) write(w http.ResponseWriter, resp *http.Response, body []byte)
 	if w.Header().Get("Content-Type") == "" {
 		w.Header().Set("Content-Type", "application/json")
 	}
-	w.WriteHeader(resp.StatusCode)
-	_, _ = w.Write(body)
+	w.WriteHeader(up.status)
+	_, _ = w.Write(body) //nolint:gosec // a JSON protocol page from the trusted coordinator
 }
 
 // writeError writes a Trino-shaped error so a JDBC client can surface it.

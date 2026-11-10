@@ -654,7 +654,6 @@ func (s *Server) Run(ctx context.Context) error {
 
 	serveErr := make(chan error, len(servers))
 	for _, server := range servers {
-		server := server
 		go func() { serveErr <- server.ListenAndServe() }()
 	}
 
@@ -684,7 +683,7 @@ func (s *Server) Run(ctx context.Context) error {
 	for range servers {
 		if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
 			cancel()
-			<-shutdown
+			<-shutdown //nolint:errcheck // the serve error is the one to return
 			return err
 		}
 	}
