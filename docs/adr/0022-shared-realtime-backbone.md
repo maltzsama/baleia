@@ -140,18 +140,18 @@ the data that is genuinely global and safe to share moves to the shared layer.
 
 ## Current compliance
 
-Not yet implemented. The code still uses the in-process hubs, the per-replica
-limiter, the polled outbox and the per-connection `pollTicker`; the deployment
-has no Redis. The issues below close the gap and this section is updated as
-they land:
+Implemented through the first six issues:
 
 - **#775, #778:** Redis deployment and the `internal/realtime` client.
 - **#776, #777:** shared cache and distributed rate limiter.
 - **#780:** monitoring events onto the bus.
 - **#779:** assistant SSE onto the bus.
-- **#766:** execution WebSocket off the `pollTicker`, plus the shared
-  `wsticket` store.
-- **#768 (split):** webhook registration and the Streams relay.
+- **#766:** the execution WebSocket reads a durable outbox row relayed onto the
+  bus and uses a shared `wsticket` store; the per-connection poll remains only
+  as the no-Redis fallback, and a queued run's position is reconciled from the
+  admission workflow without a database read.
+
+Still open: **#768 (split)** — webhook registration and the Streams relay.
 
 ## Alternatives considered
 

@@ -84,6 +84,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	// WebSocket needs a raw connection. The API issues single-use tickets (#26)
 	// that the WebSocket handler consumes; the JWT never appears in the URL.
 	tickets := wsticket.New()
+	tickets.SetBus(core.Realtime)
 	// The assistant runner needs the MCP server, which needs these handlers:
 	// they get the slot now and the runner once it is built (#363).
 	runner := &assistant.RunnerSlot{}
@@ -138,6 +139,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	}
 	s.ws = ws.New(s.logger, wsQuerier{q: store}, cfg.JWTSecret, core.Temporal, cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket, cfg.S3UseSSL)
 	s.ws.SetTickets(tickets)
+	s.ws.SetBus(core.Realtime)
 
 	var saAuth serviceAccountAuth
 	if core.OIDC != nil {
@@ -166,7 +168,34 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 
 	s.routes()
 	go monitoringevents.Listen(ctx, s.logger, core.Notifier, monitoringHub)
+	if core.Realtime.Enabled() {
+		go relayExecutions(ctx, s.logger, core.Outbox, core.Realtime)
+	}
 	return s, nil
+}
+
+// relayExecutions reads the durable execution outbox and publishes a wake-up on
+// the bus, so the WebSocket handlers on every replica re-read the execution
+// (ADR 0022). Duplicates are harmless: the handler only sends a change.
+func relayExecutions(ctx context.Context, logger *slog.Logger, outbox *monitoringevents.Outbox, bus *realtime.Client) {
+	for ctx.Err() == nil {
+		err := outbox.Listen(ctx, "execution", nil, func(payload string) {
+			if perr := bus.Publish(ctx, "execution:"+payload, []byte("changed")); perr != nil && logger != nil {
+				logger.WarnContext(ctx, "execution relay: publish failed", "err", perr)
+			}
+		})
+		if ctx.Err() != nil {
+			return
+		}
+		if logger != nil {
+			logger.WarnContext(ctx, "execution relay: outbox listen returned", "err", err)
+		}
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // startAssistant provisions the assistant (#62) when the agents feature is

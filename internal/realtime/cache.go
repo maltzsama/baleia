@@ -45,3 +45,21 @@ func (c *Client) CacheDel(ctx context.Context, key string) error {
 	defer cancel()
 	return c.rdb.Del(opCtx, c.key("cache", key)).Err()
 }
+
+// CacheGetDel returns and removes key atomically, for single-use values such
+// as WebSocket tickets. A disabled client is a cache miss.
+func (c *Client) CacheGetDel(ctx context.Context, key string) ([]byte, bool, error) {
+	if !c.Enabled() {
+		return nil, false, nil
+	}
+	opCtx, cancel := c.operation(ctx)
+	defer cancel()
+	value, err := c.rdb.GetDel(opCtx, c.key("cache", key)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return value, true, nil
+}
