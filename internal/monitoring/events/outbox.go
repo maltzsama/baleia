@@ -19,7 +19,14 @@ func NewOutbox(db *gorm.DB) *Outbox { return &Outbox{db: db} }
 
 // Notify records one event for the listeners.
 func (o *Outbox) Notify(ctx context.Context, channel, payload string) error {
-	return o.db.WithContext(ctx).Create(&model.MonitoringEvent{
+	return o.NotifyTx(o.db.WithContext(ctx), channel, payload)
+}
+
+// NotifyTx records one event through tx, so a caller's write and its
+// notification commit atomically (ADR 0022). A rolled-back write leaves no
+// notification.
+func (o *Outbox) NotifyTx(tx *gorm.DB, channel, payload string) error {
+	return tx.Create(&model.MonitoringEvent{
 		Channel: model.Text(channel),
 		Payload: payload,
 	}).Error
