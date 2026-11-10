@@ -11,7 +11,7 @@ import (
 
 var (
 	// ErrUnsupportedPartitioning is returned for a backend with no native range
-	// partitioning (SQLite). ADR 0023 does not emulate it.
+	// partitioning and no adapter. SQLite is not this: it is emulated.
 	ErrUnsupportedPartitioning = errors.New("partitioning is unsupported for this backend")
 	// ErrNotImplemented is returned for a backend that supports native
 	// partitioning but whose adapter has not shipped yet.
@@ -27,6 +27,10 @@ type Capabilities struct {
 	// ForeignKeysOnPartitioned: a partitioned table may still take part in
 	// foreign keys. MySQL/MariaDB InnoDB forbid it.
 	ForeignKeysOnPartitioned bool
+	// Emulated: the backend has no native partitioning and the adapter emulates
+	// the contract on a plain table (a sidecar registry plus a bounded DELETE
+	// for DropPartition). Mutually exclusive with NativeRange.
+	Emulated bool
 	// Implemented: this build ships the adapter.
 	Implemented bool
 }
@@ -73,7 +77,7 @@ func New(db *gorm.DB) (Manager, error) {
 	case "mysql", "tidb", "sqlserver", "oracle":
 		return nil, fmt.Errorf("%w: %q", ErrNotImplemented, name)
 	case "sqlite":
-		return nil, fmt.Errorf("%w: %q has no native range partitioning", ErrUnsupportedPartitioning, name)
+		return &sqliteManager{db: db}, nil
 	default:
 		return nil, fmt.Errorf("%w: %q has no native range partitioning", ErrUnsupportedPartitioning, name)
 	}
@@ -94,7 +98,9 @@ func capabilitiesFor(dialector string) Capabilities {
 		// (partition function/scheme, interval partitioning).
 		return Capabilities{NativeRange: true, ForeignKeysOnPartitioned: true}
 	case "sqlite":
-		return Capabilities{NativeRange: false, ForeignKeysOnPartitioned: true}
+		// No native partitioning: emulated on a plain table with a sidecar
+		// registry and a bounded DELETE for DropPartition.
+		return Capabilities{NativeRange: false, ForeignKeysOnPartitioned: true, Emulated: true, Implemented: true}
 	default:
 		return Capabilities{}
 	}
