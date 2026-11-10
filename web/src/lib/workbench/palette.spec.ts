@@ -42,6 +42,20 @@ describe('command palette', () => {
 		expect(screen.queryByText('Orders')).toBeNull();
 		expect(tables).not.toHaveBeenCalled();
 	});
+	it('leaves quick-open-only providers out of the command palette (#943)', async () => {
+		const queries = vi.fn(() => [
+			{ id: 'q', label: 'Revenue', group: 'Saved queries', run: vi.fn() }
+		]);
+		const search = vi.fn(() => [{ id: 's', label: 'Orders', group: 'Table', run: vi.fn() }]);
+		registerProvider({ id: 'queries', label: 'Saved queries', quickOnly: true, search: queries });
+		registerProvider({ id: 'search', label: 'Results', search });
+
+		render(CommandPalette, { props: { open: true } });
+
+		expect(await screen.findByText('Orders')).toBeTruthy();
+		expect(screen.queryByText('Revenue')).toBeNull();
+		expect(queries).not.toHaveBeenCalled();
+	});
 	// #472: the input is a combobox that names the option Enter will run.
 	it('announces the active option and runs that one on Enter', async () => {
 		const alpha = vi.fn();

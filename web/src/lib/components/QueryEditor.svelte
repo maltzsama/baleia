@@ -19,7 +19,7 @@
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { registerProvider, unregisterProvider } from '$lib/palette/registry';
 	import { modelPaletteProvider } from '$lib/semantic/palette';
-	import { exploreLinkOf, listModels, migratedModelOf } from '$lib/semantic/explore';
+	import { exploreLinkOf } from '$lib/semantic/explore';
 	import { MAX_DRAFT_SQL } from '$lib/workbench/drafts';
 	import type { Conflict } from '$lib/workbench/conflict';
 	import CommandPalette from '$lib/workbench/CommandPalette.svelte';
@@ -36,7 +36,8 @@
 		type Engine,
 		type WorkspaceTarget
 	} from '$lib/engines/client';
-	import { loadNamespaces, searchMetadata } from '$lib/metadata/client';
+	import { loadNamespaces } from '$lib/metadata/client';
+	import { searchPaletteProvider } from '$lib/search/palette';
 	import { sqlCompletionSource, type CompletionScope } from '$lib/workbench/sqlCompletion';
 	import { signatureHelp } from '$lib/workbench/signatureHelp';
 	import { statementSpanAt } from '$lib/workbench/sqlContext';
@@ -412,6 +413,21 @@
 		}
 	}
 
+	/** Inserts the SQL a metric renders to, for the active tab's binding. */
+	async function insertMetricSql(metricId: string) {
+		const tabBinding = editor.activeTab?.bindingId ?? '';
+		const { data: rendered } = await client.GET(
+			'/workspaces/{id}/semantic/metrics/{metric_id}/sql',
+			{
+				params: {
+					path: { id: workspaceId, metric_id: metricId },
+					query: tabBinding ? { binding_id: tabBinding } : {}
+				}
+			}
+		);
+		if (rendered?.sql) editor.insert(rendered.sql);
+	}
+
 	function registerPalette() {
 		registerProvider({
 			id: 'actions',
@@ -469,6 +485,7 @@
 		registerProvider({
 			id: 'queries',
 			label: m.components_queryeditor_saved_queries(),
+			quickOnly: true,
 			search: async (query) => {
 				if (workspaceId && savedQueries.workspaceId !== workspaceId)
 					await savedQueries.reload(workspaceId);
@@ -493,59 +510,26 @@
 					}));
 			}
 		});
-		registerProvider({
-			id: 'tables',
-			label: m.components_queryeditor_tables(),
-			search: async (query) => {
-				const q = query.trim();
-				if (q.length < 2) return [];
-				const results = await searchMetadata(workspaceId, q, { kind: 'all', limit: 10 });
-				return results
-					.filter((result) => result.kind === 'table')
-					.map((result) => ({
-						id: `table-${result.table_id}`,
-						label: result.table,
-						detail: result.namespace.join('.'),
-						group: m.components_queryeditor_tables(),
-						run: () => editor.insert(`${result.namespace.join('.')}.${result.table}`)
-					}));
-			}
-		});
-		registerProvider({
-			id: 'metrics',
-			label: m.components_queryeditor_metrics(),
-			search: async (query) => {
-				const q = query.trim();
-				if (!workspaceId) return [];
-				const { data } = await client.GET('/workspaces/{id}/semantic/metrics', {
-					params: { path: { id: workspaceId }, query: { ...(q ? { q } : {}), limit: 20 } }
-				});
-				const tabBinding = editor.activeTab?.bindingId ?? '';
-				// A v1 metric migrated into a model is offered by "Insert from model".
-				const models = await listModels(workspaceId).catch(() => []);
-				return (data ?? [])
-					.filter((metric) => !migratedModelOf(models, metric))
-					.slice(0, 20)
-					.map((metric) => ({
-						id: `metric-${metric.id}`,
-						label: metric.label,
-						detail: metric.slug,
-						group: m.components_queryeditor_metrics(),
-						run: async () => {
-							const { data: rendered } = await client.GET(
-								'/workspaces/{id}/semantic/metrics/{metric_id}/sql',
-								{
-									params: {
-										path: { id: workspaceId, metric_id: metric.id },
-										query: tabBinding ? { binding_id: tabBinding } : {}
-									}
-								}
-							);
-							if (rendered?.sql) editor.insert(rendered.sql);
-						}
-					}));
-			}
-		});
+		registerProvider(
+			searchPaletteProvider({
+				workspaceId: () => workspaceId,
+				insert: (text) => editor.insert(text),
+				openSavedQuery: async (id) => {
+					if (workspaceId && savedQueries.workspaceId !== workspaceId)
+						await savedQueries.reload(workspaceId);
+					const query = savedQueries.list.find((item) => item.id === id);
+					if (!query) return false;
+					// Switching tabs must flush the pending SQL sync first (#729).
+					flushSql();
+					editor.openSavedQuery(query, !savedQueries.canEdit(query.space_id));
+					return true;
+				},
+				insertMetric: insertMetricSql,
+				// The path comes from the search result and may carry a query.
+				// eslint-disable-next-line svelte/no-navigation-without-resolve
+				navigate: (href) => void goto(href)
+			})
+		);
 		registerProvider(
 			modelPaletteProvider({
 				workspaceId: () => workspaceId,
@@ -724,10 +708,9 @@
 			window.removeEventListener('beforeunload', onBeforeUnload);
 			document.removeEventListener('visibilitychange', onVisibility);
 			unregisterProvider('actions');
-			unregisterProvider('metrics');
+			unregisterProvider('search');
 			unregisterProvider('models');
 			unregisterProvider('queries');
-			unregisterProvider('tables');
 			for (const stream of Object.values(streams)) stream.close();
 		};
 	});

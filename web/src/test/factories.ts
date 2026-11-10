@@ -15,6 +15,9 @@ type MetadataCatalog = components['schemas']['MetadataCatalog'];
 type MetadataCatalogBinding = components['schemas']['MetadataCatalogBinding'];
 type MetadataTableDetail = components['schemas']['MetadataTableDetail'];
 type MetadataSearchResult = components['schemas']['MetadataSearchResult'];
+type WorkspaceSearchItem = components['schemas']['WorkspaceSearchItem'];
+type WorkspaceSearchResponse = components['schemas']['WorkspaceSearchResponse'];
+type SearchGlossaryEntry = components['schemas']['SearchGlossaryEntry'];
 type ConnectionProvider = components['schemas']['ConnectionProvider'];
 type ConnectionCategory = components['schemas']['ConnectionCategory'];
 type CatalogConnection = components['schemas']['CatalogConnection'];
@@ -222,6 +225,74 @@ export function makeSearchResult(
 		native_type: null,
 		score: 0.9,
 		metadata_synced_at: '2026-01-01T00:00:00Z',
+		...overrides
+	};
+}
+
+/** A table hit of the workspace search; pass `kind` and the nested hit for others. */
+export function makeSearchItem(overrides: Partial<WorkspaceSearchItem> = {}): WorkspaceSearchItem {
+	const metadata = makeSearchResult();
+	return {
+		kind: 'table',
+		id: metadata.table_id,
+		title: metadata.table,
+		subtitle: metadata.namespace.join('.'),
+		score: 0.9,
+		metadata,
+		doc: null,
+		content: null,
+		...overrides
+	};
+}
+
+/** A content hit (saved query by default) of the workspace search. */
+export function makeContentSearchItem(
+	kind: 'saved_query' | 'semantic_metric' | 'semantic_model' | 'folder',
+	id: string,
+	title: string
+): WorkspaceSearchItem {
+	return {
+		kind,
+		id,
+		title,
+		subtitle: 'Finance',
+		score: 0.9,
+		metadata: null,
+		doc: null,
+		content: {
+			kind,
+			id,
+			slug: title.toLowerCase().replaceAll(' ', '_'),
+			title,
+			space: { id: '00000000-0000-0000-0000-0000000000f1', name: 'Finance' },
+			folder_path: [],
+			updated_at: '2026-01-01T00:00:00Z'
+		}
+	};
+}
+
+export function makeSearchResponse(
+	items: WorkspaceSearchItem[],
+	overrides: Partial<WorkspaceSearchResponse> = {}
+): WorkspaceSearchResponse {
+	const counts = new Map<WorkspaceSearchItem['kind'], number>();
+	for (const item of items) counts.set(item.kind, (counts.get(item.kind) ?? 0) + 1);
+	return {
+		items,
+		facets: [...counts].map(([kind, count]) => ({ kind, count })),
+		expanded_with: [],
+		...overrides
+	};
+}
+
+export function makeGlossaryEntry(
+	overrides: Partial<SearchGlossaryEntry> = {}
+): SearchGlossaryEntry {
+	return {
+		id: '00000000-0000-0000-0000-0000000000e1',
+		term: 'receita',
+		synonyms: ['faturamento', 'revenue'],
+		created_at: '2026-01-01T00:00:00Z',
 		...overrides
 	};
 }

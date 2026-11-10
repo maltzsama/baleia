@@ -40,7 +40,9 @@
 		if (!open) return;
 		const q = query.trim();
 		const selected =
-			mode === 'quick' ? providersList().filter((p) => p.id === 'queries') : providersList();
+			mode === 'quick'
+				? providersList().filter((p) => p.id === 'queries')
+				: providersList().filter((p) => !p.quickOnly);
 		let cancelled = false;
 		const timer = setTimeout(async () => {
 			loading = true;
