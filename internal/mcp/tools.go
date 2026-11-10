@@ -27,6 +27,7 @@ func (s *Server) registerTools() {
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolListTables, Description: "List the tables of a schema."}, s.listTables)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolDescribeTable, Description: "Describe a table: columns, types, documentation and freshness."}, s.describeTable)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolSearchMetadata, Description: "Search the tables and columns visible in a workspace by name or comment, in any case and without accents."}, s.searchMetadata)
+	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolSearch, Description: "Search a workspace for tables, columns, docs, saved queries, metrics, models and folders. One list, best match first, with the number of matches per kind; matching ignores case and accents and finds plurals, and the workspace's synonyms apply."}, s.search)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolListMetrics, Description: "List the semantic metrics of a workspace."}, s.listMetrics)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolRenderMetric, Description: "Render a metric's SQL for a binding; run it with run_query."}, s.renderMetric)
 	mcpsdk.AddTool(s.sdk, &mcpsdk.Tool{Name: agentpolicy.ToolListModels, Description: "List the semantic models visible in a workspace."}, s.listModels)
@@ -65,6 +66,12 @@ type searchIn struct {
 	Query       string `json:"query" jsonschema:"search text"`
 	Kind        string `json:"kind,omitempty" jsonschema:"table, column or all (default all)"`
 	Limit       int    `json:"limit,omitempty" jsonschema:"maximum results (50)"`
+}
+type federatedSearchIn struct {
+	WorkspaceID string   `json:"workspace_id" jsonschema:"workspace UUID"`
+	Query       string   `json:"query" jsonschema:"search text"`
+	Kinds       []string `json:"kinds,omitempty" jsonschema:"only these kinds: table, column, doc, saved_query, semantic_metric, semantic_model, folder (default all)"`
+	Limit       int      `json:"limit,omitempty" jsonschema:"maximum results, 1 to 50 (default 20)"`
 }
 type renderIn struct {
 	WorkspaceID string `json:"workspace_id" jsonschema:"workspace UUID"`
@@ -302,6 +309,40 @@ func (s *Server) searchMetadata(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 			return r, nil
 		case api.SearchMetadata401JSONResponse, api.SearchMetadata404JSONResponse:
 			return nil, errNotFound
+		default:
+			return nil, fmt.Errorf("unmapped response %T", got)
+		}
+	})
+}
+
+func (s *Server) search(ctx context.Context, _ *mcpsdk.CallToolRequest, in federatedSearchIn) (*mcpsdk.CallToolResult, any, error) {
+	ws, err := id(in.WorkspaceID)
+	if err != nil {
+		return toolError("invalid_argument", "workspace_id must be a UUID")
+	}
+	params := api.SearchWorkspaceParams{Q: in.Query}
+	if len(in.Kinds) > 0 {
+		kinds := make([]api.WorkspaceSearchKind, len(in.Kinds))
+		for i, k := range in.Kinds {
+			kinds[i] = api.WorkspaceSearchKind(k)
+		}
+		params.Kind = &kinds
+	}
+	if in.Limit > 0 {
+		params.Limit = &in.Limit
+	}
+	return s.dispatch(ctx, agentpolicy.Call{Tool: agentpolicy.ToolSearch, WorkspaceID: pgUUID(ws)}, func(ctx context.Context, _ agentpolicy.Effective) (any, error) {
+		got, err := s.handlers.SearchWorkspace(ctx, api.SearchWorkspaceRequestObject{Id: pathOf(ws), Params: params})
+		if err != nil {
+			return nil, err
+		}
+		switch r := got.(type) {
+		case api.SearchWorkspace200JSONResponse:
+			return r, nil
+		case api.SearchWorkspace401JSONResponse, api.SearchWorkspace404JSONResponse:
+			return nil, errNotFound
+		case api.SearchWorkspace422JSONResponse:
+			return nil, errInvalid
 		default:
 			return nil, fmt.Errorf("unmapped response %T", got)
 		}

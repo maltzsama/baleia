@@ -15,6 +15,7 @@
 		type TableRef
 	} from '$lib/metadata/client';
 	import { parseSearchFilters } from '$lib/metadata/searchFilters';
+	import { searchTablesAndColumns } from '$lib/search/client';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -219,6 +220,8 @@
 
 	// ── Search ───────────────────────────────────────────────────────────
 	let searchResults = $state<MetadataSearchResult[]>([]);
+	/** Glossary synonyms the last search also looked for (#943). */
+	let expandedWith = $state<string[]>([]);
 	let searchLoading = $state(false);
 	let searchError = $state('');
 	let activeResult = $state(0);
@@ -235,6 +238,7 @@
 
 		if (q.length < 2 || !wid) {
 			searchResults = [];
+			expandedWith = [];
 			searchError = '';
 			searchLoading = false;
 			return;
@@ -247,16 +251,35 @@
 		const timer = setTimeout(async () => {
 			const seq = ++searchSeq;
 			try {
-				const results = await searchMetadata(wid, q, {
-					kind: parsedSearch.kind ?? 'all',
-					tags: parsedSearch.tags,
-					certified: parsedSearch.certified,
-					namespace: parsedSearch.namespace,
-					limit: 50,
-					signal: controller.signal
-				});
+				const kind = parsedSearch.kind ?? 'all';
+				// Tag, certified and namespace filters are the metadata search's;
+				// plain text goes through the workspace search, which applies the
+				// glossary (#943).
+				const filtered =
+					parsedSearch.tags?.length ||
+					parsedSearch.certified != null ||
+					parsedSearch.namespace?.length;
+				let results: MetadataSearchResult[];
+				let expanded: string[] = [];
+				if (filtered) {
+					results = await searchMetadata(wid, q, {
+						kind,
+						tags: parsedSearch.tags,
+						certified: parsedSearch.certified,
+						namespace: parsedSearch.namespace,
+						limit: 50,
+						signal: controller.signal
+					});
+				} else {
+					({ results, expandedWith: expanded } = await searchTablesAndColumns(wid, q, {
+						kind,
+						limit: 50,
+						signal: controller.signal
+					}));
+				}
 				if (seq !== searchSeq) return;
 				searchResults = results;
+				expandedWith = expanded;
 			} catch (e) {
 				if (seq !== searchSeq || controller.signal.aborted) return;
 				searchResults = [];
@@ -421,6 +444,11 @@
 			/>
 		{:else}
 			<div id={resultsId} role="listbox" aria-label={m.components_datasourcetree_search_results()}>
+				{#if expandedWith.length > 0}
+					<p class="px-2 pt-2 text-[10px] text-text-muted">
+						{m.search_expanded_with({ terms: expandedWith.join(', ') })}
+					</p>
+				{/if}
 				{#if tableResults.length > 0}
 					<p class="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-text-muted">
 						{m.components_datasourcetree_tables()}

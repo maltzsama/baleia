@@ -1286,6 +1286,17 @@ const (
 	WorkspaceRoleViewer WorkspaceRole = "viewer"
 )
 
+// Defines values for WorkspaceSearchKind.
+const (
+	WorkspaceSearchKindColumn         WorkspaceSearchKind = "column"
+	WorkspaceSearchKindDoc            WorkspaceSearchKind = "doc"
+	WorkspaceSearchKindFolder         WorkspaceSearchKind = "folder"
+	WorkspaceSearchKindSavedQuery     WorkspaceSearchKind = "saved_query"
+	WorkspaceSearchKindSemanticMetric WorkspaceSearchKind = "semantic_metric"
+	WorkspaceSearchKindSemanticModel  WorkspaceSearchKind = "semantic_model"
+	WorkspaceSearchKindTable          WorkspaceSearchKind = "table"
+)
+
 // Defines values for WorkspaceTargetMode.
 const (
 	Adopted WorkspaceTargetMode = "adopted"
@@ -4244,6 +4255,32 @@ type SavedQueryTarget struct {
 	Schema    *string             `json:"schema"`
 }
 
+// SearchGlossary defines model for SearchGlossary.
+type SearchGlossary struct {
+	// AllowedActions `view` for every member; `edit` for editors and above
+	AllowedActions []string              `json:"allowed_actions"`
+	Entries        []SearchGlossaryEntry `json:"entries"`
+}
+
+// SearchGlossaryEntry defines model for SearchGlossaryEntry.
+type SearchGlossaryEntry struct {
+	CreatedAt time.Time          `json:"created_at"`
+	Id        openapi_types.UUID `json:"id"`
+	Synonyms  []string           `json:"synonyms"`
+
+	// Term Folded: lower case, without accents
+	Term string `json:"term"`
+}
+
+// SearchGlossaryEntryCreate defines model for SearchGlossaryEntryCreate.
+type SearchGlossaryEntryCreate struct {
+	// Synonyms 1 to 20 words or short phrases, up to 64 characters each as typed, each with at least one letter or digit. Compared without case or accents, a synonym cannot equal the term or repeat another one; any of these answers 422.
+	Synonyms []string `json:"synonyms"`
+
+	// Term At most 64 characters as typed, and at least one letter or digit: the search ignores punctuation, so a word of punctuation could never match
+	Term string `json:"term"`
+}
+
 // SemanticDoc defines model for SemanticDoc.
 type SemanticDoc struct {
 	AllowedActions *[]string           `json:"allowed_actions,omitempty"`
@@ -5345,6 +5382,49 @@ type WorkspacePrincipal struct {
 // WorkspaceRole What a member may do in Baleia in this workspace (#653, ADR 0016): viewers see content and run queries, editors also create and edit content, admins also manage the workspace. What they may read or write in its catalogs is the catalog manager's decision (ADR 0015).
 type WorkspaceRole string
 
+// WorkspaceSearchFacet defines model for WorkspaceSearchFacet.
+type WorkspaceSearchFacet struct {
+	// Count Matches of this kind among the candidates the search considered, before the limit
+	Count int                 `json:"count"`
+	Kind  WorkspaceSearchKind `json:"kind"`
+}
+
+// WorkspaceSearchItem defines model for WorkspaceSearchItem.
+type WorkspaceSearchItem struct {
+	// Content Set for saved queries, metrics, models and folders
+	Content *ContentSearchItem `json:"content"`
+
+	// Doc Set for docs
+	Doc *SemanticDocSearchResult `json:"doc"`
+
+	// Id Stable within the response: a UUID, or table UUID/column name for a column
+	Id   string              `json:"id"`
+	Kind WorkspaceSearchKind `json:"kind"`
+
+	// Metadata Set for tables and columns
+	Metadata *MetadataSearchResult `json:"metadata"`
+
+	// Score Comparable across kinds; higher is better
+	Score float64 `json:"score"`
+
+	// Subtitle Where it lives: the namespace and table, the space, or the doc's description
+	Subtitle *string `json:"subtitle"`
+
+	// Title The name to show: a table, a column, a doc's table or column, or a content title
+	Title string `json:"title"`
+}
+
+// WorkspaceSearchKind defines model for WorkspaceSearchKind.
+type WorkspaceSearchKind string
+
+// WorkspaceSearchResponse defines model for WorkspaceSearchResponse.
+type WorkspaceSearchResponse struct {
+	// ExpandedWith Glossary synonyms the search also looked for; empty when none applied
+	ExpandedWith []string               `json:"expanded_with"`
+	Facets       []WorkspaceSearchFacet `json:"facets"`
+	Items        []WorkspaceSearchItem  `json:"items"`
+}
+
 // WorkspaceTarget defines model for WorkspaceTarget.
 type WorkspaceTarget struct {
 	BindingId         openapi_types.UUID  `json:"binding_id"`
@@ -5800,6 +5880,21 @@ type TriggerRetrieverRefreshJSONBody struct {
 // TriggerRetrieverRefreshJSONBodyRefreshType defines parameters for TriggerRetrieverRefresh.
 type TriggerRetrieverRefreshJSONBodyRefreshType string
 
+// SearchWorkspaceParams defines parameters for SearchWorkspace.
+type SearchWorkspaceParams struct {
+	Q string `form:"q" json:"q"`
+
+	// Kind Only these kinds; every kind when omitted
+	Kind *[]WorkspaceSearchKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// CatalogId Narrow tables, columns and docs to one catalog
+	CatalogId *openapi_types.UUID `form:"catalog_id,omitempty" json:"catalog_id,omitempty"`
+
+	// SpaceId Narrow saved queries, metrics, models and folders to one space
+	SpaceId *openapi_types.UUID `form:"space_id,omitempty" json:"space_id,omitempty"`
+	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // DeleteSemanticDocParams defines parameters for DeleteSemanticDoc.
 type DeleteSemanticDocParams struct {
 	CatalogId openapi_types.UUID `form:"catalog_id" json:"catalog_id"`
@@ -6131,6 +6226,9 @@ type UpdateRetrieverJSONRequestBody = UpdateRetrieverRequest
 
 // TriggerRetrieverRefreshJSONRequestBody defines body for TriggerRetrieverRefresh for application/json ContentType.
 type TriggerRetrieverRefreshJSONRequestBody TriggerRetrieverRefreshJSONBody
+
+// CreateSearchGlossaryEntryJSONRequestBody defines body for CreateSearchGlossaryEntry for application/json ContentType.
+type CreateSearchGlossaryEntryJSONRequestBody = SearchGlossaryEntryCreate
 
 // UpsertSemanticDocJSONRequestBody defines body for UpsertSemanticDoc for application/json ContentType.
 type UpsertSemanticDocJSONRequestBody = SemanticDocUpsert

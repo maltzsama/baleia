@@ -47,6 +47,7 @@ func All() []any {
 		&Retriever{},
 		&SavedQuery{},
 		&SearchScope{},
+		&SearchSynonym{},
 		&SearchTerm{},
 		&Selector{},
 		&SemanticDoc{},

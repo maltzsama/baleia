@@ -49,6 +49,13 @@ export const settingsSections: SettingsSection[] = [
 		action: 'manage_workload'
 	},
 	{
+		href: '/settings/search',
+		get label() {
+			return m.settings_sections_search_glossary();
+		},
+		group: 'platform'
+	},
+	{
 		href: '/settings/identity',
 		get label() {
 			return m.settings_sections_identity_providers();

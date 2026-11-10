@@ -75,3 +75,21 @@ type SearchTerm struct {
 
 // TableName is the table of SearchTerm.
 func (SearchTerm) TableName() string { return "search_terms" }
+
+// SearchSynonym is one entry of a workspace's search glossary: a folded term
+// and the words that mean the same, so searching for any of them also looks
+// for the others (#943).
+type SearchSynonym struct {
+	ID          UUID        `gorm:"column:id;primaryKey;not null"`
+	WorkspaceID UUID        `gorm:"column:workspace_id;not null;uniqueIndex:search_synonyms_workspace_term_uq,priority:1"`
+	Term        Text        `gorm:"column:term;not null;size:128;uniqueIndex:search_synonyms_workspace_term_uq,priority:2"`
+	Synonyms    StringArray `gorm:"column:synonyms;not null"`
+	CreatedBy   UUID        `gorm:"column:created_by;not null"`
+	CreatedAt   time.Time   `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
+
+	Workspace    *Workspace `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnDelete:CASCADE"`
+	CreatedByRef *User      `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnDelete:RESTRICT"`
+}
+
+// TableName is the table of SearchSynonym.
+func (SearchSynonym) TableName() string { return "search_synonyms" }

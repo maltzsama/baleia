@@ -163,6 +163,16 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.SearchScope{}, &model.SearchTerm{})
 			},
 		},
+		Migration{
+			Version: 13,
+			Name:    "create search glossary",
+			Up: func(db *gorm.DB) error {
+				if err := AutoMigrate(db, &model.SearchSynonym{}); err != nil {
+					return err
+				}
+				return createForeignKeys(db, []any{&model.SearchSynonym{}})
+			},
+		},
 	)
 }
 

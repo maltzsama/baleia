@@ -55,6 +55,7 @@ Every request needs an agent token minted in the UI (`/settings/agents`):
 | `list_tables` | Tables of a schema |
 | `describe_table` | Columns, types, docs and freshness |
 | `search_metadata` | Search tables and columns by name or comment |
+| `search` | One ranked search over tables, columns, docs, saved queries, metrics, models and folders, with a count per kind |
 | `list_metrics` | Semantic metrics of a workspace |
 | `render_metric` | Render a metric's SQL for a binding |
 | `list_models` | Semantic models visible in a workspace |

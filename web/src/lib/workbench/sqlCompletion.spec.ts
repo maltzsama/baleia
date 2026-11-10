@@ -198,6 +198,18 @@ describe('sqlCompletionSource', () => {
 		expect(result?.from).toBe(14);
 	});
 
+	it('offers a table typed without its accents or in another case (#943)', async () => {
+		server.use(
+			http.get('/workspaces/{id}/metadata/search', ({ response }) =>
+				response(200).json([
+					makeSearchResult({ table_id: IDS.sf1Nation, namespace: ['sf1'], table: 'Região' })
+				])
+			)
+		);
+		const result = await complete('SELECT * FROM REGIA|');
+		expect(labels(result?.options)).toContain('Região · sf1');
+	});
+
 	it('lists the tables of a schema after its name', async () => {
 		const result = await complete('SELECT * FROM sf1.|');
 		expect(labels(result?.options)).toEqual(['nation · sf1']);

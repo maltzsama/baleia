@@ -68,22 +68,27 @@ func (h *SemanticHandlers) SearchContent(ctx context.Context, request SearchCont
 	h.metrics.search.Result(metrics.SearchContent, len(hits))
 	items := make([]ContentSearchItem, 0, len(hits))
 	for _, hit := range hits {
-		path := make([]ContentSearchFolderPath, 0, len(hit.FolderPath))
-		for _, f := range hit.FolderPath {
-			path = append(path, ContentSearchFolderPath{Id: openapi_types.UUID(f.ID.Bytes), Name: f.Name})
-		}
-		items = append(items, ContentSearchItem{
-			Kind:       hit.Kind,
-			Id:         openapi_types.UUID(hit.ID.Bytes),
-			Slug:       hit.Slug,
-			Title:      hit.Title,
-			Space:      ContentSearchSpace{Id: openapi_types.UUID(hit.SpaceID.Bytes), Name: hit.SpaceName},
-			FolderPath: path,
-			UpdatedAt:  hit.UpdatedAt,
-			Certified:  hit.Certified,
-		})
+		items = append(items, contentSearchItem(hit))
 	}
 	return SearchContent200JSONResponse(items), nil
+}
+
+// contentSearchItem is the public form of one content search hit.
+func contentSearchItem(hit search.Hit) ContentSearchItem {
+	path := make([]ContentSearchFolderPath, 0, len(hit.FolderPath))
+	for _, f := range hit.FolderPath {
+		path = append(path, ContentSearchFolderPath{Id: openapi_types.UUID(f.ID.Bytes), Name: f.Name})
+	}
+	return ContentSearchItem{
+		Kind:       hit.Kind,
+		Id:         openapi_types.UUID(hit.ID.Bytes),
+		Slug:       hit.Slug,
+		Title:      hit.Title,
+		Space:      ContentSearchSpace{Id: openapi_types.UUID(hit.SpaceID.Bytes), Name: hit.SpaceName},
+		FolderPath: path,
+		UpdatedAt:  hit.UpdatedAt,
+		Certified:  hit.Certified,
+	}
 }
 
 // ListWorkspacePrincipals — GET /workspaces/{id}/principals (#113). Any

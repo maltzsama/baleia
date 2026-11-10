@@ -254,10 +254,14 @@ var operationAccess = map[string]access{
 	// Semantic layer v1 (#33): workspace members; docs only on catalogs the
 	// workspace may use (semanticCatalog wraps grantedCatalog). Docs are not
 	// content items, so #40 does not add a space check here.
-	"ListSemanticDocs":   checked("metadataWorkspace", "semanticCatalog"),
-	"UpsertSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
-	"DeleteSemanticDoc":  checked("metadataWorkspace", "semanticCatalog"),
-	"SearchSemanticDocs": checked("metadataWorkspace", "docs.Search"),
+	"ListSemanticDocs":          checked("metadataWorkspace", "semanticCatalog"),
+	"UpsertSemanticDoc":         checked("metadataWorkspace", "semanticCatalog"),
+	"DeleteSemanticDoc":         checked("metadataWorkspace", "semanticCatalog"),
+	"SearchSemanticDocs":        checked("metadataWorkspace", "docs.Search"),
+	"SearchWorkspace":           checked("metadataWorkspace", "PrincipalFromContext", "federatedHitsFor"),
+	"ListSearchGlossary":        checked("metadataWorkspace"),
+	"CreateSearchGlossaryEntry": checked("metadataWorkspace", "requireWorkspaceRole"),
+	"DeleteSearchGlossaryEntry": checked("metadataWorkspace", "requireWorkspaceRole"),
 	// Metrics are validated against a real engine in a read-only session
 	// (validateSemanticMetric); the catalog must be granted and the caller
 	// needs the space role (contentSpace wraps requireSpace).

@@ -1,0 +1,26 @@
+meta {
+  name: Search Glossary List
+  type: http
+  seq: 29
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/search/glossary
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the entry is listed and the caller may edit", function () {
+    expect(res.body.entries.some((e) => e.id === bru.getVar("search_glossary_entry_id"))).to.equal(true);
+    expect(res.body.allowed_actions).to.include("edit");
+  });
+}

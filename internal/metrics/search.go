@@ -7,6 +7,8 @@ const (
 	SearchMetadata = "metadata"
 	SearchDocs     = "docs"
 	SearchContent  = "content"
+	// SearchFederated is the one search over every kind (#943).
+	SearchFederated = "federated"
 )
 
 // Search counts in-product search requests (#941).

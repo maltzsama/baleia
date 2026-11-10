@@ -1,0 +1,36 @@
+meta {
+  name: Workspace Search
+  type: http
+  seq: 26
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/search?q={{metadata_table_name}}&limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the table is found and ranked, with a facet per matched kind", function () {
+    expect(res.body.items.length).to.be.greaterThan(0);
+    expect(res.body.items[0].kind).to.equal("table");
+    expect(res.body.items[0].metadata.table).to.equal(bru.getVar("metadata_table_name"));
+    const facet = res.body.facets.find((f) => f.kind === "table");
+    expect(facet.count).to.be.greaterThan(0);
+    expect(res.body.expanded_with).to.be.an("array");
+  });
+}
+
+docs {
+  One relevance-ranked search over tables, columns, docs, saved queries,
+  metrics, models and folders (#943). `kind` narrows it (repeat it for
+  several), `catalog_id` and `space_id` scope it, `limit` is 1 to 50.
+}

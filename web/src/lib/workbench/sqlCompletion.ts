@@ -13,6 +13,7 @@ import { keywordCompletionSource, type SQLDialect } from '@maltzsama/lang-sql';
 import { m } from '$lib/paraglide/messages';
 import { plural } from '$lib/i18n/plural';
 import { formatRelativeTime } from '$lib/util/time';
+import { startsWithFolded } from '$lib/search/fold';
 import { loadBindingFunctions, type DialectFunction } from '$lib/engines/client';
 import {
 	joinSuggestions,
@@ -392,9 +393,7 @@ async function tableOptions(
 		const byName = (a: string[], b: string[]) =>
 			a.join('.').localeCompare(b.join('.'), undefined, { numeric: true });
 		const others = hits
-			.filter(
-				(hit) => lower(hit.table).startsWith(lower(ctx.prefix)) && !samePath(hit.namespace, home)
-			)
+			.filter((hit) => startsWithFolded(hit.table, ctx.prefix) && !samePath(hit.namespace, home))
 			.sort((a, b) => a.table.localeCompare(b.table) || byName(a.namespace, b.namespace));
 		for (const hit of others) {
 			out.push(
@@ -502,12 +501,12 @@ function joinInfo(suggestion: JoinSuggestion): () => Node {
 	]);
 }
 
-/** Prefix match, then group rank; exact matches first inside a group. */
+/** Prefix match (ignoring case and accents), then group rank; exact matches first inside a group. */
 function rank(options: Option[], prefix: string): Completion[] {
 	const p = lower(prefix);
 	const seen = new Set<string>();
 	return options
-		.filter((option) => lower(option.label).startsWith(p))
+		.filter((option) => startsWithFolded(option.label, prefix))
 		.map((option, index) => ({ option, index }))
 		.sort(
 			(a, b) =>

@@ -20,6 +20,7 @@ const (
 	ToolListTables      = "list_tables"
 	ToolDescribeTable   = "describe_table"
 	ToolSearchMetadata  = "search_metadata"
+	ToolSearch          = "search"
 	ToolListMetrics     = "list_metrics"
 	ToolRenderMetric    = "render_metric"
 	ToolListModels      = "list_models"
@@ -40,6 +41,7 @@ var AllTools = []string{
 	ToolListTables,
 	ToolDescribeTable,
 	ToolSearchMetadata,
+	ToolSearch,
 	ToolListMetrics,
 	ToolRenderMetric,
 	ToolListModels,

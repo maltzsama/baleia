@@ -1,0 +1,43 @@
+meta {
+  name: Search Glossary Create
+  type: http
+  seq: 28
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/search/glossary
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "term": "Receita",
+    "synonyms": ["Faturamento", "Revenue"]
+  }
+}
+
+vars:post-response {
+  search_glossary_entry_id: res.body.id
+}
+
+assert {
+  res.status: eq 201
+}
+
+tests {
+  test("the entry is stored folded", function () {
+    expect(res.body.term).to.equal("receita");
+    expect(res.body.synonyms).to.eql(["faturamento", "revenue"]);
+  });
+}
+
+docs {
+  A set of words that mean the same in the workspace (#943): searching for
+  any of them also looks for the others. Needs the editor role; a term that
+  already has an entry answers 409.
+}
