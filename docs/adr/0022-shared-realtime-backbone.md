@@ -140,7 +140,7 @@ the data that is genuinely global and safe to share moves to the shared layer.
 
 ## Current compliance
 
-Implemented through the first six issues:
+Implemented through #775–#780 and #766:
 
 - **#775, #778:** Redis deployment and the `internal/realtime` client.
 - **#776, #777:** shared cache and distributed rate limiter.
@@ -151,8 +151,11 @@ Implemented through the first six issues:
   as the no-Redis fallback, and a queued run's position is reconciled from the
   admission workflow without a database read.
 
-Still open: **#909** — the Streams delivery relay (retry, dead-letter, replay).
-The registration API, store, secrets and producer (**#908**) are implemented.
+Implemented through **#908** (registration API, store, secrets, producer) and
+**#909** (the Streams delivery relay with retry/backoff and a dead-letter
+state). Follow-ups, not yet implemented: an operator replay from a checkpoint,
+the periodic Stream retention trim with the replay window, and traces. Parent
+epic **#768** remains open until its children are accepted.
 
 ## Alternatives considered
 
