@@ -87,6 +87,7 @@ func (p Pattern) Best(fields ...Field) float64 {
 	return best
 }
 
+// tier is the match tier of a folded text, 0 when it does not match.
 func (p Pattern) tier(folded string, words []string, closeness float64) float64 {
 	switch {
 	case folded == p.text:
