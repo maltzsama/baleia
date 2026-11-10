@@ -3,12 +3,19 @@ import clsx from 'clsx';
 import Link from '@docusaurus/Link';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+import Head from '@docusaurus/Head';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
 
 import styles from './index.module.css';
 
 const repo = 'https://github.com/maltzsama/baleia';
+
+// What a search result and a link preview say about the product. The brand is
+// appended by Docusaurus ("... | Baleia"), so the title leads with the keywords.
+const pageTitle = 'Self-hosted SQL workspace for Trino and Iceberg';
+const pageDescription =
+  'Baleia is an open-source, self-hosted SQL workspace and control plane for Trino and Apache Iceberg: one workbench for every engine, every catalog wired, and saved queries, metrics and models shared with your team.';
 
 function HomepageHeader() {
   const { siteConfig } = useDocusaurusContext();
@@ -24,9 +31,9 @@ function HomepageHeader() {
           height={132}
         />
         <Heading as="h1" className="hero__title">
-          {siteConfig.title}
+          {pageTitle}
         </Heading>
-        <p className="hero__subtitle">{siteConfig.tagline}</p>
+        <p className="hero__subtitle">Baleia is the control plane for your data platform</p>
         {version && (
           <Link className={styles.version} href={`${repo}/releases/tag/v${version}`}>
             v{version}
@@ -46,13 +53,9 @@ function HomepageHeader() {
           >
             Try the live demo
           </Link>
-          <iframe
-            src="https://ghbtns.com/github-btn.html?user=maltzsama&repo=baleia&type=star&count=true&size=large"
-            width="160"
-            height="30"
-            title="GitHub Stars"
-            className={styles.githubButton}
-          />
+          <Link className={clsx('button button--lg', styles.outlineButton)} href={repo}>
+            Star on GitHub
+          </Link>
         </div>
       </div>
     </header>
@@ -113,6 +116,9 @@ function HomepageFeatures() {
   return (
     <section className={styles.features}>
       <div className="container">
+        <Heading as="h2" className={styles.srOnly}>
+          What you can do with Baleia
+        </Heading>
         <div className="row">
           {features.map((props) => (
             <Feature key={props.title} {...props} />
@@ -127,6 +133,24 @@ function HomepageFeatures() {
 // bookmarks to its sections (e.g. /#where-to-start) land here: send them on.
 const introAnchors = ['what-you-can-do', 'where-to-start'];
 
+// Structured data for the product, so a result can show what Baleia is.
+function structuredData(version: string, url: string) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Baleia',
+    description: pageDescription,
+    url,
+    codeRepository: repo,
+    sameAs: repo,
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'Linux, Kubernetes',
+    license: 'https://www.apache.org/licenses/LICENSE-2.0',
+    ...(version && { softwareVersion: version }),
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }
+  };
+}
+
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
   const docsUrl = useBaseUrl('/docs');
@@ -137,7 +161,12 @@ export default function Home(): ReactNode {
     }
   }, [docsUrl]);
   return (
-    <Layout title={siteConfig.title} description={siteConfig.tagline}>
+    <Layout title={pageTitle} description={pageDescription}>
+      <Head>
+        <script type="application/ld+json">
+          {JSON.stringify(structuredData(String(siteConfig.customFields?.version ?? ''), siteConfig.url))}
+        </script>
+      </Head>
       <HomepageHeader />
       <main>
         <HomepageFeatures />
