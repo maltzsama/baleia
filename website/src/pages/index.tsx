@@ -44,12 +44,17 @@ function HomepageHeader() {
           share queries, metrics and models with your team.
         </p>
         <div className={styles.buttons}>
-          <Link className={clsx('button button--lg', styles.outlineButton)} to="/docs/quick-start">
+          <Link
+            className={clsx('button button--lg', styles.outlineButton)}
+            to="/docs/quick-start"
+            data-umami-event="get-started"
+          >
             Get Started
           </Link>
           <Link
             className={clsx('button button--lg', styles.outlineButton)}
             href="https://demo.baleia.galileostd.io"
+            data-umami-event="try-live-demo"
           >
             Try the live demo
           </Link>

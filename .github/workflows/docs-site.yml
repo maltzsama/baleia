@@ -62,3 +62,17 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+      # Tell IndexNow search engines (Bing, Yandex and others; Google does not
+      # use it) which URLs to crawl. The key is public by design: the same value
+      # is served as website/static/<key>.txt. A failure here never fails the
+      # deploy.
+      - name: Submit the sitemap to IndexNow
+        continue-on-error: true
+        env:
+          HOST: baleia.galileostd.io
+          INDEXNOW_KEY: 53b730d34ac95d31ca8ae6efe32952eb
+        run: |
+          curl -fsS "https://$HOST/sitemap.xml" | grep -o '<loc>[^<]*' | sed 's/<loc>//' \
+            | jq -Rn '{host: env.HOST, key: env.INDEXNOW_KEY, keyLocation: "https://\(env.HOST)/\(env.INDEXNOW_KEY).txt", urlList: [inputs]}' \
+            | curl -fsS -X POST https://api.indexnow.org/IndexNow \
+                -H 'Content-Type: application/json; charset=utf-8' --data @- -w 'IndexNow: HTTP %{http_code}\n'
