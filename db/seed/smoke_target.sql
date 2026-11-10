@@ -6,6 +6,9 @@
 -- mirrors cmd/e2e-seed's ensureTarget with the same query shapes, but in SQL so
 -- it works from both compose and minikube. Idempotent.
 --
+-- The GORM store (ADR 0020) generates catalog and binding ids in the
+-- application, so these raw inserts supply them with gen_random_uuid().
+--
 -- Usage (EMAIL is the smoke admin created by scripts/smoke.sh):
 --   psql -U baleia -d baleia -v email="$EMAIL" < db/seed/smoke_target.sql
 
