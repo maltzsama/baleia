@@ -63,7 +63,7 @@ type tableIn struct {
 type searchIn struct {
 	WorkspaceID string `json:"workspace_id" jsonschema:"workspace UUID"`
 	Query       string `json:"query" jsonschema:"search text"`
-	Kind        string `json:"kind,omitempty" jsonschema:"table, column or metric"`
+	Kind        string `json:"kind,omitempty" jsonschema:"table, column or all (default all)"`
 	Limit       int    `json:"limit,omitempty" jsonschema:"maximum results (50)"`
 }
 type renderIn struct {
