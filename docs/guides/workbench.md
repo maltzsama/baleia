@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: "Use the Baleia SQL workbench: tabs, autocomplete from your catalogs, saved queries, EXPLAIN, scripts and large results you can page through or export."
 ---
 
 # SQL workbench

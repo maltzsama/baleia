@@ -1,3 +1,7 @@
+---
+description: "Baleia's optional assistant answers data questions in the workbench through governed tools. It is off by default, set up by an admin and never queries engines."
+---
+
 # Embedded assistant
 
 The assistant answers data questions from the workbench. It is **off by default**

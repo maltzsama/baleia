@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+description: "Browse every catalog in the Baleia data explorer from stored metadata: search tables, see columns and lineage, without querying your SQL engines."
 ---
 
 # Data explorer

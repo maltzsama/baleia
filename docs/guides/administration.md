@@ -1,5 +1,6 @@
 ---
 sidebar_position: 7
+description: "Administer Baleia: workspaces, teams and roles, OIDC or LDAP sign-in, API keys, service accounts, platform health and the audit trail of operations."
 ---
 
 # Administration

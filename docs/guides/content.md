@@ -1,5 +1,6 @@
 ---
 sidebar_position: 4
+description: "Organize saved queries, metrics and semantic models in team spaces with version history, export Git-friendly bundles and schedule retrievers into Iceberg."
 ---
 
 # Content, spaces and retrievers

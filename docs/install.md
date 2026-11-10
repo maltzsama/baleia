@@ -1,5 +1,6 @@
 ---
 sidebar_position: 3
+description: "Install Baleia on Kubernetes with the official Helm chart: API, worker and migrations, plus optional Trino with the catalog-store plugin and its dependencies."
 ---
 
 # Install on Kubernetes

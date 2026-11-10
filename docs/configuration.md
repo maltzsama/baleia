@@ -1,3 +1,7 @@
+---
+description: "Configure the Baleia API and worker with environment variables: defaults for local development with Docker Compose and the Helm chart settings for Kubernetes."
+---
+
 # Configuration
 
 Baleia (the API and the worker) is configured with environment variables. The defaults work for local development with the provided `docker-compose.yaml`. In Kubernetes, the Helm chart sets them from `config` and its Secret (`deploy/helm/baleia/values.yaml`).

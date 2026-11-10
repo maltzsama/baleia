@@ -1,3 +1,7 @@
+---
+description: "Connect Claude Desktop, IDE assistants and your own agents to Baleia's MCP server to discover governed metadata and run SQL with their owner's role."
+---
+
 # MCP server
 
 Baleia exposes a Model Context Protocol server at `POST /mcp` so

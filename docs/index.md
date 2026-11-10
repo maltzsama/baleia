@@ -1,10 +1,12 @@
 ---
 slug: /
 sidebar_position: 1
-title: Introduction
+title: "Documentation: install, connect and run SQL with Baleia"
+sidebar_label: Introduction
+description: "Baleia is a self-hosted SQL workspace for Trino and your databases: write queries, browse every catalog and share saved queries and models with your team."
 ---
 
-# Baleia
+# Baleia documentation
 
 Baleia is a self-hosted SQL workspace for your data platform. Write and run SQL against Trino and your databases, browse every catalog in one place, and share queries, metrics and models with your team.
 
