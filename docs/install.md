@@ -70,6 +70,29 @@ To use a Trino you run yourself instead, leave `trino.enabled` false and set `co
 
 The in-chart Trino requires authentication (#647): it serves clients over HTTPS only and logs in Baleia with `secrets.values.BALEIA_TRINO_PASSWORD` (or that key in `existingSecret`), the password of `config.BALEIA_TRINO_ADMIN_USER`, which is required. The chart generates a CA and a server certificate, kept across upgrades, and the API and worker trust that CA; to use your own, set `trino.auth.tls.existingSecret` to a Secret with `tls.crt`, `tls.key` and `ca.crt`. Only Baleia's login may impersonate other identities. Trino writes its password file and keystore when its pod starts, and the API and worker read the password and the CA when they start: after changing the password or the TLS Secret, restart the three together (see [Operations](operations.md#rotating-the-bundled-trino-password-or-certificate)). The chart also restricts the coordinator to the API and worker pods with a NetworkPolicy (`trino.networkPolicy.enabled`, on by default; add peers with `trino.networkPolicy.extraIngressFrom`), which takes effect when your CNI enforces NetworkPolicy. See [Architecture](architecture.md#trino-security-model).
 
+## BI gateway
+
+The BI gateway (ADR 0017) serves Trino's HTTP client protocol from the API pods, so Tableau, Power BI and other Trino clients reach the engines only through Baleia, with the key's workspace scope and read-only access. It is **off by default**. Enabling it renders a dedicated `baleia-bi-gateway` Service (the protocol lives at the server root, so the Ingress cannot share the API's `/api/v1` one) and, optionally, an Ingress:
+
+```yaml title="values.yaml"
+biGateway:
+  enabled: true
+  publicURL: https://bi.example.com   # the address the BI tools reach
+  ingress:
+    enabled: true
+    className: nginx
+    hosts: ["bi.example.com"]
+    tls:
+      - secretName: bi-example-tls
+        hosts: ["bi.example.com"]
+```
+
+Add `BALEIA_BI_GATEWAY_SECRET` to the Secret: at least 32 characters, the same on every API replica. It signs the Trino URIs the gateway hands back, so any replica can serve the next page of a query. With `secrets.create`, set `secrets.values.BALEIA_BI_GATEWAY_SECRET`; the chart refuses to render without it. With `existingSecret`, add the key to that Secret yourself: the chart cannot check an external Secret, and the API pod does not start until the key exists.
+
+BI tools sign in with HTTP Basic: the key owner's e-mail as the user and a workspace-bound BI key as the password (`POST /workspaces/{id}/bi-keys`), never a Trino credential. One key names one workspace and one engine; its statements are read-only and recorded in the history with origin `bi`. Only Trino engines are served: a direct engine (PostgreSQL, MySQL, …) has no gateway path.
+
+`biGateway.publicURL` must be the URL the BI tools use, because the gateway rewrites every `nextUri` to it. With the Ingress enabled it must be `https://`: the key travels as the Basic-auth password, and the chart refuses a cleartext public URL. Capacity and scaling are covered in [Operations](operations.md#bi-gateway-capacity).
+
 ## Install
 
 ```bash title="Install the chart"

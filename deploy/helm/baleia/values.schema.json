@@ -30,6 +30,7 @@
             "S3_ACCESS_KEY": { "type": "string" },
             "S3_SECRET_KEY": { "type": "string" },
             "SMTP_PASSWORD": { "type": "string" },
+            "BALEIA_BI_GATEWAY_SECRET": { "minLength": 32 },
             "BALEIA_METRICS_TOKEN": { "type": "string" }
           }
         }
@@ -47,6 +48,31 @@
         "replicas": { "type": "integer", "minimum": 1 },
         "port": { "type": "integer" },
         "resources": { "type": "object" }
+      }
+    },
+    "biGateway": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "publicURL": { "type": "string" },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string" },
+            "annotations": { "type": "object" }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "className": { "type": "string" },
+            "annotations": { "type": "object" },
+            "hosts": { "type": "array", "items": { "type": "string" } },
+            "tls": { "type": "array", "items": { "type": "object" } }
+          }
+        }
       }
     },
     "worker": {

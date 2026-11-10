@@ -5,6 +5,9 @@
 #   BALEIA_REGISTRY_KEY (Phase B registry encryption, >= 32 chars, differs from
 #   JWT_SECRET and BALEIA_ENCRYPTION_KEY), BALEIA_REGISTRY_KEY_PREVIOUS (rotation only),
 #   S3_ACCESS_KEY, S3_SECRET_KEY, SMTP_PASSWORD (optional),
+#   BALEIA_BI_GATEWAY_SECRET (required when biGateway.enabled: the HMAC key that
+#   signs the gateway's rewritten Trino URIs, >= 32 chars, the same on every
+#   replica),
 #   BALEIA_TRINO_PASSWORD (optional: the password of config.BALEIA_TRINO_ADMIN_USER
 #   on an authenticated Trino; needs an https TRINO_URL)
 
@@ -42,6 +45,10 @@ config:
   # Execution limits (api and worker). Defaults match the binary's own.
   BALEIA_STATEMENT_TIMEOUT: "30m"
   BALEIA_EXECUTION_TIMEOUT: "2h"
+  # BI gateway limits (ADR 0017); they only apply when biGateway.enabled. A
+  # statement over either gets 429 with Retry-After; 0 disables a limit.
+  BALEIA_BI_MAX_CONCURRENT_PER_KEY: "5"
+  BALEIA_BI_MAX_CONCURRENT_PER_WORKSPACE: "20"
   BALEIA_WORKLOAD_ENABLED: "false"
   BALEIA_METADATA_SYNC_INTERVAL: "15m"
   BALEIA_WEBHOOKS_ENABLED: "true"
@@ -78,6 +85,34 @@ api:
   replicas: 1
   resources: {}
   port: 8080
+
+# BI gateway (ADR 0017): serves Trino's HTTP client protocol from the API pods,
+# so BI tools reach the engines only through Baleia. Off by default. It is a
+# data path: gateway replicas scale with BI concurrency (see
+# docs/operations.md#bi-gateway-capacity).
+biGateway:
+  enabled: false
+  # Listener port inside the API pods; becomes BALEIA_BI_GATEWAY_ADDR=:port and
+  # the port of the dedicated Service.
+  port: 8443
+  # Base URL the gateway rewrites Trino nextUri/infoUri/partialCancelUri to,
+  # e.g. https://bi.example.com. It must be the address BI tools can reach, so
+  # it is required when the gateway is enabled; with TLS terminating before the
+  # Service it must be https.
+  publicURL: ""
+  service:
+    type: ClusterIP
+    annotations: {}
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    # Bare host names, e.g. ["bi.example.com"]. The Trino protocol lives at the
+    # server root, so every host is served at "/" (Prefix).
+    hosts: []
+    # Standard Ingress TLS entries, e.g.
+    # [{secretName: bi-example-tls, hosts: ["bi.example.com"]}].
+    tls: []
 
 worker:
   replicas: 1

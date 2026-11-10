@@ -40,11 +40,35 @@ spec:
                   key: {{ $key }}
             {{- end }}
             {{- end }}
+            {{- if .Values.biGateway.enabled }}
+            - name: BALEIA_BI_GATEWAY_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "baleia.fullname" . }}-config
+                  key: BALEIA_BI_GATEWAY_ADDR
+            - name: BALEIA_BI_GATEWAY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "baleia.fullname" . }}-config
+                  key: BALEIA_BI_GATEWAY_URL
+            {{- /* Only the API serves the gateway; the worker never needs the HMAC key.
+                   Not optional: when the gateway is on, Kubernetes reports a
+                   missing key in existingSecret directly. */}}
+            - name: BALEIA_BI_GATEWAY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.secretName" . }}
+                  key: BALEIA_BI_GATEWAY_SECRET
+            {{- end }}
             {{- include "baleia.trinoCAEnv" . | nindent 12 }}
             {{- include "baleia.secretEnv" . | nindent 12 }}
           ports:
             - name: http
               containerPort: {{ .Values.api.port }}
+            {{- if .Values.biGateway.enabled }}
+            - name: bi-gateway
+              containerPort: {{ .Values.biGateway.port }}
+            {{- end }}
           livenessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 10
