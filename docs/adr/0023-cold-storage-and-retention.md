@@ -157,7 +157,7 @@ statement_joins         FOREIGN KEY (statement_id, execution_started_at)
 
 ## Current compliance
 
-The `PartitionManager` seam exists in `internal/persistence/partitioning`: the interface, `Spec`/`Capabilities` (with `Emulated`), and three adapters with tests — PostgreSQL, MySQL/MariaDB (native range, foreign keys dropped) and SQLite (emulated). TiDB rides the MySQL adapter through the MySQL protocol; SQL Server and Oracle adapters are not yet shipped (no GORM dialector or test server in the repository). Nothing else in this decision is implemented yet: `audit_events` is still a single plain table, `EnsureAuditPartitions` and `audit.Prune` are effectively no-ops, and query history has no lifecycle management. #948 tracks the rollout.
+The `PartitionManager` seam exists in `internal/persistence/partitioning`: the interface, `Spec`/`Capabilities` (with `Emulated`), and three adapters with tests — PostgreSQL, MySQL/MariaDB (native range, foreign keys dropped) and SQLite (emulated). TiDB rides the MySQL adapter through the MySQL protocol. SQL Server and Oracle have GORM dialectors (`gorm.io/driver/sqlserver`; Godror-based `gorm-oracle` or pure-Go `cengsin/oracle`), but their adapters are not yet shipped: the store wires only PostgreSQL and MySQL, and the store test harness (`internal/testdb`) covers only those two backends. Nothing else in this decision is implemented yet: `audit_events` is still a single plain table, `EnsureAuditPartitions` and `audit.Prune` are effectively no-ops, and query history has no lifecycle management. #948 tracks the rollout.
 
 ## Rollout
 
