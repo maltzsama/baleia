@@ -42,6 +42,7 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/temporal/dial"
 	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/galileostudio/baleia/internal/webhooks"
 	"go.temporal.io/sdk/client"
 	"gorm.io/gorm"
 )
@@ -168,7 +169,12 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		c.Notifier = events.NewBus(c.Realtime)
 		// A status write and its outbox row commit together; the API relays the
 		// row onto the bus (ADR 0022).
-		c.StoreRepo.SetEnqueue(c.Outbox.NotifyTx)
+		c.StoreRepo.SetEnqueue(func(tx *gorm.DB, channel, payload string) error {
+			if channel == "webhook" && !cfg.WebhooksEnabled {
+				return nil
+			}
+			return c.Outbox.NotifyTx(tx, channel, payload)
+		})
 	} else {
 		c.Notifier = c.Outbox
 	}
@@ -264,6 +270,11 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		WithIcebergMinRetention(cfg.MaintenanceMinRetention()).
 		WithProviders(c.Connections)
 	c.Audit = audit.NewPostgres(c.Logger, c.StoreRepo, c.Connections.SecretKeys(), c.Metrics.Audit().WriteFailed)
+	if c.Realtime.Enabled() && cfg.WebhooksEnabled {
+		c.Audit.SetWebhook(func(ctx context.Context, ev webhooks.Event) {
+			_ = c.Outbox.Notify(ctx, "webhook", ev.Marshal())
+		})
+	}
 	return c, nil
 }
 

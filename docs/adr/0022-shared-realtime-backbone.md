@@ -151,7 +151,8 @@ Implemented through the first six issues:
   as the no-Redis fallback, and a queued run's position is reconciled from the
   admission workflow without a database read.
 
-Still open: **#768 (split)** — webhook registration and the Streams relay.
+Still open: **#909** — the Streams delivery relay (retry, dead-letter, replay).
+The registration API, store, secrets and producer (**#908**) are implemented.
 
 ## Alternatives considered
 

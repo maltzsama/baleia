@@ -4109,6 +4109,45 @@ components:
         started_at: { type: string, format: date-time, nullable: true }
         finished_at: { type: string, format: date-time, nullable: true }
 
+    Webhook:
+      type: object
+      required: [id, url, events, enabled, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, format: uri }
+        events:
+          type: array
+          items: { type: string }
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CreateWebhookRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url: { type: string, format: uri }
+        events:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: ["execution.finished", "catalog.synced", "audit", "*"]
+
+    CreatedWebhook:
+      type: object
+      required: [id, url, events, enabled, created_at, secret]
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, format: uri }
+        events:
+          type: array
+          items: { type: string }
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        secret: { type: string }
+
 # ═══════════════════════════════════════════════════════════════
 # PATHS
 # ═══════════════════════════════════════════════════════════════
@@ -9645,4 +9684,59 @@ paths:
                     items: { $ref: "#/components/schemas/MigrationItem" }
                   pagination: { $ref: "#/components/schemas/Pagination" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/webhooks:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Workspaces]
+      operationId: listWebhooks
+      summary: "List a workspace's webhooks"
+      responses:
+        "200":
+          description: "Webhooks"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Webhook" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Workspaces]
+      operationId: createWebhook
+      summary: "Register a webhook; the HMAC secret is returned once"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateWebhookRequest" }
+      responses:
+        "201":
+          description: "Webhook created"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedWebhook" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/webhooks/{webhook_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: webhook_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [Workspaces]
+      operationId: deleteWebhook
+      summary: "Delete a webhook"
+      responses:
+        "204": { description: "Deleted" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }

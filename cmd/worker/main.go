@@ -35,6 +35,9 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	if cfg.WebhooksEnabled && core.Realtime.Enabled() {
+		go workerapp.RelayWebhooks(ctx, logger, core.Outbox, core.Realtime)
+	}
 
 	if cfg.SchedulesEnabled {
 		if err := workerapp.EnsureSchedules(ctx, core.Temporal, cfg); err != nil {

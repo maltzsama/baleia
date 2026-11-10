@@ -65,6 +65,8 @@ func All() []any {
 		&TrinoResourceGroupRevision{},
 		&UserIDPToken{},
 		&User{},
+		&Webhook{},
+		&WebhookDelivery{},
 		&WorkloadRule{},
 		&WorkspaceCatalogGrant{},
 		&WorkspaceMember{},

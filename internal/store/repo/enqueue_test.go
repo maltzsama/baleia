@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,8 +50,17 @@ func TestExecutionEnqueueIsTransactional(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 	want := "execution:" + UUIDString(exec.ID)
-	if len(events) != 1 || events[0] != want {
-		t.Fatalf("enqueued %v, want [%s]", events, want)
+	countPrefix := func(prefix string) int {
+		n := 0
+		for _, e := range events {
+			if strings.HasPrefix(e, prefix) {
+				n++
+			}
+		}
+		return n
+	}
+	if countPrefix("execution:") != 1 || countPrefix("webhook:") != 1 || !strings.Contains(strings.Join(events, ","), want) {
+		t.Fatalf("enqueued %v, want one execution (%s) and one webhook event", events, want)
 	}
 	var rows []model.MonitoringEvent
 	if err := gdb.Where("channel = ?", "execution").Find(&rows).Error; err != nil {
@@ -66,7 +76,7 @@ func TestExecutionEnqueueIsTransactional(t *testing.T) {
 	}); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("second update err = %v, want ErrNoRows", err)
 	}
-	if len(events) != 1 {
+	if len(events) != 2 {
 		t.Fatalf("a no-op enqueued: %v", events)
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
+	"github.com/galileostudio/baleia/internal/webhooks"
 	"go.temporal.io/sdk/worker"
 )
 
@@ -83,6 +84,11 @@ func wireActivities(core *app.Core, cfg *config.Config, logger *slog.Logger, len
 		return r.Run(ctx, dryRun)
 	})
 	act.SetAudit(core.Audit)
+	if cfg.WebhooksEnabled && core.Realtime.Enabled() {
+		act.SetWebhook(func(ctx context.Context, ev webhooks.Event) {
+			_ = core.Outbox.Notify(ctx, "webhook", ev.Marshal())
+		})
+	}
 
 	// Audit export to OpenSearch (#50): disabled unless a URL is configured.
 	if cfg.AuditExportURL != "" {
