@@ -41,8 +41,9 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
         env:
-          # Umami website id (public): the repository variable of the same name.
-          UMAMI: ${{ vars.UMAMI }}
+          # Umami website id: the repository secret of the same name. It ends up
+          # in the public HTML, so masking it in the logs is the only effect.
+          UMAMI: ${{ secrets.UMAMI }}
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
