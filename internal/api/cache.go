@@ -105,7 +105,12 @@ func (c *sharedCache[T]) Get(key string) (T, bool) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), cacheTimeout)
 	defer cancel()
-	raw, ok, err := c.client.CacheGet(ctx, c.cacheKey(ctx, key))
+	cacheKey, ok := c.cacheKey(ctx, key)
+	if !ok {
+		var zero T
+		return zero, false
+	}
+	raw, ok, err := c.client.CacheGet(ctx, cacheKey)
 	if err != nil || !ok {
 		var zero T
 		return zero, false
@@ -129,7 +134,11 @@ func (c *sharedCache[T]) Set(key string, value T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), cacheTimeout)
 	defer cancel()
-	_ = c.client.CacheSet(ctx, c.cacheKey(ctx, key), raw, c.ttl)
+	cacheKey, ok := c.cacheKey(ctx, key)
+	if !ok {
+		return
+	}
+	_ = c.client.CacheSet(ctx, cacheKey, raw, c.ttl)
 }
 
 func (c *sharedCache[T]) Invalidate(key string) {
@@ -139,7 +148,11 @@ func (c *sharedCache[T]) Invalidate(key string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), cacheTimeout)
 	defer cancel()
-	_ = c.client.CacheDel(ctx, c.cacheKey(ctx, key))
+	cacheKey, ok := c.cacheKey(ctx, key)
+	if !ok {
+		return
+	}
+	_ = c.client.CacheDel(ctx, cacheKey)
 }
 
 func (c *sharedCache[T]) Clear() {
@@ -159,31 +172,42 @@ func (c *sharedCache[T]) Clear() {
 	c.mu.Unlock()
 }
 
-// cacheKey namespaces key under the current generation.
-func (c *sharedCache[T]) cacheKey(ctx context.Context, key string) string {
-	return c.name + ":" + c.generation(ctx) + ":" + key
+// cacheKey namespaces key under the current generation. It reports false when
+// the generation could not be read, so the caller treats the operation as a
+// miss/no-op instead of writing under a wrong generation.
+func (c *sharedCache[T]) cacheKey(ctx context.Context, key string) (string, bool) {
+	gen, ok := c.generation(ctx)
+	if !ok {
+		return "", false
+	}
+	return c.name + ":" + gen + ":" + key, true
 }
 
-// generation returns the cache generation, reusing the last read for a short
-// time so a Get/Set is one Redis call, not two.
-func (c *sharedCache[T]) generation(ctx context.Context) string {
+// generation returns the cache generation, reusing the last successful read
+// for a short time so a Get/Set is one Redis call, not two.
+func (c *sharedCache[T]) generation(ctx context.Context) (string, bool) {
 	c.mu.Lock()
 	if time.Now().Before(c.genTill) {
 		gen := c.gen
 		c.mu.Unlock()
-		return gen
+		return gen, true
 	}
 	c.mu.Unlock()
 
 	raw, ok, err := c.client.CacheGet(ctx, c.key("gen"))
+	if err != nil {
+		// A failed read is not a missing generation: using "0" here would
+		// resurrect entries a Clear removed. Do not cache the fallback.
+		return "", false
+	}
 	gen := "0"
-	if err == nil && ok && len(raw) > 0 {
+	if ok && len(raw) > 0 {
 		gen = string(raw)
 	}
 	c.mu.Lock()
 	c.gen, c.genTill = gen, time.Now().Add(cacheGenerationTTL)
 	c.mu.Unlock()
-	return gen
+	return gen, true
 }
 
 // key builds one of the cache's own keys (the generation key).
