@@ -41,15 +41,18 @@ type AgentWorkspace struct {
 }
 
 type ApiKey struct {
-	ID         UUID        `json:"id"`
-	UserID     UUID        `json:"user_id"`
-	Name       string      `json:"name"`
-	KeyHash    string      `json:"key_hash"`
-	ExpiresAt  Timestamptz `json:"expires_at"`
-	CreatedAt  Timestamptz `json:"created_at"`
-	Prefix     string      `json:"prefix"`
-	Scopes     []string    `json:"scopes"`
-	LastUsedAt Timestamptz `json:"last_used_at"`
+	ID          UUID        `json:"id"`
+	UserID      UUID        `json:"user_id"`
+	Kind        string      `json:"kind"`
+	WorkspaceID UUID        `json:"workspace_id"`
+	EngineID    UUID        `json:"engine_id"`
+	Name        string      `json:"name"`
+	KeyHash     string      `json:"key_hash"`
+	ExpiresAt   Timestamptz `json:"expires_at"`
+	CreatedAt   Timestamptz `json:"created_at"`
+	Prefix      string      `json:"prefix"`
+	Scopes      []string    `json:"scopes"`
+	LastUsedAt  Timestamptz `json:"last_used_at"`
 }
 
 type AssistantConversation struct {

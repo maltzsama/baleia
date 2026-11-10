@@ -51,16 +51,24 @@ func (Agent) TableName() string { return "agents" }
 
 // APIKey is the api_keys table.
 type APIKey struct {
-	ID         UUID        `gorm:"column:id;primaryKey;not null"`
-	UserID     UUID        `gorm:"column:user_id;not null;index:idx_api_keys_user_id,priority:1"`
-	Name       string      `gorm:"column:name;not null"`
-	KeyHash    Text        `gorm:"column:key_hash;not null;size:128;uniqueIndex:api_keys_key_hash_key,priority:1;index:idx_api_keys_key_hash,priority:1"`
-	ExpiresAt  *time.Time  `gorm:"column:expires_at"`
-	CreatedAt  time.Time   `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
-	Prefix     Text        `gorm:"column:prefix;not null;size:64;default:''"`
-	Scopes     StringArray `gorm:"column:scopes;not null;default:'{*}'"`
-	LastUsedAt *time.Time  `gorm:"column:last_used_at"`
-	User       *User       `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:CASCADE"`
+	ID     UUID `gorm:"column:id;primaryKey;not null"`
+	UserID UUID `gorm:"column:user_id;not null;index:idx_api_keys_user_id,priority:1"`
+	// Kind is "user" (personal API key) or "bi" (workspace-bound BI key).
+	Kind Text `gorm:"column:kind;not null;size:16;default:'user';check:api_keys_kind_scope_check,(((kind = 'user') AND (workspace_id IS NULL) AND (engine_id IS NULL)) OR ((kind = 'bi') AND (workspace_id IS NOT NULL) AND (engine_id IS NOT NULL)))"`
+	// WorkspaceID and EngineID are set only for a BI key: one key, one
+	// workspace, one engine (ADR 0017).
+	WorkspaceID *UUID       `gorm:"column:workspace_id;index:idx_api_keys_workspace,priority:1"`
+	EngineID    *UUID       `gorm:"column:engine_id;index:idx_api_keys_engine,priority:1"`
+	Name        string      `gorm:"column:name;not null"`
+	KeyHash     Text        `gorm:"column:key_hash;not null;size:128;uniqueIndex:api_keys_key_hash_key,priority:1;index:idx_api_keys_key_hash,priority:1"`
+	ExpiresAt   *time.Time  `gorm:"column:expires_at"`
+	CreatedAt   time.Time   `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
+	Prefix      Text        `gorm:"column:prefix;not null;size:64;default:''"`
+	Scopes      StringArray `gorm:"column:scopes;not null;default:'{*}'"`
+	LastUsedAt  *time.Time  `gorm:"column:last_used_at"`
+	User        *User       `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:CASCADE"`
+	Workspace   *Workspace  `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnDelete:CASCADE"`
+	Engine      *Engine     `gorm:"foreignKey:EngineID;references:ID;constraint:OnDelete:CASCADE"`
 }
 
 func (APIKey) TableName() string { return "api_keys" }

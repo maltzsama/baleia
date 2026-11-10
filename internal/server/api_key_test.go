@@ -151,3 +151,21 @@ func TestSuspendedCannotUseAPIKey(t *testing.T) {
 		t.Fatalf("status=%d called=%v, want 401", rec.Code, called)
 	}
 }
+
+// biKeyQuerier returns a BI key for any hash: the API must reject it before
+// looking at scopes or the owner (ADR 0017).
+type biKeyQuerier struct{ db.Querier }
+
+func (biKeyQuerier) GetAPIKeyByHash(context.Context, string) (db.ApiKey, error) {
+	return db.ApiKey{Kind: "bi", Scopes: []string{"bi"}}, nil
+}
+
+// TestAPIKey_BIKeyRejected: a workspace-bound BI key authenticates only at the
+// BI gateway, never on the API.
+func TestAPIKey_BIKeyRejected(t *testing.T) {
+	t.Parallel()
+	rec, _, called := runAuth(t, biKeyQuerier{}, http.MethodGet, "/api/v1/workspaces", "ListWorkspaces", "bal_bi")
+	if rec.Code != http.StatusUnauthorized || called {
+		t.Fatalf("status=%d called=%v, want 401", rec.Code, called)
+	}
+}

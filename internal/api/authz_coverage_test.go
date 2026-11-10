@@ -192,6 +192,9 @@ var operationAccess = map[string]access{
 	"CreateWorkspace":            {kind: kindChecked, calls: []string{"RoleFromContext", "UserIDFromContext"}}, // shared needs an admin
 	"GetWorkspace":               {kind: kindChecked, calls: wsMember},
 	"ListWorkspaceTargets":       {kind: kindChecked, calls: wsMember},
+	"ListBiKeys":                 {kind: kindChecked, calls: wsMember},
+	"CreateBiKey":                {kind: kindChecked, calls: []string{"requireWorkspaceAccess", "PrincipalFromContext"}},
+	"DeleteBiKey":                {kind: kindChecked, calls: []string{"requireWorkspaceAccess", "PrincipalFromContext"}},
 	"UpdateWorkspace":            checked("Workspace"),
 	"ListWorkspaceCatalogAccess": checked("Workspace"),
 	"GrantCatalogAccess":         checked("Workspace", "Catalog"),

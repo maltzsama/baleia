@@ -1,0 +1,28 @@
+meta {
+  name: List BI Keys
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/bi-keys
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+tests {
+  test("the key created above is listed without its secret", function () {
+    const key = res.getBody().find(k => k.id === bru.getVar("bi_key_id"));
+    expect(key, "created key").to.exist;
+    expect(key).to.not.have.property("secret");
+  });
+}

@@ -102,6 +102,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    PathKeyId:
+      name: key_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     PathAgentId:
       name: agent_id
       in: path
@@ -881,6 +886,52 @@ components:
       required: [name]
       properties:
         name: { type: string }
+        expires_at: { type: string, format: date-time, nullable: true }
+
+    # ── BI gateway keys (#708) ──────────────────────────────────
+    BiKey:
+      type: object
+      required: [id, name, key_prefix, workspace_id, engine_id, owner_id, owner_email, created_at]
+      description: >
+        A workspace-bound BI key (ADR 0017). One key names one workspace and one
+        engine; the BI tool authenticates with HTTP Basic using the owner's e-mail
+        and the key secret.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        key_prefix: { type: string, example: "bal_abc..." }
+        workspace_id: { type: string, format: uuid }
+        engine_id: { type: string, format: uuid }
+        owner_id: { type: string, format: uuid }
+        owner_email: { type: string }
+        expires_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time, nullable: true }
+
+    BiKeyCreated:
+      allOf:
+        - $ref: "#/components/schemas/BiKey"
+        - type: object
+          required: [secret]
+          properties:
+            secret:
+              type: string
+              description: "The HTTP Basic password; displayed only once upon creation"
+
+    CreateBiKeyRequest:
+      type: object
+      required: [name, engine_id]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        engine_id:
+          type: string
+          format: uuid
+          description: "The Trino engine of the workspace target the key reaches"
+        owner_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "A service account of the workspace; workspace admins only. Omit to create the key for the caller."
         expires_at: { type: string, format: date-time, nullable: true }
 
     # ── Service accounts (#653) ─────────────────────────────────
@@ -6851,6 +6902,58 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/WorkspacePrincipal" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/bi-keys:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [BI]
+      operationId: listBiKeys
+      summary: "List the workspace's BI keys (admins: all; members: their own)"
+      responses:
+        "200":
+          description: "BI keys"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BiKey" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [BI]
+      operationId: createBiKey
+      summary: "Issue a workspace-bound BI key (the secret is shown once)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBiKeyRequest" }
+      responses:
+        "201":
+          description: "Key created — secret displayed only once"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BiKeyCreated" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/bi-keys/{key_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - $ref: "#/components/parameters/PathKeyId"
+    delete:
+      tags: [BI]
+      operationId: deleteBiKey
+      summary: "Revoke a workspace-bound BI key"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/spaces:
