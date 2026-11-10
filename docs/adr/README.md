@@ -32,6 +32,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0020](0020-gorm-store.md) | GORM is the store ORM; no handwritten SQL survives in the data layer | Accepted |
 | [0021](0021-unified-connection-model.md) | Unified connection model and Trino catalog support | Proposed; amends 0002 |
 | [0022](0022-shared-realtime-backbone.md) | Redis is the shared real-time, cache and rate-limit backbone | Accepted |
+| [0023](0023-portable-search-index.md) | Search reads a portable term index rebuilt per scope | Accepted |
 
 ## Owner decisions
 
