@@ -95,6 +95,9 @@ func New(d Deps) (*Gateway, error) {
 	if d.Keys == nil || d.Engines == nil || d.Scope == nil || d.Dialect == nil || d.TrinoIdentity == nil {
 		return nil, errors.New("bi gateway: missing dependencies")
 	}
+	if d.PublicURL == "" && d.Logger != nil {
+		d.Logger.Warn("bi gateway: BALEIA_BI_GATEWAY_URL is unset; rewritten URIs use the request scheme and host. Set an https URL when TLS terminates before the gateway")
+	}
 	return &Gateway{deps: d, now: time.Now}, nil
 }
 
@@ -197,6 +200,8 @@ func (g *Gateway) relay(w http.ResponseWriter, r *http.Request, cred bikeys.Cred
 	g.relayWithQuery(w, r, cred, path, r.URL.Query(), body)
 }
 
+// relayWithQuery forwards one statement or follow request after resolving the
+// workspace scope, the owner's Trino identity and the per-user catalog token.
 func (g *Gateway) relayWithQuery(w http.ResponseWriter, r *http.Request, cred bikeys.Credential, path string, query url.Values, body []byte) {
 	base, client, ok := g.target(r.Context(), w, cred)
 	if !ok {
@@ -234,6 +239,10 @@ func (g *Gateway) target(ctx context.Context, w http.ResponseWriter, cred bikeys
 	eng, err := g.deps.Engines.Get(ctx, cred.Key.EngineID)
 	if err != nil {
 		g.writeError(w, http.StatusNotFound, "CATALOG_NOT_FOUND", "the key's engine is unavailable")
+		return "", nil, false
+	}
+	if eng.Kind() != "trino" {
+		g.writeError(w, http.StatusUnprocessableEntity, "NOT_SUPPORTED", "the key's engine is not a Trino engine")
 		return "", nil, false
 	}
 	proxy, ok := eng.(queryengine.TrinoProxy)
@@ -276,7 +285,7 @@ func (g *Gateway) requestHeaders(w http.ResponseWriter, r *http.Request, cred bi
 		h.Set("X-Trino-Source", "baleia-bi")
 	}
 	class := g.classify(r.Context(), cred)
-	tags := splitTags(h.Get("X-Trino-Client-Tags"))
+	tags := dropReservedTags(splitTags(h.Get("X-Trino-Client-Tags")))
 	tags = append(tags, "baleia", "bi")
 	if class != "" {
 		tags = append(tags, "baleia.class="+string(class))
@@ -442,6 +451,7 @@ func (g *Gateway) writeError(w http.ResponseWriter, status int, name, message st
 	}})
 }
 
+// splitTags splits a comma-separated client tag header.
 func splitTags(raw string) []string {
 	var out []string
 	for _, tag := range strings.Split(raw, ",") {
@@ -452,6 +462,7 @@ func splitTags(raw string) []string {
 	return out
 }
 
+// dedupe keeps the first occurrence of each tag, preserving order.
 func dedupe(values []string) []string {
 	seen := map[string]bool{}
 	out := make([]string, 0, len(values))
@@ -481,6 +492,19 @@ func encodeExtraCredentials(values map[string]string) string {
 }
 
 // validQueryURI checks the unsigned key binding and expiry #710 will sign.
+// dropReservedTags removes the tags only the gateway may set, so a client
+// cannot override the workload class or impersonate Baleia's own tags.
+func dropReservedTags(tags []string) []string {
+	out := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		if tag == "baleia" || tag == "bi" || strings.HasPrefix(tag, "baleia.") {
+			continue
+		}
+		out = append(out, tag)
+	}
+	return out
+}
+
 func (g *Gateway) validQueryURI(q url.Values, keyID db.UUID) bool {
 	if q.Get("baleia_key") != keyID.String() {
 		return false

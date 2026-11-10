@@ -69,9 +69,12 @@ func (f fakeWorkspaces) GetWorkspaceByID(context.Context, db.UUID) (db.Workspace
 
 type fakeEngine struct {
 	queryengine.Engine
-	url string
-	hc  *http.Client
+	url  string
+	hc   *http.Client
+	kind string
 }
+
+func (f fakeEngine) Kind() string { return f.kind }
 
 func (f fakeEngine) ProxyClient() (string, *http.Client) { return f.url, f.hc }
 
@@ -139,6 +142,11 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
+	return newFixtureKind(t, "trino")
+}
+
+func newFixtureKind(t *testing.T, kind string) *fixture {
+	t.Helper()
 	trino := &coordinator{}
 	trino.server = httptest.NewServer(trino)
 	t.Cleanup(trino.server.Close)
@@ -158,7 +166,7 @@ func newFixture(t *testing.T) *fixture {
 	d := dialect.NewRegistry().MustGet(dialect.Trino)
 	gw, err := New(Deps{
 		Keys:               f.keys,
-		Engines:            fakeEngines{eng: fakeEngine{url: trino.server.URL, hc: trino.server.Client()}},
+		Engines:            fakeEngines{eng: fakeEngine{url: trino.server.URL, hc: trino.server.Client(), kind: kind}},
 		Scope:              scope,
 		Rules:              fakeRules{},
 		Workspaces:         fakeWorkspaces{ws: db.Workspace{ID: testWSID}},
@@ -263,7 +271,10 @@ func TestStatementScopeHeadersAndURIs(t *testing.T) {
 func TestFollowAndDelete(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	_, _, body := f.post(t, "SELECT 1", nil)
+	status, _, body := f.post(t, "SELECT 1", nil)
+	if status != http.StatusOK {
+		t.Fatalf("statement status = %d, body = %s", status, body)
+	}
 	var page map[string]any
 	if err := json.Unmarshal(body, &page); err != nil {
 		t.Fatal(err)
@@ -418,7 +429,7 @@ func TestWorkloadRuleTag(t *testing.T) {
 	}
 	gw, err := New(Deps{
 		Keys:          fakeKeys{cred: cred},
-		Engines:       fakeEngines{eng: fakeEngine{url: trino.server.URL, hc: trino.server.Client()}},
+		Engines:       fakeEngines{eng: fakeEngine{url: trino.server.URL, hc: trino.server.Client(), kind: "trino"}},
 		Scope:         &fakeScope{rows: []db.ListWorkspaceTargetsRow{{EngineID: testEngine, EngineCatalogName: "lake", EngineKind: "trino", BindingEnabled: true, EngineEnabled: true, CatalogEnabled: true}}},
 		Rules:         fakeRules{rows: []db.WorkloadRule{{ID: testKeyID, Enabled: true, Match: []byte(`{"origin":"bi"}`), Class: "heavy", Weight: 1}}},
 		Workspaces:    fakeWorkspaces{},
@@ -432,6 +443,7 @@ func TestWorkloadRuleTag(t *testing.T) {
 	t.Cleanup(srv.Close)
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/v1/statement", strings.NewReader("SELECT 1"))
 	req.SetBasicAuth("bi@example.test", "secret")
+	req.Header.Set("X-Trino-Client-Tags", "baleia.class=interactive,baleia,bi,client")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -440,7 +452,25 @@ func TestWorkloadRuleTag(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
-	if !strings.Contains(trino.last().header.Get("X-Trino-Client-Tags"), "baleia.class=heavy") {
-		t.Fatalf("tags = %q", trino.last().header.Get("X-Trino-Client-Tags"))
+	tags := trino.last().header.Get("X-Trino-Client-Tags")
+	if !strings.Contains(tags, "baleia.class=heavy") || strings.Contains(tags, "baleia.class=interactive") {
+		t.Fatalf("tags = %q; the client must not override the rule", tags)
+	}
+	if !strings.Contains(tags, "client") {
+		t.Fatalf("tags = %q; the client's non-reserved tag must survive", tags)
+	}
+}
+
+// TestNonTrinoEngine: the managed wrapper implements TrinoProxy for every
+// kind, so the gateway must check the engine kind before using it.
+func TestNonTrinoEngine(t *testing.T) {
+	t.Parallel()
+	f := newFixtureKind(t, "postgresql")
+	status, _, _ := f.post(t, "SELECT 1", nil)
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("non-trino status = %d, want 422", status)
+	}
+	if f.trino.count() != 0 {
+		t.Fatal("a non-trino engine reached the coordinator")
 	}
 }
