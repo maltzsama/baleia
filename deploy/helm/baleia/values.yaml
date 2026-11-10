@@ -30,6 +30,7 @@ config:
   TEMPORAL_HOST: ""       # default: temporal.<namespace>.svc:7233
   TRINO_URL: ""           # empty + trino.enabled -> in-chart service
   POLARIS_URL: ""         # default: http://baleia-polaris.<namespace>.svc:8181
+  BALEIA_REDIS_URL: ""    # default: in-chart Redis when redis.enabled, else none
   S3_ENDPOINT: ""
   S3_BUCKET: baleia-results
   S3_REGION: ""           # signing region; required by e.g. Oracle Object Storage
@@ -86,6 +87,22 @@ worker:
 
 migrate:
   enabled: true
+
+# Redis (ADR 0022): the shared real-time, cache and rate-limit backbone. Enable
+# the in-chart instance for a single-node deployment, or leave it off and set
+# config.BALEIA_REDIS_URL at a managed Redis. A multi-replica API needs one of
+# the two; without it each replica keeps its own state and the real-time
+# features stay process-local.
+redis:
+  enabled: false
+  image:
+    repository: docker.io/library/redis
+    tag: "7-alpine"
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClassName: ""
+  resources: {}
 
 # Trino (PR3): official image + plugin init container.
 trino:
