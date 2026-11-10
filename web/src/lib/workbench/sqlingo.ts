@@ -35,6 +35,19 @@ const DIALECTS: Record<string, () => Promise<DialectClass>> = {
 	dremio: async () => (await import('sqlingo/dremio')).Dremio
 };
 
+/** The dialects the editor maps, in selector order. Deriving them from the
+ *  `DIALECTS` keys keeps engine-kind literals out of the callers (FD6). */
+export const DIALECT_NAMES: readonly string[] = Object.keys(DIALECTS);
+
+/** The default conversion target, when no source dialect is known. */
+export const DEFAULT_TARGET_DIALECT = DIALECT_NAMES[0] ?? '';
+
+/** A target dialect that differs from `source`, so "Convert" is never a no-op
+ *  when the current engine already speaks the natural default. */
+export function otherDialect(source: string | null | undefined): string {
+	return DIALECT_NAMES.find((name) => name !== source) ?? DEFAULT_TARGET_DIALECT;
+}
+
 const dialectCache = new Map<string, Promise<DialectClass>>();
 
 /** Dialects that treat `#` as a line comment (the MySQL family). Keys are
@@ -149,18 +162,47 @@ export async function statementSpans(
 	);
 }
 
+// Parse `text` with the `read` grammar and render every statement with the
+// `write` grammar. The default (raising) error level rejects malformed SQL, so a
+// partial parse is never rewritten into different SQL; the filter only drops the
+// `undefined` sqlingo yields for empty input.
+async function render(read: DialectClass, write: DialectClass, text: string): Promise<string> {
+	const { parse } = await import('sqlingo');
+	const expressions = parse(text, { read });
+	return expressions
+		.filter((expression): expression is Expression => expression != null)
+		.map((expression) => expression.sql({ dialect: write, pretty: true }))
+		.join(';\n');
+}
+
 /** Format `text` for its dialect, preserving comments and whitespace intent. A
  *  malformed script throws rather than being rewritten, so the editor keeps the
  *  original text. */
 export async function formatSQL(name: string | null | undefined, text: string): Promise<string> {
 	const dialect = await loadDialect(name);
-	const { parse } = await import('sqlingo');
-	// The default (raising) error level rejects malformed SQL: a partial parse
-	// must never be reformatted into different SQL. The filter only drops the
-	// `undefined` sqlingo yields for empty input.
-	const expressions = parse(text, { read: dialect });
-	return expressions
-		.filter((expression): expression is Expression => expression != null)
-		.map((expression) => expression.sql({ dialect, pretty: true }))
-		.join(';\n');
+	return render(dialect, dialect, text);
+}
+
+/** Transpile `text` from the `source` dialect to the `target` dialect. A
+ *  malformed script throws rather than being half-rewritten (the caller keeps
+ *  the original). sqlingo lowers dialect-specific constructs where it can, for
+ *  example PostgreSQL `ILIKE` becomes `LOWER(...) LIKE LOWER(...)` on Trino. */
+export async function transpileSQL(
+	source: string | null | undefined,
+	target: string | null | undefined,
+	text: string
+): Promise<string> {
+	const read = await loadDialect(source);
+	const write = await loadDialect(target);
+	return render(read, write, text);
+}
+
+/** Rewrite `text` with sqlingo's rule-based optimizer, in its own dialect. A
+ *  malformed script throws rather than being rewritten (the caller keeps the
+ *  original). This folds constants and hoists subqueries, it is not an engine
+ *  planner: no statistics or cost model are involved. */
+export async function optimizeSQL(name: string | null | undefined, text: string): Promise<string> {
+	const dialect = await loadDialect(name);
+	const { optimize } = await import('sqlingo');
+	return optimize(text, { dialect }).sql({ dialect, pretty: true });
 }

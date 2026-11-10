@@ -40,9 +40,14 @@
 	import { sqlCompletionSource, type CompletionScope } from '$lib/workbench/sqlCompletion';
 	import { signatureHelp } from '$lib/workbench/signatureHelp';
 	import { statementSpanAt } from '$lib/workbench/sqlContext';
-	import { formatSQL as formatSql } from '$lib/workbench/sqlingo';
+	import {
+		DEFAULT_TARGET_DIALECT,
+		formatSQL as formatSql,
+		otherDialect
+	} from '$lib/workbench/sqlingo';
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
 	import FunctionsPanel from '$lib/workbench/FunctionsPanel.svelte';
+	import ConvertSqlDialog from '$lib/workbench/ConvertSqlDialog.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Drawer from '$lib/ui/Drawer.svelte';
@@ -108,6 +113,10 @@
 	let saveOpen = $state(false);
 	let detailsOpen = $state(false);
 	let functionsOpen = $state(false);
+	let convertOpen = $state(false);
+	let convertMode = $state<'convert' | 'optimize'>('convert');
+	let convertSql = $state('');
+	let convertTarget = $state(DEFAULT_TARGET_DIALECT);
 	let saveMode = $state<'save' | 'copy'>('save');
 	let savePrefill = $state('');
 	let conflict = $state<Conflict | null>(null);
@@ -417,6 +426,16 @@
 						run: () => void runCurrent()
 					},
 					{ id: 'format', label: m.components_queryeditor_format_sql(), run: formatSQL },
+					{
+						id: 'convert',
+						label: m.components_queryeditor_convert_sql(),
+						run: () => openConvert('convert')
+					},
+					{
+						id: 'optimize',
+						label: m.components_queryeditor_optimize_sql(),
+						run: () => openConvert('optimize')
+					},
 					{
 						id: 'explain',
 						label: m.components_queryeditor_explain_current_query(),
@@ -955,6 +974,17 @@
 		}
 	}
 
+	// Opens the convert/optimize dialog on a snapshot of the current buffer, so a
+	// later target change never rewrites the editor behind it.
+	function openConvert(mode: 'convert' | 'optimize') {
+		if (!editorView) return;
+		// Default to a different dialect so "Convert" is never a no-op on Trino.
+		convertTarget = otherDialect(selectedEngine?.dialect?.name);
+		convertSql = editorView.state.doc.toString();
+		convertMode = mode;
+		convertOpen = true;
+	}
+
 	async function explainQuery() {
 		if (!editorView) return;
 		const name = selectedEngine?.dialect?.name;
@@ -1093,6 +1123,16 @@
 			onclick={formatSQL}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{m.components_queryeditor_format()}</button
+		>
+		<button
+			onclick={() => openConvert('convert')}
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
+			>{m.components_queryeditor_convert()}</button
+		>
+		<button
+			onclick={() => openConvert('optimize')}
+			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
+			>{m.components_queryeditor_optimize()}</button
 		>
 		<button
 			onclick={() => (functionsOpen = true)}
@@ -1275,6 +1315,15 @@
 			oninsert={insertFunction}
 		/>
 	</Drawer>
+
+	<ConvertSqlDialog
+		bind:open={convertOpen}
+		bind:target={convertTarget}
+		mode={convertMode}
+		sql={convertSql}
+		sourceDialect={selectedEngine?.dialect?.name ?? null}
+		codemirrorBase={selectedEngine?.dialect?.codemirror_base ?? null}
+	/>
 
 	<SaveQueryDialog
 		bind:open={
