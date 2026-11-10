@@ -54,10 +54,10 @@ func (h *OpsHandlers) ListAttention(ctx context.Context, _ ListAttentionRequestO
 
 // attentionCacheStore lazily builds the per-user cache. Tests may replace it
 // with a shorter TTL before the first call.
-func (h *OpsHandlers) attentionCacheStore() *TTLStore[[]AttentionItem] {
+func (h *OpsHandlers) attentionCacheStore() cacheStore[[]AttentionItem] {
 	h.attentionOnce.Do(func() {
 		if h.attentionCache == nil {
-			h.attentionCache = NewTTLStore[[]AttentionItem](attentionCacheTTL)
+			h.attentionCache = newCache[[]AttentionItem](h.rt, "attention", attentionCacheTTL)
 		}
 	})
 	return h.attentionCache

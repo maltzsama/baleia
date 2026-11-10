@@ -34,9 +34,9 @@ type handlerFields struct {
 	settings       Settings
 	keyring        *crypto.Keyring
 	temporalClient client.Client
-	catalogCache   *TTLStore[[]workspaceCatalogEntry]
-	versionCache   *TTLStore[engineProbe]
-	attentionCache *TTLStore[[]AttentionItem]
+	catalogCache   cacheStore[[]workspaceCatalogEntry]
+	versionCache   cacheStore[engineProbe]
+	attentionCache cacheStore[[]AttentionItem]
 	connections    *connections.Registry
 	engines        engineSource
 	kinds          engineKinds
