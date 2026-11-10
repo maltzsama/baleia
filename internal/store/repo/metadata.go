@@ -8,10 +8,10 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
+	"github.com/galileostudio/baleia/internal/search"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -234,8 +234,8 @@ func (r *Repo) ListMetadataSyncRuns(ctx context.Context, arg db.ListMetadataSync
 }
 
 // SearchMetadata finds tables and columns of the catalogs the workspace may
-// use whose names are similar to q. Similarity, popularity and ordering are
-// computed in Go so the query is portable (ADR 0020).
+// use whose names or comments match q (#941). Matching, popularity and
+// ordering are computed in Go so the query is portable (ADR 0020).
 func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) ([]db.SearchMetadataRow, error) {
 	if !arg.WorkspaceID.Valid || arg.Lim <= 0 {
 		return nil, nil
@@ -287,7 +287,7 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 		for _, column := range columns {
 			columnsByTable[string(column.TableID)] = append(columnsByTable[string(column.TableID)], column)
 		}
-		q := arg.Q
+		pattern := search.Compile(arg.Q)
 		hits := make([]db.SearchMetadataRow, 0, len(tables))
 		for _, table := range tables {
 			namespace := []string(table.Namespace)
@@ -306,14 +306,14 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 			pop := popularity[tablePopularityKey(catalogID, lastNamespace, string(table.Name))]
 			syncedAt := synced[catalogID]
 			if arg.Kind == browse.KindTable || arg.Kind == browse.KindAll {
-				if nameMatches(string(table.Name), q) {
+				if score := pattern.Best(nameAndComment(string(table.Name), table.Comment)...); score > 0 {
 					hits = append(hits, db.SearchMetadataRow{
 						Kind:             browse.KindTable,
 						TableID:          PGUUID(string(table.ID)),
 						CatalogID:        PGUUID(catalogID),
 						Namespace:        namespace,
 						TableName:        string(table.Name),
-						Score:            similarity(string(table.Name), q),
+						Score:            score,
 						Popularity:       pop,
 						MetadataSyncedAt: syncedAt,
 					})
@@ -321,7 +321,8 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 			}
 			if arg.Kind == browse.KindColumn || arg.Kind == browse.KindAll {
 				for _, column := range columnsByTable[string(table.ID)] {
-					if !nameMatches(string(column.Name), q) {
+					score := pattern.Best(nameAndComment(string(column.Name), column.Comment)...)
+					if score == 0 {
 						continue
 					}
 					hits = append(hits, db.SearchMetadataRow{
@@ -332,7 +333,7 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 						TableName:        string(table.Name),
 						ColumnName:       string(column.Name),
 						NativeType:       column.NativeType,
-						Score:            similarity(string(column.Name), q),
+						Score:            score,
 						Popularity:       pop,
 						MetadataSyncedAt: syncedAt,
 					})
@@ -1039,63 +1040,14 @@ func nonNilStrings(values []string) []string {
 	return values
 }
 
-// nameMatches reproduces the trigram match (or word similarity) of the sqlc
-// query without a database extension.
-func nameMatches(name, q string) bool {
-	lower := strings.ToLower(name)
-	query := strings.ToLower(strings.TrimSpace(q))
-	if query == "" {
-		return true
-	}
-	if strings.Contains(lower, query) {
-		return true
-	}
-	if similarity(name, q) >= 0.3 {
-		return true
-	}
-	for _, word := range strings.FieldsFunc(lower, func(r rune) bool {
-		return !(r == '_' || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
-	}) {
-		if word != "" && similarity(word, q) >= 0.5 {
-			return true
-		}
-	}
-	return false
-}
+// commentWeight scales a match in a comment below the same match in a name.
+const commentWeight = 0.6
 
-// similarity is a portable trigram similarity: the Jaccard index of the
-// padded trigram sets, close enough to pg_trgm for ordering names.
-func similarity(a, b string) float64 {
-	left, right := trigrams(a), trigrams(b)
-	if len(left) == 0 || len(right) == 0 {
-		return 0
+// nameAndComment are the searchable fields of a table or column.
+func nameAndComment(name string, comment *string) []search.Field {
+	fields := []search.Field{{Text: name, Weight: 1}}
+	if comment != nil {
+		fields = append(fields, search.Field{Text: *comment, Weight: commentWeight})
 	}
-	shared := 0
-	for gram := range left {
-		if _, ok := right[gram]; ok {
-			shared++
-		}
-	}
-	return float64(shared) / float64(len(left)+len(right)-shared)
-}
-
-func trigrams(value string) map[string]struct{} {
-	value = strings.ToLower(strings.TrimSpace(value))
-	out := map[string]struct{}{}
-	if value == "" {
-		return out
-	}
-	runes := []rune(value)
-	for i := 0; i < len(runes); i++ {
-		end := i + 3
-		if end > len(runes) {
-			end = len(runes)
-		}
-		gram := string(runes[i:end])
-		if utf8.RuneCountInString(gram) < 2 {
-			continue
-		}
-		out[gram] = struct{}{}
-	}
-	return out
+	return fields
 }
