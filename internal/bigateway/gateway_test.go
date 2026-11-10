@@ -382,7 +382,7 @@ func TestInfoAndUnknownPaths(t *testing.T) {
 		t.Fatalf("info upstream = %+v", f.trino.last())
 	}
 
-	for _, path := range []string{"/api/v1/workspaces", "/v1/query/abc", "/v1/statement"} {
+	for _, path := range []string{"/api/v1/workspaces", "/v1/query/abc", "/v1/statement", "/v1/statement/../v1/query"} {
 		resp, err := http.Get(f.gateway.URL + path)
 		if err != nil {
 			t.Fatal(err)

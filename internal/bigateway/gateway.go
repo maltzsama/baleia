@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -113,6 +114,12 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		g.statement(w, r)
 	case strings.HasPrefix(r.URL.Path, "/v1/statement/") && (r.Method == http.MethodGet || r.Method == http.MethodDelete):
+		// A cleaned path that differs would let ../ reach another Trino
+		// endpoint under the statement prefix.
+		if path.Clean(r.URL.Path) != r.URL.Path {
+			http.NotFound(w, r)
+			return
+		}
 		g.follow(w, r)
 	case strings.HasPrefix(r.URL.Path, "/v1/query/"):
 		// infoUri points at the gateway, but the Trino web UI is never exposed.
