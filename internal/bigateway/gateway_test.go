@@ -649,6 +649,9 @@ func TestScopeIsRechecked(t *testing.T) {
 	if f.trino.count() != 0 {
 		t.Fatal("a revoked scope reached Trino")
 	}
+	if len(f.execs.failed) == 0 {
+		t.Fatal("a revoked scope must fail the recorded execution")
+	}
 }
 
 func TestWorkloadRuleTag(t *testing.T) {

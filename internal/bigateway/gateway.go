@@ -245,24 +245,29 @@ func (g *Gateway) relay(w http.ResponseWriter, r *http.Request, cred bikeys.Cred
 func (g *Gateway) relayWithQuery(w http.ResponseWriter, r *http.Request, cred bikeys.Credential, path string, query url.Values, body []byte, execID db.UUID) {
 	base, client, ok := g.target(r.Context(), w, cred)
 	if !ok {
+		g.failExecution(r.Context(), execID, "engine_unavailable")
 		return
 	}
 	scope, err := execscope.For(g.deps.Scope, cred.Key.WorkspaceID, cred.Key.EngineID)(r.Context())
 	if err != nil {
+		g.failExecution(r.Context(), execID, "internal")
 		g.writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "the workspace scope is unavailable")
 		return
 	}
 	if len(scope) == 0 {
+		g.failExecution(r.Context(), execID, "permission_denied")
 		g.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", "the workspace has no catalog on this engine")
 		return
 	}
 	trinoUser, err := g.deps.TrinoIdentity(r.Context(), cred.User.ID)
 	if err != nil {
+		g.failExecution(r.Context(), execID, "permission_denied")
 		g.writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "the key owner no longer exists")
 		return
 	}
 	headers, ok := g.requestHeaders(w, r, cred, scope, trinoUser, body)
 	if !ok {
+		g.failExecution(r.Context(), execID, "internal")
 		return
 	}
 	up, err := g.do(r.Context(), client, r.Method, base, path, query, body, headers)
