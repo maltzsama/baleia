@@ -238,7 +238,9 @@ describe('QueryEditor', () => {
 
 		// The cursor starts at the top: the first statement.
 		await fireEvent.click(screen.getByTestId('run-current'));
-		await waitFor(() => expect(sent).toEqual(['SELECT 1;']));
+		// Generous: the click loads sqlingo lazily, and the full suite runs many
+		// workers at once (CI and loaded machines), so 1s is too tight.
+		await waitFor(() => expect(sent).toEqual(['SELECT 1;']), { timeout: 5000 });
 	});
 
 	// CodeRabbit on #396: Run must not fall back to the whole script.
