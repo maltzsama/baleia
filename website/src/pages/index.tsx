@@ -40,8 +40,8 @@ function HomepageHeader() {
           </Link>
         )}
         <p className={styles.lede}>
-          Write and run SQL against Trino and your databases, browse every catalog in one
-          place, and share queries, metrics and models with your team.
+          Write and run SQL against Trino and your databases, browse every catalog in one place, and
+          share queries, metrics and models with your team.
         </p>
         <div className={styles.buttons}>
           <Link className={clsx('button button--lg', styles.outlineButton)} to="/docs/quick-start">
@@ -164,7 +164,9 @@ export default function Home(): ReactNode {
     <Layout title={pageTitle} description={pageDescription}>
       <Head>
         <script type="application/ld+json">
-          {JSON.stringify(structuredData(String(siteConfig.customFields?.version ?? ''), siteConfig.url))}
+          {JSON.stringify(
+            structuredData(String(siteConfig.customFields?.version ?? ''), siteConfig.url)
+          )}
         </script>
       </Head>
       <HomepageHeader />

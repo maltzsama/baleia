@@ -1,5 +1,6 @@
 ---
 sidebar_position: 3
+description: "Describe a table once as a semantic model and let anyone explore its dimensions and metrics in Baleia, which compiles correct SQL for the engine."
 ---
 
 # Explore, models and metrics

@@ -1,3 +1,7 @@
+---
+description: "Baleia's architecture: a control plane over your SQL engines. See its components, what runs where, and why it is not a query proxy or a federation layer."
+---
+
 # Architecture
 
 Baleia is a **control plane**: it manages connections, catalogs and engines, runs your SQL on those engines and shows the results. The engines are the data plane. Baleia is not a query proxy, a JDBC/ODBC/Flight SQL server or a federation layer: external clients talk to the engines directly, and joins across engines are the job of a federated engine such as Trino ([ADR 0001](adr/0001-control-plane-only.md)).

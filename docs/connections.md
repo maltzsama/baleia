@@ -1,3 +1,7 @@
+---
+description: "Every connection provider Baleia supports, from PostgreSQL to Iceberg catalogs like Polaris and Nessie: what each is used for and how to configure it."
+---
+
 # Connection providers
 
 <!-- Generated from internal/connections/providers. Do not edit by hand:

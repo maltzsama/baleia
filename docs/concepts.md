@@ -1,5 +1,6 @@
 ---
 sidebar_position: 4
+description: "The four ideas behind Baleia: where credentials point, what runs SQL, where data lives and how it reaches an engine, plus workspaces, spaces and roles."
 ---
 
 # Concepts

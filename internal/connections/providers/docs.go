@@ -12,6 +12,10 @@ import (
 // modes, category, Trino catalog mappings and status all come from here.
 func Markdown(reg *connections.Registry) string {
 	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString("description: \"Every connection provider Baleia supports, from PostgreSQL to Iceberg catalogs " +
+		"like Polaris and Nessie: what each is used for and how to configure it.\"\n")
+	b.WriteString("---\n\n")
 	b.WriteString("# Connection providers\n\n")
 	b.WriteString("<!-- Generated from internal/connections/providers. Do not edit by hand:\n")
 	b.WriteString("     BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/ -->\n\n")

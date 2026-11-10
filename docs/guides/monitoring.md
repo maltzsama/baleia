@@ -1,5 +1,6 @@
 ---
 sidebar_position: 5
+description: "Monitor Trino from Baleia: cluster load, running queries and Iceberg table health, with per-table maintenance so your lakehouse tables stay in good shape."
 ---
 
 # Monitoring and maintenance

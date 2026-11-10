@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+description: "Run Baleia locally with Docker Compose, connect the bundled Polaris Iceberg catalog and run your first SQL query on Trino in just a few minutes."
 ---
 
 # Quick start
