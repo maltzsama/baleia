@@ -22,6 +22,7 @@ func TestExceptionCode(t *testing.T) {
 		81:  queryengine.CodeNotFound,
 		47:  queryengine.CodeNotFound,
 		497: queryengine.CodePermission,
+		373: queryengine.CodePermission,
 		164: queryengine.CodePermission,
 		516: queryengine.CodePermission,
 		159: queryengine.CodeTimeout,

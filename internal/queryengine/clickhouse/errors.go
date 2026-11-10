@@ -20,6 +20,7 @@ const (
 	errTimeout           = 159 // TIMEOUT_EXCEEDED
 	errTooSlow           = 160 // TOO_SLOW
 	errReadonly          = 164 // READONLY
+	errReadonlyMode      = 373 // CANNOT_EXECUTE_QUERY_IN_READONLY_MODE
 	errSocketTimeout     = 209 // SOCKET_TIMEOUT
 	errNetwork           = 210 // NETWORK_ERROR
 	errMemoryLimit       = 241 // MEMORY_LIMIT_EXCEEDED
@@ -41,7 +42,7 @@ func exceptionCode(code int) queryengine.ErrorCode {
 		return queryengine.CodeSyntax
 	case errUnknownTable, errUnknownDatabase, errUnknownIdentifier, errBadArguments:
 		return queryengine.CodeNotFound
-	case errAccessDenied, errReadonly, errAuthFailed:
+	case errAccessDenied, errReadonly, errReadonlyMode, errAuthFailed:
 		return queryengine.CodePermission
 	case errTimeout, errSocketTimeout:
 		return queryengine.CodeTimeout
