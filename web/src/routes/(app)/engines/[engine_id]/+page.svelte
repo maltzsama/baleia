@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
 	import { plural } from '$lib/i18n/plural';
 	import { onMount } from 'svelte';
@@ -81,6 +83,12 @@
 		return e.health?.status ?? 'unknown';
 	}
 
+	function openData(catalogId: string) {
+		// The path is resolved then extended with the catalog query (#757).
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(`${resolve('/data')}?catalog=${encodeURIComponent(catalogId)}`);
+	}
+
 	async function load() {
 		if (!engineId) return;
 		loading = true;
@@ -138,7 +146,7 @@
 		if (!engineId || !engine) return;
 		if (pending === 'delete') {
 			await deleteEngine(engineId);
-			window.location.href = '/engines';
+			void goto(resolve('/engines'));
 			return;
 		}
 		await updateEngine(engineId, { enabled: pending === 'enable' });
@@ -440,8 +448,7 @@
 										<button
 											type="button"
 											class="text-primary hover:underline"
-											onclick={() =>
-												(window.location.href = `/data?catalog=${encodeURIComponent(binding.catalog_id)}`)}
+											onclick={() => openData(binding.catalog_id)}
 										>
 											{m.engines_detail_open_data()}
 										</button>

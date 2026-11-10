@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { canGlobal } from '$lib/authz/can';
@@ -100,7 +102,7 @@
 				connection_id: registerConnectionId
 			});
 			registerOpen = false;
-			window.location.href = `/engines/${engine.id}`;
+			void goto(resolve(`/engines/${engine.id}`));
 		} catch (e) {
 			registerError = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -141,7 +143,7 @@
 			{#if canRegister}
 				<Button variant="primary" onclick={openRegister}>{m.engines_register_engine()}</Button>
 			{:else if canGlobal(authStore.user, 'create_connection')}
-				<Button variant="primary" onclick={() => (window.location.href = '/connections/new')}>
+				<Button variant="primary" onclick={() => goto(resolve('/connections/new'))}>
 					{m.connections_new_connection()}
 				</Button>
 			{/if}
@@ -251,7 +253,7 @@
 									<button
 										type="button"
 										class="text-left hover:underline"
-										onclick={() => (window.location.href = `/engines/${engine.id}`)}
+										onclick={() => goto(resolve(`/engines/${engine.id}`))}
 									>
 										<EngineBadge {engine} />
 									</button>

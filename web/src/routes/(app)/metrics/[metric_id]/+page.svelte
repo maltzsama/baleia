@@ -104,7 +104,7 @@
 	function openInEditor() {
 		if (!sql || !metric) return;
 		editor.addTab({ name: metric.label, sql, bindingId });
-		window.location.href = '/sql';
+		void goto(resolve('/sql'));
 	}
 
 	async function setCertified(certified: boolean) {
@@ -115,7 +115,7 @@
 	async function remove() {
 		if (!metric) return;
 		await deleteMetric(workspaceId, metric.id);
-		window.location.href = '/metrics';
+		void goto(resolve('/metrics'));
 	}
 
 	// Reload when the URL id (or workspace) changes (#739): SPA navigation
@@ -167,7 +167,7 @@
 					</Button>
 				{/if}
 				{#if canEdit}
-					<Button onclick={() => (window.location.href = `/metrics/${metric?.id}/edit`)}
+					<Button onclick={() => goto(resolve(`/metrics/${metric?.id}/edit`))}
 						>{m.metrics_detail_edit()}</Button
 					>
 					<Button variant="danger" onclick={() => (deleteOpen = true)}

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -260,7 +262,7 @@
 					definition: definition as unknown as Record<string, unknown>,
 					expected_version: metric.version
 				});
-				window.location.href = `/metrics/${updated.id}`;
+				void goto(resolve(`/metrics/${updated.id}`));
 			} else {
 				const created = await createMetric(workspaceId, {
 					slug,
@@ -273,7 +275,7 @@
 					space_id: spaceId || undefined,
 					definition: definition as unknown as Record<string, unknown>
 				});
-				window.location.href = `/metrics/${created.id}`;
+				void goto(resolve(`/metrics/${created.id}`));
 			}
 		} catch (e) {
 			saveError = e instanceof Error ? e.message : String(e);

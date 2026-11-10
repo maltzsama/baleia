@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -135,11 +136,11 @@
 	}
 
 	function openQuery(query: SavedQuery) {
-		window.location.href = `/sql/q/${query.id}`;
+		void goto(resolve(`/sql/q/${query.id}`));
 	}
 
 	function openMetric(metric: SemanticMetric) {
-		window.location.href = `/metrics/${metric.id}`;
+		void goto(resolve(`/metrics/${metric.id}`));
 	}
 
 	function selectFolder(id: string | null) {
@@ -218,7 +219,7 @@
 		if (target.kind === 'space') {
 			const res = await savedQueries.deleteSpace(target.id, true);
 			if (res.error) throw new Error(res.error);
-			window.location.href = '/content';
+			void goto(resolve('/content'));
 			return;
 		}
 		if (target.kind === 'query') {
@@ -382,7 +383,7 @@
 				{#if canEdit}
 					<Button onclick={openImport}>{m.content_spaces_detail_import()}</Button>
 				{/if}
-				<Button onclick={() => (window.location.href = '/content/trash')}
+				<Button onclick={() => goto(resolve('/content/trash'))}
 					>{m.content_spaces_detail_trash()}</Button
 				>
 				{#if canManage && !space.is_default}

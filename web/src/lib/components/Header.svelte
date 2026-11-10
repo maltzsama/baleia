@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -153,7 +154,7 @@
 
 	function openSettings() {
 		if (!workspaceStore.current) return;
-		window.location.href = `/settings/workspaces/${workspaceStore.current.id}`;
+		void goto(resolve(`/settings/workspaces/${workspaceStore.current.id}`));
 		wsOpen = false;
 	}
 </script>

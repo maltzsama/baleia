@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -147,7 +149,7 @@
 				? await updateRetriever(workspaceId, retriever.id, body)
 				: await createRetriever(workspaceId, body);
 			ondone?.(saved);
-			if (!ondone) window.location.href = `/retrievers/${saved.id}`;
+			if (!ondone) void goto(resolve(`/retrievers/${saved.id}`));
 		} catch (e) {
 			error = e instanceof RetrieverRequestError ? e : null;
 		} finally {
