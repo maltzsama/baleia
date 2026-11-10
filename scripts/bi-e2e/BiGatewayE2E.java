@@ -117,10 +117,19 @@ public final class BiGatewayE2E {
                     throw new AssertionError("a catalog outside the workspace scope was allowed");
                 } catch (SQLException expected) {
                     String msg = String.valueOf(expected.getMessage()).toLowerCase();
-                    if (!msg.contains("access denied") && !msg.contains("permission")
-                            && !msg.contains("not allowed") && !msg.contains("tpch")) {
+                    // The catalog guard either refuses with a permission error
+                    // or hides the catalog, so an out-of-scope catalog is not
+                    // found. Both are the denial under test; a syntax or
+                    // connectivity failure is neither.
+                    boolean denied = msg.contains("access denied")
+                            || msg.contains("permission")
+                            || msg.contains("not allowed")
+                            || msg.contains("catalog 'tpch' not found")
+                            || msg.contains("catalog tpch not found");
+                    if (!denied) {
                         throw new AssertionError(
-                                "the scope denial does not name a permission error: " + expected.getMessage());
+                                "the scope denial is not a permission or hidden-catalog error: "
+                                        + expected.getMessage());
                     }
                 }
             });
@@ -203,22 +212,26 @@ public final class BiGatewayE2E {
             if (pods.length < 2) {
                 throw new AssertionError("BI_E2E_PODS needs both API replicas, got " + pods.length);
             }
-            for (String pod : pods) {
-                HttpResponse<String> first = send(request(base + "/v1/statement")
-                        .POST(HttpRequest.BodyPublishers.ofString("SELECT count(*) FROM orders")));
+            for (int i = 0; i < pods.length; i++) {
+                // POST to one replica and follow on another, so the follow
+                // cannot accidentally land on the pod that signed the URI.
+                String poster = pods[(i + 1) % pods.length];
+                String follower = pods[i];
+                HttpResponse<String> first = send(request(poster + "/v1/statement")
+                        .POST(HttpRequest.BodyPublishers.ofString("SELECT * FROM orders")));
                 if (first.statusCode() != 200) {
                     throw new AssertionError("statement = " + first.statusCode() + " " + first.body());
                 }
                 String next = nextUri(first.body());
                 if (next == null) {
-                    continue; // finished on the first page; nothing to follow
+                    throw new AssertionError("the statement finished before a cross-replica follow");
                 }
                 URI uri = URI.create(next);
-                URI direct = URI.create(pod + uri.getRawPath() + "?" + uri.getRawQuery());
+                URI direct = URI.create(follower + uri.getRawPath() + "?" + uri.getRawQuery());
                 HttpResponse<String> followed = send(request(direct.toString()).GET());
                 if (followed.statusCode() != 200) {
-                    throw new AssertionError("replica " + pod + " refused a nextUri signed elsewhere: "
-                            + followed.statusCode() + " " + followed.body());
+                    throw new AssertionError("replica " + follower + " refused a nextUri signed by "
+                            + poster + ": " + followed.statusCode() + " " + followed.body());
                 }
                 // Close the execution through the gateway so it does not stay running.
                 String next2 = nextUri(followed.body());
