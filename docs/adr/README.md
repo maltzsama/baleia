@@ -29,7 +29,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0017](0017-bi-gateway.md) | BI tools reach the engines only through Baleia (the BI gateway) | Accepted; amends 0001 |
 | [0018](0018-workspace-catalog-scope.md) | Workspace-scoped catalog access | Proposed; supersedes 0016 layer 1, extends 0005 |
 | [0019](0019-sqlingo-editor-sql-intelligence.md) | sqlingo is the editor's SQL intelligence; the server keeps its own parser | Accepted |
-| [0020](0020-gorm-store.md) | GORM is the store ORM; no handwritten SQL survives in the data layer | Accepted; amended by 0023 (partitioning behind a PartitionManager seam) |
+| [0020](0020-gorm-store.md) | GORM is the store ORM; no handwritten SQL survives in the data layer | Accepted; amended by 0024 (partitioning behind a PartitionManager seam) |
 | [0021](0021-unified-connection-model.md) | Unified connection model and Trino catalog support | Proposed; amends 0002 |
 | [0022](0022-shared-realtime-backbone.md) | Redis is the shared real-time, cache and rate-limit backbone | Accepted |
 | [0023](0023-portable-search-index.md) | Search reads a portable term index rebuilt per scope | Accepted |

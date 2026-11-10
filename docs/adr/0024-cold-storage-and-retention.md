@@ -1,4 +1,4 @@
-# 0023. Cold storage and retention for the audit trail and query history
+# 0024. Cold storage and retention for the audit trail and query history
 
 - Status: Accepted
 - Date: 2026-11-10
