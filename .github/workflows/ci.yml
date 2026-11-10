@@ -11,6 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     # DB-backed tests (internal/testdb) fail instead of skipping when CI=true.
     services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 20
       postgres:
         image: postgres:18
         env:
@@ -47,6 +52,7 @@ jobs:
           BALEIA_TEST_DATABASE_URL: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres?sslmode=disable
           BALEIA_TEST_MYSQL_URL: mysql://root:baleia_dev@127.0.0.1:3306
           BALEIA_TEST_MARIADB_URL: mysql://root:baleia_dev@127.0.0.1:3307
+          BALEIA_TEST_REDIS_URL: redis://127.0.0.1:6379/0
         # Tests are independent and parallel (#374): a random order keeps them so.
         run: go test -race -shuffle=on ./...
 

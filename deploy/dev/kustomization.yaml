@@ -4,6 +4,7 @@ namespace: baleia-dev
 resources:
   - namespace.yaml
   - postgres.yaml
+  - redis.yaml
   - temporal.yaml
   - rustfs.yaml
   - polaris.yaml
