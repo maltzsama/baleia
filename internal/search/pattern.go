@@ -1,6 +1,9 @@
 package search
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Match tiers, best first. A score is a tier plus at most tieBreak of
 // trigram similarity, so a better tier always ranks above a worse one and
@@ -34,6 +37,7 @@ type Field struct {
 type Pattern struct {
 	text   string
 	tokens []string
+	forms  [][]string // singulars of each token
 	grams  map[string]struct{}
 	words  []map[string]struct{}
 }
@@ -42,8 +46,10 @@ type Pattern struct {
 func Compile(q string) Pattern {
 	p := Pattern{text: Fold(q), tokens: unique(Tokens(q))}
 	p.grams = trigrams(p.text)
+	p.forms = make([][]string, len(p.tokens))
 	p.words = make([]map[string]struct{}, len(p.tokens))
 	for i, token := range p.tokens {
+		p.forms[i] = singulars(token)
 		p.words[i] = trigrams(token)
 	}
 	return p
@@ -88,9 +94,13 @@ func (p Pattern) tier(folded string, words []string, closeness float64) float64 
 	case strings.HasPrefix(folded, p.text):
 		return TierPrefix
 	}
+	forms := make([][]string, len(words))
+	for i, w := range words {
+		forms[i] = singulars(w)
+	}
 	exact, prefix := 0, 0
-	for _, token := range p.tokens {
-		switch wordMatch(token, words) {
+	for i, token := range p.tokens {
+		switch wordMatch(token, p.forms[i], words, forms) {
 		case matchExact:
 			exact++
 			prefix++
@@ -153,18 +163,29 @@ const (
 	matchExact
 )
 
-// wordMatch is how token matches the best of words.
-func wordMatch(token string, words []string) wordResult {
+// wordMatch is how token, with its singular forms, matches the best of
+// words: the same word or a shared singular is exact, a word that starts with
+// token a prefix.
+func wordMatch(token string, tokenForms, words []string, wordForms [][]string) wordResult {
 	out := matchNone
-	for _, w := range words {
+	for i, w := range words {
 		switch {
-		case w == token:
+		case w == token || sharesForm(tokenForms, wordForms[i]):
 			return matchExact
 		case strings.HasPrefix(w, token):
 			out = matchPrefix
 		}
 	}
 	return out
+}
+
+func sharesForm(a, b []string) bool {
+	for _, x := range a {
+		if slices.Contains(b, x) {
+			return true
+		}
+	}
+	return false
 }
 
 func unique(values []string) []string {

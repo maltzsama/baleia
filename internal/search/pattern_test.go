@@ -29,6 +29,8 @@ func TestPattern_Score(t *testing.T) {
 		{name: "every word", query: "lifetime customer", text: "customerLifetimeValue", tier: TierTokens},
 		{name: "spaced name", query: "order note", text: "order_note", tier: TierTokens},
 		{name: "word prefixes", query: "orders mod", text: "Orders by modality", tier: TierTokenPrefix},
+		{name: "singular of a plural", query: "sessao", text: "sessões_web", tier: TierTokens},
+		{name: "plural of a singular", query: "categories", text: "product_category", tier: TierTokens},
 		{name: "contains", query: "rder", text: "orders", tier: TierContains},
 		{name: "misspelled", query: "custmer", text: "customer", tier: tierFuzzy},
 		{name: "misspelled word of a name", query: "lifetme", text: "customer_lifetime_value", tier: tierFuzzy},

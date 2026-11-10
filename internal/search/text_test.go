@@ -69,3 +69,30 @@ func TestSimilarity(t *testing.T) {
 		t.Errorf("misspelling %v must be closer than another word %v", near, far)
 	}
 }
+
+func TestSingulars(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		input    string
+		expected string // one of the singulars
+	}{
+		{name: "portuguese oes", input: "sessoes", expected: "sessao"},
+		{name: "portuguese res", input: "valores", expected: "valor"},
+		{name: "portuguese ais", input: "canais", expected: "canal"},
+		{name: "english s", input: "stores", expected: "store"},
+		{name: "english ies", input: "categories", expected: "category"},
+		{name: "itself", input: "order", expected: "order"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := singulars(tt.input); !slices.Contains(got, tt.expected) {
+				t.Errorf("singulars(%q) = %q, want it to hold %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+	if got := singulars("bus"); len(got) != 1 {
+		t.Errorf("a short word has no other form: %q", got)
+	}
+}

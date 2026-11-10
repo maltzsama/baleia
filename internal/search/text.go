@@ -73,6 +73,33 @@ func Tokens(s string) []string {
 	return out
 }
 
+// pluralEndings map a Portuguese or English plural ending of a folded word
+// to its singular ending.
+var pluralEndings = []struct{ plural, singular string }{
+	{"oes", "ao"}, {"aes", "ao"}, {"aos", "ao"}, // sessões, pães, mãos
+	{"ies", "y"},  // categories
+	{"ais", "al"}, // canais
+	{"eis", "el"}, // papéis
+	{"es", ""},    // valores, boxes
+	{"s", ""},     // orders, pedidos
+}
+
+// singulars are a folded word and the singulars its plural ending may stand
+// for ("sessoes" → "sessao", "valores" → "valor", "stores" → "store"). Words
+// of three runes or fewer have no other form.
+func singulars(word string) []string {
+	out := []string{word}
+	if len([]rune(word)) <= 3 {
+		return out
+	}
+	for _, e := range pluralEndings {
+		if strings.HasSuffix(word, e.plural) {
+			out = append(out, strings.TrimSuffix(word, e.plural)+e.singular)
+		}
+	}
+	return out
+}
+
 // isCaseBoundary reports whether a camelCase word starts at runes[i]: an
 // upper-case letter after a lower-case one ("lifeTime"), or the last upper-case
 // letter of an acronym followed by a lower-case one ("HTTPServer").
