@@ -6,10 +6,12 @@
 
 ## Context
 
-Baleia must run its API as multiple replicas. Today every "real-time" feature is
-either in-process or built on database polling, so a client connected to one
-replica never sees events produced on another, and per-process state is
-silently partitioned:
+Baleia must run its API as multiple replicas. Today the real-time features are
+built on process-local hubs or on database polling. The database-polling paths
+(the monitoring outbox and the execution WebSocket's reads of shared tables) do
+reach other replicas, but only by having every replica poll shared state, and
+they cannot carry cache or rate-limit state. What is genuinely partitioned is
+the process-local fan-out and the per-process state:
 
 - **Execution WebSocket** (`internal/ws/handler.go`): a `pollTicker` per
   connection reads Postgres once a second for the execution and its
@@ -39,7 +41,7 @@ What must become shared, and what can stay local:
 
 | Component | Today | After this decision |
 |---|---|---|
-| Execution status/statement changes | per-connection DB `pollTicker` | Published on the bus; the WebSocket subscribes and re-reads the DB (the DB stays the source of truth) |
+| Execution status/statement changes | per-connection DB `pollTicker` | Written to a transactional outbox in the same transaction as the status update; a relay publishes on the bus; the WebSocket subscribes and re-reads the DB (the source of truth). A crash before the fast-path publish loses nothing: the outbox row is durable and the relay republishes it, so a connected client does not have to wait for a reconnect. Queue/admission changes are published by the admission workflow, and a queued run also re-queries that workflow on a slow bounded interval (not a per-connection DB poll) until it is admitted. |
 | Execution WS ticket (`wsticket`) | in-memory, single-use | Redis `SET` with TTL + `GETDEL` so a ticket must be consumed on any replica, once |
 | Assistant turn events (`message`/`delta`) | in-process `Hub` | Bus per conversation; replay stays from the database; deltas stay best-effort |
 | Monitoring change notifications | GORM `Outbox` poll | Redis pub/sub behind the existing `Transport` seam; `Outbox` remains the fallback |
@@ -77,15 +79,38 @@ the data that is genuinely global and safe to share moves to the shared layer.
   degrades a multi-replica correctness guarantee.
 
 - **Redis Streams is a transient delivery buffer, never the durable store of
-  record.** The source of truth for executions, catalogs and audit remains the
-  store (Postgres/MySQL/MariaDB); the durable audit record is the `audit_events`
-  table (and its OpenSearch export). A Stream holds an event only until a
-  consumer group acknowledges delivery (or it is dead-lettered); it is not a
-  log archive.
+  record.** The source of truth stays the store (Postgres/MySQL/MariaDB); the
+  durable audit record is the `audit_events` table (and its OpenSearch export).
+  Streams carry an event only for the replay retention window defined below and
+  are then trimmed; they are not a log archive.
+
+- **Publication is durable at the source, not fire-and-forget.** A domain write
+  (execution status, catalog sync) and an outbox row commit in the same
+  transaction; a relay publishes the outbox to the Stream. The at-least-once
+  guarantee therefore starts when the event is durably enqueued in the outbox,
+  not at a best-effort publish that a crash can skip. A publisher that dies
+  before relaying loses nothing: the row survives and the relay republishes it.
+  This is also the recovery path for a connected execution WebSocket subscriber
+  when a status commits but the fast-path publish does not happen.
+
+- **Consumer recovery covers pending entries, not just `last-delivered-id`.**
+  `XACK` clears an entry from the consumer group's pending list but does not
+  delete the Stream entry; `last-delivered-id` advancing past an entry means a
+  plain replay from it would skip that entry after a crash. On startup a
+  consumer first reclaims abandoned pending entries (`XPENDING` +
+  `XAUTOCLAIM`/`XCLAIM` with a minimum idle time) and only then reads new ones.
+  Replay is from pending entries plus the checkpoint, never from
+  `last-delivered-id` alone.
+
+- **Retention is separate from acknowledgement.** Acknowledged entries are not
+  deleted on ACK. A periodic trim (`XTRIM`/`MINID`) removes entries older than
+  a configurable replay window (target: 7 days), which is what makes replay
+  from an earlier checkpoint possible. Beyond the window replay is not
+  guaranteed; the durable record remains the store.
 
 - **Delivery guarantees are explicit and bounded.** `execution.finished` and
-  `catalog.synced` webhooks are **at-least-once** (Streams + consumer group +
-  ACK + replay from `last-delivered-id`). `audit.*` webhooks are
+  `catalog.synced` webhooks are **at-least-once** (durable outbox publication +
+  Streams + consumer group + pending recovery + ACK). `audit.*` webhooks are
   **best-effort**, because `internal/audit/postgres.go` records events without
   failing the request and a lost write is only counted (`audit_write_failed`).
   No consumer may promise a stronger guarantee for audit than the audit store
