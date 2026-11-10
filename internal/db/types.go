@@ -142,12 +142,15 @@ type CountWorkspaceImpactRow struct {
 }
 
 type CreateAPIKeyParams struct {
-	UserID    UUID        `json:"user_id"`
-	Name      string      `json:"name"`
-	KeyHash   string      `json:"key_hash"`
-	Prefix    string      `json:"prefix"`
-	Scopes    []string    `json:"scopes"`
-	ExpiresAt Timestamptz `json:"expires_at"`
+	UserID      UUID        `json:"user_id"`
+	Kind        string      `json:"kind"`
+	WorkspaceID UUID        `json:"workspace_id"`
+	EngineID    UUID        `json:"engine_id"`
+	Name        string      `json:"name"`
+	KeyHash     string      `json:"key_hash"`
+	Prefix      string      `json:"prefix"`
+	Scopes      []string    `json:"scopes"`
+	ExpiresAt   Timestamptz `json:"expires_at"`
 }
 
 type CreateAgentParams struct {
