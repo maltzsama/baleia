@@ -59,3 +59,26 @@ func TestPattern_FuzzyPrefixesAndIsNear(t *testing.T) {
 		t.Error("another word sharing the prefix is not near")
 	}
 }
+
+func TestDefinitionWords(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`{
+		"type": "simple", "aggregation": "count",
+		"source": {"kind": "table", "namespace": ["sales"], "table": "orders"},
+		"dimensions": [{"name": "country", "type": "string"}, {"name": "id", "label": "Order id"}],
+		"measures": [{"name": "country"}]
+	}`)
+	got := DefinitionWords(raw)
+	want := []string{"country", "Order id", "id", "orders"}
+	for _, w := range want {
+		if !slices.Contains(got, w) {
+			t.Errorf("DefinitionWords = %q, want it to hold %q", got, w)
+		}
+	}
+	if slices.Contains(got, "simple") || slices.Contains(got, "count") {
+		t.Errorf("only names are words, not types and aggregations: %q", got)
+	}
+	if len(DefinitionWords([]byte(`not json`))) != 0 {
+		t.Error("invalid JSON has no words")
+	}
+}
