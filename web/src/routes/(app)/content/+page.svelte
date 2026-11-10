@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
 	import { plural } from '$lib/i18n/plural';
 	import { onMount } from 'svelte';
@@ -67,11 +69,13 @@
 	}
 
 	function openSpace(id: string) {
-		window.location.href = `/content/spaces/${id}`;
+		void goto(resolve(`/content/spaces/${id}`));
 	}
 
 	function openItem(item: ContentSearchItem) {
-		window.location.href = contentHref(item);
+		// contentHref may carry a query string, so it cannot go through resolve() (#757).
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(contentHref(item));
 	}
 
 	function kindLabel(kind: string): string {

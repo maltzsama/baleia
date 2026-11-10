@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -47,7 +49,7 @@
 	}
 
 	function openMetric(metric: SemanticMetric) {
-		window.location.href = `/metrics/${metric.id}`;
+		void goto(resolve(`/metrics/${metric.id}`));
 	}
 
 	onMount(async () => {
@@ -64,7 +66,7 @@
 				{m.metrics_named_aggregations_over_one_table_rendered()}
 			</p>
 		</div>
-		<Button variant="primary" onclick={() => (window.location.href = '/metrics/new')}
+		<Button variant="primary" onclick={() => goto(resolve('/metrics/new'))}
 			>{m.common_new_metric()}</Button
 		>
 	</div>

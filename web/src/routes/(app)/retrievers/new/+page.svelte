@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
 	import RetrieverForm from '$lib/retrievers/RetrieverForm.svelte';
 </script>
@@ -11,7 +13,7 @@
 	<div class="mt-4 max-w-3xl">
 		<RetrieverForm
 			ondone={(saved) => {
-				window.location.href = `/retrievers/${saved.id}`;
+				void goto(resolve(`/retrievers/${saved.id}`));
 			}}
 		/>
 	</div>

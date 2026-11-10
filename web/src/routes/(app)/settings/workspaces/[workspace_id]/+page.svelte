@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -290,7 +292,7 @@
 		});
 		if (err) throw new Error('Could not delete the workspace');
 		await workspaceStore.load();
-		window.location.href = '/sql';
+		void goto(resolve('/sql'));
 	}
 
 	onMount(() => {
