@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	adb "github.com/galileostudio/baleia/internal/db/assistant"
 	"github.com/galileostudio/baleia/internal/obs"
+	"github.com/galileostudio/baleia/internal/realtime"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -41,11 +42,13 @@ type Event struct {
 	Delta     string
 }
 
-// Hub fans a turn out to in-process SSE subscribers. Cross-replica readers
-// poll assistant_messages; deltas are best-effort and local.
+// Hub fans a turn out to SSE subscribers. Without a shared bus it is in-process
+// (deltas are best-effort and local); with one, every replica's subscribers see
+// the turn.
 type Hub struct {
 	mu   sync.Mutex
 	subs map[[16]byte]map[chan Event]struct{}
+	bus  *realtime.Client
 }
 
 // NewHub builds an empty hub.
@@ -53,37 +56,91 @@ func NewHub() *Hub {
 	return &Hub{subs: make(map[[16]byte]map[chan Event]struct{})}
 }
 
-// Subscribe returns a channel and an unsubscribe function.
+// SetBus makes the hub publish and subscribe across replicas through the shared
+// layer (ADR 0022). Call it once, before the server serves requests.
+func (h *Hub) SetBus(bus *realtime.Client) {
+	h.mu.Lock()
+	h.bus = bus
+	h.mu.Unlock()
+}
+
+// Subscribe returns a channel and an unsubscribe function. With the bus on,
+// the subscriber receives every replica's events through it; without it, only
+// this process's.
 func (h *Hub) Subscribe(id [16]byte) (<-chan Event, func()) {
 	ch := make(chan Event, 32)
 	h.mu.Lock()
-	if h.subs[id] == nil {
-		h.subs[id] = make(map[chan Event]struct{})
+	bus := h.bus
+	if bus == nil || !bus.Enabled() {
+		if h.subs[id] == nil {
+			h.subs[id] = make(map[chan Event]struct{})
+		}
+		h.subs[id][ch] = struct{}{}
+		h.mu.Unlock()
+		return ch, func() {
+			h.mu.Lock()
+			if set := h.subs[id]; set != nil {
+				delete(set, ch)
+				if len(set) == 0 {
+					delete(h.subs, id)
+				}
+			}
+			h.mu.Unlock()
+		}
 	}
-	h.subs[id][ch] = struct{}{}
 	h.mu.Unlock()
-	return ch, func() {
-		h.mu.Lock()
-		if set := h.subs[id]; set != nil {
-			delete(set, ch)
-			if len(set) == 0 {
-				delete(h.subs, id)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for ctx.Err() == nil {
+			err := bus.SubscribeError(ctx, channel(id), func(payload []byte) {
+				var ev Event
+				if json.Unmarshal(payload, &ev) != nil {
+					return
+				}
+				select {
+				case ch <- ev:
+				default:
+				}
+			})
+			if ctx.Err() != nil {
+				return
+			}
+			if err != nil {
+				time.Sleep(time.Second)
+			}
+		}
+	}()
+	return ch, cancel
+}
+
+// Publish sends an event without blocking a turn. With the bus on it goes to
+// every replica (including this one); otherwise it stays local.
+func (h *Hub) Publish(id [16]byte, ev Event) {
+	h.mu.Lock()
+	bus := h.bus
+	if bus == nil || !bus.Enabled() {
+		for ch := range h.subs[id] {
+			select {
+			case ch <- ev:
+			default:
 			}
 		}
 		h.mu.Unlock()
+		return
 	}
+	h.mu.Unlock()
+
+	raw, err := json.Marshal(ev)
+	if err != nil {
+		return
+	}
+	_ = bus.Publish(context.Background(), channel(id), raw)
 }
 
-// Publish sends an event without blocking a turn.
-func (h *Hub) Publish(id [16]byte, ev Event) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for ch := range h.subs[id] {
-		select {
-		case ch <- ev:
-		default:
-		}
-	}
+// channel names one conversation's bus channel.
+func channel(id [16]byte) string {
+	return "assistant:" + uuid.UUID(id).String()
 }
 
 // Runner owns one assistant turn at a time per conversation.
@@ -111,6 +168,10 @@ func NewRunner(logger *slog.Logger, svc *Service, provider llm.Provider, tools T
 
 // Hub exposes the event bus to the SSE handler.
 func (r *Runner) Hub() *Hub { return r.hub }
+
+// SetBus wires the shared bus into the hub (ADR 0022); without it the hub is
+// in-process.
+func (r *Runner) SetBus(bus *realtime.Client) { r.hub.SetBus(bus) }
 
 // SetProvider swaps the provider after a settings update.
 func (r *Runner) SetProvider(p llm.Provider) {
