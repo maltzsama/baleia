@@ -1,0 +1,5 @@
+# Every page of the app carries <meta name="robots" content="noindex, nofollow">.
+# Crawling stays allowed so search engines can read that tag and drop the app
+# from their results: a page blocked with "Disallow: /" cannot be de-indexed.
+User-agent: *
+Allow: /

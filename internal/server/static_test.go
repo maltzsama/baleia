@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -166,6 +167,27 @@ func TestStaticWebManifestContentType(t *testing.T) {
 	}
 	if ct := rec.Header().Get("Content-Type"); ct != "application/manifest+json" {
 		t.Fatalf("GET /site.webmanifest Content-Type = %q, want application/manifest+json", ct)
+	}
+}
+
+// Crawlers only read /robots.txt as plain text, so it must come from the build
+// and never fall back to the app shell (#802). Go has no built-in type for .txt.
+func TestStaticRobotsTxt(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const robots = "User-agent: *\nAllow: /\n"
+	files := map[string]string{"app.html": "<app-shell>", "robots.txt": robots}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := serve(staticHandler(&fakeStaticUsers{configured: true}, dir), http.MethodGet, "/robots.txt")
+	if rec.Code != http.StatusOK || rec.Body.String() != robots {
+		t.Fatalf("GET /robots.txt = %d %q, want the robots file", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Fatalf("GET /robots.txt Content-Type = %q, want text/plain", ct)
 	}
 }
 
