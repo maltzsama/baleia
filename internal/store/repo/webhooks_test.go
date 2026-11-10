@@ -61,3 +61,59 @@ func TestWebhookCRUD(t *testing.T) {
 		t.Fatalf("webhook survived delete: %+v", list)
 	}
 }
+
+func TestWebhookDeliveryIdempotent(t *testing.T) {
+	t.Parallel()
+	gdb := testdb.New(t)
+	store := New(gdb)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	user := createAPIKeyUser(t, gdb, "delivery@example.test")
+	ws := model.Workspace{
+		ID: model.UUID(NewUUID()), Name: "Delivery", Type: "personal",
+		PolarisCatalogName: model.Text("polaris_delivery"), OwnerUserID: &user.ID,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := gdb.Create(&ws).Error; err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	w, err := store.Create(ctx, model.Webhook{
+		ID: model.UUID(NewUUID()), WorkspaceID: ws.ID, URL: "https://example.test/hook",
+		SecretEnc: "sealed", Events: model.JSON(`["execution.finished"]`), Enabled: true,
+		CreatedBy: user.ID, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("create webhook: %v", err)
+	}
+
+	delivery := model.WebhookDelivery{
+		WebhookID: w.ID, EventID: "evt-1", Event: "execution.finished",
+		Payload: model.JSON(`{"id":"evt-1"}`), Status: "pending",
+	}
+	if created, err := store.EnqueueDelivery(ctx, delivery); err != nil || !created {
+		t.Fatalf("first enqueue = %v, %v", created, err)
+	}
+	if created, err := store.EnqueueDelivery(ctx, delivery); err != nil || created {
+		t.Fatalf("duplicate enqueue = %v, %v (want not created)", created, err)
+	}
+
+	due, err := store.DueDeliveries(ctx, 10)
+	if err != nil || len(due) != 1 || due[0].Webhook == nil || due[0].Webhook.URL != "https://example.test/hook" {
+		t.Fatalf("due = %+v, %v", due, err)
+	}
+	next := time.Now().UTC().Add(time.Minute)
+	if err := store.MarkFailed(ctx, due[0].ID, 1, &next, "boom"); err != nil {
+		t.Fatalf("mark failed: %v", err)
+	}
+	if err := store.MarkFailed(ctx, due[0].ID, 8, nil, "dead"); err != nil {
+		t.Fatalf("mark dead: %v", err)
+	}
+	var row model.WebhookDelivery
+	if err := gdb.First(&row, due[0].ID).Error; err != nil {
+		t.Fatalf("read delivery: %v", err)
+	}
+	if row.Status != "dead" || row.Attempts != 8 {
+		t.Fatalf("delivery = %+v, want dead after 8 attempts", row)
+	}
+}
