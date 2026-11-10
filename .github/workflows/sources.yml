@@ -15,6 +15,7 @@ on:
       - "internal/trino/**"
       - "internal/dialect/**"
       - "internal/queryengine/**"
+      - "internal/persistence/**"
       - ".github/workflows/sources.yml"
 
 jobs:
@@ -138,11 +139,11 @@ jobs:
           # engine conformance both use it; a serial run keeps their fixtures
           # apart. Everything else uses a dedicated database and could run in
           # parallel.
-          go test -count=1 -v -p 1 ./internal/connections/... ./internal/dialect/... ./internal/queryengine/clickhouse/... ./internal/queryengine/mysql/... ./internal/queryengine/oracle/... ./internal/queryengine/postgresql/... ./internal/queryengine/sqlserver/... | tee test.log
+          go test -count=1 -v -p 1 ./internal/connections/... ./internal/dialect/... ./internal/queryengine/clickhouse/... ./internal/queryengine/mysql/... ./internal/queryengine/oracle/... ./internal/queryengine/postgresql/... ./internal/queryengine/sqlserver/... ./internal/persistence/partitioning | tee test.log
           # Every integration test must have run, not been skipped (Polaris
           # needs its bootstrap; it is covered against the dev stack). A
           # conformance subtest may skip by design; only a skipped top-level
           # test fails the job.
-          if grep -E -- '--- SKIP: (TestMetadataReader_|TestExecute_|TestConformance \(|TestConformanceMariaDB \(|TestConformanceAlterSystem \()' test.log | grep -v polaris; then
+          if grep -E -- '--- SKIP: (TestMetadataReader_|TestExecute_|TestConformance \(|TestConformanceMariaDB \(|TestConformanceAlterSystem \(|TestSQLServerPartitions|TestOraclePartitions)' test.log | grep -v polaris; then
             echo "an integration test was skipped" && exit 1
           fi
