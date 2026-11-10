@@ -449,6 +449,24 @@ services:
       - app_net
 
   # ============================================
+  # SHARED CACHE / REALTIME BUS - Redis (ADR 0022)
+  # ============================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: baleia_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================
   # BALEA SERVICES
   # ============================================
 
@@ -474,6 +492,7 @@ services:
       - PORT=8080
       - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
       - TEMPORAL_HOST=temporal:7233
+      - BALEIA_REDIS_URL=redis://redis:6379/0
       - TRINO_URL=https://trino:8443
       - BALEIA_TRINO_PASSWORD=${BALEIA_TRINO_PASSWORD:-dev-trino-password-not-for-production}
       - BALEIA_TRINO_CA_FILE=/etc/baleia/trino-ca/ca.crt
@@ -509,6 +528,8 @@ services:
         condition: service_healthy
       polaris:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
   worker:
     build: .
@@ -516,6 +537,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://baleia:baleia@postgres:5432/baleia?sslmode=disable
       - TEMPORAL_HOST=temporal:7233
+      - BALEIA_REDIS_URL=redis://redis:6379/0
       - TRINO_URL=https://trino:8443
       - BALEIA_TRINO_PASSWORD=${BALEIA_TRINO_PASSWORD:-dev-trino-password-not-for-production}
       - BALEIA_TRINO_CA_FILE=/etc/baleia/trino-ca/ca.crt
@@ -542,6 +564,8 @@ services:
       temporal:
         condition: service_healthy
       polaris:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # ============================================

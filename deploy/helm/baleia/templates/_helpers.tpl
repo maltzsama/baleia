@@ -38,6 +38,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- else }}http://{{ include "baleia.polarisService" . }}:8181{{ end }}
 {{- end }}
 
+{{/* The shared backbone URL (ADR 0022): an explicit one wins, then the
+in-chart Redis, else empty (no shared layer). */}}
+{{- define "baleia.redisURL" -}}
+{{- if .Values.config.BALEIA_REDIS_URL }}{{ .Values.config.BALEIA_REDIS_URL }}
+{{- else if .Values.redis.enabled }}redis://{{ include "baleia.fullname" . }}-redis.{{ .Release.Namespace }}.svc.cluster.local:6379/0
+{{- else }}{{ .Values.config.BALEIA_REDIS_URL }}{{ end }}
+{{- end }}
+
 {{- define "baleia.pluginURL" -}}
 {{- if .Values.trino.plugin.url }}{{ .Values.trino.plugin.url }}
 {{- else if .Values.trino.plugin.version }}https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v{{ .Values.trino.plugin.version }}/baleia-catalog-store-{{ .Values.trino.plugin.version }}+trino{{ .Values.trino.image.tag }}.tar.gz
