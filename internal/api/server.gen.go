@@ -525,6 +525,15 @@ type ServerInterface interface {
 	// Update a workspace — workspace owners and admins
 	// (PATCH /workspaces/{id})
 	UpdateWorkspace(w http.ResponseWriter, r *http.Request, id PathId)
+	// List the workspace's BI keys (admins: all; members: their own)
+	// (GET /workspaces/{id}/bi-keys)
+	ListBiKeys(w http.ResponseWriter, r *http.Request, id PathId)
+	// Issue a workspace-bound BI key (the secret is shown once)
+	// (POST /workspaces/{id}/bi-keys)
+	CreateBiKey(w http.ResponseWriter, r *http.Request, id PathId)
+	// Revoke a workspace-bound BI key
+	// (DELETE /workspaces/{id}/bi-keys/{key_id})
+	DeleteBiKey(w http.ResponseWriter, r *http.Request, id PathId, keyId PathKeyId)
 	// List the catalogs granted to the workspace — workspace members
 	// (GET /workspaces/{id}/catalog-access)
 	ListWorkspaceCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId)
@@ -1821,6 +1830,24 @@ func (_ Unimplemented) GetWorkspace(w http.ResponseWriter, r *http.Request, id P
 // Update a workspace — workspace owners and admins
 // (PATCH /workspaces/{id})
 func (_ Unimplemented) UpdateWorkspace(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List the workspace's BI keys (admins: all; members: their own)
+// (GET /workspaces/{id}/bi-keys)
+func (_ Unimplemented) ListBiKeys(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Issue a workspace-bound BI key (the secret is shown once)
+// (POST /workspaces/{id}/bi-keys)
+func (_ Unimplemented) CreateBiKey(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Revoke a workspace-bound BI key
+// (DELETE /workspaces/{id}/bi-keys/{key_id})
+func (_ Unimplemented) DeleteBiKey(w http.ResponseWriter, r *http.Request, id PathId, keyId PathKeyId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8143,6 +8170,114 @@ func (siw *ServerInterfaceWrapper) UpdateWorkspace(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListBiKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListBiKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBiKeys(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateBiKey operation middleware
+func (siw *ServerInterfaceWrapper) CreateBiKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateBiKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteBiKey operation middleware
+func (siw *ServerInterfaceWrapper) DeleteBiKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key_id" -------------
+	var keyId PathKeyId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key_id", chi.URLParam(r, "key_id"), &keyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteBiKey(w, r, id, keyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkspaceCatalogAccess operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkspaceCatalogAccess(w http.ResponseWriter, r *http.Request) {
 
@@ -13305,6 +13440,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/workspaces/{id}", wrapper.UpdateWorkspace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/bi-keys", wrapper.ListBiKeys)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/bi-keys", wrapper.CreateBiKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}/bi-keys/{key_id}", wrapper.DeleteBiKey)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/catalog-access", wrapper.ListWorkspaceCatalogAccess)
@@ -20781,6 +20925,149 @@ func (response UpdateWorkspace422JSONResponse) VisitUpdateWorkspaceResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListBiKeysRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListBiKeysResponseObject interface {
+	VisitListBiKeysResponse(w http.ResponseWriter) error
+}
+
+type ListBiKeys200JSONResponse []BiKey
+
+func (response ListBiKeys200JSONResponse) VisitListBiKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListBiKeys401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListBiKeys401JSONResponse) VisitListBiKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListBiKeys403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListBiKeys403JSONResponse) VisitListBiKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListBiKeys404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListBiKeys404JSONResponse) VisitListBiKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateBiKeyRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *CreateBiKeyJSONRequestBody
+}
+
+type CreateBiKeyResponseObject interface {
+	VisitCreateBiKeyResponse(w http.ResponseWriter) error
+}
+
+type CreateBiKey201JSONResponse BiKeyCreated
+
+func (response CreateBiKey201JSONResponse) VisitCreateBiKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateBiKey401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateBiKey401JSONResponse) VisitCreateBiKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateBiKey403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateBiKey403JSONResponse) VisitCreateBiKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateBiKey404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateBiKey404JSONResponse) VisitCreateBiKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateBiKey422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateBiKey422JSONResponse) VisitCreateBiKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteBiKeyRequestObject struct {
+	Id    PathId    `json:"id"`
+	KeyId PathKeyId `json:"key_id"`
+}
+
+type DeleteBiKeyResponseObject interface {
+	VisitDeleteBiKeyResponse(w http.ResponseWriter) error
+}
+
+type DeleteBiKey204Response = NoContentResponse
+
+func (response DeleteBiKey204Response) VisitDeleteBiKeyResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteBiKey401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteBiKey401JSONResponse) VisitDeleteBiKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteBiKey403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteBiKey403JSONResponse) VisitDeleteBiKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteBiKey404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteBiKey404JSONResponse) VisitDeleteBiKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListWorkspaceCatalogAccessRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -25659,6 +25946,15 @@ type StrictServerInterface interface {
 	// Update a workspace — workspace owners and admins
 	// (PATCH /workspaces/{id})
 	UpdateWorkspace(ctx context.Context, request UpdateWorkspaceRequestObject) (UpdateWorkspaceResponseObject, error)
+	// List the workspace's BI keys (admins: all; members: their own)
+	// (GET /workspaces/{id}/bi-keys)
+	ListBiKeys(ctx context.Context, request ListBiKeysRequestObject) (ListBiKeysResponseObject, error)
+	// Issue a workspace-bound BI key (the secret is shown once)
+	// (POST /workspaces/{id}/bi-keys)
+	CreateBiKey(ctx context.Context, request CreateBiKeyRequestObject) (CreateBiKeyResponseObject, error)
+	// Revoke a workspace-bound BI key
+	// (DELETE /workspaces/{id}/bi-keys/{key_id})
+	DeleteBiKey(ctx context.Context, request DeleteBiKeyRequestObject) (DeleteBiKeyResponseObject, error)
 	// List the catalogs granted to the workspace — workspace members
 	// (GET /workspaces/{id}/catalog-access)
 	ListWorkspaceCatalogAccess(ctx context.Context, request ListWorkspaceCatalogAccessRequestObject) (ListWorkspaceCatalogAccessResponseObject, error)
@@ -30678,6 +30974,92 @@ func (sh *strictHandler) UpdateWorkspace(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateWorkspaceResponseObject); ok {
 		if err := validResponse.VisitUpdateWorkspaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBiKeys operation middleware
+func (sh *strictHandler) ListBiKeys(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListBiKeysRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBiKeys(ctx, request.(ListBiKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBiKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBiKeysResponseObject); ok {
+		if err := validResponse.VisitListBiKeysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateBiKey operation middleware
+func (sh *strictHandler) CreateBiKey(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request CreateBiKeyRequestObject
+
+	request.Id = id
+
+	var body CreateBiKeyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateBiKey(ctx, request.(CreateBiKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateBiKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateBiKeyResponseObject); ok {
+		if err := validResponse.VisitCreateBiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteBiKey operation middleware
+func (sh *strictHandler) DeleteBiKey(w http.ResponseWriter, r *http.Request, id PathId, keyId PathKeyId) {
+	var request DeleteBiKeyRequestObject
+
+	request.Id = id
+	request.KeyId = keyId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteBiKey(ctx, request.(DeleteBiKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteBiKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteBiKeyResponseObject); ok {
+		if err := validResponse.VisitDeleteBiKeyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

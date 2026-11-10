@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/identity/bikeys"
 	"github.com/galileostudio/baleia/internal/identity/idptoken"
 	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/metadata"
@@ -93,6 +94,8 @@ type core struct {
 	topology *topology.Service
 	// webhooks persists workspace webhook registrations (#768).
 	webhooks *repo.Webhooks
+	// biKeys issues and validates workspace-bound BI keys (#708).
+	biKeys *bikeys.Service
 }
 
 // spacesOver builds the spaces service over store, creating a space and its

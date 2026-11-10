@@ -1916,6 +1916,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/bi-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** List the workspace's BI keys (admins: all; members: their own) */
+        get: operations["listBiKeys"];
+        put?: never;
+        /** Issue a workspace-bound BI key (the secret is shown once) */
+        post: operations["createBiKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/bi-keys/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                key_id: components["parameters"]["PathKeyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a workspace-bound BI key */
+        delete: operations["deleteBiKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/spaces": {
         parameters: {
             query?: never;
@@ -4344,6 +4384,46 @@ export interface components {
         };
         CreateApiKeyRequest: {
             name: string;
+            /** Format: date-time */
+            expires_at?: string | null;
+        };
+        /** @description A workspace-bound BI key (ADR 0017). One key names one workspace and one engine; the BI tool authenticates with HTTP Basic using the owner's e-mail and the key secret. */
+        BiKey: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @example bal_abc... */
+            key_prefix: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            engine_id: string;
+            /** Format: uuid */
+            owner_id: string;
+            owner_email: string;
+            /** Format: date-time */
+            expires_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_used_at?: string | null;
+        };
+        BiKeyCreated: components["schemas"]["BiKey"] & {
+            /** @description The HTTP Basic password; displayed only once upon creation */
+            secret: string;
+        };
+        CreateBiKeyRequest: {
+            name: string;
+            /**
+             * Format: uuid
+             * @description The Trino engine of the workspace target the key reaches
+             */
+            engine_id: string;
+            /**
+             * Format: uuid
+             * @description A service account of the workspace; workspace admins only. Omit to create the key for the caller.
+             */
+            owner_id?: string | null;
             /** Format: date-time */
             expires_at?: string | null;
         };
@@ -7362,6 +7442,7 @@ export interface components {
         MaintenanceNamespace: string;
         MaintenanceTable: string;
         PathId: string;
+        PathKeyId: string;
         PathAgentId: string;
         PathAgentTokenId: string;
         QueryPage: number;
@@ -10708,6 +10789,79 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listBiKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description BI keys */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BiKey"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createBiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBiKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Key created — secret displayed only once */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BiKeyCreated"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteBiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                key_id: components["parameters"]["PathKeyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

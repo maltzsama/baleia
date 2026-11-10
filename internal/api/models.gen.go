@@ -1738,6 +1738,37 @@ type AuthProvider struct {
 // AuthProviderType defines model for AuthProvider.Type.
 type AuthProviderType string
 
+// BiKey A workspace-bound BI key (ADR 0017). One key names one workspace and one engine; the BI tool authenticates with HTTP Basic using the owner's e-mail and the key secret.
+type BiKey struct {
+	CreatedAt   time.Time          `json:"created_at"`
+	EngineId    openapi_types.UUID `json:"engine_id"`
+	ExpiresAt   *time.Time         `json:"expires_at"`
+	Id          openapi_types.UUID `json:"id"`
+	KeyPrefix   string             `json:"key_prefix"`
+	LastUsedAt  *time.Time         `json:"last_used_at"`
+	Name        string             `json:"name"`
+	OwnerEmail  string             `json:"owner_email"`
+	OwnerId     openapi_types.UUID `json:"owner_id"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
+}
+
+// BiKeyCreated defines model for BiKeyCreated.
+type BiKeyCreated struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	EngineId   openapi_types.UUID `json:"engine_id"`
+	ExpiresAt  *time.Time         `json:"expires_at"`
+	Id         openapi_types.UUID `json:"id"`
+	KeyPrefix  string             `json:"key_prefix"`
+	LastUsedAt *time.Time         `json:"last_used_at"`
+	Name       string             `json:"name"`
+	OwnerEmail string             `json:"owner_email"`
+	OwnerId    openapi_types.UUID `json:"owner_id"`
+
+	// Secret The HTTP Basic password; displayed only once upon creation
+	Secret      string             `json:"secret"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
+}
+
 // BindingProjection defines model for BindingProjection.
 type BindingProjection struct {
 	Connector string `json:"connector"`
@@ -2277,6 +2308,17 @@ type CreateApiKeyRequest struct {
 // CreateAssistantConversationRequest defines model for CreateAssistantConversationRequest.
 type CreateAssistantConversationRequest struct {
 	WorkspaceId openapi_types.UUID `json:"workspace_id"`
+}
+
+// CreateBiKeyRequest defines model for CreateBiKeyRequest.
+type CreateBiKeyRequest struct {
+	// EngineId The Trino engine of the workspace target the key reaches
+	EngineId  openapi_types.UUID `json:"engine_id"`
+	ExpiresAt *time.Time         `json:"expires_at"`
+	Name      string             `json:"name"`
+
+	// OwnerId A service account of the workspace; workspace admins only. Omit to create the key for the caller.
+	OwnerId *openapi_types.UUID `json:"owner_id"`
 }
 
 // CreateBindingRequest defines model for CreateBindingRequest.
@@ -5327,6 +5369,9 @@ type PathAgentTokenId = openapi_types.UUID
 // PathId defines model for PathId.
 type PathId = openapi_types.UUID
 
+// PathKeyId defines model for PathKeyId.
+type PathKeyId = openapi_types.UUID
+
 // QueryPage defines model for QueryPage.
 type QueryPage = int
 
@@ -6008,6 +6053,9 @@ type CreateWorkspaceJSONRequestBody = CreateWorkspaceRequest
 
 // UpdateWorkspaceJSONRequestBody defines body for UpdateWorkspace for application/json ContentType.
 type UpdateWorkspaceJSONRequestBody = UpdateWorkspaceRequest
+
+// CreateBiKeyJSONRequestBody defines body for CreateBiKey for application/json ContentType.
+type CreateBiKeyJSONRequestBody = CreateBiKeyRequest
 
 // GrantCatalogAccessJSONRequestBody defines body for GrantCatalogAccess for application/json ContentType.
 type GrantCatalogAccessJSONRequestBody = GrantCatalogAccessRequest
