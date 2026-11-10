@@ -62,6 +62,10 @@ func (s *Service) Delete(ctx context.Context, userID, keyID db.UUID) error {
 	return nil
 }
 
+// NewSecret returns a new API key secret: "bal_" and 256 random bits,
+// URL-safe and unpadded. Only its hash is stored.
+func NewSecret() string { return newSecret() }
+
 // newSecret is "bal_" and 256 random bits, URL-safe and unpadded.
 func newSecret() string {
 	b := make([]byte, 32)
