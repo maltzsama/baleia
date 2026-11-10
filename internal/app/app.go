@@ -62,8 +62,10 @@ type Core struct {
 	// Logger is injected into every component that logs (#379).
 	Logger  *slog.Logger
 	Metrics *metrics.Registry
-	// Notifier is the cross-process monitoring outbox for SSE changes (#733).
-	Notifier *events.Outbox
+	// Notifier is the cross-process monitoring transport for SSE changes
+	// (#733): the shared bus when Redis is configured, the GORM outbox
+	// otherwise.
+	Notifier events.Transport
 	// Realtime is the shared cross-replica backbone (ADR 0022). A disabled
 	// client (no BALEIA_REDIS_URL) falls back to in-process state.
 	Realtime *realtime.Client
@@ -151,13 +153,17 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	c.onClose(func() { _ = store.Close(c.Store) })
 	c.StoreRepo = repo.New(c.Store)
 	c.Queries = c.StoreRepo
-	c.Notifier = events.NewOutbox(c.Store)
 
 	c.Realtime, err = realtime.Open(ctx, realtime.Options{URL: cfg.RedisURL, Prefix: cfg.RedisPrefix})
 	if err != nil {
 		return nil, fmt.Errorf("redis: %w", err)
 	}
 	c.onClose(func() { _ = c.Realtime.Close() })
+	if c.Realtime.Enabled() {
+		c.Notifier = events.NewBus(c.Realtime)
+	} else {
+		c.Notifier = events.NewOutbox(c.Store)
+	}
 
 	// Credentials are sealed with BALEIA_ENCRYPTION_KEY (never JWT_SECRET).
 	// With stored credentials and no key, refuse to start rather than serve
