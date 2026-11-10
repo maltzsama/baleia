@@ -2,7 +2,9 @@ package search
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
@@ -60,12 +62,17 @@ func TestSearch(t *testing.T) {
 	if len(hits) != 3 {
 		t.Fatalf("hits = %+v; want the folder, the query and the metric", hits)
 	}
-	// Ordered by title, case-insensitively.
-	if hits[0].Title != "Revenue" || hits[1].Title != "revenue by month" || hits[2].Title != "Revenue reports" {
+	// Best first: the certified metric, whose whole name starts with the query.
+	if hits[0].Title != "Revenue" {
 		t.Errorf("order = %q, %q, %q", hits[0].Title, hits[1].Title, hits[2].Title)
 	}
-	q := hits[1]
-	if q.Kind != KindSavedQuery || len(q.FolderPath) != 2 || q.FolderPath[0].Name != "Reports" || q.FolderPath[1].Name != "Revenue reports" || q.SpaceName != "Finance" {
+	var q Hit
+	for _, h := range hits {
+		if h.Kind == KindSavedQuery {
+			q = h
+		}
+	}
+	if len(q.FolderPath) != 2 || q.FolderPath[0].Name != "Reports" || q.FolderPath[1].Name != "Revenue reports" || q.SpaceName != "Finance" {
 		t.Errorf("query hit = %+v; want its folder path from the root and its space name", q)
 	}
 	if hits[0].Certified == nil || !*hits[0].Certified {
@@ -80,5 +87,105 @@ func TestSearch(t *testing.T) {
 	}
 	if hits, _ := s.Search(ctx, newID(), newID(), Query{Text: "re", Limit: 1}); len(hits) != 1 {
 		t.Errorf("limit = %d hits, want 1", len(hits))
+	}
+}
+
+// The best hits survive the limit: hits are ranked before the list is cut,
+// not sorted by title and then cut.
+func TestSearch_RanksBeforeLimit(t *testing.T) {
+	t.Parallel()
+	space := db.ListSpacesForPrincipalRow{ID: newID(), Name: "Finance"}
+	st := &fakeStore{space: space}
+	for i := range 25 {
+		st.queries = append(st.queries, db.SavedQuery{
+			ID: newID(), SpaceID: space.ID, Name: fmt.Sprintf("A revenue backup %02d", i), Slug: fmt.Sprintf("a_revenue_backup_%02d", i),
+		})
+	}
+	st.metrics = []db.SemanticMetric{{ID: newID(), SpaceID: space.ID, Label: "Revenue", Slug: "revenue"}}
+
+	hits, err := New(st).Search(context.Background(), newID(), newID(), Query{Text: "revenue", Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 20 || hits[0].Kind != KindSemanticMetric || hits[0].Title != "Revenue" {
+		t.Fatalf("first of %d hits = %+v; want the exact metric", len(hits), hits[0])
+	}
+}
+
+func TestSearch_FoldsCaseAndAccents(t *testing.T) {
+	t.Parallel()
+	space := db.ListSpacesForPrincipalRow{ID: newID(), Name: "Finance"}
+	st := &fakeStore{
+		space:   space,
+		metrics: []db.SemanticMetric{{ID: newID(), SpaceID: space.ID, Label: "Receita líquida", Slug: "receita_liquida"}},
+		models:  []db.SemanticModel{{ID: newID(), SpaceID: space.ID, Label: "Sessões web", Slug: "web"}},
+	}
+	s := New(st)
+	for _, text := range []string{"RECEITA LIQUIDA", "liquida receita", "sessao"} {
+		hits, err := s.Search(context.Background(), newID(), newID(), Query{Text: text})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(hits) != 1 {
+			t.Errorf("Search(%q) = %+v; want one hit", text, hits)
+		}
+	}
+}
+
+// Certified, own and recent content ranks first among equal matches.
+func TestSearch_Boosts(t *testing.T) {
+	t.Parallel()
+	space := db.ListSpacesForPrincipalRow{ID: newID(), Name: "Finance"}
+	user := newID()
+	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	old := db.Timestamptz{Time: now.AddDate(-1, 0, 0), Valid: true}
+	fresh := db.Timestamptz{Time: now.Add(-time.Hour), Valid: true}
+	tests := []struct {
+		name    string
+		store   *fakeStore
+		kind    string
+		boosted string
+	}{
+		{
+			name: "certified",
+			kind: KindSemanticMetric,
+			store: &fakeStore{space: space, metrics: []db.SemanticMetric{
+				{ID: newID(), SpaceID: space.ID, Label: "Revenue", Slug: "revenue_a", UpdatedAt: old},
+				{ID: newID(), SpaceID: space.ID, Label: "Revenue", Slug: "revenue_b", UpdatedAt: old, Certified: true},
+			}},
+			boosted: "revenue_b",
+		},
+		{
+			name: "own",
+			kind: KindSavedQuery,
+			store: &fakeStore{space: space, queries: []db.SavedQuery{
+				{ID: newID(), SpaceID: space.ID, Name: "Revenue", Slug: "revenue_a", UpdatedAt: old, CreatedBy: newID()},
+				{ID: newID(), SpaceID: space.ID, Name: "Revenue", Slug: "revenue_b", UpdatedAt: old, CreatedBy: user},
+			}},
+			boosted: "revenue_b",
+		},
+		{
+			name: "recent",
+			kind: KindSemanticModel,
+			store: &fakeStore{space: space, models: []db.SemanticModel{
+				{ID: newID(), SpaceID: space.ID, Label: "Revenue", Slug: "revenue_a", UpdatedAt: old},
+				{ID: newID(), SpaceID: space.ID, Label: "Revenue", Slug: "revenue_b", UpdatedAt: fresh},
+			}},
+			boosted: "revenue_b",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s := New(tt.store)
+			s.now = func() time.Time { return now }
+			hits, err := s.Search(context.Background(), newID(), user, Query{Text: "revenue", Kind: tt.kind})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(hits) != 2 || hits[0].Slug != tt.boosted || hits[0].Score <= hits[1].Score {
+				t.Fatalf("hits = %+v; want %s first", hits, tt.boosted)
+			}
+		})
 	}
 }
