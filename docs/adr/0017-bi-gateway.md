@@ -105,8 +105,9 @@ Facts the design must respect:
 ### Data path limits (this is where 0001 is amended)
 
 - The gateway streams pages; it stores nothing. It holds at most one page per request in memory
-  to rewrite the URIs, and caps the page size it asks Trino for (`targetResultSize`, configurable,
-  default small). Results do not go through Temporal or object storage.
+  to rewrite the URIs. Trino 484 caps a page at 1 MiB server-side (`TARGET_RESULT_SIZE`); there is
+  no client-side page-size request, so the gateway accepts that cap and never asks for a different
+  one. Results do not go through Temporal or object storage.
 - Per-key and per-workspace limits on concurrent queries; a new statement over the limit gets
   HTTP 429.
 - Each statement is recorded as an execution of origin `bi` (SQL, user, workspace, engine, Trino
