@@ -8,7 +8,6 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -342,7 +341,7 @@ func (s *Server) routes() {
 		})
 	})
 
-	static := staticHandler(s.queries, "web/build")
+	static := staticHandler(s.queries, "web/build", withHeadTag(analyticsTag(s.cfg)))
 	s.mux.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		static.ServeHTTP(w, r)
 	}))
@@ -377,7 +376,12 @@ var movedRoutes = map[string]string{
 // staticHandler serves the SPA. The root is the app shell, never the directory
 // listing of the build, and a prerendered .html file redirects to its
 // extensionless route so the client router matches it.
-func staticHandler(users staticUsers, dir string) http.Handler {
+func staticHandler(users staticUsers, dir string, opts ...staticOption) http.Handler {
+	var sc staticConfig
+	for _, opt := range opts {
+		opt(&sc)
+	}
+	shell := shellHandler(dir, sc.headTag)
 	fileServer := http.FileServer(http.Dir(dir))
 	// Once the first admin exists the install never goes back to setup, so
 	// the answer is cached and the database is no longer asked (#375).
@@ -419,7 +423,7 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 				return
 			}
 			if path == "/" {
-				http.ServeFile(w, r, filepath.Join(dir, "app.html"))
+				shell(w, r)
 				return
 			}
 			if strings.HasSuffix(path, ".html") && path != "/app.html" {
@@ -439,7 +443,7 @@ func staticHandler(users staticUsers, dir string) http.Handler {
 		// prerendered connections/new.html) is the app, never a listing.
 		fullPath := dir + path
 		if info, err := os.Stat(fullPath); os.IsNotExist(err) || (err == nil && info.IsDir()) {
-			http.ServeFile(w, r, filepath.Join(dir, "app.html"))
+			shell(w, r)
 			return
 		}
 		fileServer.ServeHTTP(w, r)

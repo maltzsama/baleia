@@ -256,3 +256,65 @@ func TestCatalogScopeWarning(t *testing.T) {
 		t.Errorf("require flag should refuse: %q", refuse)
 	}
 }
+
+// TestConfig_AnalyticsUmami: the tracker is off by default and is only checked
+// when it is on, so a typo fails at startup instead of dropping the analytics.
+func TestConfig_AnalyticsUmami(t *testing.T) {
+	t.Parallel()
+	const id = "4cff4cb4-3fb0-4c64-b9c8-275ddc250873"
+	tests := []struct {
+		name    string
+		id, url string
+		wantErr string
+	}{
+		{name: "off by default"},
+		{name: "off ignores the url", url: "not a url"},
+		{name: "cloud script", id: id, url: DefaultUmamiScriptURL},
+		{name: "self-hosted http script", id: id, url: "http://umami.internal:3000/script.js"},
+		{name: "id is not a uuid", id: "demo", url: DefaultUmamiScriptURL, wantErr: "BALEIA_ANALYTICS_UMAMI_WEBSITE_ID"},
+		{name: "id in another uuid form", id: "urn:uuid:" + id, url: DefaultUmamiScriptURL, wantErr: "BALEIA_ANALYTICS_UMAMI_WEBSITE_ID"},
+		{name: "id without hyphens", id: strings.ReplaceAll(id, "-", ""), url: DefaultUmamiScriptURL, wantErr: "BALEIA_ANALYTICS_UMAMI_WEBSITE_ID"},
+		{name: "empty script url", id: id, wantErr: "BALEIA_ANALYTICS_UMAMI_SCRIPT_URL"},
+		{name: "relative script url", id: id, url: "/script.js", wantErr: "BALEIA_ANALYTICS_UMAMI_SCRIPT_URL"},
+		{name: "javascript scheme", id: id, url: "javascript:alert(1)", wantErr: "BALEIA_ANALYTICS_UMAMI_SCRIPT_URL"},
+		{name: "protocol-relative url", id: id, url: "//evil.example/script.js", wantErr: "BALEIA_ANALYTICS_UMAMI_SCRIPT_URL"},
+		{name: "credentials in the url", id: id, url: "https://user:secret@umami.example/script.js", wantErr: "BALEIA_ANALYTICS_UMAMI_SCRIPT_URL"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			c := Config{
+				JWTSecret:               strings.Repeat("s", MinJWTSecretLen),
+				AnalyticsUmamiWebsiteID: tt.id,
+				AnalyticsUmamiScriptURL: tt.url,
+			}
+			err := c.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Validate() = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Validate() = %v, want an error naming %s", err, tt.wantErr)
+			}
+			if strings.Contains(err.Error(), "secret") {
+				t.Fatalf("Validate() error leaks the URL credentials: %v", err)
+			}
+		})
+	}
+}
+
+// TestLoad_AnalyticsUmamiDefaults: unset means off, and the script defaults to
+// Umami Cloud's so only the website id is needed to turn it on.
+func TestLoad_AnalyticsUmamiDefaults(t *testing.T) {
+	t.Setenv("BALEIA_ANALYTICS_UMAMI_WEBSITE_ID", "")
+	t.Setenv("BALEIA_ANALYTICS_UMAMI_SCRIPT_URL", "")
+	c := Load()
+	if c.AnalyticsUmamiWebsiteID != "" {
+		t.Errorf("website id = %q, want it off", c.AnalyticsUmamiWebsiteID)
+	}
+	if c.AnalyticsUmamiScriptURL != DefaultUmamiScriptURL {
+		t.Errorf("script url = %q, want %q", c.AnalyticsUmamiScriptURL, DefaultUmamiScriptURL)
+	}
+}
