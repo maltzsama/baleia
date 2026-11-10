@@ -126,6 +126,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 			return nil, errors.New("bi gateway: the trino dialect is not registered")
 		}
 		gw, err := bigateway.New(bigateway.Deps{
+			Secret:     []byte(cfg.BIGatewaySecret),
 			Keys:       h.BIKeyService(),
 			Engines:    core.Engines,
 			Scope:      core.StoreRepo,
