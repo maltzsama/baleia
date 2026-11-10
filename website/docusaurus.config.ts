@@ -19,7 +19,7 @@ const version = (
 // Umami Cloud website id (a public identifier, not a secret). The docs site is
 // the only surface that is measured; the product app carries no analytics. Set
 // it as the UMAMI environment variable at build time (the docs-site workflow
-// reads the UMAMI repository variable); without it no tracking script is added.
+// reads the UMAMI repository secret); without it no tracking script is added.
 const umami = process.env.UMAMI;
 
 // The site renders the repository's docs/ folder as is, under /docs, so the
