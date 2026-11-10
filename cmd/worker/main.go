@@ -10,7 +10,9 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/galileostudio/baleia/internal/trino/monitor"
+	"github.com/galileostudio/baleia/internal/webhooks"
 	"github.com/galileostudio/baleia/internal/workerapp"
+	"github.com/google/uuid"
 	"go.temporal.io/sdk/worker"
 )
 
@@ -37,6 +39,7 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	}
 	if cfg.WebhooksEnabled && core.Realtime.Enabled() {
 		go workerapp.RelayWebhooks(ctx, logger, core.Outbox, core.Realtime)
+		go webhooks.NewRelay(logger, core.Realtime, core.StoreRepo.Webhooks, core.Dialer.HTTPClient(15*time.Second), core.Keyring, uuid.NewString(), core.Metrics.Prometheus()).Run(ctx)
 	}
 
 	if cfg.SchedulesEnabled {
