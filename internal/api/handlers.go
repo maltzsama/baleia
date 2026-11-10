@@ -22,6 +22,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/galileostudio/baleia/internal/identity/bikeys"
 	"github.com/galileostudio/baleia/internal/identity/idptoken"
 	"github.com/galileostudio/baleia/internal/identity/oidclogin"
 	"github.com/galileostudio/baleia/internal/mail"
@@ -94,6 +95,21 @@ func (h *QueryHandlers) wsTicketStore() *wsticket.Store {
 	}
 	return h.wsTickets
 }
+
+// biKeyService returns the workspace-bound BI key service, constructing one
+// for handlers built by tests without NewAPI.
+func (h *core) biKeyService() *bikeys.Service {
+	if h.biKeys != nil {
+		return h.biKeys
+	}
+	if h.store != nil {
+		h.biKeys = bikeys.New(repo.New(h.store))
+	}
+	return h.biKeys
+}
+
+// BIKeyService exposes the service to the gateway listener (#709).
+func (a *API) BIKeyService() *bikeys.Service { return a.biKeyService() }
 
 // contentService returns the content writer, constructing one for handlers
 // built by tests without NewAPI.
@@ -270,6 +286,7 @@ func NewAPI(d Deps) (*API, error) {
 	// sqlc-shaped interface is only the narrow surface they consume.
 	storeRepo := repo.New(c.store)
 	c.queries = storeRepo
+	c.biKeys = bikeys.New(storeRepo)
 	c.content = content.New(storeRepo, storeRepo.TxContent)
 	c.history = history.New(storeRepo)
 	c.browse = browse.New(storeRepo)
