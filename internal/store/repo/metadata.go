@@ -234,11 +234,17 @@ func (r *Repo) ListMetadataSyncRuns(ctx context.Context, arg db.ListMetadataSync
 }
 
 // SearchMetadata finds tables and columns of the catalogs the workspace may
-// use whose names or comments match q (#941). Matching, popularity and
-// ordering are computed in Go so the query is portable (ADR 0020).
+// use whose names or comments match q (#941). The metadata index proposes
+// candidate rows (ADR 0023); they are read live, filtered by the catalogs
+// granted to the workspace, scored and ordered in Go so the query is portable
+// (ADR 0020).
 func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) ([]db.SearchMetadataRow, error) {
 	if !arg.WorkspaceID.Valid || arg.Lim <= 0 {
 		return nil, nil
+	}
+	pattern := search.Compile(arg.Q)
+	if err := r.refreshGrantedMetadata(ctx, arg); err != nil {
+		return nil, err
 	}
 	var out []db.SearchMetadataRow
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -252,28 +258,76 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 			}
 			visible = []string{UUIDString(arg.CatalogID)}
 		}
-		var tables []model.MetadataTable
-		if err := tx.Where("catalog_id IN ? AND removed_at IS NULL", visible).
-			Order("name").
-			Find(&tables).Error; err != nil {
-			return err
+		kinds := []string{kindTable, kindColumn}
+		switch arg.Kind {
+		case browse.KindTable:
+			kinds = []string{kindTable}
+		case browse.KindColumn:
+			kinds = []string{kindColumn}
 		}
-		if len(tables) == 0 {
-			return nil
+		scopes := make([]string, len(visible))
+		for i, id := range visible {
+			scopes[i] = metadataScopeKey(id)
 		}
-		tableIDs := make([]string, len(tables))
-		for i, table := range tables {
-			tableIDs[i] = string(table.ID)
-		}
-		var columns []model.MetadataColumn
-		if arg.Kind != browse.KindTable {
-			if err := tx.Where("table_id IN ?", tableIDs).Order("ordinal").Find(&columns).Error; err != nil {
-				return err
-			}
-		}
-		docs, err := r.tableDocs(tx, arg.WorkspaceID, visible)
+		found, err := candidates(tx, scopes, kinds, pattern, int(arg.Lim))
 		if err != nil {
 			return err
+		}
+		tableHit := make(map[string]bool, len(found[kindTable]))
+		tableIDs := make([]string, 0, len(found[kindTable]))
+		for _, id := range found[kindTable] {
+			tableHit[id] = true
+			tableIDs = append(tableIDs, id)
+		}
+		wantOrdinals := map[string]map[int32]bool{}
+		for _, ref := range found[kindColumn] {
+			tableID, ordinal, ok := splitColumnRef(ref)
+			if !ok {
+				continue
+			}
+			if wantOrdinals[tableID] == nil {
+				wantOrdinals[tableID] = map[int32]bool{}
+				tableIDs = append(tableIDs, tableID)
+			}
+			wantOrdinals[tableID][ordinal] = true
+		}
+		tableIDs = uniqueStrings(tableIDs)
+		if len(tableIDs) == 0 {
+			return nil
+		}
+		tables, err := liveTables(tx, tableIDs, visible)
+		if err != nil || len(tables) == 0 {
+			return err
+		}
+		columnsByTable := map[string][]model.MetadataColumn{}
+		if len(wantOrdinals) > 0 {
+			ids := make([]string, 0, len(wantOrdinals))
+			for id := range wantOrdinals {
+				ids = append(ids, id)
+			}
+			var columns []model.MetadataColumn
+			err := inChunks(ids, func(chunk []string) error {
+				var rows []model.MetadataColumn
+				if err := tx.Where("table_id IN ?", chunk).Order("ordinal").Find(&rows).Error; err != nil {
+					return err
+				}
+				columns = append(columns, rows...)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+			for _, column := range columns {
+				if wantOrdinals[string(column.TableID)][column.Ordinal] {
+					columnsByTable[string(column.TableID)] = append(columnsByTable[string(column.TableID)], column)
+				}
+			}
+		}
+		docs := map[string]model.SemanticDoc{}
+		if arg.Tags != nil || arg.Certified != nil {
+			if docs, err = r.tableDocs(tx, arg.WorkspaceID, visible); err != nil {
+				return err
+			}
 		}
 		popularity, err := r.popularityByTable(tx, arg.WorkspaceID)
 		if err != nil {
@@ -283,11 +337,6 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 		if err != nil {
 			return err
 		}
-		columnsByTable := make(map[string][]model.MetadataColumn, len(tables))
-		for _, column := range columns {
-			columnsByTable[string(column.TableID)] = append(columnsByTable[string(column.TableID)], column)
-		}
-		pattern := search.Compile(arg.Q)
 		hits := make([]db.SearchMetadataRow, 0, len(tables))
 		for _, table := range tables {
 			namespace := []string(table.Namespace)
@@ -305,7 +354,7 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 			}
 			pop := popularity[tablePopularityKey(catalogID, lastNamespace, string(table.Name))]
 			syncedAt := synced[catalogID]
-			if arg.Kind == browse.KindTable || arg.Kind == browse.KindAll {
+			if tableHit[string(table.ID)] {
 				if score := pattern.Best(nameAndComment(string(table.Name), table.Comment)...); score > 0 {
 					hits = append(hits, db.SearchMetadataRow{
 						Kind:             browse.KindTable,
@@ -319,25 +368,23 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 					})
 				}
 			}
-			if arg.Kind == browse.KindColumn || arg.Kind == browse.KindAll {
-				for _, column := range columnsByTable[string(table.ID)] {
-					score := pattern.Best(nameAndComment(string(column.Name), column.Comment)...)
-					if score == 0 {
-						continue
-					}
-					hits = append(hits, db.SearchMetadataRow{
-						Kind:             browse.KindColumn,
-						TableID:          PGUUID(string(table.ID)),
-						CatalogID:        PGUUID(catalogID),
-						Namespace:        namespace,
-						TableName:        string(table.Name),
-						ColumnName:       string(column.Name),
-						NativeType:       column.NativeType,
-						Score:            score,
-						Popularity:       pop,
-						MetadataSyncedAt: syncedAt,
-					})
+			for _, column := range columnsByTable[string(table.ID)] {
+				score := pattern.Best(nameAndComment(string(column.Name), column.Comment)...)
+				if score == 0 {
+					continue
 				}
+				hits = append(hits, db.SearchMetadataRow{
+					Kind:             browse.KindColumn,
+					TableID:          PGUUID(string(table.ID)),
+					CatalogID:        PGUUID(catalogID),
+					Namespace:        namespace,
+					TableName:        string(table.Name),
+					ColumnName:       string(column.Name),
+					NativeType:       column.NativeType,
+					Score:            score,
+					Popularity:       pop,
+					MetadataSyncedAt: syncedAt,
+				})
 			}
 		}
 		sort.SliceStable(hits, func(i, j int) bool {
@@ -369,6 +416,41 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 		out = hits
 		return nil
 	}, nil)
+	return out, err
+}
+
+// refreshGrantedMetadata brings the index of every catalog the search may
+// reach up to date, before the read transaction starts: building a scope
+// takes a row lock that a repeatable-read snapshot cannot wait on.
+func (r *Repo) refreshGrantedMetadata(ctx context.Context, arg db.SearchMetadataParams) error {
+	visible, err := grantedCatalogIDs(r.Users.db.WithContext(ctx), arg.WorkspaceID)
+	if err != nil {
+		return err
+	}
+	for _, id := range visible {
+		if arg.CatalogID.Valid && id != UUIDString(arg.CatalogID) {
+			continue
+		}
+		if err := r.refreshMetadataScope(ctx, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// liveTables reads the tables with these ids that are not removed and belong
+// to one of the catalogs.
+func liveTables(tx *gorm.DB, ids, catalogIDs []string) ([]model.MetadataTable, error) {
+	var out []model.MetadataTable
+	err := inChunks(ids, func(chunk []string) error {
+		var rows []model.MetadataTable
+		if err := tx.Where("id IN ? AND catalog_id IN ? AND removed_at IS NULL", chunk, catalogIDs).
+			Find(&rows).Error; err != nil {
+			return err
+		}
+		out = append(out, rows...)
+		return nil
+	})
 	return out, err
 }
 
@@ -577,8 +659,12 @@ func (r *Repo) StartMetadataSyncRun(ctx context.Context, arg db.StartMetadataSyn
 }
 
 // FinishMetadataSyncRun closes a running pass.
+//
+// A finished pass rebuilds its catalog's search terms right away (ADR 0023),
+// so a search rarely pays for it. That is best effort: a failure leaves the
+// scope stale, and the next search rebuilds it.
 func (r *Repo) FinishMetadataSyncRun(ctx context.Context, arg db.FinishMetadataSyncRunParams) error {
-	return r.Users.db.WithContext(ctx).Model(&model.MetadataSyncRun{}).
+	res := r.Users.db.WithContext(ctx).Model(&model.MetadataSyncRun{}).
 		Where("id = ? AND status = ?", UUIDString(arg.ID), "running").
 		Updates(map[string]any{
 			"status":         arg.Status,
@@ -588,7 +674,15 @@ func (r *Repo) FinishMetadataSyncRun(ctx context.Context, arg db.FinishMetadataS
 			"tables_removed": arg.TablesRemoved,
 			"error_code":     arg.ErrorCode,
 			"error_message":  arg.ErrorMessage,
-		}).Error
+		})
+	if res.Error != nil || res.RowsAffected == 0 || arg.Status != "finished" {
+		return res.Error
+	}
+	var run model.MetadataSyncRun
+	if err := r.Users.db.WithContext(ctx).Select("catalog_id").Where("id = ?", UUIDString(arg.ID)).First(&run).Error; err == nil {
+		_ = r.refreshMetadataScope(ctx, string(run.CatalogID)) // best effort: the next search rebuilds it
+	}
+	return nil
 }
 
 // FailStaleMetadataSyncRuns fails a run a crashed worker left running.
