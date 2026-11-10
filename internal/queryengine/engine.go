@@ -79,8 +79,9 @@ type CatalogCredentials interface {
 // TrinoProxy is implemented by the Trino engine for the BI gateway (ADR 0017):
 // the coordinator URL and the HTTP client authenticated as Baleia's admin
 // login (dialer, CA and password). The gateway adds the request's identity,
-// catalog scope and read-only credentials itself. Other engine kinds do not
-// implement it, so the gateway refuses them.
+// catalog scope and read-only credentials itself. The managed wrapper exposes
+// the method for every kind, returning empty for non-Trino engines, so the
+// gateway checks the engine kind before using the proxy.
 type TrinoProxy interface {
 	ProxyClient() (url string, client *http.Client)
 }
