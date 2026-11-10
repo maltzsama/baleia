@@ -87,6 +87,7 @@ describe('settings gating', () => {
 		const flags = (agentsOn: boolean) => ({
 			agents: agentsOn,
 			assistant: false,
+			bi_gateway: false,
 			retrievers: true
 		});
 
@@ -110,7 +111,11 @@ describe('settings gating', () => {
 			['/settings/assistant', 'assistant']
 		])('does not mount %s with its flag off', async (path) => {
 			nav.path = path;
-			await signIn(makeMe({ features: { agents: false, assistant: false, retrievers: true } }));
+			await signIn(
+				makeMe({
+					features: { agents: false, assistant: false, bi_gateway: false, retrievers: true }
+				})
+			);
 			render(SettingsLayout, { props: { children: page } });
 
 			expect(screen.getByText('This feature is turned off')).toBeTruthy();

@@ -7,6 +7,8 @@ import { clearDrafts } from '$lib/workbench/drafts';
 export type Features = {
 	agents: boolean;
 	assistant: boolean;
+	// The BI gateway is configured (ADR 0017): data-source files can be generated.
+	bi_gateway: boolean;
 	retrievers: boolean;
 };
 

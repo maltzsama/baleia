@@ -93,6 +93,8 @@ BI tools sign in with HTTP Basic: the key owner's e-mail as the user and a works
 
 `biGateway.publicURL` must be the URL the BI tools use, because the gateway rewrites every `nextUri` to it. With the Ingress enabled it must be `https://`: the key travels as the Basic-auth password, and the chart refuses a cleartext public URL. Capacity and scaling are covered in [Operations](operations.md#bi-gateway-capacity).
 
+With the gateway configured, a Trino table's detail offers **Open in Tableau** and **Open in Power BI** when BI is on for the workspace; the download comes from `GET /workspaces/{id}/bi/{tool}` and points at `biGateway.publicURL` with the target's catalog and schema. It carries no credentials.
+
 ## Install
 
 ```bash title="Install the chart"

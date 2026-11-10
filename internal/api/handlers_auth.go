@@ -272,9 +272,18 @@ func (h *AuthHandlers) GetMe(ctx context.Context, request GetMeRequestObject) (G
 // features are the navigation flags of /auth/me (#104). Agents exist when
 // BALEIA_AGENTS_ENABLED is on; the assistant (#62) does not exist yet;
 // retrievers exist when a Trino engine can host their destination (an enabled
-// Iceberg catalog).
+// Iceberg catalog); BI files exist when the gateway has a public URL (#713).
 func (h *core) features(ctx context.Context) Features {
-	f := Features{Agents: h.agentsEnabled()}
+	f := Features{Agents: h.agentsEnabled(), BiGateway: h.settings.BIGateway.Enabled}
+	if f.BiGateway {
+		// The global switch revokes BI at the next request, so the entry point
+		// follows it too; an unreadable switch leaves the entry to the request.
+		if store := h.biSettings(); store != nil {
+			if setting, err := store.GetBIGatewaySetting(ctx); err == nil && !setting.Enabled {
+				f.BiGateway = false
+			}
+		}
+	}
 	f.Retrievers = h.access.RetrieversAvailable(ctx)
 	return f
 }

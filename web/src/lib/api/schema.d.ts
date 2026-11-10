@@ -1974,6 +1974,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/bi/{tool}": {
+        parameters: {
+            query: {
+                /** @description The workspace target's engine; the gateway serves Trino only */
+                engine_id: string;
+                /** @description The target's engine catalog name (engine_catalog_name) */
+                catalog: string;
+                schema?: string;
+                table?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                tool: "tableau" | "powerbi";
+            };
+            cookie?: never;
+        };
+        /**
+         * Download a Tableau (.tds) or Power BI (.pbids) data source for the gateway
+         * @description Points the BI tool at the BI gateway (ADR 0017) with the workspace's engine catalog and, optionally, schema and table. The file carries no credentials: the tool signs in with a workspace-bound BI key (POST /workspaces/{id}/bi-keys). Served only when BALEIA_BI_GATEWAY_ADDR and BALEIA_BI_GATEWAY_URL are set, the global switch is on and BI is on for the workspace; only Trino targets produce a file.
+         */
+        get: operations["getWorkspaceBIFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/spaces": {
         parameters: {
             query?: never;
@@ -4725,6 +4755,8 @@ export interface components {
         Features: {
             agents: boolean;
             assistant: boolean;
+            /** @description The BI gateway listener and public URL are configured, so the BI data-source files can be generated (ADR 0017) */
+            bi_gateway: boolean;
             retrievers: boolean;
         };
         Me: components["schemas"]["UserPublic"] & {
@@ -10942,6 +10974,40 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getWorkspaceBIFile: {
+        parameters: {
+            query: {
+                /** @description The workspace target's engine; the gateway serves Trino only */
+                engine_id: string;
+                /** @description The target's engine catalog name (engine_catalog_name) */
+                catalog: string;
+                schema?: string;
+                table?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                tool: "tableau" | "powerbi";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The data source file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listSpaces: {

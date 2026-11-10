@@ -3027,8 +3027,11 @@ type ExploreQueryFiltersOp string
 
 // Features defines model for Features.
 type Features struct {
-	Agents     bool `json:"agents"`
-	Assistant  bool `json:"assistant"`
+	Agents    bool `json:"agents"`
+	Assistant bool `json:"assistant"`
+
+	// BiGateway The BI gateway listener and public URL are configured, so the BI data-source files can be generated (ADR 0017)
+	BiGateway  bool `json:"bi_gateway"`
 	Retrievers bool `json:"retrievers"`
 }
 
@@ -5616,6 +5619,17 @@ type ReconcileTrinoParams struct {
 type ListUsersParams struct {
 	Page    *QueryPage    `form:"page,omitempty" json:"page,omitempty"`
 	PerPage *QueryPerPage `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
+
+// GetWorkspaceBIFileParams defines parameters for GetWorkspaceBIFile.
+type GetWorkspaceBIFileParams struct {
+	// EngineId The workspace target's engine; the gateway serves Trino only
+	EngineId openapi_types.UUID `form:"engine_id" json:"engine_id"`
+
+	// Catalog The target's engine catalog name (engine_catalog_name)
+	Catalog string  `form:"catalog" json:"catalog"`
+	Schema  *string `form:"schema,omitempty" json:"schema,omitempty"`
+	Table   *string `form:"table,omitempty" json:"table,omitempty"`
 }
 
 // SearchContentParams defines parameters for SearchContent.

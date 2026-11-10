@@ -1282,10 +1282,13 @@ components:
              manage_identity, view_all_audit, view_system, manage_assistant, manage_workload]
     Features:
       type: object
-      required: [agents, assistant, retrievers]
+      required: [agents, assistant, bi_gateway, retrievers]
       properties:
         agents: { type: boolean }
         assistant: { type: boolean }
+        bi_gateway:
+          type: boolean
+          description: "The BI gateway listener and public URL are configured, so the BI data-source files can be generated (ADR 0017)"
         retrievers: { type: boolean }
     Me:
       allOf:
@@ -7008,6 +7011,51 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/bi/{tool}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: tool
+        in: path
+        required: true
+        schema: { type: string, enum: [tableau, powerbi] }
+      - name: engine_id
+        in: query
+        required: true
+        description: "The workspace target's engine; the gateway serves Trino only"
+        schema: { type: string, format: uuid }
+      - name: catalog
+        in: query
+        required: true
+        description: "The target's engine catalog name (engine_catalog_name)"
+        schema: { type: string }
+      - name: schema
+        in: query
+        schema: { type: string }
+      - name: table
+        in: query
+        schema: { type: string }
+    get:
+      tags: [BI]
+      operationId: getWorkspaceBIFile
+      summary: "Download a Tableau (.tds) or Power BI (.pbids) data source for the gateway"
+      description: >
+        Points the BI tool at the BI gateway (ADR 0017) with the workspace's
+        engine catalog and, optionally, schema and table. The file carries no
+        credentials: the tool signs in with a workspace-bound BI key (POST
+        /workspaces/{id}/bi-keys). Served only when BALEIA_BI_GATEWAY_ADDR and
+        BALEIA_BI_GATEWAY_URL are set, the global switch is on and BI is on for
+        the workspace; only Trino targets produce a file.
+      responses:
+        "200":
+          description: "The data source file"
+          content:
+            text/plain:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /workspaces/{id}/spaces:
     parameters:

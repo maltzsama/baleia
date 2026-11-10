@@ -2613,6 +2613,7 @@
 	"engines_external_url_saved": "External URL saved",
 	"components_tabledetail_open_in_tableau": "Open in Tableau",
 	"components_tabledetail_open_in_powerbi": "Open in Power BI",
+	"components_tabledetail_bi_file_failed": "Could not download the data source file.",
 	"components_tabledetail_set_the_engine_external_url": "Set the engine's external URL in its settings first.",
 	"data_search_filter_type": "type: {value}",
 	"data_search_filter_tag": "tag: {value}",

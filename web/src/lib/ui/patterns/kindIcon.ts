@@ -92,6 +92,12 @@ export function hasTrinoResourceGroups(kind: string | null | undefined): boolean
 	return kind === 'trino';
 }
 
+/** canOpenInBI: the engine kind a BI data-source file can point at (ADR 0017).
+ * The BI gateway relays Trino's HTTP protocol and nothing else. */
+export function canOpenInBI(kind: string): boolean {
+	return kind === 'trino';
+}
+
 // Connection kinds whose catalogs get Iceberg table health and maintenance
 // (#500): the same list the health pass reads (ListEnabledIcebergCatalogs).
 const tableHealthKinds = ['polaris', 'iceberg', 'nessie'];

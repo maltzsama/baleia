@@ -43,6 +43,7 @@ export function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 		owner_team_id: null,
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
+		bi_enabled: true,
 		allowed_actions: ['view', 'update', 'delete', 'manage_grants', 'set_defaults'],
 		...overrides
 	};
@@ -130,7 +131,7 @@ export function makeMe(overrides: Partial<Me> = {}): Me {
 		role: 'admin',
 		auth_provider: 'local',
 		created_at: '2026-01-01T00:00:00Z',
-		features: { agents: false, assistant: false, retrievers: true },
+		features: { agents: false, assistant: false, bi_gateway: false, retrievers: true },
 		global_actions: [
 			'create_connection',
 			'create_workspace',

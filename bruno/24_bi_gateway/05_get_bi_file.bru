@@ -1,0 +1,30 @@
+meta {
+  name: Get a BI Data-Source File
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/bi/tableau?engine_id={{trino_engine_id}}&catalog={{bi_engine_catalog}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: in 200,422
+}
+
+tests {
+  test("the file points at the gateway when it is configured", function () {
+    if (res.status === 422) {
+      expect(res.body.code).to.eq("validation_error");
+      return;
+    }
+    expect(res.body).to.include("<connection class='trino'");
+    expect(res.body).to.not.include("password");
+  });
+}

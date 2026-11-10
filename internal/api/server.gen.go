@@ -540,6 +540,9 @@ type ServerInterface interface {
 	// Revoke a workspace-bound BI key
 	// (DELETE /workspaces/{id}/bi-keys/{key_id})
 	DeleteBiKey(w http.ResponseWriter, r *http.Request, id PathId, keyId PathKeyId)
+	// Download a Tableau (.tds) or Power BI (.pbids) data source for the gateway
+	// (GET /workspaces/{id}/bi/{tool})
+	GetWorkspaceBIFile(w http.ResponseWriter, r *http.Request, id PathId, tool string, params GetWorkspaceBIFileParams)
 	// List the catalogs granted to the workspace — workspace members
 	// (GET /workspaces/{id}/catalog-access)
 	ListWorkspaceCatalogAccess(w http.ResponseWriter, r *http.Request, id PathId)
@@ -1866,6 +1869,12 @@ func (_ Unimplemented) CreateBiKey(w http.ResponseWriter, r *http.Request, id Pa
 // Revoke a workspace-bound BI key
 // (DELETE /workspaces/{id}/bi-keys/{key_id})
 func (_ Unimplemented) DeleteBiKey(w http.ResponseWriter, r *http.Request, id PathId, keyId PathKeyId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Download a Tableau (.tds) or Power BI (.pbids) data source for the gateway
+// (GET /workspaces/{id}/bi/{tool})
+func (_ Unimplemented) GetWorkspaceBIFile(w http.ResponseWriter, r *http.Request, id PathId, tool string, params GetWorkspaceBIFileParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8340,6 +8349,97 @@ func (siw *ServerInterfaceWrapper) DeleteBiKey(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetWorkspaceBIFile operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkspaceBIFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "tool" -------------
+	var tool string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tool", chi.URLParam(r, "tool"), &tool, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tool", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetWorkspaceBIFileParams
+
+	// ------------- Required query parameter "engine_id" -------------
+
+	if paramValue := r.URL.Query().Get("engine_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "engine_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "engine_id", r.URL.Query(), &params.EngineId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engine_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "catalog" -------------
+
+	if paramValue := r.URL.Query().Get("catalog"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "catalog"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "catalog", r.URL.Query(), &params.Catalog)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalog", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "schema" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "schema", r.URL.Query(), &params.Schema)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "schema", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "table" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "table", r.URL.Query(), &params.Table)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkspaceBIFile(w, r, id, tool, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkspaceCatalogAccess operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkspaceCatalogAccess(w http.ResponseWriter, r *http.Request) {
 
@@ -13517,6 +13617,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/workspaces/{id}/bi-keys/{key_id}", wrapper.DeleteBiKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/bi/{tool}", wrapper.GetWorkspaceBIFile)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/catalog-access", wrapper.ListWorkspaceCatalogAccess)
@@ -21216,6 +21319,64 @@ func (response DeleteBiKey404JSONResponse) VisitDeleteBiKeyResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetWorkspaceBIFileRequestObject struct {
+	Id     PathId `json:"id"`
+	Tool   string `json:"tool"`
+	Params GetWorkspaceBIFileParams
+}
+
+type GetWorkspaceBIFileResponseObject interface {
+	VisitGetWorkspaceBIFileResponse(w http.ResponseWriter) error
+}
+
+type GetWorkspaceBIFile200TextResponse string
+
+func (response GetWorkspaceBIFile200TextResponse) VisitGetWorkspaceBIFileResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(200)
+
+	_, err := w.Write([]byte(response))
+	return err
+}
+
+type GetWorkspaceBIFile401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetWorkspaceBIFile401JSONResponse) VisitGetWorkspaceBIFileResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWorkspaceBIFile403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetWorkspaceBIFile403JSONResponse) VisitGetWorkspaceBIFileResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWorkspaceBIFile404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetWorkspaceBIFile404JSONResponse) VisitGetWorkspaceBIFileResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWorkspaceBIFile422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response GetWorkspaceBIFile422JSONResponse) VisitGetWorkspaceBIFileResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListWorkspaceCatalogAccessRequestObject struct {
 	Id PathId `json:"id"`
 }
@@ -26109,6 +26270,9 @@ type StrictServerInterface interface {
 	// Revoke a workspace-bound BI key
 	// (DELETE /workspaces/{id}/bi-keys/{key_id})
 	DeleteBiKey(ctx context.Context, request DeleteBiKeyRequestObject) (DeleteBiKeyResponseObject, error)
+	// Download a Tableau (.tds) or Power BI (.pbids) data source for the gateway
+	// (GET /workspaces/{id}/bi/{tool})
+	GetWorkspaceBIFile(ctx context.Context, request GetWorkspaceBIFileRequestObject) (GetWorkspaceBIFileResponseObject, error)
 	// List the catalogs granted to the workspace — workspace members
 	// (GET /workspaces/{id}/catalog-access)
 	ListWorkspaceCatalogAccess(ctx context.Context, request ListWorkspaceCatalogAccessRequestObject) (ListWorkspaceCatalogAccessResponseObject, error)
@@ -31269,6 +31433,34 @@ func (sh *strictHandler) DeleteBiKey(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteBiKeyResponseObject); ok {
 		if err := validResponse.VisitDeleteBiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWorkspaceBIFile operation middleware
+func (sh *strictHandler) GetWorkspaceBIFile(w http.ResponseWriter, r *http.Request, id PathId, tool string, params GetWorkspaceBIFileParams) {
+	var request GetWorkspaceBIFileRequestObject
+
+	request.Id = id
+	request.Tool = tool
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWorkspaceBIFile(ctx, request.(GetWorkspaceBIFileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWorkspaceBIFile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWorkspaceBIFileResponseObject); ok {
+		if err := validResponse.VisitGetWorkspaceBIFileResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

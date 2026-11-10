@@ -40,9 +40,12 @@ describe('nav sections', () => {
 	it('hides a page behind its feature flag', () => {
 		const content = navAreas.find((area) => area.key === 'content')!;
 		const hrefs = (on: boolean) =>
-			visiblePages(content, { agents: false, assistant: false, retrievers: on }).map(
-				(page) => page.href
-			);
+			visiblePages(content, {
+				agents: false,
+				assistant: false,
+				bi_gateway: false,
+				retrievers: on
+			}).map((page) => page.href);
 		expect(hrefs(true)).toContain('/retrievers');
 		expect(hrefs(false)).not.toContain('/retrievers');
 	});

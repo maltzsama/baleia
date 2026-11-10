@@ -21,7 +21,9 @@ import Header from './Header.svelte';
 
 function renderAt(path: string, retrievers = true) {
 	nav.url = new URL(`http://localhost${path}`);
-	authStore.set(makeMe({ features: { agents: false, assistant: false, retrievers } }));
+	authStore.set(
+		makeMe({ features: { agents: false, assistant: false, bi_gateway: false, retrievers } })
+	);
 	workspaceStore.select(makeWorkspace());
 	return render(Header, { props: { onToggleDark: vi.fn(), dark: false } });
 }
