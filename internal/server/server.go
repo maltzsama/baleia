@@ -132,6 +132,13 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 			Scope:      core.StoreRepo,
 			Rules:      core.StoreRepo,
 			Workspaces: core.StoreRepo,
+			Executions: core.StoreRepo,
+			Settings:   core.StoreRepo,
+			Audit:      core.Audit,
+			// The per-key and per-workspace running limits (ADR 0017); 0
+			// disables one.
+			MaxPerKey:       cfg.BIMaxConcurrentPerKey,
+			MaxPerWorkspace: cfg.BIMaxConcurrentPerWorkspace,
 			TrinoIdentity: func(ctx context.Context, uid db.UUID) (string, error) {
 				return trinoidentity.For(ctx, core.Queries, cfg.TrinoUserIdentity, uid)
 			},
