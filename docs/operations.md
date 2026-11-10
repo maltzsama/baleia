@@ -587,6 +587,42 @@ next snapshot below the threshold.
 `0` disables a trigger. The queued-query gate is the primary one; the blocked
 and memory gates catch saturation that the queue length does not show.
 
+## BI gateway capacity
+
+The BI gateway (ADR 0017) runs inside the API pods (`BALEIA_BI_GATEWAY_ADDR`,
+rendered from `biGateway.enabled` in the chart), so **`api.replicas` is the
+BI gateway's scale too**: every BI statement and every `nextUri` follow is an
+HTTP request served by an API pod. The gateway keeps no per-query state, and a
+rewritten URI carries a signature any replica can verify with the shared
+`BALEIA_BI_GATEWAY_SECRET`, so scale out without session affinity.
+
+- **Concurrency.** Each BI tool holds one statement in flight per open
+  query/tab, plus short follow requests for its pages. Size `api.replicas` for
+  the BI users you expect on top of the editor and API traffic, and keep the
+  total (replicas × limit) inside what the coordinator and its resource groups
+  can run. The gateway's own knobs are
+  `BALEIA_BI_MAX_CONCURRENT_PER_KEY` (default 5) and
+  `BALEIA_BI_MAX_CONCURRENT_PER_WORKSPACE` (default 20); over them the BI tool
+  gets HTTP 429 with `Retry-After`. They bound a single key or workspace, not
+  the cluster: the coordinator's queues still apply through the `baleia`/`bi`
+  client tags.
+- **Memory.** The gateway stores nothing and streams page by page: it holds at
+  most one Trino page per in-flight request while it rewrites the URIs. Trino
+  484 caps a page at 1 MiB (`TARGET_RESULT_SIZE`, fixed server-side, not
+  requestable by a client), so a pod's added memory is roughly *in-flight BI
+  requests × 1 MiB* plus the request/response copies. Results never go through
+  Temporal or object storage.
+- **Connections.** Each running BI statement keeps one HTTP connection from
+  the gateway to the coordinator for its duration; the Trino `NetworkPolicy`
+  and the connection pools see it like any other Baleia statement. Trino's
+  query limits, resource groups and `BALEIA_STATEMENT_TIMEOUT` still apply.
+- **Visibility.** Every BI statement is an execution with origin `bi` in the
+  history (and in audit), so the usual history and monitoring views cover it;
+  the per-key and per-workspace running counts come from the same table.
+- **Revocation.** Turning the gateway off globally (admin, `PUT
+  /admin/bi-gateway`), turning BI off for a workspace (`bi_enabled`), or
+  revoking the key takes effect at the next request on any replica.
+
 ## Runbooks
 
 ### BaleiaAPIDown
