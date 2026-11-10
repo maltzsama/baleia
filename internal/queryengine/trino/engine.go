@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -56,11 +57,13 @@ func newEngine(dl queryengine.Dialect, logger *slog.Logger) queryengine.Factory 
 		}
 		hc = obs.WrapHTTPClient(hc)
 		return &Engine{
-			logger:  cmp.Or(logger, slog.New(slog.DiscardHandler)),
-			dialect: dl,
-			id:      row.ID,
-			client:  trinoclient.NewWithHTTPClient(url, service, hc),
-			admin:   trinoclient.NewWithHTTPClient(url, admin, hc),
+			logger:    cmp.Or(logger, slog.New(slog.DiscardHandler)),
+			dialect:   dl,
+			id:        row.ID,
+			url:       url,
+			proxyHTTP: hc,
+			client:    trinoclient.NewWithHTTPClient(url, service, hc),
+			admin:     trinoclient.NewWithHTTPClient(url, admin, hc),
 		}, nil
 	}
 }
@@ -70,11 +73,13 @@ func newEngine(dl queryengine.Dialect, logger *slog.Logger) queryengine.Factory 
 func New(id, url, serviceUser, adminUser string, d *connections.Dialer, dl queryengine.Dialect) *Engine {
 	hc := obs.WrapHTTPClient(d.HTTPClient(requestTimeout))
 	return &Engine{
-		logger:  slog.New(slog.DiscardHandler),
-		dialect: dl,
-		id:      id,
-		client:  trinoclient.NewWithHTTPClient(url, valueOr(serviceUser, defaultServiceUser), hc),
-		admin:   trinoclient.NewWithHTTPClient(url, valueOr(adminUser, defaultAdminUser), hc),
+		logger:    slog.New(slog.DiscardHandler),
+		dialect:   dl,
+		id:        id,
+		url:       url,
+		proxyHTTP: hc,
+		client:    trinoclient.NewWithHTTPClient(url, valueOr(serviceUser, defaultServiceUser), hc),
+		admin:     trinoclient.NewWithHTTPClient(url, valueOr(adminUser, defaultAdminUser), hc),
 	}
 }
 
@@ -90,15 +95,20 @@ type Engine struct {
 	logger  *slog.Logger
 	dialect queryengine.Dialect
 	id      string
-	client  *trinoclient.Client // runs statements; identity set per session
-	admin   *trinoclient.Client // kills queries by handle; never runs user SQL
+	// url and proxyHTTP let the BI gateway relay the Trino protocol through
+	// the same connection (dialer, CA, admin login) as Baleia's own clients.
+	url       string
+	proxyHTTP *http.Client
+	client    *trinoclient.Client // runs statements; identity set per session
+	admin     *trinoclient.Client // kills queries by handle; never runs user SQL
 }
 
-func (e *Engine) ID() string                   { return e.id }
-func (e *Engine) Kind() string                 { return Kind }
-func (e *Engine) Class() queryengine.Class     { return queryengine.ClassFederated }
-func (e *Engine) Dialect() queryengine.Dialect { return e.dialect }
-func (e *Engine) Close() error                 { return nil }
+func (e *Engine) ID() string                          { return e.id }
+func (e *Engine) ProxyClient() (string, *http.Client) { return e.url, e.proxyHTTP }
+func (e *Engine) Kind() string                        { return Kind }
+func (e *Engine) Class() queryengine.Class            { return queryengine.ClassFederated }
+func (e *Engine) Dialect() queryengine.Dialect        { return e.dialect }
+func (e *Engine) Close() error                        { return nil }
 
 // Capabilities of Trino in v1.
 func (e *Engine) Capabilities() queryengine.Capabilities {

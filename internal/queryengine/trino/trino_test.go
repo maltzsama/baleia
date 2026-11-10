@@ -571,3 +571,20 @@ func TestSessionRenewsCatalogToken(t *testing.T) {
 		t.Error("a statement must fail when its token cannot be renewed")
 	}
 }
+
+// TestProxyClient: the BI gateway relays through the same coordinator URL and
+// HTTP client (dialer, CA, admin login) as Baleia's own Trino sessions.
+func TestProxyClient(t *testing.T) {
+	t.Parallel()
+	f := &fakeCoordinator{respond: func(string) (http.Header, map[string]any) {
+		return nil, map[string]any{"id": "20260101_000000_00001_abcde"}
+	}}
+	e := testEngine(t, f)
+	base, client := e.ProxyClient()
+	if base == "" || client == nil {
+		t.Fatalf("ProxyClient = %q, %v", base, client)
+	}
+	if base != e.url || client != e.proxyHTTP {
+		t.Fatalf("ProxyClient = %q, %v; want the engine's connection", base, client)
+	}
+}

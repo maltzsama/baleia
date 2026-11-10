@@ -101,6 +101,9 @@ type Core struct {
 	// IDPTokens keeps each user's (#648). The API and the worker share them.
 	OIDC      *oidclogin.Service
 	IDPTokens *idptoken.Tokens
+	// CatalogCredentials fills a session's per-user catalog token (ADR 0015);
+	// the BI gateway and the engine manager share it.
+	CatalogCredentials queryengine.CatalogCredentials
 	// TrinoHTTP is the HTTP client of the default cluster (TRINO_URL): the
 	// dialer, the coordinator's CA bundle and Baleia's password login
 	// (#646). The worker's Lens monitor uses it too.
@@ -238,7 +241,8 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	})
 	c.IDPTokens = idptoken.New(tokenStore, tokenTx, c.Keyring, c.OIDC, c.Logger)
 	c.OIDC.SetTokens(c.IDPTokens)
-	c.Engines.SetCatalogCredentials(catalogidentity.New(c.Queries, c.Keyring, c.Connections, c.IDPTokens, c.Logger))
+	c.CatalogCredentials = catalogidentity.New(c.Queries, c.Keyring, c.Connections, c.IDPTokens, c.Logger)
+	c.Engines.SetCatalogCredentials(c.CatalogCredentials)
 
 	c.Storage, err = storage.New(storage.Options{
 		Endpoint:  cfg.S3Endpoint,

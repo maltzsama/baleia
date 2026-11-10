@@ -3,6 +3,7 @@ package queryengine
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -73,6 +74,16 @@ type SessionSpec struct {
 // connection behind the session's catalog when the principal has none.
 type CatalogCredentials interface {
 	CatalogToken(ctx context.Context, engineID string, spec SessionSpec) (string, error)
+}
+
+// TrinoProxy is implemented by the Trino engine for the BI gateway (ADR 0017):
+// the coordinator URL and the HTTP client authenticated as Baleia's admin
+// login (dialer, CA and password). The gateway adds the request's identity,
+// catalog scope and read-only credentials itself. The managed wrapper exposes
+// the method for every kind, returning empty for non-Trino engines, so the
+// gateway checks the engine kind before using the proxy.
+type TrinoProxy interface {
+	ProxyClient() (url string, client *http.Client)
 }
 
 // Tags correlate a session with Baleia; each engine maps them to its own

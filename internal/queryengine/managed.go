@@ -2,6 +2,7 @@ package queryengine
 
 import (
 	"context"
+	"net/http"
 	"sync"
 	"time"
 
@@ -71,6 +72,14 @@ func (m *managed) OpenSession(ctx context.Context, spec SessionSpec) (_ Session,
 		return nil, err
 	}
 	return &managedSession{Session: s, owner: m}, nil
+}
+
+// ProxyClient delegates to a Trino engine; other kinds report no proxy.
+func (m *managed) ProxyClient() (string, *http.Client) {
+	if p, ok := m.Engine.(TrinoProxy); ok {
+		return p.ProxyClient()
+	}
+	return "", nil
 }
 
 func (m *managed) sessionDone() {
