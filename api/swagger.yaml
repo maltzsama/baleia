@@ -2368,6 +2368,49 @@ components:
           type: array
           items: { $ref: "#/components/schemas/MetadataColumn" }
 
+    SearchGlossaryEntry:
+      type: object
+      required: [id, term, synonyms, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        term: { type: string, description: "Folded: lower case, without accents" }
+        synonyms:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+
+    SearchGlossaryEntryCreate:
+      type: object
+      required: [term, synonyms]
+      properties:
+        term:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: "At most 64 characters as typed, and at least one letter or digit: the search ignores punctuation, so a word of punctuation could never match"
+        synonyms:
+          type: array
+          description: >
+            1 to 20 words or short phrases, up to 64 characters each as typed,
+            each with at least one letter or digit. Compared without case or
+            accents, a synonym cannot equal the term or repeat another one; any
+            of these answers 422.
+          minItems: 1
+          maxItems: 20
+          items: { type: string, minLength: 1, maxLength: 64 }
+
+    SearchGlossary:
+      type: object
+      required: [entries, allowed_actions]
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/SearchGlossaryEntry" }
+        allowed_actions:
+          type: array
+          description: "`view` for every member; `edit` for editors and above"
+          items: { type: string }
+
     WorkspaceSearchKind:
       type: string
       enum: [table, column, doc, saved_query, semantic_metric, semantic_model, folder]
@@ -6105,6 +6148,66 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/search/glossary:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Metadata]
+      operationId: listSearchGlossary
+      summary: "The workspace's search synonyms"
+      description: >
+        Each entry is a set of words that mean the same in this workspace:
+        searching for any of them also looks for the others. Any member of the
+        workspace may read it; editors change it.
+      responses:
+        "200":
+          description: "The glossary"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchGlossary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Metadata]
+      operationId: createSearchGlossaryEntry
+      summary: "Add a set of synonyms"
+      description: >
+        `term` and `synonyms` are matched without case or accents. A term that
+        already has an entry answers 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SearchGlossaryEntryCreate" }
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchGlossaryEntry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/search/glossary/{entry_id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - name: entry_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [Metadata]
+      operationId: deleteSearchGlossaryEntry
+      summary: "Remove a set of synonyms"
+      responses:
+        "204": { description: "Removed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/metadata/join-suggestions:
     parameters:

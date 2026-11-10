@@ -60,7 +60,17 @@ func (h *SemanticHandlers) SearchWorkspace(ctx context.Context, request SearchWo
 		return SearchWorkspace422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "kind is not a search kind")}, nil
 	}
 
-	hits, err := h.federatedHits(ctx, ws, p.UserID, text, wanted, params, limit)
+	glossary, err := h.glossaryFor(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	// A variant must be a query the surfaces accept: a one-letter synonym or a
+	// long query with a longer word is dropped, and not reported.
+	variants, expanded := glossary.Variants(text, func(q string) bool {
+		n := utf8.RuneCountInString(q)
+		return n >= minSearchQuery && n <= maxSearchQuery
+	})
+	hits, err := h.federatedHitsFor(ctx, ws, p.UserID, append([]string{text}, variants...), wanted, params, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +86,7 @@ func (h *SemanticHandlers) SearchWorkspace(ctx context.Context, request SearchWo
 	out := WorkspaceSearchResponse{
 		Items:        make([]WorkspaceSearchItem, 0, len(chosen)),
 		Facets:       make([]WorkspaceSearchFacet, 0, len(facets)),
-		ExpandedWith: []string{},
+		ExpandedWith: expanded,
 	}
 	for _, i := range chosen {
 		out.Items = append(out.Items, hits[i].item)
@@ -86,6 +96,40 @@ func (h *SemanticHandlers) SearchWorkspace(ctx context.Context, request SearchWo
 	}
 	h.metrics.search.Result(metrics.SearchFederated, len(out.Items))
 	return SearchWorkspace200JSONResponse(out), nil
+}
+
+// variantDiscount scales the score of a result found through a glossary
+// synonym. At 0.75 the best a synonym can score (an exact match, about 0.78)
+// stays below a whole-word match of what the person typed (0.8), so the words
+// typed rank first.
+const variantDiscount = 0.75
+
+// federatedHitsFor runs the search for the query and for each glossary variant
+// of it and keeps, for each result, its best score.
+func (h *SemanticHandlers) federatedHitsFor(ctx context.Context, ws, user db.UUID, queries []string, wanted map[WorkspaceSearchKind]bool, params SearchWorkspaceParams, limit int) ([]federatedHit, error) {
+	var out []federatedHit
+	at := map[string]int{}
+	for i, query := range queries {
+		hits, err := h.federatedHits(ctx, ws, user, query, wanted, params, limit)
+		if err != nil {
+			return nil, err
+		}
+		for _, hit := range hits {
+			if i > 0 {
+				hit.item.Score *= variantDiscount
+			}
+			key := string(hit.item.Kind) + "\x00" + hit.item.Id
+			if j, seen := at[key]; seen {
+				if hit.item.Score > out[j].item.Score {
+					out[j] = hit
+				}
+				continue
+			}
+			at[key] = len(out)
+			out = append(out, hit)
+		}
+	}
+	return out, nil
 }
 
 // federatedHit is one result of one surface, ready to rank.

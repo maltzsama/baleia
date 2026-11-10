@@ -19,6 +19,9 @@ type SemanticHandlers struct {
 	modelDefs *models.Service
 	// search finds content by name or slug (#131).
 	search *search.Service
+	// glossary holds each workspace's search synonyms (#943); nil without a
+	// store.
+	glossary *repo.SearchSynonyms
 }
 
 func newSemanticHandlers(c *core) *SemanticHandlers {
@@ -32,8 +35,13 @@ func newSemanticHandlers(c *core) *SemanticHandlers {
 		r := repo.New(c.store)
 		docStore, metricStore, modelStore, searchStore = r, r, r, r
 	}
+	var glossary *repo.SearchSynonyms
+	if c.store != nil {
+		glossary = repo.NewSearchSynonyms(c.store)
+	}
 	return &SemanticHandlers{
 		core:       c,
+		glossary:   glossary,
 		docs:       docs.New(docStore),
 		metricDefs: metrics.New(metricStore, c.contentService()),
 		modelDefs:  models.New(modelStore, c.contentService()),

@@ -4255,6 +4255,32 @@ type SavedQueryTarget struct {
 	Schema    *string             `json:"schema"`
 }
 
+// SearchGlossary defines model for SearchGlossary.
+type SearchGlossary struct {
+	// AllowedActions `view` for every member; `edit` for editors and above
+	AllowedActions []string              `json:"allowed_actions"`
+	Entries        []SearchGlossaryEntry `json:"entries"`
+}
+
+// SearchGlossaryEntry defines model for SearchGlossaryEntry.
+type SearchGlossaryEntry struct {
+	CreatedAt time.Time          `json:"created_at"`
+	Id        openapi_types.UUID `json:"id"`
+	Synonyms  []string           `json:"synonyms"`
+
+	// Term Folded: lower case, without accents
+	Term string `json:"term"`
+}
+
+// SearchGlossaryEntryCreate defines model for SearchGlossaryEntryCreate.
+type SearchGlossaryEntryCreate struct {
+	// Synonyms 1 to 20 words or short phrases, up to 64 characters each as typed, each with at least one letter or digit. Compared without case or accents, a synonym cannot equal the term or repeat another one; any of these answers 422.
+	Synonyms []string `json:"synonyms"`
+
+	// Term At most 64 characters as typed, and at least one letter or digit: the search ignores punctuation, so a word of punctuation could never match
+	Term string `json:"term"`
+}
+
 // SemanticDoc defines model for SemanticDoc.
 type SemanticDoc struct {
 	AllowedActions *[]string           `json:"allowed_actions,omitempty"`
@@ -6200,6 +6226,9 @@ type UpdateRetrieverJSONRequestBody = UpdateRetrieverRequest
 
 // TriggerRetrieverRefreshJSONRequestBody defines body for TriggerRetrieverRefresh for application/json ContentType.
 type TriggerRetrieverRefreshJSONRequestBody TriggerRetrieverRefreshJSONBody
+
+// CreateSearchGlossaryEntryJSONRequestBody defines body for CreateSearchGlossaryEntry for application/json ContentType.
+type CreateSearchGlossaryEntryJSONRequestBody = SearchGlossaryEntryCreate
 
 // UpsertSemanticDocJSONRequestBody defines body for UpsertSemanticDoc for application/json ContentType.
 type UpsertSemanticDocJSONRequestBody = SemanticDocUpsert

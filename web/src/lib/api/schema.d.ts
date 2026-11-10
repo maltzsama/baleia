@@ -1367,6 +1367,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/search/glossary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The workspace's search synonyms
+         * @description Each entry is a set of words that mean the same in this workspace: searching for any of them also looks for the others. Any member of the workspace may read it; editors change it.
+         */
+        get: operations["listSearchGlossary"];
+        put?: never;
+        /**
+         * Add a set of synonyms
+         * @description `term` and `synonyms` are matched without case or accents. A term that already has an entry answers 409.
+         */
+        post: operations["createSearchGlossaryEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/search/glossary/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a set of synonyms */
+        delete: operations["deleteSearchGlossaryEntry"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/metadata/join-suggestions": {
         parameters: {
             query?: never;
@@ -5658,6 +5704,26 @@ export interface components {
             preview_sql?: string | null;
             doc?: components["schemas"]["SemanticDoc"];
             columns: components["schemas"]["MetadataColumn"][];
+        };
+        SearchGlossaryEntry: {
+            /** Format: uuid */
+            id: string;
+            /** @description Folded: lower case, without accents */
+            term: string;
+            synonyms: string[];
+            /** Format: date-time */
+            created_at: string;
+        };
+        SearchGlossaryEntryCreate: {
+            /** @description At most 64 characters as typed, and at least one letter or digit: the search ignores punctuation, so a word of punctuation could never match */
+            term: string;
+            /** @description 1 to 20 words or short phrases, up to 64 characters each as typed, each with at least one letter or digit. Compared without case or accents, a synonym cannot equal the term or repeat another one; any of these answers 422. */
+            synonyms: string[];
+        };
+        SearchGlossary: {
+            entries: components["schemas"]["SearchGlossaryEntry"][];
+            /** @description `view` for every member; `edit` for editors and above */
+            allowed_actions: string[];
         };
         /** @enum {string} */
         WorkspaceSearchKind: "table" | "column" | "doc" | "saved_query" | "semantic_metric" | "semantic_model" | "folder";
@@ -9951,6 +10017,85 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listSearchGlossary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The glossary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchGlossary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createSearchGlossaryEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchGlossaryEntryCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchGlossaryEntry"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteSearchGlossaryEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listJoinSuggestions: {

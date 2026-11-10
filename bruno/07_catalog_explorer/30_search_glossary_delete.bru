@@ -1,0 +1,19 @@
+meta {
+  name: Search Glossary Delete
+  type: http
+  seq: 30
+}
+
+delete {
+  url: {{base_url}}/workspaces/{{workspace_id}}/search/glossary/{{search_glossary_entry_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 204
+}

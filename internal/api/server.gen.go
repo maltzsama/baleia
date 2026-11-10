@@ -696,6 +696,15 @@ type ServerInterface interface {
 	// One relevance-ranked search over tables, columns, docs, saved queries, metrics, models and folders
 	// (GET /workspaces/{id}/search)
 	SearchWorkspace(w http.ResponseWriter, r *http.Request, id PathId, params SearchWorkspaceParams)
+	// The workspace's search synonyms
+	// (GET /workspaces/{id}/search/glossary)
+	ListSearchGlossary(w http.ResponseWriter, r *http.Request, id PathId)
+	// Add a set of synonyms
+	// (POST /workspaces/{id}/search/glossary)
+	CreateSearchGlossaryEntry(w http.ResponseWriter, r *http.Request, id PathId)
+	// Remove a set of synonyms
+	// (DELETE /workspaces/{id}/search/glossary/{entry_id})
+	DeleteSearchGlossaryEntry(w http.ResponseWriter, r *http.Request, id PathId, entryId openapi_types.UUID)
 	// Delete a doc — workspace editors and admins (#653)
 	// (DELETE /workspaces/{id}/semantic/docs)
 	DeleteSemanticDoc(w http.ResponseWriter, r *http.Request, id PathId, params DeleteSemanticDocParams)
@@ -2184,6 +2193,24 @@ func (_ Unimplemented) TriggerRetrieverRefresh(w http.ResponseWriter, r *http.Re
 // One relevance-ranked search over tables, columns, docs, saved queries, metrics, models and folders
 // (GET /workspaces/{id}/search)
 func (_ Unimplemented) SearchWorkspace(w http.ResponseWriter, r *http.Request, id PathId, params SearchWorkspaceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The workspace's search synonyms
+// (GET /workspaces/{id}/search/glossary)
+func (_ Unimplemented) ListSearchGlossary(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a set of synonyms
+// (POST /workspaces/{id}/search/glossary)
+func (_ Unimplemented) CreateSearchGlossaryEntry(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a set of synonyms
+// (DELETE /workspaces/{id}/search/glossary/{entry_id})
+func (_ Unimplemented) DeleteSearchGlossaryEntry(w http.ResponseWriter, r *http.Request, id PathId, entryId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10949,6 +10976,114 @@ func (siw *ServerInterfaceWrapper) SearchWorkspace(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListSearchGlossary operation middleware
+func (siw *ServerInterfaceWrapper) ListSearchGlossary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSearchGlossary(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSearchGlossaryEntry operation middleware
+func (siw *ServerInterfaceWrapper) CreateSearchGlossaryEntry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSearchGlossaryEntry(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSearchGlossaryEntry operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSearchGlossaryEntry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "entry_id" -------------
+	var entryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "entry_id", chi.URLParam(r, "entry_id"), &entryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "entry_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSearchGlossaryEntry(w, r, id, entryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteSemanticDoc operation middleware
 func (siw *ServerInterfaceWrapper) DeleteSemanticDoc(w http.ResponseWriter, r *http.Request) {
 
@@ -13865,6 +14000,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/search", wrapper.SearchWorkspace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/search/glossary", wrapper.ListSearchGlossary)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/search/glossary", wrapper.CreateSearchGlossaryEntry)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}/search/glossary/{entry_id}", wrapper.DeleteSearchGlossaryEntry)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/workspaces/{id}/semantic/docs", wrapper.DeleteSemanticDoc)
@@ -23783,6 +23927,150 @@ func (response SearchWorkspace422JSONResponse) VisitSearchWorkspaceResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListSearchGlossaryRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListSearchGlossaryResponseObject interface {
+	VisitListSearchGlossaryResponse(w http.ResponseWriter) error
+}
+
+type ListSearchGlossary200JSONResponse SearchGlossary
+
+func (response ListSearchGlossary200JSONResponse) VisitListSearchGlossaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSearchGlossary401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSearchGlossary401JSONResponse) VisitListSearchGlossaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSearchGlossary404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSearchGlossary404JSONResponse) VisitListSearchGlossaryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSearchGlossaryEntryRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *CreateSearchGlossaryEntryJSONRequestBody
+}
+
+type CreateSearchGlossaryEntryResponseObject interface {
+	VisitCreateSearchGlossaryEntryResponse(w http.ResponseWriter) error
+}
+
+type CreateSearchGlossaryEntry201JSONResponse SearchGlossaryEntry
+
+func (response CreateSearchGlossaryEntry201JSONResponse) VisitCreateSearchGlossaryEntryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSearchGlossaryEntry401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateSearchGlossaryEntry401JSONResponse) VisitCreateSearchGlossaryEntryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSearchGlossaryEntry403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateSearchGlossaryEntry403JSONResponse) VisitCreateSearchGlossaryEntryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSearchGlossaryEntry404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateSearchGlossaryEntry404JSONResponse) VisitCreateSearchGlossaryEntryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSearchGlossaryEntry409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateSearchGlossaryEntry409JSONResponse) VisitCreateSearchGlossaryEntryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSearchGlossaryEntry422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateSearchGlossaryEntry422JSONResponse) VisitCreateSearchGlossaryEntryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSearchGlossaryEntryRequestObject struct {
+	Id      PathId             `json:"id"`
+	EntryId openapi_types.UUID `json:"entry_id"`
+}
+
+type DeleteSearchGlossaryEntryResponseObject interface {
+	VisitDeleteSearchGlossaryEntryResponse(w http.ResponseWriter) error
+}
+
+type DeleteSearchGlossaryEntry204Response struct {
+}
+
+func (response DeleteSearchGlossaryEntry204Response) VisitDeleteSearchGlossaryEntryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSearchGlossaryEntry401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteSearchGlossaryEntry401JSONResponse) VisitDeleteSearchGlossaryEntryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSearchGlossaryEntry403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteSearchGlossaryEntry403JSONResponse) VisitDeleteSearchGlossaryEntryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSearchGlossaryEntry404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteSearchGlossaryEntry404JSONResponse) VisitDeleteSearchGlossaryEntryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DeleteSemanticDocRequestObject struct {
 	Id     PathId `json:"id"`
 	Params DeleteSemanticDocParams
@@ -26568,6 +26856,15 @@ type StrictServerInterface interface {
 	// One relevance-ranked search over tables, columns, docs, saved queries, metrics, models and folders
 	// (GET /workspaces/{id}/search)
 	SearchWorkspace(ctx context.Context, request SearchWorkspaceRequestObject) (SearchWorkspaceResponseObject, error)
+	// The workspace's search synonyms
+	// (GET /workspaces/{id}/search/glossary)
+	ListSearchGlossary(ctx context.Context, request ListSearchGlossaryRequestObject) (ListSearchGlossaryResponseObject, error)
+	// Add a set of synonyms
+	// (POST /workspaces/{id}/search/glossary)
+	CreateSearchGlossaryEntry(ctx context.Context, request CreateSearchGlossaryEntryRequestObject) (CreateSearchGlossaryEntryResponseObject, error)
+	// Remove a set of synonyms
+	// (DELETE /workspaces/{id}/search/glossary/{entry_id})
+	DeleteSearchGlossaryEntry(ctx context.Context, request DeleteSearchGlossaryEntryRequestObject) (DeleteSearchGlossaryEntryResponseObject, error)
 	// Delete a doc — workspace editors and admins (#653)
 	// (DELETE /workspaces/{id}/semantic/docs)
 	DeleteSemanticDoc(ctx context.Context, request DeleteSemanticDocRequestObject) (DeleteSemanticDocResponseObject, error)
@@ -33069,6 +33366,92 @@ func (sh *strictHandler) SearchWorkspace(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SearchWorkspaceResponseObject); ok {
 		if err := validResponse.VisitSearchWorkspaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSearchGlossary operation middleware
+func (sh *strictHandler) ListSearchGlossary(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListSearchGlossaryRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSearchGlossary(ctx, request.(ListSearchGlossaryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSearchGlossary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSearchGlossaryResponseObject); ok {
+		if err := validResponse.VisitListSearchGlossaryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSearchGlossaryEntry operation middleware
+func (sh *strictHandler) CreateSearchGlossaryEntry(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request CreateSearchGlossaryEntryRequestObject
+
+	request.Id = id
+
+	var body CreateSearchGlossaryEntryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSearchGlossaryEntry(ctx, request.(CreateSearchGlossaryEntryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSearchGlossaryEntry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSearchGlossaryEntryResponseObject); ok {
+		if err := validResponse.VisitCreateSearchGlossaryEntryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSearchGlossaryEntry operation middleware
+func (sh *strictHandler) DeleteSearchGlossaryEntry(w http.ResponseWriter, r *http.Request, id PathId, entryId openapi_types.UUID) {
+	var request DeleteSearchGlossaryEntryRequestObject
+
+	request.Id = id
+	request.EntryId = entryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSearchGlossaryEntry(ctx, request.(DeleteSearchGlossaryEntryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSearchGlossaryEntry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSearchGlossaryEntryResponseObject); ok {
+		if err := validResponse.VisitDeleteSearchGlossaryEntryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
