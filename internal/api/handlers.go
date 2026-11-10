@@ -30,6 +30,7 @@ import (
 	"github.com/galileostudio/baleia/internal/metrics"
 	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/realtime"
 	"github.com/galileostudio/baleia/internal/storage"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
@@ -174,6 +175,9 @@ type Deps struct {
 	WSTickets *wsticket.Store
 	// Monitoring fans monitoring changes out to the SSE endpoint (#733).
 	Monitoring *events.Hub
+	// Realtime is the shared cross-replica backbone (ADR 0022). Nil or
+	// disabled keeps the caches local.
+	Realtime *realtime.Client
 }
 
 // ObservabilityDeps are optional: a nil Audit records nothing, a nil
@@ -236,7 +240,8 @@ func NewAPI(d Deps) (*API, error) {
 	}
 	c := &core{
 		logger:         cmp.Or(d.Observability.Logger, slog.New(slog.DiscardHandler)),
-		versionCache:   NewTTLStore[engineProbe](engineVersionTTL),
+		rt:             d.Realtime,
+		versionCache:   newCache[engineProbe](d.Realtime, "engine-version", engineVersionTTL),
 		s3:             d.Storage,
 		queries:        d.Data.Queries,
 		store:          d.Data.Store,
@@ -244,8 +249,8 @@ func NewAPI(d Deps) (*API, error) {
 		settings:       d.Settings,
 		keyring:        d.Keyring,
 		temporalClient: d.Temporal,
-		catalogCache:   NewTTLStore[[]workspaceCatalogEntry](60 * time.Second),
-		functionsCache: NewTTLStore[[]metadata.FunctionReference](time.Hour),
+		catalogCache:   newCache[[]workspaceCatalogEntry](d.Realtime, "catalog", 60*time.Second),
+		functionsCache: newCache[[]metadata.FunctionReference](d.Realtime, "functions", time.Hour),
 		connections:    d.Engines.Connections,
 		engines:        d.Engines.Engines,
 		kinds:          d.Engines.Kinds,

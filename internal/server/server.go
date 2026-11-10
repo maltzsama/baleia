@@ -105,6 +105,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		Assistant:     runner,
 		Identity:      api.IdentityDeps{OIDC: core.OIDC, IDPTokens: core.IDPTokens},
 		Monitoring:    monitoringHub,
+		Realtime:      core.Realtime,
 	})
 	if err != nil {
 		return nil, err
@@ -121,15 +122,14 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 
 	authMetrics := h.AuthMetrics()
 	s.onRefreshLimited = func() { authMetrics.Attempt(metrics.AuthRefresh, metrics.OutcomeRateLimited) }
-	s.rl = NewRateLimiter(RateLimiterConfig{RequestsPerSecond: cfg.RateLimitRPS, Burst: cfg.RateLimitBurst})
-	// Strict per-IP limits on the password-guessing surface (#51). They are
-	// per replica: a multi-replica deployment needs a shared limiter to enforce
-	// them across the fleet.
+	s.rl = NewRateLimiter(RateLimiterConfig{RequestsPerSecond: cfg.RateLimitRPS, Burst: cfg.RateLimitBurst}, core.Realtime)
+	// Strict per-IP limits on the password-guessing surface (#51). With the
+	// shared layer they hold across the fleet; without it they are per replica.
 	s.authLimiter = NewAuthRouteLimiter([]AuthRouteLimit{
 		{Path: "/api/v1/auth/login", Kind: metrics.AuthPassword, Every: time.Minute, Burst: 10},
 		{Path: "/api/v1/auth/password-reset/request", Kind: metrics.AuthPasswordResetRequest, Every: 15 * time.Minute, Burst: 5},
 		{Path: "/api/v1/auth/password-reset/confirm", Kind: metrics.AuthPasswordResetConfirm, Every: 15 * time.Minute, Burst: 10},
-	}, func(kind string) { authMetrics.Attempt(kind, metrics.OutcomeRateLimited) })
+	}, func(kind string) { authMetrics.Attempt(kind, metrics.OutcomeRateLimited) }, core.Realtime)
 
 	var store wsStore = core.Queries
 	if core.StoreRepo != nil {
