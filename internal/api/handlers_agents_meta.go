@@ -29,6 +29,8 @@ func agentToolDoc(name string) (label, description string, readOnly bool) {
 		return "Describe table", "Columns, types and comments for one table.", true
 	case agentpolicy.ToolSearchMetadata:
 		return "Search metadata", "Find tables and columns by name or description.", true
+	case agentpolicy.ToolSearch:
+		return "Search", "Find tables, columns, docs, saved queries, metrics and models in one ranked list.", true
 	case agentpolicy.ToolListMetrics:
 		return "List metrics", "The semantic metrics available to the workspace.", true
 	case agentpolicy.ToolRenderMetric:
