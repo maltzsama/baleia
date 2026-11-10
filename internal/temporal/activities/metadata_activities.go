@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/webhooks"
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
@@ -96,6 +97,9 @@ func (a *Activities) syncCatalogMetadata(ctx context.Context, p SyncCatalogMetad
 	}
 	activity.GetLogger(ctx).Info("metadata synced", "catalog_id", p.CatalogID, "path", stats.Path,
 		"seen", stats.TablesSeen, "changed", stats.TablesChanged, "removed", stats.TablesRemoved)
+	if a.webhook != nil && (stats.TablesChanged > 0 || stats.TablesRemoved > 0) {
+		a.webhook(ctx, webhooks.CatalogSyncedEvent(p.CatalogID))
+	}
 	return &SyncCatalogMetadataResult{Path: stats.Path, TablesSeen: stats.TablesSeen, TablesChanged: stats.TablesChanged, TablesRemoved: stats.TablesRemoved}, nil
 }
 

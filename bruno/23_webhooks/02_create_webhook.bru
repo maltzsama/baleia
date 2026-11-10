@@ -1,0 +1,30 @@
+meta {
+  name: Create Webhook
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/webhooks
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "url": "https://example.test/baleia-hook",
+    "events": ["execution.finished"]
+  }
+}
+
+vars:post-response {
+  webhook_id: res.body.id
+}
+
+assert {
+  res.status: eq 201
+}

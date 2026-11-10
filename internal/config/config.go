@@ -52,6 +52,9 @@ type Config struct {
 	// RedisPrefix namespaces Redis keys and channels when one instance serves
 	// more than one deployment. Empty uses "baleia".
 	RedisPrefix string
+	// WebhooksEnabled turns on workspace webhook registration and delivery
+	// (ADR 0022). Off drops webhook events at the producer.
+	WebhooksEnabled bool
 	PolarisURL  string
 	// PolarisClientID/Secret seed the credentials of a polaris connection
 	// created without any (POLARIS_CLIENT_ID, POLARIS_CLIENT_SECRET).
@@ -272,6 +275,7 @@ func Load() *Config {
 		TemporalNamespace:                 getEnv("BALEIA_TEMPORAL_NAMESPACE", "default"),
 		RedisURL:                          getEnv("BALEIA_REDIS_URL", ""),
 		RedisPrefix:                       getEnv("BALEIA_REDIS_PREFIX", "baleia"),
+		WebhooksEnabled:                   getEnv("BALEIA_WEBHOOKS_ENABLED", "true") == "true",
 		PolarisURL:                        getEnv("POLARIS_URL", "http://localhost:8181"),
 		PolarisClientID:                   getEnv("POLARIS_CLIENT_ID", ""),
 		PolarisClientSecret:               getEnv("POLARIS_CLIENT_SECRET", ""),

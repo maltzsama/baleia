@@ -22,6 +22,7 @@ import (
 	"github.com/galileostudio/baleia/internal/policy"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/webhooks"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/worker"
@@ -45,8 +46,11 @@ type Activities struct {
 	// store is the GORM store every activity persists through (ADR 0020).
 	// The field keeps the sqlc-shaped interface so unit tests can inject a
 	// fake; production always holds *repo.Repo.
-	store   db.Querier
-	notify  events.Transport
+	store  db.Querier
+	notify events.Transport
+	// webhook publishes domain events for webhook delivery (ADR 0022); nil
+	// when webhooks are disabled.
+	webhook func(ctx context.Context, ev webhooks.Event)
 	engines engineSource
 	monitor lensMonitor
 	s3      s3Client
@@ -81,6 +85,9 @@ func (a *Activities) SetAuditExporter(e *auditexport.Exporter) { a.auditExport =
 
 // SetAudit wires the audit recorder (#45).
 func (a *Activities) SetAudit(r audit.Recorder) { a.audit = r }
+
+// SetWebhook wires the best-effort webhook publisher (ADR 0022).
+func (a *Activities) SetWebhook(fn func(ctx context.Context, ev webhooks.Event)) { a.webhook = fn }
 
 // s3Client is the slice of the storage client result streaming needs. It is an
 // interface so tests can inject a fake.

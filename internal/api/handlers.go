@@ -260,6 +260,9 @@ func NewAPI(d Deps) (*API, error) {
 		idpTokens:      d.Identity.IDPTokens,
 		monitoringHub:  d.Monitoring,
 	}
+	if d.Data.Store != nil {
+		c.webhooks = repo.NewWebhooks(d.Data.Store)
+	}
 	if c.audit == nil {
 		c.audit = audit.Nop{}
 	}

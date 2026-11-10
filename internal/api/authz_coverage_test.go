@@ -324,6 +324,9 @@ var operationAccess = map[string]access{
 	// Workspace settings (#108).
 	"DeleteWorkspace":      checked("PrincipalFromContext", "Workspace"),
 	"ListWorkspaceMembers": checked("PrincipalFromContext", "Workspace"),
+	"ListWebhooks":         checked("webhookManager"),
+	"CreateWebhook":        checked("webhookManager"),
+	"DeleteWebhook":        checked("webhookManager"),
 	// Service accounts (#653): people only; a global admin, or an admin of
 	// the workspace the account was created in.
 	"ListServiceAccounts":       checked("serviceAccountManager"),

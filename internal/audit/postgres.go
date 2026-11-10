@@ -10,6 +10,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/webhooks"
 	"github.com/google/uuid"
 )
 
@@ -27,8 +28,13 @@ type Postgres struct {
 	q       Inserter
 	secret  map[string]bool
 	failed  func()
+	webhook func(ctx context.Context, ev webhooks.Event)
 	timeout time.Duration
 }
+
+// SetWebhook observes every recorded event for best-effort webhook delivery.
+// The audit store's guarantee stays best-effort; a failed publish is ignored.
+func (p *Postgres) SetWebhook(fn func(ctx context.Context, ev webhooks.Event)) { p.webhook = fn }
 
 // NewPostgres returns a recorder. secretKeys are field names whose values are
 // redacted (the connection providers' secret fields); onFailure counts failed
@@ -51,6 +57,9 @@ func (p *Postgres) Record(ctx context.Context, e Event) error {
 		if p.failed != nil {
 			p.failed()
 		}
+	}
+	if err == nil && p.webhook != nil {
+		p.webhook(ctx, webhooks.AuditEvent(e.WorkspaceID, string(e.Action), e.ResourceType, e.ResourceID, string(e.Outcome)))
 	}
 	return err
 }
