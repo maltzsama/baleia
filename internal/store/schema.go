@@ -130,6 +130,16 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.Webhook{}, &model.WebhookDelivery{})
 			},
 		},
+		Migration{
+			Version: 10,
+			Name:    "add workspace-bound bi keys",
+			Up: func(db *gorm.DB) error {
+				if err := AutoMigrate(db, &model.APIKey{}); err != nil {
+					return err
+				}
+				return createForeignKeys(db, []any{&model.APIKey{}})
+			},
+		},
 	)
 }
 
