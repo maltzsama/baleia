@@ -31,9 +31,9 @@ function HomepageHeader() {
           height={132}
         />
         <Heading as="h1" className="hero__title">
-          {pageTitle}
+          {siteConfig.title}
         </Heading>
-        <p className="hero__subtitle">Baleia is the control plane for your data platform</p>
+        <p className="hero__subtitle">{siteConfig.tagline}</p>
         {version && (
           <Link className={styles.version} href={`${repo}/releases/tag/v${version}`}>
             v{version}
