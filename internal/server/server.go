@@ -180,7 +180,9 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 func relayExecutions(ctx context.Context, logger *slog.Logger, outbox *monitoringevents.Outbox, bus *realtime.Client) {
 	for ctx.Err() == nil {
 		err := outbox.Listen(ctx, "execution", nil, func(payload string) {
-			_ = bus.Publish(ctx, "execution:"+payload, []byte("changed"))
+			if perr := bus.Publish(ctx, "execution:"+payload, []byte("changed")); perr != nil && logger != nil {
+				logger.WarnContext(ctx, "execution relay: publish failed", "err", perr)
+			}
 		})
 		if ctx.Err() != nil {
 			return
