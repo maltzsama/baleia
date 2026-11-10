@@ -74,8 +74,8 @@ type Manager interface {
 | GaussDB | yes | yes | PostgreSQL-compatible, same adapter |
 | MySQL / MariaDB | yes | **no** (InnoDB) | implemented |
 | TiDB | yes | version-dependent | pending |
-| SQL Server | yes (scheme model) | yes | pending |
-| Oracle | yes (Partitioning option) | yes | pending |
+| SQL Server | yes (scheme model) | yes | implemented |
+| Oracle | yes (Partitioning option) | yes | implemented |
 | SQLite | **no** | n/a | emulated (plain table + registry, drop = `DELETE`) |
 
 ## Schema
@@ -157,7 +157,7 @@ statement_joins         FOREIGN KEY (statement_id, execution_started_at)
 
 ## Current compliance
 
-The `PartitionManager` seam exists in `internal/persistence/partitioning`: the interface, `Spec`/`Capabilities` (with `Emulated`), and three adapters with tests — PostgreSQL, MySQL/MariaDB (native range, foreign keys dropped) and SQLite (emulated). TiDB rides the MySQL adapter through the MySQL protocol. SQL Server and Oracle have GORM dialectors (`gorm.io/driver/sqlserver`; Godror-based `gorm-oracle` or pure-Go `cengsin/oracle`), but their adapters are not yet shipped: the store wires only PostgreSQL and MySQL, and the store test harness (`internal/testdb`) covers only those two backends. Nothing else in this decision is implemented yet: `audit_events` is still a single plain table, `EnsureAuditPartitions` and `audit.Prune` are effectively no-ops, and query history has no lifecycle management. #948 tracks the rollout.
+The `PartitionManager` seam exists in `internal/persistence/partitioning`: the interface, `Spec`/`Capabilities` (with `Emulated`), and adapters for PostgreSQL, MySQL/MariaDB (native range, foreign keys dropped), SQL Server (partition function + scheme), Oracle (native range, paid Partitioning option) and SQLite (emulated). TiDB rides the MySQL adapter through the MySQL protocol. PostgreSQL, MySQL and SQLite are DB-tested; SQL Server has a skip-gated DB test; Oracle is unit-tested for its DDL shape only (a live test needs the Godror driver's Oracle Instant Client). Nothing else in this decision is implemented yet: `audit_events` is still a single plain table, `EnsureAuditPartitions` and `audit.Prune` are effectively no-ops, and query history has no lifecycle management. #948 tracks the rollout.
 
 ## Rollout
 

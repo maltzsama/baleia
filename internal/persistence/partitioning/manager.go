@@ -64,9 +64,10 @@ type Manager interface {
 
 // New resolves the adapter from the GORM dialector. The registry covers every
 // backend ADR 0023 names: PostgreSQL and GaussDB (native), MySQL/MariaDB
-// (native, foreign keys dropped), SQLite (emulated), and TiDB, SQL Server and
-// Oracle (not yet shipped, returning ErrNotImplemented rather than pretending
-// parity).
+// (native, foreign keys dropped), SQL Server (partition function + scheme),
+// Oracle (native range, paid Partitioning option), SQLite (emulated), and TiDB
+// (MySQL protocol, via the MySQL adapter). A backend whose adapter has not
+// shipped returns ErrNotImplemented rather than pretending parity.
 func New(db *gorm.DB) (Manager, error) {
 	if db == nil {
 		return nil, errors.New("partitioning: nil database")
@@ -77,7 +78,11 @@ func New(db *gorm.DB) (Manager, error) {
 		return &postgresManager{db: db}, nil
 	case "mysql":
 		return &mysqlManager{db: db}, nil
-	case "tidb", "sqlserver", "oracle":
+	case "sqlserver":
+		return &sqlserverManager{db: db}, nil
+	case "oracle":
+		return &oracleManager{db: db}, nil
+	case "tidb":
 		return nil, fmt.Errorf("%w: %q", ErrNotImplemented, name)
 	case "sqlite":
 		return &sqliteManager{db: db}, nil
@@ -100,10 +105,13 @@ func capabilitiesFor(dialector string) Capabilities {
 		// TiDB native range partitioning is version-dependent and, like
 		// MySQL, forbids foreign keys on partitioned tables.
 		return Capabilities{NativeRange: true, ForeignKeysOnPartitioned: false}
-	case "sqlserver", "oracle":
-		// Both support native partitioning but with a different model
-		// (partition function/scheme, interval partitioning).
-		return Capabilities{NativeRange: true, ForeignKeysOnPartitioned: true}
+	case "sqlserver":
+		// Partition function + scheme model; foreign keys are allowed on
+		// partitioned tables. Drop is truncate + merge, not a metadata drop.
+		return Capabilities{NativeRange: true, ForeignKeysOnPartitioned: true, Implemented: true}
+	case "oracle":
+		// Native range partitioning requires the paid Partitioning option.
+		return Capabilities{NativeRange: true, ForeignKeysOnPartitioned: true, Implemented: true}
 	case "sqlite":
 		// No native partitioning: emulated on a plain table with a sidecar
 		// registry and a bounded DELETE for DropPartition.
