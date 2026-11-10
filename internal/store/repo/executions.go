@@ -8,6 +8,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/webhooks"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -98,6 +99,12 @@ func (r *Repo) UpdateQueryExecution(ctx context.Context, arg db.UpdateQueryExecu
 		if err == nil {
 			err = r.enqueueTx(tx, "execution", UUIDString(arg.ID))
 		}
+		if err == nil && terminalStatus(out.Status) {
+			err = r.enqueueTx(tx, "webhook", webhooks.ExecutionFinishedEvent(
+				UUIDString(out.WorkspaceID), UUIDString(out.ID), out.Status,
+				out.RowsReturned, out.DurationMs, out.ErrorCode,
+			).Marshal())
+		}
 		return err
 	})
 	return out, err
@@ -124,6 +131,12 @@ func (r *Repo) CancelQueryExecution(ctx context.Context, arg db.CancelQueryExecu
 		out = row
 		if err == nil {
 			err = r.enqueueTx(tx, "execution", UUIDString(arg.ID))
+		}
+		if err == nil && terminalStatus(out.Status) {
+			err = r.enqueueTx(tx, "webhook", webhooks.ExecutionFinishedEvent(
+				UUIDString(out.WorkspaceID), UUIDString(out.ID), out.Status,
+				out.RowsReturned, out.DurationMs, out.ErrorCode,
+			).Marshal())
 		}
 		return err
 	})
@@ -155,6 +168,12 @@ func (r *Repo) FailQueryExecution(ctx context.Context, arg db.FailQueryExecution
 		out = row
 		if err == nil {
 			err = r.enqueueTx(tx, "execution", UUIDString(arg.ID))
+		}
+		if err == nil && terminalStatus(out.Status) {
+			err = r.enqueueTx(tx, "webhook", webhooks.ExecutionFinishedEvent(
+				UUIDString(out.WorkspaceID), UUIDString(out.ID), out.Status,
+				out.RowsReturned, out.DurationMs, out.ErrorCode,
+			).Marshal())
 		}
 		return err
 	})
@@ -557,6 +576,10 @@ func (r *Repo) ListWorkloadRules(ctx context.Context) ([]db.WorkloadRule, error)
 		out[i] = toDBWorkloadRule(row)
 	}
 	return out, nil
+}
+
+func terminalStatus(status string) bool {
+	return status == "finished" || status == "failed" || status == "cancelled"
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

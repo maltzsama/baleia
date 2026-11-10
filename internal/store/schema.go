@@ -123,6 +123,13 @@ func AllMigrations() (*Registry, error) {
 			Name:    "backfill connection access mode",
 			Up:      backfillAccessMode,
 		},
+		Migration{
+			Version: 9,
+			Name:    "create webhook tables",
+			Up: func(db *gorm.DB) error {
+				return AutoMigrate(db, &model.Webhook{}, &model.WebhookDelivery{})
+			},
+		},
 	)
 }
 

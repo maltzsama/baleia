@@ -44,6 +44,7 @@ config:
   BALEIA_EXECUTION_TIMEOUT: "2h"
   BALEIA_WORKLOAD_ENABLED: "false"
   BALEIA_METADATA_SYNC_INTERVAL: "15m"
+  BALEIA_WEBHOOKS_ENABLED: "true"
   BALEIA_RESULT_MAX_ROWS: "1000000"
   BALEIA_RESULT_MAX_BYTES: "536870912"
   # Trino identity that may manage catalogs. One value: Baleia's DDL emitter

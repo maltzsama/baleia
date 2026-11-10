@@ -91,6 +91,8 @@ type core struct {
 	access *wsaccess.Service
 	// topology reads and edits how catalogs sit on engines.
 	topology *topology.Service
+	// webhooks persists workspace webhook registrations (#768).
+	webhooks *repo.Webhooks
 }
 
 // spacesOver builds the spaces service over store, creating a space and its
