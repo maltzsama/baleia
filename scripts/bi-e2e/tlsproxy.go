@@ -10,6 +10,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -49,7 +50,8 @@ func main() {
 // forward copies one TLS connection to the plain gateway.
 func forward(conn net.Conn, target string) {
 	defer func() { _ = conn.Close() }()
-	up, err := net.DialTimeout("tcp", target, 5*time.Second)
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	up, err := dialer.DialContext(context.Background(), "tcp", target)
 	if err != nil {
 		return
 	}
