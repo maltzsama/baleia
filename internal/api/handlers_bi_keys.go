@@ -30,8 +30,10 @@ func (h *WorkspaceHandlers) ListBiKeys(ctx context.Context, request ListBiKeysRe
 	}
 	wsID := workspaceIDFromRequest(request.Id)
 	role, err := h.authz().WorkspaceRole(ctx, p, wsID)
-	if err != nil {
+	if errors.Is(err, authz.ErrNotFound) {
 		return ListBiKeys404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+	} else if err != nil {
+		return nil, err
 	}
 	keys, err := svc.List(ctx, wsID, p.UserID, role >= authz.WorkspaceAdmin)
 	if err != nil {
@@ -87,8 +89,10 @@ func (h *WorkspaceHandlers) CreateBiKey(ctx context.Context, request CreateBiKey
 	}
 	wsID := workspaceIDFromRequest(request.Id)
 	role, err := h.authz().WorkspaceRole(ctx, p, wsID)
-	if err != nil {
+	if errors.Is(err, authz.ErrNotFound) {
 		return CreateBiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+	} else if err != nil {
+		return nil, err
 	}
 	owner := p.UserID
 	if body.OwnerId != nil {
@@ -161,8 +165,10 @@ func (h *WorkspaceHandlers) DeleteBiKey(ctx context.Context, request DeleteBiKey
 	}
 	wsID := workspaceIDFromRequest(request.Id)
 	role, err := h.authz().WorkspaceRole(ctx, p, wsID)
-	if err != nil {
+	if errors.Is(err, authz.ErrNotFound) {
 		return DeleteBiKey404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+	} else if err != nil {
+		return nil, err
 	}
 	keyID := db.UUID{Bytes: request.KeyId, Valid: true}
 	key, err := svc.Revoke(ctx, wsID, keyID, p.UserID, role >= authz.WorkspaceAdmin)
