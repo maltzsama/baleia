@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -441,6 +442,56 @@ func TestConnectionsMatrixUpToDate(t *testing.T) {
 	}
 	if string(want) != got {
 		t.Error("docs/connections.md is stale; regenerate it with BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/")
+	}
+}
+
+// TestConnectionPagesUpToDate keeps docs/connections/ equal to what the registry
+// generates: a changed provider, a new supported kind, or a hand edit fails it,
+// and so does a page left behind by a kind that lost its page.
+func TestConnectionPagesUpToDate(t *testing.T) {
+	t.Parallel()
+	const dir = "../../../docs/connections"
+	pages := Pages(registry(t, connections.DialerOptions{}))
+	if os.Getenv("BALEIA_UPDATE_DOCS") == "1" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		stale, err := filepath.Glob(filepath.Join(dir, "*.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range stale {
+			if err := os.Remove(f); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for kind, body := range pages {
+			if err := os.WriteFile(filepath.Join(dir, string(kind)+".md"), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return
+	}
+	const regen = "regenerate them with BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/"
+	for kind, want := range pages {
+		got, err := os.ReadFile(filepath.Join(dir, string(kind)+".md"))
+		if err != nil {
+			t.Errorf("docs/connections/%s.md is missing: %v (%s)", kind, err, regen)
+			continue
+		}
+		if string(got) != want {
+			t.Errorf("docs/connections/%s.md is stale (%s)", kind, regen)
+		}
+	}
+	files, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		kind := connections.Kind(strings.TrimSuffix(filepath.Base(f), ".md"))
+		if _, ok := pages[kind]; !ok {
+			t.Errorf("%s has no provider page to match (%s)", f, regen)
+		}
 	}
 }
 

@@ -2,6 +2,7 @@ package providers
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/connections"
@@ -57,29 +58,98 @@ func Markdown(reg *connections.Registry) string {
 		if d := p.Meta().Description; d != "" {
 			b.WriteString(d + "\n\n")
 		}
-		b.WriteString("| Field | Type | Required | Default | Notes |\n")
-		b.WriteString("|---|---|---|---|---|\n")
-		for _, f := range p.ConfigSchema() {
-			req := ""
-			if f.Required {
-				req = "yes"
+		writeFieldTable(&b, p.ConfigSchema())
+	}
+	return b.String()
+}
+
+// writeFieldTable renders a provider's configuration schema.
+func writeFieldTable(b *strings.Builder, schema []connections.Field) {
+	b.WriteString("| Field | Type | Required | Default | Notes |\n")
+	b.WriteString("|---|---|---|---|---|\n")
+	for _, f := range schema {
+		req := ""
+		if f.Required {
+			req = "yes"
+		}
+		notes := f.Help
+		if len(f.Options) > 0 {
+			opts := "one of `" + strings.Join(f.Options, "`, `") + "`"
+			if notes != "" {
+				notes = opts + ". " + notes
+			} else {
+				notes = opts
 			}
-			notes := f.Help
-			if len(f.Options) > 0 {
-				opts := "one of `" + strings.Join(f.Options, "`, `") + "`"
-				if notes != "" {
-					notes = opts + ". " + notes
-				} else {
-					notes = opts
-				}
-			}
-			def := ""
-			if f.Default != "" {
-				def = "`" + f.Default + "`"
-			}
-			fmt.Fprintf(&b, "| `%s` | %s | %s | %s | %s |\n", f.Key, f.Type, req, def, strings.ReplaceAll(notes, "|", `\|`))
+		}
+		def := ""
+		if f.Default != "" {
+			def = "`" + f.Default + "`"
+		}
+		fmt.Fprintf(b, "| `%s` | %s | %s | %s | %s |\n", f.Key, f.Type, req, def, strings.ReplaceAll(notes, "|", `\|`))
+	}
+}
+
+// pageStates are the provider states that get a page of their own. planned and
+// experimental kinds are not offered to users, and a page for them would
+// advertise what Baleia cannot do yet; not_applicable is reserved. A kind that
+// is only unsupported until the operator enables it (SQLite needs
+// BALEIA_SQLITE_ROOT) is documented.
+func hasPage(p connections.Provider) bool {
+	switch p.Status().State {
+	case connections.StatePlanned, connections.StateExperimental, connections.StateNotApplicable:
+		return false
+	}
+	return true
+}
+
+// Pages renders one docs page per documented provider, keyed by kind. They are
+// written to docs/connections/<kind>.md, a folder that holds only these files.
+// Every sentence comes from the registry (description, roles, access modes,
+// configuration schema), so a page cannot claim more than the provider declares.
+func Pages(reg *connections.Registry) map[connections.Kind]string {
+	pages := map[connections.Kind]string{}
+	for _, p := range reg.All() {
+		if hasPage(p) {
+			pages[p.Kind()] = page(p)
 		}
 	}
+	return pages
+}
+
+func page(p connections.Provider) string {
+	meta := p.Meta()
+	var b strings.Builder
+	fmt.Fprintf(&b, "---\nsidebar_label: %s\n", p.Label())
+	fmt.Fprintf(&b, "description: \"Connect %s to Baleia. %s See its settings and what Baleia does with it.\"\n---\n\n",
+		p.Label(), strings.ReplaceAll(meta.Description, `"`, `\"`))
+	fmt.Fprintf(&b, "# Connect %s to Baleia\n\n", p.Label())
+	b.WriteString("<!-- Generated from internal/connections/providers. Do not edit by hand:\n")
+	b.WriteString("     BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/ -->\n\n")
+	b.WriteString(meta.Description + "\n\n")
+
+	b.WriteString("## What Baleia does with it\n\n")
+	for _, r := range p.Roles() {
+		switch r {
+		case connections.RoleMetadata:
+			b.WriteString("- Reads its catalogs, schemas, tables and columns into Baleia's stored metadata, which the [data explorer](../guides/data.md) browses without querying the source.\n")
+		case connections.RoleDirect:
+			fmt.Fprintf(&b, "- Runs SQL on it directly from the [workbench](../guides/workbench.md), on its own connection (engine kind `%s`).\n", p.EngineKind())
+		case connections.RoleFederated:
+			b.WriteString("- Runs SQL as a federated engine, so one query can join across the sources registered with it.\n")
+		}
+	}
+	if slices.Contains(meta.AccessModes, connections.AccessModeTrino) && len(meta.TrinoCatalogTypes) > 0 {
+		fmt.Fprintf(&b, "- Sets up and keeps the matching Trino catalog (type `%s`), so Trino can query it.\n",
+			strings.Join(meta.TrinoCatalogTypes, "`, `"))
+	}
+	b.WriteString("\n## Configuration\n\n")
+	b.WriteString("Create it under **Connections**. Credentials are sealed with `BALEIA_ENCRYPTION_KEY` before they are stored, and every outbound connection goes through the same [network policy](../adr/0011-direct-connections-security.md).\n\n")
+	writeFieldTable(&b, p.ConfigSchema())
+
+	b.WriteString("\n## Next steps\n\n")
+	b.WriteString("- [Quick start](../quick-start.md)\n")
+	b.WriteString("- [Every connection provider](../connections.md)\n")
+	b.WriteString("- [Concepts](../concepts.md)\n")
 	return b.String()
 }
 
