@@ -195,6 +195,12 @@ func dropPartition(db *gorm.DB, table string, from, until time.Time) error {
 		// partition a non-partitioned table references through a composite
 		// foreign key be removed; it fails closed if referencing rows remain.
 		if err := db.Transaction(func(tx *gorm.DB) error {
+			// Bound the detach: a pending DETACH holds ACCESS EXCLUSIVE on the
+			// parent and would block reads and writes there. A timeout rolls
+			// the whole transaction back so a later pass can retry.
+			if err := tx.Exec("SET LOCAL lock_timeout = '30s'").Error; err != nil {
+				return fmt.Errorf("set lock timeout: %w", err)
+			}
 			if err := tx.Exec("ALTER TABLE ? DETACH PARTITION ?",
 				clause.Column{Name: table}, clause.Column{Name: p.Name}).Error; err != nil {
 				return fmt.Errorf("detach %s: %w", p.Name, err)
