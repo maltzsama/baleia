@@ -8,8 +8,8 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-// AuditPartitionsWorkflow keeps the audit trail's monthly partitions ahead
-// of time (schedule audit-partitions, daily, #45). A missing partition makes
+// AuditPartitionsWorkflow keeps the audit trail's daily partitions ahead
+// of time (schedule audit-partitions, daily, #45, ADR 0026). A missing partition makes
 // every audit write fail, so a day of retries is cheap insurance.
 func AuditPartitionsWorkflow(ctx workflow.Context) error {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{

@@ -10,9 +10,9 @@ import (
 	"github.com/galileostudio/baleia/internal/testdb"
 )
 
-// TestEnsureAuditPartitions: the schedule extends the partitions of the audit
-// trail and the query history ahead of the current month, idempotently, and
-// never drops one.
+// TestEnsureAuditPartitions: the schedule extends the daily partitions of the
+// audit trail and the query history ahead of today, idempotently, and never
+// drops one.
 func TestEnsureAuditPartitions(t *testing.T) {
 	t.Parallel()
 	gdb := testdb.New(t)
@@ -25,12 +25,14 @@ func TestEnsureAuditPartitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Past the 14 days the migration provisions, so the call really extends.
+	const ahead = 30
 	for range 2 {
-		if err := r.EnsureAuditPartitions(ctx, 6); err != nil {
+		if err := r.EnsureAuditPartitions(ctx, ahead); err != nil {
 			t.Fatalf("EnsureAuditPartitions: %v", err)
 		}
 	}
-	last := partitioning.Monthly.Start(time.Now()).AddDate(0, 6, 0)
+	last := partitioning.Daily.Start(time.Now()).AddDate(0, 0, ahead)
 	for _, tbl := range model.PartitionedTables() {
 		parts, err := pm.ListPartitions(ctx, tbl.Table)
 		if err != nil {

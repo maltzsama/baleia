@@ -958,12 +958,11 @@ func (r *Repo) ReleaseMetadataSyncLock(ctx context.Context, catalogID string) er
 	return nil
 }
 
-// EnsureAuditPartitions creates the monthly partitions of the audit trail and of
-// the query history from the current month through monthsAhead months ahead
-// (ADR 0024). It never drops one, and it is idempotent. A table that is still
+// EnsureAuditPartitions creates the daily partitions of the audit trail and of
+// the query history from today through daysAhead days ahead (ADR 0026). It never drops one, and it is idempotent. A table that is still
 // plain (migration 14 has not run, or the engine has no adapter) is left alone:
 // provisioning would convert it, and converting belongs to the migration.
-func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) error {
+func (r *Repo) EnsureAuditPartitions(ctx context.Context, daysAhead int) error {
 	pm, err := r.partitionManager()
 	if err != nil {
 		return err
@@ -971,8 +970,8 @@ func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) err
 	if pm == nil {
 		return nil
 	}
-	from := partitioning.Monthly.Start(time.Now())
-	until := from.AddDate(0, int(monthsAhead)+1, 0)
+	from := partitioning.Daily.Start(time.Now())
+	until := from.AddDate(0, 0, daysAhead+1)
 	for _, t := range model.PartitionedTables() {
 		existing, err := pm.ListPartitions(ctx, t.Table)
 		if err != nil {
@@ -981,7 +980,7 @@ func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) err
 		if len(existing) == 0 {
 			return fmt.Errorf("%s is not partitioned: run the store migrations", t.Table)
 		}
-		spec := partitioning.Spec{Table: t.Table, Column: t.Column, Strategy: partitioning.Range, Interval: partitioning.Monthly}
+		spec := partitioning.Spec{Table: t.Table, Column: t.Column, Strategy: partitioning.Range, Interval: partitioning.Daily}
 		if err := pm.Provision(ctx, t.Model, spec, from, until); err != nil {
 			return fmt.Errorf("provision %s: %w", t.Table, err)
 		}

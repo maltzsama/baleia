@@ -318,3 +318,18 @@ func TestLoad_AnalyticsUmamiDefaults(t *testing.T) {
 		t.Errorf("script url = %q, want %q", c.AnalyticsUmamiScriptURL, DefaultUmamiScriptURL)
 	}
 }
+
+func TestConfig_PartitionDaysAhead(t *testing.T) {
+	t.Setenv("BALEIA_PARTITION_DAYS_AHEAD", "")
+	if got := Load().PartitionDaysAhead; got != 14 {
+		t.Fatalf("default PartitionDaysAhead = %d, want 14", got)
+	}
+	t.Setenv("BALEIA_PARTITION_DAYS_AHEAD", "30")
+	if got := Load().PartitionDaysAhead; got != 30 {
+		t.Fatalf("PartitionDaysAhead = %d, want 30", got)
+	}
+	cfg := &Config{JWTSecret: strings.Repeat("s", MinJWTSecretLen), PartitionDaysAhead: -1}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "BALEIA_PARTITION_DAYS_AHEAD") {
+		t.Fatalf("Validate() = %v, want an error naming BALEIA_PARTITION_DAYS_AHEAD", err)
+	}
+}
