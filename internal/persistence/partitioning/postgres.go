@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // postgresManager is the PostgreSQL adapter. All dialect-specific partition
@@ -182,18 +183,27 @@ func dropPartition(db *gorm.DB, table string, from, until time.Time) error {
 		return fmt.Errorf("partitioning: invalid table name %q", table)
 	}
 	for _, p := range RangeMonths(table, from, until) {
+		if !identifier.MatchString(p.Name) {
+			return fmt.Errorf("partitioning: invalid partition name %q", p.Name)
+		}
 		if !db.Migrator().HasTable(p.Name) {
 			continue
 		}
-		// Detach first: a partition whose rows a non-partitioned table
-		// references through a composite foreign key (query history's
-		// snapshots and references) cannot be dropped while attached. Detaching
-		// makes it a standalone table the FK no longer covers, which then drops
-		// cleanly. It fails closed if referencing rows remain.
-		if err := db.Exec(fmt.Sprintf(`ALTER TABLE "%s" DETACH PARTITION "%s"`, table, p.Name)).Error; err != nil {
-			return fmt.Errorf("partitioning: detach partition %s: %w", p.Name, err)
-		}
-		if err := db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, p.Name)).Error; err != nil {
+		// Detach and drop in one transaction: a DETACH that survives a failed
+		// DROP leaves a standalone table that no longer detaches on retry, so
+		// the two steps must roll back together. Detaching first is what lets a
+		// partition a non-partitioned table references through a composite
+		// foreign key be removed; it fails closed if referencing rows remain.
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("ALTER TABLE ? DETACH PARTITION ?",
+				clause.Column{Name: table}, clause.Column{Name: p.Name}).Error; err != nil {
+				return fmt.Errorf("detach %s: %w", p.Name, err)
+			}
+			if err := tx.Exec("DROP TABLE IF EXISTS ?", clause.Column{Name: p.Name}).Error; err != nil {
+				return fmt.Errorf("drop %s: %w", p.Name, err)
+			}
+			return nil
+		}); err != nil {
 			return fmt.Errorf("partitioning: drop partition %s: %w", p.Name, err)
 		}
 	}
