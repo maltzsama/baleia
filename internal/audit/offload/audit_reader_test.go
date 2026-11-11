@@ -2,6 +2,7 @@ package offload
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +18,9 @@ func TestColdAuditDocument(t *testing.T) {
 		ID: 42, OccurredAt: time.Date(2026, 10, 5, 10, 0, 0, 0, time.UTC),
 		ActorKind: "user", ActorID: "u1", Action: "catalog.update", ResourceType: "catalog",
 		Outcome: "allowed", OnBehalfOf: "00000000-0000-0000-0000-000000000009",
-		Changes: json.RawMessage(`{"a":1}`),
+		// A number past float64's exact range: decoding through any would
+		// round it to 9007199254740992.
+		Changes: json.RawMessage(`{"value":9007199254740993}`),
 	}
 	doc := ColdAuditDocument(e)
 	if doc["id"] != int64(42) {
@@ -26,7 +29,11 @@ func TestColdAuditDocument(t *testing.T) {
 	if doc["on_behalf_of"] != "00000000-0000-0000-0000-000000000009" {
 		t.Fatalf("on_behalf_of = %v", doc["on_behalf_of"])
 	}
-	if doc["action"] != "catalog.update" || doc["changes"] == nil {
-		t.Fatalf("doc = %v", doc)
+	b, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(b), "9007199254740993") {
+		t.Fatalf("changes lost precision: %s", b)
 	}
 }

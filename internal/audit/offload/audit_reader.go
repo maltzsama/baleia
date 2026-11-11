@@ -115,10 +115,9 @@ func ColdAuditDocument(e export.Event) map[string]any {
 		doc["on_behalf_of"] = e.OnBehalfOf
 	}
 	if len(e.Changes) > 0 {
-		var changes any
-		if json.Unmarshal(e.Changes, &changes) == nil {
-			doc["changes"] = changes
-		}
+		// Keep the raw JSON: decoding into any would round large numbers
+		// through float64 and lose precision.
+		doc["changes"] = e.Changes
 	}
 	return doc
 }
