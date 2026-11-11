@@ -383,14 +383,18 @@ The audit trail and the query history are offloaded to S3 and pruned after their
 retention is gated on.
 
 - **Format:** gzip NDJSON, one object per month under the configured prefix, with a per-month
-  `manifest.json` recording the object keys, row counts and checksums. The cursor advances past a
-  month only after its manifest is written.
+  `manifest.json` recording the object keys, row counts and checksums. The audit stream writes one
+  object per month (`audit-YYYYMM.ndjson.gz`); query history writes the pair
+  (`query_executions-YYYYMM.ndjson.gz` and `query_statements-YYYYMM.ndjson.gz`), so a statement is
+  never offloaded without its execution and a month is not complete until both exist. The cursor
+  advances past a month only after its manifest is written.
 - **Configuration:** `BALEIA_AUDIT_COLD_BUCKET`/`_PREFIX` and
   `BALEIA_QUERY_HISTORY_COLD_BUCKET`/`_PREFIX` (both off by default), `BALEIA_AUDIT_RETENTION`
   (400d), `BALEIA_QUERY_HISTORY_RETENTION` (180d), `BALEIA_AUDIT_COLD_GRACE` /
   `BALEIA_QUERY_HISTORY_COLD_GRACE` (7d), and `BALEIA_PRUNE_MAX_PARTITIONS` (1).
-- **Schedules:** `audit-offload` (hourly), and `audit-retention` / `query-history-retention`
-  (daily). All are created only when a cold bucket is configured.
+- **Schedules:** `audit-offload` and `query-history-offload` (hourly), and `audit-retention` /
+  `query-history-retention` (daily). Each pair is created only when that stream's cold bucket is
+  configured.
 - **Fail-closed:** a partition is dropped only if the cold cursor has advanced past it and its
   manifest exists. An unconfigured or unreachable cold sink grows the database (with alerts)
   rather than losing data.
