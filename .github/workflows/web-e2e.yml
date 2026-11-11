@@ -53,9 +53,12 @@ jobs:
         working-directory: web
         run: npm ci
 
+      # The runner image already ships Chromium's shared libraries; --with-deps
+      # only adds optional fonts through apt, whose mirrors fail DNS often
+      # enough to block the job. No spec compares screenshots, so skip apt.
       - name: Install Playwright browsers
         working-directory: web
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Start minikube, seed and run Playwright
         run: make e2e
