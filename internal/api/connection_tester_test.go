@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -290,7 +291,7 @@ func TestTransient_SQLCleanupOnClientCancel(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // the client went away
-	err = connectionTest{h: h.CatalogHandlers, provider: p, cfg: cfg}.bind(ctx, testBind{
+	_, err = connectionTest{h: h.CatalogHandlers, provider: p, cfg: cfg}.bind(ctx, testBind{
 		engine:  db.Engine{ID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: "trino"},
 		cluster: db.TrinoCluster{ID: db.UUID{Bytes: [16]byte{0xCC}, Valid: true}},
 	})
@@ -308,6 +309,93 @@ func TestTransient_SQLCleanupOnClientCancel(t *testing.T) {
 	}
 	if drops != 1 {
 		t.Fatalf("statements = %v", ft.statements())
+	}
+}
+
+// fakeUnity is a Unity Catalog server that lists the given catalogs.
+func fakeUnity(t *testing.T, catalogs ...string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/2.1/unity-catalog/catalogs" {
+			http.NotFound(w, r)
+			return
+		}
+		parts := make([]string, 0, len(catalogs))
+		for _, c := range catalogs {
+			parts = append(parts, fmt.Sprintf(`{"name":%q}`, c))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"catalogs":[`+strings.Join(parts, ",")+`]}`)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestTransient_BindCatalogManager: a catalog manager's bind check binds a
+// source ref (a projection without one is invalid): the warehouse the caller
+// will create the catalog with, else the first catalog the connection lists.
+// It names it in the check, and fails as not_found, binding nothing, when
+// there is neither.
+func TestTransient_BindCatalogManager(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		catalogs  []string
+		listed    []connections.CatalogRef // what list_catalogs left, nil when it did not run
+		warehouse string
+		want      string
+		wantErr   error
+	}{
+		{name: "binds the given warehouse", catalogs: []string{"first"}, warehouse: "sumeh_demo", want: "sumeh_demo"},
+		{name: "lists the catalogs itself", catalogs: []string{"sumeh_demo", "system"}, want: "sumeh_demo"},
+		{name: "reuses the list_catalogs result", listed: []connections.CatalogRef{{Name: "listed"}}, want: "listed"},
+		{name: "no catalog", catalogs: nil, wantErr: connections.ErrNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			h, q, ft := newAuthzHandlers(t)
+			ef := &ephemeralFake{authzFake: q}
+			h.queries = ef
+			h.access = wsaccess.New(h.queries)
+			h.topology = topology.New(h.queries)
+			reg, _ := loopbackRegistry(t)
+			p, _ := reg.Get(connections.KindUnity)
+			cfg, err := p.Validate(connections.Config{Kind: connections.KindUnity,
+				Values:  map[string]string{"url": fakeUnity(t, tt.catalogs...).URL, "iceberg_path": "/api/2.1/unity-catalog/iceberg-rest"},
+				Secrets: map[string]string{"token": "t0k3n"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c, err := connectionTest{h: h.CatalogHandlers, provider: p, cfg: cfg, catalogs: tt.listed, warehouse: tt.warehouse}.bind(context.Background(), testBind{
+				engine:  db.Engine{ID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: "trino"},
+				cluster: db.TrinoCluster{ID: db.UUID{Bytes: [16]byte{0xCC}, Valid: true}},
+			})
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) || classifyTestError(err) != codeNotFound {
+					t.Fatalf("err = %v, want %v classified %s", err, tt.wantErr, codeNotFound)
+				}
+				if len(ef.inserted) != 0 {
+					t.Fatalf("bound %v with no catalog to bind", ef.inserted)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("bind: %v", err)
+			}
+			if c.Name != "bind:trino" || c.Detail == nil || *c.Detail != tt.want {
+				t.Fatalf("check = %+v", c)
+			}
+			created := false
+			for _, s := range ft.statements() {
+				if strings.HasPrefix(s, "CREATE CATALOG") && strings.Contains(s, "'"+tt.want+"'") {
+					created = true
+				}
+			}
+			if !created {
+				t.Fatalf("no catalog created for warehouse %q: %v", tt.want, ft.statements())
+			}
+		})
 	}
 }
 

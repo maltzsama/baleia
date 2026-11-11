@@ -108,4 +108,26 @@ describe('ConnectionWizard', () => {
 		expect(create.disabled).toBe(true);
 		expect(screen.queryByText('Tested')).toBeNull();
 	});
+
+	it('tests the bind with the warehouse the catalog will be created with', async () => {
+		let sent: { intents?: string[]; warehouse?: string } | undefined;
+		server.use(
+			http.post('/catalog-connections/test', async ({ request, response }) => {
+				sent = await request.json();
+				return response(200).json(makeTestResult());
+			})
+		);
+		render(ConnectionWizard);
+		await fillConfiguration();
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('radio', { name: /Expose through a federated engine/ }));
+		await fireEvent.click(await screen.findByRole('checkbox', { name: /warehouse/ }));
+		await fireEvent.input(screen.getByLabelText('Database name'), { target: { value: 'sales' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+		expect(await screen.findByText('Tested')).toBeTruthy();
+		expect(sent?.intents).toContain(`bind:${ENGINE}`);
+		expect(sent?.warehouse).toBe('sales');
+	});
 });
