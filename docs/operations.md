@@ -412,6 +412,12 @@ retention is gated on.
   it lists is in the cold store with the recorded checksum and row count. A day that fails the
   check is skipped, with the reason in the worker log (`reason`), and holds only itself. An
   unconfigured or unreachable cold sink grows the database (with alerts) rather than losing data.
+- **Draining a backlog:** a retention run drops at most `BALEIA_PRUNE_MAX_PARTITIONS` days (1 by
+  default) and runs once a day, while one more day becomes droppable every day. A database that
+  already holds more than its window therefore never catches up at the default. Raise
+  `BALEIA_PRUNE_MAX_PARTITIONS` above 1 until the oldest partition is back inside the window, or
+  drain it in one go with `migrate -cmd=audit-prune -before=YYYY-MM-DD`, which has no cap and
+  goes through the same gates.
 - **Upgrading from 0.7.0:** store migration 14 converts `audit_events`, `query_executions` and
   `query_statements` to one partition per day, from the oldest row through today plus the
   horizon. It runs in stages (preparation, one transaction per table, then one per foreign key)

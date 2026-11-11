@@ -148,7 +148,11 @@ The cold bucket and prefix settings of 0024 are unchanged.
 - The window held is the configured one, give or take the cadence and a day of grace, instead of
   up to a month more.
 - How often DDL runs is an operator's choice that does not affect the partition layout.
-- A failed offload blocks one day, not a month. A recovery re-runs one day's objects.
+- A failed offload stalls at one day, not at a month: the cursor cannot advance past the failed
+  day, so no later day is offloaded either, and none of them can be dropped until the failure is
+  fixed, even once they are past the window. Recovery re-runs one day's objects. This is not the
+  same as a manifest that fails the check for a day the cursor already passed, which holds only
+  that day.
 
 **Negative**
 
