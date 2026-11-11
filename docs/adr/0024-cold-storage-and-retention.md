@@ -1,6 +1,6 @@
 # 0024. Cold storage and retention for the audit trail and query history
 
-- Status: Accepted
+- Status: Accepted; partition interval, retention defaults, cadence and offload unit amended by [0026](0026-daily-partitions-and-retention-cadence.md)
 - Date: 2026-11-10
 - Issues: #948
 - Supersedes: the documented "400 days" audit convention (never enforced) and `migrate -cmd=audit-prune` as the retention mechanism.
