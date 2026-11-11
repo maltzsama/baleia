@@ -61,7 +61,7 @@ func TestOffloadQueryHistory(t *testing.T) {
 		t.Fatalf("resumed page = %+v, want only the third execution", rest)
 	}
 
-	stmts, err := f.r.OffloadQueryStatements(ctx, []model.UUID{e1.ID}, base.Add(-time.Hour), base.Add(time.Hour))
+	stmts, err := f.r.OffloadQueryStatements(ctx, []model.UUID{e1.ID}, base.Add(-time.Hour), base.Add(time.Hour), 1000)
 	if err != nil {
 		t.Fatalf("statements: %v", err)
 	}
@@ -138,15 +138,23 @@ func TestDeleteQueryHistoryDependents(t *testing.T) {
 	if err := f.r.DeleteStatementJoinsByMonth(ctx, from, until); err != nil {
 		t.Fatalf("delete joins: %v", err)
 	}
-	if err := f.r.DeleteTrinoQuerySnapshotsByMonth(ctx, from, until); err != nil {
-		t.Fatalf("delete snapshots: %v", err)
+	if err := f.r.UnlinkTrinoQuerySnapshotsByMonth(ctx, from, until); err != nil {
+		t.Fatalf("unlink snapshots: %v", err)
 	}
 
-	var refs, joins, snaps int64
+	var refs, joins int64
 	f.gdb.Model(&model.StatementReference{}).Count(&refs)
 	f.gdb.Model(&model.StatementJoin{}).Count(&joins)
-	f.gdb.Model(&model.TrinoQuerySnapshot{}).Count(&snaps)
-	if refs != 0 || joins != 0 || snaps != 0 {
-		t.Fatalf("dependents left: references=%d joins=%d snapshots=%d", refs, joins, snaps)
+	if refs != 0 || joins != 0 {
+		t.Fatalf("dependents left: references=%d joins=%d", refs, joins)
+	}
+	// The snapshot survives, unlinked from its execution, so its metrics are
+	// not discarded by query-history retention.
+	var kept model.TrinoQuerySnapshot
+	if err := f.gdb.First(&kept).Error; err != nil {
+		t.Fatalf("snapshot missing: %v", err)
+	}
+	if kept.ExecutionID != nil {
+		t.Fatalf("snapshot still linked: %v", kept.ExecutionID)
 	}
 }

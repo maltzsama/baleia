@@ -40,17 +40,19 @@ type Chunk struct {
 // stream's query and row shape (ADR 0024).
 type MonthReader interface {
 	// ReadMonth reads month after pos and before the cutoff, calling emit once
-	// per bounded chunk. An emit error stops the read.
-	ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func(Chunk) error) error
+	// per bounded flush. A flush carries one or more chunks (an execution and
+	// its statements travel together) and the commit position the cursor may
+	// advance to only after every chunk in the flush is persisted. An emit error
+	// stops the read.
+	ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func(chunks []Chunk, commitTo export.Position) error) error
 	// EarliestMonth returns the month of the stream's first row, or the zero
 	// time when it has none.
 	EarliestMonth(ctx context.Context, before time.Time) (time.Time, error)
 }
 
-// chunker accumulates rows into one bounded chunk and flushes it via emit.
+// chunker accumulates rows into one bounded chunk. take drains it.
 type chunker struct {
 	object string
-	emit   func(Chunk) error
 	first  export.Position
 	last   export.Position
 	rows   []json.RawMessage
@@ -68,13 +70,13 @@ func (c *chunker) add(pos export.Position, row json.RawMessage) {
 
 func (c *chunker) full() bool { return len(c.rows) >= ChunkRows || c.size >= ChunkBytes }
 
-func (c *chunker) flush() error {
+func (c *chunker) take() (Chunk, bool) {
 	if len(c.rows) == 0 {
-		return nil
+		return Chunk{}, false
 	}
-	rows, first, last := c.rows, c.first, c.last
+	ch := Chunk{Object: c.object, First: c.first, Last: c.last, Rows: c.rows}
 	c.rows, c.size = nil, 0
-	return c.emit(Chunk{Object: c.object, First: first, Last: last, Rows: rows})
+	return ch, true
 }
 
 // Offloader writes a stream's rows to the cold sink month by month, finalizing
@@ -152,23 +154,32 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 			return total, err
 		}
 
-		err = o.Reader.ReadMonth(ctx, month, before, &pos, func(c Chunk) error {
-			if len(c.Rows) == 0 {
+		err = o.Reader.ReadMonth(ctx, month, before, &pos, func(chunks []Chunk, commitTo export.Position) error {
+			rows := 0
+			for _, c := range chunks {
+				if len(c.Rows) == 0 {
+					continue
+				}
+				key := o.Sink.ChunkKey(month, c.Object, c.First)
+				count, checksum, err := o.Sink.WriteChunk(ctx, key, c.Rows)
+				if err != nil {
+					return err
+				}
+				manifest.add(key, count, checksum)
+				rows += int(count)
+			}
+			if rows == 0 {
 				return nil
 			}
-			key := o.Sink.ChunkKey(month, c.Object, c.First)
-			count, checksum, err := o.Sink.WriteChunk(ctx, key, c.Rows)
-			if err != nil {
-				return err
-			}
-			manifest.add(key, count, checksum)
 			if err := o.Sink.WriteManifest(ctx, month, manifest); err != nil {
 				return err
 			}
-			if err := o.Cursor.Set(ctx, o.Stream, o.SinkName, c.Last); err != nil {
+			// Advance the cursor only after every chunk of this flush is
+			// persisted, so an execution and its statements commit together.
+			if err := o.Cursor.Set(ctx, o.Stream, o.SinkName, commitTo); err != nil {
 				return err
 			}
-			total += int(count)
+			total += rows
 			if now().After(deadline) {
 				return ErrPassDone
 			}

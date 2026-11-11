@@ -29,7 +29,7 @@ func (r *AuditReader) EarliestMonth(ctx context.Context, before time.Time) (time
 }
 
 // ReadMonth streams the audit rows of the month as bounded chunks.
-func (r *AuditReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func(Chunk) error) error {
+func (r *AuditReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func([]Chunk, export.Position) error) error {
 	doc := r.Document
 	if doc == nil {
 		doc = ColdAuditDocument
@@ -40,18 +40,18 @@ func (r *AuditReader) ReadMonth(ctx context.Context, month, before time.Time, po
 	}
 	readPos := *pos
 	limit := nextMonth(month)
-	ch := &chunker{object: name, emit: emit}
+	ch := &chunker{object: name}
 	for {
 		events, err := r.Source.Events(ctx, readPos, before, r.batch())
 		if err != nil {
 			return err
 		}
 		if len(events) == 0 {
-			return ch.flush()
+			break
 		}
 		for _, ev := range events {
 			if !ev.OccurredAt.Before(limit) {
-				return ch.flush()
+				return r.flush(ch, emit)
 			}
 			data, err := json.Marshal(doc(ev))
 			if err != nil {
@@ -60,15 +60,24 @@ func (r *AuditReader) ReadMonth(ctx context.Context, month, before time.Time, po
 			readPos = export.Position{OccurredAt: ev.OccurredAt, ID: ev.ID}
 			ch.add(readPos, data)
 			if ch.full() {
-				if err := ch.flush(); err != nil {
+				if err := r.flush(ch, emit); err != nil {
 					return err
 				}
 			}
 		}
 		if len(events) < r.batch() {
-			return ch.flush()
+			break
 		}
 	}
+	return r.flush(ch, emit)
+}
+
+func (r *AuditReader) flush(ch *chunker, emit func([]Chunk, export.Position) error) error {
+	c, ok := ch.take()
+	if !ok {
+		return nil
+	}
+	return emit([]Chunk{c}, c.Last)
 }
 
 func (r *AuditReader) batch() int {

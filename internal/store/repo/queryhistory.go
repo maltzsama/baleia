@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/store/model"
@@ -33,9 +34,10 @@ func (r *Repo) OffloadQueryExecutions(ctx context.Context, afterAt time.Time, af
 }
 
 // OffloadQueryStatements returns a page of executions' statements in position
-// order, grouped by execution. The execution_started_at bounds pin the parent's
-// month partition.
-func (r *Repo) OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time) ([]model.QueryStatement, error) {
+// order, capped at limit. Exceeding it is treated as an error: a single page
+// with that many statements would buffer unbounded. The execution_started_at
+// bounds pin the parent's month partition.
+func (r *Repo) OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time, limit int) ([]model.QueryStatement, error) {
 	if len(executionIDs) == 0 {
 		return nil, nil
 	}
@@ -43,8 +45,15 @@ func (r *Repo) OffloadQueryStatements(ctx context.Context, executionIDs []model.
 	err := r.Users.db.WithContext(ctx).
 		Where("execution_id IN ? AND execution_started_at >= ? AND execution_started_at < ?", executionIDs, from, until).
 		Order("execution_id, position").
+		Limit(limit + 1).
 		Find(&rows).Error
-	return rows, err
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) > limit {
+		return nil, fmt.Errorf("query_history: one execution page has more than %d statements", limit)
+	}
+	return rows, nil
 }
 
 // PendingExecutions reports whether any execution in [from, until) is still
@@ -73,10 +82,13 @@ func (r *Repo) DeleteStatementJoinsByMonth(ctx context.Context, from, until time
 		Delete(&model.StatementJoin{}).Error
 }
 
-// DeleteTrinoQuerySnapshotsByMonth removes a month's Trino query snapshots so
-// the month's query_executions partition can be detached (ADR 0024).
-func (r *Repo) DeleteTrinoQuerySnapshotsByMonth(ctx context.Context, from, until time.Time) error {
+// UnlinkTrinoQuerySnapshotsByMonth detaches a month's Trino query snapshots from
+// their executions (NULLing the link) so the month's query_executions partition
+// can be detached without discarding the snapshots' metrics. The snapshots are
+// monitoring data with their own lifecycle, not part of the cold offload.
+func (r *Repo) UnlinkTrinoQuerySnapshotsByMonth(ctx context.Context, from, until time.Time) error {
 	return r.Users.db.WithContext(ctx).
+		Model(&model.TrinoQuerySnapshot{}).
 		Where("execution_started_at >= ? AND execution_started_at < ?", from, until).
-		Delete(&model.TrinoQuerySnapshot{}).Error
+		Updates(map[string]any{"execution_id": nil, "execution_started_at": nil}).Error
 }

@@ -74,7 +74,7 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 		storeRepo := core.StoreRepo
 		for _, table := range []string{"query_statements", "query_executions"} {
 			preDrop := func(ctx context.Context, from, until time.Time) error {
-				return storeRepo.DeleteTrinoQuerySnapshotsByMonth(ctx, from, until)
+				return storeRepo.UnlinkTrinoQuerySnapshotsByMonth(ctx, from, until)
 			}
 			if table == "query_statements" {
 				preDrop = func(ctx context.Context, from, until time.Time) error {

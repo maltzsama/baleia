@@ -39,7 +39,7 @@ func (f *fakeQueryHistoryStore) OffloadQueryExecutions(_ context.Context, afterA
 	return out, nil
 }
 
-func (f *fakeQueryHistoryStore) OffloadQueryStatements(_ context.Context, ids []model.UUID, _, _ time.Time) ([]model.QueryStatement, error) {
+func (f *fakeQueryHistoryStore) OffloadQueryStatements(_ context.Context, ids []model.UUID, _, _ time.Time, _ int) ([]model.QueryStatement, error) {
 	var out []model.QueryStatement
 	for _, id := range ids {
 		out = append(out, f.stmts[string(id)]...)
@@ -82,9 +82,8 @@ func TestQueryHistoryReaderWritesPair(t *testing.T) {
 		t.Fatalf("offloaded = %d, want 4", n)
 	}
 
-	first := export.Position{OccurredAt: oct, Key: string(e1.ID)}
-	execKey := sink.ChunkKey(oct, ExecutionsObject, first)
-	stmtKey := sink.ChunkKey(oct, StatementsObject, first)
+	execKey := sink.ChunkKey(oct, ExecutionsObject, export.Position{OccurredAt: oct, Key: string(e1.ID)})
+	stmtKey := sink.ChunkKey(oct, StatementsObject, statementPos(stmts[string(e1.ID)][0]))
 	if _, ok := objects.objects[execKey]; !ok {
 		t.Fatalf("executions object missing")
 	}

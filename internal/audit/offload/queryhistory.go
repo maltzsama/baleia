@@ -3,6 +3,7 @@ package offload
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit/export"
@@ -18,8 +19,9 @@ type QueryHistoryStore interface {
 	// before, ordered by (started_at, id).
 	OffloadQueryExecutions(ctx context.Context, afterAt time.Time, afterID string, before time.Time, limit int) ([]model.QueryExecution, error)
 	// OffloadQueryStatements returns the statements of a page of executions
-	// (a batch, not one query per execution), within [from, until).
-	OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time) ([]model.QueryStatement, error)
+	// (a batch, not one query per execution), within [from, until), capped at
+	// limit; exceeding it fails closed rather than buffering unbounded.
+	OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time, limit int) ([]model.QueryStatement, error)
 	// PendingExecutions reports whether any execution in [from, until) is not
 	// terminal (queued or running), so the month cannot be sealed yet.
 	PendingExecutions(ctx context.Context, from, until time.Time) (bool, error)
@@ -46,6 +48,10 @@ const (
 // so the archived pair is final before retention can drop the partition.
 const QueryHistorySafetyLag = 24 * time.Hour
 
+// statementPageSize caps one statement fetch for an execution page, so a single
+// execution with an unreasonable number of statements cannot buffer unbounded.
+var statementPageSize = ChunkRows * 8
+
 // EarliestMonth is the month of the first execution, or the zero time.
 func (r *QueryHistoryReader) EarliestMonth(ctx context.Context, before time.Time) (time.Time, error) {
 	execs, err := r.Store.OffloadQueryExecutions(ctx, time.Time{}, "", before, 1)
@@ -56,11 +62,11 @@ func (r *QueryHistoryReader) EarliestMonth(ctx context.Context, before time.Time
 }
 
 // ReadMonth streams the executions and statements of the month as bounded
-// chunks. It reads one page of executions and fetches that page's statements in
-// a single query, so the statement reads never become one round trip per
-// execution; the two objects are flushed together at the same execution
-// boundary so the cursor stays consistent.
-func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func(Chunk) error) error {
+// chunks. The execution chunk and the statement chunk of a flush travel
+// together: the cursor commits to the execution position only after both are
+// persisted, so an interrupted pass never seals an execution whose statements
+// are still unwritten.
+func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func([]Chunk, export.Position) error) error {
 	limit := nextMonth(month)
 	pending, err := r.Store.PendingExecutions(ctx, month, limit)
 	if err != nil {
@@ -73,8 +79,32 @@ func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.T
 		return ErrNotQuiescent
 	}
 	readPos := *pos
-	execCh := &chunker{object: ExecutionsObject, emit: emit}
-	stmtCh := &chunker{object: StatementsObject, emit: emit}
+	execCh := &chunker{object: ExecutionsObject}
+	stmtCh := &chunker{object: StatementsObject}
+
+	// flushPair emits both chunks in one flush, committing the cursor to the
+	// execution position after both objects are written.
+	flushPair := func() error {
+		execChunk, execOK := execCh.take()
+		stmtChunk, stmtOK := stmtCh.take()
+		if !execOK && !stmtOK {
+			return nil
+		}
+		chunks := make([]Chunk, 0, 2)
+		commitTo := export.Position{}
+		if execOK {
+			chunks = append(chunks, execChunk)
+			commitTo = execChunk.Last
+		}
+		if stmtOK {
+			chunks = append(chunks, stmtChunk)
+			if !execOK {
+				commitTo = stmtChunk.Last
+			}
+		}
+		return emit(chunks, commitTo)
+	}
+
 	for {
 		execs, err := r.Store.OffloadQueryExecutions(ctx, readPos.OccurredAt, readPos.Key, before, r.batch())
 		if err != nil {
@@ -97,7 +127,7 @@ func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.T
 			for i, e := range page {
 				ids[i] = e.ID
 			}
-			stmts, err := r.Store.OffloadQueryStatements(ctx, ids, month, limit)
+			stmts, err := r.Store.OffloadQueryStatements(ctx, ids, month, limit, statementPageSize)
 			if err != nil {
 				return err
 			}
@@ -110,34 +140,38 @@ func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.T
 				if err != nil {
 					return err
 				}
-				p := export.Position{OccurredAt: e.StartedAt, Key: string(e.ID)}
-				execCh.add(p, ed)
+				execCh.add(executionPos(e), ed)
 				for _, s := range byExec[e.ID] {
 					sd, err := json.Marshal(toStatementDoc(s))
 					if err != nil {
 						return err
 					}
-					stmtCh.add(p, sd)
+					stmtCh.add(statementPos(s), sd)
 				}
 				if execCh.full() || stmtCh.full() {
-					if err := execCh.flush(); err != nil {
-						return err
-					}
-					if err := stmtCh.flush(); err != nil {
+					if err := flushPair(); err != nil {
 						return err
 					}
 				}
 			}
-			readPos = export.Position{OccurredAt: page[len(page)-1].StartedAt, Key: string(page[len(page)-1].ID)}
+			readPos = executionPos(page[len(page)-1])
 		}
 		if done || len(execs) < r.batch() {
 			break
 		}
 	}
-	if err := execCh.flush(); err != nil {
-		return err
-	}
-	return stmtCh.flush()
+	return flushPair()
+}
+
+// executionPos is the cursor position of one execution (started_at, id uuid).
+func executionPos(e model.QueryExecution) export.Position {
+	return export.Position{OccurredAt: e.StartedAt, Key: string(e.ID)}
+}
+
+// statementPos pins one statement's chunk identity: started_at plus the
+// (execution, position) tie, so two chunks of the same execution never collide.
+func statementPos(s model.QueryStatement) export.Position {
+	return export.Position{OccurredAt: s.ExecutionStartedAt, Key: string(s.ExecutionID) + ":" + strconv.Itoa(int(s.Position))}
 }
 
 func (r *QueryHistoryReader) batch() int {
