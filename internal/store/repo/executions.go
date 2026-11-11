@@ -30,7 +30,7 @@ func (r *Repo) CreateQueryExecution(ctx context.Context, arg db.CreateQueryExecu
 		Status:          model.Text(arg.Status),
 		Origin:          model.Text(origin),
 		BIKeyID:         modelUUIDPtr(arg.BIKeyID),
-		SQL:             model.Text(arg.Sql),
+		SQL:             arg.Sql,
 		StartedAt:       time.Now().UTC(),
 		TrinoCatalog:    arg.TrinoCatalog,
 		RequestID:       arg.RequestID,

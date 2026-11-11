@@ -100,7 +100,7 @@ type QueryExecution struct {
 	Status          Text            `gorm:"column:status;not null;size:128;index:idx_query_executions_status,priority:1;index:idx_query_executions_bi_key_status,priority:2;index:idx_query_executions_ws_origin_status,priority:3"`
 	Origin          Text            `gorm:"column:origin;not null;size:32;default:'editor';index:idx_query_executions_ws_origin_status,priority:2"`
 	BIKeyID         *UUID           `gorm:"column:bi_key_id;index:idx_query_executions_bi_key_status,priority:1"`
-	SQL             Text            `gorm:"column:sql;not null;size:128;index:query_executions_sql_trgm,priority:1"`
+	SQL             string          `gorm:"column:sql;not null"`
 	EngineQueryID   *string         `gorm:"column:engine_query_id"`
 	RowsReturned    *int64          `gorm:"column:rows_returned"`
 	DurationMs      *int64          `gorm:"column:duration_ms"`

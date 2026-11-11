@@ -10,7 +10,7 @@ type SemanticDoc struct {
 	Namespace      StringArray `gorm:"column:namespace;not null;size:128;uniqueIndex:semantic_docs_workspace_id_catalog_id_namespace_table_name__key,priority:3;index:semantic_docs_lookup,priority:3"`
 	TableNameValue Text        `gorm:"column:table_name;not null;size:128;uniqueIndex:semantic_docs_workspace_id_catalog_id_namespace_table_name__key,priority:4;index:semantic_docs_lookup,priority:4"`
 	ColumnName     *Text       `gorm:"column:column_name;size:128;uniqueIndex:semantic_docs_workspace_id_catalog_id_namespace_table_name__key,priority:5"`
-	Description    Text        `gorm:"column:description;not null;size:128;default:'';index:semantic_docs_description_trgm,priority:1"`
+	Description    string      `gorm:"column:description;not null"`
 	Tags           StringArray `gorm:"column:tags;not null;size:128;default:'{}';index:semantic_docs_tags,priority:1"`
 	OwnerUserID    *UUID       `gorm:"column:owner_user_id"`
 	UpdatedBy      UUID        `gorm:"column:updated_by;not null"`

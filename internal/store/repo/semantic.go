@@ -139,7 +139,7 @@ func (r *Repo) UpsertSemanticDoc(ctx context.Context, arg db.UpsertSemanticDocPa
 			Namespace:      model.StringArray(arg.Namespace),
 			TableNameValue: model.Text(arg.TableName),
 			ColumnName:     modelTextPtr(arg.ColumnName),
-			Description:    model.Text(arg.Description),
+			Description:    arg.Description,
 			Tags:           model.StringArray(tags),
 			OwnerUserID:    modelUUIDPtr(arg.OwnerUserID),
 			UpdatedBy:      model.UUID(UUIDString(arg.UpdatedBy)),

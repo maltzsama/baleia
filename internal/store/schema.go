@@ -222,6 +222,11 @@ func AllMigrations() (*Registry, error) {
 			Name:    "guard the one-default-space and one-running-run keys",
 			Up:      guardPartialKeys,
 		},
+		Migration{
+			Version: 18,
+			Name:    "store query history SQL and semantic descriptions without a length cap",
+			Up:      unboundFreeText,
+		},
 	)
 }
 
