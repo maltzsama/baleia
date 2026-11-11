@@ -6,8 +6,10 @@ package schedules
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/robfig/cron"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
@@ -15,7 +17,7 @@ import (
 )
 
 // Spec describes one recurring job: a single-pass workflow launched on an
-// interval.
+// interval or on a calendar. Exactly one of Every and Cron is set.
 type Spec struct {
 	ID string
 	// Workflow is the workflow function to run on each schedule tick.
@@ -24,16 +26,48 @@ type Spec struct {
 	Args []any
 	// Every is the interval between runs.
 	Every time.Duration
+	// Cron is a five-field cron expression (minute, hour, day of month, month,
+	// day of week) read in UTC, for a job that has to run at a given weekday and
+	// hour, which a fixed interval cannot pin (ADR 0026).
+	Cron string
+}
+
+// validate rejects a spec with neither or both ways of saying when, and a Cron
+// that does not parse, so a bad value fails the worker at boot instead of
+// leaving a job that never runs.
+func (s Spec) validate() error {
+	if s.ID == "" || s.Workflow == nil {
+		return errors.New("schedule: id and workflow are required")
+	}
+	switch {
+	case s.Every > 0 && s.Cron != "":
+		return fmt.Errorf("schedule %s: set every or cron, not both", s.ID)
+	case s.Every <= 0 && s.Cron == "":
+		return fmt.Errorf("schedule %s: every or cron is required", s.ID)
+	case s.Cron != "":
+		if _, err := cron.ParseStandard(s.Cron); err != nil {
+			return fmt.Errorf("schedule %s: cron %q: %w", s.ID, s.Cron, err)
+		}
+	}
+	return nil
+}
+
+// scheduleSpec is the Temporal form of when the spec runs.
+func (s Spec) scheduleSpec() client.ScheduleSpec {
+	if s.Cron != "" {
+		return client.ScheduleSpec{CronExpressions: []string{s.Cron}, TimeZoneName: "UTC"}
+	}
+	return client.ScheduleSpec{Intervals: []client.ScheduleIntervalSpec{{Every: s.Every}}}
 }
 
 // Ensure creates each schedule if it is absent and updates it when its
-// interval or workflow differs. It is safe to call on every worker boot and
+// interval, calendar or workflow differs. It is safe to call on every worker boot and
 // from several workers concurrently: a create collision is treated as success
 // and followed by an idempotent update.
 func Ensure(ctx context.Context, c client.Client, taskQueue string, specs []Spec) error {
 	for _, s := range specs {
-		if s.ID == "" || s.Workflow == nil || s.Every <= 0 {
-			return errors.New("schedule: id, workflow and every are required")
+		if err := s.validate(); err != nil {
+			return err
 		}
 
 		action := &client.ScheduleWorkflowAction{
@@ -42,9 +76,7 @@ func Ensure(ctx context.Context, c client.Client, taskQueue string, specs []Spec
 			Args:      s.Args,
 			TaskQueue: taskQueue,
 		}
-		spec := client.ScheduleSpec{
-			Intervals: []client.ScheduleIntervalSpec{{Every: s.Every}},
-		}
+		spec := s.scheduleSpec()
 
 		_, err := c.ScheduleClient().Create(ctx, client.ScheduleOptions{
 			ID:      s.ID,
