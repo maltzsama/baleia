@@ -531,6 +531,7 @@ func (r *Repo) UpdateMaintenanceRun(ctx context.Context, arg db.UpdateMaintenanc
 		Where("id = ?", UUIDString(arg.ID)).
 		Updates(map[string]any{
 			"status":        arg.Status,
+			"running_guard": model.RunningGuard(arg.Status),
 			"error_code":    arg.ErrorCode,
 			"error_message": arg.ErrorMessage,
 			"finished_at":   time.Now().UTC(),

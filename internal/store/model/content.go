@@ -1,11 +1,15 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // Space is the spaces table.
 type Space struct {
 	ID           UUID       `gorm:"column:id;primaryKey;not null;uniqueIndex:spaces_workspace_id_id_key,priority:2;check:spaces_name_check,(((length(name) >= 1) AND (length(name) <= 120)))"`
-	WorkspaceID  UUID       `gorm:"column:workspace_id;not null;uniqueIndex:spaces_workspace_id_name_key,priority:1;uniqueIndex:spaces_workspace_id_id_key,priority:1;uniqueIndex:spaces_slug_uq,priority:1;uniqueIndex:spaces_one_default,priority:1,where:is_default;check:spaces_visibility_check,((visibility IN ('workspace', 'restricted')))"`
+	WorkspaceID  UUID       `gorm:"column:workspace_id;not null;uniqueIndex:spaces_workspace_id_name_key,priority:1;uniqueIndex:spaces_workspace_id_id_key,priority:1;uniqueIndex:spaces_slug_uq,priority:1;uniqueIndex:spaces_one_default,priority:1;check:spaces_visibility_check,((visibility IN ('workspace', 'restricted')))"`
 	Name         Text       `gorm:"column:name;not null;size:128;uniqueIndex:spaces_workspace_id_name_key,priority:2;check:spaces_default_role_check,((default_role IN ('viewer', 'editor')))"`
 	Description  *string    `gorm:"column:description;check:spaces_check,(((NOT is_default) OR (visibility = 'workspace')))"`
 	Visibility   string     `gorm:"column:visibility;not null"`
@@ -15,11 +19,23 @@ type Space struct {
 	CreatedAt    time.Time  `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
 	UpdatedAt    time.Time  `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3)"`
 	Slug         Text       `gorm:"column:slug;not null;size:128;uniqueIndex:spaces_slug_uq,priority:2"`
+	DefaultGuard *bool      `gorm:"column:default_guard;uniqueIndex:spaces_one_default,priority:2"`
 	Workspace    *Workspace `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnDelete:CASCADE"`
 	CreatedByRef *User      `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnDelete:SET NULL"`
 }
 
 func (Space) TableName() string { return "spaces" }
+
+// BeforeCreate derives DefaultGuard from is_default: true on a workspace's
+// default space, NULL on every other. spaces_one_default is a unique key over
+// workspace_id and the guard, so a workspace holds one default space on every
+// engine, because MySQL and MariaDB have no partial indexes and NULLs never
+// collide in a unique key. It runs on Create only: a map update through
+// Model(&Space{}) would run an update hook on a zero value.
+func (s *Space) BeforeCreate(*gorm.DB) error {
+	s.DefaultGuard = guard(s.IsDefault)
+	return nil
+}
 
 // SpaceMember is the space_members table.
 type SpaceMember struct {

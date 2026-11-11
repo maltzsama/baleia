@@ -217,6 +217,11 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.AuditExportCursor{})
 			},
 		},
+		Migration{
+			Version: 17,
+			Name:    "guard the one-default-space and one-running-run keys",
+			Up:      guardPartialKeys,
+		},
 	)
 }
 
