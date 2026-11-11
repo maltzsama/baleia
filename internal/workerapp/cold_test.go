@@ -138,3 +138,21 @@ func TestDroppedWithoutOffload(t *testing.T) {
 	// No recorder: a drop is never held up by the audit write.
 	droppedWithoutOffload(nil, "audit")(context.Background(), p)
 }
+
+func TestRetentionAllowance(t *testing.T) {
+	t.Parallel()
+	day := 24 * time.Hour
+	for cadence, want := range map[string]time.Duration{
+		"":       (45 + 1 + 7 + 1) * day, // weekly: window, grace, a week, the day itself
+		"weekly": (45 + 1 + 7 + 1) * day,
+		"daily":  (45 + 1 + 1 + 1) * day,
+	} {
+		got, err := retentionAllowance(45*day, day, cadence)
+		if err != nil || got != want {
+			t.Errorf("retentionAllowance(%q) = %s, %v; want %s", cadence, got, err, want)
+		}
+	}
+	if _, err := retentionAllowance(45*day, day, "sometimes"); err == nil {
+		t.Error("a bad cadence must be an error")
+	}
+}

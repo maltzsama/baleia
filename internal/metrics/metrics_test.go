@@ -23,6 +23,7 @@ func registry(t *testing.T) *Registry {
 		t.Fatal(err)
 	}
 	r.Metadata().Synced(time.Second, nil)
+	r.Retention().Observe("audit", time.Unix(1_700_000_000, 0), 52*24*time.Hour)
 	r.Audit().WriteFailed()
 	r.WatchMetadataStaleness(slog.New(slog.DiscardHandler), func(context.Context) (float64, error) { return 42, nil })
 	workload := r.Workload()
@@ -167,4 +168,22 @@ func TestTokenAuth(t *testing.T) {
 			t.Errorf("Authorization %q: %d, want %d", auth, code, want)
 		}
 	}
+}
+
+// TestRetentionMetrics: the oldest partition is exported as a timestamp and the
+// allowance as seconds, per stream, under the names the alert rule uses.
+func TestRetentionMetrics(t *testing.T) {
+	t.Parallel()
+	_, body := scrape(t, registry(t).Handler(""), "")
+	for _, want := range []string{
+		`baleia_retention_oldest_partition_start_timestamp_seconds{stream="audit"} 1.7e+09`,
+		`baleia_retention_allowed_age_seconds{stream="audit"} 4.4928e+06`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("scrape lacks %q", want)
+		}
+	}
+	// A nil producer (a process without metrics) is a no-op.
+	var none *Retention
+	none.Observe("audit", time.Now(), time.Hour)
 }

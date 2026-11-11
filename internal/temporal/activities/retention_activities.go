@@ -2,6 +2,7 @@ package activities
 
 import (
 	"context"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/audit/offload"
 	"github.com/galileostudio/baleia/internal/audit/retention"
@@ -38,6 +39,7 @@ func RetainAudit(ctx context.Context) (int, error) {
 	}
 	n, err := defaultActivities.auditRetain.Run(ctx)
 	defaultActivities.passDone(schedules.AuditRetention, err)
+	defaultActivities.observeAllRetention(ctx)
 	return len(n), err
 }
 
@@ -48,6 +50,7 @@ func RetainQueryHistory(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 	var dropped int
+	defer defaultActivities.observeAllRetention(ctx)
 	for _, r := range defaultActivities.queryHistoryRetain {
 		n, err := r.Run(ctx)
 		if err != nil {
@@ -58,6 +61,55 @@ func RetainQueryHistory(ctx context.Context) (int, error) {
 	}
 	defaultActivities.passDone(schedules.QueryHistoryRetention, nil)
 	return dropped, nil
+}
+
+// SetRetentionAllowance sets how old a stream's oldest partition may get before
+// retention is behind: retention, grace, the cadence and one day (ADR 0026).
+func (a *Activities) SetRetentionAllowance(stream string, d time.Duration) {
+	if a.retentionAllowance == nil {
+		a.retentionAllowance = map[string]time.Duration{}
+	}
+	a.retentionAllowance[stream] = d
+}
+
+// observeRetention exports the start of a stream's oldest partition, read
+// from the store so it is exported whether or not the stream's retention is
+// wired: a stream with no cold bucket and no opt-out never drops, and that
+// growth is what the alert is for. It never fails a pass: a gauge that cannot be
+// read is logged, and the alert on the last value still stands.
+func (a *Activities) observeRetention(ctx context.Context, stream, table string) {
+	if a == nil || a.store == nil {
+		return
+	}
+	allowed, ok := a.retentionAllowance[stream]
+	if !ok {
+		return
+	}
+	parts, err := a.store.Partitions(ctx, table)
+	if err != nil {
+		if a.logger != nil {
+			a.logger.WarnContext(ctx, "retention gauge: list partitions", "stream", stream, "err", err)
+		}
+		return
+	}
+	if len(parts) == 0 {
+		return
+	}
+	oldest := parts[0].From
+	for _, p := range parts[1:] {
+		if p.From.Before(oldest) {
+			oldest = p.From
+		}
+	}
+	a.metrics.retention.Observe(stream, oldest, allowed)
+}
+
+// observeAllRetention refreshes both gauges: after each retention pass, and in
+// the daily audit-partitions pass, so a weekly cadence does not leave them a
+// week old. The query history is read through its executions table, the parent.
+func (a *Activities) observeAllRetention(ctx context.Context) {
+	a.observeRetention(ctx, "audit", "audit_events")
+	a.observeRetention(ctx, "query_history", "query_executions")
 }
 
 // SetAuditOffload wires the audit S3 cold offload (ADR 0024).

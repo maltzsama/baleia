@@ -29,6 +29,16 @@ import (
 func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.Config, logger *slog.Logger) error {
 	q := core.Queries
 
+	// Both streams get an allowance, wired or not: a stream that never drops
+	// (no cold bucket, no opt-out) is exactly the one whose growth the
+	// BaleiaRetentionBacklog alert has to see.
+	if err := setAllowance(act, "audit", cfg.AuditRetentionWindow(), cfg.AuditGrace(), cfg.AuditRetentionCadence); err != nil {
+		return err
+	}
+	if err := setAllowance(act, "query_history", cfg.QueryHistoryRetentionWindow(), cfg.QueryHistoryGrace(), cfg.QueryHistoryRetentionCadence); err != nil {
+		return err
+	}
+
 	if cfg.AuditColdBucket != "" || cfg.AuditDropWithoutOffload {
 		retain := &retention.Retain{
 			Table: "audit_events", Stream: auditexport.StreamAudit, SinkName: auditexport.SinkS3,
@@ -124,6 +134,27 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 		}
 		act.SetQueryHistoryRetain(retains)
 	}
+	return nil
+}
+
+// retentionAllowance is how old a stream's oldest partition may get before
+// retention is behind: the window, the grace, the longest gap between two runs
+// of the cadence, and the day the partition itself spans (ADR 0026). A day that
+// has just become droppable can wait one full cadence for the run that drops it.
+func retentionAllowance(window, grace time.Duration, cadence string) (time.Duration, error) {
+	period, err := config.RetentionPeriod(cadence)
+	if err != nil {
+		return 0, err
+	}
+	return window + grace + period + 24*time.Hour, nil
+}
+
+func setAllowance(act *activities.Activities, stream string, window, grace time.Duration, cadence string) error {
+	allowed, err := retentionAllowance(window, grace, cadence)
+	if err != nil {
+		return fmt.Errorf("%s retention cadence: %w", stream, err)
+	}
+	act.SetRetentionAllowance(stream, allowed)
 	return nil
 }
 
