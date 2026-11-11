@@ -46,3 +46,13 @@ func (r *Repo) OffloadQueryStatements(ctx context.Context, executionIDs []model.
 		Find(&rows).Error
 	return rows, err
 }
+
+// PendingExecutions reports whether any execution in [from, until) is still
+// queued or running, so its month cannot be sealed until it finishes.
+func (r *Repo) PendingExecutions(ctx context.Context, from, until time.Time) (bool, error) {
+	var n int64
+	err := r.Users.db.WithContext(ctx).Model(&model.QueryExecution{}).
+		Where("started_at >= ? AND started_at < ? AND status IN ?", from, until, []string{"queued", "running"}).
+		Count(&n).Error
+	return n > 0, err
+}

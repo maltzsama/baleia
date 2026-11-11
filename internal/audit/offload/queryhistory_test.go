@@ -11,8 +11,9 @@ import (
 )
 
 type fakeQueryHistoryStore struct {
-	execs []model.QueryExecution
-	stmts map[string][]model.QueryStatement
+	execs   []model.QueryExecution
+	stmts   map[string][]model.QueryStatement
+	pending bool
 }
 
 func (f *fakeQueryHistoryStore) OffloadQueryExecutions(_ context.Context, afterAt time.Time, afterID string, before time.Time, limit int) ([]model.QueryExecution, error) {
@@ -44,6 +45,10 @@ func (f *fakeQueryHistoryStore) OffloadQueryStatements(_ context.Context, ids []
 		out = append(out, f.stmts[string(id)]...)
 	}
 	return out, nil
+}
+
+func (f *fakeQueryHistoryStore) PendingExecutions(context.Context, time.Time, time.Time) (bool, error) {
+	return f.pending, nil
 }
 
 func TestQueryHistoryReaderWritesPair(t *testing.T) {
@@ -94,5 +99,38 @@ func TestQueryHistoryReaderWritesPair(t *testing.T) {
 	}
 	if !cur.pos.OccurredAt.Equal(time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("cursor = %+v", cur.pos)
+	}
+}
+
+// TestQueryHistoryReaderWaitsForFinal: a month with a queued or running
+// execution is not sealed; Run returns 0, writes nothing and leaves the cursor
+// untouched so the next pass retries.
+func TestQueryHistoryReaderWaitsForFinal(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC)
+	oct := time.Date(2026, 10, 5, 10, 0, 0, 0, time.UTC)
+	e := model.QueryExecution{ID: "00000000-0000-0000-0000-0000000000aa", WorkspaceID: "w", UserID: "u", Status: "running", Origin: "editor", SQL: "select 1", StartedAt: oct}
+	store := &fakeQueryHistoryStore{execs: []model.QueryExecution{e}, pending: true}
+	objects := &fakeStore{objects: map[string][]byte{}, types: map[string]string{}}
+	cur := &fakeCursor{}
+	sink := NewSink(objects, "baleia-cold", export.StreamQueryHistory)
+	o := &Offloader{
+		Stream: export.StreamQueryHistory, SinkName: export.SinkS3,
+		Cursor: cur, Sink: sink, Reader: &QueryHistoryReader{Store: store},
+		Lag: QueryHistorySafetyLag, Now: func() time.Time { return now },
+	}
+	n, err := o.Run(ctx)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("offloaded = %d, want 0 (not quiescent)", n)
+	}
+	if len(objects.objects) != 0 {
+		t.Fatalf("objects = %d, want none", len(objects.objects))
+	}
+	if cur.pos.After() {
+		t.Fatalf("cursor advanced to %+v", cur.pos)
 	}
 }

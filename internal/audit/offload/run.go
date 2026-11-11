@@ -3,11 +3,17 @@ package offload
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit/export"
 )
+
+// ErrNotQuiescent reports that a stream's month is not ready to seal yet (its
+// rows can still change). The offloader stops the pass without advancing the
+// cursor and retries on the next run.
+var ErrNotQuiescent = errors.New("offload: month not quiescent")
 
 // MonthReader reads one month of a stream. The offloader owns the month loop,
 // the manifest and the cursor; the reader only knows the stream's query and
@@ -93,6 +99,9 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 
 		objects, err := o.Reader.ReadMonth(ctx, month, before, &pos)
 		if err != nil {
+			if errors.Is(err, ErrNotQuiescent) {
+				return total, nil // retry on the next run; nothing is sealed
+			}
 			return total, err
 		}
 		rows := 0

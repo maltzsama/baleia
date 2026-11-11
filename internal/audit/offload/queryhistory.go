@@ -20,6 +20,9 @@ type QueryHistoryStore interface {
 	// OffloadQueryStatements returns the statements of a page of executions
 	// (a batch, not one query per execution), within [from, until).
 	OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time) ([]model.QueryStatement, error)
+	// PendingExecutions reports whether any execution in [from, until) is not
+	// terminal (queued or running), so the month cannot be sealed yet.
+	PendingExecutions(ctx context.Context, from, until time.Time) (bool, error)
 }
 
 // QueryHistoryReader is the MonthReader of the query_history stream: it reads
@@ -57,6 +60,16 @@ func (r *QueryHistoryReader) EarliestMonth(ctx context.Context, before time.Time
 // the statement reads never become one round trip per execution.
 func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position) (map[string][]json.RawMessage, error) {
 	limit := nextMonth(month)
+	pending, err := r.Store.PendingExecutions(ctx, month, limit)
+	if err != nil {
+		return nil, err
+	}
+	if pending {
+		// An execution started in the month is still queued or running, so its
+		// row (and its statements) can still change. Sealing now would archive
+		// a mid-run state; wait for the next run.
+		return nil, ErrNotQuiescent
+	}
 	var execRows, stmtRows []json.RawMessage
 	for {
 		execs, err := r.Store.OffloadQueryExecutions(ctx, pos.OccurredAt, pos.Key, before, r.batch())
