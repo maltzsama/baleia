@@ -2,6 +2,7 @@ package partitioning
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -188,7 +189,13 @@ func (m *sqlserverManager) ListPartitions(ctx context.Context, table string) ([]
 	if err != nil {
 		return nil, err
 	}
-	iv := boundaryInterval(bounds)
+	if len(bounds) == 0 {
+		return nil, nil // never provisioned
+	}
+	iv, err := boundaryInterval(bounds)
+	if err != nil {
+		return nil, fmt.Errorf("partitioning: list partitions of %s: %w", table, err)
+	}
 	var out []Partition
 	for _, until := range bounds {
 		from := iv.previous(until)
@@ -205,15 +212,18 @@ func (m *sqlserverManager) DropPartition(ctx context.Context, table string, from
 		return fmt.Errorf("partitioning: invalid table name %q", table)
 	}
 	pf := pfName(table)
-	bounds, err := m.boundaries(ctx, pf)
-	if err != nil {
-		return err
-	}
 	existing, err := m.ListPartitions(ctx, table)
 	if err != nil {
 		return err
 	}
 	for _, p := range partitionsIn(existing, from, until) {
+		// Merging a boundary renumbers the partitions after it, so the numbers
+		// are read again for every partition: reusing the list from before the
+		// first merge truncates the wrong day.
+		bounds, err := m.boundaries(ctx, pf)
+		if err != nil {
+			return err
+		}
 		n, ok := partitionNumber(bounds, p.Until)
 		if !ok {
 			continue
@@ -315,16 +325,30 @@ func containsTime(ts []time.Time, want time.Time) bool {
 	return false
 }
 
+// errAmbiguousWidth reports a partition function whose width cannot be read.
+var errAmbiguousWidth = errors.New("the partition width cannot be established from fewer than two boundaries")
+
 // boundaryInterval infers the partition width from the partition function's
-// boundaries: a first gap of 28 days or more means monthly partitions. The function
-// carries no width of its own, and Provision always lays down several
-// boundaries; a function with fewer than two is read as daily, the width the
-// product provisions.
-func boundaryInterval(bounds []time.Time) Interval {
-	if len(bounds) >= 2 && bounds[1].Sub(bounds[0]) >= 28*24*time.Hour {
-		return Monthly
+// boundaries, which carry no width of their own: the smallest gap between two
+// consecutive boundaries is a day or more than 28 days (monthly). The smallest
+// gap, not the first, because dropping a day merges its boundary and leaves a
+// wider gap behind. With fewer than two boundaries there is no gap to read, and
+// guessing could truncate a partition that holds more than the day a manifest
+// covers, so it fails closed.
+func boundaryInterval(bounds []time.Time) (Interval, error) {
+	if len(bounds) < 2 {
+		return "", errAmbiguousWidth
 	}
-	return Daily
+	smallest := bounds[1].Sub(bounds[0])
+	for i := 2; i < len(bounds); i++ {
+		if gap := bounds[i].Sub(bounds[i-1]); gap < smallest {
+			smallest = gap
+		}
+	}
+	if smallest >= 28*24*time.Hour {
+		return Monthly, nil
+	}
+	return Daily, nil
 }
 
 // previous returns the start of the partition that ends at until.

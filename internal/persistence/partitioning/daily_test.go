@@ -85,6 +85,15 @@ func exerciseDaily(t *testing.T, db *gorm.DB, model any) {
 	if n := count(); n != 3 {
 		t.Fatalf("rows after drop = %d, want 3", n)
 	}
+	// The count alone cannot tell the right days were dropped: the survivors are
+	// the rows of Nov 29, Dec 2 and Dec 3.
+	var ids []int64
+	if err := db.Table(spec.Table).Order("id").Pluck("id", &ids).Error; err != nil {
+		t.Fatalf("surviving ids: %v", err)
+	}
+	if len(ids) != 3 || ids[0] != 1 || ids[1] != 4 || ids[2] != 5 {
+		t.Fatalf("surviving row ids = %v, want [1 4 5] (Nov 29, Dec 2, Dec 3)", ids)
+	}
 	parts, err = pm.ListPartitions(ctx, spec.Table)
 	if err != nil {
 		t.Fatalf("ListPartitions after drop: %v", err)
