@@ -218,6 +218,13 @@ func mustInsert(t *testing.T, db *gorm.DB, table string, row map[string]any) {
 	}
 }
 
+// legacyLeftover is the table an interrupted conversion leaves behind.
+type legacyLeftover struct {
+	ID int64 `gorm:"column:id;primaryKey"`
+}
+
+func (legacyLeftover) TableName() string { return "audit_events_legacy" }
+
 // TestRepartitionResumesAfterAFailedTable: the stages commit separately, so a
 // failure while converting one table leaves the tables before it converted and
 // the rest untouched, and a rerun finishes the job without redoing or losing
@@ -238,7 +245,7 @@ func TestRepartitionResumesAfterAFailedTable(t *testing.T) {
 
 	// A leftover legacy table makes the audit conversion refuse, as an
 	// interrupted earlier attempt would. audit_events is converted last.
-	if err := db.Exec(`CREATE TABLE audit_events_legacy (id bigint)`).Error; err != nil {
+	if err := AutoMigrate(db, &legacyLeftover{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := repartitionQueryHistory(db); err == nil {
@@ -263,7 +270,7 @@ func TestRepartitionResumesAfterAFailedTable(t *testing.T) {
 	}
 
 	// The operator removes the leftover and reruns.
-	if err := db.Exec(`DROP TABLE audit_events_legacy`).Error; err != nil {
+	if err := db.Migrator().DropTable(&legacyLeftover{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := repartitionQueryHistory(db); err != nil {
