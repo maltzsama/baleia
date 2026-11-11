@@ -88,7 +88,7 @@ type QueryExecution struct {
 	EngineQueryID   *string         `gorm:"column:engine_query_id"`
 	RowsReturned    *int64          `gorm:"column:rows_returned"`
 	DurationMs      *int64          `gorm:"column:duration_ms"`
-	StartedAt       time.Time       `gorm:"column:started_at;not null;default:CURRENT_TIMESTAMP(3);index:query_executions_ws_started,priority:2;index:idx_query_executions_agent_started,priority:2"`
+	StartedAt       time.Time       `gorm:"column:started_at;primaryKey;not null;default:CURRENT_TIMESTAMP(3);index:query_executions_ws_started,priority:2;index:idx_query_executions_agent_started,priority:2"`
 	FinishedAt      *time.Time      `gorm:"column:finished_at"`
 	TrinoCatalog    *string         `gorm:"column:trino_catalog"`
 	ResultKey       *string         `gorm:"column:result_key"`
@@ -120,24 +120,27 @@ func (QueryExecution) TableName() string { return "query_executions" }
 
 // QueryStatement is the query_statements table.
 type QueryStatement struct {
-	ID            UUID            `gorm:"column:id;primaryKey;not null;check:query_statements_status_check,((status IN ('pending', 'running', 'finished', 'failed', 'cancelled', 'skipped')))"`
-	ExecutionID   UUID            `gorm:"column:execution_id;not null;index:idx_query_statements_execution,priority:1"`
-	Position      int32           `gorm:"column:position;not null"`
-	SQL           string          `gorm:"column:sql;not null"`
-	Status        string          `gorm:"column:status;not null"`
-	EngineQueryID *string         `gorm:"column:engine_query_id"`
-	RowsReturned  *int64          `gorm:"column:rows_returned"`
-	DurationMs    *int64          `gorm:"column:duration_ms"`
-	ErrorMessage  *string         `gorm:"column:error_message"`
-	StartedAt     time.Time       `gorm:"column:started_at;not null;default:CURRENT_TIMESTAMP(3)"`
-	FinishedAt    *time.Time      `gorm:"column:finished_at"`
-	ResultKey     *string         `gorm:"column:result_key"`
-	ResultBytes   *int64          `gorm:"column:result_bytes"`
-	Truncated     bool            `gorm:"column:truncated;not null;default:false"`
-	QueryHandle   *JSON           `gorm:"column:query_handle"`
-	ResultSets    JSON            `gorm:"column:result_sets;not null;default:('[]')"`
-	ErrorCode     *string         `gorm:"column:error_code"`
-	Execution     *QueryExecution `gorm:"foreignKey:ExecutionID;references:ID;constraint:OnDelete:CASCADE"`
+	ID          UUID `gorm:"column:id;primaryKey;not null;check:query_statements_status_check,((status IN ('pending', 'running', 'finished', 'failed', 'cancelled', 'skipped')))"`
+	ExecutionID UUID `gorm:"column:execution_id;not null;index:idx_query_statements_execution,priority:1"`
+	// ExecutionStartedAt is the parent execution's started_at, denormalized so
+	// the statement stays inside the parent's month partition (ADR 0024).
+	ExecutionStartedAt time.Time       `gorm:"column:execution_started_at;primaryKey;not null"`
+	Position           int32           `gorm:"column:position;not null"`
+	SQL                string          `gorm:"column:sql;not null"`
+	Status             string          `gorm:"column:status;not null"`
+	EngineQueryID      *string         `gorm:"column:engine_query_id"`
+	RowsReturned       *int64          `gorm:"column:rows_returned"`
+	DurationMs         *int64          `gorm:"column:duration_ms"`
+	ErrorMessage       *string         `gorm:"column:error_message"`
+	StartedAt          time.Time       `gorm:"column:started_at;not null;default:CURRENT_TIMESTAMP(3)"`
+	FinishedAt         *time.Time      `gorm:"column:finished_at"`
+	ResultKey          *string         `gorm:"column:result_key"`
+	ResultBytes        *int64          `gorm:"column:result_bytes"`
+	Truncated          bool            `gorm:"column:truncated;not null;default:false"`
+	QueryHandle        *JSON           `gorm:"column:query_handle"`
+	ResultSets         JSON            `gorm:"column:result_sets;not null;default:('[]')"`
+	ErrorCode          *string         `gorm:"column:error_code"`
+	Execution          *QueryExecution `gorm:"foreignKey:ExecutionID,ExecutionStartedAt;references:ID,StartedAt;constraint:OnDelete:CASCADE"`
 }
 
 func (QueryStatement) TableName() string { return "query_statements" }
@@ -163,30 +166,35 @@ func (ContentVersion) TableName() string { return "content_versions" }
 
 // StatementReference is the statement_references table.
 type StatementReference struct {
-	StatementID    UUID            `gorm:"column:statement_id;primaryKey;not null;index:statement_references_statement,priority:1;check:statement_references_kind_check,((kind IN ('read', 'write')))"`
-	WorkspaceID    UUID            `gorm:"column:workspace_id;not null;index:statement_references_workspace_table,priority:1"`
-	CatalogID      *UUID           `gorm:"column:catalog_id"`
-	Namespace      Text            `gorm:"column:namespace;primaryKey;not null;size:128;default:'';index:statement_references_workspace_table,priority:2"`
-	TableNameValue Text            `gorm:"column:table_name;primaryKey;not null;size:128;index:statement_references_workspace_table,priority:3"`
-	Alias          Text            `gorm:"column:alias;primaryKey;not null;size:128;default:''"`
-	Kind           Text            `gorm:"column:kind;not null;size:255;default:'read'"`
-	Statement      *QueryStatement `gorm:"foreignKey:StatementID;references:ID;constraint:OnDelete:CASCADE"`
-	Workspace      *Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnDelete:CASCADE"`
-	Catalog        *Catalog        `gorm:"foreignKey:CatalogID;references:ID;constraint:OnDelete:SET NULL"`
+	StatementID UUID `gorm:"column:statement_id;primaryKey;not null;index:statement_references_statement,priority:1;check:statement_references_kind_check,((kind IN ('read', 'write')))"`
+	// ExecutionStartedAt is the statement's execution_started_at, so the
+	// composite foreign key to query_statements has its partition key (ADR 0024).
+	ExecutionStartedAt time.Time       `gorm:"column:execution_started_at;not null"`
+	WorkspaceID        UUID            `gorm:"column:workspace_id;not null;index:statement_references_workspace_table,priority:1"`
+	CatalogID          *UUID           `gorm:"column:catalog_id"`
+	Namespace          Text            `gorm:"column:namespace;primaryKey;not null;size:128;default:'';index:statement_references_workspace_table,priority:2"`
+	TableNameValue     Text            `gorm:"column:table_name;primaryKey;not null;size:128;index:statement_references_workspace_table,priority:3"`
+	Alias              Text            `gorm:"column:alias;primaryKey;not null;size:128;default:''"`
+	Kind               Text            `gorm:"column:kind;not null;size:255;default:'read'"`
+	Statement          *QueryStatement `gorm:"foreignKey:StatementID,ExecutionStartedAt;references:ID,ExecutionStartedAt;constraint:OnDelete:CASCADE"`
+	Workspace          *Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnDelete:CASCADE"`
+	Catalog            *Catalog        `gorm:"foreignKey:CatalogID;references:ID;constraint:OnDelete:SET NULL"`
 }
 
 func (StatementReference) TableName() string { return "statement_references" }
 
 // StatementJoin is the statement_joins table.
 type StatementJoin struct {
-	StatementID UUID            `gorm:"column:statement_id;primaryKey;not null"`
-	WorkspaceID UUID            `gorm:"column:workspace_id;not null;index:statement_joins_workspace,priority:1"`
-	LeftAlias   Text            `gorm:"column:left_alias;primaryKey;not null;size:128"`
-	LeftColumn  Text            `gorm:"column:left_column;primaryKey;not null;size:128"`
-	RightAlias  Text            `gorm:"column:right_alias;primaryKey;not null;size:128"`
-	RightColumn Text            `gorm:"column:right_column;primaryKey;not null;size:128"`
-	Statement   *QueryStatement `gorm:"foreignKey:StatementID;references:ID;constraint:OnDelete:CASCADE"`
-	Workspace   *Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnDelete:CASCADE"`
+	StatementID UUID `gorm:"column:statement_id;primaryKey;not null"`
+	// ExecutionStartedAt is the statement's execution_started_at (ADR 0024).
+	ExecutionStartedAt time.Time       `gorm:"column:execution_started_at;not null"`
+	WorkspaceID        UUID            `gorm:"column:workspace_id;not null;index:statement_joins_workspace,priority:1"`
+	LeftAlias          Text            `gorm:"column:left_alias;primaryKey;not null;size:128"`
+	LeftColumn         Text            `gorm:"column:left_column;primaryKey;not null;size:128"`
+	RightAlias         Text            `gorm:"column:right_alias;primaryKey;not null;size:128"`
+	RightColumn        Text            `gorm:"column:right_column;primaryKey;not null;size:128"`
+	Statement          *QueryStatement `gorm:"foreignKey:StatementID,ExecutionStartedAt;references:ID,ExecutionStartedAt;constraint:OnDelete:CASCADE"`
+	Workspace          *Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnDelete:CASCADE"`
 }
 
 func (StatementJoin) TableName() string { return "statement_joins" }

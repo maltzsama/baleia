@@ -5,7 +5,7 @@ import "time"
 // AuditEvent is the audit_events table.
 type AuditEvent struct {
 	ID           int64     `gorm:"column:id;primaryKey;autoIncrement;check:audit_events_actor_kind_check,((actor_kind IN ('user', 'service', 'agent', 'anonymous')))"`
-	OccurredAt   time.Time `gorm:"column:occurred_at;not null;default:CURRENT_TIMESTAMP(3);index:audit_events_resource,priority:3;index:audit_events_actor,priority:2;index:audit_events_ws,priority:2;index:audit_events_on_behalf_of,priority:2"`
+	OccurredAt   time.Time `gorm:"column:occurred_at;primaryKey;not null;default:CURRENT_TIMESTAMP(3);index:audit_events_resource,priority:3;index:audit_events_actor,priority:2;index:audit_events_ws,priority:2;index:audit_events_on_behalf_of,priority:2"`
 	ActorKind    string    `gorm:"column:actor_kind;not null;check:audit_events_outcome_check,((outcome IN ('allowed', 'denied', 'error')))"`
 	ActorID      *Text     `gorm:"column:actor_id;size:128;index:audit_events_actor,priority:1"`
 	AuthMethod   *string   `gorm:"column:auth_method"`

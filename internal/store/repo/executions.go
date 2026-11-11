@@ -367,14 +367,19 @@ func (r *Repo) ListRunningStatementHandles(ctx context.Context, executionID db.U
 
 // CreateQueryStatement inserts a statement record.
 func (r *Repo) CreateQueryStatement(ctx context.Context, arg db.CreateQueryStatementParams) (db.QueryStatement, error) {
+	executionStartedAt, err := executionStartedAt(ctx, r.Users.db, UUIDString(arg.ExecutionID))
+	if err != nil {
+		return db.QueryStatement{}, err
+	}
 	row := model.QueryStatement{
-		ID:          model.UUID(NewUUID()),
-		ExecutionID: model.UUID(UUIDString(arg.ExecutionID)),
-		Position:    arg.Position,
-		SQL:         arg.Sql,
-		Status:      arg.Status,
-		StartedAt:   time.Now().UTC(),
-		ResultSets:  model.JSON("[]"),
+		ID:                 model.UUID(NewUUID()),
+		ExecutionID:        model.UUID(UUIDString(arg.ExecutionID)),
+		ExecutionStartedAt: executionStartedAt,
+		Position:           arg.Position,
+		SQL:                arg.Sql,
+		Status:             arg.Status,
+		StartedAt:          time.Now().UTC(),
+		ResultSets:         model.JSON("[]"),
 	}
 	if err := r.Users.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return db.QueryStatement{}, err

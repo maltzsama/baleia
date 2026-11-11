@@ -21,9 +21,12 @@ func (ClusterSnapshot) TableName() string { return "cluster_snapshots" }
 
 // TrinoQuerySnapshot is the trino_query_snapshots table.
 type TrinoQuerySnapshot struct {
-	ID                 UUID            `gorm:"column:id;primaryKey;not null;check:trino_query_snapshots_origin_check,((origin IN ('baleia', 'trino_direct')))"`
-	TrinoQueryID       Text            `gorm:"column:trino_query_id;not null;size:128;uniqueIndex:trino_query_snapshots_trino_query_id_key,priority:1;index:idx_trino_query_snapshots_query_id,priority:1;check:trino_query_snapshots_state_check,((state IN ('running', 'finished', 'failed', 'cancelled')))"`
-	ExecutionID        *UUID           `gorm:"column:execution_id"`
+	ID           UUID  `gorm:"column:id;primaryKey;not null;check:trino_query_snapshots_origin_check,((origin IN ('baleia', 'trino_direct')))"`
+	TrinoQueryID Text  `gorm:"column:trino_query_id;not null;size:128;uniqueIndex:trino_query_snapshots_trino_query_id_key,priority:1;index:idx_trino_query_snapshots_query_id,priority:1;check:trino_query_snapshots_state_check,((state IN ('running', 'finished', 'failed', 'cancelled')))"`
+	ExecutionID  *UUID `gorm:"column:execution_id"`
+	// ExecutionStartedAt is the parent execution's started_at, set with
+	// ExecutionID for the composite foreign key (ADR 0024).
+	ExecutionStartedAt *time.Time      `gorm:"column:execution_started_at"`
 	Origin             Text            `gorm:"column:origin;not null;size:128;index:idx_trino_query_snapshots_origin,priority:1"`
 	User               Text            `gorm:"column:user;not null;size:128;index:idx_trino_query_snapshots_user,priority:1"`
 	State              Text            `gorm:"column:state;not null;size:128;index:idx_trino_query_snapshots_state,priority:1"`
@@ -40,7 +43,7 @@ type TrinoQuerySnapshot struct {
 	FirstSeenAt        time.Time       `gorm:"column:first_seen_at;not null;default:CURRENT_TIMESTAMP(3)"`
 	LastSeenAt         time.Time       `gorm:"column:last_seen_at;not null;default:CURRENT_TIMESTAMP(3)"`
 	EngineID           UUID            `gorm:"column:engine_id;not null;index:trino_query_snapshots_engine_time,priority:1"`
-	Execution          *QueryExecution `gorm:"foreignKey:ExecutionID;references:ID;constraint:OnDelete:SET NULL"`
+	Execution          *QueryExecution `gorm:"foreignKey:ExecutionID,ExecutionStartedAt;references:ID,StartedAt;constraint:OnDelete:SET NULL"`
 	Engine             *Engine         `gorm:"foreignKey:EngineID;references:ID;constraint:OnDelete:CASCADE"`
 }
 

@@ -86,10 +86,19 @@ func (r *Repo) UpsertTrinoQuerySnapshot(ctx context.Context, arg db.UpsertTrinoQ
 		if arg.CreatedAt.Valid {
 			createdAt = arg.CreatedAt.Time
 		}
+		var executionStarted *time.Time
+		if arg.ExecutionID.Valid {
+			started, err := executionStartedAt(ctx, tx, UUIDString(arg.ExecutionID))
+			if err != nil {
+				return err
+			}
+			executionStarted = &started
+		}
 		row := model.TrinoQuerySnapshot{
 			ID:                 model.UUID(NewUUID()),
 			TrinoQueryID:       model.Text(arg.TrinoQueryID),
 			ExecutionID:        modelUUIDPtr(arg.ExecutionID),
+			ExecutionStartedAt: executionStarted,
 			Origin:             model.Text(arg.Origin),
 			User:               model.Text(arg.User),
 			State:              model.Text(arg.State),
