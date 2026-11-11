@@ -3,10 +3,12 @@ package repo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/persistence/partitioning"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"gorm.io/gorm"
 )
@@ -956,8 +958,36 @@ func (r *Repo) ReleaseMetadataSyncLock(ctx context.Context, catalogID string) er
 	return nil
 }
 
-// EnsureAuditPartitions is a no-op: the GORM model creates audit_events as a
-// plain table, so there are no monthly partitions to create.
+// EnsureAuditPartitions creates the monthly partitions of the audit trail and of
+// the query history from the current month through monthsAhead months ahead
+// (ADR 0024). It never drops one, and it is idempotent. A table that is still
+// plain (migration 14 has not run, or the engine has no adapter) is left alone:
+// provisioning would convert it, and converting belongs to the migration.
 func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) error {
+	if !partitioning.CapabilitiesFor(r.Users.db).Implemented {
+		return nil
+	}
+	pm, err := partitioning.New(r.Users.db)
+	if err != nil {
+		if errors.Is(err, partitioning.ErrNotImplemented) || errors.Is(err, partitioning.ErrUnsupportedPartitioning) {
+			return nil
+		}
+		return err
+	}
+	from := partitioning.MonthStart(time.Now())
+	until := from.AddDate(0, int(monthsAhead)+1, 0)
+	for _, t := range model.PartitionedTables() {
+		existing, err := pm.ListPartitions(ctx, t.Table)
+		if err != nil {
+			return err
+		}
+		if len(existing) == 0 {
+			return fmt.Errorf("%s is not partitioned: run the store migrations", t.Table)
+		}
+		spec := partitioning.Spec{Table: t.Table, Column: t.Column, Strategy: partitioning.Range, Interval: partitioning.Monthly}
+		if err := pm.Provision(ctx, t.Model, spec, from, until); err != nil {
+			return fmt.Errorf("provision %s: %w", t.Table, err)
+		}
+	}
 	return nil
 }
