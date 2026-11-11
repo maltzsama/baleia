@@ -178,6 +178,10 @@ func listPartitions(db *gorm.DB, table string) ([]Partition, error) {
 	return out, nil
 }
 
+// dropPartition detaches then drops each monthly partition of table in
+// [from, until), one transaction per partition. Detaching first lets a
+// partition whose rows a non-partitioned table references through a composite
+// foreign key be removed; it fails closed if referencing rows remain.
 func dropPartition(db *gorm.DB, table string, from, until time.Time) error {
 	if !identifier.MatchString(table) {
 		return fmt.Errorf("partitioning: invalid table name %q", table)
