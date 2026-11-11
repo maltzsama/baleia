@@ -38,7 +38,6 @@ func AuditExportWorkflow(ctx workflow.Context) (int, error) {
 func AuditOffloadWorkflow(ctx workflow.Context) (int, error) {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 6 * time.Minute,
-		HeartbeatTimeout:    2 * time.Minute,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
 	})
 	var n int
@@ -52,7 +51,6 @@ func AuditOffloadWorkflow(ctx workflow.Context) (int, error) {
 func QueryHistoryOffloadWorkflow(ctx workflow.Context) (int, error) {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 6 * time.Minute,
-		HeartbeatTimeout:    2 * time.Minute,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
 	})
 	var n int
