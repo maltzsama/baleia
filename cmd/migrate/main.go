@@ -15,7 +15,7 @@ func main() {
 	var command, before string
 	var dryRun bool
 	flag.StringVar(&command, "cmd", "store-up", "command: store-up, store-down, store-status (GORM schema migrations, ADR 0020); credentials (re-seal legacy credentials), oidc-providers (seal provider configs) or audit-prune (drop the gated audit partitions before -before)")
-	flag.StringVar(&before, "before", "", "audit-prune: drop the audit partitions of the months before this one (YYYY-MM)")
+	flag.StringVar(&before, "before", "", "audit-prune: drop the audit partitions before this day (YYYY-MM-DD, or YYYY-MM for a month start)")
 	flag.BoolVar(&dryRun, "dry-run", false, "audit-prune: report the partitions that would be dropped without dropping them")
 	flag.Parse()
 

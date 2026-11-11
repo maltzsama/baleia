@@ -132,13 +132,13 @@ func TestDeleteQueryHistoryDependents(t *testing.T) {
 
 	from := time.Date(base.Year(), base.Month(), 1, 0, 0, 0, 0, time.UTC)
 	until := from.AddDate(0, 1, 0)
-	if err := f.r.DeleteStatementReferencesByMonth(ctx, from, until); err != nil {
+	if err := f.r.DeleteStatementReferencesByPeriod(ctx, from, until); err != nil {
 		t.Fatalf("delete references: %v", err)
 	}
-	if err := f.r.DeleteStatementJoinsByMonth(ctx, from, until); err != nil {
+	if err := f.r.DeleteStatementJoinsByPeriod(ctx, from, until); err != nil {
 		t.Fatalf("delete joins: %v", err)
 	}
-	if err := f.r.UnlinkTrinoQuerySnapshotsByMonth(ctx, from, until); err != nil {
+	if err := f.r.UnlinkTrinoQuerySnapshotsByPeriod(ctx, from, until); err != nil {
 		t.Fatalf("unlink snapshots: %v", err)
 	}
 

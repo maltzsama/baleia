@@ -18,19 +18,20 @@ import (
 	"github.com/galileostudio/baleia/internal/store/repo"
 )
 
-// pruneAudit drops the audit partitions of the months before before (YYYY-MM),
-// applying the same cold-sink gates as the scheduled retention: a partition is
-// dropped only when the audit cursor has advanced past it and its manifest
-// exists. It refuses to run without a configured cold bucket (fail-closed); with
-// --dry-run it reports what it would drop without dropping anything.
+// pruneAudit drops the audit partitions before before (YYYY-MM-DD, or YYYY-MM
+// for the first day of a month), applying the same cold-sink gates as the
+// scheduled retention: a partition is dropped only when the audit cursor has
+// advanced past it and its manifest exists and validates. It refuses to run
+// without a configured cold bucket (fail-closed); with --dry-run it reports what
+// it would drop without dropping anything.
 func pruneAudit(ctx context.Context, logger *slog.Logger, cfg *config.Config, before string, dryRun bool) error {
-	cut, err := time.Parse("2006-01", before)
+	cut, err := parseBefore(before)
 	if err != nil {
-		return fmt.Errorf("-before must look like 2026-01: %w", err)
+		return err
 	}
 	now := time.Now().UTC()
-	if !cut.Before(time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)) {
-		return fmt.Errorf("refusing to prune the current month or later (before=%s)", before)
+	if !cut.Before(partitioning.Daily.Start(now)) {
+		return fmt.Errorf("refusing to prune today or later (before=%s)", before)
 	}
 	if cfg.AuditColdBucket == "" {
 		return fmt.Errorf("refusing to prune without BALEIA_AUDIT_COLD_BUCKET: retention is fail-closed")
@@ -58,7 +59,7 @@ func pruneAudit(ctx context.Context, logger *slog.Logger, cfg *config.Config, be
 		Table: "audit_events", Stream: export.StreamAudit, SinkName: export.SinkS3,
 		Partitions: prunePartitions{q: q},
 		Cursor:     pruneCursor{q: q},
-		Manifest:   pruneManifest{sink: sink, has: cold.Has},
+		Manifest:   sink,
 		Cutoff:     cut,
 		// The manual command drains every eligible partition before -before.
 		MaxPartitions: -1,
@@ -82,11 +83,11 @@ func pruneAudit(ctx context.Context, logger *slog.Logger, cfg *config.Config, be
 type prunePartitions struct{ q *repo.Repo }
 
 func (p prunePartitions) ListPartitions(ctx context.Context, table string) ([]partitioning.Partition, error) {
-	return p.q.MonthPartitions(ctx, table)
+	return p.q.Partitions(ctx, table)
 }
 
 func (p prunePartitions) DropPartition(ctx context.Context, table string, from, until time.Time) error {
-	return p.q.DropMonth(ctx, table, from, until)
+	return p.q.DropPartitions(ctx, table, from, until)
 }
 
 // pruneCursor adapts the store to the retention Cursor contract.
@@ -103,12 +104,13 @@ func (c pruneCursor) OccurredAt(ctx context.Context, stream, sink string) (time.
 	return row.OccurredAt.Time, nil
 }
 
-// pruneManifest reads the cold store for a month's manifest.
-type pruneManifest struct {
-	sink *offload.Sink
-	has  func(ctx context.Context, key string) (bool, error)
-}
-
-func (m pruneManifest) Exists(ctx context.Context, _ string, month time.Time) (bool, error) {
-	return m.has(ctx, m.sink.ManifestKey(month))
+// parseBefore reads -before as a day (2026-01-15) or, for convenience, a month
+// (2026-01, its first day).
+func parseBefore(before string) (time.Time, error) {
+	for _, layout := range []string{"2006-01-02", "2006-01"} {
+		if t, err := time.Parse(layout, before); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("-before must look like 2026-01-15 or 2026-01 (got %q)", before)
 }

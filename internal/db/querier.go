@@ -184,10 +184,10 @@ type Querier interface {
 	DisableMissingNativeBindings(ctx context.Context, arg DisableMissingNativeBindingsParams) (int64, error)
 	// Creates the daily partitions of today and the next days ahead.
 	EnsureAuditPartitions(ctx context.Context, daysAhead int) error
-	// MonthPartitions returns the existing monthly partitions of table, and
-	// DropMonth drops the partitions covering [from, until) (ADR 0024).
-	MonthPartitions(ctx context.Context, table string) ([]partitioning.Partition, error)
-	DropMonth(ctx context.Context, table string, from, until time.Time) error
+	// Partitions returns the existing partitions of table, and
+	// DropPartitions drops the partitions covering [from, until) (ADR 0024).
+	Partitions(ctx context.Context, table string) ([]partitioning.Partition, error)
+	DropPartitions(ctx context.Context, table string, from, until time.Time) error
 	// A run that failed before any statement ran (the admission queue) records its
 	// error code here, where no statement can (#399).
 	FailQueryExecution(ctx context.Context, arg FailQueryExecutionParams) (QueryExecution, error)

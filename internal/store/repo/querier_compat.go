@@ -988,8 +988,8 @@ func (r *Repo) EnsureAuditPartitions(ctx context.Context, daysAhead int) error {
 	return nil
 }
 
-// MonthPartitions returns the existing monthly partitions of table (ADR 0024).
-func (r *Repo) MonthPartitions(ctx context.Context, table string) ([]partitioning.Partition, error) {
+// Partitions returns the existing partitions of table (ADR 0024).
+func (r *Repo) Partitions(ctx context.Context, table string) ([]partitioning.Partition, error) {
 	pm, err := r.partitionManager()
 	if err != nil || pm == nil {
 		return nil, err
@@ -997,8 +997,8 @@ func (r *Repo) MonthPartitions(ctx context.Context, table string) ([]partitionin
 	return pm.ListPartitions(ctx, table)
 }
 
-// DropMonth drops the partitions of table covering [from, until) (ADR 0024).
-func (r *Repo) DropMonth(ctx context.Context, table string, from, until time.Time) error {
+// DropPartitions drops the partitions of table covering [from, until) (ADR 0024).
+func (r *Repo) DropPartitions(ctx context.Context, table string, from, until time.Time) error {
 	pm, err := r.partitionManager()
 	if err != nil || pm == nil {
 		return err

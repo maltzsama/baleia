@@ -1,5 +1,6 @@
 // Package retention drops the partitions of a stream that are past their hot
-// window, gated on the cold-sink cursor and the per-month manifest (ADR 0024).
+// window, gated on the cold-sink cursor and the per-day manifest (ADR 0024,
+// ADR 0026).
 package retention
 
 import (
@@ -22,9 +23,12 @@ type Cursor interface {
 	OccurredAt(ctx context.Context, stream, sink string) (time.Time, error)
 }
 
-// ManifestCheck reports whether a month's manifest is in the cold store.
+// ManifestCheck verifies a day's manifest against the cold store.
 type ManifestCheck interface {
-	Exists(ctx context.Context, stream string, month time.Time) (bool, error)
+	// Verify returns why the day's manifest cannot gate a drop, or "" when it
+	// exists and validates (every listed object is present, with the recorded
+	// checksum and row count). A failure to read the store is an error.
+	Verify(ctx context.Context, day time.Time) (reason string, err error)
 }
 
 // Retain drops the partitions of one table that are past their hot window.
@@ -39,7 +43,7 @@ type Retain struct {
 	Grace         time.Duration
 	MaxPartitions int
 	// Cutoff, when set, replaces the hot-window cutoff (now - Retention -
-	// Grace); the manual prune passes its -before month here.
+	// Grace); the manual prune passes its -before day here.
 	Cutoff time.Time
 	// DryRun reports the droppable partitions without dropping them.
 	DryRun bool
@@ -91,12 +95,12 @@ func (r *Retain) Run(ctx context.Context) ([]string, error) {
 			r.skip(p.Name, "cursor not advanced")
 			continue
 		}
-		ok, err := r.Manifest.Exists(ctx, r.Stream, p.From)
+		reason, err := r.Manifest.Verify(ctx, p.From)
 		if err != nil {
 			return dropped, err
 		}
-		if !ok {
-			r.skip(p.Name, "manifest missing")
+		if reason != "" {
+			r.skip(p.Name, reason)
 			continue
 		}
 		if !r.DryRun {

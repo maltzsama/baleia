@@ -8,10 +8,10 @@ import (
 	"github.com/galileostudio/baleia/internal/audit/export"
 )
 
-// AuditReader is the MonthReader of the audit stream: it reads audit_events
+// AuditReader is the PeriodReader of the audit stream: it reads audit_events
 // through the export Source and maps each row to a lossless cold document. The
-// object is named after the stream, so the chunk keys stay
-// audit-YYYYMM-<tie>.ndjson.gz.
+// object is named after the stream, so the chunk keys are
+// audit-YYYYMMDD-<tie>.ndjson.gz.
 type AuditReader struct {
 	Source   export.Source
 	Name     string
@@ -19,17 +19,17 @@ type AuditReader struct {
 	Document func(export.Event) map[string]any
 }
 
-// EarliestMonth is the month of the first audit row, or the zero time.
-func (r *AuditReader) EarliestMonth(ctx context.Context, before time.Time) (time.Time, error) {
+// EarliestPeriod is the day of the first audit row, or the zero time.
+func (r *AuditReader) EarliestPeriod(ctx context.Context, before time.Time) (time.Time, error) {
 	events, err := r.Source.Events(ctx, export.Position{}, before, 1)
 	if err != nil || len(events) == 0 {
 		return time.Time{}, err
 	}
-	return monthStart(events[0].OccurredAt), nil
+	return period.Start(events[0].OccurredAt), nil
 }
 
-// ReadMonth streams the audit rows of the month as bounded chunks.
-func (r *AuditReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func([]Chunk, export.Position) error) error {
+// ReadPeriod streams the audit rows of the day as bounded chunks.
+func (r *AuditReader) ReadPeriod(ctx context.Context, day, before time.Time, pos *export.Position, emit func([]Chunk, export.Position) error) error {
 	doc := r.Document
 	if doc == nil {
 		doc = ColdAuditDocument
@@ -39,7 +39,7 @@ func (r *AuditReader) ReadMonth(ctx context.Context, month, before time.Time, po
 		name = export.StreamAudit
 	}
 	readPos := *pos
-	limit := nextMonth(month)
+	limit := period.Next(day)
 	ch := &chunker{object: name}
 	for {
 		events, err := r.Source.Events(ctx, readPos, before, r.batch())

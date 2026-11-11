@@ -7,27 +7,32 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit/export"
+	"github.com/galileostudio/baleia/internal/persistence/partitioning"
 )
 
-// ChunkRows and ChunkBytes bound one object chunk: a month is streamed in
-// chunks of at most these sizes, so a very large month never accumulates the
-// whole month — or one whole gzip object — in memory.
+// period is the width of one offload unit (ADR 0026): the offloader writes, and
+// retention gates on, one UTC day at a time.
+const period = partitioning.Daily
+
+// ChunkRows and ChunkBytes bound one object chunk: a day is streamed in chunks
+// of at most these sizes, so a very large day never accumulates the whole day —
+// or one whole gzip object — in memory.
 var (
 	ChunkRows  = 10_000
 	ChunkBytes = 32 << 20
 )
 
-// ErrNotQuiescent reports that a stream's month is not ready to seal yet (its
+// ErrNotQuiescent reports that a stream's day is not ready to seal yet (its
 // rows can still change). The offloader stops the pass without advancing the
 // cursor and retries on the next run.
-var ErrNotQuiescent = errors.New("offload: month not quiescent")
+var ErrNotQuiescent = errors.New("offload: day not quiescent")
 
-// ErrPassDone reports that the pass bound was reached mid-month. The chunks and
+// ErrPassDone reports that the pass bound was reached mid-day. The chunks and
 // manifest written so far are committed, the cursor advanced past them, and a
-// later run resumes instead of re-reading the whole month.
+// later run resumes instead of re-reading the whole day.
 var ErrPassDone = errors.New("offload: pass bound reached")
 
-// Chunk is one bounded page of a month's object.
+// Chunk is one bounded page of a day's object.
 type Chunk struct {
 	Object string
 	First  export.Position
@@ -35,19 +40,19 @@ type Chunk struct {
 	Rows   []json.RawMessage
 }
 
-// MonthReader streams one month of a stream as bounded chunks. The offloader
-// owns the month loop, the manifest and the cursor; the reader only knows the
-// stream's query and row shape (ADR 0024).
-type MonthReader interface {
-	// ReadMonth reads month after pos and before the cutoff, calling emit once
+// PeriodReader streams one day of a stream as bounded chunks. The offloader
+// owns the day loop, the manifest and the cursor; the reader only knows the
+// stream's query and row shape (ADR 0024, ADR 0026).
+type PeriodReader interface {
+	// ReadPeriod reads day after pos and before the cutoff, calling emit once
 	// per bounded flush. A flush carries one or more chunks (an execution and
 	// its statements travel together) and the commit position the cursor may
 	// advance to only after every chunk in the flush is persisted. An emit error
 	// stops the read.
-	ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func(chunks []Chunk, commitTo export.Position) error) error
-	// EarliestMonth returns the month of the stream's first row, or the zero
+	ReadPeriod(ctx context.Context, day, before time.Time, pos *export.Position, emit func(chunks []Chunk, commitTo export.Position) error) error
+	// EarliestPeriod returns the day of the stream's first row, or the zero
 	// time when it has none.
-	EarliestMonth(ctx context.Context, before time.Time) (time.Time, error)
+	EarliestPeriod(ctx context.Context, before time.Time) (time.Time, error)
 }
 
 // chunker accumulates rows into one bounded chunk. take drains it.
@@ -79,27 +84,27 @@ func (c *chunker) take() (Chunk, bool) {
 	return ch, true
 }
 
-// Offloader writes a stream's rows to the cold sink month by month, finalizing
-// each month with a manifest before advancing the cursor past it. A month is
-// finalized only once it is entirely past the safety lag.
+// Offloader writes a stream's rows to the cold sink day by day, finalizing each
+// day with a manifest before advancing the cursor past it. A day is finalized
+// only once it is entirely past the safety lag.
 type Offloader struct {
 	Stream   string
 	SinkName string
 	Cursor   export.Cursor
 	Sink     *Sink
-	Reader   MonthReader
+	Reader   PeriodReader
 	Lag      time.Duration
 	Now      func() time.Time
 	MaxPass  time.Duration
 }
 
-// Run offloads complete months until caught up or the pass bound elapses. It
-// returns the number of rows offloaded. Within a month it writes bounded chunks
-// and advances the cursor past each committed chunk, so an oversized month makes
+// Run offloads complete days until caught up or the pass bound elapses. It
+// returns the number of rows offloaded. Within a day it writes bounded chunks
+// and advances the cursor past each committed chunk, so an oversized day makes
 // progress instead of exhausting memory and blocking retention.
 //
 // A stream's passes are serialized by its Temporal schedule (SKIP overlap plus a
-// fixed workflow ID), so a month's manifest read-merge-write is never raced by a
+// fixed workflow ID), so a day's manifest read-merge-write is never raced by a
 // second scheduled run. Starting an offload workflow by hand with a different
 // workflow ID is a debug-only action and must not overlap the schedule.
 func (o *Offloader) Run(ctx context.Context) (int, error) {
@@ -123,11 +128,11 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 	}
 	total := 0
 
-	// The first month to process: the cursor's month, resolved lazily from the
+	// The first day to process: the cursor's day, resolved lazily from the
 	// earliest row when the cursor is unset.
-	var month time.Time
+	var day time.Time
 	if pos.After() {
-		month = monthStart(pos.OccurredAt)
+		day = period.Start(pos.OccurredAt)
 	}
 
 	for {
@@ -139,33 +144,33 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 		}
 		before := now().Add(-lag)
 
-		if month.IsZero() {
-			month, err = o.Reader.EarliestMonth(ctx, before)
+		if day.IsZero() {
+			day, err = o.Reader.EarliestPeriod(ctx, before)
 			if err != nil {
 				return total, err
 			}
-			if month.IsZero() {
+			if day.IsZero() {
 				return total, nil // nothing to offload yet
 			}
 		}
-		// A month is offloadable once it is entirely before the safety lag.
-		if !nextMonth(month).Before(before) {
+		// A day is offloadable once it is entirely before the safety lag.
+		if !period.Next(day).Before(before) {
 			return total, nil
 		}
 
-		// Resume a month's manifest so a partial pass keeps its chunks.
-		manifest, err := o.Sink.ReadManifest(ctx, month)
+		// Resume a day's manifest so a partial pass keeps its chunks.
+		manifest, err := o.Sink.ReadManifest(ctx, day)
 		if err != nil {
 			return total, err
 		}
 
-		err = o.Reader.ReadMonth(ctx, month, before, &pos, func(chunks []Chunk, commitTo export.Position) error {
+		err = o.Reader.ReadPeriod(ctx, day, before, &pos, func(chunks []Chunk, commitTo export.Position) error {
 			rows := 0
 			for _, c := range chunks {
 				if len(c.Rows) == 0 {
 					continue
 				}
-				key := o.Sink.ChunkKey(month, c.Object, c.First)
+				key := o.Sink.ChunkKey(day, c.Object, c.First)
 				count, checksum, err := o.Sink.WriteChunk(ctx, key, c.Rows)
 				if err != nil {
 					return err
@@ -176,7 +181,7 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 			if rows == 0 {
 				return nil
 			}
-			if err := o.Sink.WriteManifest(ctx, month, manifest); err != nil {
+			if err := o.Sink.WriteManifest(ctx, day, manifest); err != nil {
 				return err
 			}
 			// Advance the cursor only after every chunk of this flush is
@@ -192,7 +197,7 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 		})
 		switch {
 		case err == nil:
-			// The month is fully read.
+			// The day is fully read.
 		case errors.Is(err, ErrPassDone):
 			return total, nil // chunks and cursor are committed; resume later
 		case errors.Is(err, ErrNotQuiescent):
@@ -201,27 +206,18 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 			return total, err
 		}
 
-		// Finalize every fully read month, even when it has no rows: the
-		// manifest is the retention gate, so an empty month's partition still
-		// needs one to become droppable later.
+		// Finalize every fully read day, even when it has no rows: the manifest
+		// is the retention gate, so an empty day's partition still needs one to
+		// become droppable later.
 		if len(manifest.Keys) == 0 {
-			if err := o.Sink.WriteManifest(ctx, month, manifest); err != nil {
+			if err := o.Sink.WriteManifest(ctx, day, manifest); err != nil {
 				return total, err
 			}
 		}
-		pos = export.Position{OccurredAt: nextMonth(month)}
+		pos = export.Position{OccurredAt: period.Next(day)}
 		if err := o.Cursor.Set(ctx, o.Stream, o.SinkName, pos); err != nil {
 			return total, err
 		}
-		month = nextMonth(month)
+		day = period.Next(day)
 	}
-}
-
-func monthStart(t time.Time) time.Time {
-	t = t.UTC()
-	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
-}
-
-func nextMonth(m time.Time) time.Time {
-	return monthStart(m).AddDate(0, 1, 0)
 }
