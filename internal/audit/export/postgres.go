@@ -34,6 +34,7 @@ func (p Postgres) Events(ctx context.Context, after Position, before time.Time, 
 			AuthMethod: r.AuthMethod, Action: r.Action, ResourceType: r.ResourceType, ResourceID: r.ResourceID,
 			WorkspaceID: r.WorkspaceID, Outcome: r.Outcome, Reason: r.Reason, RequestID: r.RequestID,
 			TraceID: r.TraceID, ClientIP: r.ClientIp, UserAgent: r.UserAgent, Changes: r.Changes,
+			OnBehalfOf: r.OnBehalfOf,
 		})
 	}
 	return out, nil

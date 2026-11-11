@@ -67,6 +67,7 @@ type Event struct {
 	ClientIP     string
 	UserAgent    string
 	Changes      json.RawMessage
+	OnBehalfOf   string
 }
 
 // Position is a cursor value: the (occurred_at, id) of the last accepted event,

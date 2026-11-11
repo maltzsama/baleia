@@ -324,6 +324,10 @@ func (r *Repo) ListAuditEventsForExport(ctx context.Context, arg db.ListAuditEve
 		if row.WorkspaceID != nil {
 			workspaceID = string(*row.WorkspaceID)
 		}
+		onBehalfOf := ""
+		if row.OnBehalfOf != nil {
+			onBehalfOf = string(*row.OnBehalfOf)
+		}
 		out[i] = db.ListAuditEventsForExportRow{
 			OccurredAt:   PGTime(row.OccurredAt),
 			ID:           row.ID,
@@ -341,6 +345,7 @@ func (r *Repo) ListAuditEventsForExport(ctx context.Context, arg db.ListAuditEve
 			ClientIp:     derefInet(row.ClientIP),
 			UserAgent:    derefString(row.UserAgent),
 			Changes:      derefJSON(row.Changes),
+			OnBehalfOf:   onBehalfOf,
 		}
 	}
 	return out, nil

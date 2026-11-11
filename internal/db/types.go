@@ -1180,6 +1180,7 @@ type ListAuditEventsForExportRow struct {
 	ClientIp     string      `json:"client_ip"`
 	UserAgent    string      `json:"user_agent"`
 	Changes      []byte      `json:"changes"`
+	OnBehalfOf   string      `json:"on_behalf_of"`
 }
 
 type ListAuditEventsParams struct {
