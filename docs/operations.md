@@ -353,13 +353,16 @@ lists them, newest first: admins see every event, anyone else only their own.
   past today (14 by default) and never drops one. PostgreSQL has no default partition: an event
   whose day has no partition fails to write, so the horizon is how long the schedule can stay
   down before writes start failing.
-- **Retention:** `BALEIA_AUDIT_RETENTION` (400 days by default). The `audit-retention` schedule
-  drops a day's partition only after the cold offload has sealed that day and the day's manifest
-  validates; it is fail-closed and never drops data that has not been offloaded.
+- **Retention:** `BALEIA_AUDIT_RETENTION` (45 days by default, at least 1 day). The
+  `audit-retention` schedule, weekly by default, drops a day's partition only after the cold
+  offload has sealed that day and the day's manifest validates; it is fail-closed and never drops
+  data that has not been offloaded, unless the stream opts out (see the next section). Audit older
+  than the window lives only in the cold store, so the bucket's lifecycle and legal-hold policy is
+  what keeps the audit trail for compliance.
 - **Manual prune:** `migrate -cmd=audit-prune -before=YYYY-MM-DD` (or `YYYY-MM` for the first of
   a month) drains the same gated path by hand (it refuses without a cold bucket and refuses
   today or later). `--dry-run` reports the partitions that would be dropped without dropping
-  them. `-before` **overrides the hot-retention window** (including the 400-day default), so it
+  them. `-before` **overrides the hot-retention window** (including the 45-day default), so it
   is the cutoff to choose carefully.
 
 ## Audit export
@@ -401,24 +404,43 @@ retention is gated on.
   advances past a day only after its manifest is written. A day with no rows still gets a
   manifest, so its empty partition can be dropped. That is about 365 manifests per stream per
   year.
-- **Configuration:** `BALEIA_AUDIT_COLD_BUCKET`/`_PREFIX` and
-  `BALEIA_QUERY_HISTORY_COLD_BUCKET`/`_PREFIX` (both off by default), `BALEIA_AUDIT_RETENTION`
-  (400d), `BALEIA_QUERY_HISTORY_RETENTION` (180d), `BALEIA_AUDIT_COLD_GRACE` /
-  `BALEIA_QUERY_HISTORY_COLD_GRACE` (7d), and `BALEIA_PRUNE_MAX_PARTITIONS` (1).
-- **Schedules:** `audit-offload` and `query-history-offload` (hourly), and `audit-retention` /
-  `query-history-retention` (daily). Each pair is created only when that stream's cold bucket is
-  configured.
+- **Configuration**, per stream (`AUDIT` and `QUERY_HISTORY`):
+
+  | Setting | Default | Meaning |
+  |---|---|---|
+  | `BALEIA_<STREAM>_COLD_BUCKET`, `_COLD_PREFIX` | off | The cold sink |
+  | `BALEIA_<STREAM>_RETENTION` | `45d` | Hot window, at least `1d`; written as `45d` or `1080h` |
+  | `BALEIA_<STREAM>_RETENTION_CADENCE` | `weekly` | `daily` (03:00 UTC), `weekly` (Sunday 03:00 UTC) or a five-field cron expression in UTC |
+  | `BALEIA_<STREAM>_OFFLOAD_BEFORE_DROP` | `true` | `false` drops on age alone, with no cold copy (see below) |
+  | `BALEIA_<STREAM>_COLD_GRACE` | `1d` | Margin past the window before a day is droppable |
+  | `BALEIA_PRUNE_MAX_PARTITIONS` | `14` | Days dropped per run, per stream |
+
+  A value that cannot be read (`45 days`, `0`, `FALSE`, a cron with six fields) stops the worker at
+  startup instead of falling back to a default: these settings decide when data is deleted.
+- **Schedules:** `audit-offload` and `query-history-offload` (hourly, only with a cold bucket), and
+  `audit-retention` / `query-history-retention`, on each stream's cadence. A stream's retention
+  schedule exists when it has a cold bucket, or when it opted out of the gate; a stream with
+  neither never drops anything, and raises [BaleiaRetentionBacklog](#baleiaretentionbacklog) once
+  its oldest partition is past the allowance.
 - **Fail-closed:** a partition is dropped only if the cold cursor has advanced past it and its
   day's manifest exists and validates: the manifest names that stream and day, and every object
   it lists is in the cold store with the recorded checksum and row count. A day that fails the
   check is skipped, with the reason in the worker log (`reason`), and holds only itself. An
   unconfigured or unreachable cold sink grows the database (with alerts) rather than losing data.
-- **Draining a backlog:** a retention run drops at most `BALEIA_PRUNE_MAX_PARTITIONS` days (1 by
-  default) and runs once a day, while one more day becomes droppable every day. A database that
-  already holds more than its window therefore never catches up at the default. Raise
-  `BALEIA_PRUNE_MAX_PARTITIONS` above 1 until the oldest partition is back inside the window, or
-  drain it in one go with `migrate -cmd=audit-prune -before=YYYY-MM-DD`, which has no cap and
-  goes through the same gates.
+- **Opting out of the offload gate:** `BALEIA_<STREAM>_OFFLOAD_BEFORE_DROP=false` drops partitions
+  past the window on age alone, for a deployment that keeps no cold copy on purpose. **It loses
+  data by configuration**: nothing is recoverable once dropped. It is loud: the worker logs a
+  warning at startup, and every dropped partition writes an audit event (`partition.drop`, reason
+  `no_offload`) naming the stream and the day. With the default (`true`) an unconfigured cold sink
+  still blocks every drop.
+- **Draining a backlog:** a retention run drops at most `BALEIA_PRUNE_MAX_PARTITIONS` days (14 by
+  default). With the weekly default one more week of days becomes droppable between runs, so a run
+  that drops 14 days shrinks the backlog by 7 days per week: a database that holds 400 days with a
+  46-day window (window plus grace) needs about 51 weeks to catch up. To go faster, raise the cap, run
+  the stream on `daily`, or drain it in one go with
+  `migrate -cmd=audit-prune -before=YYYY-MM-DD`, which has no cap and goes through the same gates.
+  [BaleiaRetentionBacklog](#baleiaretentionbacklog) fires during the drain, because the oldest
+  partition is past the allowance; that is expected.
 - **Upgrading from 0.7.0:** store migration 14 converts `audit_events`, `query_executions` and
   `query_statements` to one partition per day, from the oldest row through today plus the
   horizon. It runs in stages (preparation, one transaction per table, then one per foreign key)
