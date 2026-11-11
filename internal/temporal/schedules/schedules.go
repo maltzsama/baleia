@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/robfig/cron"
@@ -48,8 +49,20 @@ func (s Spec) validate() error {
 		if _, err := cron.ParseStandard(s.Cron); err != nil {
 			return fmt.Errorf("schedule %s: cron %q: %w", s.ID, s.Cron, err)
 		}
+		// cron fires when either day field matches if both are restricted;
+		// Temporal needs both, so the same expression would mean two different
+		// sets of dates, or none.
+		if f := strings.Fields(s.Cron); restrictedField(f[2]) && restrictedField(f[4]) {
+			return fmt.Errorf("schedule %s: cron %q restricts both the day of month and the day of week", s.ID, s.Cron)
+		}
 	}
 	return nil
+}
+
+// restrictedField reports whether a cron field names particular values: one
+// that starts with * or ? matches every value or every Nth.
+func restrictedField(field string) bool {
+	return !strings.HasPrefix(field, "*") && !strings.HasPrefix(field, "?")
 }
 
 // scheduleSpec is the Temporal form of when the spec runs.

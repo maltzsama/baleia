@@ -135,6 +135,8 @@ func TestEnsure_RejectsBadSpecs(t *testing.T) {
 		{"six fields", Spec{ID: "a", Workflow: func() {}, Cron: "0 0 3 * * 0"}},
 		{"not a cron", Spec{ID: "a", Workflow: func() {}, Cron: "every sunday"}},
 		{"out of range", Spec{ID: "a", Workflow: func() {}, Cron: "0 25 * * *"}},
+		{"both day fields restricted", Spec{ID: "a", Workflow: func() {}, Cron: "0 3 1 * 1"}},
+		{"an impossible date", Spec{ID: "a", Workflow: func() {}, Cron: "0 3 31 2 1"}},
 		{"no id", Spec{Workflow: func() {}, Every: time.Hour}},
 		{"no workflow", Spec{ID: "a", Every: time.Hour}},
 	} {
