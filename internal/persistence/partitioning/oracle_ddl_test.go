@@ -38,8 +38,17 @@ func TestOracleSplitStatement(t *testing.T) {
 func TestOracleDropStatement(t *testing.T) {
 	t.Parallel()
 	got := oracleDropStatement("audit_events", "audit_events_202601")
-	want := "ALTER TABLE AUDIT_EVENTS DROP PARTITION AUDIT_EVENTS_202601"
+	want := "ALTER TABLE AUDIT_EVENTS DROP PARTITION AUDIT_EVENTS_202601 UPDATE GLOBAL INDEXES"
 	if got != want {
 		t.Errorf("oracleDropStatement = %q, want %q", got, want)
+	}
+}
+
+func TestOracleLocalKeyStatement(t *testing.T) {
+	t.Parallel()
+	got := oracleLocalKeyStatement("audit_events", []string{"id", "occurred_at"})
+	want := "ALTER TABLE AUDIT_EVENTS ADD CONSTRAINT PK_AUDIT_EVENTS PRIMARY KEY (ID, OCCURRED_AT) USING INDEX LOCAL"
+	if got != want {
+		t.Errorf("oracleLocalKeyStatement = %q, want %q", got, want)
 	}
 }

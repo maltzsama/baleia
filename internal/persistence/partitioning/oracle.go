@@ -51,7 +51,7 @@ func (m *oracleManager) Provision(ctx context.Context, model any, spec Spec, fro
 		return err
 	}
 	if !partitioned {
-		return m.db.WithContext(ctx).Exec(oraclePartitionByStatement(spec, months)).Error
+		return m.partition(ctx, model, spec, months)
 	}
 	existing, err := m.partitionNames(ctx, spec.Table)
 	if err != nil {
@@ -66,6 +66,63 @@ func (m *oracleManager) Provision(ctx context.Context, model any, spec Spec, fro
 		}
 	}
 	return nil
+}
+
+// partition converts a plain table in place. When the key must change to carry
+// the partition column, the old key goes first and the new one comes back
+// afterwards as a LOCAL index: a global unique index would be left UNUSABLE by
+// every dropped partition. Identity columns are untouched.
+func (m *oracleManager) partition(ctx context.Context, model any, spec Spec, months []Partition) error {
+	db := m.db.WithContext(ctx)
+	key, err := modelKey(db, model)
+	if err != nil {
+		return err
+	}
+	have, err := m.primaryKey(ctx, spec.Table)
+	if err != nil {
+		return err
+	}
+	change := !sameKey(key, have)
+	if change && len(have) > 0 {
+		if err := db.Exec("ALTER TABLE " + oracleIdent(spec.Table) + " DROP PRIMARY KEY DROP INDEX").Error; err != nil {
+			return fmt.Errorf("partitioning: drop primary key of %s: %w", spec.Table, err)
+		}
+	}
+	if err := db.Exec(oraclePartitionByStatement(spec, months)).Error; err != nil {
+		return fmt.Errorf("partitioning: partition %s: %w", spec.Table, err)
+	}
+	if change {
+		if err := db.Exec(oracleLocalKeyStatement(spec.Table, key)).Error; err != nil {
+			return fmt.Errorf("partitioning: add partitioned primary key to %s: %w", spec.Table, err)
+		}
+	}
+	return nil
+}
+
+// primaryKey returns the columns of the table's primary key, in order. The
+// dialector's migrator cannot list indexes, so the dictionary is read directly.
+func (m *oracleManager) primaryKey(ctx context.Context, table string) ([]string, error) {
+	var cols []string
+	if err := m.db.WithContext(ctx).Raw(
+		`SELECT cc.column_name FROM user_constraints c
+		 JOIN user_cons_columns cc ON cc.constraint_name = c.constraint_name
+		 WHERE c.constraint_type = 'P' AND c.table_name = UPPER(?)
+		 ORDER BY cc.position`, table,
+	).Scan(&cols).Error; err != nil {
+		return nil, fmt.Errorf("partitioning: read primary key of %s: %w", table, err)
+	}
+	return cols, nil
+}
+
+// oracleLocalKeyStatement adds the primary key as a local index, which the
+// partition column in the key makes possible.
+func oracleLocalKeyStatement(table string, key []string) string {
+	cols := make([]string, len(key))
+	for i, c := range key {
+		cols[i] = oracleIdent(c)
+	}
+	return "ALTER TABLE " + oracleIdent(table) + " ADD CONSTRAINT " + oracleIdent("pk_"+table) +
+		" PRIMARY KEY (" + strings.Join(cols, ", ") + ") USING INDEX LOCAL"
 }
 
 // ListPartitions returns the partitions whose names match <table>_YYYYMM,
@@ -178,7 +235,8 @@ func oracleSplitStatement(table string, p Partition) string {
 }
 
 func oracleDropStatement(table, name string) string {
-	return "ALTER TABLE " + oracleIdent(table) + " DROP PARTITION " + oracleIdent(name)
+	// UPDATE GLOBAL INDEXES keeps the table's non-partitioned indexes usable.
+	return "ALTER TABLE " + oracleIdent(table) + " DROP PARTITION " + oracleIdent(name) + " UPDATE GLOBAL INDEXES"
 }
 
 func writeOracleRangePartition(b *strings.Builder, name string, until time.Time) {

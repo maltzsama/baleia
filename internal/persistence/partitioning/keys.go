@@ -20,10 +20,12 @@ func modelKey(db *gorm.DB, model any) ([]string, error) {
 	}
 	cols := make([]string, 0, len(stmt.Schema.PrimaryFields))
 	for _, f := range stmt.Schema.PrimaryFields {
-		if !identifier.MatchString(f.DBName) {
+		// Some dialects (Oracle) name columns in upper case.
+		name := strings.ToLower(f.DBName)
+		if !identifier.MatchString(name) {
 			return nil, fmt.Errorf("partitioning: invalid key column %q", f.DBName)
 		}
-		cols = append(cols, f.DBName)
+		cols = append(cols, name)
 	}
 	return cols, nil
 }
@@ -58,13 +60,18 @@ func keyChange(db *gorm.DB, model any, table string) (want []string, current str
 	if err != nil {
 		return nil, "", false, err
 	}
+	return want, name, !sameKey(want, have), nil
+}
+
+// sameKey compares two keys column by column, ignoring case.
+func sameKey(want, have []string) bool {
 	if len(have) != len(want) {
-		return want, name, true, nil
+		return false
 	}
 	for i := range want {
 		if !strings.EqualFold(have[i], want[i]) {
-			return want, name, true, nil
+			return false
 		}
 	}
-	return want, name, false, nil
+	return true
 }
