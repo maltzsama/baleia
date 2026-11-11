@@ -32,13 +32,17 @@ func (r *Repo) OffloadQueryExecutions(ctx context.Context, afterAt time.Time, af
 	return rows, nil
 }
 
-// OffloadQueryStatements returns one execution's statements in position order.
-// execution_started_at pins the parent's month partition.
-func (r *Repo) OffloadQueryStatements(ctx context.Context, executionID model.UUID, executionStartedAt time.Time) ([]model.QueryStatement, error) {
+// OffloadQueryStatements returns a page of executions' statements in position
+// order, grouped by execution. The execution_started_at bounds pin the parent's
+// month partition.
+func (r *Repo) OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time) ([]model.QueryStatement, error) {
+	if len(executionIDs) == 0 {
+		return nil, nil
+	}
 	var rows []model.QueryStatement
 	err := r.Users.db.WithContext(ctx).
-		Where("execution_id = ? AND execution_started_at = ?", executionID, executionStartedAt).
-		Order("position").
+		Where("execution_id IN ? AND execution_started_at >= ? AND execution_started_at < ?", executionIDs, from, until).
+		Order("execution_id, position").
 		Find(&rows).Error
 	return rows, err
 }

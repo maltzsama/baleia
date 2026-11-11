@@ -58,6 +58,9 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 		act.SetQueryHistoryOffload(&offload.Offloader{
 			Stream: auditexport.StreamQueryHistory, SinkName: auditexport.SinkS3,
 			Cursor: pg, Sink: sink,
+			// A month is only sealed a day after it ends, so an execution that
+			// crosses the boundary is archived in its final state.
+			Lag: offload.QueryHistorySafetyLag,
 			// Executions and their statements are read together and written as
 			// one month's pair (ADR 0024).
 			Reader: &offload.QueryHistoryReader{Store: core.StoreRepo},

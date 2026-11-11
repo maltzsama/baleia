@@ -38,8 +38,12 @@ func (f *fakeQueryHistoryStore) OffloadQueryExecutions(_ context.Context, afterA
 	return out, nil
 }
 
-func (f *fakeQueryHistoryStore) OffloadQueryStatements(_ context.Context, id model.UUID, _ time.Time) ([]model.QueryStatement, error) {
-	return f.stmts[string(id)], nil
+func (f *fakeQueryHistoryStore) OffloadQueryStatements(_ context.Context, ids []model.UUID, _, _ time.Time) ([]model.QueryStatement, error) {
+	var out []model.QueryStatement
+	for _, id := range ids {
+		out = append(out, f.stmts[string(id)]...)
+	}
+	return out, nil
 }
 
 func TestQueryHistoryReaderWritesPair(t *testing.T) {

@@ -61,7 +61,7 @@ func TestOffloadQueryHistory(t *testing.T) {
 		t.Fatalf("resumed page = %+v, want only the third execution", rest)
 	}
 
-	stmts, err := f.r.OffloadQueryStatements(ctx, e1.ID, e1.StartedAt)
+	stmts, err := f.r.OffloadQueryStatements(ctx, []model.UUID{e1.ID}, base.Add(-time.Hour), base.Add(time.Hour))
 	if err != nil {
 		t.Fatalf("statements: %v", err)
 	}
