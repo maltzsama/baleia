@@ -85,3 +85,68 @@ func TestOffloadQueryHistory(t *testing.T) {
 		t.Fatalf("cursor key = %q, want %q", got.CursorKey, key)
 	}
 }
+
+// TestDeleteQueryHistoryDependents: the month-scoped deletes remove the rows
+// that would otherwise block detaching a month's query-history partitions.
+func TestDeleteQueryHistoryDependents(t *testing.T) {
+	t.Parallel()
+	f := newWorkbenchFixture(t)
+	ctx := context.Background()
+	base := time.Now().UTC().Truncate(time.Second)
+
+	exec := model.QueryExecution{
+		ID: model.UUID(NewUUID()), WorkspaceID: f.ws, UserID: f.owner,
+		Status: "finished", Origin: "editor", SQL: "select 1", StartedAt: base,
+	}
+	if err := f.gdb.Create(&exec).Error; err != nil {
+		t.Fatalf("create execution: %v", err)
+	}
+	stmt := model.QueryStatement{
+		ID: model.UUID(NewUUID()), ExecutionID: exec.ID, ExecutionStartedAt: base,
+		Position: 1, SQL: "select 1", Status: "finished", StartedAt: base, ResultSets: model.JSON("[]"),
+	}
+	if err := f.gdb.Create(&stmt).Error; err != nil {
+		t.Fatalf("create statement: %v", err)
+	}
+	ref := model.StatementReference{
+		StatementID: stmt.ID, ExecutionStartedAt: base, WorkspaceID: f.ws,
+		Namespace: "public", TableNameValue: "t", Alias: "t", Kind: "read",
+	}
+	if err := f.gdb.Create(&ref).Error; err != nil {
+		t.Fatalf("create reference: %v", err)
+	}
+	join := model.StatementJoin{
+		StatementID: stmt.ID, ExecutionStartedAt: base, WorkspaceID: f.ws,
+		LeftAlias: "a", LeftColumn: "x", RightAlias: "b", RightColumn: "y",
+	}
+	if err := f.gdb.Create(&join).Error; err != nil {
+		t.Fatalf("create join: %v", err)
+	}
+	snap := model.TrinoQuerySnapshot{
+		ID: model.UUID(NewUUID()), TrinoQueryID: "tq1", Origin: "baleia", User: "u",
+		State: "finished", SQL: "select 1", EngineID: f.engine, ExecutionID: &exec.ID, ExecutionStartedAt: &base,
+	}
+	if err := f.gdb.Create(&snap).Error; err != nil {
+		t.Fatalf("create snapshot: %v", err)
+	}
+
+	from := time.Date(base.Year(), base.Month(), 1, 0, 0, 0, 0, time.UTC)
+	until := from.AddDate(0, 1, 0)
+	if err := f.r.DeleteStatementReferencesByMonth(ctx, from, until); err != nil {
+		t.Fatalf("delete references: %v", err)
+	}
+	if err := f.r.DeleteStatementJoinsByMonth(ctx, from, until); err != nil {
+		t.Fatalf("delete joins: %v", err)
+	}
+	if err := f.r.DeleteTrinoQuerySnapshotsByMonth(ctx, from, until); err != nil {
+		t.Fatalf("delete snapshots: %v", err)
+	}
+
+	var refs, joins, snaps int64
+	f.gdb.Model(&model.StatementReference{}).Count(&refs)
+	f.gdb.Model(&model.StatementJoin{}).Count(&joins)
+	f.gdb.Model(&model.TrinoQuerySnapshot{}).Count(&snaps)
+	if refs != 0 || joins != 0 || snaps != 0 {
+		t.Fatalf("dependents left: references=%d joins=%d snapshots=%d", refs, joins, snaps)
+	}
+}

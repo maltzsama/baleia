@@ -68,7 +68,22 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 		var retains []*retention.Retain
 		// Children first: query_statements references query_executions, so its
 		// month partition must be detached and dropped before the parent's.
+		// Each table's PreDrop removes the rows that still point into the month's
+		// partition (references and joins for statements, snapshots for
+		// executions), otherwise the detach fails and retention never prunes.
+		storeRepo := core.StoreRepo
 		for _, table := range []string{"query_statements", "query_executions"} {
+			preDrop := func(ctx context.Context, from, until time.Time) error {
+				return storeRepo.DeleteTrinoQuerySnapshotsByMonth(ctx, from, until)
+			}
+			if table == "query_statements" {
+				preDrop = func(ctx context.Context, from, until time.Time) error {
+					if err := storeRepo.DeleteStatementReferencesByMonth(ctx, from, until); err != nil {
+						return err
+					}
+					return storeRepo.DeleteStatementJoinsByMonth(ctx, from, until)
+				}
+			}
 			retains = append(retains, &retention.Retain{
 				Table: table, Stream: auditexport.StreamQueryHistory, SinkName: auditexport.SinkS3,
 				Partitions: repoPartitions{q}, Cursor: repoCursor{q},
@@ -76,6 +91,7 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 				Retention:     cfg.QueryHistoryRetention,
 				Grace:         cfg.QueryHistoryColdGrace,
 				MaxPartitions: cfg.PruneMaxPartitions,
+				PreDrop:       preDrop,
 			})
 		}
 		act.SetQueryHistoryRetain(retains)

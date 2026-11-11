@@ -43,7 +43,11 @@ type Retain struct {
 	Cutoff time.Time
 	// DryRun reports the droppable partitions without dropping them.
 	DryRun bool
-	Now    func() time.Time
+	// PreDrop, when set, runs after the gates pass and before the partition is
+	// dropped, with the partition's [from, until). It removes dependent rows
+	// (references, joins, snapshots) that would otherwise block the detach.
+	PreDrop func(ctx context.Context, from, until time.Time) error
+	Now     func() time.Time
 	// OnSkip observes a skipped partition with its reason.
 	OnSkip func(partition, reason string)
 }
@@ -96,6 +100,15 @@ func (r *Retain) Run(ctx context.Context) ([]string, error) {
 			continue
 		}
 		if !r.DryRun {
+			// Remove rows that reference the partition before detaching: the
+			// detach fails while a non-partitioned table still points into it
+			// (query history's references, joins and snapshots). If the cleanup
+			// fails, the drop does not happen (fail-closed).
+			if r.PreDrop != nil {
+				if err := r.PreDrop(ctx, p.From, p.Until); err != nil {
+					return dropped, err
+				}
+			}
 			if err := r.Partitions.DropPartition(ctx, r.Table, p.From, p.Until); err != nil {
 				return dropped, err
 			}

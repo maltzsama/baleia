@@ -175,3 +175,36 @@ func TestRetainCutoff(t *testing.T) {
 		t.Fatalf("names = %v, want January dropped by the explicit cutoff", names)
 	}
 }
+
+// TestRetainPreDrop: the PreDrop hook runs after the gates pass, with the
+// partition's bounds, and before the partition is dropped.
+func TestRetainPreDrop(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
+	jan := month(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	parts := &fakePartitions{parts: []partitioning.Partition{
+		{Name: "query_statements_202601", From: jan, Until: jan.AddDate(0, 1, 0)},
+	}}
+	var preFrom, preUntil time.Time
+	r := &Retain{
+		Table: "query_statements", Stream: "query_history", SinkName: "s3",
+		Partitions: parts, Cursor: &fakeCursor{at: now}, Manifest: &fakeManifest{have: map[time.Time]bool{jan: true}},
+		Retention: 30 * 24 * time.Hour, MaxPartitions: -1,
+		PreDrop: func(_ context.Context, from, until time.Time) error {
+			preFrom, preUntil = from, until
+			return nil
+		},
+		Now: func() time.Time { return now },
+	}
+	names, err := r.Run(ctx)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(names) != 1 {
+		t.Fatalf("names = %v, want one", names)
+	}
+	if !preFrom.Equal(jan) || !preUntil.Equal(jan.AddDate(0, 1, 0)) {
+		t.Fatalf("PreDrop got [%v, %v), want [%v, %v)", preFrom, preUntil, jan, jan.AddDate(0, 1, 0))
+	}
+}

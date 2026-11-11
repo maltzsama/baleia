@@ -56,3 +56,27 @@ func (r *Repo) PendingExecutions(ctx context.Context, from, until time.Time) (bo
 		Count(&n).Error
 	return n > 0, err
 }
+
+// DeleteStatementReferencesByMonth removes a month's statement references so
+// the month's query_statements partition can be detached (ADR 0024).
+func (r *Repo) DeleteStatementReferencesByMonth(ctx context.Context, from, until time.Time) error {
+	return r.Users.db.WithContext(ctx).
+		Where("execution_started_at >= ? AND execution_started_at < ?", from, until).
+		Delete(&model.StatementReference{}).Error
+}
+
+// DeleteStatementJoinsByMonth removes a month's statement equi-joins so the
+// month's query_statements partition can be detached (ADR 0024).
+func (r *Repo) DeleteStatementJoinsByMonth(ctx context.Context, from, until time.Time) error {
+	return r.Users.db.WithContext(ctx).
+		Where("execution_started_at >= ? AND execution_started_at < ?", from, until).
+		Delete(&model.StatementJoin{}).Error
+}
+
+// DeleteTrinoQuerySnapshotsByMonth removes a month's Trino query snapshots so
+// the month's query_executions partition can be detached (ADR 0024).
+func (r *Repo) DeleteTrinoQuerySnapshotsByMonth(ctx context.Context, from, until time.Time) error {
+	return r.Users.db.WithContext(ctx).
+		Where("execution_started_at >= ? AND execution_started_at < ?", from, until).
+		Delete(&model.TrinoQuerySnapshot{}).Error
+}
