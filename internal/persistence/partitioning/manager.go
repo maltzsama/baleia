@@ -62,6 +62,14 @@ type Manager interface {
 	Capabilities() Capabilities
 }
 
+// SequenceSyncer is implemented by an adapter whose conversion of a plain table
+// copies rows with explicit ids and so must move the id sequence afterwards.
+// Engines that convert in place keep their auto-increment and do not need it.
+type SequenceSyncer interface {
+	// SyncSequence makes the next generated value of table.column next+1.
+	SyncSequence(ctx context.Context, table, column string, next int64) error
+}
+
 // New resolves the adapter from the GORM dialector. The registry covers every
 // backend ADR 0023 names: PostgreSQL and GaussDB (native), MySQL/MariaDB
 // (native, foreign keys dropped), SQL Server (partition function + scheme),

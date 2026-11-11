@@ -67,27 +67,37 @@ func (r *Repo) DeleteStatementJoins(ctx context.Context, statementID db.UUID) er
 
 // InsertStatementReference inserts one table reference.
 func (r *Repo) InsertStatementReference(ctx context.Context, arg db.InsertStatementReferenceParams) error {
+	executionStartedAt, err := statementExecutionStartedAt(ctx, r.Users.db, UUIDString(arg.StatementID))
+	if err != nil {
+		return err
+	}
 	row := model.StatementReference{
-		StatementID:    model.UUID(UUIDString(arg.StatementID)),
-		WorkspaceID:    model.UUID(UUIDString(arg.WorkspaceID)),
-		CatalogID:      modelUUIDPtr(arg.CatalogID),
-		Namespace:      model.Text(arg.Namespace),
-		TableNameValue: model.Text(arg.TableName),
-		Alias:          model.Text(arg.Alias),
-		Kind:           model.Text(arg.Kind),
+		StatementID:        model.UUID(UUIDString(arg.StatementID)),
+		ExecutionStartedAt: executionStartedAt,
+		WorkspaceID:        model.UUID(UUIDString(arg.WorkspaceID)),
+		CatalogID:          modelUUIDPtr(arg.CatalogID),
+		Namespace:          model.Text(arg.Namespace),
+		TableNameValue:     model.Text(arg.TableName),
+		Alias:              model.Text(arg.Alias),
+		Kind:               model.Text(arg.Kind),
 	}
 	return r.Users.db.WithContext(ctx).Create(&row).Error
 }
 
 // InsertStatementJoin inserts one equi-join.
 func (r *Repo) InsertStatementJoin(ctx context.Context, arg db.InsertStatementJoinParams) error {
+	executionStartedAt, err := statementExecutionStartedAt(ctx, r.Users.db, UUIDString(arg.StatementID))
+	if err != nil {
+		return err
+	}
 	row := model.StatementJoin{
-		StatementID: model.UUID(UUIDString(arg.StatementID)),
-		WorkspaceID: model.UUID(UUIDString(arg.WorkspaceID)),
-		LeftAlias:   model.Text(arg.LeftAlias),
-		LeftColumn:  model.Text(arg.LeftColumn),
-		RightAlias:  model.Text(arg.RightAlias),
-		RightColumn: model.Text(arg.RightColumn),
+		StatementID:        model.UUID(UUIDString(arg.StatementID)),
+		ExecutionStartedAt: executionStartedAt,
+		WorkspaceID:        model.UUID(UUIDString(arg.WorkspaceID)),
+		LeftAlias:          model.Text(arg.LeftAlias),
+		LeftColumn:         model.Text(arg.LeftColumn),
+		RightAlias:         model.Text(arg.RightAlias),
+		RightColumn:        model.Text(arg.RightColumn),
 	}
 	return r.Users.db.WithContext(ctx).Create(&row).Error
 }

@@ -39,8 +39,8 @@ func addJoinHistory(t *testing.T, f *metaFixture, leftColumn, rightColumn string
 		t.Fatal(err)
 	}
 	statement := model.QueryStatement{
-		ID: model.UUID(repo.NewUUID()), ExecutionID: execution.ID, Position: 1,
-		SQL: "select 1", Status: "finished", StartedAt: now, FinishedAt: &now,
+		ID: model.UUID(repo.NewUUID()), ExecutionID: execution.ID, ExecutionStartedAt: execution.StartedAt,
+		Position: 1, SQL: "select 1", Status: "finished", StartedAt: now, FinishedAt: &now,
 		ResultSets: model.JSON(`[]`),
 	}
 	if err := f.gdb.Create(&statement).Error; err != nil {
@@ -53,14 +53,16 @@ func addJoinHistory(t *testing.T, f *metaFixture, leftColumn, rightColumn string
 		alias model.Text
 	}{{"orders", "o"}, {"customers", "c"}} {
 		if err := f.gdb.Create(&model.StatementReference{
-			StatementID: statement.ID, WorkspaceID: workspace, CatalogID: &catalog,
+			StatementID: statement.ID, ExecutionStartedAt: statement.ExecutionStartedAt,
+			WorkspaceID: workspace, CatalogID: &catalog,
 			Namespace: "sales", TableNameValue: ref.table, Alias: ref.alias, Kind: "read",
 		}).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := f.gdb.Create(&model.StatementJoin{
-		StatementID: statement.ID, WorkspaceID: workspace, LeftAlias: "o", LeftColumn: model.Text(leftColumn),
+		StatementID: statement.ID, ExecutionStartedAt: statement.ExecutionStartedAt,
+		WorkspaceID: workspace, LeftAlias: "o", LeftColumn: model.Text(leftColumn),
 		RightAlias: "c", RightColumn: model.Text(rightColumn),
 	}).Error; err != nil {
 		t.Fatal(err)

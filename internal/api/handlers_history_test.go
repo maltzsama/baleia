@@ -150,6 +150,13 @@ func executionIDs(page ListExecutions200JSONResponse) []string {
 	return out
 }
 
+// historyBase is noon on the first day of the current month: executions are
+// partitioned by month, so a fixed past date has no partition to land in.
+func historyBase() time.Time {
+	now := time.Now().UTC()
+	return time.Date(now.Year(), now.Month(), 1, 12, 0, 0, 0, time.UTC)
+}
+
 func stringPtr(value string) *string { return &value }
 
 func statusPtr(value ListExecutionsParamsStatus) *ListExecutionsParamsStatus { return &value }
@@ -157,7 +164,7 @@ func statusPtr(value ListExecutionsParamsStatus) *ListExecutionsParamsStatus { r
 func TestHistory_Filters(t *testing.T) {
 	t.Parallel()
 	f := newHistoryFixture(t)
-	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	base := historyBase()
 	first := f.addExecution(t, f.member, "finished", "SELECT a FROM orders", base)
 	second := f.addExecution(t, f.member, "failed", "SELECT b FROM customers", base.Add(time.Hour))
 	third := f.addExecution(t, f.owner, "finished", "SELECT c FROM revenue", base.Add(2*time.Hour))
@@ -217,7 +224,7 @@ func TestHistory_Filters(t *testing.T) {
 func TestHistory_KeysetCursor(t *testing.T) {
 	t.Parallel()
 	f := newHistoryFixture(t)
-	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	base := historyBase()
 	oldest := f.addExecution(t, f.member, "finished", "SELECT 1", base)
 	middle := f.addExecution(t, f.member, "finished", "SELECT 2", base.Add(time.Minute))
 	newest := f.addExecution(t, f.member, "finished", "SELECT 3", base.Add(2*time.Minute))
@@ -245,7 +252,7 @@ func TestHistory_KeysetCursor(t *testing.T) {
 func TestHistory_Visibility(t *testing.T) {
 	t.Parallel()
 	f := newHistoryFixture(t)
-	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	base := historyBase()
 	f.addExecution(t, f.member, "finished", "SELECT 1", base)
 	f.addExecution(t, f.member, "failed", "SELECT 2", base.Add(time.Minute))
 	f.addExecution(t, f.owner, "finished", "SELECT 3", base.Add(2*time.Minute))
@@ -281,7 +288,7 @@ func classPtr(value ListExecutionsParamsClass) *ListExecutionsParamsClass { retu
 func TestHistory_FiltersByWorkloadClass(t *testing.T) {
 	t.Parallel()
 	f := newHistoryFixture(t)
-	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	base := historyBase()
 	f.addExecution(t, f.member, "finished", "SELECT 1", base)
 	heavy := f.addExecution(t, f.member, "finished", "SELECT 2", base.Add(time.Minute))
 	at := base.Add(time.Minute)

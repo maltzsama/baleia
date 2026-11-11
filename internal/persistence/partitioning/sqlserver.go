@@ -61,6 +61,12 @@ func (m *sqlserverManager) Provision(ctx context.Context, model any, spec Spec, 
 		if !m.db.Migrator().HasTable(spec.Table) {
 			return fmt.Errorf("partitioning: model does not create table %q", spec.Table)
 		}
+	} else if on, err := m.onScheme(ctx, spec.Table); err != nil {
+		return err
+	} else if !on {
+		if err := m.convert(ctx, model, spec, ps); err != nil {
+			return err
+		}
 	}
 
 	existing, err := m.boundaries(ctx, pf)
@@ -76,6 +82,99 @@ func (m *sqlserverManager) Provision(ctx context.Context, model any, spec Spec, 
 		}
 	}
 	return nil
+}
+
+// onScheme reports whether the table's clustered index is placed on a
+// partition scheme.
+func (m *sqlserverManager) onScheme(ctx context.Context, table string) (bool, error) {
+	var n int64
+	if err := m.db.WithContext(ctx).Raw(
+		`SELECT COUNT(*) FROM sys.indexes i
+		 JOIN sys.partition_schemes s ON s.data_space_id = i.data_space_id
+		 WHERE i.object_id = OBJECT_ID(?) AND i.index_id IN (0, 1)`, table,
+	).Scan(&n).Error; err != nil {
+		return false, fmt.Errorf("partitioning: read partition schemes of %s: %w", table, err)
+	}
+	return n > 0, nil
+}
+
+// convert moves a plain table onto the partition scheme in place: its primary
+// key is dropped and re-added as the clustered key the model declares, placed
+// on the scheme, and the model's secondary indexes are rebuilt so they follow
+// the table onto the scheme. A non-aligned index would make TRUNCATE ... WITH
+// (PARTITIONS) fail, which is how DropPartition reclaims a month. IDENTITY is
+// untouched.
+func (m *sqlserverManager) convert(ctx context.Context, model any, spec Spec, ps string) error {
+	db := m.db.WithContext(ctx)
+	key, current, _, err := keyChange(db, model, spec.Table)
+	if err != nil {
+		return err
+	}
+	secondary, err := secondaryIndexes(db, model, spec.Table)
+	if err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, name := range secondary {
+			if err := tx.Migrator().DropIndex(model, name); err != nil {
+				return fmt.Errorf("partitioning: drop index %s: %w", name, err)
+			}
+		}
+		if current != "" {
+			if err := tx.Exec("ALTER TABLE [" + spec.Table + "] DROP CONSTRAINT " + bracket(current)).Error; err != nil {
+				return fmt.Errorf("partitioning: drop primary key of %s: %w", spec.Table, err)
+			}
+		}
+		if err := tx.Exec(addClusteredKeyStatement(spec, key, ps)).Error; err != nil {
+			return fmt.Errorf("partitioning: add partitioned primary key to %s: %w", spec.Table, err)
+		}
+		for _, name := range secondary {
+			if err := tx.Migrator().CreateIndex(model, name); err != nil {
+				return fmt.Errorf("partitioning: recreate index %s: %w", name, err)
+			}
+		}
+		return nil
+	})
+}
+
+// secondaryIndexes returns the names of the indexes the table has that the model
+// declares (the primary key excluded), so they can be rebuilt by the ORM.
+func secondaryIndexes(db *gorm.DB, model any, table string) ([]string, error) {
+	stmt := &gorm.Statement{DB: db}
+	if err := stmt.Parse(model); err != nil {
+		return nil, fmt.Errorf("partitioning: parse model: %w", err)
+	}
+	declared := map[string]bool{}
+	for _, ix := range stmt.Schema.ParseIndexes() {
+		declared[ix.Name] = true
+	}
+	indexes, err := db.Migrator().GetIndexes(table)
+	if err != nil {
+		return nil, fmt.Errorf("partitioning: list indexes of %s: %w", table, err)
+	}
+	var out []string
+	for _, idx := range indexes {
+		if primary, ok := idx.PrimaryKey(); ok && primary {
+			continue
+		}
+		if declared[idx.Name()] {
+			out = append(out, idx.Name())
+		}
+	}
+	return out, nil
+}
+
+// bracket quotes a server-generated identifier (the primary key's constraint
+// name is not under our control) for T-SQL.
+func bracket(name string) string { return "[" + strings.ReplaceAll(name, "]", "]]") + "]" }
+
+func addClusteredKeyStatement(spec Spec, key []string, ps string) string {
+	cols := make([]string, len(key))
+	for i, c := range key {
+		cols[i] = "[" + c + "]"
+	}
+	return "ALTER TABLE [" + spec.Table + "] ADD CONSTRAINT [pk_" + spec.Table + "] PRIMARY KEY CLUSTERED (" +
+		strings.Join(cols, ", ") + ") ON [" + ps + "] ([" + spec.Column + "])"
 }
 
 // ListPartitions derives one partition per boundary of the partition function,

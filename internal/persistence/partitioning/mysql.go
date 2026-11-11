@@ -53,7 +53,21 @@ func (m *mysqlManager) Provision(ctx context.Context, model any, spec Spec, from
 	}
 	months := RangeMonths(spec.Table, from, until)
 	if len(existing) == 0 {
-		return m.db.WithContext(ctx).Exec(partitionByStatement(spec, months)).Error
+		// A plain table is converted in place; InnoDB needs the partition column
+		// in the primary key, and the same ALTER can swap it so the table is
+		// rebuilt once. The auto-increment column stays first in the key.
+		key, _, change, err := keyChange(m.db.WithContext(ctx), model, spec.Table)
+		if err != nil {
+			return err
+		}
+		stmt := partitionByStatement(spec, months)
+		if change {
+			stmt = withPrimaryKey(stmt, spec.Table, key, m.hasPrimaryKey(ctx, spec.Table))
+		}
+		if err := m.db.WithContext(ctx).Exec(stmt).Error; err != nil {
+			return fmt.Errorf("partitioning: partition %s: %w", spec.Table, err)
+		}
+		return nil
 	}
 	for _, p := range months {
 		if existing[p.Name] {
@@ -64,6 +78,34 @@ func (m *mysqlManager) Provision(ctx context.Context, model any, spec Spec, from
 		}
 	}
 	return nil
+}
+
+// hasPrimaryKey reports whether the table has a primary key to drop.
+func (m *mysqlManager) hasPrimaryKey(ctx context.Context, table string) bool {
+	_, cols, err := currentKey(m.db.WithContext(ctx), table)
+	return err == nil && len(cols) > 0
+}
+
+// withPrimaryKey puts the primary key swap in front of the PARTITION BY clause
+// of an ALTER built by partitionByStatement, so both apply in one rebuild.
+func withPrimaryKey(alter, table string, key []string, drop bool) string {
+	prefix := "ALTER TABLE `" + table + "` "
+	var b strings.Builder
+	b.WriteString(prefix)
+	if drop {
+		b.WriteString("DROP PRIMARY KEY, ")
+	}
+	b.WriteString("ADD PRIMARY KEY (")
+	for i, c := range key {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("`" + c + "`")
+	}
+	// partition_options follow the alter specifications with no comma.
+	b.WriteString(") ")
+	b.WriteString(strings.TrimPrefix(alter, prefix))
+	return b.String()
 }
 
 // ListPartitions returns the partitions whose names match <table>_YYYYMM,

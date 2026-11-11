@@ -52,3 +52,21 @@ func TestDropStatement(t *testing.T) {
 		t.Errorf("dropStatement = %q, want %q", got, want)
 	}
 }
+
+func TestWithPrimaryKey(t *testing.T) {
+	t.Parallel()
+	spec := Spec{Table: "audit_events", Column: "occurred_at", Strategy: Range, Interval: Monthly}
+	months := RangeMonths("audit_events",
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC))
+	alter := partitionByStatement(spec, months)
+
+	got := withPrimaryKey(alter, "audit_events", []string{"id", "occurred_at"}, true)
+	want := "ALTER TABLE `audit_events` DROP PRIMARY KEY, ADD PRIMARY KEY (`id`, `occurred_at`) PARTITION BY RANGE COLUMNS"
+	if !strings.HasPrefix(got, want) {
+		t.Errorf("withPrimaryKey = %q, want prefix %q", got, want)
+	}
+	if got := withPrimaryKey(alter, "audit_events", []string{"id"}, false); strings.Contains(got, "DROP PRIMARY KEY") {
+		t.Errorf("no drop expected for a table without a key: %q", got)
+	}
+}

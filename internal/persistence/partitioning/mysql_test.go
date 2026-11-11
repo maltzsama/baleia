@@ -93,3 +93,58 @@ func TestMySQLPartitions(t *testing.T) {
 		t.Fatalf("after drop: %d partitions, want 3", len(parts))
 	}
 }
+
+// TestMySQLConvertsPlainTable partitions a populated plain table in place: the
+// primary key gains the partition column in the same rebuild, the rows and the
+// auto-increment survive.
+func TestMySQLConvertsPlainTable(t *testing.T) {
+	t.Parallel()
+	db := testdb.New(t)
+	if db.Name() != "mysql" {
+		t.Skip("partitioning MySQL test requires a MySQL/MariaDB test database")
+	}
+	ctx := context.Background()
+	if err := db.AutoMigrate(&plainConvEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	jan := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
+	mar := time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)
+	for _, at := range []time.Time{jan, mar} {
+		if err := db.Create(&plainConvEvent{OccurredAt: at, Name: "x"}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	pm, err := partitioning.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := partitioning.Spec{Table: "partitioning_conv_events", Column: "occurred_at", Strategy: partitioning.Range, Interval: partitioning.Monthly}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	until := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	if err := pm.Provision(ctx, &convEvent{}, spec, from, until); err != nil {
+		t.Fatalf("Provision over a plain table: %v", err)
+	}
+	// Idempotent once converted.
+	if err := pm.Provision(ctx, &convEvent{}, spec, from, until); err != nil {
+		t.Fatalf("second Provision: %v", err)
+	}
+	parts, err := pm.ListPartitions(ctx, spec.Table)
+	if err != nil || len(parts) != 4 {
+		t.Fatalf("partitions = %+v, %v; want 4", parts, err)
+	}
+	var n int64
+	if err := db.Model(&convEvent{}).Count(&n).Error; err != nil || n != 2 {
+		t.Fatalf("rows = %d, %v; want 2", n, err)
+	}
+	fresh := convEvent{OccurredAt: mar, Name: "new"}
+	if err := db.Create(&fresh).Error; err != nil {
+		t.Fatal(err)
+	}
+	if fresh.ID != 3 {
+		t.Fatalf("auto-increment resumed at %d, want 3", fresh.ID)
+	}
+	// The month is part of the key, so the same id may exist in another month.
+	if err := db.Create(&convEvent{ID: 1, OccurredAt: time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC), Name: "dup"}).Error; err != nil {
+		t.Fatalf("composite key should allow id 1 in another month: %v", err)
+	}
+}

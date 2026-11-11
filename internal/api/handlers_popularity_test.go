@@ -27,8 +27,8 @@ func TestPopularTables_Refresh(t *testing.T) {
 			t.Fatal(err)
 		}
 		statement := model.QueryStatement{
-			ID: model.UUID(repo.NewUUID()), ExecutionID: execution.ID, Position: 1,
-			SQL: "select 1", Status: "finished", StartedAt: now, FinishedAt: &now,
+			ID: model.UUID(repo.NewUUID()), ExecutionID: execution.ID, ExecutionStartedAt: execution.StartedAt,
+			Position: 1, SQL: "select 1", Status: "finished", StartedAt: now, FinishedAt: &now,
 			ResultSets: model.JSON(`[]`),
 		}
 		if err := f.gdb.Create(&statement).Error; err != nil {
@@ -36,7 +36,8 @@ func TestPopularTables_Refresh(t *testing.T) {
 		}
 		catalog := model.UUID(repo.UUIDString(pgUUIDOf(f.lake)))
 		if err := f.gdb.Create(&model.StatementReference{
-			StatementID: statement.ID, WorkspaceID: model.UUID(f.ws.String()), CatalogID: &catalog,
+			StatementID: statement.ID, ExecutionStartedAt: statement.ExecutionStartedAt,
+			WorkspaceID: model.UUID(f.ws.String()), CatalogID: &catalog,
 			Namespace: "sales", TableNameValue: "orders", Alias: "o", Kind: "read",
 		}).Error; err != nil {
 			t.Fatal(err)

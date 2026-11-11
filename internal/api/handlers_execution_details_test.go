@@ -19,9 +19,13 @@ func addStatement(t *testing.T, f *historyFixture, execution openapi_types.UUID,
 		engineQueryID = &queryID
 	}
 	now := time.Now()
+	var parent model.QueryExecution
+	if err := f.gdb.Where("id = ?", execution.String()).First(&parent).Error; err != nil {
+		t.Fatal(err)
+	}
 	row := model.QueryStatement{
 		ID: model.UUID(repo.NewUUID()), ExecutionID: model.UUID(execution.String()),
-		Position: 1, SQL: "SELECT 1", Status: "finished", EngineQueryID: engineQueryID,
+		ExecutionStartedAt: parent.StartedAt, Position: 1, SQL: "SELECT 1", Status: "finished", EngineQueryID: engineQueryID,
 		RowsReturned: &rows, DurationMs: &duration, ResultBytes: &resultBytes,
 		StartedAt: now, FinishedAt: &now, ResultSets: model.JSON(`[]`),
 	}
