@@ -354,7 +354,8 @@ lists them, newest first: admins see every event, anyone else only their own.
   and never drops data that has not been offloaded.
 - **Manual prune:** `migrate -cmd=audit-prune -before=YYYY-MM` drains the same gated path by hand
   (it refuses without a cold bucket and refuses the current month or later). `--dry-run` reports
-  the partitions that would be dropped without dropping them; `--before` sets the upper bound.
+  the partitions that would be dropped without dropping them. `-before` **overrides the
+  hot-retention window** (including the 400-day default), so it is the cutoff to choose carefully.
 
 ## Audit export
 
