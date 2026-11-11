@@ -1,6 +1,6 @@
 # 0026. Daily partitions, configurable retention and a weekly drop cadence
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Issues: #958 (continues #948)
 - Amends: [0024](0024-cold-storage-and-retention.md): the partition interval (monthly → daily), the
@@ -185,32 +185,40 @@ The cold bucket and prefix settings of 0024 are unchanged.
 
 ## Current compliance
 
-Implemented by the first pull request (#958): `Daily` in the `PartitionManager` seam and every
-adapter (decisions 1 and 2), migration 14 creating daily partitions in validated stages with
-`BALEIA_PARTITION_DAYS_AHEAD` (10 and 11), the daily offload (`PeriodReader`, day keys and
-manifests, decision 5) and the gate that validates the day's manifest (6 and 7).
+Implemented by two pull requests: the first (#959) and the second (closing #958).
 
-Not implemented yet, left to the second pull request: the configurable retention and its 45-day
-default (3), the drop cadence and the calendar form of `schedules.Spec` (4), the per-run cap of 14
-(8), the `OFFLOAD_BEFORE_DROP` opt-out (9), the `1d` grace default, and the oldest-unpruned-partition
-metric and alert. Until then `audit-retention` and `query-history-retention` run every 24 hours
-with the 0024 defaults (`400d`, `180d`, `7d` grace, a cap of `1`).
+- **First:** `Daily` in the `PartitionManager` seam and every adapter (decisions 1 and 2), migration
+  14 creating daily partitions in validated stages with `BALEIA_PARTITION_DAYS_AHEAD` (10 and 11),
+  the daily offload (`PeriodReader`, day keys and manifests, decision 5) and the gate that
+  validates the day's manifest (6 and 7).
+- **Second:** the retention window, its 1-day minimum and its 45-day default (3), the calendar form
+  of `schedules.Spec` and the per-stream cadence (4), the per-run cap of 14 (8), the
+  `OFFLOAD_BEFORE_DROP` opt-out with its startup warning and its `partition.drop` audit event (9),
+  the `1d` grace default, and the oldest-unpruned-partition metric and alert.
+
+Choices the decisions left open:
+
+- **Settings are read strictly.** `time.ParseDuration` has no `d`, so `45d` was silently ignored and
+  the default applied. Retention, grace, cadence and the opt-out now accept what the table says and
+  stop the worker at startup on anything else, `0` included.
+- **A stream's retention schedule exists when it has a cold bucket or has opted out**, and offload
+  runs only with a bucket. A stream with neither never drops, as in 0024.
+- **The alert reads two gauges, not a rule per cadence:** the start of the oldest partition and the
+  allowance (window, grace, the longest gap between two runs of the cadence, and the day). Both are
+  exported for every stream, wired or not, so a stream that never drops is seen too, and the age
+  keeps growing between passes. The allowance is measured from the partition's start, which is why
+  the day appears in it.
 
 ## Rollout
 
-Two pull requests, in order, both before 0.8.0 is cut.
+Two pull requests, in order, both before 0.8.0 is cut. Both are done.
 
-1. **Daily layout, end to end.** Generalize the interval in `internal/persistence/partitioning`
-   (`Daily`, interval-aware range helpers, partition names parsed by suffix width) with DB-backed
-   tests per adapter. Edit migration 14 to create daily partitions with per-day copy validation, and
-   switch `audit-partitions` to `BALEIA_PARTITION_DAYS_AHEAD`. Switch the offload to days
-   (`PeriodReader`, daily keys and manifests) and the retention gate to daily manifests that are
-   validated, not only checked for existence. `migrate -cmd=audit-prune -before` takes a day.
-   Update `docs/operations.md`.
-2. **Cadence and configuration.** Add the calendar form to `schedules.Spec`, the cadence and
-   opt-out settings, the new defaults and the cap, and move `audit-retention` and
-   `query-history-retention` to the cadence. Add the oldest-unpruned-partition metric and alert.
-   Update `docs/configuration.md`.
+1. **Daily layout, end to end** (#959): the interval in `internal/persistence/partitioning`, migration
+   14 with per-day copy validation, `BALEIA_PARTITION_DAYS_AHEAD`, the daily offload and the
+   validated daily gate, `migrate -cmd=audit-prune -before` taking a day, and `docs/operations.md`.
+2. **Cadence and configuration:** the calendar form of `schedules.Spec`, the cadence and opt-out
+   settings, the new defaults and the cap, the oldest-unpruned-partition metric and alert, and
+   `docs/operations.md` and `docs/configuration.md`.
 
 ## Alternatives considered
 
