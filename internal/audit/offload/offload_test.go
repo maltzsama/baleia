@@ -72,7 +72,7 @@ func TestObjectAndManifestKeys(t *testing.T) {
 	t.Parallel()
 	s := NewSink(nil, "baleia-cold", "audit")
 	month := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
-	if got, want := s.ObjectKey(month), "baleia-cold/audit/2026/11/audit-202611.ndjson.gz"; got != want {
+	if got, want := s.ObjectKey(month, "audit"), "baleia-cold/audit/2026/11/audit-202611.ndjson.gz"; got != want {
 		t.Fatalf("ObjectKey = %q, want %q", got, want)
 	}
 	if got, want := s.ManifestKey(month), "baleia-cold/audit/2026/11/manifest.json"; got != want {
@@ -87,11 +87,11 @@ func TestWriteAndManifest(t *testing.T) {
 	ctx := context.Background()
 	month := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
-	key, count, checksum, err := s.Write(ctx, month, []json.RawMessage{json.RawMessage(`{"a":1}`)})
+	key, count, checksum, err := s.Write(ctx, month, "audit", []json.RawMessage{json.RawMessage(`{"a":1}`)})
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
-	if key != s.ObjectKey(month) {
+	if key != s.ObjectKey(month, "audit") {
 		t.Fatalf("key = %q", key)
 	}
 	if count != 1 || checksum == "" {

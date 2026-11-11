@@ -3,24 +3,36 @@ package offload
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit/export"
 )
 
+// MonthReader reads one month of a stream. The offloader owns the month loop,
+// the manifest and the cursor; the reader only knows the stream's query and
+// row shape (ADR 0024: the mechanism is shared, only the query and rows
+// differ).
+type MonthReader interface {
+	// ReadMonth reads every row of month after pos (advancing pos past the
+	// last one) and before the cutoff, returning the objects to write, keyed
+	// by object name.
+	ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position) (map[string][]json.RawMessage, error)
+	// EarliestMonth returns the month of the stream's first row, or the zero
+	// time when it has none.
+	EarliestMonth(ctx context.Context, before time.Time) (time.Time, error)
+}
+
 // Offloader writes a stream's rows to the cold sink month by month, finalizing
 // each month with a manifest before advancing the cursor. A month is finalized
-// only once it is fully past the safety lag, so a concurrent insert of an
+// only once it is entirely past the safety lag, so a concurrent insert of an
 // earlier timestamp cannot arrive after the month is sealed.
 type Offloader struct {
-	Stream   string // export.StreamAudit or export.StreamQueryHistory
-	SinkName string // export.SinkS3
-	Source   export.Source
+	Stream   string
+	SinkName string
 	Cursor   export.Cursor
 	Sink     *Sink
-	// Document maps a row to its JSON document; nil means export.Document.
-	Document func(export.Event) map[string]any
-	Batch    int
+	Reader   MonthReader
 	Lag      time.Duration
 	Now      func() time.Time
 	MaxPass  time.Duration
@@ -66,7 +78,10 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 		before := now().Add(-lag)
 
 		if month.IsZero() {
-			month = o.earliestMonth(ctx, before)
+			month, err = o.Reader.EarliestMonth(ctx, before)
+			if err != nil {
+				return total, err
+			}
 			if month.IsZero() {
 				return total, nil // nothing to offload yet
 			}
@@ -76,15 +91,19 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 			return total, nil
 		}
 
-		rows, err := o.readMonth(ctx, month, before, &pos)
+		objects, err := o.Reader.ReadMonth(ctx, month, before, &pos)
 		if err != nil {
 			return total, err
 		}
-		if len(rows) > 0 {
-			if err := o.finalize(ctx, month, rows); err != nil {
+		rows := 0
+		for _, r := range objects {
+			rows += len(r)
+		}
+		if rows > 0 {
+			if err := o.finalize(ctx, month, objects); err != nil {
 				return total, err
 			}
-			total += len(rows)
+			total += rows
 		}
 		// Advance the cursor to the start of the next month, whether the month
 		// had rows or not: the whole month is offloaded, and the retention gate
@@ -99,71 +118,31 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 	}
 }
 
-// readMonth reads every row of month, in order, advancing pos past the last
-// one.
-func (o *Offloader) readMonth(ctx context.Context, month, before time.Time, pos *export.Position) ([]json.RawMessage, error) {
-	doc := o.Document
-	if doc == nil {
-		doc = export.Document
+// finalize writes the month's objects and their manifest, in deterministic
+// object-name order.
+func (o *Offloader) finalize(ctx context.Context, month time.Time, objects map[string][]json.RawMessage) error {
+	names := make([]string, 0, len(objects))
+	for name := range objects {
+		names = append(names, name)
 	}
-	var rows []json.RawMessage
-	limit := nextMonth(month)
-	for {
-		events, err := o.Source.Events(ctx, *pos, before, o.batch())
-		if err != nil {
-			return nil, err
-		}
-		if len(events) == 0 {
-			return rows, nil
-		}
-		for _, ev := range events {
-			if !ev.OccurredAt.Before(limit) {
-				return rows, nil // the month is done
-			}
-			data, err := json.Marshal(doc(ev))
-			if err != nil {
-				return nil, err
-			}
-			rows = append(rows, data)
-			*pos = export.Position{OccurredAt: ev.OccurredAt, ID: ev.ID}
-		}
-		if len(events) < o.batch() {
-			return rows, nil
-		}
-	}
-}
+	sort.Strings(names)
 
-// earliestMonth is the month of the first row, or the zero time when the stream
-// has none.
-func (o *Offloader) earliestMonth(ctx context.Context, before time.Time) time.Time {
-	events, err := o.Source.Events(ctx, export.Position{}, before, 1)
-	if err != nil || len(events) == 0 {
-		return time.Time{}
-	}
-	return monthStart(events[0].OccurredAt)
-}
-
-// finalize writes the month's object and its manifest.
-func (o *Offloader) finalize(ctx context.Context, month time.Time, rows []json.RawMessage) error {
-	key, count, checksum, err := o.Sink.Write(ctx, month, rows)
-	if err != nil {
-		return err
-	}
 	m := Manifest{
 		Stream:    o.Stream,
 		Month:     month.Format("2006-01"),
-		Keys:      []string{key},
-		Counts:    map[string]int64{key: count},
-		Checksums: map[string]string{key: checksum},
+		Counts:    make(map[string]int64, len(names)),
+		Checksums: make(map[string]string, len(names)),
+	}
+	for _, name := range names {
+		key, count, checksum, err := o.Sink.Write(ctx, month, name, objects[name])
+		if err != nil {
+			return err
+		}
+		m.Keys = append(m.Keys, key)
+		m.Counts[key] = count
+		m.Checksums[key] = checksum
 	}
 	return o.Sink.WriteManifest(ctx, month, m)
-}
-
-func (o *Offloader) batch() int {
-	if o.Batch <= 0 {
-		return 500
-	}
-	return o.Batch
 }
 
 func monthStart(t time.Time) time.Time {

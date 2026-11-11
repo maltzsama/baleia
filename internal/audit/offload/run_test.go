@@ -57,9 +57,9 @@ func TestOffloaderMonths(t *testing.T) {
 
 	o := &Offloader{
 		Stream: export.StreamAudit, SinkName: export.SinkS3,
-		Source: src, Cursor: cur, Sink: sink,
-		Document: func(e export.Event) map[string]any { return map[string]any{"id": e.ID} },
-		Now:      func() time.Time { return now },
+		Cursor: cur, Sink: sink,
+		Reader: &AuditReader{Source: src, Name: export.StreamAudit, Document: func(e export.Event) map[string]any { return map[string]any{"id": e.ID} }},
+		Now:    func() time.Time { return now },
 	}
 	n, err := o.Run(ctx)
 	if err != nil {
@@ -73,10 +73,10 @@ func TestOffloaderMonths(t *testing.T) {
 	if len(store.objects) != 4 { // 2 objects + 2 manifests
 		t.Fatalf("objects = %d, want 4", len(store.objects))
 	}
-	if got := gunzip(t, store.objects[sink.ObjectKey(nov)]); got != `{"id":1}`+"\n"+`{"id":2}`+"\n" {
+	if got := gunzip(t, store.objects[sink.ObjectKey(nov, export.StreamAudit)]); got != `{"id":1}`+"\n"+`{"id":2}`+"\n" {
 		t.Fatalf("november object = %q", got)
 	}
-	if got := gunzip(t, store.objects[sink.ObjectKey(dec)]); got != `{"id":3}`+"\n" {
+	if got := gunzip(t, store.objects[sink.ObjectKey(dec, export.StreamAudit)]); got != `{"id":3}`+"\n" {
 		t.Fatalf("december object = %q", got)
 	}
 
@@ -100,9 +100,9 @@ func TestOffloaderEmptyMonthAdvances(t *testing.T) {
 
 	o := &Offloader{
 		Stream: export.StreamAudit, SinkName: export.SinkS3,
-		Source: src, Cursor: cur, Sink: sink,
-		Document: func(e export.Event) map[string]any { return map[string]any{"id": e.ID} },
-		Now:      func() time.Time { return now },
+		Cursor: cur, Sink: sink,
+		Reader: &AuditReader{Source: src, Name: export.StreamAudit, Document: func(e export.Event) map[string]any { return map[string]any{"id": e.ID} }},
+		Now:    func() time.Time { return now },
 	}
 	if _, err := o.Run(ctx); err != nil {
 		t.Fatalf("Run: %v", err)

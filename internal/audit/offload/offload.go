@@ -33,11 +33,12 @@ func NewSink(store objectStore, prefix, stream string) *Sink {
 	return &Sink{store: store, prefix: prefix, stream: stream}
 }
 
-// ObjectKey is the deterministic key of a month's object: re-running the
-// offload of a month overwrites the same object (idempotent).
-func (s *Sink) ObjectKey(month time.Time) string {
+// ObjectKey is the deterministic key of one month's named object (audit,
+// query_executions, query_statements): re-running the offload of a month
+// overwrites the same object (idempotent).
+func (s *Sink) ObjectKey(month time.Time, name string) string {
 	m := month.UTC()
-	return fmt.Sprintf("%s/%s/%s/%s-%s.ndjson.gz", s.prefix, s.stream, m.Format("2006/01"), s.stream, m.Format("200601"))
+	return fmt.Sprintf("%s/%s/%s/%s-%s.ndjson.gz", s.prefix, s.stream, m.Format("2006/01"), name, m.Format("200601"))
 }
 
 // ManifestKey is the deterministic key of a month's manifest.
@@ -54,14 +55,14 @@ type Manifest struct {
 	Checksums map[string]string `json:"checksums"`
 }
 
-// Write compresses rows into one gzip NDJSON object, stores it, and returns
-// its key, row count and checksum.
-func (s *Sink) Write(ctx context.Context, month time.Time, rows []json.RawMessage) (key string, count int64, checksum string, err error) {
+// Write compresses rows into one named gzip NDJSON object, stores it, and
+// returns its key, row count and checksum.
+func (s *Sink) Write(ctx context.Context, month time.Time, name string, rows []json.RawMessage) (key string, count int64, checksum string, err error) {
 	data, count, checksum, err := buildObject(rows)
 	if err != nil {
 		return "", 0, "", err
 	}
-	key = s.ObjectKey(month)
+	key = s.ObjectKey(month, name)
 	if err := s.store.Put(ctx, key, data, "application/x-ndjson"); err != nil {
 		return "", 0, "", fmt.Errorf("offload: put %s: %w", key, err)
 	}
