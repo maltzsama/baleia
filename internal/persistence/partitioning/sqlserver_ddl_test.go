@@ -89,34 +89,3 @@ func TestCreatePartitionFunctionStatementDaily(t *testing.T) {
 		t.Errorf("createPartitionFunctionStatement = %q, want %q", got, want)
 	}
 }
-
-func TestBoundaryInterval(t *testing.T) {
-	t.Parallel()
-	d := func(y int, m time.Month, day int) time.Time { return time.Date(y, m, day, 0, 0, 0, 0, time.UTC) }
-	for _, tc := range []struct {
-		name    string
-		bounds  []time.Time
-		want    Interval
-		wantErr bool
-	}{
-		{"daily", []time.Time{d(2026, 12, 1), d(2026, 12, 2), d(2026, 12, 3)}, Daily, false},
-		{"daily with a dropped day in the middle", []time.Time{d(2026, 12, 1), d(2026, 12, 3), d(2026, 12, 4)}, Daily, false},
-		{"daily with every other day dropped", []time.Time{d(2026, 12, 1), d(2026, 12, 3), d(2026, 12, 5)}, Daily, false},
-		{"daily after the oldest day was dropped", []time.Time{d(2026, 12, 3), d(2026, 12, 4), d(2026, 12, 5)}, Daily, false},
-		{"monthly", []time.Time{d(2026, 2, 1), d(2026, 3, 1), d(2026, 4, 1)}, Monthly, false},
-		{"february", []time.Time{d(2027, 2, 1), d(2027, 3, 1)}, Monthly, false},
-		{"a single boundary is ambiguous", []time.Time{d(2026, 12, 1)}, "", true},
-		{"no boundary is ambiguous", nil, "", true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got, err := boundaryInterval(tc.bounds)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("boundaryInterval error = %v, want error %v", err, tc.wantErr)
-			}
-			if got != tc.want {
-				t.Errorf("boundaryInterval = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}

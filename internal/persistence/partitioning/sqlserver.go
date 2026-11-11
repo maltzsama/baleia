@@ -2,7 +2,6 @@ package partitioning
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,8 +24,35 @@ func (m *sqlserverManager) Capabilities() Capabilities {
 	return capabilitiesFor("sqlserver")
 }
 
-func pfName(table string) string { return "pf_" + table }
-func psName(table string) string { return "ps_" + table }
+// pfName and psName carry the partition width in the name. A partition function
+// holds only boundaries, so the width cannot be read back from them: boundaries
+// 28 days apart are a monthly function or a daily one whose days in between were
+// pruned. The name is what ListPartitions and DropPartition read it from.
+func pfName(table string, iv Interval) string { return "pf_" + table + "_" + string(iv) }
+func psName(table string, iv Interval) string { return "ps_" + table + "_" + string(iv) }
+
+// width returns the width a table was provisioned with, from the partition
+// function that exists for it. A table with functions of two widths is refused.
+func (m *sqlserverManager) width(ctx context.Context, table string) (iv Interval, found bool, err error) {
+	var have []Interval
+	for _, candidate := range []Interval{Daily, Monthly} {
+		ok, err := m.exists(ctx, "sys.partition_functions", pfName(table, candidate))
+		if err != nil {
+			return "", false, err
+		}
+		if ok {
+			have = append(have, candidate)
+		}
+	}
+	switch len(have) {
+	case 0:
+		return "", false, nil
+	case 1:
+		return have[0], true, nil
+	default:
+		return "", false, fmt.Errorf("partitioning: %s has partition functions of more than one width", table)
+	}
+}
 
 // Provision creates the partition function and scheme if absent, creates the
 // table ON the scheme if absent, and splits new boundaries for months beyond
@@ -36,7 +62,12 @@ func (m *sqlserverManager) Provision(ctx context.Context, model any, spec Spec, 
 		return err
 	}
 	months := RangePartitions(spec.Table, spec.Interval, from, until)
-	pf, ps := pfName(spec.Table), psName(spec.Table)
+	if have, found, err := m.width(ctx, spec.Table); err != nil {
+		return err
+	} else if found && have != spec.Interval {
+		return fmt.Errorf("partitioning: %s is partitioned %s, not %s", spec.Table, have, spec.Interval)
+	}
+	pf, ps := pfName(spec.Table, spec.Interval), psName(spec.Table, spec.Interval)
 
 	if ok, err := m.exists(ctx, "sys.partition_functions", pf); err != nil {
 		return err
@@ -179,22 +210,22 @@ func addClusteredKeyStatement(spec Spec, key []string, ps string) string {
 }
 
 // ListPartitions derives one partition per boundary of the partition function,
-// oldest first. A boundary ends the partition that precedes it; the width is
-// read from the spacing of the boundaries (see boundaryInterval).
+// oldest first. A boundary ends the partition that precedes it, and the width
+// comes from the function's name (see pfName).
 func (m *sqlserverManager) ListPartitions(ctx context.Context, table string) ([]Partition, error) {
 	if !identifier.MatchString(table) {
 		return nil, fmt.Errorf("partitioning: invalid table name %q", table)
 	}
-	bounds, err := m.boundaries(ctx, pfName(table))
+	iv, found, err := m.width(ctx, table)
 	if err != nil {
 		return nil, err
 	}
-	if len(bounds) == 0 {
+	if !found {
 		return nil, nil // never provisioned
 	}
-	iv, err := boundaryInterval(bounds)
+	bounds, err := m.boundaries(ctx, pfName(table, iv))
 	if err != nil {
-		return nil, fmt.Errorf("partitioning: list partitions of %s: %w", table, err)
+		return nil, err
 	}
 	var out []Partition
 	for _, until := range bounds {
@@ -211,7 +242,14 @@ func (m *sqlserverManager) DropPartition(ctx context.Context, table string, from
 	if !identifier.MatchString(table) {
 		return fmt.Errorf("partitioning: invalid table name %q", table)
 	}
-	pf := pfName(table)
+	iv, found, err := m.width(ctx, table)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil // never provisioned: nothing to drop
+	}
+	pf := pfName(table, iv)
 	existing, err := m.ListPartitions(ctx, table)
 	if err != nil {
 		return err
@@ -323,32 +361,6 @@ func containsTime(ts []time.Time, want time.Time) bool {
 		}
 	}
 	return false
-}
-
-// errAmbiguousWidth reports a partition function whose width cannot be read.
-var errAmbiguousWidth = errors.New("the partition width cannot be established from fewer than two boundaries")
-
-// boundaryInterval infers the partition width from the partition function's
-// boundaries, which carry no width of their own: the smallest gap between two
-// consecutive boundaries is a day or more than 28 days (monthly). The smallest
-// gap, not the first, because dropping a day merges its boundary and leaves a
-// wider gap behind. With fewer than two boundaries there is no gap to read, and
-// guessing could truncate a partition that holds more than the day a manifest
-// covers, so it fails closed.
-func boundaryInterval(bounds []time.Time) (Interval, error) {
-	if len(bounds) < 2 {
-		return "", errAmbiguousWidth
-	}
-	smallest := bounds[1].Sub(bounds[0])
-	for i := 2; i < len(bounds); i++ {
-		if gap := bounds[i].Sub(bounds[i-1]); gap < smallest {
-			smallest = gap
-		}
-	}
-	if smallest >= 28*24*time.Hour {
-		return Monthly, nil
-	}
-	return Daily, nil
 }
 
 // previous returns the start of the partition that ends at until.

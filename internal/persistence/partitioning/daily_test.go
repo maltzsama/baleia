@@ -127,8 +127,8 @@ func TestSQLServerDailyPartitions(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		_ = db.Exec(`DROP TABLE IF EXISTS [partitioning_test_events]`).Error
-		_ = db.Exec(`DROP PARTITION SCHEME [ps_partitioning_test_events]`).Error
-		_ = db.Exec(`DROP PARTITION FUNCTION [pf_partitioning_test_events]`).Error
+		_ = db.Exec(`DROP PARTITION SCHEME [ps_partitioning_test_events_daily]`).Error
+		_ = db.Exec(`DROP PARTITION FUNCTION [pf_partitioning_test_events_daily]`).Error
 	})
 	exerciseDaily(t, db, &testEvent{})
 }
