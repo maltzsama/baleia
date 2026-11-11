@@ -95,11 +95,11 @@ jobs:
       - name: MySQL
         env:
           BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3306)/
-        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate|TestSearchIndex_PortableLookups|TestMySQLPartitions' ./internal/store ./internal/store/model ./internal/store/repo ./internal/persistence/partitioning
+        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate|TestSearchIndex_PortableLookups|TestMySQLPartitions|TestMySQLDailyPartitions' ./internal/store ./internal/store/model ./internal/store/repo ./internal/persistence/partitioning
       - name: MariaDB
         env:
           BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3307)/
-        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate|TestSearchIndex_PortableLookups|TestMySQLPartitions' ./internal/store ./internal/store/model ./internal/store/repo ./internal/persistence/partitioning
+        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate|TestSearchIndex_PortableLookups|TestMySQLPartitions|TestMySQLDailyPartitions' ./internal/store ./internal/store/model ./internal/store/repo ./internal/persistence/partitioning
 
   lint:
     name: Lint
