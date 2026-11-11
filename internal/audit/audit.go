@@ -37,6 +37,9 @@ const (
 	ReasonInternal    = "internal"
 	// ReasonReuseDetected marks a refresh token presented after rotation (#51).
 	ReasonReuseDetected = "reuse_detected"
+	// ReasonNoOffload marks a partition dropped with no cold copy behind it,
+	// because the stream opted out of offload before drop (ADR 0026).
+	ReasonNoOffload = "no_offload"
 )
 
 // Auth methods recorded with an event.

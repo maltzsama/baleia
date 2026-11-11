@@ -114,6 +114,10 @@ const (
 	WorkloadRuleCreate Action = "workload.rule_create"
 	WorkloadRuleUpdate Action = "workload.rule_update"
 	WorkloadRuleDelete Action = "workload.rule_delete"
+
+	// PartitionDrop records a retention drop that no cold copy preceded: the
+	// stream's BALEIA_*_OFFLOAD_BEFORE_DROP is false (ADR 0026).
+	PartitionDrop Action = "partition.drop"
 )
 
 // allActions is the whole vocabulary.
@@ -133,6 +137,7 @@ var allActions = []Action{
 	AgentTokenCreate, AgentTokenRevoke, AuthAgentTokenRejected,
 	AgentToolCall, AgentPolicyUpdate,
 	AssistantSettingsUpdate,
+	PartitionDrop,
 	ExecutionCreate, ExecutionCancel, QueryKill,
 	ResultsDownload,
 	MaintenanceTrigger, MaintenanceParametersSet, MaintenanceParametersRemoved, MaintenanceRunRequested,
