@@ -64,3 +64,16 @@ func TestPartitionNumber(t *testing.T) {
 		t.Error("partitionNumber found a missing boundary")
 	}
 }
+
+func TestAddClusteredKeyStatement(t *testing.T) {
+	t.Parallel()
+	spec := Spec{Table: "audit_events", Column: "occurred_at", Strategy: Range, Interval: Monthly}
+	got := addClusteredKeyStatement(spec, []string{"id", "occurred_at"}, "ps_audit_events")
+	want := "ALTER TABLE [audit_events] ADD CONSTRAINT [pk_audit_events] PRIMARY KEY CLUSTERED ([id], [occurred_at]) ON [ps_audit_events] ([occurred_at])"
+	if got != want {
+		t.Errorf("addClusteredKeyStatement = %q, want %q", got, want)
+	}
+	if got := bracket("PK__a]b"); got != "[PK__a]]b]" {
+		t.Errorf("bracket = %q", got)
+	}
+}
