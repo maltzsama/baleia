@@ -74,6 +74,10 @@ content are rebuilt when they change. The first search of a catalog that no pass
 has indexed yet, for example right after an upgrade, builds it inside the
 request: about 12 seconds for 100,000 columns, once.
 
+Each Baleia process keeps in memory the terms its typo-tolerant searches compare
+against, by catalog or workspace and by the first two letters of the word, and
+reads them again only when the index of that catalog or workspace was rebuilt.
+
 `baleia_search_requests_total` counts searches by surface and by whether they
 found anything; the zero-result rate is in the
 [metrics catalog](../operations.md#metrics-catalog).

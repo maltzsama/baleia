@@ -197,7 +197,7 @@ func (r *Repo) SearchSemanticDocs(ctx context.Context, arg db.SearchSemanticDocs
 		if err != nil || len(visible) == 0 {
 			return err
 		}
-		found, err := candidates(tx, []string{scopeDocs + workspace}, []string{kindDoc}, pattern, int(arg.Lim))
+		found, err := r.candidates(tx, []string{scopeDocs + workspace}, []string{kindDoc}, pattern, int(arg.Lim))
 		if err != nil || len(found[kindDoc]) == 0 {
 			return err
 		}

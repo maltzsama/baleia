@@ -269,7 +269,7 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 		for i, id := range visible {
 			scopes[i] = metadataScopeKey(id)
 		}
-		found, err := candidates(tx, scopes, kinds, pattern, int(arg.Lim))
+		found, err := r.candidates(tx, scopes, kinds, pattern, int(arg.Lim))
 		if err != nil {
 			return err
 		}
