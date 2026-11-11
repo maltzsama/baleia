@@ -61,22 +61,16 @@ func TestGuardPartialKeysUpgrades(t *testing.T) {
 			}
 		}
 	}
-	for _, c := range []struct {
-		model any
-		old   any
-		index string
-	}{
-		{&model.Space{}, &oldSpaceKey{}, "spaces_one_default"},
-		{&model.MaintenanceRun{}, &oldRunKey{}, "maintenance_runs_one_running"},
-	} {
-		if err := db.Migrator().DropIndex(c.model, c.index); err != nil {
+	// Back to the old keys: the guarded key goes, the old one is rebuilt from
+	// its old declaration.
+	oldShapes := map[string]any{"spaces": &oldSpaceKey{}, "maintenance_runs": &oldRunKey{}}
+	guarded := store.GuardedIndexes()
+	for _, g := range guarded {
+		if err := db.Migrator().DropIndex(g.Model, g.Index); err != nil {
 			t.Fatal(err)
 		}
-		if err := db.Migrator().CreateIndex(c.old, c.index); err != nil {
+		if err := db.Migrator().CreateIndex(oldShapes[g.Table], g.OldIndex); err != nil {
 			t.Fatal(err)
-		}
-		if exists, spans, err := store.IndexSpansGuard(db, c.index); err != nil || !exists || spans {
-			t.Fatalf("%s should be in its old shape: exists = %v, spans the guard = %v, %v", c.index, exists, spans, err)
 		}
 	}
 
@@ -98,11 +92,15 @@ func TestGuardPartialKeysUpgrades(t *testing.T) {
 	if err := db.Create(ptr(run(3, "running"))).Error; err != nil {
 		t.Fatal(err)
 	}
-	// Rows as the earlier migrations left them: no guard yet.
-	if err := db.Model(&model.Space{}).Where("workspace_id = ?", string(ws)).Update("default_guard", nil).Error; err != nil {
-		t.Fatal(err)
+	// The database as the earlier migrations left it: rows in place and no guard
+	// column at all, so the migration has to add both.
+	for _, g := range guarded {
+		if err := db.Migrator().DropColumn(g.Model, g.GuardField); err != nil {
+			t.Fatalf("drop %s: %v", g.GuardField, err)
+		}
 	}
-	if err := db.Model(&model.MaintenanceRun{}).Where("catalog_id = ?", string(catalog)).Update("running_guard", nil).Error; err != nil {
+	var before model.Space
+	if err := db.Select("id", "updated_at").Where("workspace_id = ?", string(ws)).First(&before).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -120,10 +118,21 @@ func TestGuardPartialKeysUpgrades(t *testing.T) {
 	if err := db.Where("catalog_id = ?", string(catalog)).First(&running).Error; err != nil || running.RunningGuard == nil || !*running.RunningGuard {
 		t.Fatalf("the running run was not backfilled: %+v, %v", running.RunningGuard, err)
 	}
-	for _, index := range []string{"spaces_one_default", "maintenance_runs_one_running"} {
-		if exists, spans, err := store.IndexSpansGuard(db, index); err != nil || !exists || !spans {
-			t.Errorf("%s: exists = %v, spans the guard = %v, %v", index, exists, spans, err)
+	for _, g := range guarded {
+		if !db.Migrator().HasColumn(g.Model, g.GuardField) {
+			t.Errorf("%s.%s was not added", g.Table, g.GuardField)
 		}
+		if exists, spans, err := store.IndexSpansGuard(db, g.Table, g.Index); err != nil || !exists || !spans {
+			t.Errorf("%s: exists = %v, spans the guard = %v, %v", g.Index, exists, spans, err)
+		}
+		if db.Migrator().HasIndex(g.Model, g.OldIndex) {
+			t.Errorf("the old key %s is still there", g.OldIndex)
+		}
+	}
+	// Populating the guard is not an edit of the space.
+	var after model.Space
+	if err := db.Select("id", "updated_at").Where("id = ?", string(before.ID)).First(&after).Error; err != nil || !after.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Errorf("updated_at changed from %v to %v (%v)", before.UpdatedAt, after.UpdatedAt, err)
 	}
 
 	// What the old MySQL keys forbade now works, and the rules still hold.
