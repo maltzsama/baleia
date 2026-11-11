@@ -25,6 +25,9 @@ type Repo struct {
 	// searchBuilds makes the searches of one scope share its index rebuild
 	// (ADR 0023).
 	searchBuilds singleflight.Group
+	// vocabularies keep each scope's distinct terms in memory for the fuzzy
+	// fallback of a search (ADR 0023).
+	vocabularies vocabularies
 }
 
 // SetEnqueue wires the durable notification hook. Call it once, at startup.

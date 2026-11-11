@@ -71,7 +71,7 @@ const scope = (overrides: Partial<CompletionScope> = {}): CompletionScope => ({
 	...overrides
 });
 
-let searches: { q: string; catalogId: string | null }[] = [];
+let searches: { q: string; catalogId: string | null; match: string | null }[] = [];
 let joinCalls: { left: string | null; right: string | null }[] = [];
 
 beforeEach(() => {
@@ -99,7 +99,8 @@ beforeEach(() => {
 			const url = new URL(request.url);
 			searches.push({
 				q: url.searchParams.get('q') ?? '',
-				catalogId: url.searchParams.get('catalog_id')
+				catalogId: url.searchParams.get('catalog_id'),
+				match: url.searchParams.get('match')
 			});
 			return response(200).json([
 				makeSearchResult({ table_id: IDS.sf1Nation, namespace: ['sf1'], table: 'nation' }),
@@ -194,7 +195,8 @@ describe('sqlCompletionSource', () => {
 		expect(labels(result?.options)).toEqual(['nation · tiny', 'nation · sf1']);
 		expect(result?.options[0].apply).toBe('nation');
 		expect(result?.options[1].apply).toBe('sf1.nation');
-		expect(searches).toEqual([{ q: 'nat', catalogId: CATALOG }]);
+		// A typeahead asks for names that start with the prefix, not for typo matching.
+		expect(searches).toEqual([{ q: 'nat', catalogId: CATALOG, match: 'prefix' }]);
 		expect(result?.from).toBe(14);
 	});
 

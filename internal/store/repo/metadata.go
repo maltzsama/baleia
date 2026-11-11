@@ -269,7 +269,7 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 		for i, id := range visible {
 			scopes[i] = metadataScopeKey(id)
 		}
-		found, err := candidates(tx, scopes, kinds, pattern, int(arg.Lim))
+		found, err := r.candidates(tx, scopes, kinds, pattern, int(arg.Lim), !arg.PrefixOnly)
 		if err != nil {
 			return err
 		}
@@ -355,7 +355,7 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 			pop := popularity[tablePopularityKey(catalogID, lastNamespace, string(table.Name))]
 			syncedAt := synced[catalogID]
 			if tableHit[string(table.ID)] {
-				if score := pattern.Best(nameAndComment(string(table.Name), table.Comment)...); score > 0 {
+				if score := pattern.Best(nameAndComment(string(table.Name), table.Comment)...); matches(score, arg.PrefixOnly) {
 					hits = append(hits, db.SearchMetadataRow{
 						Kind:             browse.KindTable,
 						TableID:          PGUUID(string(table.ID)),
@@ -370,7 +370,7 @@ func (r *Repo) SearchMetadata(ctx context.Context, arg db.SearchMetadataParams) 
 			}
 			for _, column := range columnsByTable[string(table.ID)] {
 				score := pattern.Best(nameAndComment(string(column.Name), column.Comment)...)
-				if score == 0 {
+				if !matches(score, arg.PrefixOnly) {
 					continue
 				}
 				hits = append(hits, db.SearchMetadataRow{
@@ -1132,6 +1132,15 @@ func nonNilStrings(values []string) []string {
 		return []string{}
 	}
 	return values
+}
+
+// matches reports whether a score is a hit: any match, or, for a prefix-only
+// search, a name that starts with the query (comments weigh less than that).
+func matches(score float64, prefixOnly bool) bool {
+	if prefixOnly {
+		return score >= search.TierPrefix
+	}
+	return score > 0
 }
 
 // commentWeight scales a match in a comment below the same match in a name.

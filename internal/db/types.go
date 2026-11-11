@@ -2018,6 +2018,8 @@ type SearchMetadataParams struct {
 	CatalogID   UUID     `json:"catalog_id"`
 	Q           string   `json:"q"`
 	Kind        string   `json:"kind"`
+	// PrefixOnly returns only names that start with Q and forgives no typo.
+	PrefixOnly bool `json:"prefix_only"`
 }
 
 type SearchMetadataRow struct {

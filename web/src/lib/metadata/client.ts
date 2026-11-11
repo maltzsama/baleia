@@ -186,6 +186,12 @@ export function searchMetadata(
 		certified?: boolean;
 		/** The table's namespace, one value per level. */
 		namespace?: string[];
+		/**
+		 * `prefix` returns only names that start with `q` and forgives no typo,
+		 * which is what a typeahead needs and is cheaper; `fuzzy` (the default)
+		 * also matches words, comments and misspellings.
+		 */
+		match?: 'fuzzy' | 'prefix';
 		limit?: number;
 		signal?: AbortSignal;
 	} = {}
@@ -198,6 +204,7 @@ export function searchMetadata(
 					q,
 					...(options.kind ? { kind: options.kind } : {}),
 					...(options.catalogId ? { catalog_id: options.catalogId } : {}),
+					...(options.match ? { match: options.match } : {}),
 					...(options.tags?.length ? { tags: options.tags } : {}),
 					...(options.certified != null ? { certified: options.certified } : {}),
 					...(options.namespace?.length ? { namespace: options.namespace } : {}),

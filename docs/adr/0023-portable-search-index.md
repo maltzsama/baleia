@@ -59,7 +59,17 @@ New write paths keep appearing.
 4. **Fuzzy matching runs on the vocabulary, not on the rows.** When the exact
    and prefix lookups find fewer candidates than the limit, the terms of the
    scopes that share a query word's first two letters are compared by trigram
-   similarity in Go, and the close terms add their rows as candidates.
+   similarity in Go, and the close terms add their rows as candidates. Each
+   process keeps those terms in memory, by scope and prefix, tied to the scope's
+   version (its fingerprint and when it was indexed): a search costs one
+   primary-key lookup of the scopes' versions, and the terms of a prefix are
+   read once per version, by a bounded range query on the searching
+   transaction's own connection. A search must never wait for a second
+   connection while it holds one: with many searches that starves the pool.
+5. **A typeahead asks for a prefix.** `match=prefix` on the metadata search
+   returns only names that start with the text and never runs the fuzzy
+   fallback. The editor's completion uses it: it only keeps names that start
+   with what was typed, and it asks on every pause in typing.
 
 ## Consequences
 
@@ -79,6 +89,10 @@ New write paths keep appearing.
 - Folders are few and are matched live, not indexed.
 - Every new searchable kind adds its texts to a scope builder and its source
   to that scope's fingerprint.
+
+- A process holds the terms of the prefixes it searched: at most 256 scopes, each
+  prefix at most 20,000 terms. A scope rebuilt (a sync pass) is read again, a
+  prefix at a time, as searches ask for it.
 
 ## Current compliance
 

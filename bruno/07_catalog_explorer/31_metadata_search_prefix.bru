@@ -1,0 +1,32 @@
+meta {
+  name: Metadata Search Prefix
+  type: http
+  seq: 31
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/metadata/search?q={{metadata_table_name}}&kind=table&match=prefix&limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("only names that start with the text are returned", function () {
+    const text = bru.getVar("metadata_table_name").toLowerCase();
+    expect(res.body.length).to.be.greaterThan(0);
+    res.body.forEach((hit) => expect(hit.table.toLowerCase().startsWith(text)).to.equal(true));
+  });
+}
+
+docs {
+  `match=prefix` returns only names that start with `q` and never forgives a
+  typo: what a typeahead needs, and cheaper than the default `fuzzy` (#943).
+}

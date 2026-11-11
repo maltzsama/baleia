@@ -384,9 +384,12 @@ async function tableOptions(
 	if (ctx.prefix.length >= 2 && scope.namespaceDepth > 0) {
 		await new Promise((resolve) => setTimeout(resolve, 200));
 		if (signal.aborted) return out;
+		// Only names that start with the prefix are used below, so the server is
+		// asked for just those: it skips typo matching, which is the costly part.
 		const hits = await searchMetadata(scope.workspaceId, ctx.prefix, {
 			kind: 'table',
 			catalogId: scope.catalogId,
+			match: 'prefix',
 			limit: 50,
 			signal
 		});

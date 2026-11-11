@@ -1372,6 +1372,12 @@ const (
 	Table  SearchMetadataParamsKind = "table"
 )
 
+// Defines values for SearchMetadataParamsMatch.
+const (
+	Fuzzy  SearchMetadataParamsMatch = "fuzzy"
+	Prefix SearchMetadataParamsMatch = "prefix"
+)
+
 // Defines values for TriggerRetrieverRefreshJSONBodyRefreshType.
 const (
 	Full        TriggerRetrieverRefreshJSONBodyRefreshType = "full"
@@ -5823,6 +5829,9 @@ type SearchMetadataParams struct {
 	Kind      *SearchMetadataParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
 	CatalogId *openapi_types.UUID       `form:"catalog_id,omitempty" json:"catalog_id,omitempty"`
 
+	// Match `fuzzy` (default) matches words, comments and misspellings; `prefix` returns only names that start with `q`
+	Match *SearchMetadataParamsMatch `form:"match,omitempty" json:"match,omitempty"`
+
 	// Tags Tables whose table-level docs carry every one of these tags
 	Tags *[]string `form:"tags,omitempty" json:"tags,omitempty"`
 
@@ -5836,6 +5845,9 @@ type SearchMetadataParams struct {
 
 // SearchMetadataParamsKind defines parameters for SearchMetadata.
 type SearchMetadataParamsKind string
+
+// SearchMetadataParamsMatch defines parameters for SearchMetadata.
+type SearchMetadataParamsMatch string
 
 // GetMetadataTableParams defines parameters for GetMetadataTable.
 type GetMetadataTableParams struct {

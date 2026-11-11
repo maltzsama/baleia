@@ -9953,6 +9953,14 @@ func (siw *ServerInterfaceWrapper) SearchMetadata(w http.ResponseWriter, r *http
 		return
 	}
 
+	// ------------- Optional query parameter "match" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "match", r.URL.Query(), &params.Match)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "match", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "tags" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "tags", r.URL.Query(), &params.Tags)

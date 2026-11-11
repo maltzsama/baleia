@@ -3,13 +3,16 @@ package repo
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/search"
 	"github.com/galileostudio/baleia/internal/store/model"
+	"gorm.io/gorm"
 )
 
 func (f *workbenchFixture) searchTable(t *testing.T, name, comment string, columns ...string) db.UpsertMetadataTableRow {
@@ -204,5 +207,66 @@ func TestSearchIndex_BuildsScopesLargerThanAPage(t *testing.T) {
 	f.gdb.Model(&model.SearchTerm{}).Where("scope_key = ? AND kind = ? AND term = ?", metadataScopeKey(string(f.catalog)), kindColumn, "amount").Count(&withColumns)
 	if withColumns != int64(len(tables)) {
 		t.Fatalf("%d columns indexed, want %d", withColumns, len(tables))
+	}
+}
+
+// The fuzzy fallback reads a scope's vocabulary from the database once, not on
+// every search, and reads it again only when the scope was rebuilt.
+func TestSearchIndex_FuzzyReadsTheVocabularyOnce(t *testing.T) {
+	t.Parallel()
+	f := semanticFixture(t)
+	var reads atomic.Int64
+	err := f.gdb.Callback().Query().After("gorm:query").Register("count_vocabulary_reads", func(tx *gorm.DB) {
+		// The quote of an identifier is the backend's: PostgreSQL's or MySQL's.
+		sql := tx.Statement.SQL.String()
+		if strings.Contains(sql, `DISTINCT "term"`) || strings.Contains(sql, "DISTINCT `term`") {
+			reads.Add(1)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.searchTable(t, "customers", "", "id")
+
+	for range 3 {
+		if got := f.searchMetadata(t, "custmer"); len(got) == 0 {
+			t.Fatal("a misspelling finds the table")
+		}
+	}
+	if n := reads.Load(); n != 1 {
+		t.Fatalf("the vocabulary was read %d times by 3 searches, want 1", n)
+	}
+
+	// A sync wrote a new table: the scope is rebuilt, its version changes and
+	// the next fuzzy search reads the vocabulary again, and finds the new term.
+	f.searchTable(t, "invoices", "", "total")
+	if got := f.searchMetadata(t, "invoises"); len(got) == 0 || got[0].TableName != "invoices" {
+		t.Fatalf("a misspelling of a table added after the vocabulary was cached: %v", names(got))
+	}
+	if n := reads.Load(); n != 2 {
+		t.Fatalf("the vocabulary was read %d times after a rebuild, want 2", n)
+	}
+
+	// A prefix-only search never needs the vocabulary: the lookup by prefix is
+	// all of it.
+	rows, err := f.r.SearchMetadata(context.Background(), db.SearchMetadataParams{
+		WorkspaceID: f.wsPG(), Q: "cus", Kind: "all", Lim: 20, PrefixOnly: true,
+	})
+	if err != nil || len(rows) == 0 || rows[0].TableName != "customers" {
+		t.Fatalf("a prefix-only search finds the table: %v, %v", names(rows), err)
+	}
+	if n := reads.Load(); n != 2 {
+		t.Fatalf("a prefix-only search read the vocabulary: %d reads, want 2", n)
+	}
+	// A search that forgives typos reads the terms of the prefix it needs once
+	// per version of the scope: "cus" starts with "cu", not read since the
+	// rebuild; asking again reads nothing.
+	f.searchMetadata(t, "cus")
+	if n := reads.Load(); n != 3 {
+		t.Fatalf("the prefix cu at the new version: %d reads, want 3", n)
+	}
+	f.searchMetadata(t, "cus")
+	if n := reads.Load(); n != 3 {
+		t.Fatalf("the prefix was read again: %d reads, want 3", n)
 	}
 }
