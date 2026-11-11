@@ -291,7 +291,8 @@ func (r *Repo) ListExecutionHistory(ctx context.Context, arg db.ListExecutionHis
 		q = q.Where("started_at <= ?", arg.ToTime.Time)
 	}
 	if arg.Q != nil {
-		q = q.Where("LOWER(sql) LIKE ?", "%"+strings.ToLower(*arg.Q)+"%")
+		// sql is a reserved word in MySQL: the dialect quotes the identifier.
+		q = q.Where("LOWER(?) LIKE ?", clause.Column{Name: "sql"}, "%"+strings.ToLower(*arg.Q)+"%")
 	}
 	if arg.CatalogID.Valid {
 		q = q.Where("target_catalog_id = ?", UUIDString(arg.CatalogID))

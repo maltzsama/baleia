@@ -214,7 +214,9 @@ func (r *Repo) ListTrinoQuerySnapshotsByEngine(ctx context.Context, arg db.ListT
 		// Both operands are lower-cased by the database and the caller: no
 		// ILIKE and no Go-only case folding for the stored column.
 		pattern := "%" + strings.ToLower(*arg.Q) + "%"
-		q = q.Where("LOWER(sql) LIKE ?", pattern)
+		// sql is a reserved word in MySQL, so the column goes in as an identifier
+		// and the dialect quotes it.
+		q = q.Where("LOWER(?) LIKE ?", clause.Column{Name: "sql"}, pattern)
 	}
 	var rows []model.TrinoQuerySnapshot
 	if err := q.Order("created_at DESC").
