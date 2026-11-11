@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/persistence/partitioning"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -36,6 +37,12 @@ func createForeignKeys(db *gorm.DB, models []any) error {
 		}
 		for name, rel := range stmt.Schema.Relationships.Relations {
 			if rel.Type != schema.BelongsTo {
+				continue
+			}
+			// Engines that forbid foreign keys on partitioned tables keep
+			// integrity in the application for these (ADR 0024).
+			if !partitioning.CapabilitiesFor(db).ForeignKeysOnPartitioned &&
+				touchesPartitioned(stmt.Schema.Table, rel.FieldSchema.Table) {
 				continue
 			}
 			if db.Migrator().HasConstraint(m, name) {
@@ -172,6 +179,11 @@ func AllMigrations() (*Registry, error) {
 				}
 				return createForeignKeys(db, []any{&model.SearchSynonym{}})
 			},
+		},
+		Migration{
+			Version: 14,
+			Name:    "partition audit and query history",
+			Up:      repartitionQueryHistory,
 		},
 	)
 }
