@@ -245,6 +245,21 @@ type Config struct {
 	// PartitionDaysAhead is how many days past today audit-partitions keeps
 	// provisioned (ADR 0026).
 	PartitionDaysAhead int
+
+	// AuditRetentionCadence and QueryHistoryRetentionCadence say how often each
+	// stream's retention runs: daily, weekly (the default) or a five-field cron
+	// expression in UTC (ADR 0026).
+	AuditRetentionCadence        string
+	QueryHistoryRetentionCadence string
+	// AuditDropWithoutOffload and QueryHistoryDropWithoutOffload are
+	// BALEIA_*_OFFLOAD_BEFORE_DROP=false: partitions are dropped on age alone,
+	// with no cold copy to gate on. The zero value, false, keeps the gate, so a
+	// Config that was never loaded can only be fail-closed.
+	AuditDropWithoutOffload        bool
+	QueryHistoryDropWithoutOffload bool
+	// problems are the settings Load could not read; Validate reports them.
+	problems []string
+
 	// Baleia's database pool; DBMaxConns 0 means the process default (api 20,
 	// worker 10).
 	DBMaxConns          int
@@ -309,7 +324,8 @@ type Config struct {
 }
 
 func Load() *Config {
-	return &Config{
+	st := &settings{}
+	cfg := &Config{
 		Port:                              getEnv("PORT", "8080"),
 		BIGatewayAddr:                     getEnv("BALEIA_BI_GATEWAY_ADDR", ""),
 		AnalyticsUmamiWebsiteID:           getEnv("BALEIA_ANALYTICS_UMAMI_WEBSITE_ID", ""),
@@ -413,15 +429,15 @@ func Load() *Config {
 		AuditExportCAFile:           getEnv("BALEIA_AUDIT_EXPORT_CA_FILE", ""),
 		AuditExportBatch:            getEnvInt("BALEIA_AUDIT_EXPORT_BATCH", 500),
 		AuditExportInterval:         getEnvDuration("BALEIA_AUDIT_EXPORT_INTERVAL", 30*time.Second),
-		AuditRetention:              getEnvDuration("BALEIA_AUDIT_RETENTION", 400*24*time.Hour),
+		AuditRetention:              st.retention("BALEIA_AUDIT_RETENTION", DefaultRetention),
 		AuditColdBucket:             getEnv("BALEIA_AUDIT_COLD_BUCKET", ""),
 		AuditColdPrefix:             getEnv("BALEIA_AUDIT_COLD_PREFIX", "audit"),
-		AuditColdGrace:              getEnvDuration("BALEIA_AUDIT_COLD_GRACE", 7*24*time.Hour),
-		QueryHistoryRetention:       getEnvDuration("BALEIA_QUERY_HISTORY_RETENTION", 180*24*time.Hour),
+		AuditColdGrace:              st.duration("BALEIA_AUDIT_COLD_GRACE", DefaultColdGrace),
+		QueryHistoryRetention:       st.retention("BALEIA_QUERY_HISTORY_RETENTION", DefaultRetention),
 		QueryHistoryColdBucket:      getEnv("BALEIA_QUERY_HISTORY_COLD_BUCKET", ""),
 		QueryHistoryColdPrefix:      getEnv("BALEIA_QUERY_HISTORY_COLD_PREFIX", "query_history"),
-		QueryHistoryColdGrace:       getEnvDuration("BALEIA_QUERY_HISTORY_COLD_GRACE", 7*24*time.Hour),
-		PruneMaxPartitions:          getEnvInt("BALEIA_PRUNE_MAX_PARTITIONS", 1),
+		QueryHistoryColdGrace:       st.duration("BALEIA_QUERY_HISTORY_COLD_GRACE", DefaultColdGrace),
+		PruneMaxPartitions:          getEnvInt("BALEIA_PRUNE_MAX_PARTITIONS", DefaultPruneMaxPartitions),
 		PartitionDaysAhead:          getEnvInt("BALEIA_PARTITION_DAYS_AHEAD", 14),
 		DBMaxConns:                  getEnvInt("BALEIA_DB_MAX_CONNS", 0),
 		DBMinConns:                  getEnvInt("BALEIA_DB_MIN_CONNS", 2),
@@ -434,7 +450,14 @@ func Load() *Config {
 		HTTPReadHeaderTimeout:       getEnvDuration("BALEIA_HTTP_READ_HEADER_TIMEOUT", 10*time.Second),
 		HTTPIdleTimeout:             getEnvDuration("BALEIA_HTTP_IDLE_TIMEOUT", 2*time.Minute),
 		HTTPShutdownTimeout:         getEnvDuration("BALEIA_HTTP_SHUTDOWN_TIMEOUT", 20*time.Second),
+
+		AuditRetentionCadence:          getEnv("BALEIA_AUDIT_RETENTION_CADENCE", CadenceWeekly),
+		QueryHistoryRetentionCadence:   getEnv("BALEIA_QUERY_HISTORY_RETENTION_CADENCE", CadenceWeekly),
+		AuditDropWithoutOffload:        !st.boolean("BALEIA_AUDIT_OFFLOAD_BEFORE_DROP", true),
+		QueryHistoryDropWithoutOffload: !st.boolean("BALEIA_QUERY_HISTORY_OFFLOAD_BEFORE_DROP", true),
 	}
+	cfg.problems = st.problems
+	return cfg
 }
 
 // Validate rejects configuration that must not reach production: a missing or
@@ -526,6 +549,9 @@ func (c *Config) Validate() error {
 	}
 	if c.ReconcileInterval != 0 && c.ReconcileInterval < 5*time.Minute {
 		return fmt.Errorf("BALEIA_RECONCILE_INTERVAL must be at least 5m (got %s)", c.ReconcileInterval)
+	}
+	if err := c.validateRetention(); err != nil {
+		return err
 	}
 	// Zero means the default, as for the other limits.
 	if c.PartitionDaysAhead < 0 {
