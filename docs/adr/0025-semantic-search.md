@@ -64,9 +64,11 @@ Facts that bound the decision:
    worker activity embeds the rows whose text hash, or whose provider, model
    or dimensions, differ from the current setting, in batches, with a rate
    limit. Until a row has a current vector it is found lexically only.
+   Saving a new provider, model or dimensions does not wait for a rebuild: it
+   enqueues every scope that has vectors, and the same activity re-embeds them.
 
 5. **Vectors live behind a `VectorStore` seam.** A small interface
-   (`Upsert`, `Delete`, `Nearest(scope, vector, k)`, `Capabilities`) with a
+   (`Upsert`, `Delete`, `Nearest(scope, vector, offset, k)`, `Capabilities`) with a
    registry, like the `PartitionManager`:
    - **`store` (default):** a GORM table `search_vectors` (scope, kind, ref,
      model, text hash, vector) with the vector as a custom GORM type stored as
@@ -84,7 +86,12 @@ Facts that bound the decision:
 6. **Vectors only propose candidates.** The nearest refs are loaded from their
    live tables with the same predicates as lexical search (granted catalogs,
    live tables, visible spaces). A stale or foreign vector index can miss or
-   misorder a hit; it cannot leak one.
+   misorder a hit; it cannot leak one. Because the filter runs after
+   `Nearest`, the search asks for a window larger than its limit and, when
+   fewer than the limit survive the filter, asks again for the next window,
+   until it has enough visible hits, the store has no more vectors in the
+   scope, or a fixed cap of candidates is reached. Invisible neighbours never
+   hide a visible match behind them.
 
 7. **Hybrid ranking is fused in the federated search.** The lexical and the
    vector lists are merged by reciprocal rank fusion. The caller picks the
