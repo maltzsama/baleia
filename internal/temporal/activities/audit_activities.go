@@ -6,15 +6,11 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
 )
 
-// auditMonthsAhead is how many months of partitions exist ahead of the current
-// one (#45).
-const auditMonthsAhead = 3
-
-// EnsureAuditPartitions creates the monthly partitions of the audit trail and
-// the query history up to auditMonthsAhead months ahead; it never drops one
-// (retention is the operator's `migrate -cmd=audit-prune`). Idempotent.
+// EnsureAuditPartitions creates the daily partitions of the audit trail and
+// the query history up to BALEIA_PARTITION_DAYS_AHEAD days ahead (ADR 0026); it
+// never drops one (retention does). Idempotent.
 func EnsureAuditPartitions(ctx context.Context) error {
-	err := defaultActivities.store.EnsureAuditPartitions(ctx, auditMonthsAhead)
+	err := defaultActivities.store.EnsureAuditPartitions(ctx, defaultActivities.partitionDaysAhead())
 	defaultActivities.passDone(schedules.AuditPartitions, err)
 	return err
 }
@@ -28,4 +24,15 @@ func ExportAuditEvents(ctx context.Context) (int, error) {
 	n, err := defaultActivities.auditExport.Run(ctx)
 	defaultActivities.passDone(schedules.AuditExport, err)
 	return n, err
+}
+
+// defaultPartitionDaysAhead is the horizon when no configuration is wired.
+const defaultPartitionDaysAhead = 14
+
+// partitionDaysAhead is the configured provisioning horizon in days.
+func (a *Activities) partitionDaysAhead() int {
+	if a.cfg == nil || a.cfg.PartitionDaysAhead < 1 {
+		return defaultPartitionDaysAhead
+	}
+	return a.cfg.PartitionDaysAhead
 }

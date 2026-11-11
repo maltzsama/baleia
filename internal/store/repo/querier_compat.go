@@ -958,12 +958,11 @@ func (r *Repo) ReleaseMetadataSyncLock(ctx context.Context, catalogID string) er
 	return nil
 }
 
-// EnsureAuditPartitions creates the monthly partitions of the audit trail and of
-// the query history from the current month through monthsAhead months ahead
-// (ADR 0024). It never drops one, and it is idempotent. A table that is still
+// EnsureAuditPartitions creates the daily partitions of the audit trail and of
+// the query history from today through daysAhead days ahead (ADR 0026). It never drops one, and it is idempotent. A table that is still
 // plain (migration 14 has not run, or the engine has no adapter) is left alone:
 // provisioning would convert it, and converting belongs to the migration.
-func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) error {
+func (r *Repo) EnsureAuditPartitions(ctx context.Context, daysAhead int) error {
 	pm, err := r.partitionManager()
 	if err != nil {
 		return err
@@ -971,8 +970,8 @@ func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) err
 	if pm == nil {
 		return nil
 	}
-	from := partitioning.MonthStart(time.Now())
-	until := from.AddDate(0, int(monthsAhead)+1, 0)
+	from := partitioning.Daily.Start(time.Now())
+	until := from.AddDate(0, 0, daysAhead+1)
 	for _, t := range model.PartitionedTables() {
 		existing, err := pm.ListPartitions(ctx, t.Table)
 		if err != nil {
@@ -981,7 +980,7 @@ func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) err
 		if len(existing) == 0 {
 			return fmt.Errorf("%s is not partitioned: run the store migrations", t.Table)
 		}
-		spec := partitioning.Spec{Table: t.Table, Column: t.Column, Strategy: partitioning.Range, Interval: partitioning.Monthly}
+		spec := partitioning.Spec{Table: t.Table, Column: t.Column, Strategy: partitioning.Range, Interval: partitioning.Daily}
 		if err := pm.Provision(ctx, t.Model, spec, from, until); err != nil {
 			return fmt.Errorf("provision %s: %w", t.Table, err)
 		}
@@ -989,8 +988,8 @@ func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) err
 	return nil
 }
 
-// MonthPartitions returns the existing monthly partitions of table (ADR 0024).
-func (r *Repo) MonthPartitions(ctx context.Context, table string) ([]partitioning.Partition, error) {
+// Partitions returns the existing partitions of table (ADR 0024).
+func (r *Repo) Partitions(ctx context.Context, table string) ([]partitioning.Partition, error) {
 	pm, err := r.partitionManager()
 	if err != nil || pm == nil {
 		return nil, err
@@ -998,8 +997,8 @@ func (r *Repo) MonthPartitions(ctx context.Context, table string) ([]partitionin
 	return pm.ListPartitions(ctx, table)
 }
 
-// DropMonth drops the partitions of table covering [from, until) (ADR 0024).
-func (r *Repo) DropMonth(ctx context.Context, table string, from, until time.Time) error {
+// DropPartitions drops the partitions of table covering [from, until) (ADR 0024).
+func (r *Repo) DropPartitions(ctx context.Context, table string, from, until time.Time) error {
 	pm, err := r.partitionManager()
 	if err != nil || pm == nil {
 		return err

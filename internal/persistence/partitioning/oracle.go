@@ -45,7 +45,7 @@ func (m *oracleManager) Provision(ctx context.Context, model any, spec Spec, fro
 			return fmt.Errorf("partitioning: model does not create table %q", spec.Table)
 		}
 	}
-	months := RangeMonths(spec.Table, from, until)
+	months := RangePartitions(spec.Table, spec.Interval, from, until)
 	partitioned, err := m.isPartitioned(ctx, spec.Table)
 	if err != nil {
 		return err
@@ -125,8 +125,8 @@ func oracleLocalKeyStatement(table string, key []string) string {
 		" PRIMARY KEY (" + strings.Join(cols, ", ") + ") USING INDEX LOCAL"
 }
 
-// ListPartitions returns the partitions whose names match <table>_YYYYMM,
-// oldest first. The MAXVALUE catch-all is excluded.
+// ListPartitions returns the partitions whose names match <table>_YYYYMM or
+// <table>_YYYYMMDD, oldest first. The MAXVALUE catch-all is excluded.
 func (m *oracleManager) ListPartitions(ctx context.Context, table string) ([]Partition, error) {
 	if !identifier.MatchString(table) {
 		return nil, fmt.Errorf("partitioning: invalid table name %q", table)
@@ -151,7 +151,11 @@ func (m *oracleManager) DropPartition(ctx context.Context, table string, from, u
 	if !identifier.MatchString(table) {
 		return fmt.Errorf("partitioning: invalid table name %q", table)
 	}
-	for _, p := range RangeMonths(table, from, until) {
+	existing, err := m.ListPartitions(ctx, table)
+	if err != nil {
+		return err
+	}
+	for _, p := range partitionsIn(existing, from, until) {
 		if err := m.db.WithContext(ctx).Exec(oracleDropStatement(table, p.Name)).Error; err != nil {
 			return fmt.Errorf("partitioning: drop partition %s: %w", p.Name, err)
 		}

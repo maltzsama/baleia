@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/persistence/partitioning"
 	"github.com/galileostudio/baleia/internal/store/model"
 )
 
@@ -86,75 +87,105 @@ func TestOffloadQueryHistory(t *testing.T) {
 	}
 }
 
-// TestDeleteQueryHistoryDependents: the month-scoped deletes remove the rows
-// that would otherwise block detaching a month's query-history partitions.
+// TestDeleteQueryHistoryDependents: the period-scoped deletes remove the rows
+// that would otherwise block detaching one day's query-history partitions, and
+// only that day's: an execution of the next day keeps its references, joins and
+// snapshot link.
 func TestDeleteQueryHistoryDependents(t *testing.T) {
 	t.Parallel()
 	f := newWorkbenchFixture(t)
 	ctx := context.Background()
-	base := time.Now().UTC().Truncate(time.Second)
+	today := partitioning.Daily.Start(time.Now()).Add(10 * time.Hour)
+	tomorrow := today.AddDate(0, 0, 1)
 
-	exec := model.QueryExecution{
-		ID: model.UUID(NewUUID()), WorkspaceID: f.ws, UserID: f.owner,
-		Status: "finished", Origin: "editor", SQL: "select 1", StartedAt: base,
+	// addDay creates an execution that started at when, with a statement, a
+	// reference, a join and a snapshot linked to it.
+	addDay := func(when time.Time, trinoID string) model.UUID {
+		t.Helper()
+		exec := model.QueryExecution{
+			ID: model.UUID(NewUUID()), WorkspaceID: f.ws, UserID: f.owner,
+			Status: "finished", Origin: "editor", SQL: "select 1", StartedAt: when,
+		}
+		if err := f.gdb.Create(&exec).Error; err != nil {
+			t.Fatalf("create execution: %v", err)
+		}
+		stmt := model.QueryStatement{
+			ID: model.UUID(NewUUID()), ExecutionID: exec.ID, ExecutionStartedAt: when,
+			Position: 1, SQL: "select 1", Status: "finished", StartedAt: when, ResultSets: model.JSON("[]"),
+		}
+		if err := f.gdb.Create(&stmt).Error; err != nil {
+			t.Fatalf("create statement: %v", err)
+		}
+		ref := model.StatementReference{
+			StatementID: stmt.ID, ExecutionStartedAt: when, WorkspaceID: f.ws,
+			Namespace: "public", TableNameValue: "t", Alias: "t", Kind: "read",
+		}
+		if err := f.gdb.Create(&ref).Error; err != nil {
+			t.Fatalf("create reference: %v", err)
+		}
+		join := model.StatementJoin{
+			StatementID: stmt.ID, ExecutionStartedAt: when, WorkspaceID: f.ws,
+			LeftAlias: "a", LeftColumn: "x", RightAlias: "b", RightColumn: "y",
+		}
+		if err := f.gdb.Create(&join).Error; err != nil {
+			t.Fatalf("create join: %v", err)
+		}
+		snap := model.TrinoQuerySnapshot{
+			ID: model.UUID(NewUUID()), TrinoQueryID: model.Text(trinoID), Origin: "baleia", User: "u",
+			State: "finished", SQL: "select 1", EngineID: f.engine, ExecutionID: &exec.ID, ExecutionStartedAt: &when,
+		}
+		if err := f.gdb.Create(&snap).Error; err != nil {
+			t.Fatalf("create snapshot: %v", err)
+		}
+		return exec.ID
 	}
-	if err := f.gdb.Create(&exec).Error; err != nil {
-		t.Fatalf("create execution: %v", err)
-	}
-	stmt := model.QueryStatement{
-		ID: model.UUID(NewUUID()), ExecutionID: exec.ID, ExecutionStartedAt: base,
-		Position: 1, SQL: "select 1", Status: "finished", StartedAt: base, ResultSets: model.JSON("[]"),
-	}
-	if err := f.gdb.Create(&stmt).Error; err != nil {
-		t.Fatalf("create statement: %v", err)
-	}
-	ref := model.StatementReference{
-		StatementID: stmt.ID, ExecutionStartedAt: base, WorkspaceID: f.ws,
-		Namespace: "public", TableNameValue: "t", Alias: "t", Kind: "read",
-	}
-	if err := f.gdb.Create(&ref).Error; err != nil {
-		t.Fatalf("create reference: %v", err)
-	}
-	join := model.StatementJoin{
-		StatementID: stmt.ID, ExecutionStartedAt: base, WorkspaceID: f.ws,
-		LeftAlias: "a", LeftColumn: "x", RightAlias: "b", RightColumn: "y",
-	}
-	if err := f.gdb.Create(&join).Error; err != nil {
-		t.Fatalf("create join: %v", err)
-	}
-	snap := model.TrinoQuerySnapshot{
-		ID: model.UUID(NewUUID()), TrinoQueryID: "tq1", Origin: "baleia", User: "u",
-		State: "finished", SQL: "select 1", EngineID: f.engine, ExecutionID: &exec.ID, ExecutionStartedAt: &base,
-	}
-	if err := f.gdb.Create(&snap).Error; err != nil {
-		t.Fatalf("create snapshot: %v", err)
-	}
+	addDay(today, "tq-today")
+	addDay(tomorrow, "tq-tomorrow")
 
-	from := time.Date(base.Year(), base.Month(), 1, 0, 0, 0, 0, time.UTC)
-	until := from.AddDate(0, 1, 0)
-	if err := f.r.DeleteStatementReferencesByMonth(ctx, from, until); err != nil {
+	// Clean up today only.
+	from := partitioning.Daily.Start(today)
+	until := partitioning.Daily.Next(today)
+	if err := f.r.DeleteStatementReferencesByPeriod(ctx, from, until); err != nil {
 		t.Fatalf("delete references: %v", err)
 	}
-	if err := f.r.DeleteStatementJoinsByMonth(ctx, from, until); err != nil {
+	if err := f.r.DeleteStatementJoinsByPeriod(ctx, from, until); err != nil {
 		t.Fatalf("delete joins: %v", err)
 	}
-	if err := f.r.UnlinkTrinoQuerySnapshotsByMonth(ctx, from, until); err != nil {
+	if err := f.r.UnlinkTrinoQuerySnapshotsByPeriod(ctx, from, until); err != nil {
 		t.Fatalf("unlink snapshots: %v", err)
 	}
 
-	var refs, joins int64
-	f.gdb.Model(&model.StatementReference{}).Count(&refs)
-	f.gdb.Model(&model.StatementJoin{}).Count(&joins)
-	if refs != 0 || joins != 0 {
-		t.Fatalf("dependents left: references=%d joins=%d", refs, joins)
+	count := func(m any, lo, hi time.Time) int64 {
+		t.Helper()
+		var n int64
+		if err := f.gdb.Model(m).Where("execution_started_at >= ? AND execution_started_at < ?", lo, hi).Count(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+		return n
 	}
-	// The snapshot survives, unlinked from its execution, so its metrics are
-	// not discarded by query-history retention.
-	var kept model.TrinoQuerySnapshot
-	if err := f.gdb.First(&kept).Error; err != nil {
-		t.Fatalf("snapshot missing: %v", err)
+	for _, m := range []any{&model.StatementReference{}, &model.StatementJoin{}} {
+		if n := count(m, from, until); n != 0 {
+			t.Errorf("%T of the cleaned day left: %d", m, n)
+		}
+		if n := count(m, until, partitioning.Daily.Next(tomorrow)); n != 1 {
+			t.Errorf("%T of the next day = %d, want 1 untouched", m, n)
+		}
 	}
-	if kept.ExecutionID != nil {
-		t.Fatalf("snapshot still linked: %v", kept.ExecutionID)
+	// The cleaned day's snapshot survives, unlinked from its execution, so its
+	// metrics are not discarded by query-history retention. The next day's stays
+	// linked.
+	var snaps []model.TrinoQuerySnapshot
+	if err := f.gdb.Order("trino_query_id").Find(&snaps).Error; err != nil || len(snaps) != 2 {
+		t.Fatalf("snapshots = %d, %v; want both kept", len(snaps), err)
+	}
+	byTrinoID := map[string]model.TrinoQuerySnapshot{}
+	for _, sn := range snaps {
+		byTrinoID[string(sn.TrinoQueryID)] = sn
+	}
+	if byTrinoID["tq-today"].ExecutionID != nil {
+		t.Errorf("the cleaned day's snapshot is still linked: %v", byTrinoID["tq-today"].ExecutionID)
+	}
+	if byTrinoID["tq-tomorrow"].ExecutionID == nil {
+		t.Error("the next day's snapshot lost its link")
 	}
 }

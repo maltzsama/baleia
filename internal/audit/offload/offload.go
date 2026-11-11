@@ -1,7 +1,7 @@
 // Package offload writes a stream's rows to an S3 cold sink as gzip NDJSON,
-// one or more bounded chunks per month with a per-month manifest (ADR 0024).
-// The sink is the building block; the month-by-month loop that drives it and
-// advances the cursor lives with the retention schedules.
+// one or more bounded chunks per UTC day with a per-day manifest (ADR 0024,
+// amended by ADR 0026). The sink is the building block; the day-by-day loop
+// that drives it and advances the cursor lives with the retention schedules.
 package offload
 
 import (
@@ -39,16 +39,18 @@ func NewSink(store objectStore, prefix, stream string) *Sink {
 	return &Sink{store: store, prefix: prefix, stream: stream}
 }
 
-// ManifestKey is the deterministic key of a month's manifest.
-func (s *Sink) ManifestKey(month time.Time) string {
-	return fmt.Sprintf("%s/%s/%s/manifest.json", s.prefix, s.stream, month.UTC().Format("2006/01"))
+// ManifestKey is the deterministic key of a day's manifest:
+// <prefix>/<stream>/<yyyy>/<mm>/<dd>/manifest.json.
+func (s *Sink) ManifestKey(day time.Time) string {
+	return fmt.Sprintf("%s/%s/%s/manifest.json", s.prefix, s.stream, day.UTC().Format("2006/01/02"))
 }
 
-// ChunkKey is the deterministic key of one bounded chunk of a month's object.
-// The chunk's first row pins the key, so re-running or resuming a month
-// overwrites the same chunk (idempotent) instead of duplicating it.
-func (s *Sink) ChunkKey(month time.Time, object string, first export.Position) string {
-	m := month.UTC()
+// ChunkKey is the deterministic key of one bounded chunk of a day's object:
+// <prefix>/<stream>/<yyyy>/<mm>/<dd>/<object>-<yyyymmdd>-<hash>.ndjson.gz. The
+// chunk's first row pins the key, so re-running or resuming a day overwrites
+// the same chunk (idempotent) instead of duplicating it.
+func (s *Sink) ChunkKey(day time.Time, object string, first export.Position) string {
+	d := day.UTC()
 	tie := first.OccurredAt.UTC().Format("20060102150405.000000000")
 	if first.Key != "" {
 		tie += "-" + first.Key
@@ -56,13 +58,13 @@ func (s *Sink) ChunkKey(month time.Time, object string, first export.Position) s
 		tie += "-" + strconv.FormatInt(first.ID, 10)
 	}
 	sum := sha256.Sum256([]byte(tie))
-	return fmt.Sprintf("%s/%s/%s/%s-%s-%s.ndjson.gz", s.prefix, s.stream, m.Format("2006/01"), object, m.Format("200601"), hex.EncodeToString(sum[:8]))
+	return fmt.Sprintf("%s/%s/%s/%s-%s-%s.ndjson.gz", s.prefix, s.stream, d.Format("2006/01/02"), object, d.Format("20060102"), hex.EncodeToString(sum[:8]))
 }
 
-// Manifest records what left the database for a month.
+// Manifest records what left the database for a day.
 type Manifest struct {
 	Stream    string            `json:"stream"`
-	Month     string            `json:"month"`
+	Day       string            `json:"day"`
 	Keys      []string          `json:"keys"`
 	Counts    map[string]int64  `json:"counts"`
 	Checksums map[string]string `json:"checksums"`
@@ -93,22 +95,22 @@ func (s *Sink) WriteChunk(ctx context.Context, key string, rows []json.RawMessag
 	return count, checksum, nil
 }
 
-// ReadManifest returns the month's manifest, or an empty one when none exists
-// yet (a resumed month starts from whatever was already written).
-func (s *Sink) ReadManifest(ctx context.Context, month time.Time) (Manifest, error) {
-	ok, err := s.store.Has(ctx, s.ManifestKey(month))
+// ReadManifest returns the day's manifest, or an empty one when none exists
+// yet (a resumed day starts from whatever was already written).
+func (s *Sink) ReadManifest(ctx context.Context, day time.Time) (Manifest, error) {
+	ok, err := s.store.Has(ctx, s.ManifestKey(day))
 	if err != nil {
 		return Manifest{}, err
 	}
 	if !ok {
 		return Manifest{
 			Stream:    s.stream,
-			Month:     month.Format("2006-01"),
+			Day:       day.UTC().Format("2006-01-02"),
 			Counts:    map[string]int64{},
 			Checksums: map[string]string{},
 		}, nil
 	}
-	data, _, err := s.store.Get(ctx, s.ManifestKey(month))
+	data, _, err := s.store.Get(ctx, s.ManifestKey(day))
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -125,13 +127,13 @@ func (s *Sink) ReadManifest(ctx context.Context, month time.Time) (Manifest, err
 	return m, nil
 }
 
-// WriteManifest stores a month's manifest.
-func (s *Sink) WriteManifest(ctx context.Context, month time.Time, m Manifest) error {
+// WriteManifest stores a day's manifest.
+func (s *Sink) WriteManifest(ctx context.Context, day time.Time, m Manifest) error {
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("offload: encode manifest: %w", err)
 	}
-	if err := s.store.Put(ctx, s.ManifestKey(month), data, "application/json"); err != nil {
+	if err := s.store.Put(ctx, s.ManifestKey(day), data, "application/json"); err != nil {
 		return fmt.Errorf("offload: put manifest: %w", err)
 	}
 	return nil

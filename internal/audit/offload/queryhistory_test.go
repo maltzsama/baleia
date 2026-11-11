@@ -97,12 +97,12 @@ func TestQueryHistoryReaderWritesPair(t *testing.T) {
 	if len(m.Keys) != 2 || m.Counts[execKey] != 2 || m.Counts[stmtKey] != 2 {
 		t.Fatalf("manifest = %+v", m)
 	}
-	if !cur.pos.OccurredAt.Equal(time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)) {
+	if !cur.pos.OccurredAt.Equal(time.Date(2027, 1, 14, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("cursor = %+v", cur.pos)
 	}
 }
 
-// TestQueryHistoryReaderWaitsForFinal: a month with a queued or running
+// TestQueryHistoryReaderWaitsForFinal: a day with a queued or running
 // execution is not sealed; Run returns 0, writes nothing and leaves the cursor
 // untouched so the next pass retries.
 func TestQueryHistoryReaderWaitsForFinal(t *testing.T) {

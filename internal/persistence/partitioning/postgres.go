@@ -16,7 +16,7 @@ type postgresManager struct {
 	db *gorm.DB
 }
 
-// Provision creates the partitioned table if needed and creates the monthly
+// Provision creates the partitioned table if needed and creates the
 // partitions covering [from, until). Idempotent. The model's table name must
 // equal spec.Table.
 //
@@ -142,7 +142,7 @@ func ensurePartitions(db *gorm.DB, spec Spec, from, until time.Time) error {
 	if err := spec.Validate(); err != nil {
 		return err
 	}
-	for _, p := range RangeMonths(spec.Table, from, until) {
+	for _, p := range RangePartitions(spec.Table, spec.Interval, from, until) {
 		stmt := fmt.Sprintf(
 			`CREATE TABLE IF NOT EXISTS "%s" PARTITION OF "%s" FOR VALUES FROM (%s) TO (%s)`,
 			p.Name, spec.Table, quoteTime(p.From), quoteTime(p.Until),
@@ -162,23 +162,17 @@ func listPartitions(db *gorm.DB, table string) ([]Partition, error) {
 	if err != nil {
 		return nil, fmt.Errorf("partitioning: list tables: %w", err)
 	}
-	prefix := table + "_"
 	var out []Partition
 	for _, name := range tables {
-		if len(name) != len(prefix)+6 || name[:len(prefix)] != prefix {
-			continue
+		if p, ok := partitionFromName(table, name); ok {
+			out = append(out, p)
 		}
-		month, err := time.Parse("200601", name[len(prefix):])
-		if err != nil {
-			continue
-		}
-		out = append(out, Partition{Name: name, From: month, Until: month.AddDate(0, 1, 0)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].From.Before(out[j].From) })
 	return out, nil
 }
 
-// dropPartition detaches then drops each monthly partition of table in
+// dropPartition detaches then drops each existing partition of table covering
 // [from, until), one transaction per partition. Detaching first lets a
 // partition whose rows a non-partitioned table references through a composite
 // foreign key be removed; it fails closed if referencing rows remain.
@@ -186,12 +180,13 @@ func dropPartition(db *gorm.DB, table string, from, until time.Time) error {
 	if !identifier.MatchString(table) {
 		return fmt.Errorf("partitioning: invalid table name %q", table)
 	}
-	for _, p := range RangeMonths(table, from, until) {
+	existing, err := listPartitions(db, table)
+	if err != nil {
+		return err
+	}
+	for _, p := range partitionsIn(existing, from, until) {
 		if !identifier.MatchString(p.Name) {
 			return fmt.Errorf("partitioning: invalid partition name %q", p.Name)
-		}
-		if !db.Migrator().HasTable(p.Name) {
-			continue
 		}
 		// Detach and drop in one transaction: a DETACH that survives a failed
 		// DROP leaves a standalone table that no longer detaches on retry, so

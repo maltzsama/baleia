@@ -91,17 +91,26 @@ func TestBuildObject(t *testing.T) {
 func TestChunkAndManifestKeys(t *testing.T) {
 	t.Parallel()
 	s := NewSink(nil, "baleia-cold", "audit")
-	month := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
-	first := export.Position{OccurredAt: month, ID: 7}
-	key := s.ChunkKey(month, "audit", first)
-	if !strings.HasPrefix(key, "baleia-cold/audit/2026/11/audit-202611-") || !strings.HasSuffix(key, ".ndjson.gz") {
+	day := time.Date(2026, 11, 15, 9, 30, 0, 0, time.UTC)
+	first := export.Position{OccurredAt: day, ID: 7}
+	key := s.ChunkKey(day, "audit", first)
+	if !strings.HasPrefix(key, "baleia-cold/audit/2026/11/15/audit-20261115-") || !strings.HasSuffix(key, ".ndjson.gz") {
 		t.Fatalf("ChunkKey = %q", key)
 	}
-	if s.ChunkKey(month, "audit", first) != key {
+	if s.ChunkKey(day, "audit", first) != key {
 		t.Fatalf("ChunkKey not deterministic")
 	}
-	if got, want := s.ManifestKey(month), "baleia-cold/audit/2026/11/manifest.json"; got != want {
+	if got, want := s.ManifestKey(day), "baleia-cold/audit/2026/11/15/manifest.json"; got != want {
 		t.Fatalf("ManifestKey = %q, want %q", got, want)
+	}
+	// A different day never shares a key, even across a month end.
+	if next := s.ManifestKey(day.AddDate(0, 0, 16)); next != "baleia-cold/audit/2026/12/01/manifest.json" {
+		t.Fatalf("ManifestKey across a month end = %q", next)
+	}
+	// A non-UTC instant keys by its UTC day.
+	late := time.Date(2026, 11, 15, 22, 0, 0, 0, time.FixedZone("UTC-3", -3*3600)) // Nov 16 01:00Z
+	if got, want := s.ManifestKey(late), "baleia-cold/audit/2026/11/16/manifest.json"; got != want {
+		t.Fatalf("ManifestKey across zones = %q, want %q", got, want)
 	}
 }
 
@@ -110,9 +119,9 @@ func TestWriteChunkAndManifest(t *testing.T) {
 	store := &fakeStore{objects: map[string][]byte{}, types: map[string]string{}}
 	s := NewSink(store, "baleia-cold", "audit")
 	ctx := context.Background()
-	month := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	day := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
-	key := s.ChunkKey(month, "audit", export.Position{OccurredAt: month, ID: 1})
+	key := s.ChunkKey(day, "audit", export.Position{OccurredAt: day, ID: 1})
 	count, checksum, err := s.WriteChunk(ctx, key, []json.RawMessage{json.RawMessage(`{"a":1}`)})
 	if err != nil {
 		t.Fatalf("WriteChunk: %v", err)
@@ -127,12 +136,12 @@ func TestWriteChunkAndManifest(t *testing.T) {
 		t.Fatalf("object = %q", got)
 	}
 
-	m := Manifest{Stream: "audit", Month: "2026-11", Counts: map[string]int64{}, Checksums: map[string]string{}}
+	m := Manifest{Stream: "audit", Day: "2026-11-01", Counts: map[string]int64{}, Checksums: map[string]string{}}
 	m.add(key, count, checksum)
-	if err := s.WriteManifest(ctx, month, m); err != nil {
+	if err := s.WriteManifest(ctx, day, m); err != nil {
 		t.Fatalf("WriteManifest: %v", err)
 	}
-	got, err := s.ReadManifest(ctx, month)
+	got, err := s.ReadManifest(ctx, day)
 	if err != nil {
 		t.Fatalf("ReadManifest: %v", err)
 	}

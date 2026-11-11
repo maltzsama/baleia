@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // ClusterSnapshot is the cluster_snapshots table.
 type ClusterSnapshot struct {
@@ -142,13 +146,14 @@ func (TableHealthSnapshot) TableName() string { return "table_health_snapshots" 
 // MaintenanceRun is the maintenance_runs table.
 type MaintenanceRun struct {
 	ID             UUID            `gorm:"column:id;primaryKey;not null;check:maintenance_runs_trigger_check,((maintenance_runs.trigger IN ('manual', 'automatic', 'dry_run')))"`
-	CatalogID      UUID            `gorm:"column:catalog_id;not null;index:maintenance_runs_catalog,priority:1;uniqueIndex:maintenance_runs_one_running,priority:1,where:status = 'running';index:maintenance_runs_table,priority:1;check:maintenance_runs_attempts_check,((attempts > 0))"`
+	CatalogID      UUID            `gorm:"column:catalog_id;not null;index:maintenance_runs_catalog,priority:1;uniqueIndex:maintenance_runs_running_guard_uq,priority:1;index:maintenance_runs_table,priority:1;check:maintenance_runs_attempts_check,((attempts > 0))"`
 	BindingID      *UUID           `gorm:"column:binding_id;check:maintenance_runs_status_check,((status IN ('running', 'finished', 'failed', 'gave_up', 'dry_run')))"`
-	Namespace      Text            `gorm:"column:namespace;not null;size:128;uniqueIndex:maintenance_runs_one_running,priority:2;index:maintenance_runs_table,priority:2"`
-	TableNameValue Text            `gorm:"column:table_name;not null;size:128;uniqueIndex:maintenance_runs_one_running,priority:3;index:maintenance_runs_table,priority:3"`
+	Namespace      Text            `gorm:"column:namespace;not null;size:128;uniqueIndex:maintenance_runs_running_guard_uq,priority:2;index:maintenance_runs_table,priority:2"`
+	TableNameValue Text            `gorm:"column:table_name;not null;size:128;uniqueIndex:maintenance_runs_running_guard_uq,priority:3;index:maintenance_runs_table,priority:3"`
 	Operations     StringArray     `gorm:"column:operations;not null"`
 	Retention      *string         `gorm:"column:retention"`
 	Status         string          `gorm:"column:status;not null"`
+	RunningGuard   *bool           `gorm:"column:running_guard;uniqueIndex:maintenance_runs_running_guard_uq,priority:4"`
 	ErrorCode      *string         `gorm:"column:error_code"`
 	ErrorMessage   *string         `gorm:"column:error_message"`
 	StartedBy      *UUID           `gorm:"column:started_by"`
@@ -166,6 +171,20 @@ type MaintenanceRun struct {
 }
 
 func (MaintenanceRun) TableName() string { return "maintenance_runs" }
+
+// BeforeCreate derives RunningGuard from the status: true while the run is
+// running, NULL once it ends. maintenance_runs_running_guard_uq is a unique key over
+// the table and the guard, so a table has one running run on every engine, for
+// the reason given on Space.BeforeCreate. The repository keeps the guard in step
+// when a run ends (UpdateMaintenanceRun), because a map update runs no hook.
+func (m *MaintenanceRun) BeforeCreate(*gorm.DB) error {
+	m.RunningGuard = RunningGuard(m.Status)
+	return nil
+}
+
+// RunningGuard is the guard value for a run status: true while running, NULL
+// otherwise.
+func RunningGuard(status string) *bool { return guard(status == "running") }
 
 // TableMaintenancePolicy is the table_maintenance_policies table.
 type TableMaintenancePolicy struct {

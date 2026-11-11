@@ -30,10 +30,30 @@ func AutoMigrate(db *gorm.DB, models ...any) error {
 // AutoMigrate runs with DisableForeignKeyConstraintWhenMigrating, because GORM
 // otherwise inlines a constraint whose referenced table may not exist yet.
 func createForeignKeys(db *gorm.DB, models []any) error {
+	missing, err := missingForeignKeys(db, models)
+	if err != nil {
+		return err
+	}
+	for _, fk := range missing {
+		// Two relations can share a constraint: re-check once the earlier ones exist.
+		if db.Migrator().HasConstraint(fk.model, fk.name) {
+			continue
+		}
+		if err := db.Migrator().CreateConstraint(fk.model, fk.name); err != nil {
+			return fmt.Errorf("create foreign key %s on %T: %w", fk.name, fk.model, err)
+		}
+	}
+	return nil
+}
+
+// missingForeignKeys lists the belongs-to constraints of models that do not
+// exist yet and that the backend can hold.
+func missingForeignKeys(db *gorm.DB, models []any) ([]foreignKey, error) {
+	var out []foreignKey
 	for _, m := range models {
 		stmt := &gorm.Statement{DB: db}
 		if err := stmt.Parse(m); err != nil {
-			return err
+			return nil, err
 		}
 		for name, rel := range stmt.Schema.Relationships.Relations {
 			if rel.Type != schema.BelongsTo {
@@ -48,12 +68,10 @@ func createForeignKeys(db *gorm.DB, models []any) error {
 			if db.Migrator().HasConstraint(m, name) {
 				continue
 			}
-			if err := db.Migrator().CreateConstraint(m, name); err != nil {
-				return fmt.Errorf("create foreign key %s on %T: %w", name, m, err)
-			}
+			out = append(out, foreignKey{model: m, name: name})
 		}
 	}
-	return nil
+	return out, nil
 }
 
 // AllMigrations is the versioned schema registry. Additive transitions call
@@ -198,6 +216,11 @@ func AllMigrations() (*Registry, error) {
 				// cursor needs a string tiebreaker next to audit's bigint id.
 				return AutoMigrate(db, &model.AuditExportCursor{})
 			},
+		},
+		Migration{
+			Version: 17,
+			Name:    "guard the one-default-space and one-running-run keys",
+			Up:      guardPartialKeys,
 		},
 	)
 }

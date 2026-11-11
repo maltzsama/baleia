@@ -3,6 +3,7 @@ package offload
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,18 +39,18 @@ func (c *fakeCursor) Set(_ context.Context, _, _ string, p export.Position) erro
 	return nil
 }
 
-func TestOffloaderMonths(t *testing.T) {
+func TestOffloaderDays(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	now := time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 12, 13, 0, 0, 0, 0, time.UTC)
 
-	nov := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
-	dec := time.Date(2026, 12, 10, 12, 0, 0, 0, time.UTC)
+	d10 := time.Date(2026, 12, 10, 12, 0, 0, 0, time.UTC)
+	d11 := time.Date(2026, 12, 11, 8, 0, 0, 0, time.UTC)
 
 	src := &fakeSource{events: []export.Event{
-		{OccurredAt: nov, ID: 1, Action: "a"},
-		{OccurredAt: nov.Add(time.Hour), ID: 2, Action: "b"},
-		{OccurredAt: dec, ID: 3, Action: "c"},
+		{OccurredAt: d10, ID: 1, Action: "a"},
+		{OccurredAt: d10.Add(time.Hour), ID: 2, Action: "b"},
+		{OccurredAt: d11, ID: 3, Action: "c"},
 	}}
 	cur := &fakeCursor{}
 	store := &fakeStore{objects: map[string][]byte{}, types: map[string]string{}}
@@ -69,35 +70,47 @@ func TestOffloaderMonths(t *testing.T) {
 		t.Fatalf("offloaded = %d, want 3", n)
 	}
 
-	// Two months, two chunks, two manifests.
+	// Two days, two chunks, two manifests.
 	if len(store.objects) != 4 { // 2 chunks + 2 manifests
 		t.Fatalf("objects = %d, want 4", len(store.objects))
 	}
-	novKey := sink.ChunkKey(nov, export.StreamAudit, export.Position{OccurredAt: nov, ID: 1})
-	if got := gunzip(t, store.objects[novKey]); got != `{"id":1}`+"\n"+`{"id":2}`+"\n" {
-		t.Fatalf("november chunk = %q", got)
+	k10 := sink.ChunkKey(d10, export.StreamAudit, export.Position{OccurredAt: d10, ID: 1})
+	if got := gunzip(t, store.objects[k10]); got != `{"id":1}`+"\n"+`{"id":2}`+"\n" {
+		t.Fatalf("Dec 10 chunk = %q", got)
 	}
-	decKey := sink.ChunkKey(dec, export.StreamAudit, export.Position{OccurredAt: dec, ID: 3})
-	if got := gunzip(t, store.objects[decKey]); got != `{"id":3}`+"\n" {
-		t.Fatalf("december chunk = %q", got)
+	if want := "baleia-cold/audit/2026/12/10/audit-20261210-"; !strings.HasPrefix(k10, want) {
+		t.Fatalf("Dec 10 chunk key = %q, want prefix %q", k10, want)
+	}
+	k11 := sink.ChunkKey(d11, export.StreamAudit, export.Position{OccurredAt: d11, ID: 3})
+	if got := gunzip(t, store.objects[k11]); got != `{"id":3}`+"\n" {
+		t.Fatalf("Dec 11 chunk = %q", got)
 	}
 
-	// The cursor advanced to the start of the month after December, so the
-	// retention gate sees December (and earlier) as fully offloaded.
-	if !cur.pos.OccurredAt.Equal(time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)) || cur.pos.ID != 0 {
+	// The cursor advanced to the start of the day after the last sealed day, so
+	// the retention gate sees Dec 11 (and earlier) as fully offloaded. Dec 12 is
+	// not sealed yet: it only ends inside the safety lag.
+	if !cur.pos.OccurredAt.Equal(time.Date(2026, 12, 12, 0, 0, 0, 0, time.UTC)) || cur.pos.ID != 0 {
 		t.Fatalf("cursor = %+v", cur.pos)
+	}
+	for _, day := range []time.Time{d10, d11} {
+		if reason, err := sink.Verify(ctx, day); err != nil || reason != "" {
+			t.Fatalf("Verify(%s) = %q, %v; want a valid manifest", day.Format("2006-01-02"), reason, err)
+		}
+	}
+	if _, ok := store.objects[sink.ManifestKey(time.Date(2026, 12, 12, 0, 0, 0, 0, time.UTC))]; ok {
+		t.Fatalf("Dec 12 must not be sealed yet")
 	}
 }
 
-func TestOffloaderEmptyMonthAdvances(t *testing.T) {
+func TestOffloaderEmptyDayAdvances(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	now := time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC)
-	dec := time.Date(2026, 12, 10, 12, 0, 0, 0, time.UTC)
-	nov := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 12, 13, 0, 0, 0, 0, time.UTC)
+	d11 := time.Date(2026, 12, 11, 12, 0, 0, 0, time.UTC)
+	d9 := time.Date(2026, 12, 9, 0, 0, 0, 0, time.UTC)
 
-	src := &fakeSource{events: []export.Event{{OccurredAt: dec, ID: 1, Action: "x"}}}
-	cur := &fakeCursor{pos: export.Position{OccurredAt: nov}}
+	src := &fakeSource{events: []export.Event{{OccurredAt: d11, ID: 1, Action: "x"}}}
+	cur := &fakeCursor{pos: export.Position{OccurredAt: d9}}
 	store := &fakeStore{objects: map[string][]byte{}, types: map[string]string{}}
 	sink := NewSink(store, "baleia-cold", "audit")
 
@@ -110,30 +123,35 @@ func TestOffloaderEmptyMonthAdvances(t *testing.T) {
 	if _, err := o.Run(ctx); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	// November had no rows (the cursor started there), December had one, and
-	// the cursor stopped at the start of January.
-	if !cur.pos.OccurredAt.Equal(time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)) || cur.pos.ID != 0 {
+	// Dec 9 and Dec 10 had no rows (the cursor started on Dec 9), Dec 11 had
+	// one, and the cursor stopped at the start of Dec 12.
+	if !cur.pos.OccurredAt.Equal(time.Date(2026, 12, 12, 0, 0, 0, 0, time.UTC)) || cur.pos.ID != 0 {
 		t.Fatalf("cursor = %+v", cur.pos)
 	}
 	var m Manifest
-	if err := json.Unmarshal(store.objects[sink.ManifestKey(dec)], &m); err != nil {
-		t.Fatalf("december manifest: %v", err)
+	if err := json.Unmarshal(store.objects[sink.ManifestKey(d11)], &m); err != nil {
+		t.Fatalf("Dec 11 manifest: %v", err)
 	}
-	if m.Month != "2026-12" {
-		t.Fatalf("manifest month = %q", m.Month)
+	if m.Day != "2026-12-11" {
+		t.Fatalf("manifest day = %q", m.Day)
 	}
-	// November had no rows but is fully read, so it still gets a manifest and
-	// its (empty) partition stays prunable.
-	if _, ok := store.objects[sink.ManifestKey(nov)]; !ok {
-		t.Fatalf("november manifest missing for the empty month")
+	// The empty days are fully read, so each still gets a manifest and its
+	// (empty) partition stays droppable, and a manifest with no objects verifies.
+	for _, day := range []time.Time{d9, d9.AddDate(0, 0, 1)} {
+		if _, ok := store.objects[sink.ManifestKey(day)]; !ok {
+			t.Fatalf("manifest missing for the empty day %s", day.Format("2006-01-02"))
+		}
+		if reason, err := sink.Verify(ctx, day); err != nil || reason != "" {
+			t.Fatalf("Verify(empty day) = %q, %v", reason, err)
+		}
 	}
 }
 
-// TestOffloaderChunksLargeMonth: a month larger than ChunkRows is written as
-// several chunks, all recorded in the month's manifest, instead of one object.
+// TestOffloaderChunksLargeDay: a day larger than ChunkRows is written as
+// several chunks, all recorded in the day's manifest, instead of one object.
 //
 //nolint:paralleltest // mutates the package-level ChunkRows
-func TestOffloaderChunksLargeMonth(t *testing.T) {
+func TestOffloaderChunksLargeDay(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 12, 15, 0, 0, 0, 0, time.UTC)
 	base := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
@@ -182,12 +200,12 @@ func TestOffloaderChunksLargeMonth(t *testing.T) {
 	}
 }
 
-// TestOffloaderResumesPartialMonth: a month with a partial manifest and a
-// mid-month cursor resumes from the cursor and merges the new chunks into the
-// manifest, instead of re-reading the whole month.
+// TestOffloaderResumesPartialDay: a day with a partial manifest and a mid-day
+// cursor resumes from the cursor and merges the new chunks into the manifest,
+// instead of re-reading the whole day.
 //
 //nolint:paralleltest // mutates the package-level ChunkRows
-func TestOffloaderResumesPartialMonth(t *testing.T) {
+func TestOffloaderResumesPartialDay(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 12, 15, 0, 0, 0, 0, time.UTC)
 	base := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
@@ -213,7 +231,7 @@ func TestOffloaderResumesPartialMonth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteChunk: %v", err)
 	}
-	m := Manifest{Stream: export.StreamAudit, Month: base.Format("2006-01"), Counts: map[string]int64{}, Checksums: map[string]string{}}
+	m := Manifest{Stream: export.StreamAudit, Day: base.Format("2006-01-02"), Counts: map[string]int64{}, Checksums: map[string]string{}}
 	m.add(key1, count, sum)
 	if err := sink.WriteManifest(ctx, base, m); err != nil {
 		t.Fatalf("WriteManifest: %v", err)

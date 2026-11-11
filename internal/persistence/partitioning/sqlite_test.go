@@ -127,3 +127,48 @@ func TestSQLiteUnprovisionedTable(t *testing.T) {
 		t.Fatalf("DropPartition on unprovisioned table: %v", err)
 	}
 }
+
+// TestSQLiteDailyPartitions: the emulation records day-wide partitions and a
+// drop deletes exactly the rows of the days inside the range.
+func TestSQLiteDailyPartitions(t *testing.T) {
+	t.Parallel()
+	db := openSQLite(t)
+	ctx := context.Background()
+	pm, err := partitioning.New(db)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	spec := partitioning.Spec{Table: "partitioning_test_events", Column: "occurred_at", Strategy: partitioning.Range, Interval: partitioning.Daily}
+	from := time.Date(2026, 11, 29, 0, 0, 0, 0, time.UTC)
+	until := time.Date(2026, 12, 3, 0, 0, 0, 0, time.UTC)
+	if err := pm.Provision(ctx, &sqliteEvent{}, spec, from, until); err != nil {
+		t.Fatalf("Provision: %v", err)
+	}
+	parts, err := pm.ListPartitions(ctx, spec.Table)
+	if err != nil || len(parts) != 4 {
+		t.Fatalf("ListPartitions = %+v, %v; want 4 days", parts, err)
+	}
+	if parts[0].Name != "partitioning_test_events_20261129" || parts[3].Name != "partitioning_test_events_20261202" {
+		t.Fatalf("unexpected names: %+v", parts)
+	}
+	for i, at := range []time.Time{
+		time.Date(2026, 11, 29, 8, 0, 0, 0, time.UTC),
+		time.Date(2026, 11, 30, 23, 59, 59, 0, time.UTC),
+		time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 12, 2, 12, 0, 0, 0, time.UTC),
+	} {
+		if err := db.Create(&sqliteEvent{ID: int64(i + 1), OccurredAt: at, Name: "x"}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	var n int64
+	if err := pm.DropPartition(ctx, spec.Table, time.Date(2026, 11, 30, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 2, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&sqliteEvent{}).Count(&n).Error; err != nil || n != 2 {
+		t.Fatalf("rows after drop = %d, %v; want 2", n, err)
+	}
+	if parts, _ = pm.ListPartitions(ctx, spec.Table); len(parts) != 2 {
+		t.Fatalf("partitions after drop = %+v, want 2", parts)
+	}
+}

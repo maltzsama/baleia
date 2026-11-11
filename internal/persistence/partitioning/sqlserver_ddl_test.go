@@ -8,7 +8,7 @@ import (
 
 func TestCreatePartitionFunctionStatement(t *testing.T) {
 	t.Parallel()
-	months := RangeMonths("audit_events",
+	months := RangePartitions("audit_events", Monthly,
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC))
 	got := createPartitionFunctionStatement("pf_audit_events", months)
@@ -75,5 +75,17 @@ func TestAddClusteredKeyStatement(t *testing.T) {
 	}
 	if got := bracket("PK__a]b"); got != "[PK__a]]b]" {
 		t.Errorf("bracket = %q", got)
+	}
+}
+
+func TestCreatePartitionFunctionStatementDaily(t *testing.T) {
+	t.Parallel()
+	days := RangePartitions("audit_events", Daily,
+		time.Date(2026, 11, 30, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 12, 2, 0, 0, 0, 0, time.UTC))
+	got := createPartitionFunctionStatement("pf_audit_events", days)
+	want := "CREATE PARTITION FUNCTION [pf_audit_events] (datetimeoffset) AS RANGE RIGHT FOR VALUES ('2026-12-01', '2026-12-02')"
+	if got != want {
+		t.Errorf("createPartitionFunctionStatement = %q, want %q", got, want)
 	}
 }

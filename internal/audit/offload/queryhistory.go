@@ -25,14 +25,14 @@ type QueryHistoryStore interface {
 	// the caller can split the page instead of buffering unbounded.
 	OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time, limit int) ([]model.QueryStatement, bool, error)
 	// PendingExecutions reports whether any execution in [from, until) is not
-	// terminal (queued or running), so the month cannot be sealed yet.
+	// terminal (queued or running), so the day cannot be sealed yet.
 	PendingExecutions(ctx context.Context, from, until time.Time) (bool, error)
 }
 
-// QueryHistoryReader is the MonthReader of the query_history stream: it reads
+// QueryHistoryReader is the PeriodReader of the query_history stream: it reads
 // executions and their statements in started_at order and writes the pair as
 // two objects, query_executions- and query_statements- (ADR 0024: statements
-// are never offloaded without their parent execution, and the month's manifest
+// are never offloaded without their parent execution, and the day's manifest
 // records the pair).
 type QueryHistoryReader struct {
 	Store QueryHistoryStore
@@ -45,7 +45,7 @@ const (
 	StatementsObject = "query_statements"
 )
 
-// QueryHistorySafetyLag delays sealing a query-history month until any
+// QueryHistorySafetyLag delays sealing a query-history day until any
 // execution started in it has finished (the execution timeout is two hours),
 // so the archived pair is final before retention can drop the partition.
 const QueryHistorySafetyLag = 24 * time.Hour
@@ -54,28 +54,28 @@ const QueryHistorySafetyLag = 24 * time.Hour
 // execution with an unreasonable number of statements cannot buffer unbounded.
 var statementPageSize = ChunkRows * 8
 
-// EarliestMonth is the month of the first execution, or the zero time.
-func (r *QueryHistoryReader) EarliestMonth(ctx context.Context, before time.Time) (time.Time, error) {
+// EarliestPeriod is the day of the first execution, or the zero time.
+func (r *QueryHistoryReader) EarliestPeriod(ctx context.Context, before time.Time) (time.Time, error) {
 	execs, err := r.Store.OffloadQueryExecutions(ctx, time.Time{}, "", before, 1)
 	if err != nil || len(execs) == 0 {
 		return time.Time{}, err
 	}
-	return monthStart(execs[0].StartedAt), nil
+	return period.Start(execs[0].StartedAt), nil
 }
 
-// ReadMonth streams the executions and statements of the month as bounded
+// ReadPeriod streams the executions and statements of the day as bounded
 // chunks. The execution chunk and the statement chunk of a flush travel
 // together: the cursor commits to the execution position only after both are
 // persisted, so an interrupted pass never seals an execution whose statements
 // are still unwritten.
-func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func([]Chunk, export.Position) error) error {
-	limit := nextMonth(month)
-	pending, err := r.Store.PendingExecutions(ctx, month, limit)
+func (r *QueryHistoryReader) ReadPeriod(ctx context.Context, day, before time.Time, pos *export.Position, emit func([]Chunk, export.Position) error) error {
+	limit := period.Next(day)
+	pending, err := r.Store.PendingExecutions(ctx, day, limit)
 	if err != nil {
 		return err
 	}
 	if pending {
-		// An execution started in the month is still queued or running, so its
+		// An execution started in the day is still queued or running, so its
 		// row (and its statements) can still change. Sealing now would archive
 		// a mid-run state; wait for the next run.
 		return ErrNotQuiescent
@@ -131,7 +131,7 @@ func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.T
 				for i, e := range execs {
 					ids[i] = e.ID
 				}
-				stmts, truncated, err := r.Store.OffloadQueryStatements(ctx, ids, month, limit, statementPageSize)
+				stmts, truncated, err := r.Store.OffloadQueryStatements(ctx, ids, day, limit, statementPageSize)
 				if err != nil {
 					return err
 				}

@@ -41,7 +41,7 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 		act.SetAuditRetain(&retention.Retain{
 			Table: "audit_events", Stream: auditexport.StreamAudit, SinkName: auditexport.SinkS3,
 			Partitions: repoPartitions{q}, Cursor: repoCursor{q},
-			Manifest:      &manifestCheck{sink: sink, has: cold.Has},
+			Manifest:      sink,
 			Retention:     cfg.AuditRetention,
 			Grace:         cfg.AuditColdGrace,
 			MaxPartitions: cfg.PruneMaxPartitions,
@@ -58,36 +58,36 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 		act.SetQueryHistoryOffload(&offload.Offloader{
 			Stream: auditexport.StreamQueryHistory, SinkName: auditexport.SinkS3,
 			Cursor: pg, Sink: sink,
-			// A month is only sealed a day after it ends, so an execution that
+			// A day is only sealed a day after it ends, so an execution that
 			// crosses the boundary is archived in its final state.
 			Lag: offload.QueryHistorySafetyLag,
 			// Executions and their statements are read together and written as
-			// one month's pair (ADR 0024).
+			// one day's pair (ADR 0024, ADR 0026).
 			Reader: &offload.QueryHistoryReader{Store: core.StoreRepo},
 		})
 		var retains []*retention.Retain
 		// Children first: query_statements references query_executions, so its
-		// month partition must be detached and dropped before the parent's.
-		// Each table's PreDrop removes the rows that still point into the month's
+		// day partition must be detached and dropped before the parent's.
+		// Each table's PreDrop removes the rows that still point into the day's
 		// partition (references and joins for statements, snapshots for
 		// executions), otherwise the detach fails and retention never prunes.
 		storeRepo := core.StoreRepo
 		for _, table := range []string{"query_statements", "query_executions"} {
 			preDrop := func(ctx context.Context, from, until time.Time) error {
-				return storeRepo.UnlinkTrinoQuerySnapshotsByMonth(ctx, from, until)
+				return storeRepo.UnlinkTrinoQuerySnapshotsByPeriod(ctx, from, until)
 			}
 			if table == "query_statements" {
 				preDrop = func(ctx context.Context, from, until time.Time) error {
-					if err := storeRepo.DeleteStatementReferencesByMonth(ctx, from, until); err != nil {
+					if err := storeRepo.DeleteStatementReferencesByPeriod(ctx, from, until); err != nil {
 						return err
 					}
-					return storeRepo.DeleteStatementJoinsByMonth(ctx, from, until)
+					return storeRepo.DeleteStatementJoinsByPeriod(ctx, from, until)
 				}
 			}
 			retains = append(retains, &retention.Retain{
 				Table: table, Stream: auditexport.StreamQueryHistory, SinkName: auditexport.SinkS3,
 				Partitions: repoPartitions{q}, Cursor: repoCursor{q},
-				Manifest:      &manifestCheck{sink: sink, has: qhCold.Has},
+				Manifest:      sink,
 				Retention:     cfg.QueryHistoryRetention,
 				Grace:         cfg.QueryHistoryColdGrace,
 				MaxPartitions: cfg.PruneMaxPartitions,
@@ -114,11 +114,11 @@ func coldClient(cfg *config.Config, bucket string) (*storage.S3Client, error) {
 type repoPartitions struct{ q db.Querier }
 
 func (p repoPartitions) ListPartitions(ctx context.Context, table string) ([]partitioning.Partition, error) {
-	return p.q.MonthPartitions(ctx, table)
+	return p.q.Partitions(ctx, table)
 }
 
 func (p repoPartitions) DropPartition(ctx context.Context, table string, from, until time.Time) error {
-	return p.q.DropMonth(ctx, table, from, until)
+	return p.q.DropPartitions(ctx, table, from, until)
 }
 
 // repoCursor adapts the store to the retention Cursor contract.
@@ -133,14 +133,4 @@ func (c repoCursor) OccurredAt(ctx context.Context, stream, sink string) (time.T
 		return time.Time{}, err
 	}
 	return row.OccurredAt.Time, nil
-}
-
-// manifestCheck reads the cold store for a month's manifest.
-type manifestCheck struct {
-	sink *offload.Sink
-	has  func(ctx context.Context, key string) (bool, error)
-}
-
-func (m *manifestCheck) Exists(ctx context.Context, _ string, month time.Time) (bool, error) {
-	return m.has(ctx, m.sink.ManifestKey(month))
 }

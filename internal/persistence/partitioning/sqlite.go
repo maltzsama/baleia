@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// sqliteManager emulates monthly range partitioning on SQLite, which has no
+// sqliteManager emulates range partitioning on SQLite, which has no
 // native partitioning (ADR 0023). The table stays a single plain table;
 // "partitions" are recorded in a per-table sidecar registry (<table>_partitions)
 // and DropPartition is a bounded DELETE rather than a metadata drop. The
@@ -53,7 +53,7 @@ func (m *sqliteManager) Provision(ctx context.Context, model any, spec Spec, fro
 				return fmt.Errorf("partitioning: create registry %s: %w", sidecar, err)
 			}
 		}
-		for _, p := range RangeMonths(spec.Table, from, until) {
+		for _, p := range RangePartitions(spec.Table, spec.Interval, from, until) {
 			if err := tx.Exec(fmt.Sprintf(
 				`INSERT OR REPLACE INTO "%s" ("name", "column_name") VALUES (?, ?)`, sidecar,
 			), p.Name, spec.Column).Error; err != nil {
@@ -67,15 +67,19 @@ func (m *sqliteManager) Provision(ctx context.Context, model any, spec Spec, fro
 // ListPartitions returns the recorded partitions of table, oldest first. A
 // table that was never provisioned has none.
 func (m *sqliteManager) ListPartitions(ctx context.Context, table string) ([]Partition, error) {
+	return listRegistry(m.db.WithContext(ctx), table)
+}
+
+func listRegistry(db *gorm.DB, table string) ([]Partition, error) {
 	if !identifier.MatchString(table) {
 		return nil, fmt.Errorf("partitioning: invalid table name %q", table)
 	}
 	sidecar := sidecarTable(table)
-	if !m.db.Migrator().HasTable(sidecar) {
+	if !db.Migrator().HasTable(sidecar) {
 		return []Partition{}, nil
 	}
 	var names []string
-	if err := m.db.WithContext(ctx).Raw(fmt.Sprintf(`SELECT "name" FROM "%s"`, sidecar)).Scan(&names).Error; err != nil {
+	if err := db.Raw(fmt.Sprintf(`SELECT "name" FROM "%s"`, sidecar)).Scan(&names).Error; err != nil {
 		return nil, fmt.Errorf("partitioning: list registry %s: %w", sidecar, err)
 	}
 	var out []Partition
@@ -88,8 +92,8 @@ func (m *sqliteManager) ListPartitions(ctx context.Context, table string) ([]Par
 	return out, nil
 }
 
-// DropPartition removes the rows in [from, until) and forgets those months in
-// the registry. It is a bounded DELETE, not a metadata drop: the retention
+// DropPartition removes the rows of the partitions covering [from, until) and
+// forgets those partitions in the registry. It is a bounded DELETE, not a metadata drop: the retention
 // layer reads Capabilities().NativeRange == false and treats it accordingly.
 func (m *sqliteManager) DropPartition(ctx context.Context, table string, from, until time.Time) error {
 	if !identifier.MatchString(table) {
@@ -107,28 +111,19 @@ func (m *sqliteManager) DropPartition(ctx context.Context, table string, from, u
 		if meta.ColumnName == "" {
 			return nil // never provisioned: nothing to drop
 		}
-		if err := tx.Exec(fmt.Sprintf(`DELETE FROM "%s" WHERE "%s" >= ? AND "%s" < ?`, table, meta.ColumnName, meta.ColumnName),
-			from, until).Error; err != nil {
-			return fmt.Errorf("partitioning: delete rows from %s: %w", table, err)
+		existing, err := listRegistry(tx, table)
+		if err != nil {
+			return err
 		}
-		for _, p := range RangeMonths(table, from, until) {
+		for _, p := range partitionsIn(existing, from, until) {
+			if err := tx.Exec(fmt.Sprintf(`DELETE FROM "%s" WHERE "%s" >= ? AND "%s" < ?`, table, meta.ColumnName, meta.ColumnName),
+				p.From, p.Until).Error; err != nil {
+				return fmt.Errorf("partitioning: delete rows from %s: %w", table, err)
+			}
 			if err := tx.Exec(fmt.Sprintf(`DELETE FROM "%s" WHERE "name" = ?`, sidecar), p.Name).Error; err != nil {
 				return fmt.Errorf("partitioning: forget partition %s: %w", p.Name, err)
 			}
 		}
 		return nil
 	})
-}
-
-// partitionFromName decodes a partition name of the form <table>_YYYYMM.
-func partitionFromName(table, name string) (Partition, bool) {
-	prefix := table + "_"
-	if len(name) != len(prefix)+6 || name[:len(prefix)] != prefix {
-		return Partition{}, false
-	}
-	month, err := time.Parse("200601", name[len(prefix):])
-	if err != nil {
-		return Partition{}, false
-	}
-	return Partition{Name: name, From: month, Until: month.AddDate(0, 1, 0)}, true
 }

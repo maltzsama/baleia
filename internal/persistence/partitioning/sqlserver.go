@@ -24,8 +24,35 @@ func (m *sqlserverManager) Capabilities() Capabilities {
 	return capabilitiesFor("sqlserver")
 }
 
-func pfName(table string) string { return "pf_" + table }
-func psName(table string) string { return "ps_" + table }
+// pfName and psName carry the partition width in the name. A partition function
+// holds only boundaries, so the width cannot be read back from them: boundaries
+// 28 days apart are a monthly function or a daily one whose days in between were
+// pruned. The name is what ListPartitions and DropPartition read it from.
+func pfName(table string, iv Interval) string { return "pf_" + table + "_" + string(iv) }
+func psName(table string, iv Interval) string { return "ps_" + table + "_" + string(iv) }
+
+// width returns the width a table was provisioned with, from the partition
+// function that exists for it. A table with functions of two widths is refused.
+func (m *sqlserverManager) width(ctx context.Context, table string) (iv Interval, found bool, err error) {
+	var have []Interval
+	for _, candidate := range []Interval{Daily, Monthly} {
+		ok, err := m.exists(ctx, "sys.partition_functions", pfName(table, candidate))
+		if err != nil {
+			return "", false, err
+		}
+		if ok {
+			have = append(have, candidate)
+		}
+	}
+	switch len(have) {
+	case 0:
+		return "", false, nil
+	case 1:
+		return have[0], true, nil
+	default:
+		return "", false, fmt.Errorf("partitioning: %s has partition functions of more than one width", table)
+	}
+}
 
 // Provision creates the partition function and scheme if absent, creates the
 // table ON the scheme if absent, and splits new boundaries for months beyond
@@ -34,8 +61,13 @@ func (m *sqlserverManager) Provision(ctx context.Context, model any, spec Spec, 
 	if err := spec.Validate(); err != nil {
 		return err
 	}
-	months := RangeMonths(spec.Table, from, until)
-	pf, ps := pfName(spec.Table), psName(spec.Table)
+	months := RangePartitions(spec.Table, spec.Interval, from, until)
+	if have, found, err := m.width(ctx, spec.Table); err != nil {
+		return err
+	} else if found && have != spec.Interval {
+		return fmt.Errorf("partitioning: %s is partitioned %s, not %s", spec.Table, have, spec.Interval)
+	}
+	pf, ps := pfName(spec.Table, spec.Interval), psName(spec.Table, spec.Interval)
 
 	if ok, err := m.exists(ctx, "sys.partition_functions", pf); err != nil {
 		return err
@@ -178,20 +210,27 @@ func addClusteredKeyStatement(spec Spec, key []string, ps string) string {
 }
 
 // ListPartitions derives one partition per boundary of the partition function,
-// oldest first. A boundary at month end means the partition covers the month
-// that ends there.
+// oldest first. A boundary ends the partition that precedes it, and the width
+// comes from the function's name (see pfName).
 func (m *sqlserverManager) ListPartitions(ctx context.Context, table string) ([]Partition, error) {
 	if !identifier.MatchString(table) {
 		return nil, fmt.Errorf("partitioning: invalid table name %q", table)
 	}
-	bounds, err := m.boundaries(ctx, pfName(table))
+	iv, found, err := m.width(ctx, table)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil // never provisioned
+	}
+	bounds, err := m.boundaries(ctx, pfName(table, iv))
 	if err != nil {
 		return nil, err
 	}
 	var out []Partition
 	for _, until := range bounds {
-		from := until.AddDate(0, -1, 0)
-		out = append(out, Partition{Name: table + "_" + from.Format("200601"), From: from, Until: until})
+		from := iv.previous(until)
+		out = append(out, Partition{Name: PartitionName(table, iv, from), From: from, Until: until})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].From.Before(out[j].From) })
 	return out, nil
@@ -203,12 +242,26 @@ func (m *sqlserverManager) DropPartition(ctx context.Context, table string, from
 	if !identifier.MatchString(table) {
 		return fmt.Errorf("partitioning: invalid table name %q", table)
 	}
-	pf := pfName(table)
-	bounds, err := m.boundaries(ctx, pf)
+	iv, found, err := m.width(ctx, table)
 	if err != nil {
 		return err
 	}
-	for _, p := range RangeMonths(table, from, until) {
+	if !found {
+		return nil // never provisioned: nothing to drop
+	}
+	pf := pfName(table, iv)
+	existing, err := m.ListPartitions(ctx, table)
+	if err != nil {
+		return err
+	}
+	for _, p := range partitionsIn(existing, from, until) {
+		// Merging a boundary renumbers the partitions after it, so the numbers
+		// are read again for every partition: reusing the list from before the
+		// first merge truncates the wrong day.
+		bounds, err := m.boundaries(ctx, pf)
+		if err != nil {
+			return err
+		}
 		n, ok := partitionNumber(bounds, p.Until)
 		if !ok {
 			continue
@@ -308,4 +361,12 @@ func containsTime(ts []time.Time, want time.Time) bool {
 		}
 	}
 	return false
+}
+
+// previous returns the start of the partition that ends at until.
+func (i Interval) previous(until time.Time) time.Time {
+	if i == Daily {
+		return until.AddDate(0, 0, -1)
+	}
+	return until.AddDate(0, -1, 0)
 }

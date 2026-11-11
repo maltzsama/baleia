@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/persistence/partitioning"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
@@ -150,11 +151,11 @@ func executionIDs(page ListExecutions200JSONResponse) []string {
 	return out
 }
 
-// historyBase is noon on the first day of the current month: executions are
-// partitioned by month, so a fixed past date has no partition to land in.
+// historyBase is noon today: executions are partitioned by day and a store
+// provisions partitions from today on, so a fixed past date has no partition to
+// land in.
 func historyBase() time.Time {
-	now := time.Now().UTC()
-	return time.Date(now.Year(), now.Month(), 1, 12, 0, 0, 0, time.UTC)
+	return partitioning.Daily.Start(time.Now()).Add(12 * time.Hour)
 }
 
 func stringPtr(value string) *string { return &value }

@@ -143,11 +143,11 @@ jobs:
           # The partitioning adapters: only SQL Server and Oracle run here (the
           # Postgres and MySQL adapters run in the main Test job and the
           # store-mysql job, which set BALEIA_TEST_DATABASE_URL).
-          go test -count=1 -v -run 'TestSQLServerPartitions|TestOraclePartitions' ./internal/persistence/partitioning | tee -a test.log
+          go test -count=1 -v -run 'TestSQLServerPartitions|TestOraclePartitions|TestSQLServerDailyPartitions|TestOracleDailyPartitions|TestSQLServerSparseDailyPartitions' ./internal/persistence/partitioning | tee -a test.log
           # Every integration test must have run, not been skipped (Polaris
           # needs its bootstrap; it is covered against the dev stack). A
           # conformance subtest may skip by design; only a skipped top-level
           # test fails the job.
-          if grep -E -- '--- SKIP: (TestMetadataReader_|TestExecute_|TestConformance \(|TestConformanceMariaDB \(|TestConformanceAlterSystem \(|TestSQLServerPartitions|TestOraclePartitions)' test.log | grep -v polaris; then
+          if grep -E -- '--- SKIP: (TestMetadataReader_|TestExecute_|TestConformance \(|TestConformanceMariaDB \(|TestConformanceAlterSystem \(|TestSQLServerPartitions|TestOraclePartitions|TestSQLServerDailyPartitions|TestOracleDailyPartitions|TestSQLServerSparseDailyPartitions)' test.log | grep -v polaris; then
             echo "an integration test was skipped" && exit 1
           fi

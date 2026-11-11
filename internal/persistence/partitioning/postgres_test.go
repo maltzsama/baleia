@@ -216,3 +216,88 @@ func TestPostgresRefusesInterruptedConversion(t *testing.T) {
 		t.Fatal("Provision should refuse a plain table beside an existing legacy table")
 	}
 }
+
+// TestPostgresDailyPartitions covers the daily width end to end: day-wide
+// ranges, names with a yyyymmdd suffix, routing, listing, and a drop that
+// removes exactly the days inside the range.
+func TestPostgresDailyPartitions(t *testing.T) {
+	t.Parallel()
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	pm, err := partitioning.New(db)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	spec := partitioning.Spec{
+		Table:    "partitioning_test_events",
+		Column:   "occurred_at",
+		Strategy: partitioning.Range,
+		Interval: partitioning.Daily,
+	}
+	from := time.Date(2026, 11, 29, 0, 0, 0, 0, time.UTC)
+	until := time.Date(2026, 12, 3, 0, 0, 0, 0, time.UTC)
+	if err := pm.Provision(ctx, &testEvent{}, spec, from, until); err != nil {
+		t.Fatalf("Provision: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Exec(`DROP TABLE IF EXISTS "partitioning_test_events" CASCADE`).Error })
+	if err := pm.Provision(ctx, &testEvent{}, spec, from, until); err != nil {
+		t.Fatalf("Provision (second): %v", err)
+	}
+
+	parts, err := pm.ListPartitions(ctx, spec.Table)
+	if err != nil {
+		t.Fatalf("ListPartitions: %v", err)
+	}
+	want := []string{
+		"partitioning_test_events_20261129", "partitioning_test_events_20261130",
+		"partitioning_test_events_20261201", "partitioning_test_events_20261202",
+	}
+	if len(parts) != len(want) {
+		t.Fatalf("ListPartitions returned %d partitions, want %d: %+v", len(parts), len(want), parts)
+	}
+	for i, name := range want {
+		if parts[i].Name != name {
+			t.Errorf("partition %d = %q, want %q", i, parts[i].Name, name)
+		}
+		if got := parts[i].Until.Sub(parts[i].From); got != 24*time.Hour {
+			t.Errorf("partition %d spans %v, want 24h", i, got)
+		}
+	}
+
+	// One row per day; the last instant of a day stays in that day.
+	for i, at := range []time.Time{
+		time.Date(2026, 11, 29, 8, 0, 0, 0, time.UTC),
+		time.Date(2026, 11, 30, 23, 59, 59, 0, time.UTC),
+		time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 12, 2, 12, 0, 0, 0, time.UTC),
+	} {
+		if err := db.Create(&testEvent{ID: int64(i + 1), OccurredAt: at, Name: "x"}).Error; err != nil {
+			t.Fatalf("insert %v: %v", at, err)
+		}
+	}
+	// A day past the provisioned horizon has no partition: the insert fails
+	// instead of landing somewhere else.
+	if err := db.Create(&testEvent{ID: 99, OccurredAt: until, Name: "x"}).Error; err == nil {
+		t.Fatal("insert beyond the horizon should fail")
+	}
+
+	if err := pm.DropPartition(ctx, spec.Table,
+		time.Date(2026, 11, 30, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 2, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("DropPartition: %v", err)
+	}
+	parts, err = pm.ListPartitions(ctx, spec.Table)
+	if err != nil {
+		t.Fatalf("ListPartitions after drop: %v", err)
+	}
+	if len(parts) != 2 || parts[0].Name != want[0] || parts[1].Name != want[3] {
+		t.Fatalf("after drop: %+v, want the first and last day", parts)
+	}
+	var n int64
+	if err := db.Model(&testEvent{}).Count(&n).Error; err != nil {
+		t.Fatalf("count after drop: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("rows after drop = %d, want 2", n)
+	}
+}

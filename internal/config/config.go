@@ -242,6 +242,9 @@ type Config struct {
 	QueryHistoryColdPrefix string
 	QueryHistoryColdGrace  time.Duration
 	PruneMaxPartitions     int
+	// PartitionDaysAhead is how many days past today audit-partitions keeps
+	// provisioned (ADR 0026).
+	PartitionDaysAhead int
 	// Baleia's database pool; DBMaxConns 0 means the process default (api 20,
 	// worker 10).
 	DBMaxConns          int
@@ -419,6 +422,7 @@ func Load() *Config {
 		QueryHistoryColdPrefix:      getEnv("BALEIA_QUERY_HISTORY_COLD_PREFIX", "query_history"),
 		QueryHistoryColdGrace:       getEnvDuration("BALEIA_QUERY_HISTORY_COLD_GRACE", 7*24*time.Hour),
 		PruneMaxPartitions:          getEnvInt("BALEIA_PRUNE_MAX_PARTITIONS", 1),
+		PartitionDaysAhead:          getEnvInt("BALEIA_PARTITION_DAYS_AHEAD", 14),
 		DBMaxConns:                  getEnvInt("BALEIA_DB_MAX_CONNS", 0),
 		DBMinConns:                  getEnvInt("BALEIA_DB_MIN_CONNS", 2),
 		DBMaxConnLifetime:           getEnvDuration("BALEIA_DB_MAX_CONN_LIFETIME", time.Hour),
@@ -522,6 +526,10 @@ func (c *Config) Validate() error {
 	}
 	if c.ReconcileInterval != 0 && c.ReconcileInterval < 5*time.Minute {
 		return fmt.Errorf("BALEIA_RECONCILE_INTERVAL must be at least 5m (got %s)", c.ReconcileInterval)
+	}
+	// Zero means the default, as for the other limits.
+	if c.PartitionDaysAhead < 0 {
+		return fmt.Errorf("BALEIA_PARTITION_DAYS_AHEAD must be at least 1 (got %d)", c.PartitionDaysAhead)
 	}
 	if c.MaintenanceMaxConcurrentRuns < 0 {
 		return fmt.Errorf("BALEIA_MAINTENANCE_MAX_CONCURRENT_RUNS must be at least 1 (got %d)", c.MaintenanceMaxConcurrentRuns)
