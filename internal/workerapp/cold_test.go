@@ -2,7 +2,9 @@ package workerapp
 
 import (
 	"context"
+	"log/slog"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,41 +120,50 @@ func (r *recordingAudit) Record(_ context.Context, e audit.Event) error {
 
 func TestDroppedWithoutOffload(t *testing.T) {
 	t.Parallel()
-	rec := &recordingAudit{}
 	day := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	p := partitioning.Partition{Name: "audit_events_20260901", From: day, Until: day.AddDate(0, 0, 1)}
 
-	droppedWithoutOffload(rec, "audit")(context.Background(), p)
-	if len(rec.events) != 1 {
-		t.Fatalf("events = %d, want 1", len(rec.events))
-	}
-	e := rec.events[0]
-	if e.Action != audit.PartitionDrop || e.ResourceType != "partition" || e.ResourceID != "audit_events_20260901" ||
-		e.Outcome != audit.Allowed || e.Reason != audit.ReasonNoOffload {
-		t.Errorf("event = %+v", e)
-	}
-	if e.Changes["stream"].To != "audit" || e.Changes["day"].To != "2026-09-01" {
-		t.Errorf("changes = %+v, want the stream and the day", e.Changes)
+	for _, coldBucket := range []bool{false, true} {
+		rec := &recordingAudit{}
+		droppedWithoutOffload(rec, "audit", coldBucket)(context.Background(), p)
+		if len(rec.events) != 1 {
+			t.Fatalf("cold bucket %v: events = %d, want 1", coldBucket, len(rec.events))
+		}
+		e := rec.events[0]
+		if e.Action != audit.PartitionDrop || e.ResourceType != "partition" || e.ResourceID != "audit_events_20260901" ||
+			e.Outcome != audit.Allowed || e.Reason != audit.ReasonOffloadGateSkipped {
+			t.Errorf("cold bucket %v: event = %+v", coldBucket, e)
+		}
+		if e.Changes["stream"].To != "audit" || e.Changes["day"].To != "2026-09-01" {
+			t.Errorf("cold bucket %v: changes = %+v, want the stream and the day", coldBucket, e.Changes)
+		}
+		// The event says whether a copy could exist, not only that the gate was off.
+		if e.Changes["cold_bucket"].To != coldBucket {
+			t.Errorf("cold_bucket = %v, want %v", e.Changes["cold_bucket"].To, coldBucket)
+		}
 	}
 
 	// No recorder: a drop is never held up by the audit write.
-	droppedWithoutOffload(nil, "audit")(context.Background(), p)
+	droppedWithoutOffload(nil, "audit", false)(context.Background(), p)
 }
 
-func TestRetentionAllowance(t *testing.T) {
+// TestWarnDropWithoutOffload: the warning says whether a copy can exist.
+func TestWarnDropWithoutOffload(t *testing.T) {
 	t.Parallel()
-	day := 24 * time.Hour
-	for cadence, want := range map[string]time.Duration{
-		"":       (45 + 1 + 7 + 1) * day, // weekly: window, grace, a week, the day itself
-		"weekly": (45 + 1 + 7 + 1) * day,
-		"daily":  (45 + 1 + 1 + 1) * day,
+	for _, tc := range []struct {
+		coldBucket bool
+		want, deny string
+	}{
+		{false, "cannot be recovered", "may exist"},
+		{true, "may exist", "cannot be recovered"},
 	} {
-		got, err := retentionAllowance(45*day, day, cadence)
-		if err != nil || got != want {
-			t.Errorf("retentionAllowance(%q) = %s, %v; want %s", cadence, got, err, want)
+		var buf strings.Builder
+		logger := slog.New(slog.NewTextHandler(&buf, nil))
+		warnDropWithoutOffload(logger, "audit", "BALEIA_AUDIT_OFFLOAD_BEFORE_DROP", tc.coldBucket)
+		out := buf.String()
+		if !strings.Contains(out, tc.want) || strings.Contains(out, tc.deny) {
+			t.Errorf("cold bucket %v: warning = %s", tc.coldBucket, out)
 		}
 	}
-	if _, err := retentionAllowance(45*day, day, "sometimes"); err == nil {
-		t.Error("a bad cadence must be an error")
-	}
+	warnDropWithoutOffload(nil, "audit", "X", false) // no logger: a no-op
 }

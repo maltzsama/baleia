@@ -37,9 +37,11 @@ const (
 	ReasonInternal    = "internal"
 	// ReasonReuseDetected marks a refresh token presented after rotation (#51).
 	ReasonReuseDetected = "reuse_detected"
-	// ReasonNoOffload marks a partition dropped with no cold copy behind it,
-	// because the stream opted out of offload before drop (ADR 0026).
-	ReasonNoOffload = "no_offload"
+	// ReasonOffloadGateSkipped marks a partition dropped without checking its
+	// cold copy, because the stream opted out of offload before drop (ADR 0026).
+	// It says the gate was skipped, not that no copy exists: with a cold bucket
+	// the offload still runs and may have written one.
+	ReasonOffloadGateSkipped = "offload_gate_skipped"
 )
 
 // Auth methods recorded with an event.

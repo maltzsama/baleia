@@ -63,8 +63,8 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 			retain.Cursor, retain.Manifest = repoCursor{q}, sink
 		}
 		if cfg.AuditDropWithoutOffload {
-			warnDropWithoutOffload(logger, "audit", "BALEIA_AUDIT_OFFLOAD_BEFORE_DROP")
-			retain.OnDropped = droppedWithoutOffload(core.Audit, auditexport.StreamAudit)
+			warnDropWithoutOffload(logger, "audit", "BALEIA_AUDIT_OFFLOAD_BEFORE_DROP", cfg.AuditColdBucket != "")
+			retain.OnDropped = droppedWithoutOffload(core.Audit, auditexport.StreamAudit, cfg.AuditColdBucket != "")
 		}
 		act.SetAuditRetain(retain)
 	}
@@ -95,8 +95,8 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 		}
 		var onDropped func(context.Context, partitioning.Partition)
 		if cfg.QueryHistoryDropWithoutOffload {
-			warnDropWithoutOffload(logger, "query_history", "BALEIA_QUERY_HISTORY_OFFLOAD_BEFORE_DROP")
-			onDropped = droppedWithoutOffload(core.Audit, auditexport.StreamQueryHistory)
+			warnDropWithoutOffload(logger, "query_history", "BALEIA_QUERY_HISTORY_OFFLOAD_BEFORE_DROP", cfg.QueryHistoryColdBucket != "")
+			onDropped = droppedWithoutOffload(core.Audit, auditexport.StreamQueryHistory, cfg.QueryHistoryColdBucket != "")
 		}
 		var retains []*retention.Retain
 		// Children first: query_statements references query_executions, so its
@@ -158,31 +158,38 @@ func setAllowance(act *activities.Activities, stream string, window, grace time.
 	return nil
 }
 
-// warnDropWithoutOffload says, at startup, that a stream will lose data it has
-// no copy of: the opt-out exists for deployments that keep none on purpose.
-func warnDropWithoutOffload(logger *slog.Logger, stream, setting string) {
+// warnDropWithoutOffload says, at startup, what the opt-out costs: with no cold
+// bucket a dropped partition has no copy anywhere; with one, the offload still
+// runs but a partition is dropped without checking that it finished, so a copy
+// may exist and is not guaranteed.
+func warnDropWithoutOffload(logger *slog.Logger, stream, setting string, coldBucket bool) {
 	if logger == nil {
 		return
 	}
-	logger.Warn("retention drops partitions without a cold copy",
-		"stream", stream, "setting", setting+"=false",
-		"effect", "partitions past the retention window are dropped on age alone and cannot be recovered")
+	effect := "no cold copy exists: partitions past the retention window are dropped on age alone and cannot be recovered"
+	if coldBucket {
+		effect = "partitions past the retention window are dropped without checking that their offload completed: a cold copy may exist, but is not guaranteed"
+	}
+	logger.Warn("retention drops partitions without checking the cold copy",
+		"stream", stream, "setting", setting+"=false", "cold_bucket", coldBucket, "effect", effect)
 }
 
-// droppedWithoutOffload records an audit event for a partition dropped with no
-// offload behind it, naming the stream and the day. It is best-effort, like every
-// audit write.
-func droppedWithoutOffload(rec audit.Recorder, stream string) func(context.Context, partitioning.Partition) {
+// droppedWithoutOffload records an audit event for a partition dropped with the
+// offload gate bypassed, naming the stream, the day and whether a cold bucket was
+// configured, so the event says what could have been kept and not only that the
+// gate was off. It is best-effort, like every audit write.
+func droppedWithoutOffload(rec audit.Recorder, stream string, coldBucket bool) func(context.Context, partitioning.Partition) {
 	return func(ctx context.Context, p partitioning.Partition) {
 		if rec == nil {
 			return
 		}
 		_ = rec.Record(audit.WithService(ctx, "retention"), audit.Event{
 			Action: audit.PartitionDrop, ResourceType: "partition", ResourceID: p.Name,
-			Outcome: audit.Allowed, Reason: audit.ReasonNoOffload,
+			Outcome: audit.Allowed, Reason: audit.ReasonOffloadGateSkipped,
 			Changes: map[string]audit.Change{
-				"stream": {To: stream},
-				"day":    {To: p.From.UTC().Format("2006-01-02")},
+				"stream":      {To: stream},
+				"day":         {To: p.From.UTC().Format("2006-01-02")},
+				"cold_bucket": {To: coldBucket},
 			},
 		})
 	}
