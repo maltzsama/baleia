@@ -49,12 +49,14 @@ func QueryHistoryOffload(every time.Duration) schedules.Spec {
 	return schedules.Spec{ID: schedules.QueryHistoryOffload, Workflow: workflows.QueryHistoryOffloadWorkflow, Every: every}
 }
 
-// AuditRetention is the audit-trail retention schedule (ADR 0024).
-func AuditRetention(every time.Duration) schedules.Spec {
-	return schedules.Spec{ID: schedules.AuditRetention, Workflow: workflows.AuditRetentionWorkflow, Every: every}
+// AuditRetention is the audit-trail retention schedule (ADR 0024). It runs on
+// the stream's cadence, a five-field cron expression in UTC (ADR 0026).
+func AuditRetention(cron string) schedules.Spec {
+	return schedules.Spec{ID: schedules.AuditRetention, Workflow: workflows.AuditRetentionWorkflow, Cron: cron}
 }
 
-// QueryHistoryRetention is the query-history retention schedule (ADR 0024).
-func QueryHistoryRetention(every time.Duration) schedules.Spec {
-	return schedules.Spec{ID: schedules.QueryHistoryRetention, Workflow: workflows.QueryHistoryRetentionWorkflow, Every: every}
+// QueryHistoryRetention is the query-history retention schedule (ADR 0024),
+// on its stream's cadence.
+func QueryHistoryRetention(cron string) schedules.Spec {
+	return schedules.Spec{ID: schedules.QueryHistoryRetention, Workflow: workflows.QueryHistoryRetentionWorkflow, Cron: cron}
 }

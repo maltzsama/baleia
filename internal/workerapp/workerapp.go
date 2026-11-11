@@ -111,7 +111,7 @@ func wireActivities(core *app.Core, cfg *config.Config, logger *slog.Logger, len
 			OnLag:   func(t time.Time) { exportMetrics.SetLag(time.Since(t).Seconds()) },
 		})
 	}
-	if err := wireColdRetention(act, core, cfg); err != nil {
+	if err := wireColdRetention(act, core, cfg, logger); err != nil {
 		return nil, err
 	}
 	return act, nil
