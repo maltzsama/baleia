@@ -352,6 +352,9 @@ lists them, newest first: admins see every event, anyone else only their own.
 - **Retention:** `BALEIA_AUDIT_RETENTION` (400 days by default). The `audit-retention` schedule
   drops a month's partition only after the cold offload has sealed that month; it is fail-closed
   and never drops data that has not been offloaded.
+- **Manual prune:** `migrate -cmd=audit-prune -before=YYYY-MM` drains the same gated path by hand
+  (it refuses without a cold bucket and refuses the current month or later). `--dry-run` reports
+  the partitions that would be dropped without dropping them; `--before` sets the upper bound.
 
 ## Audit export
 

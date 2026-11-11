@@ -4,6 +4,7 @@ package retention
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/persistence/partitioning"
@@ -37,7 +38,12 @@ type Retain struct {
 	Retention     time.Duration
 	Grace         time.Duration
 	MaxPartitions int
-	Now           func() time.Time
+	// Cutoff, when set, replaces the hot-window cutoff (now - Retention -
+	// Grace); the manual prune passes its -before month here.
+	Cutoff time.Time
+	// DryRun reports the droppable partitions without dropping them.
+	DryRun bool
+	Now    func() time.Time
 	// OnSkip observes a skipped partition with its reason.
 	OnSkip func(partition, reason string)
 }
@@ -52,10 +58,16 @@ func (r *Retain) Run(ctx context.Context) ([]string, error) {
 		now = r.Now
 	}
 	limit := r.MaxPartitions
-	if limit <= 0 {
+	switch {
+	case limit == 0:
 		limit = 1
+	case limit < 0:
+		limit = math.MaxInt // the manual prune drains every eligible partition
 	}
-	cutoff := now().Add(-r.Retention).Add(-r.Grace)
+	cutoff := r.Cutoff
+	if cutoff.IsZero() {
+		cutoff = now().Add(-r.Retention).Add(-r.Grace)
+	}
 
 	parts, err := r.Partitions.ListPartitions(ctx, r.Table)
 	if err != nil {
@@ -83,8 +95,10 @@ func (r *Retain) Run(ctx context.Context) ([]string, error) {
 			r.skip(p.Name, "manifest missing")
 			continue
 		}
-		if err := r.Partitions.DropPartition(ctx, r.Table, p.From, p.Until); err != nil {
-			return dropped, err
+		if !r.DryRun {
+			if err := r.Partitions.DropPartition(ctx, r.Table, p.From, p.Until); err != nil {
+				return dropped, err
+			}
 		}
 		dropped = append(dropped, p.Name)
 		if len(dropped) >= limit {

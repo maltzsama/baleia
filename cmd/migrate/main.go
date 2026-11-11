@@ -13,8 +13,10 @@ import (
 
 func main() {
 	var command, before string
-	flag.StringVar(&command, "cmd", "store-up", "command: store-up, store-down, store-status (GORM schema migrations, ADR 0020); credentials (re-seal legacy credentials), oidc-providers (seal provider configs) or audit-prune (drop audit partitions before -before)")
+	var dryRun bool
+	flag.StringVar(&command, "cmd", "store-up", "command: store-up, store-down, store-status (GORM schema migrations, ADR 0020); credentials (re-seal legacy credentials), oidc-providers (seal provider configs) or audit-prune (drop the gated audit partitions before -before)")
 	flag.StringVar(&before, "before", "", "audit-prune: drop the audit partitions of the months before this one (YYYY-MM)")
+	flag.BoolVar(&dryRun, "dry-run", false, "audit-prune: report the partitions that would be dropped without dropping them")
 	flag.Parse()
 
 	cfg := config.Load()
@@ -36,7 +38,7 @@ func main() {
 	case "oidc-providers":
 		err = migrateOIDCProviders(ctx, logger, cfg)
 	case "audit-prune":
-		err = pruneAudit(ctx, logger, cfg, before)
+		err = pruneAudit(ctx, logger, cfg, before, dryRun)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", command)
 		os.Exit(1)

@@ -119,3 +119,59 @@ func TestRetainMaxPartitions(t *testing.T) {
 		t.Fatalf("dropped = %v, want exactly one (the cap)", dropped)
 	}
 }
+
+// TestRetainDryRun: a dry run reports the droppable partitions but never drops
+// one (the manual `audit-prune --dry-run`).
+func TestRetainDryRun(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
+	jan := month(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	parts := &fakePartitions{parts: []partitioning.Partition{
+		{Name: "audit_events_202601", From: jan, Until: jan.AddDate(0, 1, 0)},
+	}}
+	r := &Retain{
+		Table: "audit_events", Stream: "audit", SinkName: "s3",
+		Partitions: parts, Cursor: &fakeCursor{at: now}, Manifest: &fakeManifest{have: map[time.Time]bool{jan: true}},
+		Retention: 30 * 24 * time.Hour, MaxPartitions: -1, DryRun: true,
+		Now: func() time.Time { return now },
+	}
+	names, err := r.Run(ctx)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(names) != 1 || names[0] != "audit_events_202601" {
+		t.Fatalf("names = %v, want the droppable partition", names)
+	}
+	if len(parts.dropped) != 0 {
+		t.Fatalf("a dry run dropped %v", parts.dropped)
+	}
+}
+
+// TestRetainCutoff: an explicit cutoff replaces now - retention - grace, so the
+// manual `-before` month drives which partitions are candidates.
+func TestRetainCutoff(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
+	jan := month(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	parts := &fakePartitions{parts: []partitioning.Partition{
+		{Name: "audit_events_202601", From: jan, Until: jan.AddDate(0, 1, 0)},
+	}}
+	// A 400-day hot window keeps January; the explicit cutoff makes it eligible.
+	r := &Retain{
+		Table: "audit_events", Stream: "audit", SinkName: "s3",
+		Partitions: parts, Cursor: &fakeCursor{at: now}, Manifest: &fakeManifest{have: map[time.Time]bool{jan: true}},
+		Retention: 400 * 24 * time.Hour, Grace: 7 * 24 * time.Hour,
+		Cutoff:        month(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)),
+		MaxPartitions: -1,
+		Now:           func() time.Time { return now },
+	}
+	names, err := r.Run(ctx)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(names) != 1 || names[0] != "audit_events_202601" {
+		t.Fatalf("names = %v, want January dropped by the explicit cutoff", names)
+	}
+}
