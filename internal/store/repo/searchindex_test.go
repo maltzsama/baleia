@@ -108,7 +108,7 @@ func TestSearchIndex_PortableLookups(t *testing.T) {
 		var found map[string][]string
 		err := gdb.Transaction(func(tx *gorm.DB) error {
 			var err error
-			found, err = r.candidates(tx, []string{key}, kinds, search.Compile(q), 20)
+			found, err = r.candidates(tx, []string{key}, kinds, search.Compile(q), 20, true)
 			return err
 		})
 		if err != nil {

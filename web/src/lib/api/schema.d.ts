@@ -1334,7 +1334,7 @@ export interface paths {
         };
         /**
          * Tables and columns whose names match, best first (autocomplete and search)
-         * @description Trigram similarity over table and column names of the granted catalogs; removed tables are left out.
+         * @description Matches the names and comments of tables and columns of the granted catalogs without case or accents, by word, by prefix and, by default, forgiving typos; removed tables are left out. With `match=prefix` only names that start with `q` are returned and no typo is forgiven, which is what a typeahead needs and is cheaper.
          */
         get: operations["searchMetadata"];
         put?: never;
@@ -9955,6 +9955,8 @@ export interface operations {
                 q: string;
                 kind?: "table" | "column" | "all";
                 catalog_id?: string;
+                /** @description `fuzzy` (default) matches words, comments and misspellings; `prefix` returns only names that start with `q` */
+                match?: "fuzzy" | "prefix";
                 /** @description Tables whose table-level docs carry every one of these tags */
                 tags?: string[];
                 /** @description Filter by the `certified` tag */

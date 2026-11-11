@@ -247,6 +247,17 @@ func TestSearchIndex_FuzzyReadsTheVocabularyOnce(t *testing.T) {
 		t.Fatalf("the vocabulary was read %d times after a rebuild, want 2", n)
 	}
 
+	// A prefix-only search never needs the vocabulary: the lookup by prefix is
+	// all of it.
+	rows, err := f.r.SearchMetadata(context.Background(), db.SearchMetadataParams{
+		WorkspaceID: f.wsPG(), Q: "cus", Kind: "all", Lim: 20, PrefixOnly: true,
+	})
+	if err != nil || len(rows) == 0 || rows[0].TableName != "customers" {
+		t.Fatalf("a prefix-only search finds the table: %v, %v", names(rows), err)
+	}
+	if n := reads.Load(); n != 2 {
+		t.Fatalf("a prefix-only search read the vocabulary: %d reads, want 2", n)
+	}
 	// A search that forgives typos reads the terms of the prefix it needs once
 	// per version of the scope: "cus" starts with "cu", not read since the
 	// rebuild; asking again reads nothing.

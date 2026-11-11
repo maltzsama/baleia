@@ -66,6 +66,10 @@ New write paths keep appearing.
    read once per version, by a bounded range query on the searching
    transaction's own connection. A search must never wait for a second
    connection while it holds one: with many searches that starves the pool.
+5. **A typeahead asks for a prefix.** `match=prefix` on the metadata search
+   returns only names that start with the text and never runs the fuzzy
+   fallback. The editor's completion uses it: it only keeps names that start
+   with what was typed, and it asks on every pause in typing.
 
 ## Consequences
 

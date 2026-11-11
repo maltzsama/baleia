@@ -160,7 +160,7 @@ func (r *Repo) rebuildScope(ctx context.Context, key string, owner scopeOwner, b
 // candidates are the refs, by kind, of rows of scopes with a term that matches
 // the pattern: exactly, by prefix and, when those find fewer than want rows,
 // by a close spelling. The index proposes; the caller reads and scores them.
-func (r *Repo) candidates(tx *gorm.DB, scopes, kinds []string, p search.Pattern, want int) (map[string][]string, error) {
+func (r *Repo) candidates(tx *gorm.DB, scopes, kinds []string, p search.Pattern, want int, fuzzy bool) (map[string][]string, error) {
 	if len(scopes) == 0 || len(kinds) == 0 || p.IsEmpty() {
 		return map[string][]string{}, nil
 	}
@@ -198,7 +198,7 @@ func (r *Repo) candidates(tx *gorm.DB, scopes, kinds []string, p search.Pattern,
 		}
 		add(rows)
 	}
-	if total < want {
+	if fuzzy && total < want {
 		near, err := r.nearTerms(tx, scopes, p)
 		if err != nil {
 			return nil, err
@@ -419,7 +419,7 @@ func (r *Repo) ContentCandidates(ctx context.Context, workspaceID db.UUID, p sea
 	var found map[string][]string
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
-		found, err = r.candidates(tx, []string{key}, []string{kindSavedQuery, kindMetric, kindModel}, p, contentsearch.MaxLimit)
+		found, err = r.candidates(tx, []string{key}, []string{kindSavedQuery, kindMetric, kindModel}, p, contentsearch.MaxLimit, true)
 		return err
 	})
 	if err != nil {

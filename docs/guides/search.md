@@ -16,6 +16,9 @@ You use it from:
 - the **search box of the sidebar**, for tables and columns;
 - `GET /workspaces/{id}/search` in the API (`q`, `kind`, `catalog_id`,
   `space_id`, `limit`);
+- `GET /workspaces/{id}/metadata/search`, for tables and columns only. With
+  `match=prefix` it returns just the names that start with `q` and forgives no
+  typo, which is what the editor's autocomplete asks for;
 - the **`search` tool** of the [MCP server](../mcp.md), for agents.
 
 Each surface also keeps its own endpoint (`/metadata/search`,

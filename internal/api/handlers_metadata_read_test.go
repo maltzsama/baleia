@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -394,6 +395,63 @@ func TestSearch_ZeroResultTelemetry(t *testing.T) {
 		if got[key] != n {
 			t.Errorf("baleia_search_requests_total %s = %v, want %v (all: %v)", key, got[key], n, got)
 		}
+	}
+}
+
+// A prefix-only search returns the names that start with the text and forgives
+// no typo; the default search matches words and misspellings too (#943).
+func TestSearch_PrefixOnly(t *testing.T) {
+	t.Parallel()
+	f := newMetaFixture(t)
+	search := func(q string, match *SearchMetadataParamsMatch) []string {
+		t.Helper()
+		r, err := f.h.SearchMetadata(f.as(f.owner), SearchMetadataRequestObject{Id: f.ws, Params: SearchMetadataParams{Q: q, Match: match}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []string{}
+		for _, h := range r.(SearchMetadata200JSONResponse) {
+			name := h.Table
+			if h.Column != nil {
+				name = *h.Column
+			}
+			out = append(out, name)
+		}
+		return out
+	}
+	prefix := Prefix
+
+	got := search("ord", &prefix)
+	if len(got) == 0 {
+		t.Fatal("a prefix finds the names that start with it")
+	}
+	for _, name := range got {
+		if !strings.HasPrefix(name, "ord") {
+			t.Errorf("a prefix-only search returned %q, which does not start with ord: %v", name, got)
+		}
+	}
+	if !slices.Contains(got, "orders") || !slices.Contains(got, "order_note") {
+		t.Errorf("prefix-only hits = %v, want the table orders and its column order_note", got)
+	}
+	if def := search("ord", nil); !slices.Contains(def, "customer_order_history") {
+		t.Errorf("the default search also matches a word inside a name: %v", def)
+	}
+
+	if got := search("ordrs", &prefix); len(got) != 0 {
+		t.Errorf("a prefix-only search forgave a typo: %v", got)
+	}
+	if def := search("ordrs", nil); !slices.Contains(def, "orders") {
+		t.Errorf("the default search forgives it: %v", def)
+	}
+
+	// A mode that does not exist is refused, not read as the default.
+	unknown := SearchMetadataParamsMatch("preifx")
+	r, err := f.h.SearchMetadata(f.as(f.owner), SearchMetadataRequestObject{Id: f.ws, Params: SearchMetadataParams{Q: "ord", Match: &unknown}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.(SearchMetadata422JSONResponse); !ok {
+		t.Errorf("match=preifx = %T, want 422", r)
 	}
 }
 

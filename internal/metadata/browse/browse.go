@@ -216,6 +216,9 @@ type SearchQuery struct {
 	Tags      []string
 	Certified *bool
 	Namespace []string
+	// PrefixOnly returns only names that start with Text and forgives no
+	// typo: what a typeahead needs, and cheaper.
+	PrefixOnly bool
 }
 
 // Search finds tables and columns of the catalogs granted to ws.
@@ -246,6 +249,7 @@ func (s *Service) Search(ctx context.Context, ws db.UUID, q SearchQuery) ([]db.S
 		Tags:        q.Tags,
 		Certified:   q.Certified,
 		Namespace:   q.Namespace,
+		PrefixOnly:  q.PrefixOnly,
 		Lim:         int32(limit),
 	})
 }

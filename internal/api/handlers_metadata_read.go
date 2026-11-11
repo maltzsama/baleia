@@ -332,6 +332,10 @@ func (h *CatalogHandlers) SearchMetadata(ctx context.Context, request SearchMeta
 		q.Tags = *p.Tags
 	}
 	q.Certified = p.Certified
+	if p.Match != nil && *p.Match != Fuzzy && *p.Match != Prefix {
+		return SearchMetadata422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "match must be fuzzy or prefix")}, nil
+	}
+	q.PrefixOnly = p.Match != nil && *p.Match == Prefix
 	if p.Namespace != nil {
 		q.Namespace = *p.Namespace
 	}
