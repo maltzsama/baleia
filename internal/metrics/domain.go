@@ -244,6 +244,40 @@ func (s *Schedules) Succeeded(schedule string) {
 	s.last.WithLabelValues(schedule).SetToCurrentTime()
 }
 
+// Retention records, per stream, how old the oldest partition still in the
+// database is and how old retention allows it to get (ADR 0026), so an alert can
+// tell a backlog from a schedule that merely has not run yet.
+type Retention struct{ oldest, allowed *prometheus.GaugeVec }
+
+// Retention registers baleia_retention_oldest_partition_start_timestamp_seconds
+// and baleia_retention_allowed_age_seconds, both by stream (audit or
+// query_history, bounded).
+func (r *Registry) Retention() *Retention {
+	m := &Retention{
+		oldest: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: Namespace, Name: "retention_oldest_partition_start_timestamp_seconds",
+			Help: "Unix time at which the oldest partition of a stream still in the database starts.",
+		}, []string{"stream"}),
+		allowed: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: Namespace, Name: "retention_allowed_age_seconds",
+			Help: "How old the oldest partition may get before retention is behind: retention, grace, the cadence and one day.",
+		}, []string{"stream"}),
+	}
+	r.reg.MustRegister(m.oldest, m.allowed)
+	return m
+}
+
+// Observe records the start of a stream's oldest partition and how old it may
+// get. It is a timestamp, not an age, so the age keeps growing between passes
+// and an alert on it does not depend on the schedule having run.
+func (m *Retention) Observe(stream string, oldest time.Time, allowed time.Duration) {
+	if m == nil {
+		return
+	}
+	m.oldest.WithLabelValues(stream).Set(float64(oldest.Unix()))
+	m.allowed.WithLabelValues(stream).Set(allowed.Seconds())
+}
+
 // Metadata records the metadata sync (#17). No metric carries a catalog
 // label: the allow-list forbids concrete names.
 type Metadata struct{ duration *prometheus.HistogramVec }

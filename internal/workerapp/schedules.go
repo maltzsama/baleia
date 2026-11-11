@@ -40,30 +40,62 @@ func EnsureSchedules(ctx context.Context, c client.Client, cfg *config.Config) e
 		// Best effort: an absent schedule is the state we want.
 		_ = schedules.Remove(ctx, c, schedules.AuditExport)
 	}
-	// Cold offload and retention (ADR 0024) run only for a stream whose cold
-	// bucket is configured; a stream without one keeps its retention
-	// fail-closed (it never drops).
-	if cfg.AuditColdBucket != "" {
-		if err := schedules.Ensure(ctx, c, TaskQueue, []schedules.Spec{
-			schedulespecs.AuditOffload(time.Hour),
-			schedulespecs.AuditRetention(24 * time.Hour),
-		}); err != nil {
-			return fmt.Errorf("audit cold schedules: %w", err)
-		}
-	} else {
-		_ = schedules.Remove(ctx, c, schedules.AuditOffload)
-		_ = schedules.Remove(ctx, c, schedules.AuditRetention)
+	// Cold offload and retention (ADR 0024, ADR 0026).
+	ensure, remove, err := coldSchedules(cfg)
+	if err != nil {
+		return err
 	}
-	if cfg.QueryHistoryColdBucket != "" {
-		if err := schedules.Ensure(ctx, c, TaskQueue, []schedules.Spec{
-			schedulespecs.QueryHistoryOffload(time.Hour),
-			schedulespecs.QueryHistoryRetention(24 * time.Hour),
-		}); err != nil {
-			return fmt.Errorf("query-history cold schedules: %w", err)
-		}
-	} else {
-		_ = schedules.Remove(ctx, c, schedules.QueryHistoryOffload)
-		_ = schedules.Remove(ctx, c, schedules.QueryHistoryRetention)
+	if err := schedules.Ensure(ctx, c, TaskQueue, ensure); err != nil {
+		return fmt.Errorf("cold schedules: %w", err)
+	}
+	for _, id := range remove {
+		// Best effort: an absent schedule is the state we want.
+		_ = schedules.Remove(ctx, c, id)
 	}
 	return nil
+}
+
+// coldSchedules decides which cold offload and retention schedules exist. A
+// stream with a cold bucket is offloaded, hourly. Its retention runs on the
+// stream's cadence when it has a bucket to gate on, or when it opted out of the
+// gate (BALEIA_*_OFFLOAD_BEFORE_DROP=false), and does not exist otherwise: a
+// stream with neither keeps its retention fail-closed, it never drops. A
+// schedule that should not exist is returned in remove, so a changed
+// configuration takes it away.
+func coldSchedules(cfg *config.Config) (ensure []schedules.Spec, remove []string, err error) {
+	for _, st := range []struct {
+		bucket                 string
+		dropWithoutOffload     bool
+		cadence                string
+		offloadID, retentionID string
+		offload                func(time.Duration) schedules.Spec
+		retention              func(string) schedules.Spec
+	}{
+		{
+			bucket: cfg.AuditColdBucket, dropWithoutOffload: cfg.AuditDropWithoutOffload, cadence: cfg.AuditRetentionCadence,
+			offloadID: schedules.AuditOffload, retentionID: schedules.AuditRetention,
+			offload: schedulespecs.AuditOffload, retention: schedulespecs.AuditRetention,
+		},
+		{
+			bucket: cfg.QueryHistoryColdBucket, dropWithoutOffload: cfg.QueryHistoryDropWithoutOffload, cadence: cfg.QueryHistoryRetentionCadence,
+			offloadID: schedules.QueryHistoryOffload, retentionID: schedules.QueryHistoryRetention,
+			offload: schedulespecs.QueryHistoryOffload, retention: schedulespecs.QueryHistoryRetention,
+		},
+	} {
+		if st.bucket != "" {
+			ensure = append(ensure, st.offload(time.Hour))
+		} else {
+			remove = append(remove, st.offloadID)
+		}
+		if st.bucket == "" && !st.dropWithoutOffload {
+			remove = append(remove, st.retentionID)
+			continue
+		}
+		cron, err := config.RetentionCron(st.cadence)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s retention cadence: %w", st.retentionID, err)
+		}
+		ensure = append(ensure, st.retention(cron))
+	}
+	return ensure, remove, nil
 }

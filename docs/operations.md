@@ -322,6 +322,7 @@ CI runs `promtool check rules` and `promtool test rules deploy/prometheus/alerts
 | Authz (API) | `baleia_authz_denials_total` | `resource`, `reason` (`not_found`, `forbidden`) |
 | Engines (worker) | `baleia_engine_statements_total`, `baleia_engine_statement_duration_seconds`, `baleia_engine_errors_total`, `baleia_engine_rows_returned_total`, `baleia_engine_result_bytes_total` | `engine` (engine kind), `outcome`, `code` |
 | Schedules (worker) | `baleia_schedule_last_success_timestamp_seconds` | `schedule` |
+| Retention (worker) | `baleia_retention_oldest_partition_start_timestamp_seconds`, `baleia_retention_allowed_age_seconds` | `stream` (`audit`, `query_history`) |
 | Catalogs (API) | `baleia_catalog_ddl_total`, `baleia_catalogs_by_state` | `action` (`create`, `replace`, `drop`), `outcome`, `state` |
 | Audit (API, worker) | `baleia_audit_write_failures_total` | — |
 | Metadata (worker) | `baleia_metadata_sync_duration_seconds`, `baleia_metadata_staleness_seconds_max` (the stalest enabled catalog; no catalog label) | `outcome` |
@@ -352,13 +353,16 @@ lists them, newest first: admins see every event, anyone else only their own.
   past today (14 by default) and never drops one. PostgreSQL has no default partition: an event
   whose day has no partition fails to write, so the horizon is how long the schedule can stay
   down before writes start failing.
-- **Retention:** `BALEIA_AUDIT_RETENTION` (400 days by default). The `audit-retention` schedule
-  drops a day's partition only after the cold offload has sealed that day and the day's manifest
-  validates; it is fail-closed and never drops data that has not been offloaded.
+- **Retention:** `BALEIA_AUDIT_RETENTION` (45 days by default, at least 1 day). The
+  `audit-retention` schedule, weekly by default, drops a day's partition only after the cold
+  offload has sealed that day and the day's manifest validates; it is fail-closed and never drops
+  data that has not been offloaded, unless the stream opts out (see the next section). Audit older
+  than the window lives only in the cold store, so the bucket's lifecycle and legal-hold policy is
+  what keeps the audit trail for compliance.
 - **Manual prune:** `migrate -cmd=audit-prune -before=YYYY-MM-DD` (or `YYYY-MM` for the first of
   a month) drains the same gated path by hand (it refuses without a cold bucket and refuses
   today or later). `--dry-run` reports the partitions that would be dropped without dropping
-  them. `-before` **overrides the hot-retention window** (including the 400-day default), so it
+  them. `-before` **overrides the hot-retention window** (including the 45-day default), so it
   is the cutoff to choose carefully.
 
 ## Audit export
@@ -400,24 +404,47 @@ retention is gated on.
   advances past a day only after its manifest is written. A day with no rows still gets a
   manifest, so its empty partition can be dropped. That is about 365 manifests per stream per
   year.
-- **Configuration:** `BALEIA_AUDIT_COLD_BUCKET`/`_PREFIX` and
-  `BALEIA_QUERY_HISTORY_COLD_BUCKET`/`_PREFIX` (both off by default), `BALEIA_AUDIT_RETENTION`
-  (400d), `BALEIA_QUERY_HISTORY_RETENTION` (180d), `BALEIA_AUDIT_COLD_GRACE` /
-  `BALEIA_QUERY_HISTORY_COLD_GRACE` (7d), and `BALEIA_PRUNE_MAX_PARTITIONS` (1).
-- **Schedules:** `audit-offload` and `query-history-offload` (hourly), and `audit-retention` /
-  `query-history-retention` (daily). Each pair is created only when that stream's cold bucket is
-  configured.
+- **Configuration**, per stream (`AUDIT` and `QUERY_HISTORY`):
+
+  | Setting | Default | Meaning |
+  |---|---|---|
+  | `BALEIA_<STREAM>_COLD_BUCKET`, `_COLD_PREFIX` | off | The cold sink |
+  | `BALEIA_<STREAM>_RETENTION` | `45d` | Hot window, at least `1d`; written as `45d` or `1080h` |
+  | `BALEIA_<STREAM>_RETENTION_CADENCE` | `weekly` | `daily` (03:00 UTC), `weekly` (Sunday 03:00 UTC) or a five-field cron expression in UTC |
+  | `BALEIA_<STREAM>_OFFLOAD_BEFORE_DROP` | `true` | `false` drops on age alone, with no cold copy (see below) |
+  | `BALEIA_<STREAM>_COLD_GRACE` | `1d` | Margin past the window before a day is droppable |
+  | `BALEIA_PRUNE_MAX_PARTITIONS` | `14` | Days dropped per run, per stream |
+
+  A value that cannot be read (`45 days`, `0`, `FALSE`, a cron with six fields) stops the worker at
+  startup instead of falling back to a default: these settings decide when data is deleted.
+- **Schedules:** `audit-offload` and `query-history-offload` (hourly, only with a cold bucket), and
+  `audit-retention` / `query-history-retention`, on each stream's cadence. A stream's retention
+  schedule exists when it has a cold bucket, or when it opted out of the gate; a stream with
+  neither never drops anything, and raises [BaleiaRetentionBacklog](#baleiaretentionbacklog) once
+  its oldest partition is past the allowance.
 - **Fail-closed:** a partition is dropped only if the cold cursor has advanced past it and its
   day's manifest exists and validates: the manifest names that stream and day, and every object
   it lists is in the cold store with the recorded checksum and row count. A day that fails the
   check is skipped, with the reason in the worker log (`reason`), and holds only itself. An
   unconfigured or unreachable cold sink grows the database (with alerts) rather than losing data.
-- **Draining a backlog:** a retention run drops at most `BALEIA_PRUNE_MAX_PARTITIONS` days (1 by
-  default) and runs once a day, while one more day becomes droppable every day. A database that
-  already holds more than its window therefore never catches up at the default. Raise
-  `BALEIA_PRUNE_MAX_PARTITIONS` above 1 until the oldest partition is back inside the window, or
-  drain it in one go with `migrate -cmd=audit-prune -before=YYYY-MM-DD`, which has no cap and
-  goes through the same gates.
+- **Opting out of the offload gate:** `BALEIA_<STREAM>_OFFLOAD_BEFORE_DROP=false` drops partitions
+  past the window on age alone, for a deployment that keeps no cold copy on purpose. **It loses
+  data by configuration**: with no cold bucket nothing is recoverable once dropped, and with one the
+  offload still runs but a partition is dropped without checking that it finished, so a copy may
+  exist and is not guaranteed. It is loud: the worker logs a warning at startup that says which of
+  the two applies, and every dropped partition writes an audit event (`partition.drop`, reason
+  `offload_gate_skipped`) naming the stream, the day and whether a cold bucket was configured. With the default (`true`) an unconfigured cold sink
+  still blocks every drop.
+- **Draining a backlog:** a retention run drops at most `BALEIA_PRUNE_MAX_PARTITIONS` days (14 by
+  default). With the weekly default one more week of days becomes droppable between runs, so a run
+  that drops 14 days shrinks the backlog by 7 days per week: a database that holds 400 days with a
+  46-day window (window plus grace) needs about 51 weeks to catch up. To go faster, raise the cap or run
+  the stream on `daily`. For the **audit** stream only, `migrate -cmd=audit-prune -before=YYYY-MM-DD`
+  drains it in one go, with no cap and through the same gates. That command selects `audit_events`
+  alone, and it refuses to run without `BALEIA_AUDIT_COLD_BUCKET`, also when the audit stream has
+  opted out of the gate. The query history has no such command: use the cap and the cadence.
+  [BaleiaRetentionBacklog](#baleiaretentionbacklog) fires during the drain, because the oldest
+  partition is past the allowance; that is expected.
 - **Upgrading from 0.7.0:** store migration 14 converts `audit_events`, `query_executions` and
   `query_statements` to one partition per day, from the oldest row through today plus the
   horizon. It runs in stages (preparation, one transaction per table, then one per foreign key)
@@ -773,6 +800,18 @@ A recurring job has not succeeded in three of its intervals:
 1. Check that a worker is running and polling. A worker that is down raises [BaleiaWorkerDown](#baleiaworkerdown). If `temporal_worker_task_slots_available` is flat or `temporal_*` is missing, no worker is polling.
 2. In the Temporal UI, open the schedule (its ID is the alert's `schedule` label). Read the last runs' failures.
 3. The gauge is set when a pass completes: for table health, retriever dispatch and metadata sync, after the whole pass, not its first activity. It restarts empty with the worker. Right after a worker restart, a schedule shows up once its next pass succeeds.
+
+### BaleiaRetentionBacklog
+
+The oldest partition of a stream (`audit` or `query_history`) is older than retention allows: the retention window, the grace, the cadence of the retention schedule and the day the partition spans. The worker exports the start of that partition (`baleia_retention_oldest_partition_start_timestamp_seconds{stream}`) and the allowance (`baleia_retention_allowed_age_seconds{stream}`) and the alert compares them. A stream with no cold bucket and no opt-out never drops anything, and it raises this alert too, once its oldest partition is past the allowance.
+
+1. **Expected after an upgrade.** A database that already held more history than its window has a backlog, and a run drops at most `BALEIA_PRUNE_MAX_PARTITIONS` days. The alert stays until the backlog is gone: see **Draining a backlog** under [Cold offload and retention](#cold-offload-and-retention), or, for the audit stream only, drain it at once with `migrate -cmd=audit-prune` (it needs `BALEIA_AUDIT_COLD_BUCKET` even when the stream opted out of the gate, and it does not touch the query history, which is drained with the cap and the cadence).
+2. In the Temporal UI, open the stream's retention schedule (`audit-retention` or `query-history-retention`) and read the last runs. A run that failed delays the drop by a whole cadence.
+3. Read the worker log for `partition skipped` lines. Each carries the day and the reason:
+   - `cursor not advanced` or a failed offload: the offload has not reached that day. A failed offload stalls at one day, so no later day can be dropped either. Fix the offload first (the cold bucket, its credentials, its reachability).
+   - `manifest missing` or a manifest that fails its check: the day's objects are not all in the cold store with the recorded checksum and row count. That day holds only itself.
+4. The stream has no cold bucket and no opt-out: set `BALEIA_AUDIT_COLD_BUCKET` (or `BALEIA_QUERY_HISTORY_COLD_BUCKET`), or set `BALEIA_*_OFFLOAD_BEFORE_DROP=false` if no cold copy is wanted on purpose.
+5. The partition schedule is not running (`audit-partitions`): see [BaleiaScheduleStale](#baleiaschedulestale).
 
 ### BaleiaMetadataStale
 

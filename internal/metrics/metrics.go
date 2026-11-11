@@ -29,7 +29,7 @@ const Namespace = "baleia"
 // (TestLabelAllowList).
 var AllowedLabels = []string{
 	"route", "method", "status_class", "kind", "outcome", "resource", "reason", "engine", "code", "class",
-	"schedule", "action", "result", "state", "operation", "process", "version", "commit",
+	"schedule", "action", "result", "state", "operation", "process", "version", "commit", "stream",
 }
 
 // Registry is one process's metrics.

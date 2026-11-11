@@ -5,6 +5,7 @@ package retention
 
 import (
 	"context"
+	"errors"
 	"math"
 	"time"
 
@@ -47,6 +48,14 @@ type Retain struct {
 	Cutoff time.Time
 	// DryRun reports the droppable partitions without dropping them.
 	DryRun bool
+	// DropWithoutOffload drops on the age condition alone: the cold cursor and
+	// the manifest are not consulted (and may be nil). It is the explicit
+	// opt-out of the fail-closed gate, for a deployment that keeps no cold copy
+	// on purpose (BALEIA_*_OFFLOAD_BEFORE_DROP=false, ADR 0026).
+	DropWithoutOffload bool
+	// OnDropped observes each partition after it was dropped, never on a dry run.
+	// The opt-out uses it to write an audit event naming the day.
+	OnDropped func(ctx context.Context, p partitioning.Partition)
 	// PreDrop, when set, runs after the gates pass and before the partition is
 	// dropped, with the partition's [from, until). It removes dependent rows
 	// (references, joins, snapshots) that would otherwise block the detach.
@@ -58,8 +67,8 @@ type Retain struct {
 
 // Run drops the droppable partitions, at most MaxPartitions per run, and
 // returns the names it dropped. A partition is droppable once it is entirely
-// past the hot window and both the cursor and the manifest gates pass; it is
-// skipped (never dropped) otherwise.
+// past the hot window and both the cursor and the manifest gates pass (unless
+// DropWithoutOffload opts out of them); it is skipped (never dropped) otherwise.
 func (r *Retain) Run(ctx context.Context) ([]string, error) {
 	now := time.Now
 	if r.Now != nil {
@@ -71,6 +80,9 @@ func (r *Retain) Run(ctx context.Context) ([]string, error) {
 		limit = 1
 	case limit < 0:
 		limit = math.MaxInt // the manual prune drains every eligible partition
+	}
+	if !r.DropWithoutOffload && (r.Cursor == nil || r.Manifest == nil) {
+		return nil, errors.New("retention: the offload gate needs a cursor and a manifest check")
 	}
 	cutoff := r.Cutoff
 	if cutoff.IsZero() {
@@ -87,21 +99,23 @@ func (r *Retain) Run(ctx context.Context) ([]string, error) {
 		if p.Until.After(cutoff) {
 			continue // still in the hot window
 		}
-		cursor, err := r.Cursor.OccurredAt(ctx, r.Stream, r.SinkName)
-		if err != nil {
-			return dropped, err
-		}
-		if cursor.Before(p.Until) {
-			r.skip(p.Name, "cursor not advanced")
-			continue
-		}
-		reason, err := r.Manifest.Verify(ctx, p.From)
-		if err != nil {
-			return dropped, err
-		}
-		if reason != "" {
-			r.skip(p.Name, reason)
-			continue
+		if !r.DropWithoutOffload {
+			cursor, err := r.Cursor.OccurredAt(ctx, r.Stream, r.SinkName)
+			if err != nil {
+				return dropped, err
+			}
+			if cursor.Before(p.Until) {
+				r.skip(p.Name, "cursor not advanced")
+				continue
+			}
+			reason, err := r.Manifest.Verify(ctx, p.From)
+			if err != nil {
+				return dropped, err
+			}
+			if reason != "" {
+				r.skip(p.Name, reason)
+				continue
+			}
 		}
 		if !r.DryRun {
 			// Remove rows that reference the partition before detaching: the
@@ -115,6 +129,9 @@ func (r *Retain) Run(ctx context.Context) ([]string, error) {
 			}
 			if err := r.Partitions.DropPartition(ctx, r.Table, p.From, p.Until); err != nil {
 				return dropped, err
+			}
+			if r.OnDropped != nil {
+				r.OnDropped(ctx, p)
 			}
 		}
 		dropped = append(dropped, p.Name)

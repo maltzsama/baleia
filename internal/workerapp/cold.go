@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/app"
+	"github.com/galileostudio/baleia/internal/audit"
 	auditexport "github.com/galileostudio/baleia/internal/audit/export"
 	"github.com/galileostudio/baleia/internal/audit/offload"
 	"github.com/galileostudio/baleia/internal/audit/retention"
@@ -17,54 +19,85 @@ import (
 	"github.com/galileostudio/baleia/internal/temporal/activities"
 )
 
-// wireColdRetention wires the S3 cold offload and the gated retention into the
-// activities (ADR 0024). Each stream has its own bucket; a stream whose bucket
-// is empty is left unwired, and its retention stays fail-closed.
-func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.Config) error {
-	if cfg.AuditColdBucket == "" && cfg.QueryHistoryColdBucket == "" {
-		return nil
-	}
+// wireColdRetention wires the S3 cold offload and the retention into the
+// activities (ADR 0024, ADR 0026). Each stream has its own bucket. A stream with
+// a bucket is offloaded and its retention is gated on the cold copy; a stream
+// without one is left unwired and its retention stays fail-closed, unless it
+// opts out explicitly (BALEIA_*_OFFLOAD_BEFORE_DROP=false), in which case its
+// partitions are dropped on age alone, with a warning now and an audit event per
+// drop.
+func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.Config, logger *slog.Logger) error {
 	q := core.Queries
 
-	if cfg.AuditColdBucket != "" {
-		cold, err := coldClient(cfg, cfg.AuditColdBucket)
-		if err != nil {
-			return err
-		}
-		sink := offload.NewSink(cold, cfg.AuditColdPrefix, auditexport.StreamAudit)
-		pg := auditexport.Postgres{Queries: q}
-		act.SetAuditOffload(&offload.Offloader{
-			Stream: auditexport.StreamAudit, SinkName: auditexport.SinkS3,
-			Cursor: pg, Sink: sink,
-			Reader: &offload.AuditReader{Source: pg, Name: auditexport.StreamAudit},
-		})
-		act.SetAuditRetain(&retention.Retain{
-			Table: "audit_events", Stream: auditexport.StreamAudit, SinkName: auditexport.SinkS3,
-			Partitions: repoPartitions{q}, Cursor: repoCursor{q},
-			Manifest:      sink,
-			Retention:     cfg.AuditRetention,
-			Grace:         cfg.AuditColdGrace,
-			MaxPartitions: cfg.PruneMaxPartitions,
-		})
+	// Both streams get an allowance, wired or not: a stream that never drops
+	// (no cold bucket, no opt-out) is exactly the one whose growth the
+	// BaleiaRetentionBacklog alert has to see.
+	if err := setAllowance(act, "audit", cfg.AuditRetentionWindow(), cfg.AuditGrace(), cfg.AuditRetentionCadence); err != nil {
+		return err
+	}
+	if err := setAllowance(act, "query_history", cfg.QueryHistoryRetentionWindow(), cfg.QueryHistoryGrace(), cfg.QueryHistoryRetentionCadence); err != nil {
+		return err
 	}
 
-	if cfg.QueryHistoryColdBucket != "" {
-		qhCold, err := coldClient(cfg, cfg.QueryHistoryColdBucket)
-		if err != nil {
-			return err
+	if cfg.AuditColdBucket != "" || cfg.AuditDropWithoutOffload {
+		retain := &retention.Retain{
+			Table: "audit_events", Stream: auditexport.StreamAudit, SinkName: auditexport.SinkS3,
+			Partitions:         repoPartitions{q},
+			Retention:          cfg.AuditRetentionWindow(),
+			Grace:              cfg.AuditGrace(),
+			MaxPartitions:      cfg.PruneCap(),
+			DropWithoutOffload: cfg.AuditDropWithoutOffload,
 		}
-		sink := offload.NewSink(qhCold, cfg.QueryHistoryColdPrefix, auditexport.StreamQueryHistory)
-		pg := auditexport.Postgres{Queries: q}
-		act.SetQueryHistoryOffload(&offload.Offloader{
-			Stream: auditexport.StreamQueryHistory, SinkName: auditexport.SinkS3,
-			Cursor: pg, Sink: sink,
-			// A day is only sealed a day after it ends, so an execution that
-			// crosses the boundary is archived in its final state.
-			Lag: offload.QueryHistorySafetyLag,
-			// Executions and their statements are read together and written as
-			// one day's pair (ADR 0024, ADR 0026).
-			Reader: &offload.QueryHistoryReader{Store: core.StoreRepo},
-		})
+		if cfg.AuditColdBucket != "" {
+			cold, err := coldClient(cfg, cfg.AuditColdBucket)
+			if err != nil {
+				return err
+			}
+			sink := offload.NewSink(cold, cfg.AuditColdPrefix, auditexport.StreamAudit)
+			pg := auditexport.Postgres{Queries: q}
+			act.SetAuditOffload(&offload.Offloader{
+				Stream: auditexport.StreamAudit, SinkName: auditexport.SinkS3,
+				Cursor: pg, Sink: sink,
+				Reader: &offload.AuditReader{Source: pg, Name: auditexport.StreamAudit},
+			})
+			retain.Cursor, retain.Manifest = repoCursor{q}, sink
+		}
+		if cfg.AuditDropWithoutOffload {
+			warnDropWithoutOffload(logger, "audit", "BALEIA_AUDIT_OFFLOAD_BEFORE_DROP", cfg.AuditColdBucket != "")
+			retain.OnDropped = droppedWithoutOffload(core.Audit, auditexport.StreamAudit, cfg.AuditColdBucket != "")
+		}
+		act.SetAuditRetain(retain)
+	}
+
+	if cfg.QueryHistoryColdBucket != "" || cfg.QueryHistoryDropWithoutOffload {
+		var (
+			sink   *offload.Sink
+			cursor retention.Cursor
+		)
+		if cfg.QueryHistoryColdBucket != "" {
+			qhCold, err := coldClient(cfg, cfg.QueryHistoryColdBucket)
+			if err != nil {
+				return err
+			}
+			sink = offload.NewSink(qhCold, cfg.QueryHistoryColdPrefix, auditexport.StreamQueryHistory)
+			cursor = repoCursor{q}
+			pg := auditexport.Postgres{Queries: q}
+			act.SetQueryHistoryOffload(&offload.Offloader{
+				Stream: auditexport.StreamQueryHistory, SinkName: auditexport.SinkS3,
+				Cursor: pg, Sink: sink,
+				// A day is only sealed a day after it ends, so an execution that
+				// crosses the boundary is archived in its final state.
+				Lag: offload.QueryHistorySafetyLag,
+				// Executions and their statements are read together and written as
+				// one day's pair (ADR 0024, ADR 0026).
+				Reader: &offload.QueryHistoryReader{Store: core.StoreRepo},
+			})
+		}
+		var onDropped func(context.Context, partitioning.Partition)
+		if cfg.QueryHistoryDropWithoutOffload {
+			warnDropWithoutOffload(logger, "query_history", "BALEIA_QUERY_HISTORY_OFFLOAD_BEFORE_DROP", cfg.QueryHistoryColdBucket != "")
+			onDropped = droppedWithoutOffload(core.Audit, auditexport.StreamQueryHistory, cfg.QueryHistoryColdBucket != "")
+		}
 		var retains []*retention.Retain
 		// Children first: query_statements references query_executions, so its
 		// day partition must be detached and dropped before the parent's.
@@ -84,19 +117,82 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 					return storeRepo.DeleteStatementJoinsByPeriod(ctx, from, until)
 				}
 			}
-			retains = append(retains, &retention.Retain{
+			r := &retention.Retain{
 				Table: table, Stream: auditexport.StreamQueryHistory, SinkName: auditexport.SinkS3,
-				Partitions: repoPartitions{q}, Cursor: repoCursor{q},
-				Manifest:      sink,
-				Retention:     cfg.QueryHistoryRetention,
-				Grace:         cfg.QueryHistoryColdGrace,
-				MaxPartitions: cfg.PruneMaxPartitions,
-				PreDrop:       preDrop,
-			})
+				Partitions:         repoPartitions{q},
+				Retention:          cfg.QueryHistoryRetentionWindow(),
+				Grace:              cfg.QueryHistoryGrace(),
+				MaxPartitions:      cfg.PruneCap(),
+				PreDrop:            preDrop,
+				DropWithoutOffload: cfg.QueryHistoryDropWithoutOffload,
+				OnDropped:          onDropped,
+			}
+			if sink != nil {
+				r.Cursor, r.Manifest = cursor, sink
+			}
+			retains = append(retains, r)
 		}
 		act.SetQueryHistoryRetain(retains)
 	}
 	return nil
+}
+
+// retentionAllowance is how old a stream's oldest partition may get before
+// retention is behind: the window, the grace, the longest gap between two runs
+// of the cadence, and the day the partition itself spans (ADR 0026). A day that
+// has just become droppable can wait one full cadence for the run that drops it.
+func retentionAllowance(window, grace time.Duration, cadence string) (time.Duration, error) {
+	period, err := config.RetentionPeriod(cadence)
+	if err != nil {
+		return 0, err
+	}
+	return window + grace + period + 24*time.Hour, nil
+}
+
+func setAllowance(act *activities.Activities, stream string, window, grace time.Duration, cadence string) error {
+	allowed, err := retentionAllowance(window, grace, cadence)
+	if err != nil {
+		return fmt.Errorf("%s retention cadence: %w", stream, err)
+	}
+	act.SetRetentionAllowance(stream, allowed)
+	return nil
+}
+
+// warnDropWithoutOffload says, at startup, what the opt-out costs: with no cold
+// bucket a dropped partition has no copy anywhere; with one, the offload still
+// runs but a partition is dropped without checking that it finished, so a copy
+// may exist and is not guaranteed.
+func warnDropWithoutOffload(logger *slog.Logger, stream, setting string, coldBucket bool) {
+	if logger == nil {
+		return
+	}
+	effect := "no cold copy exists: partitions past the retention window are dropped on age alone and cannot be recovered"
+	if coldBucket {
+		effect = "partitions past the retention window are dropped without checking that their offload completed: a cold copy may exist, but is not guaranteed"
+	}
+	logger.Warn("retention drops partitions without checking the cold copy",
+		"stream", stream, "setting", setting+"=false", "cold_bucket", coldBucket, "effect", effect)
+}
+
+// droppedWithoutOffload records an audit event for a partition dropped with the
+// offload gate bypassed, naming the stream, the day and whether a cold bucket was
+// configured, so the event says what could have been kept and not only that the
+// gate was off. It is best-effort, like every audit write.
+func droppedWithoutOffload(rec audit.Recorder, stream string, coldBucket bool) func(context.Context, partitioning.Partition) {
+	return func(ctx context.Context, p partitioning.Partition) {
+		if rec == nil {
+			return
+		}
+		_ = rec.Record(audit.WithService(ctx, "retention"), audit.Event{
+			Action: audit.PartitionDrop, ResourceType: "partition", ResourceID: p.Name,
+			Outcome: audit.Allowed, Reason: audit.ReasonOffloadGateSkipped,
+			Changes: map[string]audit.Change{
+				"stream":      {To: stream},
+				"day":         {To: p.From.UTC().Format("2006-01-02")},
+				"cold_bucket": {To: coldBucket},
+			},
+		})
+	}
 }
 
 func coldClient(cfg *config.Config, bucket string) (*storage.S3Client, error) {

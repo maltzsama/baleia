@@ -85,6 +85,9 @@ type Activities struct {
 	// on the cold-sink cursor and manifest.
 	auditRetain        *retention.Retain
 	queryHistoryRetain []*retention.Retain
+	// retentionAllowance is, per stream, how old its oldest partition may get
+	// before retention is behind (ADR 0026).
+	retentionAllowance map[string]time.Duration
 	// temporalClient signals the adaptive admission gate (#551, #579). Nil in
 	// tests that build activities without a worker client.
 	temporalClient client.Client
@@ -430,6 +433,7 @@ type workerMetrics struct {
 	directory  *metrics.Directory
 	workload   *metrics.Workload
 	monitoring *metrics.Monitoring
+	retention  *metrics.Retention
 }
 
 // SetMetrics registers the worker's producers on reg. Result storage is
@@ -442,6 +446,7 @@ func (a *Activities) SetMetrics(reg *metrics.Registry) {
 		directory:  reg.Directory(),
 		workload:   reg.Workload(),
 		monitoring: reg.Monitoring(),
+		retention:  reg.Retention(),
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 func EnsureAuditPartitions(ctx context.Context) error {
 	err := defaultActivities.store.EnsureAuditPartitions(ctx, defaultActivities.partitionDaysAhead())
 	defaultActivities.passDone(schedules.AuditPartitions, err)
+	defaultActivities.observeAllRetention(ctx)
 	return err
 }
 

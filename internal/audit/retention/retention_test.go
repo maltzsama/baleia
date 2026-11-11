@@ -317,3 +317,64 @@ func TestRetainDailyGates(t *testing.T) {
 		}
 	})
 }
+
+// TestRetainDropWithoutOffload: the opt-out drops on the age condition alone.
+// It needs no cursor and no manifest check, still honours the window and the
+// cap, reports each drop, and a dry run reports nothing.
+func TestRetainDropWithoutOffload(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 11, 15, 3, 0, 0, 0, time.UTC)
+	day := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 0, 0, 0, 0, time.UTC) }
+	partition := func(from time.Time) partitioning.Partition {
+		return partitioning.Partition{Name: partitioning.PartitionName("audit_events", partitioning.Daily, from), From: from, Until: from.AddDate(0, 0, 1)}
+	}
+	// Sep 1 and 2 are past the 45d window plus a day; Oct 2 and today are not.
+	parts := []partitioning.Partition{partition(day(9, 1)), partition(day(9, 2)), partition(day(10, 2)), partition(day(11, 15))}
+
+	newRetain := func(dry bool, dropped *[]string) *Retain {
+		return &Retain{
+			Table: "audit_events", Stream: "audit", SinkName: "s3",
+			Partitions: &fakePartitions{parts: parts},
+			// No Cursor and no Manifest: the opt-out must not touch them.
+			DropWithoutOffload: true,
+			Retention:          45 * 24 * time.Hour, Grace: 24 * time.Hour, MaxPartitions: 14, DryRun: dry,
+			Now:       func() time.Time { return now },
+			OnDropped: func(_ context.Context, p partitioning.Partition) { *dropped = append(*dropped, p.Name) },
+		}
+	}
+
+	var seen []string
+	got, err := newRetain(false, &seen).Run(ctx)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got) != 2 || got[0] != "audit_events_20260901" || got[1] != "audit_events_20260902" {
+		t.Fatalf("dropped = %v, want Sep 1 and Sep 2 only", got)
+	}
+	if len(seen) != 2 || seen[0] != got[0] || seen[1] != got[1] {
+		t.Fatalf("OnDropped saw %v, want the dropped partitions %v", seen, got)
+	}
+
+	var dryseen []string
+	got, err = newRetain(true, &dryseen).Run(ctx)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("dry run = %v, %v; want the two droppable days", got, err)
+	}
+	if len(dryseen) != 0 {
+		t.Fatalf("a dry run reported drops: %v", dryseen)
+	}
+}
+
+// TestRetainNeedsTheGateUnlessOptedOut: without the opt-out a missing cursor or
+// manifest check is an error, never an open gate.
+func TestRetainNeedsTheGateUnlessOptedOut(t *testing.T) {
+	t.Parallel()
+	r := &Retain{
+		Table: "audit_events", Stream: "audit", SinkName: "s3",
+		Partitions: &fakePartitions{}, Retention: 45 * 24 * time.Hour,
+	}
+	if dropped, err := r.Run(context.Background()); err == nil || len(dropped) != 0 {
+		t.Fatalf("Run = %v, %v; want an error and no drop", dropped, err)
+	}
+}
