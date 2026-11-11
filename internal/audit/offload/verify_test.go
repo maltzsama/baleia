@@ -83,6 +83,26 @@ func TestSinkVerify(t *testing.T) {
 			m.Stream = "query_history"
 			_ = sink.WriteManifest(ctx, day, m)
 		}, "manifest names stream"},
+		{"manifest repeats a key and hides another object", func(s *fakeStore, sink *Sink, key string) {
+			// Keys [k, k] with counts and checksums for k and an object that is
+			// not in the store: every length agrees, yet one object is never
+			// checked unless the key set must match the maps exactly.
+			m, _ := sink.ReadManifest(ctx, day)
+			m.Keys = []string{key, key}
+			m.Counts["ghost"] = 1
+			m.Checksums["ghost"] = "00"
+			delete(m.Counts, key)
+			delete(m.Checksums, key)
+			m.Counts[key], m.Checksums[key] = 2, sha256Hex(s.objects[key])
+			_ = sink.WriteManifest(ctx, day, m)
+		}, "repeats a key"},
+		{"manifest has a count for an object it does not list", func(s *fakeStore, sink *Sink, key string) {
+			m, _ := sink.ReadManifest(ctx, day)
+			m.Counts["ghost"] = 1
+			m.Keys = append(m.Keys, "other")
+			m.Checksums["other"] = "00"
+			_ = sink.WriteManifest(ctx, day, m)
+		}, "do not match its objects"},
 		{"manifest lists an object it has no checksum for", func(s *fakeStore, sink *Sink, key string) {
 			m, _ := sink.ReadManifest(ctx, day)
 			delete(m.Checksums, key)

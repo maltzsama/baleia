@@ -40,7 +40,17 @@ func (s *Sink) Verify(ctx context.Context, day time.Time) (string, error) {
 	if m.Stream != s.stream || m.Day != day.UTC().Format("2006-01-02") {
 		return fmt.Sprintf("manifest names stream %q day %q", m.Stream, m.Day), nil
 	}
-	if len(m.Keys) != len(m.Counts) || len(m.Keys) != len(m.Checksums) {
+	// The keys must be unique and be exactly the keys of both maps: comparing
+	// only the lengths would let a repeated key hide an object that is never
+	// checked.
+	listed := make(map[string]struct{}, len(m.Keys))
+	for _, obj := range m.Keys {
+		if _, dup := listed[obj]; dup {
+			return fmt.Sprintf("manifest repeats a key (%s)", obj), nil
+		}
+		listed[obj] = struct{}{}
+	}
+	if !sameKeys(listed, m.Counts) || !sameKeys(listed, m.Checksums) {
 		return "manifest counts and checksums do not match its objects", nil
 	}
 	for _, obj := range m.Keys {
@@ -99,4 +109,17 @@ func countRows(gz []byte) (int64, error) {
 			return 0, err
 		}
 	}
+}
+
+// sameKeys reports whether the map has exactly the given keys.
+func sameKeys[V any](want map[string]struct{}, got map[string]V) bool {
+	if len(want) != len(got) {
+		return false
+	}
+	for k := range want {
+		if _, ok := got[k]; !ok {
+			return false
+		}
+	}
+	return true
 }
