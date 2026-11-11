@@ -46,7 +46,7 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 		now = o.Now
 	}
 	lag := o.Lag
-	if lag < 0 {
+	if lag <= 0 {
 		lag = export.DefaultSafetyLag
 	}
 	pass := o.MaxPass
@@ -99,12 +99,13 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 		for _, r := range objects {
 			rows += len(r)
 		}
-		if rows > 0 {
-			if err := o.finalize(ctx, month, objects); err != nil {
-				return total, err
-			}
-			total += rows
+		// Finalize every fully read month, even when it has no rows: the
+		// manifest is the retention gate, so an empty month's partition still
+		// needs one to become droppable later.
+		if err := o.finalize(ctx, month, objects); err != nil {
+			return total, err
 		}
+		total += rows
 		// Advance the cursor to the start of the next month, whether the month
 		// had rows or not: the whole month is offloaded, and the retention gate
 		// requires the cursor to be at or past a partition's upper bound. A row

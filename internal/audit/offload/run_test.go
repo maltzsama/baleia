@@ -92,9 +92,10 @@ func TestOffloaderEmptyMonthAdvances(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC)
 	dec := time.Date(2026, 12, 10, 12, 0, 0, 0, time.UTC)
+	nov := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
 	src := &fakeSource{events: []export.Event{{OccurredAt: dec, ID: 1, Action: "x"}}}
-	cur := &fakeCursor{pos: export.Position{OccurredAt: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)}}
+	cur := &fakeCursor{pos: export.Position{OccurredAt: nov}}
 	store := &fakeStore{objects: map[string][]byte{}, types: map[string]string{}}
 	sink := NewSink(store, "baleia-cold", "audit")
 
@@ -118,5 +119,10 @@ func TestOffloaderEmptyMonthAdvances(t *testing.T) {
 	}
 	if m.Month != "2026-12" {
 		t.Fatalf("manifest month = %q", m.Month)
+	}
+	// November had no rows but is fully read, so it still gets a manifest and
+	// its (empty) partition stays prunable.
+	if _, ok := store.objects[sink.ManifestKey(nov)]; !ok {
+		t.Fatalf("november manifest missing for the empty month")
 	}
 }
