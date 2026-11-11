@@ -4,6 +4,9 @@ package db
 
 import (
 	"context"
+	"time"
+
+	"github.com/galileostudio/baleia/internal/persistence/partitioning"
 )
 
 type Querier interface {
@@ -181,6 +184,10 @@ type Querier interface {
 	DisableMissingNativeBindings(ctx context.Context, arg DisableMissingNativeBindingsParams) (int64, error)
 	// Creates the monthly partitions of this month and the next months ahead.
 	EnsureAuditPartitions(ctx context.Context, monthsAhead int32) error
+	// MonthPartitions returns the existing monthly partitions of table, and
+	// DropMonth drops the partitions covering [from, until) (ADR 0024).
+	MonthPartitions(ctx context.Context, table string) ([]partitioning.Partition, error)
+	DropMonth(ctx context.Context, table string, from, until time.Time) error
 	// A run that failed before any statement ran (the admission queue) records its
 	// error code here, where no statement can (#399).
 	FailQueryExecution(ctx context.Context, arg FailQueryExecutionParams) (QueryExecution, error)

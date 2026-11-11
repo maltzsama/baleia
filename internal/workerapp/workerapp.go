@@ -111,6 +111,9 @@ func wireActivities(core *app.Core, cfg *config.Config, logger *slog.Logger, len
 			OnLag:   func(t time.Time) { exportMetrics.SetLag(time.Since(t).Seconds()) },
 		})
 	}
+	if err := wireColdRetention(act, core, cfg); err != nil {
+		return nil, err
+	}
 	return act, nil
 }
 
@@ -133,6 +136,9 @@ func registerWorkflows(w worker.Worker) {
 	w.RegisterWorkflow(workflows.MetadataSyncDispatchWorkflow)
 	w.RegisterWorkflow(workflows.AuditPartitionsWorkflow)
 	w.RegisterWorkflow(workflows.AuditExportWorkflow)
+	w.RegisterWorkflow(workflows.AuditOffloadWorkflow)
+	w.RegisterWorkflow(workflows.AuditRetentionWorkflow)
+	w.RegisterWorkflow(workflows.QueryHistoryRetentionWorkflow)
 	w.RegisterWorkflow(workflows.CatalogReconcileWorkflow)
 	w.RegisterWorkflow(workflows.DirectoryReconcileWorkflow)
 	w.RegisterWorkflow(workflows.EphemeralCatalogSweepWorkflow)

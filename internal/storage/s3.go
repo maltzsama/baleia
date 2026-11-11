@@ -90,6 +90,18 @@ func (c *S3Client) Health(ctx context.Context) error {
 	return nil
 }
 
+// Has reports whether an object exists, without downloading it.
+func (c *S3Client) Has(ctx context.Context, key string) (bool, error) {
+	_, err := c.client.StatObject(ctx, c.bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return false, nil
+		}
+		return false, fmt.Errorf("s3 stat: %w", err)
+	}
+	return true, nil
+}
+
 // SetMetrics records operations in m (#87).
 func (c *S3Client) SetMetrics(m *metrics.Storage) { c.metrics = m }
 

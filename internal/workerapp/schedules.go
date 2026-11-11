@@ -3,6 +3,7 @@ package workerapp
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/temporal/schedules"
@@ -38,6 +39,23 @@ func EnsureSchedules(ctx context.Context, c client.Client, cfg *config.Config) e
 	} else {
 		// Best effort: an absent schedule is the state we want.
 		_ = schedules.Remove(ctx, c, schedules.AuditExport)
+	}
+	// Cold offload and retention (ADR 0024) run only when a cold bucket is
+	// configured; otherwise the retention is fail-closed and never drops.
+	cold := cfg.AuditColdBucket != "" || cfg.QueryHistoryColdBucket != ""
+	if cold {
+		if err := schedules.Ensure(ctx, c, TaskQueue, []schedules.Spec{
+			schedulespecs.AuditOffload(time.Hour),
+		}); err != nil {
+			return fmt.Errorf("audit offload schedule: %w", err)
+		}
+		if err := schedules.Ensure(ctx, c, TaskQueue, schedulespecs.Retention(24*time.Hour)); err != nil {
+			return fmt.Errorf("retention schedules: %w", err)
+		}
+	} else {
+		_ = schedules.Remove(ctx, c, schedules.AuditOffload)
+		_ = schedules.Remove(ctx, c, schedules.AuditRetention)
+		_ = schedules.Remove(ctx, c, schedules.QueryHistoryRetention)
 	}
 	return nil
 }
