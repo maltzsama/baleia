@@ -91,7 +91,7 @@ func TestValidateCopy(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name   string
-		break_ func() error
+		damage func() error
 		want   string
 	}{
 		{"lost row", func() error { return db.Delete(&digestCopy{}, 2).Error }, "day 2026-11-01 has 1 rows after the copy, want 2"},
@@ -101,7 +101,7 @@ func TestValidateCopy(t *testing.T) {
 		}, "has 1 rows"},
 	} {
 		reset()
-		if err := tc.break_(); err != nil {
+		if err := tc.damage(); err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
 		err := validateCopy(db, tbl, "digest_source")
