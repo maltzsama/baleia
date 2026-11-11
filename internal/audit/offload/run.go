@@ -97,6 +97,11 @@ type Offloader struct {
 // returns the number of rows offloaded. Within a month it writes bounded chunks
 // and advances the cursor past each committed chunk, so an oversized month makes
 // progress instead of exhausting memory and blocking retention.
+//
+// A stream's passes are serialized by its Temporal schedule (SKIP overlap plus a
+// fixed workflow ID), so a month's manifest read-merge-write is never raced by a
+// second scheduled run. Starting an offload workflow by hand with a different
+// workflow ID is a debug-only action and must not overlap the schedule.
 func (o *Offloader) Run(ctx context.Context) (int, error) {
 	now := time.Now
 	if o.Now != nil {
