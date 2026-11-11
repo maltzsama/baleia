@@ -219,10 +219,7 @@ func TestRunnerAppliesTracksAndRollsBack(t *testing.T) {
 // GORM migrations.
 func newThrowawayDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	admin := os.Getenv("BALEIA_TEST_DATABASE_URL")
-	if admin == "" {
-		t.Skip("BALEIA_TEST_DATABASE_URL not set")
-	}
+	admin := postgresAdminURL(t)
 	ctx := context.Background()
 	adminDB, err := Open(ctx, admin, Postgres, Options{MaxOpenConns: 1, Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
@@ -248,4 +245,20 @@ func newThrowawayDB(t *testing.T) *gorm.DB {
 	}
 	t.Cleanup(func() { _ = Close(db) })
 	return db
+}
+
+// postgresAdminURL is the PostgreSQL server the tests of this package create
+// throwaway databases on, or skips the test. These tests create and drop a
+// database with PostgreSQL syntax, so a MySQL or MariaDB DSN skips them; those
+// backends run their own (TestMySQLRunner).
+func postgresAdminURL(t *testing.T) string {
+	t.Helper()
+	adminURL := os.Getenv("BALEIA_TEST_DATABASE_URL")
+	if adminURL == "" {
+		t.Skip("BALEIA_TEST_DATABASE_URL not set")
+	}
+	if b, err := BackendFromDSN(adminURL); err != nil || b != Postgres {
+		t.Skip("PostgreSQL test database required")
+	}
+	return adminURL
 }
