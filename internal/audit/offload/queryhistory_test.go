@@ -39,12 +39,12 @@ func (f *fakeQueryHistoryStore) OffloadQueryExecutions(_ context.Context, afterA
 	return out, nil
 }
 
-func (f *fakeQueryHistoryStore) OffloadQueryStatements(_ context.Context, ids []model.UUID, _, _ time.Time, _ int) ([]model.QueryStatement, error) {
+func (f *fakeQueryHistoryStore) OffloadQueryStatements(_ context.Context, ids []model.UUID, _, _ time.Time, _ int) ([]model.QueryStatement, bool, error) {
 	var out []model.QueryStatement
 	for _, id := range ids {
 		out = append(out, f.stmts[string(id)]...)
 	}
-	return out, nil
+	return out, false, nil
 }
 
 func (f *fakeQueryHistoryStore) PendingExecutions(context.Context, time.Time, time.Time) (bool, error) {

@@ -3,6 +3,7 @@ package offload
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -20,8 +21,9 @@ type QueryHistoryStore interface {
 	OffloadQueryExecutions(ctx context.Context, afterAt time.Time, afterID string, before time.Time, limit int) ([]model.QueryExecution, error)
 	// OffloadQueryStatements returns the statements of a page of executions
 	// (a batch, not one query per execution), within [from, until), capped at
-	// limit; exceeding it fails closed rather than buffering unbounded.
-	OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time, limit int) ([]model.QueryStatement, error)
+	// limit. The second result reports truncation (more statements remain), so
+	// the caller can split the page instead of buffering unbounded.
+	OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time, limit int) ([]model.QueryStatement, bool, error)
 	// PendingExecutions reports whether any execution in [from, until) is not
 	// terminal (queued or running), so the month cannot be sealed yet.
 	PendingExecutions(ctx context.Context, from, until time.Time) (bool, error)
@@ -123,36 +125,55 @@ func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.T
 			page = append(page, e)
 		}
 		if len(page) > 0 {
-			ids := make([]model.UUID, len(page))
-			for i, e := range page {
-				ids[i] = e.ID
-			}
-			stmts, err := r.Store.OffloadQueryStatements(ctx, ids, month, limit, statementPageSize)
-			if err != nil {
-				return err
-			}
-			byExec := make(map[model.UUID][]model.QueryStatement, len(page))
-			for _, s := range stmts {
-				byExec[s.ExecutionID] = append(byExec[s.ExecutionID], s)
-			}
-			for _, e := range page {
-				ed, err := json.Marshal(toExecutionDoc(e))
+			var processPage func([]model.QueryExecution) error
+			processPage = func(execs []model.QueryExecution) error {
+				ids := make([]model.UUID, len(execs))
+				for i, e := range execs {
+					ids[i] = e.ID
+				}
+				stmts, truncated, err := r.Store.OffloadQueryStatements(ctx, ids, month, limit, statementPageSize)
 				if err != nil {
 					return err
 				}
-				execCh.add(executionPos(e), ed)
-				for _, s := range byExec[e.ID] {
-					sd, err := json.Marshal(toStatementDoc(s))
+				if truncated {
+					if len(execs) <= 1 {
+						return fmt.Errorf("query_history: one execution has more than %d statements", statementPageSize)
+					}
+					// Split the overflowing page so a large page keeps making
+					// progress instead of failing on every pass.
+					mid := len(execs) / 2
+					if err := processPage(execs[:mid]); err != nil {
+						return err
+					}
+					return processPage(execs[mid:])
+				}
+				byExec := make(map[model.UUID][]model.QueryStatement, len(execs))
+				for _, s := range stmts {
+					byExec[s.ExecutionID] = append(byExec[s.ExecutionID], s)
+				}
+				for _, e := range execs {
+					ed, err := json.Marshal(toExecutionDoc(e))
 					if err != nil {
 						return err
 					}
-					stmtCh.add(statementPos(s), sd)
-				}
-				if execCh.full() || stmtCh.full() {
-					if err := flushPair(); err != nil {
-						return err
+					execCh.add(executionPos(e), ed)
+					for _, s := range byExec[e.ID] {
+						sd, err := json.Marshal(toStatementDoc(s))
+						if err != nil {
+							return err
+						}
+						stmtCh.add(statementPos(s), sd)
+					}
+					if execCh.full() || stmtCh.full() {
+						if err := flushPair(); err != nil {
+							return err
+						}
 					}
 				}
+				return nil
+			}
+			if err := processPage(page); err != nil {
+				return err
 			}
 			readPos = executionPos(page[len(page)-1])
 		}

@@ -2,7 +2,6 @@ package repo
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/store/model"
@@ -34,12 +33,11 @@ func (r *Repo) OffloadQueryExecutions(ctx context.Context, afterAt time.Time, af
 }
 
 // OffloadQueryStatements returns a page of executions' statements in position
-// order, capped at limit. Exceeding it is treated as an error: a single page
-// with that many statements would buffer unbounded. The execution_started_at
-// bounds pin the parent's month partition.
-func (r *Repo) OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time, limit int) ([]model.QueryStatement, error) {
+// order, capped at limit. The second result reports truncation. The
+// execution_started_at bounds pin the parent's month partition.
+func (r *Repo) OffloadQueryStatements(ctx context.Context, executionIDs []model.UUID, from, until time.Time, limit int) ([]model.QueryStatement, bool, error) {
 	if len(executionIDs) == 0 {
-		return nil, nil
+		return nil, false, nil
 	}
 	var rows []model.QueryStatement
 	err := r.Users.db.WithContext(ctx).
@@ -48,12 +46,12 @@ func (r *Repo) OffloadQueryStatements(ctx context.Context, executionIDs []model.
 		Limit(limit + 1).
 		Find(&rows).Error
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if len(rows) > limit {
-		return nil, fmt.Errorf("query_history: one execution page has more than %d statements", limit)
+		return rows[:limit], true, nil
 	}
-	return rows, nil
+	return rows, false, nil
 }
 
 // PendingExecutions reports whether any execution in [from, until) is still
