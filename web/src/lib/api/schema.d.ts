@@ -6262,6 +6262,8 @@ export interface components {
         TestConnectionRequest: components["schemas"]["CreateCatalogConnectionRequest"] & {
             /** @description Checks to run: metadata, direct_engine, bind:<engine_id>. Default: every role the provider declares (a bind check on the default Trino engine for databases it can bind). */
             intents?: string[];
+            /** @description Warehouse a catalog manager's bind check binds: the one the catalog will be created with. Without it, the check binds the first catalog the connection lists. Ignored for databases. */
+            warehouse?: string;
         };
         WorkspaceCatalogAccess: {
             /** Format: uuid */

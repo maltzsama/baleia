@@ -138,7 +138,13 @@ export async function deleteConnection(id: string): Promise<void> {
 }
 
 /** Tests settings that have not been saved. Persists nothing. */
-export async function testDraft(draft: ConnectionDraft): Promise<TestResult> {
+/**
+ * A draft to test. `warehouse` is the one the catalog will be created with: a
+ * catalog manager's bind check binds it.
+ */
+export type TestDraft = ConnectionDraft & { warehouse?: string };
+
+export async function testDraft(draft: TestDraft): Promise<TestResult> {
 	const { data, error, response } = await client.POST('/catalog-connections/test', {
 		body: draft as unknown as components['schemas']['TestConnectionRequest']
 	});

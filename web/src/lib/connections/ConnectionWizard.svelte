@@ -41,6 +41,7 @@
 		initialValues,
 		intentsFor,
 		missingFields,
+		needsCatalogs,
 		normalizeCatalogName,
 		normalizeEngineName,
 		readsMetadata,
@@ -257,7 +258,10 @@
 				config: values,
 				credentials: secrets,
 				credentials_read_only: credentialsReadOnly,
-				intents: intentsFor(provider, usage())
+				intents: intentsFor(provider, usage()),
+				// The warehouse create() registers the catalog with, so the bind
+				// check binds the same one.
+				warehouse: needsCatalogs(usage()) ? catalogName.trim() || name : undefined
 			});
 			testResult = result;
 			if (result.success) testedSnapshot = snap;
