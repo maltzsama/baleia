@@ -174,3 +174,57 @@ tests:
               summary: The audit export is more than 15 minutes behind
               description: 'The newest unexported audit event is 1000 seconds old.'
               runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaauditexportlagging
+
+  - name: retention falling behind
+    interval: 1m
+    input_series:
+      # The oldest partition starts at the epoch and may be 2 h old. It stays put:
+      # nothing drops it.
+      - series: 'baleia_retention_oldest_partition_start_timestamp_seconds{stream="audit",instance="w1"}'
+        values: '0x400'
+      - series: 'baleia_retention_allowed_age_seconds{stream="audit",instance="w1"}'
+        values: '7200x400'
+      # A second stream that is well inside its allowance never alerts.
+      - series: 'baleia_retention_oldest_partition_start_timestamp_seconds{stream="query_history",instance="w1"}'
+        values: '0x400'
+      - series: 'baleia_retention_allowed_age_seconds{stream="query_history",instance="w1"}'
+        values: '1000000x400'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: BaleiaRetentionBacklog
+        exp_alerts: []
+      # Over its allowance since 2 h, but not yet for the hour the alert waits.
+      - eval_time: 2h30m
+        alertname: BaleiaRetentionBacklog
+        exp_alerts: []
+      - eval_time: 3h10m
+        alertname: BaleiaRetentionBacklog
+        exp_alerts:
+          - exp_labels: {severity: warning, stream: audit}
+            exp_annotations:
+              summary: Retention is behind on the audit stream
+              description: The oldest audit partition is 3h 10m 0s old, more than retention allows.
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaretentionbacklog
+
+  - name: retention catches up
+    interval: 1m
+    input_series:
+      # Over its allowance from 2 h, firing from 3 h. The oldest partition is
+      # dropped at 4 h: its start jumps to 4 h.
+      - series: 'baleia_retention_oldest_partition_start_timestamp_seconds{stream="audit",instance="w1"}'
+        values: '0x239 14400x160'
+      - series: 'baleia_retention_allowed_age_seconds{stream="audit",instance="w1"}'
+        values: '7200x400'
+    alert_rule_test:
+      - eval_time: 3h30m
+        alertname: BaleiaRetentionBacklog
+        exp_alerts:
+          - exp_labels: {severity: warning, stream: audit}
+            exp_annotations:
+              summary: Retention is behind on the audit stream
+              description: The oldest audit partition is 3h 30m 0s old, more than retention allows.
+              runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaretentionbacklog
+      # The drop is seen, the age is back under the allowance, and it clears.
+      - eval_time: 4h10m
+        alertname: BaleiaRetentionBacklog
+        exp_alerts: []

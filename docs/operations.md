@@ -322,6 +322,7 @@ CI runs `promtool check rules` and `promtool test rules deploy/prometheus/alerts
 | Authz (API) | `baleia_authz_denials_total` | `resource`, `reason` (`not_found`, `forbidden`) |
 | Engines (worker) | `baleia_engine_statements_total`, `baleia_engine_statement_duration_seconds`, `baleia_engine_errors_total`, `baleia_engine_rows_returned_total`, `baleia_engine_result_bytes_total` | `engine` (engine kind), `outcome`, `code` |
 | Schedules (worker) | `baleia_schedule_last_success_timestamp_seconds` | `schedule` |
+| Retention (worker) | `baleia_retention_oldest_partition_start_timestamp_seconds`, `baleia_retention_allowed_age_seconds` | `stream` (`audit`, `query_history`) |
 | Catalogs (API) | `baleia_catalog_ddl_total`, `baleia_catalogs_by_state` | `action` (`create`, `replace`, `drop`), `outcome`, `state` |
 | Audit (API, worker) | `baleia_audit_write_failures_total` | — |
 | Metadata (worker) | `baleia_metadata_sync_duration_seconds`, `baleia_metadata_staleness_seconds_max` (the stalest enabled catalog; no catalog label) | `outcome` |
@@ -773,6 +774,18 @@ A recurring job has not succeeded in three of its intervals:
 1. Check that a worker is running and polling. A worker that is down raises [BaleiaWorkerDown](#baleiaworkerdown). If `temporal_worker_task_slots_available` is flat or `temporal_*` is missing, no worker is polling.
 2. In the Temporal UI, open the schedule (its ID is the alert's `schedule` label). Read the last runs' failures.
 3. The gauge is set when a pass completes: for table health, retriever dispatch and metadata sync, after the whole pass, not its first activity. It restarts empty with the worker. Right after a worker restart, a schedule shows up once its next pass succeeds.
+
+### BaleiaRetentionBacklog
+
+The oldest partition of a stream (`audit` or `query_history`) is older than retention allows: the retention window, the grace, the cadence of the retention schedule and the day the partition spans. The worker exports the start of that partition (`baleia_retention_oldest_partition_start_timestamp_seconds{stream}`) and the allowance (`baleia_retention_allowed_age_seconds{stream}`) and the alert compares them. A stream with no cold bucket and no opt-out never drops anything, and it raises this alert too, once its oldest partition is past the allowance.
+
+1. **Expected after an upgrade.** A database that already held more history than its window has a backlog, and a run drops at most `BALEIA_PRUNE_MAX_PARTITIONS` days. The alert stays until the backlog is gone: see **Draining a backlog** under [Cold offload and retention](#cold-offload-and-retention), or drain it at once with `migrate -cmd=audit-prune`.
+2. In the Temporal UI, open the stream's retention schedule (`audit-retention` or `query-history-retention`) and read the last runs. A run that failed delays the drop by a whole cadence.
+3. Read the worker log for `partition skipped` lines. Each carries the day and the reason:
+   - `cursor not advanced` or a failed offload: the offload has not reached that day. A failed offload stalls at one day, so no later day can be dropped either. Fix the offload first (the cold bucket, its credentials, its reachability).
+   - `manifest missing` or a manifest that fails its check: the day's objects are not all in the cold store with the recorded checksum and row count. That day holds only itself.
+4. The stream has no cold bucket and no opt-out: set `BALEIA_AUDIT_COLD_BUCKET` (or `BALEIA_QUERY_HISTORY_COLD_BUCKET`), or set `BALEIA_*_OFFLOAD_BEFORE_DROP=false` if no cold copy is wanted on purpose.
+5. The partition schedule is not running (`audit-partitions`): see [BaleiaScheduleStale](#baleiaschedulestale).
 
 ### BaleiaMetadataStale
 

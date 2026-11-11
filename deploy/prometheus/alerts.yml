@@ -81,6 +81,23 @@ groups:
           description: 'The last successful pass of {{ $labels.schedule }} was {{ $value | humanizeDuration }} ago.'
           runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaschedulestale
 
+      - alert: BaleiaRetentionBacklog
+        # The oldest partition of a stream is older than retention + grace + the
+        # cadence + a day (ADR 0026). The worker exports the start of that
+        # partition and the allowance, per stream, so a weekly cadence needs no
+        # rule of its own and a stream that never drops (no cold bucket, no
+        # opt-out) is seen too.
+        expr: |
+          time() - max by (stream) (baleia_retention_oldest_partition_start_timestamp_seconds)
+            > max by (stream) (baleia_retention_allowed_age_seconds)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Retention is behind on the {{ $labels.stream }} stream'
+          description: 'The oldest {{ $labels.stream }} partition is {{ $value | humanizeDuration }} old, more than retention allows.'
+          runbook: https://github.com/maltzsama/baleia/blob/main/docs/operations.md#baleiaretentionbacklog
+
       - alert: BaleiaMetadataStale
         # baleia_metadata_staleness_seconds_max is produced by metadata sync (#17).
         expr: max(baleia_metadata_staleness_seconds_max) > 3600
