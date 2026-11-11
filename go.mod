@@ -35,6 +35,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/glue v1.171.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.4
 	github.com/exaring/otelpgx v0.13.0
+	github.com/glebarez/sqlite v1.11.0
+	github.com/godoes/gorm-oracle v1.6.20
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/redis/go-redis/v9 v9.23.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
@@ -45,6 +47,7 @@ require (
 	go.temporal.io/sdk/contrib/opentelemetry v0.8.1
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.3
+	gorm.io/driver/sqlserver v1.6.4
 	gorm.io/gorm v1.31.2
 )
 
@@ -62,7 +65,9 @@ require (
 	github.com/aws/smithy-go v1.28.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
+	github.com/glebarez/go-sqlite v1.21.2 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8-0.20250403174932-29230038a667 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
