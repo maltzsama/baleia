@@ -82,8 +82,9 @@ func TestQueryHistoryReaderWritesPair(t *testing.T) {
 		t.Fatalf("offloaded = %d, want 4", n)
 	}
 
-	execKey := sink.ObjectKey(oct, ExecutionsObject)
-	stmtKey := sink.ObjectKey(oct, StatementsObject)
+	first := export.Position{OccurredAt: oct, Key: string(e1.ID)}
+	execKey := sink.ChunkKey(oct, ExecutionsObject, first)
+	stmtKey := sink.ChunkKey(oct, StatementsObject, first)
 	if _, ok := objects.objects[execKey]; !ok {
 		t.Fatalf("executions object missing")
 	}

@@ -55,26 +55,30 @@ func (r *QueryHistoryReader) EarliestMonth(ctx context.Context, before time.Time
 	return monthStart(execs[0].StartedAt), nil
 }
 
-// ReadMonth reads the executions and statements of the month. It reads one
-// page of executions and fetches that page's statements in a single query, so
-// the statement reads never become one round trip per execution.
-func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position) (map[string][]json.RawMessage, error) {
+// ReadMonth streams the executions and statements of the month as bounded
+// chunks. It reads one page of executions and fetches that page's statements in
+// a single query, so the statement reads never become one round trip per
+// execution; the two objects are flushed together at the same execution
+// boundary so the cursor stays consistent.
+func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func(Chunk) error) error {
 	limit := nextMonth(month)
 	pending, err := r.Store.PendingExecutions(ctx, month, limit)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if pending {
 		// An execution started in the month is still queued or running, so its
 		// row (and its statements) can still change. Sealing now would archive
 		// a mid-run state; wait for the next run.
-		return nil, ErrNotQuiescent
+		return ErrNotQuiescent
 	}
-	var execRows, stmtRows []json.RawMessage
+	readPos := *pos
+	execCh := &chunker{object: ExecutionsObject, emit: emit}
+	stmtCh := &chunker{object: StatementsObject, emit: emit}
 	for {
-		execs, err := r.Store.OffloadQueryExecutions(ctx, pos.OccurredAt, pos.Key, before, r.batch())
+		execs, err := r.Store.OffloadQueryExecutions(ctx, readPos.OccurredAt, readPos.Key, before, r.batch())
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if len(execs) == 0 {
 			break
@@ -95,7 +99,7 @@ func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.T
 			}
 			stmts, err := r.Store.OffloadQueryStatements(ctx, ids, month, limit)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			byExec := make(map[model.UUID][]model.QueryStatement, len(page))
 			for _, s := range stmts {
@@ -104,28 +108,36 @@ func (r *QueryHistoryReader) ReadMonth(ctx context.Context, month, before time.T
 			for _, e := range page {
 				ed, err := json.Marshal(toExecutionDoc(e))
 				if err != nil {
-					return nil, err
+					return err
 				}
-				execRows = append(execRows, ed)
+				p := export.Position{OccurredAt: e.StartedAt, Key: string(e.ID)}
+				execCh.add(p, ed)
 				for _, s := range byExec[e.ID] {
 					sd, err := json.Marshal(toStatementDoc(s))
 					if err != nil {
-						return nil, err
+						return err
 					}
-					stmtRows = append(stmtRows, sd)
+					stmtCh.add(p, sd)
+				}
+				if execCh.full() || stmtCh.full() {
+					if err := execCh.flush(); err != nil {
+						return err
+					}
+					if err := stmtCh.flush(); err != nil {
+						return err
+					}
 				}
 			}
-			last := page[len(page)-1]
-			*pos = export.Position{OccurredAt: last.StartedAt, Key: string(last.ID)}
+			readPos = export.Position{OccurredAt: page[len(page)-1].StartedAt, Key: string(page[len(page)-1].ID)}
 		}
 		if done || len(execs) < r.batch() {
 			break
 		}
 	}
-	return map[string][]json.RawMessage{
-		ExecutionsObject: execRows,
-		StatementsObject: stmtRows,
-	}, nil
+	if err := execCh.flush(); err != nil {
+		return err
+	}
+	return stmtCh.flush()
 }
 
 func (r *QueryHistoryReader) batch() int {

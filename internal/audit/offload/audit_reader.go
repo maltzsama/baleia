@@ -9,9 +9,9 @@ import (
 )
 
 // AuditReader is the MonthReader of the audit stream: it reads audit_events
-// through the export Source and maps each row to the OpenSearch-shaped
-// document. The object is named after the stream, so the keys stay
-// audit-YYYYMM.ndjson.gz.
+// through the export Source and maps each row to a lossless cold document. The
+// object is named after the stream, so the chunk keys stay
+// audit-YYYYMM-<tie>.ndjson.gz.
 type AuditReader struct {
 	Source   export.Source
 	Name     string
@@ -28,8 +28,8 @@ func (r *AuditReader) EarliestMonth(ctx context.Context, before time.Time) (time
 	return monthStart(events[0].OccurredAt), nil
 }
 
-// ReadMonth reads the audit rows of the month.
-func (r *AuditReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position) (map[string][]json.RawMessage, error) {
+// ReadMonth streams the audit rows of the month as bounded chunks.
+func (r *AuditReader) ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func(Chunk) error) error {
 	doc := r.Document
 	if doc == nil {
 		doc = ColdAuditDocument
@@ -38,29 +38,35 @@ func (r *AuditReader) ReadMonth(ctx context.Context, month, before time.Time, po
 	if name == "" {
 		name = export.StreamAudit
 	}
-	var rows []json.RawMessage
+	readPos := *pos
 	limit := nextMonth(month)
+	ch := &chunker{object: name, emit: emit}
 	for {
-		events, err := r.Source.Events(ctx, *pos, before, r.batch())
+		events, err := r.Source.Events(ctx, readPos, before, r.batch())
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if len(events) == 0 {
-			return map[string][]json.RawMessage{name: rows}, nil
+			return ch.flush()
 		}
 		for _, ev := range events {
 			if !ev.OccurredAt.Before(limit) {
-				return map[string][]json.RawMessage{name: rows}, nil
+				return ch.flush()
 			}
 			data, err := json.Marshal(doc(ev))
 			if err != nil {
-				return nil, err
+				return err
 			}
-			rows = append(rows, data)
-			*pos = export.Position{OccurredAt: ev.OccurredAt, ID: ev.ID}
+			readPos = export.Position{OccurredAt: ev.OccurredAt, ID: ev.ID}
+			ch.add(readPos, data)
+			if ch.full() {
+				if err := ch.flush(); err != nil {
+					return err
+				}
+			}
 		}
 		if len(events) < r.batch() {
-			return map[string][]json.RawMessage{name: rows}, nil
+			return ch.flush()
 		}
 	}
 }

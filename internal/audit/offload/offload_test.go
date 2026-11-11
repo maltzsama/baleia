@@ -4,11 +4,14 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/galileostudio/baleia/internal/audit/export"
 )
 
 // fakeStore records puts in memory.
@@ -24,6 +27,23 @@ func (f *fakeStore) Put(_ context.Context, key string, data []byte, contentType 
 	f.objects[key] = data
 	f.types[key] = contentType
 	return nil
+}
+
+func (f *fakeStore) Get(_ context.Context, key string) ([]byte, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.objects[key]
+	if !ok {
+		return nil, "", fmt.Errorf("no such key %q", key)
+	}
+	return d, f.types[key], nil
+}
+
+func (f *fakeStore) Has(_ context.Context, key string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, ok := f.objects[key]
+	return ok, nil
 }
 
 func gunzip(t *testing.T, data []byte) string {
@@ -68,31 +88,34 @@ func TestBuildObject(t *testing.T) {
 	_ = data2
 }
 
-func TestObjectAndManifestKeys(t *testing.T) {
+func TestChunkAndManifestKeys(t *testing.T) {
 	t.Parallel()
 	s := NewSink(nil, "baleia-cold", "audit")
 	month := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
-	if got, want := s.ObjectKey(month, "audit"), "baleia-cold/audit/2026/11/audit-202611.ndjson.gz"; got != want {
-		t.Fatalf("ObjectKey = %q, want %q", got, want)
+	first := export.Position{OccurredAt: month, ID: 7}
+	key := s.ChunkKey(month, "audit", first)
+	if !strings.HasPrefix(key, "baleia-cold/audit/2026/11/audit-202611-") || !strings.HasSuffix(key, ".ndjson.gz") {
+		t.Fatalf("ChunkKey = %q", key)
+	}
+	if s.ChunkKey(month, "audit", first) != key {
+		t.Fatalf("ChunkKey not deterministic")
 	}
 	if got, want := s.ManifestKey(month), "baleia-cold/audit/2026/11/manifest.json"; got != want {
 		t.Fatalf("ManifestKey = %q, want %q", got, want)
 	}
 }
 
-func TestWriteAndManifest(t *testing.T) {
+func TestWriteChunkAndManifest(t *testing.T) {
 	t.Parallel()
 	store := &fakeStore{objects: map[string][]byte{}, types: map[string]string{}}
 	s := NewSink(store, "baleia-cold", "audit")
 	ctx := context.Background()
 	month := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
-	key, count, checksum, err := s.Write(ctx, month, "audit", []json.RawMessage{json.RawMessage(`{"a":1}`)})
+	key := s.ChunkKey(month, "audit", export.Position{OccurredAt: month, ID: 1})
+	count, checksum, err := s.WriteChunk(ctx, key, []json.RawMessage{json.RawMessage(`{"a":1}`)})
 	if err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-	if key != s.ObjectKey(month, "audit") {
-		t.Fatalf("key = %q", key)
+		t.Fatalf("WriteChunk: %v", err)
 	}
 	if count != 1 || checksum == "" {
 		t.Fatalf("count = %d checksum = %q", count, checksum)
@@ -104,13 +127,14 @@ func TestWriteAndManifest(t *testing.T) {
 		t.Fatalf("object = %q", got)
 	}
 
-	m := Manifest{Stream: "audit", Month: "2026-11", Keys: []string{key}, Counts: map[string]int64{key: 1}, Checksums: map[string]string{key: checksum}}
+	m := Manifest{Stream: "audit", Month: "2026-11", Counts: map[string]int64{}, Checksums: map[string]string{}}
+	m.add(key, count, checksum)
 	if err := s.WriteManifest(ctx, month, m); err != nil {
 		t.Fatalf("WriteManifest: %v", err)
 	}
-	var got Manifest
-	if err := json.Unmarshal(store.objects[s.ManifestKey(month)], &got); err != nil {
-		t.Fatalf("manifest json: %v", err)
+	got, err := s.ReadManifest(ctx, month)
+	if err != nil {
+		t.Fatalf("ReadManifest: %v", err)
 	}
 	if got.Keys[0] != key || got.Counts[key] != 1 || got.Checksums[key] != checksum {
 		t.Fatalf("manifest = %+v", got)

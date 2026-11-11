@@ -4,10 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"sort"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/audit/export"
+)
+
+// ChunkRows and ChunkBytes bound one object chunk: a month is streamed in
+// chunks of at most these sizes, so a very large month never accumulates the
+// whole month — or one whole gzip object — in memory.
+var (
+	ChunkRows  = 10_000
+	ChunkBytes = 32 << 20
 )
 
 // ErrNotQuiescent reports that a stream's month is not ready to seal yet (its
@@ -15,24 +22,64 @@ import (
 // cursor and retries on the next run.
 var ErrNotQuiescent = errors.New("offload: month not quiescent")
 
-// MonthReader reads one month of a stream. The offloader owns the month loop,
-// the manifest and the cursor; the reader only knows the stream's query and
-// row shape (ADR 0024: the mechanism is shared, only the query and rows
-// differ).
+// ErrPassDone reports that the pass bound was reached mid-month. The chunks and
+// manifest written so far are committed, the cursor advanced past them, and a
+// later run resumes instead of re-reading the whole month.
+var ErrPassDone = errors.New("offload: pass bound reached")
+
+// Chunk is one bounded page of a month's object.
+type Chunk struct {
+	Object string
+	First  export.Position
+	Last   export.Position
+	Rows   []json.RawMessage
+}
+
+// MonthReader streams one month of a stream as bounded chunks. The offloader
+// owns the month loop, the manifest and the cursor; the reader only knows the
+// stream's query and row shape (ADR 0024).
 type MonthReader interface {
-	// ReadMonth reads every row of month after pos (advancing pos past the
-	// last one) and before the cutoff, returning the objects to write, keyed
-	// by object name.
-	ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position) (map[string][]json.RawMessage, error)
+	// ReadMonth reads month after pos and before the cutoff, calling emit once
+	// per bounded chunk. An emit error stops the read.
+	ReadMonth(ctx context.Context, month, before time.Time, pos *export.Position, emit func(Chunk) error) error
 	// EarliestMonth returns the month of the stream's first row, or the zero
 	// time when it has none.
 	EarliestMonth(ctx context.Context, before time.Time) (time.Time, error)
 }
 
+// chunker accumulates rows into one bounded chunk and flushes it via emit.
+type chunker struct {
+	object string
+	emit   func(Chunk) error
+	first  export.Position
+	last   export.Position
+	rows   []json.RawMessage
+	size   int
+}
+
+func (c *chunker) add(pos export.Position, row json.RawMessage) {
+	if len(c.rows) == 0 {
+		c.first = pos
+	}
+	c.rows = append(c.rows, row)
+	c.size += len(row)
+	c.last = pos
+}
+
+func (c *chunker) full() bool { return len(c.rows) >= ChunkRows || c.size >= ChunkBytes }
+
+func (c *chunker) flush() error {
+	if len(c.rows) == 0 {
+		return nil
+	}
+	rows, first, last := c.rows, c.first, c.last
+	c.rows, c.size = nil, 0
+	return c.emit(Chunk{Object: c.object, First: first, Last: last, Rows: rows})
+}
+
 // Offloader writes a stream's rows to the cold sink month by month, finalizing
-// each month with a manifest before advancing the cursor. A month is finalized
-// only once it is entirely past the safety lag, so a concurrent insert of an
-// earlier timestamp cannot arrive after the month is sealed.
+// each month with a manifest before advancing the cursor past it. A month is
+// finalized only once it is entirely past the safety lag.
 type Offloader struct {
 	Stream   string
 	SinkName string
@@ -45,7 +92,9 @@ type Offloader struct {
 }
 
 // Run offloads complete months until caught up or the pass bound elapses. It
-// returns the number of rows offloaded.
+// returns the number of rows offloaded. Within a month it writes bounded chunks
+// and advances the cursor past each committed chunk, so an oversized month makes
+// progress instead of exhausting memory and blocking retention.
 func (o *Offloader) Run(ctx context.Context) (int, error) {
 	now := time.Now
 	if o.Now != nil {
@@ -97,62 +146,59 @@ func (o *Offloader) Run(ctx context.Context) (int, error) {
 			return total, nil
 		}
 
-		objects, err := o.Reader.ReadMonth(ctx, month, before, &pos)
+		// Resume a month's manifest so a partial pass keeps its chunks.
+		manifest, err := o.Sink.ReadManifest(ctx, month)
 		if err != nil {
-			if errors.Is(err, ErrNotQuiescent) {
-				return total, nil // retry on the next run; nothing is sealed
-			}
 			return total, err
 		}
-		rows := 0
-		for _, r := range objects {
-			rows += len(r)
+
+		err = o.Reader.ReadMonth(ctx, month, before, &pos, func(c Chunk) error {
+			if len(c.Rows) == 0 {
+				return nil
+			}
+			key := o.Sink.ChunkKey(month, c.Object, c.First)
+			count, checksum, err := o.Sink.WriteChunk(ctx, key, c.Rows)
+			if err != nil {
+				return err
+			}
+			manifest.add(key, count, checksum)
+			if err := o.Sink.WriteManifest(ctx, month, manifest); err != nil {
+				return err
+			}
+			if err := o.Cursor.Set(ctx, o.Stream, o.SinkName, c.Last); err != nil {
+				return err
+			}
+			total += int(count)
+			if now().After(deadline) {
+				return ErrPassDone
+			}
+			return nil
+		})
+		switch {
+		case err == nil:
+			// The month is fully read.
+		case errors.Is(err, ErrPassDone):
+			return total, nil // chunks and cursor are committed; resume later
+		case errors.Is(err, ErrNotQuiescent):
+			return total, nil // retry on the next run; nothing is sealed
+		default:
+			return total, err
 		}
+
 		// Finalize every fully read month, even when it has no rows: the
 		// manifest is the retention gate, so an empty month's partition still
 		// needs one to become droppable later.
-		if err := o.finalize(ctx, month, objects); err != nil {
-			return total, err
+		if len(manifest.Keys) == 0 {
+			if err := o.Sink.WriteManifest(ctx, month, manifest); err != nil {
+				return total, err
+			}
 		}
-		total += rows
-		// Advance the cursor to the start of the next month, whether the month
-		// had rows or not: the whole month is offloaded, and the retention gate
-		// requires the cursor to be at or past a partition's upper bound. A row
-		// at exactly the boundary is still read (the source is after-or-equal,
-		// breaking ties by id).
 		pos = export.Position{OccurredAt: nextMonth(month)}
 		if err := o.Cursor.Set(ctx, o.Stream, o.SinkName, pos); err != nil {
 			return total, err
 		}
 		month = nextMonth(month)
 	}
-}
-
-// finalize writes the month's objects and their manifest, in deterministic
-// object-name order.
-func (o *Offloader) finalize(ctx context.Context, month time.Time, objects map[string][]json.RawMessage) error {
-	names := make([]string, 0, len(objects))
-	for name := range objects {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	m := Manifest{
-		Stream:    o.Stream,
-		Month:     month.Format("2006-01"),
-		Counts:    make(map[string]int64, len(names)),
-		Checksums: make(map[string]string, len(names)),
-	}
-	for _, name := range names {
-		key, count, checksum, err := o.Sink.Write(ctx, month, name, objects[name])
-		if err != nil {
-			return err
-		}
-		m.Keys = append(m.Keys, key)
-		m.Counts[key] = count
-		m.Checksums[key] = checksum
-	}
-	return o.Sink.WriteManifest(ctx, month, m)
 }
 
 func monthStart(t time.Time) time.Time {

@@ -69,15 +69,17 @@ func TestOffloaderMonths(t *testing.T) {
 		t.Fatalf("offloaded = %d, want 3", n)
 	}
 
-	// Two months, two objects, two manifests.
-	if len(store.objects) != 4 { // 2 objects + 2 manifests
+	// Two months, two chunks, two manifests.
+	if len(store.objects) != 4 { // 2 chunks + 2 manifests
 		t.Fatalf("objects = %d, want 4", len(store.objects))
 	}
-	if got := gunzip(t, store.objects[sink.ObjectKey(nov, export.StreamAudit)]); got != `{"id":1}`+"\n"+`{"id":2}`+"\n" {
-		t.Fatalf("november object = %q", got)
+	novKey := sink.ChunkKey(nov, export.StreamAudit, export.Position{OccurredAt: nov, ID: 1})
+	if got := gunzip(t, store.objects[novKey]); got != `{"id":1}`+"\n"+`{"id":2}`+"\n" {
+		t.Fatalf("november chunk = %q", got)
 	}
-	if got := gunzip(t, store.objects[sink.ObjectKey(dec, export.StreamAudit)]); got != `{"id":3}`+"\n" {
-		t.Fatalf("december object = %q", got)
+	decKey := sink.ChunkKey(dec, export.StreamAudit, export.Position{OccurredAt: dec, ID: 3})
+	if got := gunzip(t, store.objects[decKey]); got != `{"id":3}`+"\n" {
+		t.Fatalf("december chunk = %q", got)
 	}
 
 	// The cursor advanced to the start of the month after December, so the
@@ -124,5 +126,126 @@ func TestOffloaderEmptyMonthAdvances(t *testing.T) {
 	// its (empty) partition stays prunable.
 	if _, ok := store.objects[sink.ManifestKey(nov)]; !ok {
 		t.Fatalf("november manifest missing for the empty month")
+	}
+}
+
+// TestOffloaderChunksLargeMonth: a month larger than ChunkRows is written as
+// several chunks, all recorded in the month's manifest, instead of one object.
+//
+//nolint:paralleltest // mutates the package-level ChunkRows
+func TestOffloaderChunksLargeMonth(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 12, 15, 0, 0, 0, 0, time.UTC)
+	base := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+
+	src := &fakeSource{events: make([]export.Event, 5)}
+	for i := range src.events {
+		src.events[i] = export.Event{OccurredAt: base.Add(time.Duration(i) * time.Minute), ID: int64(i + 1), Action: "x"}
+	}
+
+	old := ChunkRows
+	ChunkRows = 2
+	defer func() { ChunkRows = old }()
+
+	cur := &fakeCursor{}
+	store := &fakeStore{objects: map[string][]byte{}, types: map[string]string{}}
+	sink := NewSink(store, "baleia-cold", "audit")
+	o := &Offloader{
+		Stream: export.StreamAudit, SinkName: export.SinkS3,
+		Cursor: cur, Sink: sink,
+		Reader: &AuditReader{Source: src, Name: export.StreamAudit, Document: func(e export.Event) map[string]any { return map[string]any{"id": e.ID} }},
+		Now:    func() time.Time { return now },
+	}
+	n, err := o.Run(ctx)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if n != 5 {
+		t.Fatalf("offloaded = %d, want 5", n)
+	}
+	var m Manifest
+	if err := json.Unmarshal(store.objects[sink.ManifestKey(base)], &m); err != nil {
+		t.Fatalf("manifest: %v", err)
+	}
+	if len(m.Keys) != 3 {
+		t.Fatalf("chunks = %d, want 3", len(m.Keys))
+	}
+	var total int64
+	for k, c := range m.Counts {
+		total += c
+		if m.Checksums[k] == "" {
+			t.Fatalf("missing checksum for %s", k)
+		}
+	}
+	if total != 5 {
+		t.Fatalf("total rows = %d, want 5", total)
+	}
+}
+
+// TestOffloaderResumesPartialMonth: a month with a partial manifest and a
+// mid-month cursor resumes from the cursor and merges the new chunks into the
+// manifest, instead of re-reading the whole month.
+//
+//nolint:paralleltest // mutates the package-level ChunkRows
+func TestOffloaderResumesPartialMonth(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 12, 15, 0, 0, 0, 0, time.UTC)
+	base := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+
+	src := &fakeSource{events: make([]export.Event, 5)}
+	for i := range src.events {
+		src.events[i] = export.Event{OccurredAt: base.Add(time.Duration(i) * time.Minute), ID: int64(i + 1), Action: "x"}
+	}
+
+	old := ChunkRows
+	ChunkRows = 2
+	defer func() { ChunkRows = old }()
+
+	cur := &fakeCursor{}
+	store := &fakeStore{objects: map[string][]byte{}, types: map[string]string{}}
+	sink := NewSink(store, "baleia-cold", "audit")
+
+	// Simulate a prior partial pass: one chunk (events 1 and 2) written and the
+	// cursor advanced past event 2.
+	first := export.Position{OccurredAt: base, ID: 1}
+	key1 := sink.ChunkKey(base, export.StreamAudit, first)
+	count, sum, err := sink.WriteChunk(ctx, key1, []json.RawMessage{json.RawMessage(`{"id":1}`), json.RawMessage(`{"id":2}`)})
+	if err != nil {
+		t.Fatalf("WriteChunk: %v", err)
+	}
+	m := Manifest{Stream: export.StreamAudit, Month: base.Format("2006-01"), Counts: map[string]int64{}, Checksums: map[string]string{}}
+	m.add(key1, count, sum)
+	if err := sink.WriteManifest(ctx, base, m); err != nil {
+		t.Fatalf("WriteManifest: %v", err)
+	}
+	cur.pos = export.Position{OccurredAt: base.Add(time.Minute), ID: 2}
+
+	o := &Offloader{
+		Stream: export.StreamAudit, SinkName: export.SinkS3,
+		Cursor: cur, Sink: sink,
+		Reader: &AuditReader{Source: src, Name: export.StreamAudit, Document: func(e export.Event) map[string]any { return map[string]any{"id": e.ID} }},
+		Now:    func() time.Time { return now },
+	}
+	n, err := o.Run(ctx)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if n != 3 { // events 3, 4, 5
+		t.Fatalf("offloaded = %d, want 3", n)
+	}
+	var got Manifest
+	if err := json.Unmarshal(store.objects[sink.ManifestKey(base)], &got); err != nil {
+		t.Fatalf("manifest: %v", err)
+	}
+	// The prior chunk plus two new chunks (events 3-4 and 5).
+	if len(got.Keys) != 3 {
+		t.Fatalf("chunks = %d, want 3", len(got.Keys))
+	}
+	var total int64
+	for _, c := range got.Counts {
+		total += c
+	}
+	if total != 5 {
+		t.Fatalf("total rows = %d, want 5", total)
 	}
 }
