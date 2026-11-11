@@ -54,7 +54,10 @@ jobs:
           BALEIA_TEST_MARIADB_URL: mysql://root:baleia_dev@127.0.0.1:3307
           BALEIA_TEST_REDIS_URL: redis://127.0.0.1:6379/0
         # Tests are independent and parallel (#374): a random order keeps them so.
-        run: go test -race -shuffle=on ./...
+        # The suite creates a migrated database per test (testdb.maxTests=4), so
+        # the default 10m per-package timeout is too tight for internal/api;
+        # 30m gives headroom without masking a real hang.
+        run: go test -race -shuffle=on -timeout 30m ./...
 
   # Existing findings are a baseline: only new issues fail the job (#369). A
   # pull request is compared with its merge base on main; a push with the
