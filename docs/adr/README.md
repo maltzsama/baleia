@@ -34,6 +34,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0022](0022-shared-realtime-backbone.md) | Redis is the shared real-time, cache and rate-limit backbone | Accepted |
 | [0023](0023-portable-search-index.md) | Search reads a portable term index rebuilt per scope | Accepted |
 | [0024](0024-cold-storage-and-retention.md) | Cold storage and retention for the audit trail and query history | Accepted; amends 0020 (table partitioning) |
+| [0025](0025-semantic-search.md) | Semantic search behind a vector store seam, embedded by Baleia | Proposed; extends 0023 |
 
 ## Owner decisions
 
