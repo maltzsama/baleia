@@ -140,15 +140,30 @@ func TestRepartitionQueryHistoryKeepsData(t *testing.T) {
 	}
 	for _, tbl := range partitionedTables() {
 		parts, err := pm.ListPartitions(context.Background(), tbl.spec.Table)
-		if err != nil || len(parts) < partitionMonthsAhead+1 {
+		if err != nil || len(parts) < partitionDaysAhead+1 {
 			t.Fatalf("%s partitions = %d, %v", tbl.spec.Table, len(parts), err)
 		}
 		if db.Migrator().HasTable(partitioning.LegacyTable(tbl.spec.Table)) {
 			t.Fatalf("%s: legacy table should be gone", tbl.spec.Table)
 		}
+		// The partitions are one day wide, from the oldest row through the
+		// horizon, and a row lives in the partition of its own day.
+		for _, p := range parts {
+			if p.Until.Sub(p.From) != 24*time.Hour {
+				t.Fatalf("%s partition %s spans %v, want one day", tbl.spec.Table, p.Name, p.Until.Sub(p.From))
+			}
+		}
+		if want := partitioning.PartitionName(tbl.spec.Table, partitioning.Daily, months[0]); parts[0].Name != want {
+			t.Fatalf("%s first partition = %s, want %s", tbl.spec.Table, parts[0].Name, want)
+		}
 		var n int64
 		if err := db.Table(tbl.spec.Table).Count(&n).Error; err != nil || n != 3 {
 			t.Fatalf("%s rows = %d, %v; want 3", tbl.spec.Table, n, err)
+		}
+		day := partitioning.PartitionName(tbl.spec.Table, partitioning.Daily, months[1])
+		var inDay int64
+		if err := db.Table(day).Count(&inDay).Error; err != nil || inDay != 1 {
+			t.Fatalf("%s rows = %d, %v; want the Feb 20 row alone in its day", day, inDay, err)
 		}
 	}
 
@@ -200,5 +215,67 @@ func mustInsert(t *testing.T, db *gorm.DB, table string, row map[string]any) {
 	t.Helper()
 	if err := db.Table(table).Create(row).Error; err != nil {
 		t.Fatalf("insert into %s: %v", table, err)
+	}
+}
+
+// TestRepartitionResumesAfterAFailedTable: the stages commit separately, so a
+// failure while converting one table leaves the tables before it converted and
+// the rest untouched, and a rerun finishes the job without redoing or losing
+// anything.
+func TestRepartitionResumesAfterAFailedTable(t *testing.T) {
+	t.Parallel()
+	db := newPostgresStore(t)
+	if err := AutoMigrate(db, Models()...); err != nil {
+		t.Fatalf("schema: %v", err)
+	}
+	toOldShape(t, db)
+	at := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	for range 2 {
+		mustInsert(t, db, "audit_events", map[string]any{
+			"occurred_at": at, "actor_kind": "user", "action": "x", "resource_type": "r", "outcome": "allowed",
+		})
+	}
+
+	// A leftover legacy table makes the audit conversion refuse, as an
+	// interrupted earlier attempt would. audit_events is converted last.
+	if err := db.Exec(`CREATE TABLE audit_events_legacy (id bigint)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repartitionQueryHistory(db); err == nil {
+		t.Fatal("the audit conversion should refuse beside a legacy table")
+	}
+	pm, err := partitioning.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	for _, table := range []string{"query_executions", "query_statements"} {
+		if parts, err := pm.ListPartitions(ctx, table); err != nil || len(parts) == 0 {
+			t.Fatalf("%s should already be converted: %d partitions, %v", table, len(parts), err)
+		}
+	}
+	if parts, _ := pm.ListPartitions(ctx, "audit_events"); len(parts) != 0 {
+		t.Fatalf("audit_events must be untouched, has %d partitions", len(parts))
+	}
+	var n int64
+	if err := db.Table("audit_events").Count(&n).Error; err != nil || n != 2 {
+		t.Fatalf("audit_events rows = %d, %v; want 2", n, err)
+	}
+
+	// The operator removes the leftover and reruns.
+	if err := db.Exec(`DROP TABLE audit_events_legacy`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repartitionQueryHistory(db); err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	if parts, err := pm.ListPartitions(ctx, "audit_events"); err != nil || len(parts) == 0 {
+		t.Fatalf("audit_events should now be converted: %d partitions, %v", len(parts), err)
+	}
+	if err := db.Table("audit_events").Count(&n).Error; err != nil || n != 2 {
+		t.Fatalf("audit_events rows after the rerun = %d, %v; want 2", n, err)
+	}
+	if db.Migrator().HasTable(partitioning.LegacyTable("audit_events")) {
+		t.Fatal("legacy table should be gone after the rerun")
 	}
 }

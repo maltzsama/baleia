@@ -13,17 +13,17 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// Re-partitioning of the append-only tables (ADR 0024, issue #948). The
+// Re-partitioning of the append-only tables (ADR 0024 and 0026, issues #948 and #958). The
 // transition is expressed with the ORM and the PartitionManager seam: the only
 // SQL it needs (partition DDL, the key swap, the id sequence) lives in the
 // adapter, and the backend is told apart by Capabilities, never by dialect name.
 
 const (
-	// partitionMonthsAhead is how many months past the current one the
-	// migration provisions, the same horizon the audit-partitions schedule keeps
-	// extending. Engines with a catch-all partition take later months in it;
-	// PostgreSQL does not.
-	partitionMonthsAhead = 3
+	// partitionDaysAhead is how many days past today the migration provisions,
+	// the horizon BALEIA_PARTITION_DAYS_AHEAD keeps for the audit-partitions
+	// schedule (ADR 0026). Engines with a catch-all partition take later days in
+	// it; PostgreSQL does not.
+	partitionDaysAhead = 14
 	// copyBatch is the number of rows moved per round trip when a table is
 	// converted by copy (PostgreSQL).
 	copyBatch = 500
@@ -31,7 +31,7 @@ const (
 	backfillBatch = 500
 )
 
-// partitionedTable is one table that becomes monthly range-partitioned.
+// partitionedTable is one table that becomes daily range-partitioned.
 type partitionedTable struct {
 	model any
 	spec  partitioning.Spec
@@ -43,7 +43,7 @@ type partitionedTable struct {
 }
 
 func rangeSpec(table, column string) partitioning.Spec {
-	return partitioning.Spec{Table: table, Column: column, Strategy: partitioning.Range, Interval: partitioning.Monthly}
+	return partitioning.Spec{Table: table, Column: column, Strategy: partitioning.Range, Interval: partitioning.Daily}
 }
 
 // partitionedTables lists the partitioned tables, parents before children,
@@ -118,39 +118,75 @@ func monthColumns() []monthColumn {
 }
 
 // repartitionQueryHistory moves audit_events, query_executions and
-// query_statements to monthly range partitions keyed by the month, and the
-// foreign keys that reference them to composite ones.
+// query_statements to daily range partitions keyed by the parent's timestamp,
+// and the foreign keys that reference them to composite ones.
+//
+// It runs in stages, each its own transaction, because one partition per day of
+// history multiplies the relations a single transaction locks: converting a
+// year of history at once exhausts PostgreSQL's lock table
+// (max_locks_per_transaction). The stages are the preparation (month column,
+// backfill, dropping the old foreign keys), one conversion per table, and the
+// new foreign keys. Every stage is idempotent, and each table converts
+// atomically, so a failed run leaves whole tables either converted or untouched
+// and a rerun continues from there. A failed copy validation aborts the table's
+// conversion and keeps its original rows.
 func repartitionQueryHistory(db *gorm.DB) error {
-	return db.Transaction(func(tx *gorm.DB) error {
-		cols := monthColumns()
-		for _, c := range cols {
-			if !tx.Migrator().HasColumn(c.shim, "ExecutionStartedAt") {
-				if err := tx.Migrator().AddColumn(c.shim, "ExecutionStartedAt"); err != nil {
-					return fmt.Errorf("add execution_started_at: %w", err)
-				}
+	if err := db.Transaction(prepareRepartition); err != nil {
+		return err
+	}
+	if err := partitionTables(db); err != nil {
+		return err
+	}
+	return createHistoryForeignKeys(db)
+}
+
+// createHistoryForeignKeys adds the foreign keys of the history models, one
+// transaction per constraint: a constraint on a partitioned table is cloned
+// onto every partition and locks all of them until it commits.
+func createHistoryForeignKeys(db *gorm.DB) error {
+	missing, err := missingForeignKeys(db, historyModels())
+	if err != nil {
+		return err
+	}
+	for _, fk := range missing {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			if tx.Migrator().HasConstraint(fk.model, fk.name) {
+				return nil
+			}
+			return tx.Migrator().CreateConstraint(fk.model, fk.name)
+		})
+		if err != nil {
+			return fmt.Errorf("create foreign key %s on %T: %w", fk.name, fk.model, err)
+		}
+	}
+	return nil
+}
+
+// prepareRepartition adds and backfills the parent's timestamp on the child
+// tables and drops the foreign keys whose shape is about to change.
+func prepareRepartition(tx *gorm.DB) error {
+	cols := monthColumns()
+	for _, c := range cols {
+		if !tx.Migrator().HasColumn(c.shim, "ExecutionStartedAt") {
+			if err := tx.Migrator().AddColumn(c.shim, "ExecutionStartedAt"); err != nil {
+				return fmt.Errorf("add execution_started_at: %w", err)
 			}
 		}
-		// Parents first: a reference reads the month its statement just got.
-		for _, c := range cols {
-			if err := backfillMonth(tx, c); err != nil {
+	}
+	// Parents first: a reference reads the month its statement just got.
+	for _, c := range cols {
+		if err := backfillMonth(tx, c); err != nil {
+			return err
+		}
+	}
+	for _, c := range cols {
+		if c.notNull {
+			if err := requireNotNull(tx, c.model); err != nil {
 				return err
 			}
 		}
-		for _, c := range cols {
-			if c.notNull {
-				if err := requireNotNull(tx, c.model); err != nil {
-					return err
-				}
-			}
-		}
-		if err := dropHistoryForeignKeys(tx); err != nil {
-			return err
-		}
-		if err := partitionTables(tx); err != nil {
-			return err
-		}
-		return createForeignKeys(tx, historyModels())
-	})
+	}
+	return dropHistoryForeignKeys(tx)
 }
 
 // historyModels are the models whose foreign keys the transition touches.
@@ -300,15 +336,14 @@ func dropHistoryForeignKeys(db *gorm.DB) error {
 	return nil
 }
 
-// partitionTables provisions every partitioned table through the adapter. A
-// backend with no adapter keeps its plain tables: the schema still changes
-// shape, but nothing is partitioned.
+// partitionTables provisions every partitioned table through the adapter, one
+// transaction per table. A backend with no adapter keeps its plain tables: the
+// schema still changes shape, but nothing is partitioned.
 func partitionTables(db *gorm.DB) error {
 	if !partitioning.CapabilitiesFor(db).Implemented {
 		return nil
 	}
-	pm, err := partitioning.New(db)
-	if err != nil {
+	if _, err := partitioning.New(db); err != nil {
 		if errors.Is(err, partitioning.ErrNotImplemented) || errors.Is(err, partitioning.ErrUnsupportedPartitioning) {
 			return nil
 		}
@@ -319,39 +354,49 @@ func partitionTables(db *gorm.DB) error {
 		ctx = context.Background()
 	}
 	now := time.Now().UTC()
-	until := partitioning.Monthly.Start(now).AddDate(0, partitionMonthsAhead+1, 0)
+	until := partitioning.Daily.Start(now).AddDate(0, 0, partitionDaysAhead+1)
 	for _, t := range partitionedTables() {
-		from, err := firstMonth(db, t, now)
+		err := db.Transaction(func(tx *gorm.DB) error {
+			// The adapter is built on the transaction so its DDL and the copy
+			// commit or roll back together.
+			tpm, err := partitioning.New(tx)
+			if err != nil {
+				return err
+			}
+			from, err := firstPartition(tx, t, now)
+			if err != nil {
+				return err
+			}
+			if err := tpm.Provision(ctx, t.model, t.spec, from, until); err != nil {
+				return fmt.Errorf("partition %s: %w", t.spec.Table, err)
+			}
+			return finishConversion(ctx, tx, tpm, t)
+		})
 		if err != nil {
-			return err
-		}
-		if err := pm.Provision(ctx, t.model, t.spec, from, until); err != nil {
-			return fmt.Errorf("partition %s: %w", t.spec.Table, err)
-		}
-		if err := finishConversion(ctx, db, pm, t); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// firstMonth is the first month a partition must cover: the oldest row's, or
-// the current month on an empty table.
-func firstMonth(db *gorm.DB, t partitionedTable, now time.Time) (time.Time, error) {
+// firstPartition is the first day a partition must cover: the oldest row's, or
+// today on an empty table.
+func firstPartition(db *gorm.DB, t partitionedTable, now time.Time) (time.Time, error) {
 	var oldest []time.Time
 	if err := db.Model(t.model).Order(t.spec.Column).Limit(1).Pluck(t.spec.Column, &oldest).Error; err != nil {
 		return time.Time{}, fmt.Errorf("oldest row of %s: %w", t.spec.Table, err)
 	}
-	from := partitioning.Monthly.Start(now)
+	from := partitioning.Daily.Start(now)
 	if len(oldest) > 0 && oldest[0].Before(from) {
-		from = partitioning.Monthly.Start(oldest[0])
+		from = partitioning.Daily.Start(oldest[0])
 	}
 	return from, nil
 }
 
 // finishConversion completes a conversion that set the old table aside: the
 // rows are copied through the ORM with their ids, the id sequence moves past
-// them, and the old table goes.
+// them, the copy is validated day by day, and only then the old table goes. A
+// copy that does not match returns an error and the old table stays.
 func finishConversion(ctx context.Context, db *gorm.DB, pm partitioning.Manager, t partitionedTable) error {
 	legacy := partitioning.LegacyTable(t.spec.Table)
 	if !db.Migrator().HasTable(legacy) {
@@ -370,6 +415,9 @@ func finishConversion(ctx context.Context, db *gorm.DB, pm partitioning.Manager,
 				return err
 			}
 		}
+	}
+	if err := validateCopy(db, t, legacy); err != nil {
+		return err
 	}
 	if err := db.Migrator().DropTable(legacy); err != nil {
 		return fmt.Errorf("drop %s: %w", legacy, err)
