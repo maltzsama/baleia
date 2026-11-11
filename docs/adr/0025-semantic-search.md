@@ -56,22 +56,25 @@ Facts that bound the decision:
 3. **What is embedded.** One text per object, built deterministically:
    tables (qualified name, description, column names and comments), docs,
    saved queries (name, description, SQL), metrics and semantic models.
-   Columns are not embedded on their own. Each row stores the provider, model,
-   dimensions and a hash of its text; vectors of different models are never
-   compared, and changing the model re-embeds the scope.
+   Columns are not embedded on their own. Each row stores its embedding
+   identity (provider, endpoint, model and dimensions) and a hash of its text.
+   The endpoint is part of the identity because one model name can mean
+   different weights on different servers. Vectors of different identities are
+   never compared, and changing the identity re-embeds every scope.
 
 4. **Embedding runs in the background.** After a scope is rebuilt (0023), a
-   worker activity embeds the rows whose text hash, or whose provider, model
-   or dimensions, differ from the current setting, in batches, with a rate
-   limit. Until a row has a current vector it is found lexically only.
-   Saving a new provider, model or dimensions does not wait for a rebuild: it
-   enqueues every scope that has vectors, and the same activity re-embeds them.
+   worker activity embeds the rows that have no vector, or whose text hash or
+   embedding identity differs from the current setting, in batches, with a
+   rate limit. Until a row has a current vector it is found lexically only.
+   Enabling embeddings, or saving a new identity, does not wait for a
+   rebuild: it enqueues every indexed scope, with or without vectors, and the
+   same activity embeds them.
 
 5. **Vectors live behind a `VectorStore` seam.** A small interface
    (`Upsert`, `Delete`, `Nearest(scope, vector, offset, k)`, `Capabilities`) with a
    registry, like the `PartitionManager`:
    - **`store` (default):** a GORM table `search_vectors` (scope, kind, ref,
-     model, text hash, vector) with the vector as a custom GORM type stored as
+     embedding identity, text hash, vector) with the vector as a custom GORM type stored as
      bytes on every backend; no raw SQL. Each process keeps the vectors of the
      scopes it searched in memory, bounded by a scope count, and ranks them by
      brute-force cosine. The cache is keyed like the vocabulary (0023,
@@ -98,8 +101,8 @@ Facts that bound the decision:
    mode: `mode=lexical|hybrid`. The editor's typeahead never embeds; the
    palette and the sidebar stay lexical while typing; the MCP `search` tool
    is hybrid by default. The query's embedding is cached by its text and the
-   provider, model and dimensions, so a setting change never reuses a vector
-   of another space.
+   embedding identity, so a setting change, the endpoint included, never
+   reuses a vector of another space.
    If the provider fails or times out, the search answers lexically and says
    so in the response.
 
