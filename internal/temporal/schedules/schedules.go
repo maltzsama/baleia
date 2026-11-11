@@ -85,14 +85,18 @@ func Ensure(ctx context.Context, c client.Client, taskQueue string, specs []Spec
 // IDs of the recurring jobs the worker ensures; metrics label them by these
 // (baleia_schedule_last_success_timestamp_seconds{schedule}).
 const (
-	LensQueryPoller    = "lens-query-poller"
-	LensClusterPoller  = "lens-cluster-poller"
-	LensTableHealth    = "lens-table-health"
-	RetrieverScheduler = "retriever-scheduler"
-	MetadataSync       = "metadata-sync"
-	AuditPartitions    = "audit-partitions"
-	AuditExport        = "audit-export"
-	CatalogReconcile   = "catalog-reconcile"
+	LensQueryPoller       = "lens-query-poller"
+	LensClusterPoller     = "lens-cluster-poller"
+	LensTableHealth       = "lens-table-health"
+	RetrieverScheduler    = "retriever-scheduler"
+	MetadataSync          = "metadata-sync"
+	AuditPartitions       = "audit-partitions"
+	AuditExport           = "audit-export"
+	AuditOffload          = "audit-offload"
+	AuditRetention        = "audit-retention"
+	QueryHistoryOffload   = "query-history-offload"
+	QueryHistoryRetention = "query-history-retention"
+	CatalogReconcile      = "catalog-reconcile"
 	// EphemeralCatalogSweeper drops expired connection-test catalogs (#12).
 	EphemeralCatalogSweeper = "ephemeral-catalog-sweeper"
 	// TokenCleanup prunes expired refresh and password-reset tokens (#51).

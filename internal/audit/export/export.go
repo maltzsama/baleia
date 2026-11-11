@@ -19,8 +19,17 @@ import (
 	"time"
 )
 
-// Sink is the cursor row's name.
-const Sink = "opensearch"
+// Streams and sinks of the cold export (ADR 0024). A cursor is keyed by
+// (stream, sink): one stream per dataset, one sink per destination.
+const (
+	StreamAudit        = "audit"
+	StreamQueryHistory = "query_history"
+)
+
+const (
+	SinkOpenSearch = "opensearch"
+	SinkS3         = "s3"
+)
 
 // DefaultSafetyLag keeps not-yet-committed rows (a concurrent transaction can
 // insert an earlier occurred_at) out of the export.
@@ -58,16 +67,21 @@ type Event struct {
 	ClientIP     string
 	UserAgent    string
 	Changes      json.RawMessage
+	OnBehalfOf   string
 }
 
-// Position is a cursor value: the (occurred_at, id) of the last accepted event.
+// Position is a cursor value: the (occurred_at, id) of the last accepted event,
+// or the (occurred_at, key) of a UUID-keyed stream (query_history).
 type Position struct {
 	OccurredAt time.Time
 	ID         int64
+	// Key is the string tiebreaker of a UUID-keyed stream; the audit export
+	// uses ID instead.
+	Key string
 }
 
 // After reports whether p is strictly after the zero position.
-func (p Position) After() bool { return !p.OccurredAt.IsZero() || p.ID != 0 }
+func (p Position) After() bool { return !p.OccurredAt.IsZero() || p.ID != 0 || p.Key != "" }
 
 // DocumentID is the deterministic `_id` of an event: re-sending a batch
 // overwrites the same document instead of duplicating it.
@@ -83,7 +97,7 @@ func Document(e Event) map[string]any {
 		"event":      map[string]any{"action": e.Action, "outcome": e.Outcome},
 		"actor":      map[string]any{"kind": e.ActorKind},
 		"resource":   map[string]any{"type": e.ResourceType},
-		"baleia":     map[string]any{"sink": Sink},
+		"baleia":     map[string]any{"sink": SinkOpenSearch},
 	}
 	if e.Reason != "" {
 		doc["event"].(map[string]any)["reason"] = e.Reason
@@ -136,10 +150,10 @@ type Source interface {
 	Events(ctx context.Context, after Position, before time.Time, limit int) ([]Event, error)
 }
 
-// Cursor persists the last accepted position per sink.
+// Cursor persists the last accepted position per (stream, sink).
 type Cursor interface {
-	Get(ctx context.Context, sink string) (Position, error)
-	Set(ctx context.Context, sink string, p Position) error
+	Get(ctx context.Context, stream, sink string) (Position, error)
+	Set(ctx context.Context, stream, sink string, p Position) error
 }
 
 // BulkSink writes documents. Bulk returns the number of leading documents the
@@ -153,9 +167,12 @@ type Exporter struct {
 	Source Source
 	Cursor Cursor
 	Sink   BulkSink
-	Index  string // prefix; the monthly suffix is added per event
-	Batch  int
-	Lag    time.Duration
+	// Stream is the dataset the export reads (StreamAudit, StreamQueryHistory).
+	Stream string
+	// Index is the OpenSearch index prefix; the monthly suffix is added per event.
+	Index string
+	Batch int
+	Lag   time.Duration
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
 	// MaxPass bounds one pass; 0 means 5 minutes.
@@ -189,7 +206,7 @@ func (e *Exporter) Run(ctx context.Context) (int, error) {
 	}
 	deadline := now().Add(pass)
 
-	pos, err := e.Cursor.Get(ctx, Sink)
+	pos, err := e.Cursor.Get(ctx, e.Stream, SinkOpenSearch)
 	if err != nil {
 		return 0, err
 	}
@@ -220,7 +237,7 @@ func (e *Exporter) Run(ctx context.Context) (int, error) {
 		if accepted > 0 {
 			last := events[accepted-1]
 			newPos := Position{OccurredAt: last.OccurredAt, ID: last.ID}
-			if err := e.Cursor.Set(ctx, Sink, newPos); err != nil {
+			if err := e.Cursor.Set(ctx, e.Stream, SinkOpenSearch, newPos); err != nil {
 				return total, err
 			}
 			pos = newPos

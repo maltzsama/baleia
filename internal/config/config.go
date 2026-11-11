@@ -231,6 +231,17 @@ type Config struct {
 	AuditExportCAFile   string
 	AuditExportBatch    int
 	AuditExportInterval time.Duration
+	// Cold retention (ADR 0024): the audit trail and query history are
+	// offloaded to S3 and pruned after their hot windows.
+	AuditRetention         time.Duration
+	AuditColdBucket        string
+	AuditColdPrefix        string
+	AuditColdGrace         time.Duration
+	QueryHistoryRetention  time.Duration
+	QueryHistoryColdBucket string
+	QueryHistoryColdPrefix string
+	QueryHistoryColdGrace  time.Duration
+	PruneMaxPartitions     int
 	// Baleia's database pool; DBMaxConns 0 means the process default (api 20,
 	// worker 10).
 	DBMaxConns          int
@@ -399,6 +410,15 @@ func Load() *Config {
 		AuditExportCAFile:           getEnv("BALEIA_AUDIT_EXPORT_CA_FILE", ""),
 		AuditExportBatch:            getEnvInt("BALEIA_AUDIT_EXPORT_BATCH", 500),
 		AuditExportInterval:         getEnvDuration("BALEIA_AUDIT_EXPORT_INTERVAL", 30*time.Second),
+		AuditRetention:              getEnvDuration("BALEIA_AUDIT_RETENTION", 400*24*time.Hour),
+		AuditColdBucket:             getEnv("BALEIA_AUDIT_COLD_BUCKET", ""),
+		AuditColdPrefix:             getEnv("BALEIA_AUDIT_COLD_PREFIX", "audit"),
+		AuditColdGrace:              getEnvDuration("BALEIA_AUDIT_COLD_GRACE", 7*24*time.Hour),
+		QueryHistoryRetention:       getEnvDuration("BALEIA_QUERY_HISTORY_RETENTION", 180*24*time.Hour),
+		QueryHistoryColdBucket:      getEnv("BALEIA_QUERY_HISTORY_COLD_BUCKET", ""),
+		QueryHistoryColdPrefix:      getEnv("BALEIA_QUERY_HISTORY_COLD_PREFIX", "query_history"),
+		QueryHistoryColdGrace:       getEnvDuration("BALEIA_QUERY_HISTORY_COLD_GRACE", 7*24*time.Hour),
+		PruneMaxPartitions:          getEnvInt("BALEIA_PRUNE_MAX_PARTITIONS", 1),
 		DBMaxConns:                  getEnvInt("BALEIA_DB_MAX_CONNS", 0),
 		DBMinConns:                  getEnvInt("BALEIA_DB_MIN_CONNS", 2),
 		DBMaxConnLifetime:           getEnvDuration("BALEIA_DB_MAX_CONN_LIFETIME", time.Hour),

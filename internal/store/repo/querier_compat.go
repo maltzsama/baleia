@@ -964,15 +964,12 @@ func (r *Repo) ReleaseMetadataSyncLock(ctx context.Context, catalogID string) er
 // plain (migration 14 has not run, or the engine has no adapter) is left alone:
 // provisioning would convert it, and converting belongs to the migration.
 func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) error {
-	if !partitioning.CapabilitiesFor(r.Users.db).Implemented {
-		return nil
-	}
-	pm, err := partitioning.New(r.Users.db)
+	pm, err := r.partitionManager()
 	if err != nil {
-		if errors.Is(err, partitioning.ErrNotImplemented) || errors.Is(err, partitioning.ErrUnsupportedPartitioning) {
-			return nil
-		}
 		return err
+	}
+	if pm == nil {
+		return nil
 	}
 	from := partitioning.MonthStart(time.Now())
 	until := from.AddDate(0, int(monthsAhead)+1, 0)
@@ -990,4 +987,38 @@ func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) err
 		}
 	}
 	return nil
+}
+
+// MonthPartitions returns the existing monthly partitions of table (ADR 0024).
+func (r *Repo) MonthPartitions(ctx context.Context, table string) ([]partitioning.Partition, error) {
+	pm, err := r.partitionManager()
+	if err != nil || pm == nil {
+		return nil, err
+	}
+	return pm.ListPartitions(ctx, table)
+}
+
+// DropMonth drops the partitions of table covering [from, until) (ADR 0024).
+func (r *Repo) DropMonth(ctx context.Context, table string, from, until time.Time) error {
+	pm, err := r.partitionManager()
+	if err != nil || pm == nil {
+		return err
+	}
+	return pm.DropPartition(ctx, table, from, until)
+}
+
+// partitionManager resolves the adapter, or (nil, nil) when the backend has no
+// partitioning.
+func (r *Repo) partitionManager() (partitioning.Manager, error) {
+	if !partitioning.CapabilitiesFor(r.Users.db).Implemented {
+		return nil, nil
+	}
+	pm, err := partitioning.New(r.Users.db)
+	if err != nil {
+		if errors.Is(err, partitioning.ErrNotImplemented) || errors.Is(err, partitioning.ErrUnsupportedPartitioning) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return pm, nil
 }

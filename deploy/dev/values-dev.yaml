@@ -31,6 +31,13 @@ config:
   SMTP_FROM: noreply@baleia.io
   BALEIA_AGENTS_ENABLED: "true"
   BALEIA_WORKLOAD_ENABLED: "true"
+  # Cold offload and gated retention (ADR 0024). The dev cluster reuses the
+  # rustfs bucket with per-stream prefixes; the e2e suite exercises the
+  # offload and the retention it gates.
+  BALEIA_AUDIT_COLD_BUCKET: baleia
+  BALEIA_AUDIT_COLD_PREFIX: audit-cold
+  BALEIA_QUERY_HISTORY_COLD_BUCKET: baleia
+  BALEIA_QUERY_HISTORY_COLD_PREFIX: query-history-cold
 
 api:
   # Two replicas so the BI e2e proves a nextUri signed by one pod is followed

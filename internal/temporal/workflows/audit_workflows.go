@@ -32,3 +32,51 @@ func AuditExportWorkflow(ctx workflow.Context) (int, error) {
 	err := workflow.ExecuteActivity(ctx, activities.ExportAuditEvents).Get(ctx, &n)
 	return n, err
 }
+
+// AuditOffloadWorkflow runs one pass of the audit S3 cold offload (ADR 0024):
+// it finalizes a month with its manifest before the cursor advances past it.
+func AuditOffloadWorkflow(ctx workflow.Context) (int, error) {
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 6 * time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
+	})
+	var n int
+	err := workflow.ExecuteActivity(ctx, activities.OffloadAudit).Get(ctx, &n)
+	return n, err
+}
+
+// QueryHistoryOffloadWorkflow runs one pass of the query-history S3 cold
+// offload (ADR 0024): executions and their statements are written as one
+// month's pair before the cursor advances.
+func QueryHistoryOffloadWorkflow(ctx workflow.Context) (int, error) {
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 6 * time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
+	})
+	var n int
+	err := workflow.ExecuteActivity(ctx, activities.OffloadQueryHistory).Get(ctx, &n)
+	return n, err
+}
+
+// AuditRetentionWorkflow drops the audit trail's past-hot-window partitions.
+func AuditRetentionWorkflow(ctx workflow.Context) (int, error) {
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
+	})
+	var n int
+	err := workflow.ExecuteActivity(ctx, activities.RetainAudit).Get(ctx, &n)
+	return n, err
+}
+
+// QueryHistoryRetentionWorkflow drops the query-history past-hot-window
+// partitions, executions and statements as a pair.
+func QueryHistoryRetentionWorkflow(ctx workflow.Context) (int, error) {
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
+	})
+	var n int
+	err := workflow.ExecuteActivity(ctx, activities.RetainQueryHistory).Get(ctx, &n)
+	return n, err
+}

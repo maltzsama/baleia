@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // postgresManager is the PostgreSQL adapter. All dialect-specific partition
@@ -177,12 +178,42 @@ func listPartitions(db *gorm.DB, table string) ([]Partition, error) {
 	return out, nil
 }
 
+// dropPartition detaches then drops each monthly partition of table in
+// [from, until), one transaction per partition. Detaching first lets a
+// partition whose rows a non-partitioned table references through a composite
+// foreign key be removed; it fails closed if referencing rows remain.
 func dropPartition(db *gorm.DB, table string, from, until time.Time) error {
 	if !identifier.MatchString(table) {
 		return fmt.Errorf("partitioning: invalid table name %q", table)
 	}
 	for _, p := range RangeMonths(table, from, until) {
-		if err := db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, p.Name)).Error; err != nil {
+		if !identifier.MatchString(p.Name) {
+			return fmt.Errorf("partitioning: invalid partition name %q", p.Name)
+		}
+		if !db.Migrator().HasTable(p.Name) {
+			continue
+		}
+		// Detach and drop in one transaction: a DETACH that survives a failed
+		// DROP leaves a standalone table that no longer detaches on retry, so
+		// the two steps must roll back together. Detaching first is what lets a
+		// partition a non-partitioned table references through a composite
+		// foreign key be removed; it fails closed if referencing rows remain.
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			// Bound the detach: a pending DETACH holds ACCESS EXCLUSIVE on the
+			// parent and would block reads and writes there. A timeout rolls
+			// the whole transaction back so a later pass can retry.
+			if err := tx.Exec("SET LOCAL lock_timeout = '30s'").Error; err != nil {
+				return fmt.Errorf("set lock timeout: %w", err)
+			}
+			if err := tx.Exec("ALTER TABLE ? DETACH PARTITION ?",
+				clause.Column{Name: table}, clause.Column{Name: p.Name}).Error; err != nil {
+				return fmt.Errorf("detach %s: %w", p.Name, err)
+			}
+			if err := tx.Exec("DROP TABLE IF EXISTS ?", clause.Column{Name: p.Name}).Error; err != nil {
+				return fmt.Errorf("drop %s: %w", p.Name, err)
+			}
+			return nil
+		}); err != nil {
 			return fmt.Errorf("partitioning: drop partition %s: %w", p.Name, err)
 		}
 	}

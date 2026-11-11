@@ -341,17 +341,21 @@ it ended (`outcome`, `reason`) and from where (`request_id`, `client_ip`, `user_
 changes are kept in `changes`, with secret values stored as `***`. `GET /api/v1/audit/events`
 lists them, newest first: admins see every event, anyone else only their own.
 
-- **Append-only:** a trigger rejects every `UPDATE` and `DELETE`, also for the role that owns
-  the table.
+- **Append-only:** enforced by convention (the recorder only inserts); ADR 0020 removed the
+  trigger.
 - **Best-effort:** a failed write never fails the user's request. It is logged with
   `error_code=audit_write_failed` and counted in `baleia_audit_write_failures_total`
   ([BaleiaAuditWriteFailures](#baleiaauditwritefailures)).
-- **Partitions:** the table is partitioned by month. The `audit-partitions` schedule creates the
-  partitions three months ahead, daily, and never drops one. There is no default partition: an
-  event whose month has no partition fails to write.
-- **Retention:** 400 days by default. Retention is an explicit operator action:
-  `migrate -cmd=audit-prune -before=YYYY-MM` detaches and drops the partitions of the months before
-  that one. It refuses the current month.
+- **Partitions:** the table is partitioned by month (native `RANGE`, ADR 0024). The
+  `audit-partitions` schedule creates the partitions three months ahead, daily, and never drops
+  one. There is no default partition: an event whose month has no partition fails to write.
+- **Retention:** `BALEIA_AUDIT_RETENTION` (400 days by default). The `audit-retention` schedule
+  drops a month's partition only after the cold offload has sealed that month; it is fail-closed
+  and never drops data that has not been offloaded.
+- **Manual prune:** `migrate -cmd=audit-prune -before=YYYY-MM` drains the same gated path by hand
+  (it refuses without a cold bucket and refuses the current month or later). `--dry-run` reports
+  the partitions that would be dropped without dropping them. `-before` **overrides the
+  hot-retention window** (including the 400-day default), so it is the cutoff to choose carefully.
 
 ## Audit export
 
@@ -375,6 +379,29 @@ on stdout and are not exported.
   `baleia_audit_export_events_total{outcome}` counts batches. A lag over 15 minutes for 15 minutes
   fires [BaleiaAuditExportLagging](#baleiaauditexportlagging). A local target runs under the
   compose `opensearch` profile.
+
+## Cold offload and retention
+
+The audit trail and the query history are offloaded to S3 and pruned after their hot windows
+(ADR 0024). The OpenSearch export above is a search path; the cold sink is the durable copy that
+retention is gated on.
+
+- **Format:** gzip NDJSON, one object per month under the configured prefix, with a per-month
+  `manifest.json` recording the object keys, row counts and checksums. The audit stream writes one
+  object per month (`audit-YYYYMM.ndjson.gz`); query history writes the pair
+  (`query_executions-YYYYMM.ndjson.gz` and `query_statements-YYYYMM.ndjson.gz`), so a statement is
+  never offloaded without its execution and a month is not complete until both exist. The cursor
+  advances past a month only after its manifest is written.
+- **Configuration:** `BALEIA_AUDIT_COLD_BUCKET`/`_PREFIX` and
+  `BALEIA_QUERY_HISTORY_COLD_BUCKET`/`_PREFIX` (both off by default), `BALEIA_AUDIT_RETENTION`
+  (400d), `BALEIA_QUERY_HISTORY_RETENTION` (180d), `BALEIA_AUDIT_COLD_GRACE` /
+  `BALEIA_QUERY_HISTORY_COLD_GRACE` (7d), and `BALEIA_PRUNE_MAX_PARTITIONS` (1).
+- **Schedules:** `audit-offload` and `query-history-offload` (hourly), and `audit-retention` /
+  `query-history-retention` (daily). Each pair is created only when that stream's cold bucket is
+  configured.
+- **Fail-closed:** a partition is dropped only if the cold cursor has advanced past it and its
+  manifest exists. An unconfigured or unreachable cold sink grows the database (with alerts)
+  rather than losing data.
 
 ## Binding reconciliation
 

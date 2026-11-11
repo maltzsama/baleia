@@ -591,8 +591,10 @@ type GetAppliedCatalogRetentionRow struct {
 }
 
 type GetAuditExportCursorRow struct {
+	Stream     string      `json:"stream"`
 	OccurredAt Timestamptz `json:"occurred_at"`
 	ID         int64       `json:"id"`
+	CursorKey  string      `json:"cursor_key"`
 }
 
 type GetBindingForTargetRow struct {
@@ -1178,6 +1180,7 @@ type ListAuditEventsForExportRow struct {
 	ClientIp     string      `json:"client_ip"`
 	UserAgent    string      `json:"user_agent"`
 	Changes      []byte      `json:"changes"`
+	OnBehalfOf   string      `json:"on_behalf_of"`
 }
 
 type ListAuditEventsParams struct {
@@ -2085,9 +2088,11 @@ type SetBIGatewayEnabledParams struct {
 }
 
 type SetAuditExportCursorParams struct {
+	Stream     string      `json:"stream"`
 	Sink       string      `json:"sink"`
 	OccurredAt Timestamptz `json:"occurred_at"`
 	ID         int64       `json:"id"`
+	CursorKey  string      `json:"cursor_key"`
 }
 
 type SetCatalogDiscoverableParams struct {

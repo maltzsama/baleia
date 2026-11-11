@@ -25,12 +25,17 @@ type AuditEvent struct {
 
 func (AuditEvent) TableName() string { return "audit_events" }
 
-// AuditExportCursor is the audit_export_cursor table.
+// AuditExportCursor is the audit_export_cursor table. A cursor is keyed by
+// (stream, sink): one stream (audit, query_history) per cold sink (ADR 0024).
 type AuditExportCursor struct {
+	Stream     Text      `gorm:"column:stream;primaryKey;not null;size:128"`
 	Sink       Text      `gorm:"column:sink;primaryKey;not null;size:128"`
 	OccurredAt time.Time `gorm:"column:occurred_at;not null"`
 	ID         int64     `gorm:"column:id;not null"`
-	UpdatedAt  time.Time `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3)"`
+	// CursorKey is the string tiebreaker of a UUID-keyed stream (query_history,
+	// whose rows are ordered by (started_at, id uuid)); audit uses ID.
+	CursorKey Text      `gorm:"column:cursor_key;not null;default:''"`
+	UpdatedAt time.Time `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3)"`
 }
 
 func (AuditExportCursor) TableName() string { return "audit_export_cursor" }

@@ -101,13 +101,13 @@ type fakeCursor struct {
 	p  Position
 }
 
-func (c *fakeCursor) Get(context.Context, string) (Position, error) {
+func (c *fakeCursor) Get(context.Context, string, string) (Position, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.p, nil
 }
 
-func (c *fakeCursor) Set(_ context.Context, _ string, p Position) error {
+func (c *fakeCursor) Set(_ context.Context, _, _ string, p Position) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.p = p
@@ -123,7 +123,7 @@ func events(n int, at time.Time) []Event {
 }
 
 func newExporter(t *testing.T, src Source, cur Cursor, sink BulkSink, batch int, now time.Time) *Exporter {
-	return &Exporter{Source: src, Cursor: cur, Sink: sink, Index: "baleia-audit", Batch: batch, Lag: DefaultSafetyLag, Now: func() time.Time { return now }}
+	return &Exporter{Source: src, Cursor: cur, Sink: sink, Stream: StreamAudit, Index: "baleia-audit", Batch: batch, Lag: DefaultSafetyLag, Now: func() time.Time { return now }}
 }
 
 // TestOrderedAndResumable: a transport failure after batch 2 leaves the cursor
@@ -146,7 +146,7 @@ func TestOrderedAndResumable(t *testing.T) {
 		t.Fatal("expected a bulk error")
 	}
 	// Batch 3 failed: the cursor is at batch 2.
-	pos, _ := cur.Get(context.Background(), Sink)
+	pos, _ := cur.Get(context.Background(), StreamAudit, SinkOpenSearch)
 	if pos.ID != 2 {
 		t.Fatalf("cursor = %+v, want id 2", pos)
 	}
@@ -204,7 +204,7 @@ func TestPartialErrors(t *testing.T) {
 	if n != 2 {
 		t.Fatalf("accepted %d, want 2", n)
 	}
-	pos, _ := cur.Get(context.Background(), Sink)
+	pos, _ := cur.Get(context.Background(), StreamAudit, SinkOpenSearch)
 	if pos.ID != 2 {
 		t.Fatalf("cursor = %+v, want id 2", pos)
 	}

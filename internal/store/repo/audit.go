@@ -324,6 +324,10 @@ func (r *Repo) ListAuditEventsForExport(ctx context.Context, arg db.ListAuditEve
 		if row.WorkspaceID != nil {
 			workspaceID = string(*row.WorkspaceID)
 		}
+		onBehalfOf := ""
+		if row.OnBehalfOf != nil {
+			onBehalfOf = string(*row.OnBehalfOf)
+		}
 		out[i] = db.ListAuditEventsForExportRow{
 			OccurredAt:   PGTime(row.OccurredAt),
 			ID:           row.ID,
@@ -341,35 +345,39 @@ func (r *Repo) ListAuditEventsForExport(ctx context.Context, arg db.ListAuditEve
 			ClientIp:     derefInet(row.ClientIP),
 			UserAgent:    derefString(row.UserAgent),
 			Changes:      derefJSON(row.Changes),
+			OnBehalfOf:   onBehalfOf,
 		}
 	}
 	return out, nil
 }
 
-// GetAuditExportCursor returns the sink's position or db.ErrNoRows.
-func (r *Repo) GetAuditExportCursor(ctx context.Context, sink string) (db.GetAuditExportCursorRow, error) {
+// GetAuditExportCursor returns the stream and sink's position or db.ErrNoRows.
+func (r *Repo) GetAuditExportCursor(ctx context.Context, stream, sink string) (db.GetAuditExportCursorRow, error) {
 	var row model.AuditExportCursor
-	err := r.Users.db.WithContext(ctx).Where("sink = ?", sink).First(&row).Error
+	err := r.Users.db.WithContext(ctx).
+		Where("stream = ? AND sink = ?", stream, sink).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return db.GetAuditExportCursorRow{}, db.ErrNoRows
 	}
 	if err != nil {
 		return db.GetAuditExportCursorRow{}, err
 	}
-	return db.GetAuditExportCursorRow{OccurredAt: PGTime(row.OccurredAt), ID: row.ID}, nil
+	return db.GetAuditExportCursorRow{Stream: string(row.Stream), OccurredAt: PGTime(row.OccurredAt), ID: row.ID, CursorKey: string(row.CursorKey)}, nil
 }
 
-// SetAuditExportCursor advances the sink's cursor (upsert).
+// SetAuditExportCursor advances the stream and sink's cursor (upsert).
 func (r *Repo) SetAuditExportCursor(ctx context.Context, arg db.SetAuditExportCursorParams) error {
 	row := model.AuditExportCursor{
+		Stream:     model.Text(arg.Stream),
 		Sink:       model.Text(arg.Sink),
 		OccurredAt: arg.OccurredAt.Time,
 		ID:         arg.ID,
+		CursorKey:  model.Text(arg.CursorKey),
 		UpdatedAt:  time.Now().UTC(),
 	}
 	return r.Users.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "sink"}},
-		DoUpdates: clause.AssignmentColumns([]string{"occurred_at", "id", "updated_at"}),
+		Columns:   []clause.Column{{Name: "stream"}, {Name: "sink"}},
+		DoUpdates: clause.AssignmentColumns([]string{"occurred_at", "id", "cursor_key", "updated_at"}),
 	}).Create(&row).Error
 }
 

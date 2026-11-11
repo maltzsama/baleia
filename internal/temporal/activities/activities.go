@@ -12,6 +12,8 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	auditexport "github.com/galileostudio/baleia/internal/audit/export"
+	"github.com/galileostudio/baleia/internal/audit/offload"
+	"github.com/galileostudio/baleia/internal/audit/retention"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
@@ -72,6 +74,17 @@ type Activities struct {
 	sweepEphemeral ephemeralSweeper
 	// auditExport ships audit events to OpenSearch (#50); nil when disabled.
 	auditExport *auditexport.Exporter
+	// auditOffload writes audit events to the S3 cold sink (ADR 0024); nil when
+	// the cold bucket is not configured.
+	auditOffload *offload.Offloader
+	// queryHistoryOffload writes query executions and their statements to the
+	// S3 cold sink (ADR 0024); nil when the query-history cold bucket is not
+	// configured.
+	queryHistoryOffload *offload.Offloader
+	// auditRetain and queryHistoryRetain drop past-hot-window partitions, gated
+	// on the cold-sink cursor and manifest.
+	auditRetain        *retention.Retain
+	queryHistoryRetain []*retention.Retain
 	// temporalClient signals the adaptive admission gate (#551, #579). Nil in
 	// tests that build activities without a worker client.
 	temporalClient client.Client
@@ -143,6 +156,10 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(SyncCatalogMetadata)
 	w.RegisterActivity(EnsureAuditPartitions)
 	w.RegisterActivity(ExportAuditEvents)
+	w.RegisterActivity(OffloadAudit)
+	w.RegisterActivity(OffloadQueryHistory)
+	w.RegisterActivity(RetainAudit)
+	w.RegisterActivity(RetainQueryHistory)
 	w.RegisterActivity(ReconcileCatalogs)
 	w.RegisterActivity(ReconcileDirectories)
 	w.RegisterActivity(SweepEphemeralCatalogs)
