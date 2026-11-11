@@ -346,16 +346,20 @@ lists them, newest first: admins see every event, anyone else only their own.
 - **Best-effort:** a failed write never fails the user's request. It is logged with
   `error_code=audit_write_failed` and counted in `baleia_audit_write_failures_total`
   ([BaleiaAuditWriteFailures](#baleiaauditwritefailures)).
-- **Partitions:** the table is partitioned by month (native `RANGE`, ADR 0024). The
-  `audit-partitions` schedule creates the partitions three months ahead, daily, and never drops
-  one. There is no default partition: an event whose month has no partition fails to write.
+- **Partitions:** the table is partitioned by UTC day (native `RANGE` where the engine has it,
+  ADR 0024 and 0026), with partition names ending in `yyyymmdd` (`audit_events_20261101`). The
+  `audit-partitions` schedule, daily, keeps the partitions `BALEIA_PARTITION_DAYS_AHEAD` days
+  past today (14 by default) and never drops one. PostgreSQL has no default partition: an event
+  whose day has no partition fails to write, so the horizon is how long the schedule can stay
+  down before writes start failing.
 - **Retention:** `BALEIA_AUDIT_RETENTION` (400 days by default). The `audit-retention` schedule
-  drops a month's partition only after the cold offload has sealed that month; it is fail-closed
-  and never drops data that has not been offloaded.
-- **Manual prune:** `migrate -cmd=audit-prune -before=YYYY-MM` drains the same gated path by hand
-  (it refuses without a cold bucket and refuses the current month or later). `--dry-run` reports
-  the partitions that would be dropped without dropping them. `-before` **overrides the
-  hot-retention window** (including the 400-day default), so it is the cutoff to choose carefully.
+  drops a day's partition only after the cold offload has sealed that day and the day's manifest
+  validates; it is fail-closed and never drops data that has not been offloaded.
+- **Manual prune:** `migrate -cmd=audit-prune -before=YYYY-MM-DD` (or `YYYY-MM` for the first of
+  a month) drains the same gated path by hand (it refuses without a cold bucket and refuses
+  today or later). `--dry-run` reports the partitions that would be dropped without dropping
+  them. `-before` **overrides the hot-retention window** (including the 400-day default), so it
+  is the cutoff to choose carefully.
 
 ## Audit export
 
@@ -386,12 +390,16 @@ The audit trail and the query history are offloaded to S3 and pruned after their
 (ADR 0024). The OpenSearch export above is a search path; the cold sink is the durable copy that
 retention is gated on.
 
-- **Format:** gzip NDJSON, one object per month under the configured prefix, with a per-month
-  `manifest.json` recording the object keys, row counts and checksums. The audit stream writes one
-  object per month (`audit-YYYYMM.ndjson.gz`); query history writes the pair
-  (`query_executions-YYYYMM.ndjson.gz` and `query_statements-YYYYMM.ndjson.gz`), so a statement is
-  never offloaded without its execution and a month is not complete until both exist. The cursor
-  advances past a month only after its manifest is written.
+- **Format:** gzip NDJSON, one set of objects per UTC day under
+  `<prefix>/<stream>/<yyyy>/<mm>/<dd>/`, with a per-day `manifest.json` recording the stream, the
+  day, and each object's key, row count and checksum. The audit stream writes
+  `audit-YYYYMMDD-<hash>.ndjson.gz`; query history writes the pair
+  (`query_executions-YYYYMMDD-<hash>.ndjson.gz` and `query_statements-YYYYMMDD-<hash>.ndjson.gz`),
+  so a statement is never offloaded without its execution and a day is not complete until both
+  exist. A very large day is split into several objects, all in the day's manifest. The cursor
+  advances past a day only after its manifest is written. A day with no rows still gets a
+  manifest, so its empty partition can be dropped. That is about 365 manifests per stream per
+  year.
 - **Configuration:** `BALEIA_AUDIT_COLD_BUCKET`/`_PREFIX` and
   `BALEIA_QUERY_HISTORY_COLD_BUCKET`/`_PREFIX` (both off by default), `BALEIA_AUDIT_RETENTION`
   (400d), `BALEIA_QUERY_HISTORY_RETENTION` (180d), `BALEIA_AUDIT_COLD_GRACE` /
@@ -400,8 +408,21 @@ retention is gated on.
   `query-history-retention` (daily). Each pair is created only when that stream's cold bucket is
   configured.
 - **Fail-closed:** a partition is dropped only if the cold cursor has advanced past it and its
-  manifest exists. An unconfigured or unreachable cold sink grows the database (with alerts)
-  rather than losing data.
+  day's manifest exists and validates: the manifest names that stream and day, and every object
+  it lists is in the cold store with the recorded checksum and row count. A day that fails the
+  check is skipped, with the reason in the worker log (`reason`), and holds only itself. An
+  unconfigured or unreachable cold sink grows the database (with alerts) rather than losing data.
+- **Upgrading from 0.7.0:** store migration 14 converts `audit_events`, `query_executions` and
+  `query_statements` to one partition per day, from the oldest row through today plus the
+  horizon. It runs in stages (preparation, one transaction per table, then one per foreign key)
+  and checks each copy day by day (row count and a checksum over the ids) before it drops the
+  old table, so a mismatch aborts that table and keeps its rows. One partition per day of
+  history multiplies the relations PostgreSQL locks: with the default
+  `max_locks_per_transaction` (64) a database converts about two years of dense history, and a
+  longer history fails with `out of shared memory`. Raise `max_locks_per_transaction` (a server
+  restart) before upgrading a database with more history than that. If a run fails, the tables
+  converted so far stay converted and the rest keep their rows: fix the cause, clear the dirty
+  ledger row the runner names, and run it again.
 
 ## Binding reconciliation
 
@@ -763,8 +784,8 @@ Audit events could not be written in the last 10 minutes, so the trail has gaps.
 1. Read the API and worker logs for `error_code=audit_write_failed`.
 2. If the error names a missing partition (`no partition of relation "audit_events" found for
    row`), the `audit-partitions` schedule is not running. Check
-   [BaleiaScheduleStale](#baleiaschedulestale), then create the partitions by hand with
-   `SELECT audit_ensure_partitions(3);`.
+   [BaleiaScheduleStale](#baleiaschedulestale), then run it once by hand
+   (`temporal schedule trigger --schedule-id audit-partitions`).
 3. If the database is slow or down, see [BaleiaDBPoolSaturated](#baleiadbpoolsaturated).
 
 ### BaleiaCatalogsInError
