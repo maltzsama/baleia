@@ -105,7 +105,8 @@ func wireActivities(core *app.Core, cfg *config.Config, logger *slog.Logger, len
 		exportMetrics := reg.AuditExport()
 		act.SetAuditExporter(&auditexport.Exporter{
 			Source: pg, Cursor: pg, Sink: sink,
-			Index: cfg.AuditExportIndex, Batch: cfg.AuditExportBatch, Lag: auditexport.DefaultSafetyLag,
+			Stream: auditexport.StreamAudit,
+			Index:  cfg.AuditExportIndex, Batch: cfg.AuditExportBatch, Lag: auditexport.DefaultSafetyLag,
 			OnBatch: exportMetrics.Observe,
 			OnLag:   func(t time.Time) { exportMetrics.SetLag(time.Since(t).Seconds()) },
 		})

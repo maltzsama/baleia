@@ -11,7 +11,7 @@ import (
 // exportStore is the part of Baleia's database the export uses.
 type exportStore interface {
 	ListAuditEventsForExport(ctx context.Context, arg db.ListAuditEventsForExportParams) ([]db.ListAuditEventsForExportRow, error)
-	GetAuditExportCursor(ctx context.Context, sink string) (db.GetAuditExportCursorRow, error)
+	GetAuditExportCursor(ctx context.Context, stream, sink string) (db.GetAuditExportCursorRow, error)
 	SetAuditExportCursor(ctx context.Context, arg db.SetAuditExportCursorParams) error
 }
 
@@ -39,9 +39,10 @@ func (p Postgres) Events(ctx context.Context, after Position, before time.Time, 
 	return out, nil
 }
 
-// Get returns the sink's position, or the zero position when none is stored.
-func (p Postgres) Get(ctx context.Context, sink string) (Position, error) {
-	row, err := p.Queries.GetAuditExportCursor(ctx, sink)
+// Get returns the stream and sink's position, or the zero position when none
+// is stored.
+func (p Postgres) Get(ctx context.Context, stream, sink string) (Position, error) {
+	row, err := p.Queries.GetAuditExportCursor(ctx, stream, sink)
 	if errors.Is(err, db.ErrNoRows) {
 		return Position{}, nil
 	}
@@ -51,10 +52,10 @@ func (p Postgres) Get(ctx context.Context, sink string) (Position, error) {
 	return Position{OccurredAt: row.OccurredAt.Time, ID: row.ID}, nil
 }
 
-// Set advances the sink's cursor (upsert).
-func (p Postgres) Set(ctx context.Context, sink string, pos Position) error {
+// Set advances the stream and sink's cursor (upsert).
+func (p Postgres) Set(ctx context.Context, stream, sink string, pos Position) error {
 	return p.Queries.SetAuditExportCursor(ctx, db.SetAuditExportCursorParams{
-		Sink: sink, OccurredAt: timestamptz(pos.OccurredAt), ID: pos.ID,
+		Stream: stream, Sink: sink, OccurredAt: timestamptz(pos.OccurredAt), ID: pos.ID,
 	})
 }
 

@@ -106,7 +106,7 @@ func TestAuditExportCursor(t *testing.T) {
 	r := f.r
 	actor := "service:exporter"
 
-	if _, err := r.GetAuditExportCursor(ctx, "opensearch"); !errors.Is(err, db.ErrNoRows) {
+	if _, err := r.GetAuditExportCursor(ctx, "audit", "opensearch"); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("empty cursor = %v, want ErrNoRows", err)
 	}
 	for range 3 {
@@ -133,11 +133,11 @@ func TestAuditExportCursor(t *testing.T) {
 
 	pos := batch[1]
 	if err := r.SetAuditExportCursor(ctx, db.SetAuditExportCursorParams{
-		Sink: "opensearch", OccurredAt: pos.OccurredAt, ID: pos.ID,
+		Stream: "audit", Sink: "opensearch", OccurredAt: pos.OccurredAt, ID: pos.ID,
 	}); err != nil {
 		t.Fatalf("SetAuditExportCursor: %v", err)
 	}
-	got, err := r.GetAuditExportCursor(ctx, "opensearch")
+	got, err := r.GetAuditExportCursor(ctx, "audit", "opensearch")
 	if err != nil || got.ID != pos.ID || !got.OccurredAt.Time.Equal(pos.OccurredAt.Time) {
 		t.Fatalf("cursor = %+v, %v", got, err)
 	}
@@ -151,11 +151,11 @@ func TestAuditExportCursor(t *testing.T) {
 	// Advancing an existing sink replaces its position.
 	second := batch[2]
 	if err := r.SetAuditExportCursor(ctx, db.SetAuditExportCursorParams{
-		Sink: "opensearch", OccurredAt: second.OccurredAt, ID: second.ID,
+		Stream: "audit", Sink: "opensearch", OccurredAt: second.OccurredAt, ID: second.ID,
 	}); err != nil {
 		t.Fatalf("SetAuditExportCursor(second): %v", err)
 	}
-	got, err = r.GetAuditExportCursor(ctx, "opensearch")
+	got, err = r.GetAuditExportCursor(ctx, "audit", "opensearch")
 	if err != nil || got.ID != second.ID {
 		t.Fatalf("cursor after second set = %+v, %v", got, err)
 	}

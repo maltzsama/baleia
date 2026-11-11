@@ -38,14 +38,14 @@ func TestPostgres_EventsAndCursor(t *testing.T) {
 		t.Fatalf("events = %+v", events)
 	}
 
-	if got, err := p.Get(ctx, "test"); err != nil || got.After() {
+	if got, err := p.Get(ctx, "audit", "test"); err != nil || got.After() {
 		t.Fatalf("unset cursor = %+v, %v; want the zero position", got, err)
 	}
 	pos := Position{OccurredAt: events[0].OccurredAt, ID: events[0].ID}
-	if err := p.Set(ctx, "test", pos); err != nil {
+	if err := p.Set(ctx, "audit", "test", pos); err != nil {
 		t.Fatal(err)
 	}
-	got, err := p.Get(ctx, "test")
+	got, err := p.Get(ctx, "audit", "test")
 	if err != nil || got.ID != pos.ID || !got.OccurredAt.Equal(pos.OccurredAt) {
 		t.Fatalf("cursor = %+v, %v; want %+v", got, err, pos)
 	}

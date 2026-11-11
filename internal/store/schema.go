@@ -185,6 +185,11 @@ func AllMigrations() (*Registry, error) {
 			Name:    "partition audit and query history",
 			Up:      repartitionQueryHistory,
 		},
+		Migration{
+			Version: 15,
+			Name:    "key the export cursor by stream and sink",
+			Up:      keyExportCursor,
+		},
 	)
 }
 

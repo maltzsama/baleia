@@ -201,7 +201,7 @@ type Querier interface {
 	// The age of the oldest audit event not yet exported (the lag the exporter
 	// reports). NULL when nothing is pending.
 	GetAttentionAuditExportLag(ctx context.Context) (Timestamptz, error)
-	GetAuditExportCursor(ctx context.Context, sink string) (GetAuditExportCursorRow, error)
+	GetAuditExportCursor(ctx context.Context, stream, sink string) (GetAuditExportCursorRow, error)
 	GetAuthProviderByID(ctx context.Context, id UUID) (AuthProvider, error)
 	GetBinding(ctx context.Context, id UUID) (CatalogBinding, error)
 	// Everything an execution target needs about a binding: its engine and its

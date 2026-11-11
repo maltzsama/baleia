@@ -591,6 +591,7 @@ type GetAppliedCatalogRetentionRow struct {
 }
 
 type GetAuditExportCursorRow struct {
+	Stream     string      `json:"stream"`
 	OccurredAt Timestamptz `json:"occurred_at"`
 	ID         int64       `json:"id"`
 }
@@ -2085,6 +2086,7 @@ type SetBIGatewayEnabledParams struct {
 }
 
 type SetAuditExportCursorParams struct {
+	Stream     string      `json:"stream"`
 	Sink       string      `json:"sink"`
 	OccurredAt Timestamptz `json:"occurred_at"`
 	ID         int64       `json:"id"`
