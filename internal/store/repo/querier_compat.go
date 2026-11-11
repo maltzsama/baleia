@@ -971,7 +971,7 @@ func (r *Repo) EnsureAuditPartitions(ctx context.Context, monthsAhead int32) err
 	if pm == nil {
 		return nil
 	}
-	from := partitioning.MonthStart(time.Now())
+	from := partitioning.Monthly.Start(time.Now())
 	until := from.AddDate(0, int(monthsAhead)+1, 0)
 	for _, t := range model.PartitionedTables() {
 		existing, err := pm.ListPartitions(ctx, t.Table)

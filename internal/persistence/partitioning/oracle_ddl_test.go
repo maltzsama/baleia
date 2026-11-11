@@ -9,7 +9,7 @@ import (
 func TestOraclePartitionByStatement(t *testing.T) {
 	t.Parallel()
 	spec := Spec{Table: "audit_events", Column: "occurred_at", Strategy: Range, Interval: Monthly}
-	months := RangeMonths("audit_events",
+	months := RangePartitions("audit_events", Monthly,
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC))
 	got := oraclePartitionByStatement(spec, months)
@@ -50,5 +50,22 @@ func TestOracleLocalKeyStatement(t *testing.T) {
 	want := "ALTER TABLE AUDIT_EVENTS ADD CONSTRAINT PK_AUDIT_EVENTS PRIMARY KEY (ID, OCCURRED_AT) USING INDEX LOCAL"
 	if got != want {
 		t.Errorf("oracleLocalKeyStatement = %q, want %q", got, want)
+	}
+}
+
+func TestOraclePartitionByStatementDaily(t *testing.T) {
+	t.Parallel()
+	spec := Spec{Table: "audit_events", Column: "occurred_at", Strategy: Range, Interval: Daily}
+	days := RangePartitions("audit_events", Daily,
+		time.Date(2026, 11, 30, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 12, 2, 0, 0, 0, 0, time.UTC))
+	got := oraclePartitionByStatement(spec, days)
+	for _, want := range []string{
+		"PARTITION AUDIT_EVENTS_20261130 VALUES LESS THAN (TO_DATE('2026-12-01','YYYY-MM-DD'))",
+		"PARTITION AUDIT_EVENTS_20261201 VALUES LESS THAN (TO_DATE('2026-12-02','YYYY-MM-DD'))",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("oraclePartitionByStatement missing %q in:\n%s", want, got)
+		}
 	}
 }

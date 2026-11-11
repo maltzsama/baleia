@@ -34,7 +34,7 @@ func (m *sqlserverManager) Provision(ctx context.Context, model any, spec Spec, 
 	if err := spec.Validate(); err != nil {
 		return err
 	}
-	months := RangeMonths(spec.Table, from, until)
+	months := RangePartitions(spec.Table, spec.Interval, from, until)
 	pf, ps := pfName(spec.Table), psName(spec.Table)
 
 	if ok, err := m.exists(ctx, "sys.partition_functions", pf); err != nil {
@@ -178,8 +178,8 @@ func addClusteredKeyStatement(spec Spec, key []string, ps string) string {
 }
 
 // ListPartitions derives one partition per boundary of the partition function,
-// oldest first. A boundary at month end means the partition covers the month
-// that ends there.
+// oldest first. A boundary ends the partition that precedes it; the width is
+// read from the spacing of the boundaries (see boundaryInterval).
 func (m *sqlserverManager) ListPartitions(ctx context.Context, table string) ([]Partition, error) {
 	if !identifier.MatchString(table) {
 		return nil, fmt.Errorf("partitioning: invalid table name %q", table)
@@ -188,10 +188,11 @@ func (m *sqlserverManager) ListPartitions(ctx context.Context, table string) ([]
 	if err != nil {
 		return nil, err
 	}
+	iv := boundaryInterval(bounds)
 	var out []Partition
 	for _, until := range bounds {
-		from := until.AddDate(0, -1, 0)
-		out = append(out, Partition{Name: table + "_" + from.Format("200601"), From: from, Until: until})
+		from := iv.previous(until)
+		out = append(out, Partition{Name: PartitionName(table, iv, from), From: from, Until: until})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].From.Before(out[j].From) })
 	return out, nil
@@ -208,7 +209,11 @@ func (m *sqlserverManager) DropPartition(ctx context.Context, table string, from
 	if err != nil {
 		return err
 	}
-	for _, p := range RangeMonths(table, from, until) {
+	existing, err := m.ListPartitions(ctx, table)
+	if err != nil {
+		return err
+	}
+	for _, p := range partitionsIn(existing, from, until) {
 		n, ok := partitionNumber(bounds, p.Until)
 		if !ok {
 			continue
@@ -308,4 +313,24 @@ func containsTime(ts []time.Time, want time.Time) bool {
 		}
 	}
 	return false
+}
+
+// boundaryInterval infers the partition width from the partition function's
+// boundaries: a first gap of 28 days or more means monthly partitions. The function
+// carries no width of its own, and Provision always lays down several
+// boundaries; a function with fewer than two is read as daily, the width the
+// product provisions.
+func boundaryInterval(bounds []time.Time) Interval {
+	if len(bounds) >= 2 && bounds[1].Sub(bounds[0]) >= 28*24*time.Hour {
+		return Monthly
+	}
+	return Daily
+}
+
+// previous returns the start of the partition that ends at until.
+func (i Interval) previous(until time.Time) time.Time {
+	if i == Daily {
+		return until.AddDate(0, 0, -1)
+	}
+	return until.AddDate(0, -1, 0)
 }

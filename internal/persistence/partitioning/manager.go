@@ -21,7 +21,7 @@ var (
 // Capabilities describes what a backend can do, so the retention layer never
 // assumes one physical model (ADR 0023).
 type Capabilities struct {
-	// NativeRange: the backend partitions natively by month, and DropPartition
+	// NativeRange: the backend partitions natively by range, and DropPartition
 	// reclaims space in one metadata operation.
 	NativeRange bool
 	// ForeignKeysOnPartitioned: a partitioned table may still take part in
@@ -56,7 +56,8 @@ type Manager interface {
 	Provision(ctx context.Context, model any, spec Spec, from, until time.Time) error
 	// ListPartitions returns the existing partitions of table, oldest first.
 	ListPartitions(ctx context.Context, table string) ([]Partition, error)
-	// DropPartition drops the partitions covering [from, until).
+	// DropPartition drops the existing partitions covering [from, until), the
+	// bounds normalized to partition starts.
 	DropPartition(ctx context.Context, table string, from, until time.Time) error
 	// Capabilities reports what this adapter can do.
 	Capabilities() Capabilities

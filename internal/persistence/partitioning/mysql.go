@@ -29,7 +29,7 @@ func (m *mysqlManager) Capabilities() Capabilities {
 }
 
 // pmax is the suffix of the MAXVALUE catch-all partition. It never matches the
-// <table>_YYYYMM shape, so ListPartitions ignores it.
+// <table>_YYYYMM or <table>_YYYYMMDD shape, so ListPartitions ignores it.
 const pmax = "pmax"
 
 // Provision creates the table if absent (plain, through GORM), partitions it
@@ -51,7 +51,7 @@ func (m *mysqlManager) Provision(ctx context.Context, model any, spec Spec, from
 	if err != nil {
 		return err
 	}
-	months := RangeMonths(spec.Table, from, until)
+	months := RangePartitions(spec.Table, spec.Interval, from, until)
 	if len(existing) == 0 {
 		// A plain table is converted in place; InnoDB needs the partition column
 		// in the primary key, and the same ALTER can swap it so the table is
@@ -108,8 +108,8 @@ func withPrimaryKey(alter, table string, key []string, drop bool) string {
 	return b.String()
 }
 
-// ListPartitions returns the partitions whose names match <table>_YYYYMM,
-// oldest first. The MAXVALUE catch-all is excluded.
+// ListPartitions returns the partitions whose names match <table>_YYYYMM or
+// <table>_YYYYMMDD, oldest first. The MAXVALUE catch-all is excluded.
 func (m *mysqlManager) ListPartitions(ctx context.Context, table string) ([]Partition, error) {
 	if !identifier.MatchString(table) {
 		return nil, fmt.Errorf("partitioning: invalid table name %q", table)
@@ -134,7 +134,11 @@ func (m *mysqlManager) DropPartition(ctx context.Context, table string, from, un
 	if !identifier.MatchString(table) {
 		return fmt.Errorf("partitioning: invalid table name %q", table)
 	}
-	for _, p := range RangeMonths(table, from, until) {
+	existing, err := m.ListPartitions(ctx, table)
+	if err != nil {
+		return err
+	}
+	for _, p := range partitionsIn(existing, from, until) {
 		if err := m.db.WithContext(ctx).Exec(dropStatement(table, p.Name)).Error; err != nil {
 			return fmt.Errorf("partitioning: drop partition %s: %w", p.Name, err)
 		}

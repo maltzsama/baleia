@@ -30,7 +30,7 @@ func TestEnsureAuditPartitions(t *testing.T) {
 			t.Fatalf("EnsureAuditPartitions: %v", err)
 		}
 	}
-	last := partitioning.MonthStart(time.Now()).AddDate(0, 6, 0)
+	last := partitioning.Monthly.Start(time.Now()).AddDate(0, 6, 0)
 	for _, tbl := range model.PartitionedTables() {
 		parts, err := pm.ListPartitions(ctx, tbl.Table)
 		if err != nil {

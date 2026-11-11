@@ -319,7 +319,7 @@ func partitionTables(db *gorm.DB) error {
 		ctx = context.Background()
 	}
 	now := time.Now().UTC()
-	until := partitioning.MonthStart(now).AddDate(0, partitionMonthsAhead+1, 0)
+	until := partitioning.Monthly.Start(now).AddDate(0, partitionMonthsAhead+1, 0)
 	for _, t := range partitionedTables() {
 		from, err := firstMonth(db, t, now)
 		if err != nil {
@@ -342,9 +342,9 @@ func firstMonth(db *gorm.DB, t partitionedTable, now time.Time) (time.Time, erro
 	if err := db.Model(t.model).Order(t.spec.Column).Limit(1).Pluck(t.spec.Column, &oldest).Error; err != nil {
 		return time.Time{}, fmt.Errorf("oldest row of %s: %w", t.spec.Table, err)
 	}
-	from := partitioning.MonthStart(now)
+	from := partitioning.Monthly.Start(now)
 	if len(oldest) > 0 && oldest[0].Before(from) {
-		from = partitioning.MonthStart(oldest[0])
+		from = partitioning.Monthly.Start(oldest[0])
 	}
 	return from, nil
 }
