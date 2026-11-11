@@ -4853,6 +4853,9 @@ type TestConnectionRequest struct {
 
 	// Url Older shape: the endpoint URL (a JDBC URL for databases). Prefer config
 	Url *string `json:"url,omitempty"`
+
+	// Warehouse Warehouse a catalog manager's bind check binds: the one the catalog will be created with. Without it, the check binds the first catalog the connection lists. Ignored for databases.
+	Warehouse *string `json:"warehouse,omitempty"`
 }
 
 // TestConnectionRequestAccessMode Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.

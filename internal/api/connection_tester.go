@@ -140,6 +140,11 @@ type connectionTest struct {
 	metadata bool
 	direct   bool
 	binds    []testBind
+	// warehouse is the catalog a catalog manager's bind check binds: the one
+	// the catalog will be created with. Empty, the check binds the first of
+	// catalogs, what the list_catalogs check listed (nil if it did not run).
+	warehouse string
+	catalogs  []connections.CatalogRef
 }
 
 func ptr[T any](v T) *T { return &v }
@@ -178,14 +183,15 @@ func (t connectionTest) run(ctx context.Context) TestCatalogConnectionResult {
 			return done()
 		}
 		if slices.Contains(t.provider.Roles(), connections.RoleMetadata) {
-			n, err := t.listCatalogs(ctx)
+			cats, err := t.listCatalogs(ctx)
 			c := ConnectionCheck{Name: "list_catalogs"}
 			if err == nil {
-				c.Detail = ptr(fmt.Sprintf("%d catalogs", n))
+				c.Detail = ptr(fmt.Sprintf("%d catalogs", len(cats)))
 			}
 			if !add(c, err) {
 				return done()
 			}
+			t.catalogs = cats
 		}
 	}
 	if t.direct {
@@ -195,23 +201,47 @@ func (t connectionTest) run(ctx context.Context) TestCatalogConnectionResult {
 		}
 	}
 	for _, b := range t.binds {
-		if !add(ConnectionCheck{Name: "bind:" + b.engine.Name}, t.bind(ctx, b)) {
+		if !add(t.bind(ctx, b)) {
 			return done()
 		}
 	}
 	return done()
 }
 
-func (t connectionTest) listCatalogs(ctx context.Context) (int, error) {
+func (t connectionTest) listCatalogs(ctx context.Context) ([]connections.CatalogRef, error) {
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
 	r, err := t.provider.OpenMetadata(ctx, t.cfg)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer r.Close()
-	cats, err := r.ListCatalogs(ctx)
-	return len(cats), err
+	return r.ListCatalogs(ctx)
+}
+
+// bindSource is the source ref a bind check binds. A database's catalog
+// reaches the connection's own database and needs none. A catalog manager
+// (Iceberg family) exposes several catalogs and its projection needs one:
+// the check binds the warehouse the catalog will be created with, or, when
+// the caller gave none, the first catalog the connection lists.
+func (t connectionTest) bindSource(ctx context.Context) (string, error) {
+	if t.provider.Family() != connections.FamilyIceberg {
+		return "", nil
+	}
+	if t.warehouse != "" {
+		return t.warehouse, nil
+	}
+	cats := t.catalogs
+	if cats == nil {
+		var err error
+		if cats, err = t.listCatalogs(ctx); err != nil {
+			return "", fmt.Errorf("list catalogs to bind: %w", err)
+		}
+	}
+	if len(cats) == 0 {
+		return "", fmt.Errorf("%w: the connection lists no catalog to bind", connections.ErrNotFound)
+	}
+	return cats[0].Name, nil
 }
 
 // directEngine runs one trivial query through a transient engine instance
@@ -251,13 +281,25 @@ func (t connectionTest) directEngine(ctx context.Context) (ConnectionCheck, erro
 
 // bind binds a short-lived catalog of the settings into the federated
 // engine, lists its schemas through that engine, and always drops it. The
-// drop never uses the request context.
-func (t connectionTest) bind(ctx context.Context, b testBind) error {
+// drop never uses the request context. The check's detail names the source
+// catalog it bound, when it bound one.
+func (t connectionTest) bind(ctx context.Context, b testBind) (ConnectionCheck, error) {
+	c := ConnectionCheck{Name: "bind:" + b.engine.Name}
+	source, err := t.bindSource(ctx)
+	if err != nil {
+		return c, err
+	}
+	if source != "" {
+		c.Detail = &source
+	}
+	return c, t.bindInto(ctx, b, source)
+}
+
+func (t connectionTest) bindInto(ctx context.Context, b testBind, source string) error {
 	suffix := make([]byte, 8)
 	_, _ = rand.Read(suffix)
 	name := bindtrino.EphemeralPrefix + hex.EncodeToString(suffix)
-	// No source ref: a database's catalog reaches the connection's own database.
-	proj, err := t.h.binder.Project(bindings.BindingSpec{EngineCatalog: name}, t.cfg)
+	proj, err := t.h.binder.Project(bindings.BindingSpec{EngineCatalog: name, SourceRef: source}, t.cfg)
 	if err != nil {
 		return err
 	}
@@ -416,6 +458,9 @@ func (h *CatalogHandlers) TestConnectionDraft(ctx context.Context, request TestC
 	t, refused, err := h.planTest(ctx, p, provider, cfg, draft.Name, request.Body.Intents)
 	if err != nil {
 		return nil, err
+	}
+	if w := request.Body.Warehouse; w != nil {
+		t.warehouse = strings.TrimSpace(*w)
 	}
 	if refused != nil {
 		if strings.HasPrefix(*refused, "unknown intent") {
