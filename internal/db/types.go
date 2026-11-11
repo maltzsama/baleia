@@ -594,6 +594,7 @@ type GetAuditExportCursorRow struct {
 	Stream     string      `json:"stream"`
 	OccurredAt Timestamptz `json:"occurred_at"`
 	ID         int64       `json:"id"`
+	CursorKey  string      `json:"cursor_key"`
 }
 
 type GetBindingForTargetRow struct {
@@ -2090,6 +2091,7 @@ type SetAuditExportCursorParams struct {
 	Sink       string      `json:"sink"`
 	OccurredAt Timestamptz `json:"occurred_at"`
 	ID         int64       `json:"id"`
+	CursorKey  string      `json:"cursor_key"`
 }
 
 type SetCatalogDiscoverableParams struct {

@@ -49,13 +49,13 @@ func (p Postgres) Get(ctx context.Context, stream, sink string) (Position, error
 	if err != nil {
 		return Position{}, err
 	}
-	return Position{OccurredAt: row.OccurredAt.Time, ID: row.ID}, nil
+	return Position{OccurredAt: row.OccurredAt.Time, ID: row.ID, Key: row.CursorKey}, nil
 }
 
 // Set advances the stream and sink's cursor (upsert).
 func (p Postgres) Set(ctx context.Context, stream, sink string, pos Position) error {
 	return p.Queries.SetAuditExportCursor(ctx, db.SetAuditExportCursorParams{
-		Stream: stream, Sink: sink, OccurredAt: timestamptz(pos.OccurredAt), ID: pos.ID,
+		Stream: stream, Sink: sink, OccurredAt: timestamptz(pos.OccurredAt), ID: pos.ID, CursorKey: pos.Key,
 	})
 }
 

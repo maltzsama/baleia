@@ -357,7 +357,7 @@ func (r *Repo) GetAuditExportCursor(ctx context.Context, stream, sink string) (d
 	if err != nil {
 		return db.GetAuditExportCursorRow{}, err
 	}
-	return db.GetAuditExportCursorRow{Stream: string(row.Stream), OccurredAt: PGTime(row.OccurredAt), ID: row.ID}, nil
+	return db.GetAuditExportCursorRow{Stream: string(row.Stream), OccurredAt: PGTime(row.OccurredAt), ID: row.ID, CursorKey: string(row.CursorKey)}, nil
 }
 
 // SetAuditExportCursor advances the stream and sink's cursor (upsert).
@@ -367,11 +367,12 @@ func (r *Repo) SetAuditExportCursor(ctx context.Context, arg db.SetAuditExportCu
 		Sink:       model.Text(arg.Sink),
 		OccurredAt: arg.OccurredAt.Time,
 		ID:         arg.ID,
+		CursorKey:  model.Text(arg.CursorKey),
 		UpdatedAt:  time.Now().UTC(),
 	}
 	return r.Users.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "stream"}, {Name: "sink"}},
-		DoUpdates: clause.AssignmentColumns([]string{"occurred_at", "id", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"occurred_at", "id", "cursor_key", "updated_at"}),
 	}).Create(&row).Error
 }
 

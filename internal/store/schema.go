@@ -190,6 +190,15 @@ func AllMigrations() (*Registry, error) {
 			Name:    "key the export cursor by stream and sink",
 			Up:      keyExportCursor,
 		},
+		Migration{
+			Version: 16,
+			Name:    "add a cursor key for uuid-keyed streams",
+			Up: func(db *gorm.DB) error {
+				// query_history is ordered by (started_at, id uuid), so its
+				// cursor needs a string tiebreaker next to audit's bigint id.
+				return AutoMigrate(db, &model.AuditExportCursor{})
+			},
+		},
 	)
 }
 

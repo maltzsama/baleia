@@ -69,14 +69,18 @@ type Event struct {
 	Changes      json.RawMessage
 }
 
-// Position is a cursor value: the (occurred_at, id) of the last accepted event.
+// Position is a cursor value: the (occurred_at, id) of the last accepted event,
+// or the (occurred_at, key) of a UUID-keyed stream (query_history).
 type Position struct {
 	OccurredAt time.Time
 	ID         int64
+	// Key is the string tiebreaker of a UUID-keyed stream; the audit export
+	// uses ID instead.
+	Key string
 }
 
 // After reports whether p is strictly after the zero position.
-func (p Position) After() bool { return !p.OccurredAt.IsZero() || p.ID != 0 }
+func (p Position) After() bool { return !p.OccurredAt.IsZero() || p.ID != 0 || p.Key != "" }
 
 // DocumentID is the deterministic `_id` of an event: re-sending a batch
 // overwrites the same document instead of duplicating it.
