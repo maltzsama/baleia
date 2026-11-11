@@ -35,7 +35,8 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 		pg := auditexport.Postgres{Queries: q}
 		act.SetAuditOffload(&offload.Offloader{
 			Stream: auditexport.StreamAudit, SinkName: auditexport.SinkS3,
-			Source: pg, Cursor: pg, Sink: sink,
+			Cursor: pg, Sink: sink,
+			Reader: &offload.AuditReader{Source: pg, Name: auditexport.StreamAudit},
 		})
 		act.SetAuditRetain(&retention.Retain{
 			Table: "audit_events", Stream: auditexport.StreamAudit, SinkName: auditexport.SinkS3,
@@ -53,8 +54,18 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 			return err
 		}
 		sink := offload.NewSink(qhCold, cfg.QueryHistoryColdPrefix, auditexport.StreamQueryHistory)
+		pg := auditexport.Postgres{Queries: q}
+		act.SetQueryHistoryOffload(&offload.Offloader{
+			Stream: auditexport.StreamQueryHistory, SinkName: auditexport.SinkS3,
+			Cursor: pg, Sink: sink,
+			// Executions and their statements are read together and written as
+			// one month's pair (ADR 0024).
+			Reader: &offload.QueryHistoryReader{Store: core.StoreRepo},
+		})
 		var retains []*retention.Retain
-		for _, table := range []string{"query_executions", "query_statements"} {
+		// Children first: query_statements references query_executions, so its
+		// month partition must be detached and dropped before the parent's.
+		for _, table := range []string{"query_statements", "query_executions"} {
 			retains = append(retains, &retention.Retain{
 				Table: table, Stream: auditexport.StreamQueryHistory, SinkName: auditexport.SinkS3,
 				Partitions: repoPartitions{q}, Cursor: repoCursor{q},

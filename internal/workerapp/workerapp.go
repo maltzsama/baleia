@@ -137,6 +137,7 @@ func registerWorkflows(w worker.Worker) {
 	w.RegisterWorkflow(workflows.AuditPartitionsWorkflow)
 	w.RegisterWorkflow(workflows.AuditExportWorkflow)
 	w.RegisterWorkflow(workflows.AuditOffloadWorkflow)
+	w.RegisterWorkflow(workflows.QueryHistoryOffloadWorkflow)
 	w.RegisterWorkflow(workflows.AuditRetentionWorkflow)
 	w.RegisterWorkflow(workflows.QueryHistoryRetentionWorkflow)
 	w.RegisterWorkflow(workflows.CatalogReconcileWorkflow)

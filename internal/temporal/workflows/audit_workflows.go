@@ -46,6 +46,20 @@ func AuditOffloadWorkflow(ctx workflow.Context) (int, error) {
 	return n, err
 }
 
+// QueryHistoryOffloadWorkflow runs one pass of the query-history S3 cold
+// offload (ADR 0024): executions and their statements are written as one
+// month's pair before the cursor advances.
+func QueryHistoryOffloadWorkflow(ctx workflow.Context) (int, error) {
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 6 * time.Minute,
+		HeartbeatTimeout:    2 * time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
+	})
+	var n int
+	err := workflow.ExecuteActivity(ctx, activities.OffloadQueryHistory).Get(ctx, &n)
+	return n, err
+}
+
 // AuditRetentionWorkflow drops the audit trail's past-hot-window partitions.
 func AuditRetentionWorkflow(ctx workflow.Context) (int, error) {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{

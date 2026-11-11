@@ -19,6 +19,17 @@ func OffloadAudit(ctx context.Context) (int, error) {
 	return n, err
 }
 
+// OffloadQueryHistory runs one pass of the query-history S3 cold offload; a
+// no-op when no cold sink is configured.
+func OffloadQueryHistory(ctx context.Context) (int, error) {
+	if defaultActivities.queryHistoryOffload == nil {
+		return 0, nil
+	}
+	n, err := defaultActivities.queryHistoryOffload.Run(ctx)
+	defaultActivities.passDone(schedules.QueryHistoryOffload, err)
+	return n, err
+}
+
 // RetainAudit drops the audit trail's partitions that are past their hot
 // window, gated on the cold-sink cursor and manifest.
 func RetainAudit(ctx context.Context) (int, error) {
@@ -51,6 +62,9 @@ func RetainQueryHistory(ctx context.Context) (int, error) {
 
 // SetAuditOffload wires the audit S3 cold offload (ADR 0024).
 func (a *Activities) SetAuditOffload(o *offload.Offloader) { a.auditOffload = o }
+
+// SetQueryHistoryOffload wires the query-history S3 cold offload.
+func (a *Activities) SetQueryHistoryOffload(o *offload.Offloader) { a.queryHistoryOffload = o }
 
 // SetAuditRetain wires the audit-trail retention.
 func (a *Activities) SetAuditRetain(r *retention.Retain) { a.auditRetain = r }

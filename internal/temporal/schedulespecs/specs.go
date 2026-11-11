@@ -37,17 +37,24 @@ func AuditExport(every time.Duration) schedules.Spec {
 	return schedules.Spec{ID: schedules.AuditExport, Workflow: workflows.AuditExportWorkflow, Every: every}
 }
 
-// AuditOffload is the audit S3 cold offload schedule, enabled when the cold
-// bucket is configured (ADR 0024).
+// AuditOffload is the audit S3 cold offload schedule, enabled when the audit
+// cold bucket is configured (ADR 0024).
 func AuditOffload(every time.Duration) schedules.Spec {
 	return schedules.Spec{ID: schedules.AuditOffload, Workflow: workflows.AuditOffloadWorkflow, Every: every}
 }
 
-// Retention returns the audit and query-history retention schedules, enabled
-// when the cold bucket is configured (ADR 0024).
-func Retention(every time.Duration) []schedules.Spec {
-	return []schedules.Spec{
-		{ID: schedules.AuditRetention, Workflow: workflows.AuditRetentionWorkflow, Every: every},
-		{ID: schedules.QueryHistoryRetention, Workflow: workflows.QueryHistoryRetentionWorkflow, Every: every},
-	}
+// QueryHistoryOffload is the query-history S3 cold offload schedule, enabled
+// when the query-history cold bucket is configured (ADR 0024).
+func QueryHistoryOffload(every time.Duration) schedules.Spec {
+	return schedules.Spec{ID: schedules.QueryHistoryOffload, Workflow: workflows.QueryHistoryOffloadWorkflow, Every: every}
+}
+
+// AuditRetention is the audit-trail retention schedule (ADR 0024).
+func AuditRetention(every time.Duration) schedules.Spec {
+	return schedules.Spec{ID: schedules.AuditRetention, Workflow: workflows.AuditRetentionWorkflow, Every: every}
+}
+
+// QueryHistoryRetention is the query-history retention schedule (ADR 0024).
+func QueryHistoryRetention(every time.Duration) schedules.Spec {
+	return schedules.Spec{ID: schedules.QueryHistoryRetention, Workflow: workflows.QueryHistoryRetentionWorkflow, Every: every}
 }

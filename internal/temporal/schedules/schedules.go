@@ -94,6 +94,7 @@ const (
 	AuditExport           = "audit-export"
 	AuditOffload          = "audit-offload"
 	AuditRetention        = "audit-retention"
+	QueryHistoryOffload   = "query-history-offload"
 	QueryHistoryRetention = "query-history-retention"
 	CatalogReconcile      = "catalog-reconcile"
 	// EphemeralCatalogSweeper drops expired connection-test catalogs (#12).
