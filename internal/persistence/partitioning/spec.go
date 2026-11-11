@@ -61,6 +61,15 @@ func (s Spec) Validate() error {
 	return nil
 }
 
+// maxIdentifierLen is the longest identifier PostgreSQL keeps untruncated.
+const maxIdentifierLen = 63
+
+// LegacyTable is the name a plain table is set aside under while its
+// partitioned replacement is filled.
+func LegacyTable(table string) string { return table + "_legacy" }
+
+func legacyIndexName(name string) string { return "legacy_" + name }
+
 // MonthStart returns the first instant of t's month in UTC.
 func MonthStart(t time.Time) time.Time {
 	t = t.UTC()

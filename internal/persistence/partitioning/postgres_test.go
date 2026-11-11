@@ -103,3 +103,116 @@ func TestPostgresPartitions(t *testing.T) {
 		t.Fatalf("rows after drop = %d, want 2", n)
 	}
 }
+
+// plainConvEvent is the table as a plain deployment has it: id alone is the key.
+type plainConvEvent struct {
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	OccurredAt time.Time `gorm:"column:occurred_at;not null"`
+	Name       string    `gorm:"column:name;index:idx_conv_events_name"`
+}
+
+func (plainConvEvent) TableName() string { return "partitioning_conv_events" }
+
+// convEvent is the same table once partitioned: the month joins the key.
+type convEvent struct {
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	OccurredAt time.Time `gorm:"column:occurred_at;primaryKey;not null"`
+	Name       string    `gorm:"column:name;index:idx_conv_events_name"`
+}
+
+func (convEvent) TableName() string { return "partitioning_conv_events" }
+
+// TestPostgresConvertsPlainTable covers the swap: a populated plain table is set
+// aside, the partitioned table takes its name and key, the rows are copied with
+// their ids, and the sequence resumes after the largest id.
+func TestPostgresConvertsPlainTable(t *testing.T) {
+	t.Parallel()
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	if err := db.AutoMigrate(&plainConvEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	jan := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
+	mar := time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)
+	for _, at := range []time.Time{jan, mar} {
+		if err := db.Create(&plainConvEvent{OccurredAt: at, Name: "x"}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	pm, err := partitioning.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := partitioning.Spec{Table: "partitioning_conv_events", Column: "occurred_at", Strategy: partitioning.Range, Interval: partitioning.Monthly}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	until := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	if err := pm.Provision(ctx, &convEvent{}, spec, from, until); err != nil {
+		t.Fatalf("Provision over a plain table: %v", err)
+	}
+	legacy := partitioning.LegacyTable(spec.Table)
+	if !db.Migrator().HasTable(legacy) {
+		t.Fatalf("%s should hold the old rows", legacy)
+	}
+	parts, err := pm.ListPartitions(ctx, spec.Table)
+	if err != nil || len(parts) != 4 {
+		t.Fatalf("partitions = %+v, %v; want 4", parts, err)
+	}
+	// Idempotent once converted: the partitioned table is left alone.
+	if err := pm.Provision(ctx, &convEvent{}, spec, from, until); err != nil {
+		t.Fatalf("second Provision: %v", err)
+	}
+
+	var old []plainConvEvent
+	if err := db.Table(legacy).Order("id").Find(&old).Error; err != nil || len(old) != 2 {
+		t.Fatalf("legacy rows = %+v, %v", old, err)
+	}
+	for _, row := range old {
+		moved := convEvent(row)
+		if err := db.Create(&moved).Error; err != nil {
+			t.Fatalf("copy id %d: %v", row.ID, err)
+		}
+	}
+	syncer, ok := pm.(partitioning.SequenceSyncer)
+	if !ok {
+		t.Fatal("the PostgreSQL adapter must sync sequences")
+	}
+	if err := syncer.SyncSequence(ctx, spec.Table, "id", old[len(old)-1].ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrator().DropTable(legacy); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh := convEvent{OccurredAt: mar, Name: "new"}
+	if err := db.Create(&fresh).Error; err != nil {
+		t.Fatal(err)
+	}
+	if fresh.ID != old[len(old)-1].ID+1 {
+		t.Fatalf("next id = %d, want %d", fresh.ID, old[len(old)-1].ID+1)
+	}
+}
+
+// TestPostgresRefusesInterruptedConversion: a plain table next to a legacy one
+// is an interrupted conversion that must not be repeated blindly.
+func TestPostgresRefusesInterruptedConversion(t *testing.T) {
+	t.Parallel()
+	db := testdb.New(t)
+	ctx := context.Background()
+	if err := db.AutoMigrate(&plainConvEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`CREATE TABLE partitioning_conv_events_legacy (id bigint)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	pm, err := partitioning.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := partitioning.Spec{Table: "partitioning_conv_events", Column: "occurred_at", Strategy: partitioning.Range, Interval: partitioning.Monthly}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := pm.Provision(ctx, &convEvent{}, spec, from, from.AddDate(0, 1, 0)); err == nil {
+		t.Fatal("Provision should refuse a plain table beside an existing legacy table")
+	}
+}
