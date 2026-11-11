@@ -95,6 +95,14 @@ func TestRetentionRejectsWhatItCannotRead(t *testing.T) {
 		{"bad cadence", map[string]string{"BALEIA_AUDIT_RETENTION_CADENCE": "sometimes"}, "BALEIA_AUDIT_RETENTION_CADENCE"},
 		{"six-field cron", map[string]string{"BALEIA_QUERY_HISTORY_RETENTION_CADENCE": "0 0 3 * * 0"}, "BALEIA_QUERY_HISTORY_RETENTION_CADENCE"},
 		{"cron out of range", map[string]string{"BALEIA_AUDIT_RETENTION_CADENCE": "0 30 * * *"}, "BALEIA_AUDIT_RETENTION_CADENCE"},
+		{"cap that is not a number", map[string]string{"BALEIA_PRUNE_MAX_PARTITIONS": "1x"}, "BALEIA_PRUNE_MAX_PARTITIONS"},
+		{"cap of zero", map[string]string{"BALEIA_PRUNE_MAX_PARTITIONS": "0"}, "BALEIA_PRUNE_MAX_PARTITIONS must be at least 1"},
+		{"negative cap", map[string]string{"BALEIA_PRUNE_MAX_PARTITIONS": "-3"}, "BALEIA_PRUNE_MAX_PARTITIONS must be at least 1"},
+		{"zero grace is not unset", map[string]string{"BALEIA_AUDIT_COLD_GRACE": "0"}, "BALEIA_AUDIT_COLD_GRACE"},
+		{"days that overflow a duration", map[string]string{"BALEIA_AUDIT_RETENTION": "213505d"}, "BALEIA_AUDIT_RETENTION"},
+		{"days just past what a duration holds", map[string]string{"BALEIA_QUERY_HISTORY_RETENTION": "106752d"}, "BALEIA_QUERY_HISTORY_RETENTION"},
+		{"both day fields restricted, impossible date", map[string]string{"BALEIA_AUDIT_RETENTION_CADENCE": "0 3 31 2 1"}, "BALEIA_AUDIT_RETENTION_CADENCE"},
+		{"both day fields restricted", map[string]string{"BALEIA_QUERY_HISTORY_RETENTION_CADENCE": "0 3 1 * 1"}, "BALEIA_QUERY_HISTORY_RETENTION_CADENCE"},
 		{"offload flag is not a bool", map[string]string{"BALEIA_AUDIT_OFFLOAD_BEFORE_DROP": "maybe"}, "BALEIA_AUDIT_OFFLOAD_BEFORE_DROP must be true or false"},
 		{"offload flag in capitals", map[string]string{"BALEIA_QUERY_HISTORY_OFFLOAD_BEFORE_DROP": "FALSE"}, "BALEIA_QUERY_HISTORY_OFFLOAD_BEFORE_DROP"},
 	} {
@@ -145,6 +153,9 @@ func TestRetentionPeriod(t *testing.T) {
 		"0 3 * * 1,4": 4 * day,  // Mon, Thu: gaps of 3 and 4 days
 		"0 3 1 * *":   31 * day, // the first of the month: the longest gap is 31 days
 		"0 */6 * * *": 6 * time.Hour,
+		// A firing exactly on the sample's first instant must still count: the
+		// gap that wraps from January to December is the longest one.
+		"0 0 1 1,12 *": 334 * day,
 	} {
 		got, err := RetentionPeriod(cadence)
 		if err != nil || got != want {
@@ -153,5 +164,42 @@ func TestRetentionPeriod(t *testing.T) {
 	}
 	if _, err := RetentionPeriod("nope"); err == nil {
 		t.Error("RetentionPeriod accepted a bad cadence")
+	}
+}
+
+// TestRetentionAcceptsOneRestrictedDayField: a cron that restricts the day of
+// month or the day of week, one of them, means the same in every implementation.
+func TestRetentionAcceptsOneRestrictedDayField(t *testing.T) {
+	t.Parallel()
+	for _, cadence := range []string{"0 3 1 * *", "0 3 * * 1", "0 3 * * 1,4", "0 3 1,15 * *", "30 2 * 6 *"} {
+		if _, err := RetentionCron(cadence); err != nil {
+			t.Errorf("RetentionCron(%q) = %v, want it accepted", cadence, err)
+		}
+	}
+}
+
+// TestRetentionDaysDoNotOverflow: a day count a duration cannot hold must be
+// refused, not wrapped into a window of about a day.
+func TestRetentionDaysDoNotOverflow(t *testing.T) {
+	t.Parallel()
+	if _, err := parseRetention("213505d"); err == nil {
+		t.Error("parseRetention accepted 213505d, which wraps a duration")
+	}
+	if d, err := parseRetention("100000d"); err != nil || d != 100000*24*time.Hour {
+		t.Errorf("parseRetention(100000d) = %s, %v; want it exact", d, err)
+	}
+}
+
+// TestRetentionPeriodOfADenseCadence: a cadence that fires every minute must not
+// hold the worker up at startup.
+func TestRetentionPeriodOfADenseCadence(t *testing.T) {
+	t.Parallel()
+	start := time.Now()
+	got, err := RetentionPeriod("* * * * *")
+	if err != nil || got != time.Minute {
+		t.Fatalf("RetentionPeriod(* * * * *) = %s, %v; want 1m", got, err)
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Errorf("took %s, want well under a few seconds", took)
 	}
 }
