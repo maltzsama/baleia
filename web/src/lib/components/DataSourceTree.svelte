@@ -134,8 +134,12 @@
 		}
 	}
 
+	// Only a change after the tree mounted refreshes: the mount loads its own roots.
+	let seenAccessVersion = catalogAccessStore.version;
 	$effect(() => {
-		if (catalogAccessStore.version === 0) return;
+		const version = catalogAccessStore.version;
+		if (version === seenAccessVersion) return;
+		seenAccessVersion = version;
 		void refreshRoots(untrack(() => workspaceId));
 	});
 
