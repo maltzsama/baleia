@@ -424,6 +424,10 @@ var (
 	ErrUnknownKind = errors.New("provider_unsupported")
 	// ErrNotFound means the catalog, namespace or table does not exist.
 	ErrNotFound = errors.New("not_found")
+	// ErrTableUnsupported means the table exists but this provider's protocol
+	// cannot read it (a plain Delta table behind Unity's Iceberg endpoint). A
+	// walk skips it instead of failing the whole catalog.
+	ErrTableUnsupported = errors.New("table_unsupported")
 )
 
 // Registry maps kinds to providers. It is built once at the wiring sites

@@ -146,7 +146,7 @@ func (p *Provider) Ping(ctx context.Context, cfg connections.Config) error {
 // OpenMetadata reads Unity catalogs; each catalog is a warehouse addressed by
 // name.
 func (p *Provider) OpenMetadata(_ context.Context, cfg connections.Config) (connections.MetadataReader, error) {
-	return p.client(cfg).ReaderWithCatalogs(p.listCatalogs(cfg), func(c string) string { return c }), nil
+	return p.client(cfg).ReaderSkippingUnsupported(p.listCatalogs(cfg), func(c string) string { return c }), nil
 }
 
 // UserIdentity reports whether Unity authorizes each Baleia user (#648).

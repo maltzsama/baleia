@@ -6,6 +6,7 @@ package icebergrest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -263,6 +264,17 @@ type reader struct {
 	// ListCatalogs overrides the static list when set (Polaris lists them
 	// through its management API).
 	listCatalogs func(context.Context) ([]connections.CatalogRef, error)
+	// unsupportedOn400 reports a 400 on a table load as
+	// connections.ErrTableUnsupported. Unity answers 400 for a Delta table
+	// without Iceberg metadata; the answer's body is never read (ADR 0008).
+	unsupportedOn400 bool
+}
+
+// ReaderSkippingUnsupported is ReaderWithCatalogs for a server that answers a
+// table it cannot serve over Iceberg REST with 400: LoadTable then returns
+// connections.ErrTableUnsupported, so a walk can skip that table.
+func (c *Client) ReaderSkippingUnsupported(list func(context.Context) ([]connections.CatalogRef, error), warehouseOf func(string) string) connections.MetadataReader {
+	return &reader{c: c, listCatalogs: list, warehouseOf: warehouseOf, unsupportedOn400: true}
 }
 
 // ReaderWithCatalogs is Reader with a dynamic catalog list.
@@ -384,6 +396,10 @@ func (r *reader) LoadTableIfChanged(ctx context.Context, t connections.TableRef,
 	path := root + "/namespaces/" + encodeNamespace(t.Namespace) + "/tables/" + url.PathEscape(t.Name)
 	status, hdr, err := r.c.get(ctx, "load table", path, nil, extra, &out)
 	if err != nil {
+		var se *StatusError
+		if r.unsupportedOn400 && errors.As(err, &se) && se.Status == http.StatusBadRequest {
+			return nil, "", fmt.Errorf("%w: %w", connections.ErrTableUnsupported, err)
+		}
 		return nil, "", err
 	}
 	if status == http.StatusNotModified {
