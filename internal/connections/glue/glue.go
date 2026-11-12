@@ -339,11 +339,24 @@ func (r *reader) allTables(ctx context.Context, db string) ([]gluetypes.Table, e
 func ref(db string, t gluetypes.Table) connections.TableRef {
 	name := aws.ToString(t.Name)
 	return connections.TableRef{
-		Catalog:   Catalog,
-		Namespace: connections.Namespace{db},
-		Name:      name,
-		Type:      tableType(t),
+		Catalog:     Catalog,
+		Namespace:   connections.Namespace{db},
+		Name:        name,
+		Type:        tableType(t),
+		Unsupported: unsupported(t),
 	}
+}
+
+// unsupported says why Trino cannot read a Glue table, or nothing. Trino's
+// Delta connector recognizes a Delta table only by
+// spark.sql.sources.provider=delta, the way Spark, Databricks and Glue's Delta
+// crawler register it; Athena's table_type=DELTA alone is answered with "not a
+// Delta Lake table" (#980).
+func unsupported(t gluetypes.Table) connections.Unsupported {
+	if Format(t) == "delta" && !strings.EqualFold(t.Parameters["spark.sql.sources.provider"], "delta") {
+		return connections.Unsupported{Code: connections.UnsupportedRegistration, Detail: "table_type=DELTA"}
+	}
+	return connections.Unsupported{}
 }
 
 func tableType(t gluetypes.Table) string {
@@ -355,8 +368,9 @@ func tableType(t gluetypes.Table) string {
 	}
 }
 
-// Format derives the table format from the Glue table parameters, the way
-// Trino's connectors recognize it.
+// Format derives the table format from the Glue table parameters. A Delta table
+// marked only with Athena's table_type=DELTA is still Delta here, but Trino does
+// not read it: see unsupported.
 func Format(t gluetypes.Table) string {
 	p := t.Parameters
 	switch strings.ToLower(p["table_type"]) {
@@ -390,7 +404,7 @@ func meta(db string, t *gluetypes.Table) connections.TableMeta {
 	format := Format(*t)
 	props["format"] = format
 	return connections.TableMeta{
-		Ref:        connections.TableRef{Catalog: Catalog, Namespace: connections.Namespace{db}, Name: name, Type: tableType(*t)},
+		Ref:        connections.TableRef{Catalog: Catalog, Namespace: connections.Namespace{db}, Name: name, Type: tableType(*t), Unsupported: unsupported(*t)},
 		Columns:    columns(t),
 		Comment:    comment(*t),
 		Format:     format,
