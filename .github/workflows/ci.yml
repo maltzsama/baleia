@@ -13,8 +13,63 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Which job groups a pull request can affect. Pushes run everything. A job
+  # whose `if` is false is reported as skipped, which satisfies a required
+  # check, so a docs-only pull request never waits on the Go suite.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      go: ${{ github.event_name != 'pull_request' || steps.go.outputs.code == 'true' || steps.inputs.outputs.go_data == 'true' }}
+      image: ${{ github.event_name != 'pull_request' || steps.image.outputs.image == 'true' }}
+      web: ${{ github.event_name != 'pull_request' || steps.inputs.outputs.web == 'true' }}
+    steps:
+      # Everything but the website, the SPA and prose is a Go input.
+      - id: go
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - "**"
+              - "!website/**"
+              - "!web/**"
+              - "!docs/**"
+              - "!**/*.md"
+      # The image builds the SPA and every Go binary.
+      - id: image
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          predicate-quantifier: every
+          filters: |
+            image:
+              - "**"
+              - "!website/**"
+              - "!docs/**"
+              - "!**/*.md"
+      - id: inputs
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            # Files outside Go packages that Go tests read.
+            go_data:
+              - "web/messages/**"
+              - "docs/connections.md"
+              - "docs/connections/**"
+            web:
+              - "web/**"
+              - "api/swagger.yaml"
+              - ".github/workflows/ci.yml"
+
   test:
     name: Test
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     # DB-backed tests (internal/testdb) fail instead of skipping when CI=true.
     services:
@@ -76,6 +131,8 @@ jobs:
   # query history and a foreign key that MySQL checks row by row go unnoticed.
   store:
     name: Store (${{ matrix.db }})
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -125,6 +182,8 @@ jobs:
   # commit before it (a branch's first push has none and falls back).
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -146,6 +205,8 @@ jobs:
   # (golang:1.26-alpine), so a standard-library fix only needs a rebuild.
   vuln:
     name: Vulnerabilities
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -161,6 +222,8 @@ jobs:
   # plugin release (#39): the Makefile's BALEIA_PLUGIN_VERSION.
   contract:
     name: Contract
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -212,6 +275,8 @@ jobs:
 
   build:
     name: Build
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -226,6 +291,8 @@ jobs:
   # ARM-only break shows up on the PR, not at release time. Nothing is pushed.
   image:
     name: Image (amd64, arm64)
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -241,6 +308,8 @@ jobs:
 
   web:
     name: Web
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
