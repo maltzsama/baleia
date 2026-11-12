@@ -1,6 +1,7 @@
 // Typed workbench state (#29, #112). Components read and mutate tabs here
 // instead of exchanging `window` CustomEvents. Drafts persist per user ×
 // workspace through IndexedDB (#112).
+import { untrack } from 'svelte';
 import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import { loadDrafts, saveDrafts, type PersistedTab } from '$lib/workbench/drafts';
@@ -76,8 +77,17 @@ function emptyTab(id: string, overrides: Partial<EditorTab> = {}): EditorTab {
 	};
 }
 
+/** The SQL or the target differs from what was last saved. */
+function differsFromSaved(tab: EditorTab): boolean {
+	return (
+		tab.sql !== tab.savedSql ||
+		tab.bindingId !== tab.savedBindingId ||
+		tab.schema !== tab.savedSchema
+	);
+}
+
 function fromPersisted(tab: PersistedTab): EditorTab {
-	return emptyTab(tab.id, {
+	const restored = emptyTab(tab.id, {
 		name: tab.name,
 		sql: tab.sql,
 		savedRef: tab.savedRef,
@@ -89,9 +99,25 @@ function fromPersisted(tab: PersistedTab): EditorTab {
 		savedBindingId: tab.savedBindingId,
 		savedSchema: tab.savedSchema
 	});
+	// A draft restored with edits on top of its saved version is still unsaved.
+	restored.dirty = differsFromSaved(restored);
+	return restored;
 }
 
-export type EditorInsert = { tabId: string; text: string; seq: number };
+export type EditorInsert = {
+	tabId: string;
+	text: string;
+	/** Where the cursor lands, as an offset into `text`; the end when unset. */
+	caret?: number;
+	seq: number;
+};
+
+/**
+ * What the SQL reference needs to ask the API about the active tab's target:
+ * the workspace, the catalog and the binding the tab runs on (#979). The editor
+ * publishes it; the Inspector reads it.
+ */
+export type ReferenceScope = { workspaceId: string; catalogId: string; bindingId: string };
 export type EditorRun = { tabId: string; seq: number };
 
 function createEditorStore() {
@@ -102,6 +128,8 @@ function createEditorStore() {
 	// editor applies it at the cursor and bumps `seq` (FD rule).
 	let insertSeq = 0;
 	let pendingInsert = $state<EditorInsert | null>(null);
+	// The target of the active tab, for the SQL reference in the Inspector (#979).
+	let referenceScope = $state<ReferenceScope | null>(null);
 	// "Re-run" from history (#36) opens a tab and asks the editor to run it.
 	let runSeq = 0;
 	let pendingRun = $state<EditorRun | null>(null);
@@ -183,11 +211,7 @@ function createEditorStore() {
 	// schema. Every mutation recomputes this so a target change is never lost
 	// when the SQL is reverted (and vice-versa).
 	function isDirty(tab: EditorTab): boolean {
-		return (
-			tab.sql !== tab.savedSql ||
-			tab.bindingId !== tab.savedBindingId ||
-			tab.schema !== tab.savedSchema
-		);
+		return differsFromSaved(tab);
 	}
 
 	function updateSql(id: string, sql: string) {
@@ -197,10 +221,25 @@ function createEditorStore() {
 		tab.dirty = isDirty(tab);
 	}
 
-	/** Asks the active tab's editor to insert text at the cursor. */
-	function insert(text: string) {
+	/**
+	 * Asks the active tab's editor to insert text at the cursor. `caret` moves the
+	 * cursor inside the inserted text (a function's parentheses).
+	 */
+	function insert(text: string, caret?: number) {
 		if (!text) return;
-		pendingInsert = { tabId: activeId, text, seq: ++insertSeq };
+		pendingInsert = { tabId: activeId, text, caret, seq: ++insertSeq };
+	}
+
+	/** The editor reports the target of its active tab; null when it has none. */
+	function setReferenceScope(scope: ReferenceScope | null) {
+		// Untracked: the editor's effect that calls this must not depend on what it
+		// writes.
+		const current = untrack(() => referenceScope);
+		const same =
+			scope?.workspaceId === current?.workspaceId &&
+			scope?.catalogId === current?.catalogId &&
+			scope?.bindingId === current?.bindingId;
+		if (!same) referenceScope = scope;
 	}
 
 	/**
@@ -269,6 +308,9 @@ function createEditorStore() {
 		tabs.splice(0, tabs.length, emptyTab('1'));
 		activeId = '1';
 		counter = 1;
+		// An insert or run asked for before the reset must not land in the new tabs.
+		pendingInsert = null;
+		pendingRun = null;
 		generation++;
 	}
 
@@ -288,6 +330,9 @@ function createEditorStore() {
 		get pendingRun() {
 			return pendingRun;
 		},
+		get referenceScope() {
+			return referenceScope;
+		},
 		get dirty() {
 			return dirty;
 		},
@@ -301,6 +346,7 @@ function createEditorStore() {
 		markSaved,
 		updateSql,
 		insert,
+		setReferenceScope,
 		setTarget,
 		setExecution,
 		openExecution,

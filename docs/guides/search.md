@@ -10,8 +10,7 @@ one list, best match first, with how many matches each kind has.
 
 You use it from:
 
-- the **command palette** of the [workbench](workbench.md) (the *Commands*
-  button): a table or column is inserted at the cursor, a metric inserts its
+- the **command palette** of the [workbench](workbench.md) (⌘/Ctrl + K): a table or column is inserted at the cursor, a metric inserts its
   SQL, a saved query opens in a tab, and anything else opens its page;
 - the **search box of the sidebar**, for tables and columns;
 - `GET /workspaces/{id}/search` in the API (`q`, `kind`, `catalog_id`,

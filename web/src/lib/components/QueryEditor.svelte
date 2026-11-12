@@ -27,6 +27,7 @@
 	import SaveConflictDialog from '$lib/workbench/SaveConflictDialog.svelte';
 	import SaveQueryDialog from '$lib/workbench/SaveQueryDialog.svelte';
 	import SplitHandle from '$lib/workbench/SplitHandle.svelte';
+	import MenuButton from '$lib/ui/MenuButton.svelte';
 	import { SPLIT_DEFAULT, loadSplit } from '$lib/workbench/split';
 	import {
 		codemirrorDialect,
@@ -34,7 +35,6 @@
 		clearEnginesCache,
 		loadEngines,
 		type Dialect,
-		type DialectFunction,
 		type Engine,
 		type WorkspaceTarget
 	} from '$lib/engines/client';
@@ -49,7 +49,6 @@
 		defaultTargetDialect
 	} from '$lib/workbench/sqlingo';
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
-	import FunctionsPanel from '$lib/workbench/FunctionsPanel.svelte';
 	import ConvertSqlDialog from '$lib/workbench/ConvertSqlDialog.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
@@ -115,7 +114,6 @@
 
 	let saveOpen = $state(false);
 	let detailsOpen = $state(false);
-	let functionsOpen = $state(false);
 	let convertOpen = $state(false);
 	let convertMode = $state<'convert' | 'optimize'>('convert');
 	let convertSql = $state('');
@@ -158,6 +156,11 @@
 		}
 		return out;
 	});
+
+	// Where the document stands: never saved, saved with edits on top, or saved and unchanged.
+	const saveState = $derived<'new' | 'modified' | 'saved'>(
+		activeTab.savedId === null ? 'new' : activeTab.dirty ? 'modified' : 'saved'
+	);
 
 	const catalogChoices = $derived(targets.filter((target) => target.engine_id === activeEngineId));
 	const canChooseSchema = $derived((selectedEngine?.capabilities?.namespace_depth ?? 0) > 0);
@@ -645,19 +648,21 @@
 	);
 	const complete = sqlCompletionSource(() => completionScope);
 
-	// Insert a function from the reference panel with the cursor inside the
-	// parentheses (#556).
-	function insertFunction(fn: DialectFunction) {
-		if (!editorView || activeTab.readOnly) return;
-		const { from, to } = editorView.state.selection.main;
-		const insert = fn.call ? `${fn.name}()` : fn.name;
-		editorView.dispatch({
-			changes: { from, to, insert },
-			selection: { anchor: from + fn.name.length + (fn.call ? 1 : 0) },
-			userEvent: 'input.complete'
-		});
-		functionsOpen = false;
-	}
+	// The Inspector's SQL reference asks the API about the target of the active
+	// tab (#979); the editor is the one that knows it.
+	$effect(() => {
+		editor.setReferenceScope(
+			completionScope
+				? {
+						workspaceId: completionScope.workspaceId,
+						catalogId: completionScope.catalogId,
+						bindingId: completionScope.bindingId
+					}
+				: null
+		);
+	});
+	// Only on unmount: a rerun of the effect above must not blank the scope.
+	$effect(() => () => editor.setReferenceScope(null));
 
 	// The live document lives in CodeMirror; `tab.sql` is a debounced mirror so a
 	// burst of keystrokes does not serialize the whole doc, rebuild the draft
@@ -780,11 +785,11 @@
 		const pending = editor.pendingInsert;
 		if (!editorView || !pending || pending.seq === appliedInsertSeq) return;
 		appliedInsertSeq = pending.seq;
-		if (pending.tabId !== editor.activeId) return;
+		if (pending.tabId !== editor.activeId || activeTab.readOnly) return; // a view-only tab takes no insert
 		const { from, to } = editorView.state.selection.main;
 		editorView.dispatch({
 			changes: { from, to, insert: pending.text },
-			selection: { anchor: from + pending.text.length }
+			selection: { anchor: from + (pending.caret ?? pending.text.length) }
 		});
 		editorView.focus();
 	});
@@ -1166,36 +1171,46 @@
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{m.components_queryeditor_format()}</button
 		>
-		<button
-			onclick={() => openConvert('convert')}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{m.components_queryeditor_convert()}</button
-		>
-		<button
-			onclick={() => openConvert('optimize')}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{m.components_queryeditor_optimize()}</button
-		>
-		<button
-			onclick={() => (functionsOpen = true)}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{m.functions_panel_title()}</button
-		>
+		<MenuButton
+			label={m.components_queryeditor_transform()}
+			title={m.components_queryeditor_transform_hint()}
+			items={[
+				{
+					id: 'convert',
+					label: m.components_queryeditor_convert_dialect(),
+					onselect: () => openConvert('convert')
+				},
+				{
+					id: 'optimize',
+					label: m.components_queryeditor_optimize_sql(),
+					onselect: () => openConvert('optimize')
+				}
+			]}
+		/>
+		<!-- Save is the blue action of the toolbar and says where the document
+		     stands: new, with pending changes, or saved and unchanged (#979). -->
 		<button
 			onclick={() => openSave(activeTab.readOnly ? 'copy' : 'save')}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{activeTab.readOnly
-				? m.components_queryeditor_save_a_copy()
-				: m.components_queryeditor_save()}</button
+			data-testid="save-button"
+			data-save-state={saveState}
+			title={saveState === 'modified' ? m.components_queryeditor_unsaved_changes() : undefined}
+			class="flex items-center gap-[5px] py-1 px-2.5 text-xs font-medium rounded-[5px] cursor-pointer whitespace-nowrap border {saveState ===
+			'saved'
+				? 'border-border bg-transparent text-primary opacity-60 hover:opacity-100 hover:bg-border'
+				: 'border-primary bg-primary text-white hover:bg-primary-hover'}"
 		>
-		<button
-			onclick={() => {
-				paletteMode = 'commands';
-				paletteOpen = true;
-			}}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{m.components_queryeditor_commands()}</button
-		>
+			{#if activeTab.readOnly}
+				{m.components_queryeditor_save_a_copy()}
+			{:else if saveState === 'saved'}
+				{m.components_queryeditor_saved()}
+			{:else}
+				{m.components_queryeditor_save()}
+			{/if}
+			{#if saveState === 'modified'}
+				<span class="h-1.5 w-1.5 rounded-full bg-white" aria-hidden="true"></span>
+				<span class="sr-only">{m.components_queryeditor_unsaved_changes()}</span>
+			{/if}
+		</button>
 		{#if exploreLink}
 			<button
 				onclick={openInExplore}
@@ -1343,20 +1358,6 @@
 			<ExecutionDetails {workspaceId} executionId={activeTab.executionId} />
 		</Drawer>
 	{/if}
-
-	<Drawer
-		size="md"
-		bind:open={functionsOpen}
-		title={m.functions_panel_title()}
-		onclose={() => editorView?.focus()}
-	>
-		<FunctionsPanel
-			workspaceId={completionScope?.workspaceId ?? ''}
-			catalogId={completionScope?.catalogId ?? ''}
-			bindingId={completionScope?.bindingId ?? ''}
-			oninsert={insertFunction}
-		/>
-	</Drawer>
 
 	<ConvertSqlDialog
 		bind:open={convertOpen}

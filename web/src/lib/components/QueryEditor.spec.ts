@@ -10,6 +10,7 @@ import { http, server } from '../../test/server';
 import { makeSavedQuery, makeSpace, makeWorkspace } from '../../test/factories';
 import { formatKeys } from '$lib/util/keys';
 import QueryEditor from './QueryEditor.svelte';
+import RightSidebar from './RightSidebar.svelte';
 
 vi.mock('$lib/workbench/drafts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/workbench/drafts')>()),
@@ -139,6 +140,99 @@ describe('QueryEditor', () => {
 		const schema = screen.getByLabelText('Schema') as HTMLSelectElement;
 		await waitFor(() => expect(schema.value).toBe('sales'));
 		expect(screen.getByText('Ln 1, Col 1')).toBeTruthy();
+	});
+
+	it('publishes its target for the SQL reference in the Inspector (#979)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		await waitFor(() =>
+			expect(editor.referenceScope).toEqual({
+				workspaceId: WS,
+				catalogId: CATALOG,
+				bindingId: BINDING
+			})
+		);
+	});
+
+	it('inserts what the Inspector sends at the cursor (#979)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		await waitFor(() => expect(editor.referenceScope).not.toBeNull());
+		editor.insert('count()', 6);
+		await waitFor(() =>
+			expect(document.querySelector('.cm-content')?.textContent).toContain('count()')
+		);
+	});
+
+	it('groups Convert dialect and Optimize SQL under Transform, and keeps Format apart (#979)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		// Format is its own button; the old Convert and Optimize buttons are gone.
+		expect(screen.getByRole('button', { name: 'Format' })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Convert' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Optimize' })).toBeNull();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Transform' }));
+		const items = screen.getAllByRole('menuitem').map((item) => item.textContent?.trim());
+		expect(items).toEqual(['Convert dialect', 'Optimize SQL']);
+
+		await fireEvent.click(screen.getByRole('menuitem', { name: 'Optimize SQL' }));
+		expect(await screen.findByRole('dialog')).toBeTruthy();
+	});
+
+	it('keeps Run, Explain, Format, Transform and Save in order and drops Commands (#979)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		const names = ['Run', 'Explain', 'Format', 'Transform', 'Save'].map((name) =>
+			screen.getByRole('button', { name: new RegExp(`^${name}`) })
+		);
+		// Document order is the toolbar order: execution, editing, persistence.
+		for (let i = 1; i < names.length; i++) {
+			expect(
+				names[i - 1].compareDocumentPosition(names[i]) & Node.DOCUMENT_POSITION_FOLLOWING
+			).toBeTruthy();
+		}
+		expect(screen.queryByRole('button', { name: 'Commands' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Functions' })).toBeNull();
+	});
+
+	it('shows where the document stands on the Save button (#979)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		// Never saved: a plain blue Save.
+		const save = screen.getByTestId('save-button');
+		expect(save.getAttribute('data-save-state')).toBe('new');
+		expect(save.textContent?.trim()).toBe('Save');
+		expect(save.className).toContain('bg-primary');
+
+		// Saved and unchanged: subdued, no blue fill, and it says so.
+		const tab = editor.activeTab;
+		editor.markSaved(tab.id, {
+			id: 'q1',
+			version: 1,
+			workspace_id: WS,
+			space_id: 's',
+			folder_id: null,
+			slug: 'q',
+			name: 'Q',
+			sql: tab.sql
+		} as never);
+		await waitFor(() => expect(save.getAttribute('data-save-state')).toBe('saved'));
+		expect(save.textContent?.trim()).toBe('Saved');
+		expect(save.className).not.toContain('bg-primary');
+
+		// Edited on top of the saved version: Save again, with the pending-changes mark.
+		editor.updateSql(tab.id, 'SELECT 2');
+		await waitFor(() => expect(save.getAttribute('data-save-state')).toBe('modified'));
+		expect(save.className).toContain('bg-primary');
+		expect(save.getAttribute('title')).toBe('Unsaved changes');
+		expect(within(save).getByText('Unsaved changes')).toBeTruthy();
 	});
 
 	it('shows the name a query uses beside the catalog display name', async () => {
@@ -574,9 +668,12 @@ describe('QueryEditor', () => {
 		expect(screen.queryByTestId('results-area')).toBeNull();
 	});
 
-	it('finds date_trunc and inserts it with the cursor inside the parentheses (#556)', async () => {
+	it('inserts a function from the Inspector reference, cursor inside the parentheses (#556, #979)', async () => {
 		mockWorkbench();
 		server.use(
+			http.get('/assistant/status', ({ response }) =>
+				response(200).json({ enabled: false, data_sharing: 'metadata_only' })
+			),
 			http.get('/workspaces/{id}/metadata/functions', ({ response }) =>
 				response(200).json([
 					{ name: 'date_trunc', kind: 'function', call: true },
@@ -585,9 +682,12 @@ describe('QueryEditor', () => {
 			)
 		);
 		render(QueryEditor);
+		render(RightSidebar, { props: { collapsed: false } });
 		await screen.findByText('trino · trino');
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Functions' }));
+		// The toolbar no longer has Functions: it lives in the Inspector.
+		expect(screen.queryByRole('button', { name: 'Functions' })).toBeNull();
+		await fireEvent.click(screen.getByRole('tab', { name: 'SQL reference' }));
 		const search = await screen.findByRole('searchbox', { name: 'Search functions' });
 		await fireEvent.input(search, { target: { value: 'truncate' } });
 		await fireEvent.click(await screen.findByRole('button', { name: /date_trunc/ }));

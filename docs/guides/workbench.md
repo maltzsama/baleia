@@ -19,9 +19,11 @@ Each tab runs against a **target**: an engine binding and, optionally, a schema 
 
 - **Autocomplete** suggests what fits at the cursor (statement keywords, tables, columns, clause keywords) from the target catalog's stored metadata.
 - **Join suggestions:** right after `JOIN <table> ON`, autocomplete offers whole join conditions. They come from joins your workspace has run before (with how often and when) and from foreign keys.
-- **Functions:** the **Functions** button opens the engine's function reference. Search it, filter by kind, and click a function to insert it at the cursor.
+- **SQL reference:** the **SQL reference** tab of the Inspector lists the functions of the engine the tab runs on. Search it, filter by kind, and click a function to insert it at the cursor with the cursor inside its parentheses.
 - **Format SQL** reformats the tab for the engine's dialect.
+- **Transform** holds the two actions that rewrite the SQL for review: **Convert dialect** and **Optimize SQL** show the result next to your SQL and never change the editor.
 - **Explain** shows the engine's plan for the statement at the cursor, when the engine supports `EXPLAIN`.
+- **Save** is the blue button: it shows **Save** for a new or edited document (with a mark for pending changes) and a subdued **Saved** when nothing has changed.
 - **Tabs** keep their SQL and target; open as many as you need.
 
 ## Run

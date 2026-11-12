@@ -163,7 +163,6 @@
 	"monitoring_cluster_load_running_queries_and_iceberg_t": "Carga do cluster, consultas em execução e saúde das tabelas Iceberg, por motor.",
 	"errorpanel_code": "código",
 	"common_column": "Coluna",
-	"components_queryeditor_commands": "Comandos",
 	"settings_profile_confirm_new_password": "Confirme a nova senha",
 	"setup_confirm_password": "Confirme a senha",
 	"engines_connection": "Conexão",
@@ -2736,5 +2735,12 @@
 	"metadata_unsupported_table": "Tabela não suportada",
 	"metadata_unsupported_table_kind": "tipo: {kind}\nTipo não suportado: a origem não dá acesso a este tipo de tabela para motores externos.",
 	"metadata_unsupported_table_refused": "A origem recusou servir esta tabela, então ela não pode ser lida.",
-	"metadata_unsupported_table_unreadable": "Esta tabela não pode ser lida, então não tem colunas e não pode ser consultada."
+	"metadata_unsupported_table_unreadable": "Esta tabela não pode ser lida, então não tem colunas e não pode ser consultada.",
+	"components_rightsidebar_sql_reference": "Referência SQL",
+	"components_rightsidebar_reference_pick_a_target": "Escolha um catálogo no editor para ver as funções que o motor dele suporta.",
+	"components_queryeditor_transform": "Transformar",
+	"components_queryeditor_transform_hint": "Atua sobre o SQL do editor",
+	"components_queryeditor_convert_dialect": "Converter dialeto",
+	"components_queryeditor_saved": "Salvo",
+	"components_queryeditor_unsaved_changes": "Alterações não salvas"
 }

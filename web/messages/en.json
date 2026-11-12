@@ -163,7 +163,6 @@
 	"monitoring_cluster_load_running_queries_and_iceberg_t": "Cluster load, running queries and Iceberg table health, per engine.",
 	"errorpanel_code": "code",
 	"common_column": "Column",
-	"components_queryeditor_commands": "Commands",
 	"settings_profile_confirm_new_password": "Confirm new password",
 	"setup_confirm_password": "Confirm password",
 	"engines_connection": "Connection",
@@ -2736,5 +2735,12 @@
 	"metadata_unsupported_table": "Unsupported table",
 	"metadata_unsupported_table_kind": "type: {kind}\nUnsupported type: the source does not give external engines access to this kind of table.",
 	"metadata_unsupported_table_refused": "The source refused to serve this table, so it cannot be read.",
-	"metadata_unsupported_table_unreadable": "This table cannot be read, so it has no columns and cannot be queried."
+	"metadata_unsupported_table_unreadable": "This table cannot be read, so it has no columns and cannot be queried.",
+	"components_rightsidebar_sql_reference": "SQL reference",
+	"components_rightsidebar_reference_pick_a_target": "Choose a catalog in the editor to see the functions its engine supports.",
+	"components_queryeditor_transform": "Transform",
+	"components_queryeditor_transform_hint": "Operates on the SQL in the editor",
+	"components_queryeditor_convert_dialect": "Convert dialect",
+	"components_queryeditor_saved": "Saved",
+	"components_queryeditor_unsaved_changes": "Unsaved changes"
 }
