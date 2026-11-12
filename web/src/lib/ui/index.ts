@@ -6,6 +6,7 @@ export { default as EmptyState } from './EmptyState.svelte';
 export { default as ErrorState } from './ErrorState.svelte';
 export { default as IconButton } from './IconButton.svelte';
 export { default as Input } from './Input.svelte';
+export { default as MenuButton } from './MenuButton.svelte';
 export { default as Modal } from './Modal.svelte';
 export { default as PasswordInput } from './PasswordInput.svelte';
 export { default as Select } from './Select.svelte';
