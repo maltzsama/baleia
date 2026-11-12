@@ -4,6 +4,7 @@ import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { http, server } from '../../test/server';
 import {
+	makeMetadataBinding,
 	makeMetadataCatalog,
 	makeSearchItem,
 	makeSearchResponse,
@@ -99,6 +100,42 @@ describe('DataSourceTree', () => {
 
 		await screen.findByText('Polaris Lake');
 		expect(screen.getByText('lake_t')).toBeTruthy();
+	});
+
+	it('shows each engine its own query name, and tells them apart in the catalog view', async () => {
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([
+					makeMetadataCatalog({
+						name: 'Shared Lake',
+						bindings: [
+							makeMetadataBinding({
+								binding_id: '00000000-0000-0000-0000-0000000000b1',
+								engine_id: '00000000-0000-0000-0000-0000000000e1',
+								engine_name: 'trino-a',
+								engine_catalog_name: 'lake_a'
+							}),
+							makeMetadataBinding({
+								binding_id: '00000000-0000-0000-0000-0000000000b2',
+								engine_id: '00000000-0000-0000-0000-0000000000e2',
+								engine_name: 'trino-b',
+								engine_catalog_name: 'lake_b'
+							})
+						]
+					})
+				])
+			)
+		);
+		render(DataSourceTree, { props: { onSelectTable: vi.fn() } });
+
+		// Catalog view: each name carries the engine it belongs to.
+		expect(await screen.findByText('lake_a (trino-a), lake_b (trino-b)')).toBeTruthy();
+
+		// Engine view: under each engine only that engine's name.
+		await fireEvent.click(screen.getByRole('button', { name: 'By engine' }));
+		expect(await screen.findAllByText('lake_a')).toHaveLength(1);
+		expect(screen.getAllByText('lake_b')).toHaveLength(1);
+		expect(screen.queryByText(/lake_a \(/)).toBeNull();
 	});
 
 	it('renders namespaces before tables finish loading', async () => {
