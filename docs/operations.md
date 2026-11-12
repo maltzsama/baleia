@@ -457,7 +457,10 @@ retention is gated on.
   restart) before upgrading a database with more history than that. If a run fails, the tables
   converted so far stay converted and the rest keep their rows: fix the cause, delete the dirty
   ledger row the runner names (do not just set `dirty` to false: that marks the migration as
-  applied and it is skipped, leaving the schema incomplete), and run it again.
+  applied and it is skipped, leaving the schema incomplete), and run it again. A failed
+  rollback (`store-migrate-down`) is the opposite: its row is still the applied migration, so
+  restore the applied schema and set `dirty` to false to retry, or delete the row if you
+  finished the rollback by hand.
 
 ## Binding reconciliation
 
