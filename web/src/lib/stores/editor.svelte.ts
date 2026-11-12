@@ -1,6 +1,7 @@
 // Typed workbench state (#29, #112). Components read and mutate tabs here
 // instead of exchanging `window` CustomEvents. Drafts persist per user ×
 // workspace through IndexedDB (#112).
+import { untrack } from 'svelte';
 import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import { loadDrafts, saveDrafts, type PersistedTab } from '$lib/workbench/drafts';
@@ -223,10 +224,13 @@ function createEditorStore() {
 
 	/** The editor reports the target of its active tab; null when it has none. */
 	function setReferenceScope(scope: ReferenceScope | null) {
+		// Untracked: the editor's effect that calls this must not depend on what it
+		// writes.
+		const current = untrack(() => referenceScope);
 		const same =
-			scope?.workspaceId === referenceScope?.workspaceId &&
-			scope?.catalogId === referenceScope?.catalogId &&
-			scope?.bindingId === referenceScope?.bindingId;
+			scope?.workspaceId === current?.workspaceId &&
+			scope?.catalogId === current?.catalogId &&
+			scope?.bindingId === current?.bindingId;
 		if (!same) referenceScope = scope;
 	}
 
