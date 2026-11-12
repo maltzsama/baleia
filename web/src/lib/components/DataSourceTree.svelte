@@ -558,13 +558,17 @@
 				: ''}"><path d="M9 18l6-6-6-6" /></svg
 		>
 		<KindIcon kind={catalog.provider_kind} family="catalog" size={14} />
-		<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium"
-			>{catalog.name}{#if queryNames.length > 0}&nbsp;
+		<span class="flex min-w-0 flex-1 flex-col">
+			<span class="overflow-hidden text-ellipsis whitespace-nowrap font-medium"
+				>{catalog.name}&nbsp;</span
+			>
+			{#if queryNames.length > 0}
 				<span
-					class="font-mono text-[11px] font-normal text-text-muted"
+					class="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] text-text-muted"
 					title={m.components_datasourcetree_query_name()}>{queryNames.join(', ')}</span
-				>{/if}</span
-		>
+				>
+			{/if}
+		</span>
 		<span class="flex shrink-0 items-center gap-1">
 			{#each catalog.bindings as binding (binding.binding_id)}
 				<span
