@@ -22,8 +22,12 @@ Backend definition of done (`DoD-standard`): `go vet ./...`, `go test -race
 ./...` (with `BALEIA_TEST_DATABASE_URL` for the DB-backed tests), `make lint`,
 `make vuln`, regenerated OpenAPI when the contract changes, and a Bruno
 case for every new endpoint. CI (`.github/workflows/ci.yml`) runs the same:
-`Test` with Postgres and `-race`, `Lint` (golangci-lint, `.golangci.yml`, new
-issues only) and `Vulnerabilities` (govulncheck).
+`Test` with Postgres and `-race`, `Store` (the store suite once per backend:
+Postgres, MySQL, MariaDB), `Lint` (golangci-lint, `.golangci.yml`, new issues
+only) and `Vulnerabilities` (govulncheck). On a pull request the `Changes` job
+skips the jobs its paths cannot affect; pushes run everything. The release
+workflow starts only after CI succeeds on `main`, and a failed nightly
+(`web-e2e`, `k8s-smoke`, `sources`) opens a `Nightly failure` issue.
 
 ## Pull requests
 
