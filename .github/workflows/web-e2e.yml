@@ -91,3 +91,16 @@ jobs:
           kubectl -n baleia-dev get pods -o wide || true
           kubectl -n baleia-dev get events --sort-by=.lastTimestamp || true
           kubectl -n baleia-dev logs -l app.kubernetes.io/name=baleia --all-containers --tail=200 || true
+
+  # Scheduled runs only: a failed pull request run is already visible on the PR.
+  report:
+    name: Report nightly failure
+    needs: e2e
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/report-nightly-failure

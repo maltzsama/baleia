@@ -56,3 +56,16 @@ jobs:
           done
           echo "-- baleia-trino failed queries"
           kubectl -n baleia-dev logs deploy/baleia-trino --tail=3000 | grep -E 'FAILED|Query .* failed' | tail -10 || true
+
+  # Scheduled runs only: a failed pull request run is already visible on the PR.
+  report:
+    name: Report nightly failure
+    needs: smoke
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/report-nightly-failure

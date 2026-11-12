@@ -1,0 +1,29 @@
+name: Report a nightly failure
+description: >-
+  Opens an issue when a scheduled workflow fails, or comments on the one that is
+  already open for it, so a red nightly is noticed the same morning. Close the
+  issue once the workflow is green again. Needs `issues: write`.
+
+runs:
+  using: composite
+  steps:
+    - name: Open or update the failure issue
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        title="Nightly failure: ${GITHUB_WORKFLOW}"
+        run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        body="The scheduled run of \`${GITHUB_WORKFLOW}\` failed on \`${GITHUB_SHA}\`: ${run_url}"
+        existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label ci \
+          --search "\"${title}\" in:title" --json number,title \
+          --jq "map(select(.title == \"${title}\")) | .[0].number // empty")"
+        if [ -n "$existing" ]; then
+          gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+        else
+          gh issue create --repo "$GITHUB_REPOSITORY" --label ci --title "$title" \
+            --body "${body}
+
+        Close this issue once the workflow is green again; the next failure opens a new one."
+        fi

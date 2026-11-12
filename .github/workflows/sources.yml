@@ -151,3 +151,16 @@ jobs:
           if grep -E -- '--- SKIP: (TestMetadataReader_|TestExecute_|TestConformance \(|TestConformanceMariaDB \(|TestConformanceAlterSystem \(|TestSQLServerPartitions|TestOraclePartitions|TestSQLServerDailyPartitions|TestOracleDailyPartitions|TestSQLServerSparseDailyPartitions)' test.log | grep -v polaris; then
             echo "an integration test was skipped" && exit 1
           fi
+
+  # Scheduled runs only: a failed pull request run is already visible on the PR.
+  report:
+    name: Report nightly failure
+    needs: providers
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/report-nightly-failure
