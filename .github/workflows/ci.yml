@@ -172,6 +172,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # MySQL 8.4 syncs the redo log and the binary log on every commit, and the
+      # suite creates and migrates a database per test, so it ran about twice as
+      # long as on MariaDB. A throwaway server needs no crash safety; schema,
+      # keys and constraints behave the same. Service containers take no server
+      # flags, hence the runtime switches.
+      - name: Relax MySQL durability
+        if: matrix.db == 'mysql'
+        run: >-
+          docker exec ${{ job.services.db.id }} mysql -uroot -pbaleia_dev -e
+          "ALTER INSTANCE DISABLE INNODB REDO_LOG;
+          SET GLOBAL sync_binlog = 0;
+          SET GLOBAL innodb_flush_log_at_trx_commit = 2;"
       - name: Store suite
         env:
           BALEIA_TEST_DATABASE_URL: ${{ matrix.url }}
