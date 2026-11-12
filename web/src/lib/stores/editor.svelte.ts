@@ -77,8 +77,17 @@ function emptyTab(id: string, overrides: Partial<EditorTab> = {}): EditorTab {
 	};
 }
 
+/** The SQL or the target differs from what was last saved. */
+function differsFromSaved(tab: EditorTab): boolean {
+	return (
+		tab.sql !== tab.savedSql ||
+		tab.bindingId !== tab.savedBindingId ||
+		tab.schema !== tab.savedSchema
+	);
+}
+
 function fromPersisted(tab: PersistedTab): EditorTab {
-	return emptyTab(tab.id, {
+	const restored = emptyTab(tab.id, {
 		name: tab.name,
 		sql: tab.sql,
 		savedRef: tab.savedRef,
@@ -90,6 +99,9 @@ function fromPersisted(tab: PersistedTab): EditorTab {
 		savedBindingId: tab.savedBindingId,
 		savedSchema: tab.savedSchema
 	});
+	// A draft restored with edits on top of its saved version is still unsaved.
+	restored.dirty = differsFromSaved(restored);
+	return restored;
 }
 
 export type EditorInsert = {
@@ -199,11 +211,7 @@ function createEditorStore() {
 	// schema. Every mutation recomputes this so a target change is never lost
 	// when the SQL is reverted (and vice-versa).
 	function isDirty(tab: EditorTab): boolean {
-		return (
-			tab.sql !== tab.savedSql ||
-			tab.bindingId !== tab.savedBindingId ||
-			tab.schema !== tab.savedSchema
-		);
+		return differsFromSaved(tab);
 	}
 
 	function updateSql(id: string, sql: string) {

@@ -141,6 +141,44 @@ describe('editor store', () => {
 		expect(tab.dirty).toBe(false);
 	});
 
+	it('restores a draft with edits over its saved version as dirty (#979)', async () => {
+		vi.mocked(loadDrafts).mockResolvedValueOnce([
+			{
+				id: '7',
+				name: 'Revenue',
+				sql: 'SELECT 2',
+				savedRef: { id: 'q1', version: 1, slug: 'revenue', space_id: 'sp1', folder_id: null },
+				bindingId: 'b1',
+				schema: '',
+				readOnly: false,
+				savedSql: 'SELECT 1',
+				savedBindingId: 'b1',
+				savedSchema: ''
+			}
+		]);
+		await editor.hydrate('u1', 'ws1');
+		const tab = editor.tabs.find((item) => item.id === '7');
+		expect(tab?.dirty).toBe(true);
+
+		// And a draft that matches its saved version is not.
+		vi.mocked(loadDrafts).mockResolvedValueOnce([
+			{
+				id: '8',
+				name: 'Same',
+				sql: 'SELECT 1',
+				savedRef: { id: 'q2', version: 1, slug: 'same', space_id: 'sp1', folder_id: null },
+				bindingId: 'b1',
+				schema: '',
+				readOnly: false,
+				savedSql: 'SELECT 1',
+				savedBindingId: 'b1',
+				savedSchema: ''
+			}
+		]);
+		await editor.hydrate('u1', 'ws1');
+		expect(editor.tabs.find((item) => item.id === '8')?.dirty).toBe(false);
+	});
+
 	it('hydrates the drafts of a user and workspace', async () => {
 		vi.mocked(loadDrafts).mockResolvedValueOnce([
 			{
