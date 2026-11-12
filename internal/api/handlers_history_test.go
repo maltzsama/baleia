@@ -120,7 +120,7 @@ func (f *historyFixture) addExecution(t *testing.T, user openapi_types.UUID, sta
 	snapshot := model.JSON(`{}`)
 	row := model.QueryExecution{
 		ID: model.UUID(repo.NewUUID()), WorkspaceID: model.UUID(f.ws.String()),
-		UserID: model.UUID(user.String()), Status: model.Text(status), SQL: model.Text(sql),
+		UserID: model.UUID(user.String()), Status: model.Text(status), SQL: sql,
 		StartedAt: started, FinishedAt: &started, RowsReturned: &rows, DurationMs: &duration,
 		EngineID: &engine, TargetCatalogID: &catalog, TargetBindingID: &binding, TargetSnapshot: &snapshot,
 	}

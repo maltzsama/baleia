@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"log/slog"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -15,10 +14,7 @@ import (
 
 func TestAllMigrationsUpCreatesSchema(t *testing.T) {
 	t.Parallel()
-	adminURL := os.Getenv("BALEIA_TEST_DATABASE_URL")
-	if adminURL == "" {
-		t.Skip("BALEIA_TEST_DATABASE_URL not set")
-	}
+	adminURL := postgresAdminURL(t)
 	ctx := context.Background()
 	admin, err := Open(ctx, adminURL, Postgres, Options{MaxOpenConns: 1, Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
@@ -84,10 +80,7 @@ func TestAllMigrationsUpCreatesSchema(t *testing.T) {
 // transitions they own.
 func TestAllMigrationsUpgradeFromVersionOne(t *testing.T) {
 	t.Parallel()
-	adminURL := os.Getenv("BALEIA_TEST_DATABASE_URL")
-	if adminURL == "" {
-		t.Skip("BALEIA_TEST_DATABASE_URL not set")
-	}
+	adminURL := postgresAdminURL(t)
 	ctx := context.Background()
 	admin, err := Open(ctx, adminURL, Postgres, Options{MaxOpenConns: 1, Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {

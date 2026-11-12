@@ -11,6 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // TxFolders runs fn in one transaction over a Repo bound to it, so a folder
@@ -121,16 +122,36 @@ func (r *Repo) MoveQueryFolderSubtree(ctx context.Context, arg db.MoveQueryFolde
 				return err
 			}
 		}
-		// The target's parent may stay in the source space: clear it before
-		// the move, and the caller's folder update sets the final parent.
-		if err := tx.Model(&model.QueryFolder{}).
-			Where("id = ? AND workspace_id = ?", UUIDString(arg.ID), UUIDString(arg.WorkspaceID)).
+		// A folder's parent is a (space_id, parent_id) foreign key to the parent's
+		// (space_id, id). PostgreSQL checks it when the statement ends, so one
+		// update of the whole subtree passes. MySQL and MariaDB check it row by row,
+		// and no order of rows works: a parent that moves first strands its
+		// children, a child that moves first has no parent in the new space. So the
+		// subtree is taken off its parents, moved, and hung back: each folder is
+		// reattached once its parent is already in the new space. The snapshot is a
+		// locking read, so a parent changed meanwhile is neither lost nor restored stale.
+		var folders []model.QueryFolder
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id IN ?", ids).Find(&folders).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.QueryFolder{}).Where("id IN ?", ids).
 			Update("parent_id", nil).Error; err != nil {
 			return err
 		}
 		if err := tx.Model(&model.QueryFolder{}).Where("id IN ?", ids).
 			Update("space_id", spaceID).Error; err != nil {
 			return err
+		}
+		// The target's own parent may stay in the source space: it is left
+		// cleared, and the caller's folder update sets the final parent.
+		for _, folder := range folders {
+			if string(folder.ID) == UUIDString(arg.ID) || folder.ParentID == nil {
+				continue
+			}
+			if err := tx.Model(&model.QueryFolder{}).Where("id = ?", string(folder.ID)).
+				Update("parent_id", folder.ParentID).Error; err != nil {
+				return err
+			}
 		}
 		now := time.Now().UTC()
 		for _, query := range saved {

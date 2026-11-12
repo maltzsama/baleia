@@ -354,6 +354,14 @@ func TestAssistantTurnLifecycle(t *testing.T) {
 		t.Fatalf("second claim: err = %v, want db.ErrNoRows", err)
 	}
 
+	// updated_at as the database holds it: PostgreSQL keeps microseconds and
+	// MySQL and MariaDB milliseconds, so the value the claim returned (taken from
+	// the clock, in nanoseconds) is not what a read gives back.
+	before, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user})
+	if err != nil {
+		t.Fatalf("GetConversation: %v", err)
+	}
+
 	time.Sleep(5 * time.Millisecond)
 	if err := f.r.HeartbeatConversation(ctx, conv.ID); err != nil {
 		t.Fatalf("HeartbeatConversation: %v", err)
@@ -362,8 +370,8 @@ func TestAssistantTurnLifecycle(t *testing.T) {
 	if err != nil || !beaten.TurnHeartbeatAt.Valid || !beaten.TurnHeartbeatAt.Time.After(claimed.TurnHeartbeatAt.Time) {
 		t.Fatalf("heartbeat = %+v, %v", beaten.TurnHeartbeatAt, err)
 	}
-	if !beaten.UpdatedAt.Time.Equal(claimed.UpdatedAt.Time.Truncate(time.Microsecond)) {
-		t.Fatalf("heartbeat moved updated_at: %v -> %v", claimed.UpdatedAt.Time, beaten.UpdatedAt.Time)
+	if !beaten.UpdatedAt.Time.Equal(before.UpdatedAt.Time) {
+		t.Fatalf("heartbeat moved updated_at: %v -> %v", before.UpdatedAt.Time, beaten.UpdatedAt.Time)
 	}
 
 	// A stale runner must not release a turn it no longer owns.

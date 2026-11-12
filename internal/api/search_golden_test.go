@@ -238,7 +238,7 @@ func seedGoldenCorpus(t *testing.T, f *metaFixture, c goldenCorpus) {
 	for _, doc := range c.Docs {
 		row := model.SemanticDoc{
 			ID: model.UUID(repo.NewUUID()), WorkspaceID: ws, CatalogID: lake, Namespace: doc.Namespace,
-			TableNameValue: model.Text(doc.Table), Description: model.Text(doc.Description), Tags: model.StringArray{},
+			TableNameValue: model.Text(doc.Table), Description: doc.Description, Tags: model.StringArray{},
 			UpdatedBy: owner,
 		}
 		if doc.Column != nil {

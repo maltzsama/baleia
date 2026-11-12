@@ -30,7 +30,7 @@ func (r *Repo) CreateQueryExecution(ctx context.Context, arg db.CreateQueryExecu
 		Status:          model.Text(arg.Status),
 		Origin:          model.Text(origin),
 		BIKeyID:         modelUUIDPtr(arg.BIKeyID),
-		SQL:             model.Text(arg.Sql),
+		SQL:             arg.Sql,
 		StartedAt:       time.Now().UTC(),
 		TrinoCatalog:    arg.TrinoCatalog,
 		RequestID:       arg.RequestID,
@@ -291,7 +291,8 @@ func (r *Repo) ListExecutionHistory(ctx context.Context, arg db.ListExecutionHis
 		q = q.Where("started_at <= ?", arg.ToTime.Time)
 	}
 	if arg.Q != nil {
-		q = q.Where("LOWER(sql) LIKE ?", "%"+strings.ToLower(*arg.Q)+"%")
+		// sql is a reserved word in MySQL: the dialect quotes the identifier.
+		q = q.Where("LOWER(?) LIKE ?", clause.Column{Name: "sql"}, "%"+strings.ToLower(*arg.Q)+"%")
 	}
 	if arg.CatalogID.Valid {
 		q = q.Where("target_catalog_id = ?", UUIDString(arg.CatalogID))

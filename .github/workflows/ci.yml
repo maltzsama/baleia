@@ -64,8 +64,9 @@ jobs:
   # commit before it (a branch's first push has none and falls back).
   # The store supports MySQL and MariaDB through the same single
   # DATABASE_URL contract: the DSN picks the dialector. This job points that
-  # one variable at each server, so the migrations and the runner stay covered
-  # there without a second store configuration.
+  # one variable at each server and runs the whole store suite on it, not a
+  # selection: a selection let two broken unique keys, a 128 character cap on the
+  # query history and a foreign key that MySQL checks row by row go unnoticed.
   store-mysql:
     name: Store on MySQL/MariaDB
     runs-on: ubuntu-latest
@@ -95,11 +96,11 @@ jobs:
       - name: MySQL
         env:
           BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3306)/
-        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate|TestSearchIndex_PortableLookups|TestMySQLPartitions|TestMySQLDailyPartitions|TestGuardPartialKeysUpgrades|TestSpaceDefaultGuard|TestMaintenanceRuns' ./internal/store ./internal/store/model ./internal/store/repo ./internal/persistence/partitioning
+        run: go test -race -count=1 -timeout 60m ./internal/store/... ./internal/persistence/partitioning
       - name: MariaDB
         env:
           BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3307)/
-        run: go test -race -count=1 -run 'TestMySQLRunner|TestAllModelsMigrate|TestIdentityModelsMigrate|TestSearchIndex_PortableLookups|TestMySQLPartitions|TestMySQLDailyPartitions|TestGuardPartialKeysUpgrades|TestSpaceDefaultGuard|TestMaintenanceRuns' ./internal/store ./internal/store/model ./internal/store/repo ./internal/persistence/partitioning
+        run: go test -race -count=1 -timeout 60m ./internal/store/... ./internal/persistence/partitioning
 
   lint:
     name: Lint

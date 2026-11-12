@@ -43,3 +43,28 @@ func TestEnsureAuditPartitions(t *testing.T) {
 		}
 	}
 }
+
+// TestFreshDatabaseAcceptsYesterday: a freshly migrated database has a partition
+// for the day before today. The audit-partitions schedule only ever looks
+// forward, so the first day of a database's life is the one day nothing would
+// create it for, and an event stamped just before midnight (clock skew between
+// replicas, a write that straddles the boundary, or a test that backdates by
+// minutes just after 00:00 UTC) must not fail for want of a partition.
+func TestFreshDatabaseAcceptsYesterday(t *testing.T) {
+	t.Parallel()
+	f := newWorkbenchFixture(t)
+	justBeforeMidnight := partitioning.Daily.Start(time.Now()).Add(-time.Hour)
+
+	if err := f.gdb.Create(&model.AuditEvent{
+		OccurredAt: justBeforeMidnight, ActorKind: "user", Action: "catalog.update",
+		ResourceType: "catalog", Outcome: "allowed",
+	}).Error; err != nil {
+		t.Fatalf("an audit event from yesterday: %v", err)
+	}
+	if err := f.gdb.Create(&model.QueryExecution{
+		ID: model.UUID(NewUUID()), WorkspaceID: f.ws, UserID: f.owner,
+		Status: "finished", Origin: "editor", SQL: "select 1", StartedAt: justBeforeMidnight,
+	}).Error; err != nil {
+		t.Fatalf("a query execution from yesterday: %v", err)
+	}
+}

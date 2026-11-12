@@ -380,13 +380,16 @@ func partitionTables(db *gorm.DB) error {
 }
 
 // firstPartition is the first day a partition must cover: the oldest row's, or
-// today on an empty table.
+// yesterday on an empty table. The audit-partitions schedule only looks forward,
+// so without that day a database's first day would be the one day nothing creates
+// a partition for, and an event stamped just before midnight (clock skew between
+// replicas, a write that straddles the boundary) would fail to write.
 func firstPartition(db *gorm.DB, t partitionedTable, now time.Time) (time.Time, error) {
 	var oldest []time.Time
 	if err := db.Model(t.model).Order(t.spec.Column).Limit(1).Pluck(t.spec.Column, &oldest).Error; err != nil {
 		return time.Time{}, fmt.Errorf("oldest row of %s: %w", t.spec.Table, err)
 	}
-	from := partitioning.Daily.Start(now)
+	from := partitioning.Daily.Start(now).AddDate(0, 0, -1)
 	if len(oldest) > 0 && oldest[0].Before(from) {
 		from = partitioning.Daily.Start(oldest[0])
 	}

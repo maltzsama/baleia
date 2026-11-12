@@ -118,7 +118,9 @@ func TestTableHealthUpsert(t *testing.T) {
 		}
 	}
 	first := health(40, true, true, []string{"optimize", "expire_snapshots"})
-	first.LastMaintenanceAt = PGTime(time.Now().UTC().Add(-time.Hour).Truncate(time.Microsecond))
+	// A millisecond is what every backend stores exactly: PostgreSQL keeps
+	// microseconds and MySQL and MariaDB milliseconds, rounding what is finer.
+	first.LastMaintenanceAt = PGTime(time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond))
 	stored, err := f.r.UpsertTableHealthSnapshot(ctx, first)
 	if err != nil {
 		t.Fatalf("UpsertTableHealthSnapshot(create): %v", err)
@@ -199,7 +201,7 @@ func TestTableMaintenancePolicies(t *testing.T) {
 	got, err := f.r.GetTableMaintenancePolicy(ctx, db.GetTableMaintenancePolicyParams{
 		CatalogID: f.catalogID(), Namespace: "sales", TableName: "orders",
 	})
-	if err != nil || got.Revision != 1 || string(got.Optimize) != `{"enabled": true}` {
+	if err != nil || got.Revision != 1 || !sameJSON(t, got.Optimize, `{"enabled": true}`) {
 		t.Fatalf("GetTableMaintenancePolicy = %+v, %v", got, err)
 	}
 
@@ -424,7 +426,7 @@ func TestMonitoringSnapshots(t *testing.T) {
 	got, _ = f.r.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
 		EngineID: f.engineID(), TrinoQueryID: "q-1",
 	})
-	if string(got.RawTrinoPayload) != `{"peakMemoryBytes": 42}` {
+	if !sameJSON(t, got.RawTrinoPayload, `{"peakMemoryBytes": 42}`) {
 		t.Fatalf("profile = %s", got.RawTrinoPayload)
 	}
 
@@ -662,7 +664,8 @@ func TestUpsertTableHealthSnapshotConcurrentFirstWrite(t *testing.T) {
 	f := monitoringFixture(t)
 	ctx := context.Background()
 	connection := f.catalogConnection(t)
-	maintainedAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Microsecond)
+	// A millisecond is what every backend stores exactly.
+	maintainedAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
 
 	base := db.UpsertTableHealthSnapshotParams{
 		CatalogID: f.catalogID(), CatalogConnectionID: PGUUID(string(connection)),
