@@ -346,7 +346,7 @@
 					disabled={!detailCurrent || !detail.qualified_name}
 					onclick={insertName}>{m.components_tabledetail_insert_name()}</Button
 				>
-				{#if biFileAvailable}
+				{#if biFileAvailable && detailCurrent && !detail.unsupported}
 					<Button variant="secondary" size="sm" onclick={() => openInBI('tableau')}
 						>{m.components_tabledetail_open_in_tableau()}</Button
 					>
