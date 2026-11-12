@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/connections"
@@ -199,5 +200,59 @@ func TestOpenMetadata_ClassificationFailureKeepsTheListing(t *testing.T) {
 	tables, _, err := r.ListTables(context.Background(), "c", connections.Namespace{"s"}, "")
 	if err != nil || len(tables) != 1 || tables[0].Unsupported.Is() {
 		t.Fatalf("ListTables = %+v, %v; want one readable table", tables, err)
+	}
+}
+
+// TestOpenMetadata_ClassifiesASchemaOnce: the Iceberg listing is paged and the
+// classifier runs per page, but a schema is scanned through the Unity API once per
+// reader; a failed scan is not kept, so the next page retries it.
+func TestOpenMetadata_ClassifiesASchemaOnce(t *testing.T) {
+	t.Parallel()
+	var scans, failFirst atomic.Int32
+	failFirst.Store(1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/2.1/unity-catalog/iceberg/v1/config":
+			_ = json.NewEncoder(w).Encode(map[string]any{})
+		case "/api/2.1/unity-catalog/iceberg/v1/namespaces/s/tables":
+			_ = json.NewEncoder(w).Encode(map[string]any{"identifiers": []map[string]any{{"namespace": []string{"s"}, "name": "t"}}})
+		case "/api/2.1/unity-catalog/tables":
+			scans.Add(1)
+			if failFirst.Add(-1) >= 0 {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"tables": []map[string]any{{"name": "t", "securable_kind": "TABLE_DB_STORAGE"}}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	d, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := New(d).OpenMetadata(context.Background(), connections.Config{Values: map[string]string{"url": srv.URL}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := func() connections.TableRef {
+		t.Helper()
+		tables, _, err := r.ListTables(context.Background(), "c", connections.Namespace{"s"}, "")
+		if err != nil || len(tables) != 1 {
+			t.Fatalf("ListTables = %+v, %v", tables, err)
+		}
+		return tables[0]
+	}
+	if first := list(); first.Unsupported.Is() { // the scan failed: listed, unmarked
+		t.Errorf("first page after a failed scan = %+v, want unmarked", first)
+	}
+	if second := list(); !second.Unsupported.Is() { // retried and kept
+		t.Errorf("second page = %+v, want marked", second)
+	}
+	list()
+	list()
+	if got := scans.Load(); got != 2 {
+		t.Errorf("Unity table scans = %d, want 2 (one failed, one kept)", got)
 	}
 }
