@@ -164,6 +164,24 @@ describe('QueryEditor', () => {
 		);
 	});
 
+	it('groups Convert dialect and Optimize SQL under Transform, and keeps Format apart (#979)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		// Format is its own button; the old Convert and Optimize buttons are gone.
+		expect(screen.getByRole('button', { name: 'Format' })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Convert' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Optimize' })).toBeNull();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Transform' }));
+		const items = screen.getAllByRole('menuitem').map((item) => item.textContent?.trim());
+		expect(items).toEqual(['Convert dialect', 'Optimize SQL']);
+
+		await fireEvent.click(screen.getByRole('menuitem', { name: 'Optimize SQL' }));
+		expect(await screen.findByRole('dialog')).toBeTruthy();
+	});
+
 	it('shows the name a query uses beside the catalog display name', async () => {
 		mockWorkbench();
 		render(QueryEditor);

@@ -27,6 +27,7 @@
 	import SaveConflictDialog from '$lib/workbench/SaveConflictDialog.svelte';
 	import SaveQueryDialog from '$lib/workbench/SaveQueryDialog.svelte';
 	import SplitHandle from '$lib/workbench/SplitHandle.svelte';
+	import MenuButton from '$lib/ui/MenuButton.svelte';
 	import { SPLIT_DEFAULT, loadSplit } from '$lib/workbench/split';
 	import {
 		codemirrorDialect,
@@ -1165,16 +1166,22 @@
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{m.components_queryeditor_format()}</button
 		>
-		<button
-			onclick={() => openConvert('convert')}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{m.components_queryeditor_convert()}</button
-		>
-		<button
-			onclick={() => openConvert('optimize')}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{m.components_queryeditor_optimize()}</button
-		>
+		<MenuButton
+			label={m.components_queryeditor_transform()}
+			title={m.components_queryeditor_transform_hint()}
+			items={[
+				{
+					id: 'convert',
+					label: m.components_queryeditor_convert_dialect(),
+					onselect: () => openConvert('convert')
+				},
+				{
+					id: 'optimize',
+					label: m.components_queryeditor_optimize_sql(),
+					onselect: () => openConvert('optimize')
+				}
+			]}
+		/>
 		<button
 			onclick={() => openSave(activeTab.readOnly ? 'copy' : 'save')}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
