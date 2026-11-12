@@ -282,6 +282,8 @@
 				toasts.error(apiErrorMessage(err));
 				return;
 			}
+			// An approval activates the catalog for this workspace.
+			if (approve) catalogAccessStore.changed();
 			await load();
 		} finally {
 			acting = false;
