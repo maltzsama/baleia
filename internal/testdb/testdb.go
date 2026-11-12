@@ -83,13 +83,6 @@ func New(t *testing.T) *gorm.DB {
 	return db
 }
 
-// DSN creates a throwaway database and returns its connection string, for
-// tests that open a connection of their own (the pgx pool's session guards).
-func DSN(t *testing.T) string {
-	t.Helper()
-	return createDatabase(t)
-}
-
 // createDatabase makes an empty database on the test server and registers its
 // drop. The slot is registered first, so it is given back last: after the
 // drop.
