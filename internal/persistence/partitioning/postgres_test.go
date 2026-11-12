@@ -7,7 +7,21 @@ import (
 
 	"github.com/galileostudio/baleia/internal/persistence/partitioning"
 	"github.com/galileostudio/baleia/internal/testdb"
+	"gorm.io/gorm"
 )
+
+// postgresDB is the throwaway test database, or skips the test: these tests
+// exercise the PostgreSQL adapter (a plain table set aside and copied, a partition
+// that refuses a row past the horizon), which MySQL and MariaDB do not share. The
+// MySQL tests live in mysql_test.go and daily_test.go.
+func postgresDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db := testdb.New(t)
+	if db.Name() != "postgres" {
+		t.Skip("PostgreSQL test database required")
+	}
+	return db
+}
 
 type testEvent struct {
 	ID         int64     `gorm:"column:id;primaryKey;autoIncrement:false"`
@@ -23,7 +37,7 @@ func (testEvent) TableName() string { return "partitioning_test_events" }
 // DB-backed suite.
 func TestPostgresPartitions(t *testing.T) {
 	t.Parallel()
-	db := testdb.New(t)
+	db := postgresDB(t)
 	ctx := context.Background()
 
 	pm, err := partitioning.New(db)
@@ -127,7 +141,7 @@ func (convEvent) TableName() string { return "partitioning_conv_events" }
 // their ids, and the sequence resumes after the largest id.
 func TestPostgresConvertsPlainTable(t *testing.T) {
 	t.Parallel()
-	db := testdb.New(t)
+	db := postgresDB(t)
 	ctx := context.Background()
 
 	if err := db.AutoMigrate(&plainConvEvent{}); err != nil {
@@ -198,7 +212,7 @@ func TestPostgresConvertsPlainTable(t *testing.T) {
 // is an interrupted conversion that must not be repeated blindly.
 func TestPostgresRefusesInterruptedConversion(t *testing.T) {
 	t.Parallel()
-	db := testdb.New(t)
+	db := postgresDB(t)
 	ctx := context.Background()
 	if err := db.AutoMigrate(&plainConvEvent{}); err != nil {
 		t.Fatal(err)
@@ -222,7 +236,7 @@ func TestPostgresRefusesInterruptedConversion(t *testing.T) {
 // removes exactly the days inside the range.
 func TestPostgresDailyPartitions(t *testing.T) {
 	t.Parallel()
-	db := testdb.New(t)
+	db := postgresDB(t)
 	ctx := context.Background()
 
 	pm, err := partitioning.New(db)
