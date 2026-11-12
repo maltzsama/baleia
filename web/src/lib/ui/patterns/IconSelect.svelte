@@ -24,7 +24,11 @@
 	let open = $state(false);
 	let active = $state(0);
 	let root = $state<HTMLDivElement>();
+	let button = $state<HTMLButtonElement>();
 	let list = $state<HTMLUListElement>();
+	// The list is fixed to the viewport, so a modal or a scrolling panel around
+	// the select cannot clip it.
+	let place = $state({ top: 0, left: 0, width: 0, maxHeight: 240 });
 
 	const selected = $derived(options.find((o) => o.value === value));
 
@@ -33,6 +37,18 @@
 			0,
 			options.findIndex((o) => o.value === value)
 		);
+		const box = button?.getBoundingClientRect();
+		if (box) {
+			const below = window.innerHeight - box.bottom - 12;
+			const above = box.top - 12;
+			const up = below < 160 && above > below;
+			place = {
+				top: up ? Math.max(8, box.top - 4 - Math.min(240, above)) : box.bottom + 4,
+				left: box.left,
+				width: box.width,
+				maxHeight: Math.min(240, up ? above : below)
+			};
+		}
 		open = true;
 	}
 
@@ -96,13 +112,14 @@
 	});
 </script>
 
-<svelte:window onclick={onwindowclick} />
+<svelte:window onclick={onwindowclick} onresize={() => (open = false)} />
 
-<div class="relative flex flex-col gap-1 {className}" bind:this={root}>
+<div class="flex flex-col gap-1 {className}" bind:this={root}>
 	{#if label}
 		<label for={buttonId} class="text-[11px] font-semibold text-text-muted">{label}</label>
 	{/if}
 	<button
+		bind:this={button}
 		id={buttonId}
 		type="button"
 		role="combobox"
@@ -130,7 +147,12 @@
 			id={listId}
 			role="listbox"
 			aria-label={label}
-			class="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-bg-panel py-1 shadow-lg"
+			style:position="fixed"
+			style:top="{place.top}px"
+			style:left="{place.left}px"
+			style:width="{place.width}px"
+			style:max-height="{place.maxHeight}px"
+			class="z-[100] overflow-y-auto rounded-md border border-border bg-bg-panel py-1 shadow-lg"
 		>
 			{#each options as option, index (option.value)}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
