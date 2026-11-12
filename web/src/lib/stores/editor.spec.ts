@@ -32,6 +32,22 @@ describe('editor store', () => {
 		vi.mocked(saveDrafts).mockReset();
 	});
 
+	it('carries the caret of an insert and the scope of the SQL reference (#979)', () => {
+		editor.insert('count()', 6);
+		expect(editor.pendingInsert).toMatchObject({ text: 'count()', caret: 6 });
+		editor.insert('x');
+		expect(editor.pendingInsert?.caret).toBeUndefined();
+
+		const scope = { workspaceId: 'w', catalogId: 'c', bindingId: 'b' };
+		editor.setReferenceScope(scope);
+		expect(editor.referenceScope).toEqual(scope);
+		const kept = editor.referenceScope;
+		editor.setReferenceScope({ ...scope }); // the same target keeps the same object
+		expect(editor.referenceScope).toBe(kept);
+		editor.setReferenceScope(null);
+		expect(editor.referenceScope).toBeNull();
+	});
+
 	it('opens a saved query in a new tab and focuses it', () => {
 		const tab = editor.openSavedQuery(query);
 		expect(tab.savedId).toBe('q1');
