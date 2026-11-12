@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { delay } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { editor } from '$lib/stores/editor.svelte';
 import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
@@ -188,6 +189,47 @@ describe('QueryEditor', () => {
 		await waitFor(() => expect(catalog.options).toHaveLength(2));
 		// The selection the user had survives the refresh.
 		expect(catalog.value).toBe(BINDING);
+	});
+
+	it('keeps the newest targets when refreshes answer out of order (#975)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
+		await waitFor(() => expect(catalog.value).toBe(BINDING));
+
+		const target = (binding: string, name: string) => ({
+			binding_id: binding,
+			catalog_id: CATALOG,
+			catalog_name: name,
+			engine_id: ENGINE,
+			engine_name: 'trino',
+			engine_kind: 'trino',
+			engine_catalog_name: `${name}_t`,
+			mode: 'adopted' as const,
+			is_default: binding === BINDING
+		});
+		const both = [
+			target(BINDING, 'lake'),
+			target('00000000-0000-0000-0000-0000000000b2', 'granted')
+		];
+		let calls = 0;
+		server.use(
+			http.get('/workspaces/{id}/targets', async ({ response }) => {
+				calls += 1;
+				// The first refresh is slow and stale (before the grant); the second is current.
+				if (calls === 1) {
+					await delay(150);
+					return response(200).json([target(BINDING, 'lake')]);
+				}
+				return response(200).json(both);
+			})
+		);
+		catalogAccessStore.changed();
+		await waitFor(() => expect(calls).toBe(1)); // the slow, stale refresh is in flight
+		catalogAccessStore.changed();
+		await waitFor(() => expect(catalog.options).toHaveLength(2));
+		await delay(300);
+		expect(catalog.options).toHaveLength(2);
 	});
 
 	it('starts empty and shows the restored draft under the same tab id (#112)', async () => {

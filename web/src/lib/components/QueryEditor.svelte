@@ -164,7 +164,12 @@
 	const canExplain = $derived(selectedEngine?.capabilities?.supports_explain ?? true);
 	const canCancel = $derived(selectedEngine?.capabilities?.supports_cancel ?? true);
 
+	// The newest targets request wins: a slow response for a workspace the user has
+	// left, or an older refresh, must not overwrite what a newer request loaded.
+	let targetsRequest = 0;
+
 	async function loadTargets(wid: string) {
+		const request = ++targetsRequest;
 		targets = [];
 		targetError = '';
 		if (!wid) return;
@@ -173,11 +178,13 @@
 				client.GET('/workspaces/{id}/targets', { params: { path: { id: wid } } }),
 				loadEngines().catch(() => [] as Engine[])
 			]);
+			if (request !== targetsRequest) return;
 			if (error)
 				throw new Error(apiErrorMessage(error, m.components_queryeditor_failed_to_load_targets()));
 			targets = data ?? [];
 			engines = loadedEngines;
 		} catch (e) {
+			if (request !== targetsRequest) return;
 			targetError = errorMessage(e);
 		}
 	}
@@ -197,18 +204,24 @@
 	 */
 	async function refreshTargets(wid: string) {
 		if (!wid) return;
+		const request = ++targetsRequest;
 		try {
 			const { data } = await client.GET('/workspaces/{id}/targets', {
 				params: { path: { id: wid } }
 			});
+			if (request !== targetsRequest) return;
 			if (data) targets = data;
 		} catch {
 			return;
 		}
 	}
 
+	// Only a change after this editor mounted refreshes: the mount loads its own.
+	let seenAccessVersion = catalogAccessStore.version;
 	$effect(() => {
-		if (catalogAccessStore.version === 0) return;
+		const version = catalogAccessStore.version;
+		if (version === seenAccessVersion) return;
+		seenAccessVersion = version;
 		void refreshTargets(untrack(() => workspaceId));
 	});
 
