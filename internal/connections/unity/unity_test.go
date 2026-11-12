@@ -2,7 +2,10 @@ package unity
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -106,5 +109,95 @@ func TestUnityIntegration(t *testing.T) {
 			}
 			t.Logf("%s.%v: %d tables", c.Name, ns, len(tables))
 		}
+	}
+}
+
+// TestOpenMetadata_MarksTablesDatabricksCannotServe: Databricks lists a managed
+// table in its default storage (TABLE_DB_STORAGE) but never vends credentials for
+// it, so the listing marks it unsupported with the kind as the reason; the other
+// kinds, and a Unity that reports no kind, are left alone.
+func TestOpenMetadata_MarksTablesDatabricksCannotServe(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/2.1/unity-catalog/iceberg-rest/v1/config":
+			_ = json.NewEncoder(w).Encode(map[string]any{"overrides": map[string]string{"prefix": "catalogs/c"}})
+		case "/api/2.1/unity-catalog/iceberg-rest/v1/catalogs/c/namespaces/s/tables":
+			_ = json.NewEncoder(w).Encode(map[string]any{"identifiers": []map[string]any{
+				{"namespace": []string{"s"}, "name": "native"},
+				{"namespace": []string{"s"}, "name": "default_storage"},
+				{"namespace": []string{"s"}, "name": "no_kind"},
+			}})
+		case "/api/2.1/unity-catalog/tables":
+			if r.URL.Query().Get("catalog_name") != "c" || r.URL.Query().Get("schema_name") != "s" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"tables": []map[string]any{
+				{"name": "native", "securable_kind": "TABLE_DELTA_ICEBERG_MANAGED"},
+				{"name": "default_storage", "securable_kind": "TABLE_DB_STORAGE"},
+				{"name": "no_kind"},
+			}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	d, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := connections.Config{Values: map[string]string{"url": srv.URL, "iceberg_path": "/api/2.1/unity-catalog/iceberg-rest"}}
+	r, err := New(d).OpenMetadata(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables, _, err := r.ListTables(context.Background(), "c", connections.Namespace{"s"}, "")
+	if err != nil {
+		t.Fatalf("ListTables: %v", err)
+	}
+	got := map[string]connections.Unsupported{}
+	for _, tb := range tables {
+		got[tb.Name] = tb.Unsupported
+	}
+	want := map[string]connections.Unsupported{
+		"native":          {},
+		"default_storage": {Code: connections.UnsupportedKind, Detail: "TABLE_DB_STORAGE"},
+		"no_kind":         {},
+	}
+	for name, w := range want {
+		if got[name] != w {
+			t.Errorf("table %q unsupported = %+v, want %+v", name, got[name], w)
+		}
+	}
+}
+
+// A classification that fails (an OSS Unity without the endpoint, a 403) must not
+// fail the listing: the tables are listed and an unsupported one is caught when it
+// is loaded.
+func TestOpenMetadata_ClassificationFailureKeepsTheListing(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/2.1/unity-catalog/iceberg/v1/config":
+			_ = json.NewEncoder(w).Encode(map[string]any{})
+		case "/api/2.1/unity-catalog/iceberg/v1/namespaces/s/tables":
+			_ = json.NewEncoder(w).Encode(map[string]any{"identifiers": []map[string]any{{"namespace": []string{"s"}, "name": "t"}}})
+		default:
+			w.WriteHeader(http.StatusForbidden)
+		}
+	}))
+	defer srv.Close()
+	d, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := New(d).OpenMetadata(context.Background(), connections.Config{Values: map[string]string{"url": srv.URL}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables, _, err := r.ListTables(context.Background(), "c", connections.Namespace{"s"}, "")
+	if err != nil || len(tables) != 1 || tables[0].Unsupported.Is() {
+		t.Fatalf("ListTables = %+v, %v; want one readable table", tables, err)
 	}
 }

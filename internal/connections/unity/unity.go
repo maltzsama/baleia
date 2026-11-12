@@ -28,6 +28,7 @@ package unity
 
 import (
 	"context"
+	"net/url"
 	"strings"
 	"time"
 
@@ -146,7 +147,63 @@ func (p *Provider) Ping(ctx context.Context, cfg connections.Config) error {
 // OpenMetadata reads Unity catalogs; each catalog is a warehouse addressed by
 // name.
 func (p *Provider) OpenMetadata(_ context.Context, cfg connections.Config) (connections.MetadataReader, error) {
-	return p.client(cfg).ReaderSkippingUnsupported(p.listCatalogs(cfg), func(c string) string { return c }), nil
+	return p.client(cfg).ReaderSkippingUnsupported(p.listCatalogs(cfg), func(c string) string { return c }, p.classifier(cfg)), nil
+}
+
+const (
+	// tablesPath lists a schema's tables through the Unity REST API.
+	tablesPath = "/api/2.1/unity-catalog/tables"
+	// maxTablePages bounds the listing of one schema: a server that keeps
+	// answering a next-page token cannot loop the walk.
+	maxTablePages = 1000
+)
+
+// unreadableKinds are the securable kinds Databricks lists but never gives
+// external engines credentials for: a managed table in the workspace's default
+// storage ("cannot be accessed from outside of Databricks Compute Environment").
+// Anything else is left to the Iceberg REST endpoint, which answers for itself.
+var unreadableKinds = map[string]bool{
+	"TABLE_DB_STORAGE": true,
+}
+
+// classifier marks the tables of a schema that Unity lists but cannot serve to
+// an external engine, from the securable kind its table listing carries. A
+// Unity that reports no kind (the OSS server) marks nothing.
+func (p *Provider) classifier(cfg connections.Config) icebergrest.Classifier {
+	b := p.browsing(cfg)
+	return func(ctx context.Context, catalog string, ns connections.Namespace) (map[string]connections.Unsupported, error) {
+		if len(ns) != 1 { // a Unity schema is one level deep
+			return nil, nil
+		}
+		out := map[string]connections.Unsupported{}
+		token := ""
+		for range maxTablePages {
+			q := url.Values{"catalog_name": {catalog}, "schema_name": {ns[0]}}
+			if token != "" {
+				q.Set("page_token", token)
+			}
+			var page struct {
+				Tables []struct {
+					Name          string `json:"name"`
+					SecurableKind string `json:"securable_kind"`
+				} `json:"tables"`
+				NextPageToken string `json:"next_page_token"`
+			}
+			if err := b.Get(ctx, "list unity tables", tablesPath, q, &page); err != nil {
+				return nil, err
+			}
+			for _, t := range page.Tables {
+				if unreadableKinds[t.SecurableKind] {
+					out[t.Name] = connections.Unsupported{Code: connections.UnsupportedKind, Detail: t.SecurableKind}
+				}
+			}
+			if page.NextPageToken == "" || page.NextPageToken == token {
+				break
+			}
+			token = page.NextPageToken
+		}
+		return out, nil
+	}
 }
 
 // UserIdentity reports whether Unity authorizes each Baleia user (#648).
