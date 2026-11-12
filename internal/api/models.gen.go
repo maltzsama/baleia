@@ -865,6 +865,12 @@ const (
 	MetadataTableSummaryKindView             MetadataTableSummaryKind = "view"
 )
 
+// Defines values for MetadataTableUnsupportedCode.
+const (
+	Refused   MetadataTableUnsupportedCode = "refused"
+	TableKind MetadataTableUnsupportedCode = "table_kind"
+)
+
 // Defines values for MigrateV1ItemAction.
 const (
 	MigrateV1ItemActionCREATE    MigrateV1ItemAction = "CREATE"
@@ -3725,6 +3731,9 @@ type MetadataTableDetail struct {
 
 	// RemovedAt Set when the source no longer has the table
 	RemovedAt *time.Time `json:"removed_at"`
+
+	// Unsupported Why the source lists the table but Baleia cannot read it. Such a table has no columns and cannot be queried.
+	Unsupported *MetadataTableUnsupported `json:"unsupported,omitempty"`
 }
 
 // MetadataTableDetailKind defines model for MetadataTableDetail.Kind.
@@ -3746,10 +3755,25 @@ type MetadataTableSummary struct {
 	Kind          MetadataTableSummaryKind `json:"kind"`
 	LastChangedAt *time.Time               `json:"last_changed_at"`
 	Name          string                   `json:"name"`
+
+	// Unsupported Why the source lists the table but Baleia cannot read it. Such a table has no columns and cannot be queried.
+	Unsupported *MetadataTableUnsupported `json:"unsupported,omitempty"`
 }
 
 // MetadataTableSummaryKind defines model for MetadataTableSummary.Kind.
 type MetadataTableSummaryKind string
+
+// MetadataTableUnsupported Why the source lists the table but Baleia cannot read it. Such a table has no columns and cannot be queried.
+type MetadataTableUnsupported struct {
+	// Code table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded.
+	Code MetadataTableUnsupportedCode `json:"code"`
+
+	// Detail The source's own table kind when code is table_kind, for example TABLE_DB_STORAGE
+	Detail *string `json:"detail"`
+}
+
+// MetadataTableUnsupportedCode table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded.
+type MetadataTableUnsupportedCode string
 
 // MigrateV1Item defines model for MigrateV1Item.
 type MigrateV1Item struct {

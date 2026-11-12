@@ -268,13 +268,24 @@ type reader struct {
 	// connections.ErrTableUnsupported. Unity answers 400 for a Delta table
 	// without Iceberg metadata; the answer's body is never read (ADR 0008).
 	unsupportedOn400 bool
+	// classify marks the tables of a namespace the server lists but cannot
+	// serve; nil means it does not.
+	classify Classifier
 }
+
+// Classifier names the tables of one namespace that the server lists but cannot
+// serve over Iceberg REST, by table name. It is best effort: a table it misses
+// is caught when it is loaded.
+type Classifier func(ctx context.Context, catalog string, ns connections.Namespace) (map[string]connections.Unsupported, error)
 
 // ReaderSkippingUnsupported is ReaderWithCatalogs for a server that answers a
 // table it cannot serve over Iceberg REST with 400: LoadTable then returns
 // connections.ErrTableUnsupported, so a walk can skip that table.
-func (c *Client) ReaderSkippingUnsupported(list func(context.Context) ([]connections.CatalogRef, error), warehouseOf func(string) string) connections.MetadataReader {
-	return &reader{c: c, listCatalogs: list, warehouseOf: warehouseOf, unsupportedOn400: true}
+//
+// classify, when not nil, marks the tables the server lists but cannot serve, so
+// a walk can show them without loading them.
+func (c *Client) ReaderSkippingUnsupported(list func(context.Context) ([]connections.CatalogRef, error), warehouseOf func(string) string, classify Classifier) connections.MetadataReader {
+	return &reader{c: c, listCatalogs: list, warehouseOf: warehouseOf, unsupportedOn400: true, classify: classify}
 }
 
 // ReaderWithCatalogs is Reader with a dynamic catalog list.
@@ -340,9 +351,19 @@ func (r *reader) ListTables(ctx context.Context, catalog string, ns connections.
 	if err := r.c.Get(ctx, "list tables", root+"/namespaces/"+encodeNamespace(ns)+"/tables", q, &out); err != nil {
 		return nil, "", err
 	}
+	var unsupported map[string]connections.Unsupported
+	if r.classify != nil {
+		// Best effort: a failed classification leaves the tables to be caught
+		// when they are loaded.
+		if m, err := r.classify(ctx, catalog, ns); err == nil {
+			unsupported = m
+		}
+	}
 	tables := make([]connections.TableRef, 0, len(out.Identifiers))
 	for _, id := range out.Identifiers {
-		tables = append(tables, connections.TableRef{Catalog: catalog, Namespace: id.Namespace, Name: id.Name, Type: "TABLE"})
+		tables = append(tables, connections.TableRef{
+			Catalog: catalog, Namespace: id.Namespace, Name: id.Name, Type: "TABLE", Unsupported: unsupported[id.Name],
+		})
 	}
 	return tables, out.NextPageToken, nil
 }

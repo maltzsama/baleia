@@ -158,15 +158,31 @@ func (r *Repo) ListMetadataTablesPage(ctx context.Context, arg db.ListMetadataTa
 	}
 	out := make([]db.ListMetadataTablesPageRow, len(rows))
 	for i, row := range rows {
+		code, detail := unsupportedReason(row.Properties)
 		out[i] = db.ListMetadataTablesPageRow{
-			ID:            PGUUID(string(row.ID)),
-			Name:          string(row.Name),
-			Kind:          row.Kind,
-			Comment:       row.Comment,
-			LastChangedAt: PGTime(row.LastChangedAt),
+			ID:                PGUUID(string(row.ID)),
+			Name:              string(row.Name),
+			Kind:              row.Kind,
+			Comment:           row.Comment,
+			LastChangedAt:     PGTime(row.LastChangedAt),
+			UnsupportedCode:   code,
+			UnsupportedDetail: detail,
 		}
 	}
 	return out, nil
+}
+
+// unsupportedReason reads why a table the source lists cannot be read from its
+// stored properties; both are empty for a readable table (#977).
+func unsupportedReason(props model.JSON) (code, detail string) {
+	if len(props) == 0 {
+		return "", ""
+	}
+	var m map[string]string
+	if err := json.Unmarshal(props, &m); err != nil {
+		return "", ""
+	}
+	return m[db.TablePropUnsupportedCode], m[db.TablePropUnsupportedDetail]
 }
 
 // GetCatalogBindingForDisplay returns an enabled binding of the catalog (the

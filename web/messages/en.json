@@ -2732,5 +2732,9 @@
 	"search_glossary_removed": "Entry removed",
 	"search_glossary_no_workspace": "Pick a workspace to see its glossary.",
 	"settings_sections_search_glossary": "Search glossary",
-	"search_glossary_created": "Added"
+	"search_glossary_created": "Added",
+	"metadata_unsupported_table": "Unsupported table",
+	"metadata_unsupported_table_kind": "type: {kind}\nUnsupported type: the source does not give external engines access to this kind of table.",
+	"metadata_unsupported_table_refused": "The source refused to serve this table, so it cannot be read.",
+	"metadata_unsupported_table_unreadable": "This table cannot be read, so it has no columns and cannot be queried."
 }

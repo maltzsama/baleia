@@ -11,6 +11,7 @@ export type MetadataCatalog = components['schemas']['MetadataCatalog'];
 export type MetadataCatalogBinding = components['schemas']['MetadataCatalogBinding'];
 export type MetadataFreshness = components['schemas']['MetadataFreshness'];
 export type MetadataNamespaceList = components['schemas']['MetadataNamespaceList'];
+export type MetadataTableUnsupported = components['schemas']['MetadataTableUnsupported'];
 export type MetadataTableSummary = components['schemas']['MetadataTableSummary'];
 export type MetadataTablePage = components['schemas']['MetadataTablePage'];
 export type MetadataTableDetail = components['schemas']['MetadataTableDetail'];
@@ -64,6 +65,14 @@ export function clearMetadataCache(): void {
 	tablesCache.clear();
 	tableCache.clear();
 	popularCache.clear();
+}
+
+/**
+ * Forgets the cached catalog lists. A grant or revoke changes which catalogs a
+ * workspace sees, and the list is otherwise cached for the whole session (#975).
+ */
+export function invalidateCatalogs(): void {
+	catalogsCache.clear();
 }
 
 function cached<T>(cache: Cache<T>, key: string, load: () => Promise<T>): Promise<T> {

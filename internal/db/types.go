@@ -1613,12 +1613,24 @@ type ListMetadataTablesPageParams struct {
 	Lim       int32    `json:"lim"`
 }
 
+// The properties of a metadata table that carry why a source lists it but
+// cannot read it (#977); the sync writes them and the reads turn them into the
+// reason the API returns.
+const (
+	TablePropUnsupportedCode   = "unsupported_code"
+	TablePropUnsupportedDetail = "unsupported_detail"
+)
+
 type ListMetadataTablesPageRow struct {
 	ID            UUID        `json:"id"`
 	Name          string      `json:"name"`
 	Kind          string      `json:"kind"`
 	Comment       *string     `json:"comment"`
 	LastChangedAt Timestamptz `json:"last_changed_at"`
+	// UnsupportedCode is why the source lists the table but cannot read it; empty
+	// for a readable table. UnsupportedDetail refines it (the source's table kind).
+	UnsupportedCode   string `json:"unsupported_code"`
+	UnsupportedDetail string `json:"unsupported_detail"`
 }
 
 type ListPopularTablesParams struct {

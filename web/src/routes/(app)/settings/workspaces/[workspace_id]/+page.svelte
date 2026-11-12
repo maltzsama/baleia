@@ -9,6 +9,7 @@
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import WorkspaceMembers from '$lib/workspaces/WorkspaceMembers.svelte';
 	import { workspaceStore, type Workspace } from '$lib/stores/workspace.svelte';
+	import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 	import type { components } from '$lib/api/schema';
 	import Button from '$lib/ui/Button.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -203,6 +204,7 @@
 				body: { catalog_id: grantCatalogId }
 			});
 			if (err) throw new Error('Could not grant access');
+			catalogAccessStore.changed();
 			grantOpen = false;
 			await load();
 		} catch (e) {
@@ -229,6 +231,7 @@
 			params: { path: { id: ws.id, catalog_id: revokeCatalog.catalog_id } }
 		});
 		if (err) throw new Error('Could not revoke access');
+		catalogAccessStore.changed();
 		await load();
 	}
 
@@ -279,6 +282,8 @@
 				toasts.error(apiErrorMessage(err));
 				return;
 			}
+			// An approval activates the catalog for this workspace.
+			if (approve) catalogAccessStore.changed();
 			await load();
 		} finally {
 			acting = false;

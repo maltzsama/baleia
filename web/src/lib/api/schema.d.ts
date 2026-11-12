@@ -5641,6 +5641,16 @@ export interface components {
                 path: string[];
             }[];
         };
+        /** @description Why the source lists the table but Baleia cannot read it. Such a table has no columns and cannot be queried. */
+        MetadataTableUnsupported: {
+            /**
+             * @description table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded.
+             * @enum {string}
+             */
+            code: "table_kind" | "refused";
+            /** @description The source's own table kind when code is table_kind, for example TABLE_DB_STORAGE */
+            detail?: string | null;
+        };
         MetadataTableSummary: {
             /** Format: uuid */
             id: string;
@@ -5650,6 +5660,7 @@ export interface components {
             comment?: string | null;
             /** Format: date-time */
             last_changed_at?: string | null;
+            unsupported?: components["schemas"]["MetadataTableUnsupported"];
         };
         MetadataTablePage: {
             freshness: components["schemas"]["MetadataFreshness"];
@@ -5693,6 +5704,7 @@ export interface components {
              * @description Set when the source no longer has the table
              */
             removed_at?: string | null;
+            unsupported?: components["schemas"]["MetadataTableUnsupported"];
             /**
              * Format: uuid
              * @description The binding display_type and qualified_name are rendered for; null when the catalog has none

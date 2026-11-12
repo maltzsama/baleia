@@ -129,6 +129,19 @@ func (h *CatalogHandlers) ListMetadataNamespaces(ctx context.Context, request Li
 	return out, nil
 }
 
+// unsupportedTable is the API form of the reason a source lists a table it
+// cannot read; nil for a readable table (#977).
+func unsupportedTable(code, detail string) *MetadataTableUnsupported {
+	if code == "" {
+		return nil
+	}
+	out := &MetadataTableUnsupported{Code: MetadataTableUnsupportedCode(code)}
+	if detail != "" {
+		out.Detail = &detail
+	}
+	return out
+}
+
 // ListMetadataTables — GET /workspaces/{id}/metadata/catalogs/{catalog_id}/tables
 // Pages by name: the cursor is the last name of the previous page, encoded.
 func (h *CatalogHandlers) ListMetadataTables(ctx context.Context, request ListMetadataTablesRequestObject) (ListMetadataTablesResponseObject, error) {
@@ -161,6 +174,7 @@ func (h *CatalogHandlers) ListMetadataTables(ctx context.Context, request ListMe
 		out.Items = append(out.Items, MetadataTableSummary{
 			Id: openapi_types.UUID(r.ID.Bytes), Name: r.Name, Kind: MetadataTableSummaryKind(r.Kind),
 			Comment: r.Comment, LastChangedAt: timePtr(r.LastChangedAt),
+			Unsupported: unsupportedTable(r.UnsupportedCode, r.UnsupportedDetail),
 		})
 	}
 	return out, nil
@@ -277,13 +291,15 @@ func (h *CatalogHandlers) GetMetadataTable(ctx context.Context, request GetMetad
 		Doc:     tableDoc,
 	}
 	decodeStored(h.logger, t.Properties, &out.Properties, "metadata_tables.properties")
+	out.Unsupported = unsupportedTable(out.Properties[db.TablePropUnsupportedCode], out.Properties[db.TablePropUnsupportedDetail])
 	var d dialect.Dialect
 	if b := detail.Binding; b != nil {
 		id := openapi_types.UUID(b.ID.Bytes)
 		out.BindingId = &id
 		if dd, ok := h.dialects.ForEngineKind(b.EngineKind); ok {
 			d = dd
-			if q, err := d.Qualify(b.EngineCatalogName, t.Namespace, t.Name); err == nil {
+			// A table the source cannot read is not queryable: no SQL name, no preview.
+			if q, err := d.Qualify(b.EngineCatalogName, t.Namespace, t.Name); err == nil && out.Unsupported == nil {
 				out.QualifiedName = &q
 				// The preview is rendered by the binding's dialect so the UI
 				// never has to hard-code LIMIT/TOP/FETCH FIRST.

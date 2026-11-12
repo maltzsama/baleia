@@ -4,7 +4,13 @@ import { authStore } from '$lib/stores/auth.svelte';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { http, server } from '../../test/server';
-import { makeMe, makeMetadataBinding, makeTableDetail, makeWorkspace } from '../../test/factories';
+import {
+	makeLineageGraph,
+	makeMe,
+	makeMetadataBinding,
+	makeTableDetail,
+	makeWorkspace
+} from '../../test/factories';
 import TableDetail from './TableDetail.svelte';
 import type { TableRef } from '$lib/metadata/client';
 
@@ -45,6 +51,30 @@ describe('TableDetail', () => {
 		expect(screen.getByText('varchar')).toBeTruthy();
 		expect(screen.getByText('format')).toBeTruthy();
 		expect(screen.getByText('iceberg')).toBeTruthy();
+	});
+
+	it('explains an unsupported table and offers no preview or name (#977)', async () => {
+		server.use(
+			http.get('/workspaces/{id}/metadata/tables/{table_id}', ({ response }) =>
+				response(200).json(
+					makeTableDetail({
+						columns: [],
+						qualified_name: null,
+						preview_sql: null,
+						unsupported: { code: 'table_kind', detail: 'TABLE_DB_STORAGE' }
+					})
+				)
+			)
+		);
+		render(TableDetail, { props: { table: tableRef() } });
+
+		const note = await screen.findByRole('note');
+		expect(note.textContent).toContain('Unsupported table');
+		expect(note.textContent).toContain('type: TABLE_DB_STORAGE');
+		expect(note.textContent).toContain('cannot be read');
+		expect((screen.getByRole('button', { name: 'Preview' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
 	});
 
 	it('hides the engine picker with a single binding', async () => {
@@ -186,6 +216,32 @@ describe('BI data-source file', () => {
 
 		authStore.set(makeMe({ features: features(true) }));
 		expect(await screen.findByRole('button', { name: 'Open in Tableau' })).toBeTruthy();
+	});
+
+	it('is not offered for a table the source cannot read (#977)', async () => {
+		server.use(
+			http.get('/workspaces/{id}/metadata/tables/{table_id}', ({ response }) =>
+				response(200).json(
+					makeTableDetail({
+						columns: [],
+						qualified_name: null,
+						preview_sql: null,
+						unsupported: { code: 'refused' }
+					})
+				)
+			),
+			http.get('/workspaces/{id}/lineage', ({ response }) =>
+				response(200).json(makeLineageGraph({ nodes: [], edges: [] }))
+			)
+		);
+		authStore.set(makeMe({ features: features(true) }));
+		// Its own table id: the detail of the shared one is cached by the tests around it.
+		render(TableDetail, {
+			props: { table: { ...tableRef(), tableId: '00000000-0000-0000-0000-0000000000d9' } }
+		});
+		await screen.findByRole('note');
+		expect(screen.queryByRole('button', { name: 'Open in Tableau' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Open in Power BI' })).toBeNull();
 	});
 
 	it('hides the file when the workspace has BI off', async () => {

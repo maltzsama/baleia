@@ -2,7 +2,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { formatKeys } from '$lib/util/keys';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { browser } from '$app/environment';
 	import { basicSetup } from 'codemirror';
 	import { EditorView, keymap } from '@codemirror/view';
@@ -17,6 +17,7 @@
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { savedQueries, type SavedQuery } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
+	import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 	import { registerProvider, unregisterProvider } from '$lib/palette/registry';
 	import { modelPaletteProvider } from '$lib/semantic/palette';
 	import { exploreLinkOf } from '$lib/semantic/explore';
@@ -30,6 +31,7 @@
 	import {
 		codemirrorDialect,
 		loadDialect,
+		clearEnginesCache,
 		loadEngines,
 		type Dialect,
 		type DialectFunction,
@@ -163,7 +165,15 @@
 	const canExplain = $derived(selectedEngine?.capabilities?.supports_explain ?? true);
 	const canCancel = $derived(selectedEngine?.capabilities?.supports_cancel ?? true);
 
+	// The newest targets request wins: a slow response for a workspace the user has
+	// left, or an older refresh, must not overwrite what a newer request loaded.
+	let targetsRequest = 0;
+	// Whether the current workspace has loaded its targets at least once.
+	let targetsReady = false;
+
 	async function loadTargets(wid: string) {
+		const request = ++targetsRequest;
+		targetsReady = false;
 		targets = [];
 		targetError = '';
 		if (!wid) return;
@@ -172,11 +182,14 @@
 				client.GET('/workspaces/{id}/targets', { params: { path: { id: wid } } }),
 				loadEngines().catch(() => [] as Engine[])
 			]);
+			if (request !== targetsRequest) return;
 			if (error)
 				throw new Error(apiErrorMessage(error, m.components_queryeditor_failed_to_load_targets()));
 			targets = data ?? [];
 			engines = loadedEngines;
+			targetsReady = true;
 		} catch (e) {
+			if (request !== targetsRequest) return;
 			targetError = errorMessage(e);
 		}
 	}
@@ -187,6 +200,45 @@
 
 	$effect(() => {
 		void loadTargets(workspaceId);
+	});
+
+	/**
+	 * Refetches the targets after a catalog access change, here or in another tab
+	 * (#975). The current targets stay on screen meanwhile; a failed refresh keeps
+	 * them.
+	 */
+	async function refreshTargets(wid: string) {
+		if (!wid) return;
+		const request = ++targetsRequest;
+		// A grant can make an engine visible that the session cache has not seen.
+		clearEnginesCache();
+		try {
+			const [{ data }, loadedEngines] = await Promise.all([
+				client.GET('/workspaces/{id}/targets', { params: { path: { id: wid } } }),
+				loadEngines().catch(() => null)
+			]);
+			if (request !== targetsRequest) return;
+			if (data) {
+				targets = data;
+				targetsReady = true;
+			}
+			if (loadedEngines) engines = loadedEngines;
+			if (data) return;
+		} catch {
+			if (request !== targetsRequest) return;
+		}
+		// The refresh failed. It may have invalidated a first load still in flight:
+		// with no targets yet, load them the full way so the editor is not left bare.
+		if (!targetsReady) void loadTargets(wid);
+	}
+
+	// Only a change after this editor mounted refreshes: the mount loads its own.
+	let seenAccessVersion = catalogAccessStore.version;
+	$effect(() => {
+		const version = catalogAccessStore.version;
+		if (version === seenAccessVersion) return;
+		seenAccessVersion = version;
+		void refreshTargets(untrack(() => workspaceId));
 	});
 
 	// Drafts are per user × workspace (#112).

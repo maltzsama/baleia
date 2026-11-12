@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { delay } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { editor } from '$lib/stores/editor.svelte';
+import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 import { loadDrafts } from '$lib/workbench/drafts';
 import { clearEnginesCache } from '$lib/engines/client';
 import { clearMetadataCache } from '$lib/metadata/client';
@@ -146,6 +148,140 @@ describe('QueryEditor', () => {
 		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
 		await waitFor(() => expect(catalog.value).toBe(BINDING));
 		expect(catalog.selectedOptions[0]?.textContent).toBe('lake (lake_t)');
+	});
+
+	it('offers a catalog granted to the workspace without a reload (#975)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
+		await waitFor(() => expect(catalog.value).toBe(BINDING));
+		expect(catalog.options).toHaveLength(1);
+
+		server.use(
+			http.get('/workspaces/{id}/targets', ({ response }) =>
+				response(200).json([
+					{
+						binding_id: BINDING,
+						catalog_id: CATALOG,
+						catalog_name: 'lake',
+						engine_id: ENGINE,
+						engine_name: 'trino',
+						engine_kind: 'trino',
+						engine_catalog_name: 'lake_t',
+						mode: 'adopted',
+						is_default: true
+					},
+					{
+						binding_id: '00000000-0000-0000-0000-0000000000b2',
+						catalog_id: '00000000-0000-0000-0000-0000000000c2',
+						catalog_name: 'granted',
+						engine_id: ENGINE,
+						engine_name: 'trino',
+						engine_kind: 'trino',
+						engine_catalog_name: 'granted_t',
+						mode: 'adopted',
+						is_default: false
+					}
+				])
+			)
+		);
+		catalogAccessStore.changed();
+		await waitFor(() => expect(catalog.options).toHaveLength(2));
+		// The selection the user had survives the refresh.
+		expect(catalog.value).toBe(BINDING);
+	});
+
+	it('loads the engines again after a grant, so a new engine target resolves (#975)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
+		await waitFor(() => expect(catalog.value).toBe(BINDING));
+
+		let engineCalls = 0;
+		server.use(
+			http.get('/engines', ({ response }) => {
+				engineCalls += 1;
+				return response(200).json([]);
+			})
+		);
+		catalogAccessStore.changed();
+		await waitFor(() => expect(engineCalls).toBe(1));
+	});
+
+	it('still loads its targets when a refresh that cut a first load in flight fails (#975)', async () => {
+		mockWorkbench();
+		let calls = 0;
+		const lake = {
+			binding_id: BINDING,
+			catalog_id: CATALOG,
+			catalog_name: 'lake',
+			engine_id: ENGINE,
+			engine_name: 'trino',
+			engine_kind: 'trino',
+			engine_catalog_name: 'lake_t',
+			mode: 'adopted' as const,
+			is_default: true
+		};
+		server.use(
+			http.get('/workspaces/{id}/targets', async ({ response }) => {
+				calls += 1;
+				if (calls === 1) {
+					await delay(150); // the first load, still in flight when the refresh starts
+					return response(200).json([lake]);
+				}
+				if (calls === 2)
+					return response(404).json({ code: 'not_found', message: 'refresh failed' });
+				return response(200).json([lake]);
+			})
+		);
+		render(QueryEditor);
+		await waitFor(() => expect(calls).toBe(1));
+		catalogAccessStore.changed();
+		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
+		// The empty editor has a placeholder option; a loaded target is the selected one.
+		await waitFor(() => expect(catalog.value).toBe(BINDING), { timeout: 3000 });
+		expect(calls).toBe(3);
+	});
+
+	it('keeps the newest targets when refreshes answer out of order (#975)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
+		await waitFor(() => expect(catalog.value).toBe(BINDING));
+
+		const target = (binding: string, name: string) => ({
+			binding_id: binding,
+			catalog_id: CATALOG,
+			catalog_name: name,
+			engine_id: ENGINE,
+			engine_name: 'trino',
+			engine_kind: 'trino',
+			engine_catalog_name: `${name}_t`,
+			mode: 'adopted' as const,
+			is_default: binding === BINDING
+		});
+		const both = [
+			target(BINDING, 'lake'),
+			target('00000000-0000-0000-0000-0000000000b2', 'granted')
+		];
+		let calls = 0;
+		server.use(
+			http.get('/workspaces/{id}/targets', async ({ response }) => {
+				calls += 1;
+				// The first refresh is slow and stale (before the grant); the second is current.
+				if (calls === 1) {
+					await delay(150);
+					return response(200).json([target(BINDING, 'lake')]);
+				}
+				return response(200).json(both);
+			})
+		);
+		catalogAccessStore.changed();
+		await waitFor(() => expect(calls).toBe(1)); // the slow, stale refresh is in flight
+		catalogAccessStore.changed();
+		await waitFor(() => expect(catalog.options).toHaveLength(2));
+		await delay(300);
+		expect(catalog.options).toHaveLength(2);
 	});
 
 	it('starts empty and shows the restored draft under the same tab id (#112)', async () => {

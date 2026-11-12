@@ -2732,5 +2732,9 @@
 	"search_glossary_removed": "Entrada removida",
 	"search_glossary_no_workspace": "Escolha um workspace para ver o glossário.",
 	"settings_sections_search_glossary": "Glossário de busca",
-	"search_glossary_created": "Adicionada"
+	"search_glossary_created": "Adicionada",
+	"metadata_unsupported_table": "Tabela não suportada",
+	"metadata_unsupported_table_kind": "tipo: {kind}\nTipo não suportado: a origem não dá acesso a este tipo de tabela para motores externos.",
+	"metadata_unsupported_table_refused": "A origem recusou servir esta tabela, então ela não pode ser lida.",
+	"metadata_unsupported_table_unreadable": "Esta tabela não pode ser lida, então não tem colunas e não pode ser consultada."
 }

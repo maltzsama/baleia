@@ -9,6 +9,7 @@
 	import { configureAuth } from '$lib/api/client';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
+	import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 
 	let { children } = $props();
 	let dark = $state(browser && localStorage.getItem('theme') === 'dark');
@@ -33,6 +34,15 @@
 		await workspaceStore.load();
 	});
 </script>
+
+<!-- A grant made in another tab or screen is picked up when this window is used
+     again (#975). -->
+<svelte:window onfocus={() => catalogAccessStore.focused()} />
+<svelte:document
+	onvisibilitychange={() => {
+		if (document.visibilityState === 'visible') catalogAccessStore.focused();
+	}}
+/>
 
 <!-- Skips the repeated navigation (#466); visible when focused. -->
 <a

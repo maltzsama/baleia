@@ -2,6 +2,7 @@
 // grants, projections and impact. Reads never filter visibility client-side.
 import { apiErrorMessage, client } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
+import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 
 export type CatalogSummary = components['schemas']['CatalogSummary'];
 export type CatalogBindingRef = components['schemas']['CatalogBindingRef'];
@@ -185,6 +186,7 @@ export async function grantCatalog(workspaceId: string, catalogId: string): Prom
 		body: { catalog_id: catalogId }
 	});
 	if (result.error) fail(result, 'Could not grant access');
+	catalogAccessStore.changed();
 }
 
 export async function revokeCatalog(workspaceId: string, catalogId: string): Promise<void> {
@@ -192,6 +194,7 @@ export async function revokeCatalog(workspaceId: string, catalogId: string): Pro
 		params: { path: { id: workspaceId, catalog_id: catalogId } }
 	});
 	if (result.error) fail(result, 'Could not revoke access');
+	catalogAccessStore.changed();
 }
 
 /** The remediation sentence for a binding error code (FD7). */

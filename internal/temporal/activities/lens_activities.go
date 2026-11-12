@@ -391,6 +391,9 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 				if params.Table != "" && tbl.Name != params.Table {
 					continue
 				}
+				if tbl.Unsupported.Is() {
+					continue // listed but unreadable: no health to record, and no load to refuse
+				}
 				meta, err := reader.LoadTable(ctx, tbl)
 				if errors.Is(err, connections.ErrTableUnsupported) {
 					continue // not readable through the provider's protocol: no health to record
