@@ -3,6 +3,7 @@
 // Every provider/engine kind comes from the API; this module never names one.
 import { apiErrorMessage, client } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
+import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 import type { AccessMode } from './accessModes';
 
 export type ConnectionProvider = components['schemas']['ConnectionProvider'];
@@ -242,6 +243,7 @@ export async function grantCatalogAccess(input: GrantInput): Promise<void> {
 		body: { catalog_id: input.catalogId }
 	});
 	if (error) throw toError(error, response?.status, 'Could not grant access');
+	catalogAccessStore.changed();
 }
 
 /** Workspaces the caller can grant catalogs to (they carry manage_grants). */
