@@ -139,6 +139,15 @@ describe('QueryEditor', () => {
 		expect(screen.getByText('Ln 1, Col 1')).toBeTruthy();
 	});
 
+	it('shows the name a query uses beside the catalog display name', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+
+		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
+		await waitFor(() => expect(catalog.value).toBe(BINDING));
+		expect(catalog.selectedOptions[0]?.textContent).toBe('lake (lake_t)');
+	});
+
 	it('starts empty and shows the restored draft under the same tab id (#112)', async () => {
 		mockWorkbench();
 		render(QueryEditor);

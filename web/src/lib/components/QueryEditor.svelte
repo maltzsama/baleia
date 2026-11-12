@@ -957,6 +957,14 @@
 		}
 	}
 
+	// The name a query uses is the engine's catalog name, which can differ from the
+	// display name; show it so nobody has to guess what to write after FROM.
+	function targetLabel(target: { catalog_name: string; engine_catalog_name: string }): string {
+		return target.engine_catalog_name === target.catalog_name
+			? target.catalog_name
+			: `${target.catalog_name} (${target.engine_catalog_name})`;
+	}
+
 	// Opens the convert/optimize dialog on a snapshot of the current buffer, so a
 	// later target change never rewrites the editor behind it.
 	function openConvert(mode: 'convert' | 'optimize') {
@@ -1167,13 +1175,13 @@
 				aria-label={m.common_catalog()}
 				value={selectedTarget?.binding_id ?? ''}
 				onchange={(e) => selectCatalog((e.currentTarget as HTMLSelectElement).value)}
-				class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer max-w-[170px]"
+				class="border border-border rounded py-0.5 px-1.5 text-[11px] bg-bg-panel cursor-pointer max-w-[240px]"
 			>
 				{#if catalogChoices.length === 0}
 					<option value="">{m.components_queryeditor_no_catalog()}</option>
 				{/if}
 				{#each catalogChoices as target (target.binding_id)}
-					<option value={target.binding_id}>{target.catalog_name}</option>
+					<option value={target.binding_id}>{targetLabel(target)}</option>
 				{/each}
 			</select>
 
