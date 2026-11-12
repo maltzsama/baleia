@@ -31,6 +31,7 @@
 	import {
 		codemirrorDialect,
 		loadDialect,
+		clearEnginesCache,
 		loadEngines,
 		type Dialect,
 		type DialectFunction,
@@ -205,12 +206,16 @@
 	async function refreshTargets(wid: string) {
 		if (!wid) return;
 		const request = ++targetsRequest;
+		// A grant can make an engine visible that the session cache has not seen.
+		clearEnginesCache();
 		try {
-			const { data } = await client.GET('/workspaces/{id}/targets', {
-				params: { path: { id: wid } }
-			});
+			const [{ data }, loadedEngines] = await Promise.all([
+				client.GET('/workspaces/{id}/targets', { params: { path: { id: wid } } }),
+				loadEngines().catch(() => null)
+			]);
 			if (request !== targetsRequest) return;
 			if (data) targets = data;
+			if (loadedEngines) engines = loadedEngines;
 		} catch {
 			return;
 		}

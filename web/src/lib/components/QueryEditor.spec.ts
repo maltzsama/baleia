@@ -191,6 +191,23 @@ describe('QueryEditor', () => {
 		expect(catalog.value).toBe(BINDING);
 	});
 
+	it('loads the engines again after a grant, so a new engine target resolves (#975)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
+		await waitFor(() => expect(catalog.value).toBe(BINDING));
+
+		let engineCalls = 0;
+		server.use(
+			http.get('/engines', ({ response }) => {
+				engineCalls += 1;
+				return response(200).json([]);
+			})
+		);
+		catalogAccessStore.changed();
+		await waitFor(() => expect(engineCalls).toBe(1));
+	});
+
 	it('keeps the newest targets when refreshes answer out of order (#975)', async () => {
 		mockWorkbench();
 		render(QueryEditor);
