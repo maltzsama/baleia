@@ -63,52 +63,66 @@ jobs:
         # Tests are independent and parallel (#374): a random order keeps them so.
         # The suite creates a migrated database per test (testdb.maxTests=4), so
         # the default 10m per-package timeout is too tight for internal/api;
-        # 30m gives headroom without masking a real hang.
-        run: go test -race -shuffle=on -timeout 30m ./...
+        # 30m gives headroom without masking a real hang. The store suite runs
+        # in the Store job, once per backend.
+        run: |
+          go test -race -shuffle=on -timeout 30m \
+            $(go list ./... | grep -vE '/internal/store(/|$)|/internal/persistence/partitioning$')
 
-  # Existing findings are a baseline: only new issues fail the job (#369). A
-  # pull request is compared with its merge base on main; a push with the
-  # commit before it (a branch's first push has none and falls back).
-  # The store supports MySQL and MariaDB through the same single
+  # The store supports Postgres, MySQL and MariaDB through the same single
   # DATABASE_URL contract: the DSN picks the dialector. This job points that
   # one variable at each server and runs the whole store suite on it, not a
   # selection: a selection let two broken unique keys, a 128 character cap on the
   # query history and a foreign key that MySQL checks row by row go unnoticed.
-  store-mysql:
-    name: Store on MySQL/MariaDB
+  store:
+    name: Store (${{ matrix.db }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: postgres
+            image: postgres:18
+            port: 5432
+            health: pg_isready -U postgres
+            url: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres?sslmode=disable
+          - db: mysql
+            image: mysql:8.4
+            port: 3306
+            health: mysqladmin ping -h 127.0.0.1 -uroot -pbaleia_dev
+            url: root:baleia_dev@tcp(127.0.0.1:3306)/
+          - db: mariadb
+            image: mariadb:11.4
+            port: 3306
+            health: healthcheck.sh --connect --innodb_initialized
+            url: root:baleia_dev@tcp(127.0.0.1:3306)/
     services:
-      mysql:
-        image: mysql:8.4
+      db:
+        image: ${{ matrix.image }}
+        # Each image reads only its own variables and ignores the others.
         env:
+          POSTGRES_PASSWORD: baleia_dev
           MYSQL_ROOT_PASSWORD: baleia_dev
           MYSQL_ROOT_HOST: "%"
-        ports: ["3306:3306"]
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pbaleia_dev" --health-interval 5s --health-timeout 5s --health-retries 20
-      mariadb:
-        image: mariadb:11.4
-        env:
           MARIADB_ROOT_PASSWORD: baleia_dev
           MARIADB_ROOT_HOST: "%"
-        ports: ["3307:3306"]
+        ports: ["${{ matrix.port }}:${{ matrix.port }}"]
         options: >-
-          --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 20
+          --health-cmd "${{ matrix.health }}" --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
-      - name: MySQL
+      - name: Store suite
         env:
-          BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3306)/
-        run: go test -race -count=1 -timeout 60m ./internal/store/... ./internal/persistence/partitioning
-      - name: MariaDB
-        env:
-          BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3307)/
-        run: go test -race -count=1 -timeout 60m ./internal/store/... ./internal/persistence/partitioning
+          BALEIA_TEST_DATABASE_URL: ${{ matrix.url }}
+        run: go test -race -shuffle=on -count=1 -timeout 60m ./internal/store/... ./internal/persistence/partitioning
 
+  # Existing findings are a baseline: only new issues fail the job (#369). A
+  # pull request is compared with its merge base on main; a push with the
+  # commit before it (a branch's first push has none and falls back).
   lint:
     name: Lint
     runs-on: ubuntu-latest
