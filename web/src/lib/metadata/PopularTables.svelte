@@ -53,10 +53,13 @@
 	{:else if error}
 		<ErrorState title={m.data_popular_failed()} message={error} />
 	{:else if rows.length === 0}
-		<EmptyState
-			title={m.data_popular_empty()}
-			description={m.data_browse_the_metadata_driven_catalogs_on()}
-		/>
+		<div class="rounded-md border border-dashed border-border px-4">
+			<EmptyState
+				align="start"
+				title={m.data_popular_empty()}
+				description={m.data_browse_the_metadata_driven_catalogs_on()}
+			/>
+		</div>
 	{:else}
 		<ul class="flex flex-col gap-1">
 			{#each rows as row (row.table_id)}
