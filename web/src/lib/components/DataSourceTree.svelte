@@ -2,7 +2,10 @@
 	import { m } from '$lib/paraglide/messages';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
+	import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
+	import { untrack } from 'svelte';
 	import {
+		invalidateCatalogs,
 		loadCatalogs,
 		loadNamespaces,
 		loadTables,
@@ -107,6 +110,26 @@
 
 	$effect(() => {
 		void loadRoots(workspaceId);
+	});
+
+	/**
+	 * Refetches the catalog roots after a grant or revoke, here or in another tab
+	 * (#975). The tree keeps what the user has expanded and selected; only the
+	 * list of catalogs is replaced. A failed refresh leaves the tree as it is.
+	 */
+	async function refreshRoots(wid: string) {
+		if (!wid) return;
+		invalidateCatalogs();
+		try {
+			catalogs = await loadCatalogs(wid);
+		} catch {
+			return;
+		}
+	}
+
+	$effect(() => {
+		if (catalogAccessStore.version === 0) return;
+		void refreshRoots(untrack(() => workspaceId));
 	});
 
 	function loadNode(node: NamespaceNode, catalog: MetadataCatalog, path: string[]): Promise<void> {

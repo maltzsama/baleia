@@ -66,6 +66,14 @@ export function clearMetadataCache(): void {
 	popularCache.clear();
 }
 
+/**
+ * Forgets the cached catalog lists. A grant or revoke changes which catalogs a
+ * workspace sees, and the list is otherwise cached for the whole session (#975).
+ */
+export function invalidateCatalogs(): void {
+	catalogsCache.clear();
+}
+
 function cached<T>(cache: Cache<T>, key: string, load: () => Promise<T>): Promise<T> {
 	const hit = cache.get(key);
 	if (hit) return hit;

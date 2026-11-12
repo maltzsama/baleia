@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
+import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { http, server } from '../../test/server';
 import {
@@ -88,6 +89,33 @@ describe('DataSourceTree', () => {
 				tableName: 'orders'
 			})
 		);
+	});
+
+	it('shows a catalog granted to the selected workspace without a reload (#975)', async () => {
+		let granted = false;
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json(
+					granted
+						? [
+								makeMetadataCatalog(),
+								makeMetadataCatalog({
+									id: '00000000-0000-0000-0000-0000000000c2',
+									name: 'Granted Lake'
+								})
+							]
+						: [makeMetadataCatalog()]
+				)
+			)
+		);
+		render(DataSourceTree, { props: { onSelectTable: vi.fn() } });
+		await screen.findByText('lake');
+		expect(screen.queryByText('Granted Lake')).toBeNull();
+
+		// The grant lands on the server, then the grant flow signals it.
+		granted = true;
+		catalogAccessStore.changed();
+		expect(await screen.findByText('Granted Lake')).toBeTruthy();
 	});
 
 	it('shows the name a query uses beside a catalog whose display name differs', async () => {
