@@ -16,6 +16,8 @@ The tree on the left goes catalog → schema → table. Pick a table to open its
 - **About:** the table's documentation.
 - **Columns and properties:** from the last metadata sync.
 
+A table the source lists but Baleia cannot read stays in the tree, greyed out and not selectable. Hover its info icon to see why, for example `type: TABLE_DB_STORAGE`: a Databricks managed table in the default storage, which Databricks does not open to external engines. It has no columns and cannot be queried; see the [connection's page](../connections.md) for what each provider can read.
+
 A table bound into several engines lets you switch the binding the names are shown for. Links to a table keep the catalog, schema and table in the URL (`/data?catalog=…&ns=…&table=…`), so they can be shared.
 
 Metadata is refreshed on a schedule (`BALEIA_METADATA_SYNC_INTERVAL`); an admin can sync a catalog at once from its page in **Connections → Catalogs**.
