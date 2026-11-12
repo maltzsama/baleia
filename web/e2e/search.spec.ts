@@ -40,6 +40,9 @@ async function signInAndSync(
 
 async function searchPalette(page: Page, text: string) {
 	await page.goto('/sql');
+	// The shortcut is registered once the editor has mounted; the old button click
+	// waited for it implicitly.
+	await expect(page.getByTestId('run-current')).toBeEnabled();
 	await page.keyboard.press('ControlOrMeta+k');
 	await page.getByRole('combobox', { name: 'Command palette' }).fill(text);
 }

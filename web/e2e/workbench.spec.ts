@@ -6,6 +6,9 @@ test('@issue-112 the workbench opens the command palette', async ({ page, loginA
 	await loginAs('member');
 	await page.goto('/sql');
 
+	// The shortcut is registered once the editor has mounted; the old button click
+	// waited for it implicitly.
+	await expect(page.getByTestId('run-current')).toBeEnabled();
 	await page.keyboard.press('ControlOrMeta+k');
 	await expect(page.getByRole('combobox', { name: 'Command palette' })).toBeVisible();
 	await expect(page.getByText('Run current statement')).toBeVisible();
