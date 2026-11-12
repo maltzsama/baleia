@@ -123,6 +123,8 @@
 		invalidateCatalogs();
 		try {
 			catalogs = await loadCatalogs(wid);
+			// A root error from the first load is stale once a refresh worked.
+			loadError = '';
 		} catch {
 			return;
 		}

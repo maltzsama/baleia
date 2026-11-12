@@ -167,6 +167,24 @@ describe('DataSourceTree', () => {
 		expect(onSelectTable).not.toHaveBeenCalled();
 	});
 
+	it('clears a root load error once a refresh works (#975)', async () => {
+		let failing = true;
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				failing
+					? response(404).json({ code: 'not_found', message: 'boom' })
+					: response(200).json([makeMetadataCatalog()])
+			)
+		);
+		render(DataSourceTree, { props: { onSelectTable: vi.fn() } });
+		expect(await screen.findByText('Could not load catalogs')).toBeTruthy();
+
+		failing = false;
+		catalogAccessStore.changed();
+		expect(await screen.findByText('lake')).toBeTruthy();
+		expect(screen.queryByText('Could not load catalogs')).toBeNull();
+	});
+
 	it('shows the name a query uses beside a catalog whose display name differs', async () => {
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
