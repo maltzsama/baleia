@@ -15,6 +15,8 @@ The workbench (**SQL** in the navigation rail) is where you write and run SQL:
 
 Each tab runs against a **target**: an engine binding and, optionally, a schema ([concepts](../concepts.md#bindings)). Pick it in the target selector above the editor. A workspace can set a default target, used when a tab names none.
 
+Workspace administrators can open **Workspace catalogs** from the data-source sidebar, or **Add catalog** when the explorer is empty. Search by catalog or connection name; each choice shows its provider icon (a generic catalog icon when the provider is unavailable) and connection when visible. **Add catalog** activates access when you manage both sides; **Request access** waits for catalog approval. Incoming offers can be approved in the same panel. Active access refreshes the explorer and target choices without reloading the page; running queries still requires an available engine. Workspace settings → **Catalogs** uses the same picker and also lets you revoke access.
+
 ## Write
 
 - **Autocomplete** suggests what fits at the cursor (statement keywords, tables, columns, clause keywords) from the target catalog's stored metadata.
