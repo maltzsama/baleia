@@ -11,6 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // TxFolders runs fn in one transaction over a Repo bound to it, so a folder
@@ -127,9 +128,10 @@ func (r *Repo) MoveQueryFolderSubtree(ctx context.Context, arg db.MoveQueryFolde
 		// and no order of rows works: a parent that moves first strands its
 		// children, a child that moves first has no parent in the new space. So the
 		// subtree is taken off its parents, moved, and hung back: each folder is
-		// reattached once its parent is already in the new space.
+		// reattached once its parent is already in the new space. The snapshot is a
+		// locking read, so a parent changed meanwhile is neither lost nor restored stale.
 		var folders []model.QueryFolder
-		if err := tx.Where("id IN ?", ids).Find(&folders).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id IN ?", ids).Find(&folders).Error; err != nil {
 			return err
 		}
 		if err := tx.Model(&model.QueryFolder{}).Where("id IN ?", ids).
