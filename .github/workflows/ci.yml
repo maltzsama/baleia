@@ -218,6 +218,22 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
+  # Functions nothing reaches from a binary, a test or a build-tagged suite
+  # (make deadcode); golangci-lint's unused misses exported ones.
+  deadcode:
+    name: Dead code
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: deadcode
+        run: make deadcode
+
   # Baleia's half of the registry contract against the fixtures of the pinned
   # plugin release (#39): the Makefile's BALEIA_PLUGIN_VERSION.
   contract:
