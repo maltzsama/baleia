@@ -2317,9 +2317,9 @@ components:
       properties:
         code:
           type: string
-          enum: [table_kind, refused]
-          description: "table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded."
-        detail: { type: string, nullable: true, description: "The source's own table kind when code is table_kind, for example TABLE_DB_STORAGE" }
+          enum: [table_kind, refused, registration]
+          description: "table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded. registration: the table is registered in a way the engine's connector does not recognize (detail is that registration)."
+        detail: { type: string, nullable: true, description: "The source's own table kind when code is table_kind (for example TABLE_DB_STORAGE), or the registration found when code is registration (for example table_type=DELTA)" }
 
     MetadataTableSummary:
       type: object
