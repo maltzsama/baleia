@@ -191,14 +191,13 @@ func (r *Repo) GetCatalogSyncState(ctx context.Context, catalogID db.UUID) (db.G
 			out.LastErrorCode = *latest.ErrorCode
 		}
 	}
-	var finished *time.Time
-	if err := r.Users.db.WithContext(ctx).Model(&model.MetadataSyncRun{}).
-		Where("catalog_id = ? AND status = ?", UUIDString(catalogID), "finished").
-		Select("MAX(finished_at)").
-		Scan(&finished).Error; err != nil {
+	// finishedSyncAt scans MAX(finished_at) into a nullable: a catalog with no
+	// finished run has none.
+	syncedAt, err := finishedSyncAt(r.Users.db.WithContext(ctx), UUIDString(catalogID))
+	if err != nil {
 		return db.GetCatalogSyncStateRow{}, err
 	}
-	out.SyncedAt = PGTimePtr(finished)
+	out.SyncedAt = syncedAt
 	return out, nil
 }
 
