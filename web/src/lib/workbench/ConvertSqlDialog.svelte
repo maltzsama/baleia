@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
 	import Modal from '$lib/ui/Modal.svelte';
-	import Select from '$lib/ui/Select.svelte';
+	import IconSelect from '$lib/ui/patterns/IconSelect.svelte';
+	import { kindForDialect } from '$lib/ui/patterns/kindIcon';
 	import Button from '$lib/ui/Button.svelte';
 	import CodeBlock from '$lib/ui/patterns/CodeBlock.svelte';
 	import { toasts } from '$lib/ui/toast.svelte';
@@ -51,7 +52,11 @@
 	let runId = 0;
 
 	const options = $derived(
-		DIALECT_NAMES.map((name) => ({ value: name, label: DIALECT_TEXT[name]?.() ?? name }))
+		DIALECT_NAMES.map((name) => ({
+			value: name,
+			label: DIALECT_TEXT[name]?.() ?? name,
+			kind: kindForDialect(name)
+		}))
 	);
 	const title = $derived(
 		mode === 'convert'
@@ -110,7 +115,7 @@
 <Modal bind:open {title} size="lg">
 	<div class="flex flex-col gap-3">
 		{#if mode === 'convert'}
-			<Select bind:value={target} label={m.convert_sql_dialog_target_dialect()} {options} />
+			<IconSelect bind:value={target} label={m.convert_sql_dialog_target_dialect()} {options} />
 		{/if}
 
 		{#if loading}

@@ -226,7 +226,7 @@ describe('data page deep link', () => {
 		await screen.findByText('order_note');
 		goto.mockReset();
 
-		await fireEvent.click(await screen.findByRole('button', { name: /lake/i }));
+		await fireEvent.click(await screen.findByRole('button', { name: /\blake\b/i }));
 		// lake (listed first) now shows its own sales namespace above warehouse's.
 		await waitFor(() => expect(screen.getAllByRole('button', { name: /^sales$/ })).toHaveLength(2));
 		await fireEvent.click(screen.getAllByRole('button', { name: /^sales$/ })[0]);

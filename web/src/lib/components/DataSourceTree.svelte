@@ -390,6 +390,27 @@
 		return true;
 	}
 
+	// The name a query uses for a catalog when it differs from the display name.
+	// In an engine's group it is that engine's name; in the catalog view, names that
+	// differ between engines are listed with the engine they belong to.
+	function queryNameText(catalog: MetadataCatalog, engineId?: string): string {
+		const bindings = engineId
+			? catalog.bindings.filter((b) => b.engine_id === engineId)
+			: catalog.bindings;
+		// No prototype: a catalog named "constructor" is a name, not a property.
+		const byName: Record<string, string[]> = Object.create(null);
+		for (const b of bindings) {
+			if (!b.engine_catalog_name || b.engine_catalog_name === catalog.name) continue;
+			(byName[b.engine_catalog_name] ??= []).push(b.engine_name);
+		}
+		const namesDiffer = new Set(catalog.bindings.map((b) => b.engine_catalog_name)).size > 1;
+		return Object.entries(byName)
+			.map(([name, engines]) =>
+				engineId || !namesDiffer ? name : `${name} (${engines.join(', ')})`
+			)
+			.join(', ');
+	}
+
 	// ── Engine grouping ──────────────────────────────────────────────────
 	type EngineGroup = { key: string; name: string; kind: string; catalogs: MetadataCatalog[] };
 	const engineGroups = $derived.by(() => {
@@ -510,7 +531,7 @@
 					<EngineBadge engine={{ name: group.name, kind: group.kind }} />
 				</div>
 				{#each group.catalogs as catalog (group.key + ':' + catalog.id)}
-					{@render catalogNode(group.key + ':' + catalog.id, catalog)}
+					{@render catalogNode(group.key + ':' + catalog.id, catalog, group.key)}
 				{/each}
 			{/each}
 		{/if}
@@ -538,9 +559,10 @@
 	</button>
 {/snippet}
 
-{#snippet catalogNode(refKey: string, catalog: MetadataCatalog)}
+{#snippet catalogNode(refKey: string, catalog: MetadataCatalog, engineId?: string)}
 	{@const key = nodeKey(refKey, [])}
 	{@const open = expanded.has(key)}
+	{@const queryName = queryNameText(catalog, engineId)}
 	<button
 		class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-left text-[13px] text-inherit hover:bg-slate-100 dark:hover:bg-[#1c2128]"
 		onclick={() => toggleNode(refKey, catalog, [])}
@@ -553,9 +575,17 @@
 				: ''}"><path d="M9 18l6-6-6-6" /></svg
 		>
 		<KindIcon kind={catalog.provider_kind} family="catalog" size={14} />
-		<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium"
-			>{catalog.name}</span
-		>
+		<span class="flex min-w-0 flex-1 flex-col">
+			<span class="overflow-hidden text-ellipsis whitespace-nowrap font-medium"
+				>{catalog.name}&nbsp;</span
+			>
+			{#if queryName}
+				<span
+					class="break-all font-mono text-[11px] text-text-muted"
+					title="{m.components_datasourcetree_query_name()}: {queryName}">{queryName}</span
+				>
+			{/if}
+		</span>
 		<span class="flex shrink-0 items-center gap-1">
 			{#each catalog.bindings as binding (binding.binding_id)}
 				<span

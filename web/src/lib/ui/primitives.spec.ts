@@ -97,6 +97,17 @@ describe('EmptyState', () => {
 		expect(screen.getByText('No queries')).toBeTruthy();
 		expect(screen.getByText('Save one to start.')).toBeTruthy();
 	});
+
+	it('is centered by default and left-aligned when asked', () => {
+		const { unmount } = render(EmptyState, { props: { title: 'Centered' } });
+		expect(screen.getByText('Centered').parentElement?.className).toContain('text-center');
+		unmount();
+
+		render(EmptyState, { props: { title: 'Start', align: 'start' } });
+		const box = screen.getByText('Start').parentElement;
+		expect(box?.className).toContain('text-left');
+		expect(box?.className).not.toContain('text-center');
+	});
 });
 
 describe('ErrorState', () => {
