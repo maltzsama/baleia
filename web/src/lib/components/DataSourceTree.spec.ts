@@ -165,6 +165,14 @@ describe('DataSourceTree', () => {
 		// Clicking the disabled row selects nothing.
 		await fireEvent.click(screen.getByText('locked'));
 		expect(onSelectTable).not.toHaveBeenCalled();
+
+		// The reason is also reachable without a pointer: the info button reveals it.
+		expect(why.getAttribute('aria-expanded')).toBe('false');
+		await fireEvent.click(why);
+		expect(why.getAttribute('aria-expanded')).toBe('true');
+		expect((await screen.findByRole('note')).textContent).toContain('type: TABLE_DB_STORAGE');
+		await fireEvent.click(why);
+		expect(screen.queryByRole('note')).toBeNull();
 	});
 
 	it('clears a root load error once a refresh works (#975)', async () => {

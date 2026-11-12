@@ -72,6 +72,9 @@
 	// same catalog under two engines expands independently.
 	let nodes = $state<Record<string, NamespaceNode>>({});
 	const expanded = new SvelteSet<string>();
+	// Unsupported tables whose reason is shown: the info button toggles it, so the
+	// reason is reachable from the keyboard and on touch, where a title is not (#977).
+	const reasonOpen = new SvelteSet<string>();
 	const inflight = new SvelteMap<string, Promise<void>>();
 
 	let selectedTableId = $state('');
@@ -84,6 +87,7 @@
 		catalogs = [];
 		nodes = {};
 		expanded.clear();
+		reasonOpen.clear();
 		inflight.clear();
 		selectedTableId = '';
 		searchResults = [];
@@ -697,6 +701,11 @@
 							class="shrink-0 cursor-help rounded-full p-0.5 text-text-muted"
 							title={reason}
 							aria-label="{m.metadata_unsupported_table()}: {reason}"
+							aria-expanded={reasonOpen.has(table.id)}
+							onclick={() => {
+								if (reasonOpen.has(table.id)) reasonOpen.delete(table.id);
+								else reasonOpen.add(table.id);
+							}}
 						>
 							<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 stroke-current" aria-hidden="true"
 								><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line
@@ -708,6 +717,11 @@
 							>
 						</button>
 					</div>
+					{#if reasonOpen.has(table.id)}
+						<p class="mb-1 ml-6 whitespace-pre-line text-[11px] text-text-muted" role="note">
+							{reason}
+						</p>
+					{/if}
 				{:else}
 					<button
 						class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-left text-[13px] text-inherit hover:bg-slate-100 dark:hover:bg-[#1c2128] {selectedTableId ===
