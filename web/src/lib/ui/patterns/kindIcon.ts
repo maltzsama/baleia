@@ -73,6 +73,15 @@ const familyFallback: Record<string, KindAppearance> = {
 	file: { color: 'text-text-muted', glyph: 'file' }
 };
 
+// Dialect names that differ from the engine kind whose mark they show.
+const dialectKinds: Record<string, string> = { tsql: 'sqlserver' };
+
+/** The engine kind whose icon stands for a SQL dialect (the dialects the
+ *  editor converts between): same name, except T-SQL, which is SQL Server. */
+export function kindForDialect(dialect: string): string {
+	return dialectKinds[dialect] ?? dialect;
+}
+
 export function appearanceFor(kind: string, family?: string): KindAppearance {
 	return (
 		appearances[kind] ??

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
 	import Modal from '$lib/ui/Modal.svelte';
-	import Select from '$lib/ui/Select.svelte';
+	import KindIcon from '$lib/ui/patterns/KindIcon.svelte';
+	import { kindForDialect } from '$lib/ui/patterns/kindIcon';
 	import Button from '$lib/ui/Button.svelte';
 	import CodeBlock from '$lib/ui/patterns/CodeBlock.svelte';
 	import { toasts } from '$lib/ui/toast.svelte';
@@ -110,7 +111,31 @@
 <Modal bind:open {title} size="lg">
 	<div class="flex flex-col gap-3">
 		{#if mode === 'convert'}
-			<Select bind:value={target} label={m.convert_sql_dialog_target_dialect()} {options} />
+			<fieldset class="flex flex-col gap-1.5">
+				<legend class="text-[11px] font-semibold text-text-muted">
+					{m.convert_sql_dialog_target_dialect()}
+				</legend>
+				<div class="flex flex-wrap gap-1.5">
+					{#each options as option (option.value)}
+						<label
+							class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs text-text-main transition-colors duration-150 has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary {target ===
+							option.value
+								? 'border-primary'
+								: 'border-border hover:bg-bg-toolbar'}"
+						>
+							<input
+								type="radio"
+								name="convert-target-dialect"
+								class="sr-only"
+								value={option.value}
+								bind:group={target}
+							/>
+							<KindIcon kind={kindForDialect(option.value)} family="engine" />
+							{option.label}
+						</label>
+					{/each}
+				</div>
+			</fieldset>
 		{/if}
 
 		{#if loading}
