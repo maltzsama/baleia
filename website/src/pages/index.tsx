@@ -34,11 +34,14 @@ function HomepageHeader() {
           {siteConfig.title}
         </Heading>
         <p className="hero__subtitle">{siteConfig.tagline}</p>
-        {version && (
-          <Link className={styles.version} href={`${repo}/releases/tag/v${version}`}>
-            v{version}
-          </Link>
-        )}
+        <div className={styles.release}>
+          {version && (
+            <Link className={styles.version} href={`${repo}/releases/tag/v${version}`}>
+              v{version}
+            </Link>
+          )}
+          <span className={styles.stage}>beta</span>
+        </div>
         <p className={styles.lede}>
           Write and run SQL against Trino and your databases, browse every catalog in one place, and
           share queries, metrics and models with your team.
@@ -58,8 +61,12 @@ function HomepageHeader() {
           >
             Try the live demo
           </Link>
-          <Link className={clsx('button button--lg', styles.outlineButton)} href={repo}>
-            Star on GitHub
+          <Link
+            className={clsx('button button--lg', styles.outlineButton)}
+            to="/docs/install"
+            data-umami-event="install-kubernetes"
+          >
+            Install on Kubernetes
           </Link>
         </div>
       </div>
