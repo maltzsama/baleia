@@ -163,7 +163,7 @@ Arrow Flight SQL endpoint, queried directly.
 
 ## `glue` — AWS Glue Data Catalog
 
-AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino.
+AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino. A Delta table is read only when Glue registers it with spark.sql.sources.provider=delta, as Spark, Databricks and the Glue Delta crawler do; one registered only with Athena's table_type=DELTA stays in the catalog greyed out with the reason, since Trino's Delta connector does not recognize it.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|

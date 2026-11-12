@@ -1,6 +1,6 @@
 ---
 sidebar_label: AWS Glue Data Catalog
-description: "Connect AWS Glue Data Catalog to Baleia. AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino. See its settings and what Baleia does with it."
+description: "Connect AWS Glue Data Catalog to Baleia. AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino. A Delta table is read only when Glue registers it with spark.sql.sources.provider=delta, as Spark, Databricks and the Glue Delta crawler do; one registered only with Athena's table_type=DELTA stays in the catalog greyed out with the reason, since Trino's Delta connector does not recognize it. See its settings and what Baleia does with it."
 ---
 
 # Connect AWS Glue Data Catalog to Baleia
@@ -8,7 +8,7 @@ description: "Connect AWS Glue Data Catalog to Baleia. AWS Glue Data Catalog hol
 <!-- Generated from internal/connections/providers. Do not edit by hand:
      BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/ -->
 
-AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino.
+AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino. A Delta table is read only when Glue registers it with spark.sql.sources.provider=delta, as Spark, Databricks and the Glue Delta crawler do; one registered only with Athena's table_type=DELTA stays in the catalog greyed out with the reason, since Trino's Delta connector does not recognize it.
 
 ## What Baleia does with it
 

@@ -65,7 +65,7 @@ func (*Provider) EngineKind() string { return "" }
 func (*Provider) Meta() connections.TypeMeta {
 	modes := []connections.AccessMode{connections.AccessModeTrino}
 	return connections.TypeMeta{
-		Description:       "AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino.",
+		Description:       "AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino. A Delta table is read only when Glue registers it with spark.sql.sources.provider=delta, as Spark, Databricks and the Glue Delta crawler do; one registered only with Athena's table_type=DELTA stays in the catalog greyed out with the reason, since Trino's Delta connector does not recognize it.",
 		Category:          connections.CategoryMetastore,
 		AccessModes:       modes,
 		TrinoCatalogTypes: []string{"iceberg", "hive", "delta_lake"},
