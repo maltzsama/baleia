@@ -157,6 +157,11 @@
 		return out;
 	});
 
+	// Where the document stands: never saved, saved with edits on top, or saved and unchanged.
+	const saveState = $derived<'new' | 'modified' | 'saved'>(
+		activeTab.savedId === null ? 'new' : activeTab.dirty ? 'modified' : 'saved'
+	);
+
 	const catalogChoices = $derived(targets.filter((target) => target.engine_id === activeEngineId));
 	const canChooseSchema = $derived((selectedEngine?.capabilities?.namespace_depth ?? 0) > 0);
 	const sessionSchema = $derived(selectedEngine?.capabilities?.session_schema ?? true);
@@ -1182,13 +1187,30 @@
 				}
 			]}
 		/>
+		<!-- Save is the blue action of the toolbar and says where the document
+		     stands: new, with pending changes, or saved and unchanged (#979). -->
 		<button
 			onclick={() => openSave(activeTab.readOnly ? 'copy' : 'save')}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{activeTab.readOnly
-				? m.components_queryeditor_save_a_copy()
-				: m.components_queryeditor_save()}</button
+			data-testid="save-button"
+			data-save-state={saveState}
+			title={saveState === 'modified' ? m.components_queryeditor_unsaved_changes() : undefined}
+			class="flex items-center gap-[5px] py-1 px-2.5 text-xs font-medium rounded-[5px] cursor-pointer whitespace-nowrap border {saveState ===
+			'saved'
+				? 'border-border bg-transparent text-primary opacity-60 hover:opacity-100 hover:bg-border'
+				: 'border-primary bg-primary text-white hover:bg-primary-hover'}"
 		>
+			{#if activeTab.readOnly}
+				{m.components_queryeditor_save_a_copy()}
+			{:else if saveState === 'saved'}
+				{m.components_queryeditor_saved()}
+			{:else}
+				{m.components_queryeditor_save()}
+			{/if}
+			{#if saveState === 'modified'}
+				<span class="h-1.5 w-1.5 rounded-full bg-white" aria-hidden="true"></span>
+				<span class="sr-only">{m.components_queryeditor_unsaved_changes()}</span>
+			{/if}
+		</button>
 		<button
 			onclick={() => {
 				paletteMode = 'commands';

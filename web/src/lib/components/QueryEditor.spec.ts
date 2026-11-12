@@ -182,6 +182,41 @@ describe('QueryEditor', () => {
 		expect(await screen.findByRole('dialog')).toBeTruthy();
 	});
 
+	it('shows where the document stands on the Save button (#979)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		// Never saved: a plain blue Save.
+		const save = screen.getByTestId('save-button');
+		expect(save.getAttribute('data-save-state')).toBe('new');
+		expect(save.textContent?.trim()).toBe('Save');
+		expect(save.className).toContain('bg-primary');
+
+		// Saved and unchanged: subdued, no blue fill, and it says so.
+		const tab = editor.activeTab;
+		editor.markSaved(tab.id, {
+			id: 'q1',
+			version: 1,
+			workspace_id: WS,
+			space_id: 's',
+			folder_id: null,
+			slug: 'q',
+			name: 'Q',
+			sql: tab.sql
+		} as never);
+		await waitFor(() => expect(save.getAttribute('data-save-state')).toBe('saved'));
+		expect(save.textContent?.trim()).toBe('Saved');
+		expect(save.className).not.toContain('bg-primary');
+
+		// Edited on top of the saved version: Save again, with the pending-changes mark.
+		editor.updateSql(tab.id, 'SELECT 2');
+		await waitFor(() => expect(save.getAttribute('data-save-state')).toBe('modified'));
+		expect(save.className).toContain('bg-primary');
+		expect(save.getAttribute('title')).toBe('Unsaved changes');
+		expect(within(save).getByText('Unsaved changes')).toBeTruthy();
+	});
+
 	it('shows the name a query uses beside the catalog display name', async () => {
 		mockWorkbench();
 		render(QueryEditor);
