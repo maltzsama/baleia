@@ -5,7 +5,10 @@
 
 <p align="center"><strong>A self-hosted SQL workspace for your data platform.</strong></p>
 
+<p align="center"><strong>Baleia is in beta</strong> — expect breaking changes between minor versions; read the <a href="docs/operations.md">upgrade notes</a> before upgrading.</p>
+
 <p align="center">
+  <a href="docs/operations.md"><img src="https://img.shields.io/badge/status-beta-orange" alt="Status: beta"></a>
   <a href="https://github.com/maltzsama/baleia/actions/workflows/ci.yml"><img src="https://github.com/maltzsama/baleia/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/maltzsama/baleia/releases"><img src="https://img.shields.io/github/v/release/maltzsama/baleia?sort=semver" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/maltzsama/baleia" alt="License"></a>
