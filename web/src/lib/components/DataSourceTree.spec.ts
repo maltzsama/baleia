@@ -118,6 +118,55 @@ describe('DataSourceTree', () => {
 		expect(await screen.findByText('Granted Lake')).toBeTruthy();
 	});
 
+	it('shows a table the source cannot read disabled, with why (#977)', async () => {
+		const onSelectTable = vi.fn();
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([makeMetadataCatalog()])
+			),
+			http.get(
+				'/workspaces/{id}/metadata/catalogs/{catalog_id}/namespaces',
+				({ request, response }) => {
+					const parent = new URL(request.url).searchParams.getAll('parent');
+					return response(200).json({
+						freshness: { metadata_synced_at: null },
+						items: parent.length === 0 ? [{ path: ['sales'] }] : []
+					});
+				}
+			),
+			http.get('/workspaces/{id}/metadata/catalogs/{catalog_id}/tables', ({ response }) =>
+				response(200).json({
+					freshness: { metadata_synced_at: null },
+					items: [
+						{ id: TABLE_ID, name: 'orders', kind: 'table' },
+						{
+							id: '00000000-0000-0000-0000-0000000000d2',
+							name: 'locked',
+							kind: 'table',
+							unsupported: { code: 'table_kind', detail: 'TABLE_DB_STORAGE' }
+						}
+					],
+					next_cursor: null
+				})
+			)
+		);
+		render(DataSourceTree, { props: { onSelectTable } });
+		await fireEvent.click(await screen.findByRole('button', { name: /lake/i }));
+		await fireEvent.click(await screen.findByRole('button', { name: /sales/i }));
+
+		// The readable table is a button; the unsupported one is not, but explains itself.
+		expect(await screen.findByRole('button', { name: /orders/i })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: /^locked/i })).toBeNull();
+		const why = screen.getByRole('button', { name: /Unsupported table: type: TABLE_DB_STORAGE/ });
+		expect(why.getAttribute('title')).toContain('type: TABLE_DB_STORAGE');
+		expect(why.getAttribute('title')).toContain('Unsupported type');
+		expect(document.querySelector('[data-unsupported-table]')?.textContent).toContain('locked');
+
+		// Clicking the disabled row selects nothing.
+		await fireEvent.click(screen.getByText('locked'));
+		expect(onSelectTable).not.toHaveBeenCalled();
+	});
+
 	it('shows the name a query uses beside a catalog whose display name differs', async () => {
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>

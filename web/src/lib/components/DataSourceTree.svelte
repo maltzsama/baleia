@@ -18,6 +18,7 @@
 		type TableRef
 	} from '$lib/metadata/client';
 	import { parseSearchFilters } from '$lib/metadata/searchFilters';
+	import { unsupportedReason } from '$lib/metadata/unsupported';
 	import { searchTablesAndColumns } from '$lib/search/client';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
@@ -671,35 +672,71 @@
 			{/each}
 
 			{#each node.tables as table (table.id)}
-				<button
-					class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-left text-[13px] text-inherit hover:bg-slate-100 dark:hover:bg-[#1c2128] {selectedTableId ===
-					table.id
-						? 'bg-blue-50 font-medium text-primary dark:bg-[#152236]'
-						: ''}"
-					onclick={() => selectTable(catalog, path, table)}
-					aria-current={selectedTableId === table.id}
-				>
-					<svg
-						viewBox="0 0 24 24"
-						class="h-3.5 w-3.5 shrink-0 {selectedTableId === table.id
-							? 'stroke-primary'
-							: 'stroke-text-muted'}"
-						><rect x="3" y="3" width="18" height="18" rx="2" /><line
-							x1="3"
-							y1="9"
-							x2="21"
-							y2="9"
-						/><line x1="9" y1="21" x2="9" y2="9" /></svg
+				{#if table.unsupported}
+					<!-- Listed by the source but unreadable: shown disabled, with why (#977). -->
+					{@const reason = unsupportedReason(table.unsupported)}
+					<div
+						class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-[13px] text-text-muted opacity-60"
+						data-unsupported-table
 					>
-					<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
-						>{table.name}</span
-					>
-					{#if table.kind !== 'table'}
-						<span class="rounded border border-border px-1 text-[9px] uppercase text-text-muted"
-							>{table.kind}</span
+						<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 stroke-text-muted"
+							><rect x="3" y="3" width="18" height="18" rx="2" /><line
+								x1="3"
+								y1="9"
+								x2="21"
+								y2="9"
+							/><line x1="9" y1="21" x2="9" y2="9" /></svg
 						>
-					{/if}
-				</button>
+						<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+							>{table.name}</span
+						>
+						<button
+							type="button"
+							class="shrink-0 cursor-help rounded-full p-0.5 text-text-muted"
+							title={reason}
+							aria-label="{m.metadata_unsupported_table()}: {reason}"
+						>
+							<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 stroke-current" aria-hidden="true"
+								><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line
+									x1="12"
+									y1="8"
+									x2="12.01"
+									y2="8"
+								/></svg
+							>
+						</button>
+					</div>
+				{:else}
+					<button
+						class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-left text-[13px] text-inherit hover:bg-slate-100 dark:hover:bg-[#1c2128] {selectedTableId ===
+						table.id
+							? 'bg-blue-50 font-medium text-primary dark:bg-[#152236]'
+							: ''}"
+						onclick={() => selectTable(catalog, path, table)}
+						aria-current={selectedTableId === table.id}
+					>
+						<svg
+							viewBox="0 0 24 24"
+							class="h-3.5 w-3.5 shrink-0 {selectedTableId === table.id
+								? 'stroke-primary'
+								: 'stroke-text-muted'}"
+							><rect x="3" y="3" width="18" height="18" rx="2" /><line
+								x1="3"
+								y1="9"
+								x2="21"
+								y2="9"
+							/><line x1="9" y1="21" x2="9" y2="9" /></svg
+						>
+						<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+							>{table.name}</span
+						>
+						{#if table.kind !== 'table'}
+							<span class="rounded border border-border px-1 text-[9px] uppercase text-text-muted"
+								>{table.kind}</span
+							>
+						{/if}
+					</button>
+				{/if}
 			{/each}
 
 			{#if node.tablesError}

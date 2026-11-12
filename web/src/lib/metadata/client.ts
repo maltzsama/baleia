@@ -11,6 +11,7 @@ export type MetadataCatalog = components['schemas']['MetadataCatalog'];
 export type MetadataCatalogBinding = components['schemas']['MetadataCatalogBinding'];
 export type MetadataFreshness = components['schemas']['MetadataFreshness'];
 export type MetadataNamespaceList = components['schemas']['MetadataNamespaceList'];
+export type MetadataTableUnsupported = components['schemas']['MetadataTableUnsupported'];
 export type MetadataTableSummary = components['schemas']['MetadataTableSummary'];
 export type MetadataTablePage = components['schemas']['MetadataTablePage'];
 export type MetadataTableDetail = components['schemas']['MetadataTableDetail'];
