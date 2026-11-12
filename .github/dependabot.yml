@@ -1,0 +1,52 @@
+# One grouped pull request per ecosystem and month keeps dependency updates in
+# step with the one-PR-at-a-time flow (AGENTS.md); security updates still open
+# as soon as an advisory lands.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope
+    labels: [ci]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      go:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope
+    labels: [backend]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: monthly
+    groups:
+      web:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope
+    labels: [frontend]
+
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: monthly
+    groups:
+      website:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope
+    labels: [documentation]
