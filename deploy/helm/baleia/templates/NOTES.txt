@@ -1,0 +1,6 @@
+Baleia {{ .Chart.AppVersion }} installed as {{ .Release.Name }}.
+
+The database migrations run in the Job {{ include "baleia.fullname" . }}-migrate-{{ .Release.Revision }}, which is a plain resource, not a Helm hook:
+`helm upgrade` alone reports "deployed" even if that Job keeps failing. In automation use
+  helm upgrade --wait --wait-for-jobs ...
+so a failed migration fails the upgrade.

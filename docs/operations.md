@@ -9,6 +9,7 @@ Baleia's own schema is defined by GORM models and evolved by versioned Go migrat
 
 - `make store-migrate` (or `/migrate -cmd=store-up` in the image) applies the pending migrations. The API also applies them on start; the worker does not wait for them, so its first jobs may fail against the old schema until the API is up, and Temporal retries them.
 - `make store-migrate-status` (`-cmd=store-status`) prints the applied and pending versions; `make store-migrate-down` rolls back the last safe migration.
+- The chart runs the migrations in a plain Job (`<release>-migrate-<revision>`), not a Helm hook, so `helm upgrade` alone reports `deployed` even when that Job keeps failing. In automation use `helm upgrade --wait --wait-for-jobs`, which fails the upgrade when the Job does.
 - A store created by the former goose migrations is adopted as the baseline on the first `store-up`: the existing schema is recorded and only newer Go migrations run.
 
 `DATABASE_URL` selects the backend: a `postgres://` URL or the MySQL/MariaDB go-sql-driver DSN; see [Store backend](configuration.md#store-backend) for the DSNs and caveats. The query-execution path (Trino and the direct engines) is unaffected.
@@ -454,8 +455,12 @@ retention is gated on.
   `max_locks_per_transaction` (64) a database converts about two years of dense history, and a
   longer history fails with `out of shared memory`. Raise `max_locks_per_transaction` (a server
   restart) before upgrading a database with more history than that. If a run fails, the tables
-  converted so far stay converted and the rest keep their rows: fix the cause, clear the dirty
-  ledger row the runner names, and run it again.
+  converted so far stay converted and the rest keep their rows: fix the cause, delete the dirty
+  ledger row the runner names (do not just set `dirty` to false: that marks the migration as
+  applied and it is skipped, leaving the schema incomplete), and run it again. A failed
+  rollback (`store-migrate-down`) is the opposite: its row is still the applied migration, so
+  restore the applied schema and set `dirty` to false to retry, or delete the row if you
+  finished the rollback by hand.
 
 ## Binding reconciliation
 
