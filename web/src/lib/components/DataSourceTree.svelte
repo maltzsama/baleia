@@ -397,7 +397,8 @@
 		const bindings = engineId
 			? catalog.bindings.filter((b) => b.engine_id === engineId)
 			: catalog.bindings;
-		const byName: Record<string, string[]> = {};
+		// No prototype: a catalog named "constructor" is a name, not a property.
+		const byName: Record<string, string[]> = Object.create(null);
 		for (const b of bindings) {
 			if (!b.engine_catalog_name || b.engine_catalog_name === catalog.name) continue;
 			(byName[b.engine_catalog_name] ??= []).push(b.engine_name);

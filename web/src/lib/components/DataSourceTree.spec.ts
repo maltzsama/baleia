@@ -138,6 +138,22 @@ describe('DataSourceTree', () => {
 		expect(screen.queryByText(/lake_a \(/)).toBeNull();
 	});
 
+	it('renders a catalog whose query name is an Object property name', async () => {
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([
+					makeMetadataCatalog({
+						name: 'Odd',
+						bindings: [makeMetadataBinding({ engine_catalog_name: 'constructor' })]
+					})
+				])
+			)
+		);
+		render(DataSourceTree, { props: { onSelectTable: vi.fn() } });
+
+		expect(await screen.findByText('constructor')).toBeTruthy();
+	});
+
 	it('renders namespaces before tables finish loading', async () => {
 		let resolveTables!: () => void;
 		const tablesGate = new Promise<void>((resolve) => (resolveTables = resolve));
