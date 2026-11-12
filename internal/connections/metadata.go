@@ -30,6 +30,11 @@ const (
 	// UnsupportedRefused: the provider's protocol refused the table when it was
 	// loaded, without saying why.
 	UnsupportedRefused = "refused"
+	// UnsupportedRegistration: the table is registered in a way the engine's
+	// connector does not recognize; Detail is the registration found (Glue: a
+	// Delta table marked only with table_type=DELTA, which Trino's Delta
+	// connector does not read).
+	UnsupportedRegistration = "registration"
 )
 
 // Unsupported says why a table that a provider lists cannot be read. The zero
