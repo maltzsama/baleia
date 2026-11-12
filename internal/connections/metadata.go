@@ -17,7 +17,30 @@ type TableRef struct {
 	Namespace Namespace
 	Name      string
 	Type      string // TABLE | VIEW | MATERIALIZED_VIEW
+	// Unsupported is set when the provider lists the table but cannot read it.
+	Unsupported Unsupported
 }
+
+// Why a listed table cannot be read. The codes are stable: they are stored with
+// the table and become the keys of the message the UI shows.
+const (
+	// UnsupportedKind: the provider reports a kind of table its protocol cannot
+	// serve; Detail is that kind (Unity: TABLE_DB_STORAGE).
+	UnsupportedKind = "table_kind"
+	// UnsupportedRefused: the provider's protocol refused the table when it was
+	// loaded, without saying why.
+	UnsupportedRefused = "refused"
+)
+
+// Unsupported says why a table that a provider lists cannot be read. The zero
+// value means the table is readable.
+type Unsupported struct {
+	Code   string
+	Detail string
+}
+
+// Is reports whether the table is unsupported.
+func (u Unsupported) Is() bool { return u.Code != "" }
 
 // Column is one column of a table, in the source's native type system.
 type Column struct {

@@ -90,7 +90,7 @@ func TestLoadTable_BadRequestIsUnsupported(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	tolerant := New(srv.URL, Auth{}, nil, srv.Client()).ReaderSkippingUnsupported(list, same)
+	tolerant := New(srv.URL, Auth{}, nil, srv.Client()).ReaderSkippingUnsupported(list, same, nil)
 	if _, err := tolerant.LoadTable(ctx, ref("delta")); !errors.Is(err, connections.ErrTableUnsupported) {
 		t.Errorf("400 on a tolerant reader = %v, want ErrTableUnsupported", err)
 	}
@@ -100,5 +100,47 @@ func TestLoadTable_BadRequestIsUnsupported(t *testing.T) {
 	strict := New(srv.URL, Auth{}, nil, srv.Client()).ReaderWithCatalogs(list, same)
 	if _, err := strict.LoadTable(ctx, ref("delta")); err == nil || errors.Is(err, connections.ErrTableUnsupported) {
 		t.Errorf("400 on a strict reader = %v, want a plain error", err)
+	}
+}
+
+// TestListTables_Classifier: tables the classifier names come back marked
+// unsupported; a failing classifier leaves the listing unmarked.
+func TestListTables_Classifier(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/config":
+			_ = json.NewEncoder(w).Encode(map[string]any{})
+		case "/v1/namespaces/s/tables":
+			_ = json.NewEncoder(w).Encode(map[string]any{"identifiers": []map[string]any{
+				{"namespace": []string{"s"}, "name": "ok"},
+				{"namespace": []string{"s"}, "name": "bad"},
+			}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	list := func(context.Context) ([]connections.CatalogRef, error) { return nil, nil }
+	same := func(c string) string { return c }
+	ns := connections.Namespace{"s"}
+	reason := connections.Unsupported{Code: connections.UnsupportedKind, Detail: "K"}
+
+	marks := func(context.Context, string, connections.Namespace) (map[string]connections.Unsupported, error) {
+		return map[string]connections.Unsupported{"bad": reason}, nil
+	}
+	r := New(srv.URL, Auth{}, nil, srv.Client()).ReaderSkippingUnsupported(list, same, marks)
+	tables, _, err := r.ListTables(context.Background(), "c", ns, "")
+	if err != nil || len(tables) != 2 || tables[0].Unsupported.Is() || tables[1].Unsupported != reason {
+		t.Fatalf("ListTables = %+v, %v; want ok readable and bad marked", tables, err)
+	}
+
+	broken := func(context.Context, string, connections.Namespace) (map[string]connections.Unsupported, error) {
+		return nil, errors.New("boom")
+	}
+	r = New(srv.URL, Auth{}, nil, srv.Client()).ReaderSkippingUnsupported(list, same, broken)
+	tables, _, err = r.ListTables(context.Background(), "c", ns, "")
+	if err != nil || len(tables) != 2 || tables[0].Unsupported.Is() || tables[1].Unsupported.Is() {
+		t.Fatalf("ListTables with a failing classifier = %+v, %v; want both unmarked", tables, err)
 	}
 }
