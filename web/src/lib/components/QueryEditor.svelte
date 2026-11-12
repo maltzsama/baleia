@@ -168,9 +168,12 @@
 	// The newest targets request wins: a slow response for a workspace the user has
 	// left, or an older refresh, must not overwrite what a newer request loaded.
 	let targetsRequest = 0;
+	// Whether the current workspace has loaded its targets at least once.
+	let targetsReady = false;
 
 	async function loadTargets(wid: string) {
 		const request = ++targetsRequest;
+		targetsReady = false;
 		targets = [];
 		targetError = '';
 		if (!wid) return;
@@ -184,6 +187,7 @@
 				throw new Error(apiErrorMessage(error, m.components_queryeditor_failed_to_load_targets()));
 			targets = data ?? [];
 			engines = loadedEngines;
+			targetsReady = true;
 		} catch (e) {
 			if (request !== targetsRequest) return;
 			targetError = errorMessage(e);
@@ -214,11 +218,18 @@
 				loadEngines().catch(() => null)
 			]);
 			if (request !== targetsRequest) return;
-			if (data) targets = data;
+			if (data) {
+				targets = data;
+				targetsReady = true;
+			}
 			if (loadedEngines) engines = loadedEngines;
+			if (data) return;
 		} catch {
-			return;
+			if (request !== targetsRequest) return;
 		}
+		// The refresh failed. It may have invalidated a first load still in flight:
+		// with no targets yet, load them the full way so the editor is not left bare.
+		if (!targetsReady) void loadTargets(wid);
 	}
 
 	// Only a change after this editor mounted refreshes: the mount loads its own.

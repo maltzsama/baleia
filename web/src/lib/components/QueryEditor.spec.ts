@@ -208,6 +208,41 @@ describe('QueryEditor', () => {
 		await waitFor(() => expect(engineCalls).toBe(1));
 	});
 
+	it('still loads its targets when a refresh that cut a first load in flight fails (#975)', async () => {
+		mockWorkbench();
+		let calls = 0;
+		const lake = {
+			binding_id: BINDING,
+			catalog_id: CATALOG,
+			catalog_name: 'lake',
+			engine_id: ENGINE,
+			engine_name: 'trino',
+			engine_kind: 'trino',
+			engine_catalog_name: 'lake_t',
+			mode: 'adopted' as const,
+			is_default: true
+		};
+		server.use(
+			http.get('/workspaces/{id}/targets', async ({ response }) => {
+				calls += 1;
+				if (calls === 1) {
+					await delay(150); // the first load, still in flight when the refresh starts
+					return response(200).json([lake]);
+				}
+				if (calls === 2)
+					return response(404).json({ code: 'not_found', message: 'refresh failed' });
+				return response(200).json([lake]);
+			})
+		);
+		render(QueryEditor);
+		await waitFor(() => expect(calls).toBe(1));
+		catalogAccessStore.changed();
+		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
+		// The empty editor has a placeholder option; a loaded target is the selected one.
+		await waitFor(() => expect(catalog.value).toBe(BINDING), { timeout: 3000 });
+		expect(calls).toBe(3);
+	});
+
 	it('keeps the newest targets when refreshes answer out of order (#975)', async () => {
 		mockWorkbench();
 		render(QueryEditor);
