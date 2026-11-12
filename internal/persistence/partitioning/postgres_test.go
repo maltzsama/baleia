@@ -315,3 +315,48 @@ func TestPostgresDailyPartitions(t *testing.T) {
 		t.Fatalf("rows after drop = %d, want 2", n)
 	}
 }
+
+// A table partitioned monthly (0.7.0) keeps its monthly partitions when it moves
+// to daily ones: the days a monthly partition covers are skipped instead of
+// overlapping it, and the days past it get daily partitions.
+func TestPostgresDailyOverMonthlyPartitions(t *testing.T) {
+	t.Parallel()
+	db := postgresDB(t)
+	ctx := context.Background()
+
+	pm, err := partitioning.New(db)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	monthly := partitioning.Spec{Table: "partitioning_test_events", Column: "occurred_at", Strategy: partitioning.Range, Interval: partitioning.Monthly}
+	daily := monthly
+	daily.Interval = partitioning.Daily
+
+	if err := pm.Provision(ctx, &testEvent{}, monthly,
+		time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("Provision monthly: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Exec(`DROP TABLE IF EXISTS "partitioning_test_events" CASCADE`).Error })
+
+	if err := pm.Provision(ctx, &testEvent{}, daily,
+		time.Date(2026, 11, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 3, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("Provision daily over monthly: %v", err)
+	}
+
+	parts, err := pm.ListPartitions(ctx, daily.Table)
+	if err != nil {
+		t.Fatalf("ListPartitions: %v", err)
+	}
+	want := []string{
+		"partitioning_test_events_202611",
+		"partitioning_test_events_20261201", "partitioning_test_events_20261202",
+	}
+	if len(parts) != len(want) {
+		t.Fatalf("got %d partitions, want %d: %+v", len(parts), len(want), parts)
+	}
+	for i, name := range want {
+		if parts[i].Name != name {
+			t.Errorf("partition %d = %q, want %q", i, parts[i].Name, name)
+		}
+	}
+}

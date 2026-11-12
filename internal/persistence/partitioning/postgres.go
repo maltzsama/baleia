@@ -142,7 +142,17 @@ func ensurePartitions(db *gorm.DB, spec Spec, from, until time.Time) error {
 	if err := spec.Validate(); err != nil {
 		return err
 	}
+	existing, err := listPartitions(db, spec.Table)
+	if err != nil {
+		return err
+	}
 	for _, p := range RangePartitions(spec.Table, spec.Interval, from, until) {
+		// A table converted from an older width keeps its partitions (a
+		// monthly one covers every day of its month); PostgreSQL rejects a
+		// partition that overlaps one, and IF NOT EXISTS only matches names.
+		if overlapsAny(p, existing) {
+			continue
+		}
 		stmt := fmt.Sprintf(
 			`CREATE TABLE IF NOT EXISTS "%s" PARTITION OF "%s" FOR VALUES FROM (%s) TO (%s)`,
 			p.Name, spec.Table, quoteTime(p.From), quoteTime(p.Until),
@@ -152,6 +162,16 @@ func ensurePartitions(db *gorm.DB, spec Spec, from, until time.Time) error {
 		}
 	}
 	return nil
+}
+
+// overlapsAny reports whether p shares any instant with one of parts.
+func overlapsAny(p Partition, parts []Partition) bool {
+	for _, q := range parts {
+		if p.From.Before(q.Until) && q.From.Before(p.Until) {
+			return true
+		}
+	}
+	return false
 }
 
 func listPartitions(db *gorm.DB, table string) ([]Partition, error) {
