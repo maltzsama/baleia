@@ -39,13 +39,20 @@ const DIALECTS: Record<string, () => Promise<DialectClass>> = {
  *  `DIALECTS` keys keeps engine-kind literals out of the callers (FD6). */
 export const DIALECT_NAMES: readonly string[] = Object.keys(DIALECTS);
 
-/** The default conversion target, when no source dialect is known. */
+/** The default conversion target, when no source dialect is known: Trino, the
+ *  engine Baleia runs on. */
 export const DEFAULT_TARGET_DIALECT = DIALECT_NAMES[0] ?? '';
 
-/** A target dialect that differs from `source`, so "Convert" is never a no-op
- *  when the current engine already speaks the natural default. */
+// Presto is a target someone picks on purpose; it is never the automatic one.
+const NOT_A_DEFAULT = new Set(['presto']);
+
+/** The default target for a conversion from `source`: Trino, and when the
+ *  source already is Trino (a no-op), the next dialect that is not Presto. */
 export function otherDialect(source: string | null | undefined): string {
-	return DIALECT_NAMES.find((name) => name !== source) ?? DEFAULT_TARGET_DIALECT;
+	return (
+		DIALECT_NAMES.find((name) => name !== source && !NOT_A_DEFAULT.has(name)) ??
+		DEFAULT_TARGET_DIALECT
+	);
 }
 
 const dialectCache = new Map<string, Promise<DialectClass>>();
