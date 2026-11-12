@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import Button from '$lib/ui/Button.svelte';
+	import Modal from '$lib/ui/Modal.svelte';
+	import WorkspaceCatalogs from '$lib/workspaces/WorkspaceCatalogs.svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -34,7 +38,15 @@
 		search?: string;
 	} = $props();
 
+	let catalogsOpen = $state(false);
+	const canManageCatalogs = $derived(
+		!!workspaceStore.current?.allowed_actions?.includes('manage_grants')
+	);
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
+
+	export function openCatalogs() {
+		if (canManageCatalogs) catalogsOpen = true;
+	}
 
 	type View = 'catalog' | 'engine';
 	let view = $state<View>('catalog');
@@ -468,6 +480,21 @@
 	});
 </script>
 
+{#if catalogsOpen && workspaceStore.current}
+	<Modal bind:open={catalogsOpen} title={m.workspace_catalogs_title()} size="lg">
+		{#key workspaceId}
+			<WorkspaceCatalogs workspace={workspaceStore.current} />
+		{/key}
+		{#snippet footer()}
+			<a
+				class="text-sm text-primary underline"
+				href={resolve(`/settings/workspaces/${workspaceId}?tab=catalogs`)}
+				>{m.workspace_catalogs_manage()}</a
+			>
+		{/snippet}
+	</Modal>
+{/if}
+
 <div class="overflow-y-auto flex-1 px-1.5 pb-2 text-[13px]" data-testid="metadata-tree">
 	{#if !workspaceStore.current}
 		<p class="text-text-muted text-xs px-2 py-4">
@@ -531,8 +558,16 @@
 	{:else if catalogs.length === 0}
 		<EmptyState
 			title={m.components_datasourcetree_no_catalogs()}
-			description={m.components_datasourcetree_this_workspace_has_no_granted_catalogs()}
-		/>
+			description={canManageCatalogs
+				? m.workspace_catalogs_empty_explorer()
+				: m.workspace_catalogs_ask_admin()}
+		>
+			{#if canManageCatalogs}
+				<Button size="sm" variant="primary" onclick={() => (catalogsOpen = true)}
+					>{m.workspace_catalogs_add()}</Button
+				>
+			{/if}
+		</EmptyState>
 	{:else}
 		<div
 			class="flex gap-1 px-1.5 py-2"

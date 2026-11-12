@@ -2743,5 +2743,19 @@
 	"components_queryeditor_convert_dialect": "Converter dialeto",
 	"components_queryeditor_saved": "Salvo",
 	"components_queryeditor_unsaved_changes": "Alterações não salvas",
-	"metadata_unsupported_table_registration": "registrada como: {registration}\nO motor não reconhece esse registro. Uma tabela Delta no Glue precisa de spark.sql.sources.provider=delta, como o Spark e o Databricks registram."
+	"metadata_unsupported_table_registration": "registrada como: {registration}\nO motor não reconhece esse registro. Uma tabela Delta no Glue precisa de spark.sql.sources.provider=delta, como o Spark e o Databricks registram.",
+	"workspace_catalogs_title": "Catálogos do workspace",
+	"workspace_catalogs_context": "Acesso a catálogos de {name}. Adicionar um catálogo o disponibiliza neste workspace; executar queries também exige um motor disponível.",
+	"workspace_catalogs_search": "Buscar catálogos ou conexões",
+	"workspace_catalogs_add": "Adicionar catálogo",
+	"workspace_catalogs_request": "Solicitar acesso",
+	"workspace_catalogs_available": "Disponível no workspace",
+	"workspace_catalogs_pending": "Aguardando aprovação do catálogo",
+	"workspace_catalogs_offer": "Aguardando sua aprovação",
+	"workspace_catalogs_empty": "Nenhum catálogo encontrado",
+	"workspace_catalogs_empty_hint": "Tente outra busca. A lista inclui apenas catálogos que você pode adicionar ou solicitar, além dos acessos existentes.",
+	"workspace_catalogs_no_permission": "O acesso a catálogos é gerenciado por um administrador do workspace",
+	"workspace_catalogs_ask_admin": "Peça a um administrador do workspace para adicionar um catálogo ou solicitar acesso.",
+	"workspace_catalogs_empty_explorer": "Adicione um catálogo a este workspace para explorar seus dados.",
+	"workspace_catalogs_manage": "Gerenciar acesso nas configurações do workspace"
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import DataSourceTree from './DataSourceTree.svelte';
 	import SavedQueriesList from './SavedQueriesList.svelte';
 	import type { TableRef } from '$lib/metadata/client';
@@ -112,9 +113,9 @@
 				</button>
 			</div>
 
-			<div class="p-2 border-b border-border shrink-0">
+			<div class="flex items-center gap-1.5 p-2 border-b border-border shrink-0">
 				<div
-					class="w-full flex items-center gap-1.5 bg-slate-100 dark:bg-[#1c2128] border border-border rounded-md px-2 py-[5px] transition-all duration-150 focus-within:bg-bg-panel focus-within:border-primary"
+					class="min-w-0 flex-1 flex items-center gap-1.5 bg-slate-100 dark:bg-[#1c2128] border border-border rounded-md px-2 py-[5px] transition-all duration-150 focus-within:bg-bg-panel focus-within:border-primary"
 				>
 					<svg viewBox="0 0 24 24" class="w-3 h-3 text-text-muted shrink-0"
 						><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg
@@ -129,6 +130,30 @@
 						class="border-none bg-transparent outline-none text-xs text-text-main w-full placeholder:text-text-muted"
 					/>
 				</div>
+				{#if activeTab === 'datasources' && workspaceStore.current?.allowed_actions?.includes('manage_grants')}
+					<button
+						type="button"
+						class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-toolbar hover:text-text-main focus-visible:outline-2 focus-visible:outline-primary"
+						title={m.workspace_catalogs_title()}
+						aria-label={m.workspace_catalogs_title()}
+						onclick={() => tree?.openCatalogs()}
+					>
+						<svg
+							viewBox="0 0 24 24"
+							class="h-4 w-4"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.7"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true"
+						>
+							<ellipse cx="10" cy="5" rx="7" ry="3" />
+							<path d="M3 5v12c0 1.66 3.13 3 7 3M17 5v5M3 11c0 1.66 3.13 3 7 3" />
+							<path d="M17 14v8M13 18h8" />
+						</svg>
+					</button>
+				{/if}
 			</div>
 
 			<div

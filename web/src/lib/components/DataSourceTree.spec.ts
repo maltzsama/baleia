@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
@@ -58,6 +58,87 @@ describe('DataSourceTree', () => {
 	beforeEach(() => {
 		clearMetadataCache();
 		workspaceStore.select(makeWorkspace());
+	});
+
+	it('opens workspace catalogs from an empty explorer and refreshes after adding (#985)', async () => {
+		let granted = false;
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json(granted ? [makeMetadataCatalog()] : [])
+			),
+			http.get('/catalog-grants', ({ response }) => response(200).json([])),
+			http.get('/workspaces/{id}/requestable-catalogs', ({ response }) => response(200).json([])),
+			http.get('/catalogs', ({ response }) =>
+				response(200).json([
+					{
+						id: 'catalog',
+						name: 'New catalog',
+						connection_id: 'connection',
+						connector: 'testdb',
+						enabled: true,
+						discoverable: false,
+						origin: 'native',
+						bindings: [],
+						needs_attention: false,
+						allowed_actions: ['grant']
+					}
+				])
+			),
+			http.post('/catalog-grants', ({ response }) => {
+				granted = true;
+				return response(200).json({
+					workspace_id: makeWorkspace().id,
+					catalog_id: 'catalog',
+					state: 'active'
+				});
+			})
+		);
+		render(DataSourceTree);
+		await fireEvent.click(await screen.findByRole('button', { name: 'Add catalog' }));
+		expect(screen.getByRole('dialog', { name: 'Workspace catalogs' })).toBeTruthy();
+		await screen.findByText('New catalog');
+		await fireEvent.click(
+			within(screen.getByRole('dialog', { name: 'Workspace catalogs' })).getByRole('button', {
+				name: 'Add catalog'
+			})
+		);
+		await screen.findByText('Available in workspace');
+		await fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		expect(await screen.findByText('lake')).toBeTruthy();
+	});
+
+	it('keeps catalog management discoverable in a populated explorer (#985)', async () => {
+		mockTree();
+		server.use(
+			http.get('/catalog-grants', ({ response }) => response(200).json([])),
+			http.get('/workspaces/{id}/requestable-catalogs', ({ response }) => response(200).json([])),
+			http.get('/catalogs', ({ response }) => response(200).json([]))
+		);
+		render(LeftSidebar);
+		await screen.findByText('lake');
+		const shortcut = screen.getByRole('button', { name: 'Workspace catalogs' });
+		expect(shortcut.textContent?.trim()).toBe('');
+		expect(shortcut.getAttribute('title')).toBe('Workspace catalogs');
+		expect(shortcut.querySelector('svg')).toBeTruthy();
+		await fireEvent.click(shortcut);
+		expect(await screen.findByRole('dialog', { name: 'Workspace catalogs' })).toBeTruthy();
+		expect(
+			screen.getByRole('link', { name: 'Manage access in workspace settings' }).getAttribute('href')
+		).toBe(`/settings/workspaces/${makeWorkspace().id}?tab=catalogs`);
+		await screen.findByText('No catalogs found');
+	});
+
+	it('guides users without catalog management permission without offering mutations (#985)', async () => {
+		workspaceStore.select(makeWorkspace({ allowed_actions: ['view'] }));
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) => response(200).json([]))
+		);
+		render(DataSourceTree);
+		expect(
+			await screen.findByText('Ask a workspace administrator to add a catalog or request access.')
+		).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Workspace catalogs' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Add catalog' })).toBeNull();
 	});
 
 	it('expands from the metadata API and caches a revisited node', async () => {

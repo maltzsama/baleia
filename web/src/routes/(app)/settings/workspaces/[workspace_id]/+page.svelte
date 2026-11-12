@@ -7,6 +7,7 @@
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import { toasts } from '$lib/ui/toast.svelte';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
+	import WorkspaceCatalogs from '$lib/workspaces/WorkspaceCatalogs.svelte';
 	import WorkspaceMembers from '$lib/workspaces/WorkspaceMembers.svelte';
 	import { workspaceStore, type Workspace } from '$lib/stores/workspace.svelte';
 	import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
@@ -25,7 +26,6 @@
 	type Target = components['schemas']['WorkspaceTarget'];
 	type Access = components['schemas']['WorkspaceCatalogAccess'];
 	type Impact = components['schemas']['WorkspaceImpact'];
-	type Catalog = components['schemas']['CatalogSummary'];
 
 	const workspaceId = $derived(page.params.workspace_id ?? '');
 
@@ -47,20 +47,8 @@
 	let targetSaving = $state(false);
 	let targetError = $state('');
 
-	let grantOpen = $state(false);
-	let grantCatalogs = $state<Catalog[]>([]);
-	let grantCatalogId = $state('');
-	let granting = $state(false);
-	let grantError = $state('');
-
-	// Two-party flow: pending offers/requests for this workspace, and the
-	// discoverable catalogs a workspace admin may request.
+	let catalogsOpen = $state(false);
 	let pending = $state<components['schemas']['CatalogGrantItem'][]>([]);
-	let requestOpen = $state(false);
-	let requestableCatalogs = $state<components['schemas']['RequestableCatalog'][]>([]);
-	let requestCatalogId = $state('');
-	let requesting = $state(false);
-	let requestError = $state('');
 	let acting = $state(false);
 
 	let refreshError = $state('');
@@ -183,37 +171,6 @@
 		}
 	}
 
-	async function openGrant() {
-		grantError = '';
-		grantCatalogId = '';
-		grantOpen = true;
-		const { data } = await client.GET('/catalogs', {
-			params: { query: { action: 'grant', limit: 200 } }
-		});
-		const granted = new Set(grants.map((grant) => grant.catalog_id));
-		grantCatalogs = (data ?? []).filter((catalog) => catalog.id && !granted.has(catalog.id));
-	}
-
-	async function submitGrant() {
-		if (!ws || !grantCatalogId) return;
-		granting = true;
-		grantError = '';
-		try {
-			const { error: err } = await client.POST('/workspaces/{id}/catalog-access', {
-				params: { path: { id: ws.id } },
-				body: { catalog_id: grantCatalogId }
-			});
-			if (err) throw new Error('Could not grant access');
-			catalogAccessStore.changed();
-			grantOpen = false;
-			await load();
-		} catch (e) {
-			grantError = e instanceof Error ? e.message : String(e);
-		} finally {
-			granting = false;
-		}
-	}
-
 	async function openRevoke(grant: Access) {
 		revokeCatalog = grant;
 		revokeImpact = null;
@@ -233,39 +190,6 @@
 		if (err) throw new Error('Could not revoke access');
 		catalogAccessStore.changed();
 		await load();
-	}
-
-	async function openRequest() {
-		requestError = '';
-		requestCatalogId = '';
-		requestOpen = true;
-		const { data, error: err } = await client.GET('/workspaces/{id}/requestable-catalogs', {
-			params: { path: { id: workspaceId } }
-		});
-		if (err) {
-			requestOpen = false;
-			toasts.error(apiErrorMessage(err));
-			return;
-		}
-		requestableCatalogs = data ?? [];
-	}
-
-	async function submitRequest() {
-		if (!ws || !requestCatalogId) return;
-		requesting = true;
-		requestError = '';
-		try {
-			const { error: err } = await client.POST('/catalog-grants', {
-				body: { workspace_id: ws.id, catalog_id: requestCatalogId }
-			});
-			if (err) throw new Error('Could not request the catalog');
-			requestOpen = false;
-			await load();
-		} catch (e) {
-			requestError = e instanceof Error ? e.message : String(e);
-		} finally {
-			requesting = false;
-		}
 	}
 
 	async function actOnPending(item: components['schemas']['CatalogGrantItem'], approve: boolean) {
@@ -470,14 +394,9 @@
 					{m.settings_workspaces_detail_catalogs_granted_to_this_workspace_revoking()}
 				</p>
 				{#if canManageGrants}
-					<div class="flex items-center gap-2">
-						<Button variant="secondary" onclick={openRequest}
-							>{m.settings_workspaces_detail_request_catalog()}</Button
-						>
-						<Button variant="primary" onclick={openGrant}
-							>{m.settings_workspaces_detail_grant_access()}</Button
-						>
-					</div>
+					<Button variant="primary" onclick={() => (catalogsOpen = true)}
+						>{m.workspace_catalogs_title()}</Button
+					>
 				{/if}
 			</div>
 			{#if pending.length > 0}
@@ -570,53 +489,13 @@
 	{/if}
 </div>
 
-<Modal bind:open={grantOpen} title={m.common_grant_catalog_access()}>
-	<div class="flex flex-col gap-3 text-[12px]">
-		<Select
-			label={m.common_catalog()}
-			bind:value={grantCatalogId}
-			options={grantCatalogs
-				.filter((catalog) => !!catalog.id)
-				.map((catalog) => ({ value: catalog.id!, label: catalog.name ?? catalog.id! }))}
-		/>
-		{#if grantError}<p class="text-danger" role="alert">{grantError}</p>{/if}
-	</div>
-	{#snippet footer()}
-		<div class="flex justify-end gap-2">
-			<Button onclick={() => (grantOpen = false)} disabled={granting}>{m.common_cancel()}</Button>
-			<Button variant="primary" loading={granting} disabled={granting} onclick={submitGrant}
-				>{m.common_grant()}</Button
-			>
-		</div>
-	{/snippet}
-</Modal>
-
-<Modal bind:open={requestOpen} title={m.settings_workspaces_detail_request_catalog()}>
-	<div class="flex flex-col gap-3 text-[12px]">
-		<Select
-			label={m.common_catalog()}
-			bind:value={requestCatalogId}
-			options={requestableCatalogs.map((catalog) => ({ value: catalog.id, label: catalog.name }))}
-		/>
-		{#if requestableCatalogs.length === 0}
-			<p class="text-text-muted">{m.settings_workspaces_detail_no_requestable_catalogs()}</p>
-		{/if}
-		{#if requestError}<p class="text-danger" role="alert">{requestError}</p>{/if}
-	</div>
-	{#snippet footer()}
-		<div class="flex justify-end gap-2">
-			<Button onclick={() => (requestOpen = false)} disabled={requesting}
-				>{m.common_cancel()}</Button
-			>
-			<Button
-				variant="primary"
-				loading={requesting}
-				disabled={requesting || !requestCatalogId}
-				onclick={submitRequest}>{m.settings_workspaces_detail_request_catalog()}</Button
-			>
-		</div>
-	{/snippet}
-</Modal>
+{#if catalogsOpen && ws}
+	<Modal bind:open={catalogsOpen} title={m.workspace_catalogs_title()} size="lg">
+		{#key workspaceId}
+			<WorkspaceCatalogs workspace={ws} onchange={() => void load()} />
+		{/key}
+	</Modal>
+{/if}
 
 <ConfirmDialog
 	bind:open={revokeOpen}
