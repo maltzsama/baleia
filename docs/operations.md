@@ -454,8 +454,9 @@ retention is gated on.
   `max_locks_per_transaction` (64) a database converts about two years of dense history, and a
   longer history fails with `out of shared memory`. Raise `max_locks_per_transaction` (a server
   restart) before upgrading a database with more history than that. If a run fails, the tables
-  converted so far stay converted and the rest keep their rows: fix the cause, clear the dirty
-  ledger row the runner names, and run it again.
+  converted so far stay converted and the rest keep their rows: fix the cause, delete the dirty
+  ledger row the runner names (do not just set `dirty` to false: that marks the migration as
+  applied and it is skipped, leaving the schema incomplete), and run it again.
 
 ## Binding reconciliation
 

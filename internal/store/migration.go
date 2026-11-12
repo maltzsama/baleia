@@ -105,7 +105,8 @@ type Status struct {
 //
 // Runs are serialized by a row in store_migration_lock. A migration is marked
 // dirty before its callback runs and cleared after; a dirty row blocks both Up
-// and Down until an operator reconciles the schema and clears it.
+// and Down until an operator reconciles the schema and deletes it; clearing the flag
+// instead would mark the migration as applied.
 type Runner struct {
 	db       *gorm.DB
 	registry *Registry
@@ -285,7 +286,7 @@ func (r *Runner) refuseInterrupted(ctx context.Context) error {
 	for _, row := range rows {
 		versions = append(versions, row.Version)
 	}
-	return fmt.Errorf("interrupted store migration(s) %v: reconcile the schema and clear the dirty ledger rows before retrying", versions)
+	return fmt.Errorf("interrupted store migration(s) %v: reconcile the schema, then delete the dirty ledger rows before retrying (setting dirty to false marks the migration as applied and skips it)", versions)
 }
 
 func (r *Runner) markApplied(ctx context.Context, version int64) error {
