@@ -201,7 +201,7 @@ func TestTableMaintenancePolicies(t *testing.T) {
 	got, err := f.r.GetTableMaintenancePolicy(ctx, db.GetTableMaintenancePolicyParams{
 		CatalogID: f.catalogID(), Namespace: "sales", TableName: "orders",
 	})
-	if err != nil || got.Revision != 1 || string(got.Optimize) != `{"enabled": true}` {
+	if err != nil || got.Revision != 1 || !sameJSON(t, got.Optimize, `{"enabled": true}`) {
 		t.Fatalf("GetTableMaintenancePolicy = %+v, %v", got, err)
 	}
 
@@ -426,7 +426,7 @@ func TestMonitoringSnapshots(t *testing.T) {
 	got, _ = f.r.GetTrinoQuerySnapshotByEngine(ctx, db.GetTrinoQuerySnapshotByEngineParams{
 		EngineID: f.engineID(), TrinoQueryID: "q-1",
 	})
-	if string(got.RawTrinoPayload) != `{"peakMemoryBytes": 42}` {
+	if !sameJSON(t, got.RawTrinoPayload, `{"peakMemoryBytes": 42}`) {
 		t.Fatalf("profile = %s", got.RawTrinoPayload)
 	}
 

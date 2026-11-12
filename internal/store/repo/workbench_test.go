@@ -512,7 +512,7 @@ func TestWorkbenchStatementsAndReferences(t *testing.T) {
 		t.Fatalf("SetStatementQueryHandle: %v", err)
 	}
 	handles, err := f.r.ListRunningStatementHandles(ctx, exec.ID)
-	if err != nil || len(handles) != 1 || string(handles[0].QueryHandle) != `{"id": "q1"}` {
+	if err != nil || len(handles) != 1 || !sameJSON(t, handles[0].QueryHandle, `{"id": "q1"}`) {
 		t.Fatalf("handles = %+v, %v", handles, err)
 	}
 	finishedAt := PGTime(time.Now().UTC())
