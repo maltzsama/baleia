@@ -499,6 +499,59 @@ func TestMetadataTable_DisplayForBinding(t *testing.T) {
 	}
 }
 
+// TestMetadataTable_Unsupported: a table the source lists but cannot read is
+// returned with its reason and without a SQL name or preview, so the UI can show
+// it disabled; the readable tables of the namespace carry none (#977).
+func TestMetadataTable_Unsupported(t *testing.T) {
+	t.Parallel()
+	f := newMetaFixture(t)
+	id := model.UUID(repo.NewUUID())
+	row := model.MetadataTable{
+		ID: id, CatalogID: model.UUID(repo.UUIDString(pgUUID(f.lake))),
+		Namespace: model.StringArray{"sales"}, Name: "locked", Kind: "table", Fingerprint: "unsupported:table_kind:TABLE_DB_STORAGE",
+		Properties: model.JSON(`{"unsupported_code":"table_kind","unsupported_detail":"TABLE_DB_STORAGE"}`),
+		LastSeenAt: time.Now(), LastChangedAt: time.Now(),
+	}
+	if err := f.gdb.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	sales := []string{"sales"}
+	r, err := f.h.ListMetadataTables(f.as(f.owner), ListMetadataTablesRequestObject{Id: f.ws, CatalogId: f.lake, Params: ListMetadataTablesParams{Ns: &sales}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range r.(ListMetadataTables200JSONResponse).Items {
+		switch it.Name {
+		case "locked":
+			if it.Unsupported == nil || it.Unsupported.Code != TableKind || it.Unsupported.Detail == nil || *it.Unsupported.Detail != "TABLE_DB_STORAGE" {
+				t.Errorf("locked table unsupported = %+v", it.Unsupported)
+			}
+		default:
+			if it.Unsupported != nil {
+				t.Errorf("readable table %q unsupported = %+v", it.Name, it.Unsupported)
+			}
+		}
+	}
+
+	d, err := f.h.GetMetadataTable(f.as(f.owner), GetMetadataTableRequestObject{Id: f.ws, TableId: openapi_types.UUID(repo.PGUUID(string(id)).Bytes)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tb := d.(GetMetadataTable200JSONResponse)
+	if tb.Unsupported == nil || tb.Unsupported.Code != TableKind {
+		t.Fatalf("detail unsupported = %+v", tb.Unsupported)
+	}
+	if tb.QualifiedName != nil || tb.PreviewSql != nil || len(tb.Columns) != 0 {
+		t.Errorf("an unsupported table must have no SQL name, preview or columns: %v %v %d", tb.QualifiedName, tb.PreviewSql, len(tb.Columns))
+	}
+	// A readable table keeps both.
+	ok, _ := f.h.GetMetadataTable(f.as(f.owner), GetMetadataTableRequestObject{Id: f.ws, TableId: f.orders})
+	if o := ok.(GetMetadataTable200JSONResponse); o.Unsupported != nil || o.QualifiedName == nil {
+		t.Errorf("orders = unsupported %+v, qualified %v", o.Unsupported, o.QualifiedName)
+	}
+}
+
 // TestSearch_Filters: tags, the certified tag and namespace compose with the
 // free text and with each other (#534).
 func TestSearch_Filters(t *testing.T) {

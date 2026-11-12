@@ -2310,6 +2310,17 @@ components:
             properties:
               path: { type: array, items: { type: string } }
 
+    MetadataTableUnsupported:
+      type: object
+      required: [code]
+      description: "Why the source lists the table but Baleia cannot read it. Such a table has no columns and cannot be queried."
+      properties:
+        code:
+          type: string
+          enum: [table_kind, refused]
+          description: "table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded."
+        detail: { type: string, nullable: true, description: "The source's own table kind when code is table_kind, for example TABLE_DB_STORAGE" }
+
     MetadataTableSummary:
       type: object
       required: [id, name, kind]
@@ -2319,6 +2330,7 @@ components:
         kind: { type: string, enum: [table, view, materialized_view] }
         comment: { type: string, nullable: true }
         last_changed_at: { type: string, format: date-time, nullable: true }
+        unsupported: { $ref: "#/components/schemas/MetadataTableUnsupported" }
 
     MetadataTablePage:
       type: object
@@ -2360,6 +2372,7 @@ components:
         properties: { type: object, additionalProperties: { type: string } }
         last_changed_at: { type: string, format: date-time, nullable: true }
         removed_at: { type: string, format: date-time, nullable: true, description: "Set when the source no longer has the table" }
+        unsupported: { $ref: "#/components/schemas/MetadataTableUnsupported" }
         binding_id: { type: string, format: uuid, nullable: true, description: "The binding display_type and qualified_name are rendered for; null when the catalog has none" }
         qualified_name: { type: string, nullable: true, description: "The table's name in SQL on that binding's engine" }
         preview_sql: { type: string, nullable: true, description: "A SELECT that previews the table on that binding's engine (the dialect's PreviewSQL, 100 rows); null without a binding or dialect" }
