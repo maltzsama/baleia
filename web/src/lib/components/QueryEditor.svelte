@@ -2,7 +2,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { formatKeys } from '$lib/util/keys';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { browser } from '$app/environment';
 	import { basicSetup } from 'codemirror';
 	import { EditorView, keymap } from '@codemirror/view';
@@ -17,6 +17,7 @@
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { savedQueries, type SavedQuery } from '$lib/stores/savedQueries.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
+	import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 	import { registerProvider, unregisterProvider } from '$lib/palette/registry';
 	import { modelPaletteProvider } from '$lib/semantic/palette';
 	import { exploreLinkOf } from '$lib/semantic/explore';
@@ -187,6 +188,28 @@
 
 	$effect(() => {
 		void loadTargets(workspaceId);
+	});
+
+	/**
+	 * Refetches the targets after a catalog access change, here or in another tab
+	 * (#975). The current targets stay on screen meanwhile; a failed refresh keeps
+	 * them.
+	 */
+	async function refreshTargets(wid: string) {
+		if (!wid) return;
+		try {
+			const { data } = await client.GET('/workspaces/{id}/targets', {
+				params: { path: { id: wid } }
+			});
+			if (data) targets = data;
+		} catch {
+			return;
+		}
+	}
+
+	$effect(() => {
+		if (catalogAccessStore.version === 0) return;
+		void refreshTargets(untrack(() => workspaceId));
 	});
 
 	// Drafts are per user × workspace (#112).

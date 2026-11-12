@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { editor } from '$lib/stores/editor.svelte';
+import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 import { loadDrafts } from '$lib/workbench/drafts';
 import { clearEnginesCache } from '$lib/engines/client';
 import { clearMetadataCache } from '$lib/metadata/client';
@@ -146,6 +147,47 @@ describe('QueryEditor', () => {
 		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
 		await waitFor(() => expect(catalog.value).toBe(BINDING));
 		expect(catalog.selectedOptions[0]?.textContent).toBe('lake (lake_t)');
+	});
+
+	it('offers a catalog granted to the workspace without a reload (#975)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
+		await waitFor(() => expect(catalog.value).toBe(BINDING));
+		expect(catalog.options).toHaveLength(1);
+
+		server.use(
+			http.get('/workspaces/{id}/targets', ({ response }) =>
+				response(200).json([
+					{
+						binding_id: BINDING,
+						catalog_id: CATALOG,
+						catalog_name: 'lake',
+						engine_id: ENGINE,
+						engine_name: 'trino',
+						engine_kind: 'trino',
+						engine_catalog_name: 'lake_t',
+						mode: 'adopted',
+						is_default: true
+					},
+					{
+						binding_id: '00000000-0000-0000-0000-0000000000b2',
+						catalog_id: '00000000-0000-0000-0000-0000000000c2',
+						catalog_name: 'granted',
+						engine_id: ENGINE,
+						engine_name: 'trino',
+						engine_kind: 'trino',
+						engine_catalog_name: 'granted_t',
+						mode: 'adopted',
+						is_default: false
+					}
+				])
+			)
+		);
+		catalogAccessStore.changed();
+		await waitFor(() => expect(catalog.options).toHaveLength(2));
+		// The selection the user had survives the refresh.
+		expect(catalog.value).toBe(BINDING);
 	});
 
 	it('starts empty and shows the restored draft under the same tab id (#112)', async () => {
