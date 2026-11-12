@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_TARGET_DIALECT, optimizeSQL, otherDialect, transpileSQL } from './sqlingo';
+import { DEFAULT_TARGET_DIALECT, defaultTargetDialect, optimizeSQL, transpileSQL } from './sqlingo';
 
 describe('transpileSQL', () => {
 	it('lowers PostgreSQL ILIKE for Trino', async () => {
@@ -36,15 +36,9 @@ describe('optimizeSQL', () => {
 	});
 });
 
-describe('otherDialect', () => {
-	it('defaults to Trino, never to Presto', () => {
+describe('defaultTargetDialect', () => {
+	it('is Trino, never Presto', () => {
 		expect(DEFAULT_TARGET_DIALECT).toBe('trino');
-		expect(otherDialect(null)).toBe('trino');
-		expect(otherDialect('postgresql')).toBe('trino');
-		expect(otherDialect('presto')).toBe('trino');
-	});
-
-	it('moves off the source when it already is Trino, still skipping Presto', () => {
-		expect(otherDialect('trino')).toBe('postgresql');
+		expect(defaultTargetDialect()).toBe('trino');
 	});
 });

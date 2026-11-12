@@ -44,7 +44,7 @@
 	import {
 		DEFAULT_TARGET_DIALECT,
 		formatSQL as formatSql,
-		otherDialect
+		defaultTargetDialect
 	} from '$lib/workbench/sqlingo';
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
 	import FunctionsPanel from '$lib/workbench/FunctionsPanel.svelte';
@@ -969,8 +969,7 @@
 	// later target change never rewrites the editor behind it.
 	function openConvert(mode: 'convert' | 'optimize') {
 		if (!editorView) return;
-		// Default to a different dialect so "Convert" is never a no-op on Trino.
-		convertTarget = otherDialect(selectedEngine?.dialect?.name);
+		convertTarget = defaultTargetDialect();
 		convertSql = editorView.state.doc.toString();
 		convertMode = mode;
 		convertOpen = true;
