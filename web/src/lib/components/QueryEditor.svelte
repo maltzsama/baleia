@@ -1211,14 +1211,6 @@
 				<span class="sr-only">{m.components_queryeditor_unsaved_changes()}</span>
 			{/if}
 		</button>
-		<button
-			onclick={() => {
-				paletteMode = 'commands';
-				paletteOpen = true;
-			}}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{m.components_queryeditor_commands()}</button
-		>
 		{#if exploreLink}
 			<button
 				onclick={openInExplore}

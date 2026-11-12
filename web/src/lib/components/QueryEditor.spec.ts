@@ -182,6 +182,24 @@ describe('QueryEditor', () => {
 		expect(await screen.findByRole('dialog')).toBeTruthy();
 	});
 
+	it('keeps Run, Explain, Format, Transform and Save in order and drops Commands (#979)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		await screen.findByText('trino · trino');
+
+		const names = ['Run', 'Explain', 'Format', 'Transform', 'Save'].map((name) =>
+			screen.getByRole('button', { name: new RegExp(`^${name}`) })
+		);
+		// Document order is the toolbar order: execution, editing, persistence.
+		for (let i = 1; i < names.length; i++) {
+			expect(
+				names[i - 1].compareDocumentPosition(names[i]) & Node.DOCUMENT_POSITION_FOLLOWING
+			).toBeTruthy();
+		}
+		expect(screen.queryByRole('button', { name: 'Commands' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Functions' })).toBeNull();
+	});
+
 	it('shows where the document stands on the Save button (#979)', async () => {
 		mockWorkbench();
 		render(QueryEditor);

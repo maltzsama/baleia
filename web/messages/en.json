@@ -163,7 +163,6 @@
 	"monitoring_cluster_load_running_queries_and_iceberg_t": "Cluster load, running queries and Iceberg table health, per engine.",
 	"errorpanel_code": "code",
 	"common_column": "Column",
-	"components_queryeditor_commands": "Commands",
 	"settings_profile_confirm_new_password": "Confirm new password",
 	"setup_confirm_password": "Confirm password",
 	"engines_connection": "Connection",
