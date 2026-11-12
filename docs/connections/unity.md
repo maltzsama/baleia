@@ -1,6 +1,6 @@
 ---
 sidebar_label: Unity Catalog
-description: "Connect Unity Catalog to Baleia. Unity Catalog, exposed through Trino. See its settings and what Baleia does with it."
+description: "Connect Unity Catalog to Baleia. Unity Catalog, exposed through Trino. Tables are read through the Iceberg REST endpoint, so only Iceberg tables and Delta tables with UniForm are listed and queryable; plain Delta tables are skipped by the metadata sync. See its settings and what Baleia does with it."
 ---
 
 # Connect Unity Catalog to Baleia
@@ -8,7 +8,7 @@ description: "Connect Unity Catalog to Baleia. Unity Catalog, exposed through Tr
 <!-- Generated from internal/connections/providers. Do not edit by hand:
      BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/ -->
 
-Unity Catalog, exposed through Trino.
+Unity Catalog, exposed through Trino. Tables are read through the Iceberg REST endpoint, so only Iceberg tables and Delta tables with UniForm are listed and queryable; plain Delta tables are skipped by the metadata sync.
 
 ## What Baleia does with it
 

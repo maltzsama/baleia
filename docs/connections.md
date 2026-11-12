@@ -490,7 +490,7 @@ Trino federated query engine.
 
 ## `unity` — Unity Catalog
 
-Unity Catalog, exposed through Trino.
+Unity Catalog, exposed through Trino. Tables are read through the Iceberg REST endpoint, so only Iceberg tables and Delta tables with UniForm are listed and queryable; plain Delta tables are skipped by the metadata sync.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|

@@ -60,7 +60,7 @@ func (*Provider) EngineKind() string         { return "" }
 func (*Provider) Meta() connections.TypeMeta {
 	modes := []connections.AccessMode{connections.AccessModeTrino}
 	return connections.TypeMeta{
-		Description:       "Unity Catalog, exposed through Trino.",
+		Description:       "Unity Catalog, exposed through Trino. Tables are read through the Iceberg REST endpoint, so only Iceberg tables and Delta tables with UniForm are listed and queryable; plain Delta tables are skipped by the metadata sync.",
 		Category:          connections.CategoryCatalogManager,
 		AccessModes:       modes,
 		TrinoCatalogTypes: []string{"iceberg"},
