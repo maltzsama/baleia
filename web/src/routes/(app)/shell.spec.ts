@@ -10,6 +10,7 @@ vi.mock('$app/state', () => ({
 
 import AppLayout from './+layout.svelte';
 import LeftSidebar from '$lib/components/LeftSidebar.svelte';
+import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 
 const content = createRawSnippet(() => ({ render: () => '<p>page body</p>' }));
 
@@ -36,6 +37,22 @@ describe('app shell landmarks', () => {
 			.getAllByRole('link')
 			.filter((link) => link.getAttribute('aria-current') === 'page');
 		expect(current.map((link) => link.textContent?.trim())).toEqual(['Data']);
+	});
+});
+
+// #975: a grant made in another tab shows up when this window is used again.
+describe('app shell catalog access refresh', () => {
+	it('signals a catalog access change when the window regains focus', async () => {
+		server.use(
+			http.get('/auth/me', ({ response }) => response(200).json(makeMe())),
+			http.get('/workspaces', ({ response }) => response(200).json([makeWorkspace()])),
+			http.get('/attention', ({ response }) => response(200).json([]))
+		);
+		render(AppLayout, { props: { children: content } });
+
+		const before = catalogAccessStore.version;
+		await fireEvent.focus(window);
+		expect(catalogAccessStore.version).toBe(before + 1);
 	});
 });
 
