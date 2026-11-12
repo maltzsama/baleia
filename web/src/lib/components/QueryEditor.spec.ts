@@ -10,6 +10,7 @@ import { http, server } from '../../test/server';
 import { makeSavedQuery, makeSpace, makeWorkspace } from '../../test/factories';
 import { formatKeys } from '$lib/util/keys';
 import QueryEditor from './QueryEditor.svelte';
+import RightSidebar from './RightSidebar.svelte';
 
 vi.mock('$lib/workbench/drafts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/workbench/drafts')>()),
@@ -596,9 +597,12 @@ describe('QueryEditor', () => {
 		expect(screen.queryByTestId('results-area')).toBeNull();
 	});
 
-	it('finds date_trunc and inserts it with the cursor inside the parentheses (#556)', async () => {
+	it('inserts a function from the Inspector reference, cursor inside the parentheses (#556, #979)', async () => {
 		mockWorkbench();
 		server.use(
+			http.get('/assistant/status', ({ response }) =>
+				response(200).json({ enabled: false, data_sharing: 'metadata_only' })
+			),
 			http.get('/workspaces/{id}/metadata/functions', ({ response }) =>
 				response(200).json([
 					{ name: 'date_trunc', kind: 'function', call: true },
@@ -607,9 +611,12 @@ describe('QueryEditor', () => {
 			)
 		);
 		render(QueryEditor);
+		render(RightSidebar, { props: { collapsed: false } });
 		await screen.findByText('trino · trino');
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Functions' }));
+		// The toolbar no longer has Functions: it lives in the Inspector.
+		expect(screen.queryByRole('button', { name: 'Functions' })).toBeNull();
+		await fireEvent.click(screen.getByRole('tab', { name: 'SQL reference' }));
 		const search = await screen.findByRole('searchbox', { name: 'Search functions' });
 		await fireEvent.input(search, { target: { value: 'truncate' } });
 		await fireEvent.click(await screen.findByRole('button', { name: /date_trunc/ }));

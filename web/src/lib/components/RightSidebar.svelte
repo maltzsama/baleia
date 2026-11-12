@@ -2,6 +2,9 @@
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import TableDetail from './TableDetail.svelte';
+	import FunctionsPanel from '$lib/workbench/FunctionsPanel.svelte';
+	import type { DialectFunction } from '$lib/engines/client';
+	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import LineageGraph from './LineageGraph.svelte';
 	import AssistantPanel from '$lib/assistant/Panel.svelte';
 	import { assistantStore } from '$lib/assistant/store.svelte';
@@ -20,7 +23,23 @@
 		width?: number;
 	} = $props();
 
-	let tab = $state<'inspector' | 'assistant'>('inspector');
+	let tab = $state<'inspector' | 'reference' | 'assistant'>('inspector');
+
+	const tabs = $derived([
+		{ id: 'inspector', label: m.components_rightsidebar_inspector() },
+		{ id: 'reference', label: m.components_rightsidebar_sql_reference() },
+		...(assistantStore.enabled
+			? [{ id: 'assistant', label: m.components_rightsidebar_assistant() }]
+			: [])
+	]);
+
+	// The SQL reference reads the target of the active editor tab (#979).
+	const referenceScope = $derived(editor.referenceScope);
+
+	// A function goes in at the cursor, which lands inside its parentheses.
+	function insertFunction(fn: DialectFunction) {
+		editor.insert(fn.call ? `${fn.name}()` : fn.name, fn.name.length + (fn.call ? 1 : 0));
+	}
 
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 	const savedQueryId = $derived(editor.activeTab.savedId);
@@ -86,42 +105,26 @@
 	{:else}
 		<div class="flex flex-col flex-1 overflow-hidden">
 			<div class="flex items-center gap-2 border-b border-border bg-bg-toolbar px-2.5 py-[7px]">
-				{#if assistantStore.enabled}
-					<div
-						class="flex flex-1 gap-1"
-						role="tablist"
-						aria-label={m.components_rightsidebar_right_sidebar()}
-					>
+				<div
+					class="flex flex-1 gap-1"
+					role="tablist"
+					aria-label={m.components_rightsidebar_right_sidebar()}
+				>
+					{#each tabs as item (item.id)}
 						<button
 							type="button"
 							role="tab"
-							aria-selected={tab === 'inspector'}
+							aria-selected={tab === item.id}
 							class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide {tab ===
-							'inspector'
+							item.id
 								? 'bg-bg-panel text-text-main'
 								: 'text-text-muted hover:text-text-main'}"
-							onclick={() => (tab = 'inspector')}
+							onclick={() => (tab = item.id as typeof tab)}
 						>
-							{m.components_rightsidebar_inspector()}
+							{item.label}
 						</button>
-						<button
-							type="button"
-							role="tab"
-							aria-selected={tab === 'assistant'}
-							class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide {tab ===
-							'assistant'
-								? 'bg-bg-panel text-text-main'
-								: 'text-text-muted hover:text-text-main'}"
-							onclick={() => (tab = 'assistant')}
-						>
-							{m.components_rightsidebar_assistant()}
-						</button>
-					</div>
-				{:else}
-					<span class="flex-1 text-[10px] font-bold uppercase tracking-wide text-text-muted"
-						>{m.components_rightsidebar_inspector()}</span
-					>
-				{/if}
+					{/each}
+				</div>
 				<button
 					onclick={() => (collapsed = true)}
 					title={m.components_rightsidebar_collapse()}
@@ -133,6 +136,22 @@
 			</div>
 			{#if tab === 'assistant' && assistantStore.enabled}
 				<AssistantPanel />
+			{:else if tab === 'reference'}
+				<div class="min-h-0 flex-1 overflow-hidden p-3">
+					{#if referenceScope}
+						<FunctionsPanel
+							workspaceId={referenceScope.workspaceId}
+							catalogId={referenceScope.catalogId}
+							bindingId={referenceScope.bindingId}
+							oninsert={insertFunction}
+						/>
+					{:else}
+						<EmptyState
+							title={m.components_rightsidebar_sql_reference()}
+							description={m.components_rightsidebar_reference_pick_a_target()}
+						/>
+					{/if}
+				</div>
 			{:else}
 				{#if lineageVisible}
 					<div class="shrink-0 border-b border-border p-3">

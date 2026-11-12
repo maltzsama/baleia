@@ -34,7 +34,6 @@
 		clearEnginesCache,
 		loadEngines,
 		type Dialect,
-		type DialectFunction,
 		type Engine,
 		type WorkspaceTarget
 	} from '$lib/engines/client';
@@ -49,7 +48,6 @@
 		defaultTargetDialect
 	} from '$lib/workbench/sqlingo';
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
-	import FunctionsPanel from '$lib/workbench/FunctionsPanel.svelte';
 	import ConvertSqlDialog from '$lib/workbench/ConvertSqlDialog.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
@@ -115,7 +113,6 @@
 
 	let saveOpen = $state(false);
 	let detailsOpen = $state(false);
-	let functionsOpen = $state(false);
 	let convertOpen = $state(false);
 	let convertMode = $state<'convert' | 'optimize'>('convert');
 	let convertSql = $state('');
@@ -657,22 +654,9 @@
 					}
 				: null
 		);
-		return () => editor.setReferenceScope(null);
 	});
-
-	// Insert a function from the reference panel with the cursor inside the
-	// parentheses (#556).
-	function insertFunction(fn: DialectFunction) {
-		if (!editorView || activeTab.readOnly) return;
-		const { from, to } = editorView.state.selection.main;
-		const insert = fn.call ? `${fn.name}()` : fn.name;
-		editorView.dispatch({
-			changes: { from, to, insert },
-			selection: { anchor: from + fn.name.length + (fn.call ? 1 : 0) },
-			userEvent: 'input.complete'
-		});
-		functionsOpen = false;
-	}
+	// Only on unmount: a rerun of the effect above must not blank the scope.
+	$effect(() => () => editor.setReferenceScope(null));
 
 	// The live document lives in CodeMirror; `tab.sql` is a debounced mirror so a
 	// burst of keystrokes does not serialize the whole doc, rebuild the draft
@@ -795,7 +779,7 @@
 		const pending = editor.pendingInsert;
 		if (!editorView || !pending || pending.seq === appliedInsertSeq) return;
 		appliedInsertSeq = pending.seq;
-		if (pending.tabId !== editor.activeId) return;
+		if (pending.tabId !== editor.activeId || activeTab.readOnly) return; // a view-only tab takes no insert
 		const { from, to } = editorView.state.selection.main;
 		editorView.dispatch({
 			changes: { from, to, insert: pending.text },
@@ -1192,11 +1176,6 @@
 			>{m.components_queryeditor_optimize()}</button
 		>
 		<button
-			onclick={() => (functionsOpen = true)}
-			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
-			>{m.functions_panel_title()}</button
-		>
-		<button
 			onclick={() => openSave(activeTab.readOnly ? 'copy' : 'save')}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap"
 			>{activeTab.readOnly
@@ -1358,20 +1337,6 @@
 			<ExecutionDetails {workspaceId} executionId={activeTab.executionId} />
 		</Drawer>
 	{/if}
-
-	<Drawer
-		size="md"
-		bind:open={functionsOpen}
-		title={m.functions_panel_title()}
-		onclose={() => editorView?.focus()}
-	>
-		<FunctionsPanel
-			workspaceId={completionScope?.workspaceId ?? ''}
-			catalogId={completionScope?.catalogId ?? ''}
-			bindingId={completionScope?.bindingId ?? ''}
-			oninsert={insertFunction}
-		/>
-	</Drawer>
 
 	<ConvertSqlDialog
 		bind:open={convertOpen}

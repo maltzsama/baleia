@@ -2736,5 +2736,7 @@
 	"metadata_unsupported_table": "Unsupported table",
 	"metadata_unsupported_table_kind": "type: {kind}\nUnsupported type: the source does not give external engines access to this kind of table.",
 	"metadata_unsupported_table_refused": "The source refused to serve this table, so it cannot be read.",
-	"metadata_unsupported_table_unreadable": "This table cannot be read, so it has no columns and cannot be queried."
+	"metadata_unsupported_table_unreadable": "This table cannot be read, so it has no columns and cannot be queried.",
+	"components_rightsidebar_sql_reference": "SQL reference",
+	"components_rightsidebar_reference_pick_a_target": "Choose a catalog in the editor to see the functions its engine supports."
 }
