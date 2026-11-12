@@ -867,8 +867,9 @@ const (
 
 // Defines values for MetadataTableUnsupportedCode.
 const (
-	Refused   MetadataTableUnsupportedCode = "refused"
-	TableKind MetadataTableUnsupportedCode = "table_kind"
+	Refused      MetadataTableUnsupportedCode = "refused"
+	Registration MetadataTableUnsupportedCode = "registration"
+	TableKind    MetadataTableUnsupportedCode = "table_kind"
 )
 
 // Defines values for MigrateV1ItemAction.
@@ -3765,14 +3766,14 @@ type MetadataTableSummaryKind string
 
 // MetadataTableUnsupported Why the source lists the table but Baleia cannot read it. Such a table has no columns and cannot be queried.
 type MetadataTableUnsupported struct {
-	// Code table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded.
+	// Code table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded. registration: the table is registered in a way the engine's connector does not recognize (detail is that registration).
 	Code MetadataTableUnsupportedCode `json:"code"`
 
-	// Detail The source's own table kind when code is table_kind, for example TABLE_DB_STORAGE
+	// Detail The source's own table kind when code is table_kind (for example TABLE_DB_STORAGE), or the registration found when code is registration (for example table_type=DELTA)
 	Detail *string `json:"detail"`
 }
 
-// MetadataTableUnsupportedCode table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded.
+// MetadataTableUnsupportedCode table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded. registration: the table is registered in a way the engine's connector does not recognize (detail is that registration).
 type MetadataTableUnsupportedCode string
 
 // MigrateV1Item defines model for MigrateV1Item.

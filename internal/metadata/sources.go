@@ -296,6 +296,11 @@ func (s *walkerSource) Walk(ctx context.Context, known func([]string, string) (K
 		}
 	}
 	return s.w.WalkCatalog(ctx, catalog, func(m connections.TableMeta) error {
+		if m.Ref.Unsupported.Is() {
+			// Listed but unreadable by the engine: record it with the reason
+			// and no columns, so the catalog shows it disabled (#977, #980).
+			return v.Table(unsupportedSnapshot(m.Ref, m.Ref.Unsupported))
+		}
 		if fk := fks[tableKey([]string(m.Ref.Namespace), m.Ref.Name)]; fk != nil {
 			m.ForeignKeys = fk
 		}

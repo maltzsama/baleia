@@ -92,6 +92,41 @@ func TestFormat(t *testing.T) {
 	}
 }
 
+// TestUnsupported: a Delta table registered only with Athena's table_type=DELTA
+// is marked unsupported, since Trino's Delta connector needs
+// spark.sql.sources.provider=delta (#980); every other registration is readable.
+func TestUnsupported(t *testing.T) {
+	t.Parallel()
+	registration := connections.Unsupported{Code: connections.UnsupportedRegistration, Detail: "table_type=DELTA"}
+	cases := []struct {
+		name   string
+		params map[string]string
+		want   connections.Unsupported
+	}{
+		{"athena delta", map[string]string{"table_type": "DELTA", "classification": "delta"}, registration},
+		{"athena delta, lower case", map[string]string{"table_type": "delta"}, registration},
+		{"spark delta", map[string]string{"spark.sql.sources.provider": "delta"}, connections.Unsupported{}},
+		{"both", map[string]string{"table_type": "DELTA", "spark.sql.sources.provider": "DELTA"}, connections.Unsupported{}},
+		{"iceberg", map[string]string{"table_type": "ICEBERG"}, connections.Unsupported{}},
+		{"hive", map[string]string{"classification": "csv"}, connections.Unsupported{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			table := gluetypes.Table{Name: aws.String("people"), Parameters: c.params}
+			if got := unsupported(table); got != c.want {
+				t.Errorf("unsupported = %+v, want %+v", got, c.want)
+			}
+			if got := meta("db", &table).Ref.Unsupported; got != c.want {
+				t.Errorf("meta Ref.Unsupported = %+v, want %+v", got, c.want)
+			}
+			if got := ref("db", table).Unsupported; got != c.want {
+				t.Errorf("ref Unsupported = %+v, want %+v", got, c.want)
+			}
+		})
+	}
+}
+
 // TestMetadataReader_Moto reads a real Glue API backed by moto. Run it with a
 // moto server: docker run -p 5000:5000 motoserver/moto, then
 // BALEIA_TEST_MOTO_URL=http://localhost:5000 go test ./internal/connections/glue/

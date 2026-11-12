@@ -233,6 +233,41 @@ func TestProviderSource_DatabaseSingleQuery(t *testing.T) {
 	}
 }
 
+// walkUnsupported is a walking reader whose one table the engine cannot read.
+type walkUnsupported struct{ *fakeReader }
+
+func (r walkUnsupported) WalkCatalog(_ context.Context, catalog string, visit func(connections.TableMeta) error) error {
+	return visit(connections.TableMeta{
+		Ref: connections.TableRef{
+			Catalog: catalog, Namespace: connections.Namespace{"delta_db"}, Name: "people", Type: "TABLE",
+			Unsupported: connections.Unsupported{Code: connections.UnsupportedRegistration, Detail: "table_type=DELTA"},
+		},
+		Columns: []connections.Column{{Name: "col", NativeType: "array<string>", Position: 1}},
+	})
+}
+
+// TestWalkerSource_RecordsUnsupportedTables: a walked table the engine cannot
+// read (a Glue Delta table registered the Athena way, #980) is recorded with its
+// reason and without the placeholder columns the catalog holds.
+func TestWalkerSource_RecordsUnsupportedTables(t *testing.T) {
+	t.Parallel()
+	r := walkUnsupported{&fakeReader{}}
+	src := &walkerSource{r: r, w: r, catalog: "glue", typeSystem: "hive"}
+	rec := &recorder{}
+	none := func([]string, string) (Known, bool) { return Known{}, false }
+	if err := src.Walk(context.Background(), none, rec); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.tables) != 1 {
+		t.Fatalf("tables = %+v", rec.tables)
+	}
+	got := rec.tables[0]
+	if got.Properties[db.TablePropUnsupportedCode] != connections.UnsupportedRegistration ||
+		got.Properties[db.TablePropUnsupportedDetail] != "table_type=DELTA" || len(got.Columns) != 0 {
+		t.Errorf("table = %+v", got)
+	}
+}
+
 // fakeIntrospectEngine answers the dialect's schemas and catalog queries and
 // records the session spec.
 type fakeIntrospectEngine struct {

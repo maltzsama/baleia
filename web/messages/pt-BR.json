@@ -2742,5 +2742,6 @@
 	"components_queryeditor_transform_hint": "Atua sobre o SQL do editor",
 	"components_queryeditor_convert_dialect": "Converter dialeto",
 	"components_queryeditor_saved": "Salvo",
-	"components_queryeditor_unsaved_changes": "Alterações não salvas"
+	"components_queryeditor_unsaved_changes": "Alterações não salvas",
+	"metadata_unsupported_table_registration": "registrada como: {registration}\nO motor não reconhece esse registro. Uma tabela Delta no Glue precisa de spark.sql.sources.provider=delta, como o Spark e o Databricks registram."
 }
