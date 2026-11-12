@@ -392,6 +392,9 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 					continue
 				}
 				meta, err := reader.LoadTable(ctx, tbl)
+				if errors.Is(err, connections.ErrTableUnsupported) {
+					continue // not readable through the provider's protocol: no health to record
+				}
 				if err != nil {
 					recordErr(fmt.Errorf("table %s.%s.%s: %w", cat.Name, nsName, tbl.Name, err))
 					continue

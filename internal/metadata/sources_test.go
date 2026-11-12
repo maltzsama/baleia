@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -150,6 +151,32 @@ func TestIcebergSource_ConditionalLoads(t *testing.T) {
 	}
 	if r.loads != 0 || !rec.tables[0].Unchanged || !rec.tables[1].Unchanged {
 		t.Fatalf("unchanged re-walk: loads %d tables %+v", r.loads, rec.tables)
+	}
+}
+
+// unsupportedReader reports the table named "a" as one the provider cannot read.
+type unsupportedReader struct{ *fakeReader }
+
+func (r unsupportedReader) LoadTableIfChanged(ctx context.Context, t connections.TableRef, etag string) (*connections.TableMeta, string, error) {
+	if t.Name == "a" {
+		return nil, "", fmt.Errorf("%w: load table", connections.ErrTableUnsupported)
+	}
+	return r.fakeReader.LoadTableIfChanged(ctx, t, etag)
+}
+
+// TestIcebergSource_SkipsUnsupportedTables: a table the provider cannot read
+// (a plain Delta table behind Unity) is skipped; the rest of the catalog still
+// syncs instead of the whole run failing.
+func TestIcebergSource_SkipsUnsupportedTables(t *testing.T) {
+	t.Parallel()
+	src := &icebergSource{r: unsupportedReader{&fakeReader{etag: `W/"1"`}}, catalog: "wh"}
+	none := func([]string, string) (Known, bool) { return Known{}, false }
+	rec := &recorder{}
+	if err := src.Walk(context.Background(), none, rec); err != nil {
+		t.Fatalf("walk failed on an unsupported table: %v", err)
+	}
+	if len(rec.tables) != 1 || rec.tables[0].Name != "b" {
+		t.Fatalf("tables = %+v, want only b", rec.tables)
 	}
 }
 
