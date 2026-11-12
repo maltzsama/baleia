@@ -8,6 +8,7 @@
 	import { poll } from '$lib/util/poll';
 	import { canOpenInBI } from '$lib/ui/patterns/kindIcon';
 	import { loadTable, type MetadataTableDetail, type TableRef } from '$lib/metadata/client';
+	import { unsupportedReason } from '$lib/metadata/unsupported';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -363,6 +364,17 @@
 					</span>
 				{/if}
 			</div>
+			{#if detail.unsupported}
+				<!-- The source lists the table but cannot read it (#977). -->
+				<div
+					class="mt-3 rounded border border-border bg-slate-50 px-3 py-2 text-[12px] text-text-muted dark:bg-[#1c2128]"
+					role="note"
+				>
+					<p class="font-semibold">{m.metadata_unsupported_table()}</p>
+					<p class="whitespace-pre-line">{unsupportedReason(detail.unsupported)}</p>
+					<p>{m.metadata_unsupported_table_unreadable()}</p>
+				</div>
+			{/if}
 		</div>
 
 		<div class="flex-1 overflow-y-auto">
