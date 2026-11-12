@@ -211,6 +211,9 @@ func (s *icebergSource) walkTables(ctx context.Context, ns connections.Namespace
 			if errors.Is(err, connections.ErrNotFound) {
 				continue // dropped between the listing and the load
 			}
+			if errors.Is(err, connections.ErrTableUnsupported) {
+				continue // listed, but not readable through this protocol (plain Delta behind Unity)
+			}
 			if err != nil {
 				return fmt.Errorf("load %v.%s: %w", ref.Namespace, ref.Name, err)
 			}

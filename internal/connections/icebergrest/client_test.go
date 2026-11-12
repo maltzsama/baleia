@@ -3,10 +3,13 @@ package icebergrest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/galileostudio/baleia/internal/connections"
 )
 
 // TestBearer_ReuseWindow: a client-credentials token is reused until 30 s
@@ -61,5 +64,41 @@ func TestBearer_StaticAndAnonymous(t *testing.T) {
 	tok, _, err = New("http://x", Auth{}, nil, http.DefaultClient).Bearer(context.Background())
 	if err != nil || tok != "" {
 		t.Errorf("anonymous = %q, %v", tok, err)
+	}
+}
+
+// TestLoadTable_BadRequestIsUnsupported: Unity answers a plain Delta table with
+// 400. Only a reader built for it reports that as ErrTableUnsupported; every
+// other reader keeps the plain status error, and other statuses stay errors.
+func TestLoadTable_BadRequestIsUnsupported(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/config":
+			_ = json.NewEncoder(w).Encode(map[string]any{})
+		case "/v1/namespaces/s/tables/delta":
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+	list := func(context.Context) ([]connections.CatalogRef, error) { return nil, nil }
+	same := func(c string) string { return c }
+	ref := func(name string) connections.TableRef {
+		return connections.TableRef{Catalog: "c", Namespace: connections.Namespace{"s"}, Name: name}
+	}
+	ctx := context.Background()
+
+	tolerant := New(srv.URL, Auth{}, nil, srv.Client()).ReaderSkippingUnsupported(list, same)
+	if _, err := tolerant.LoadTable(ctx, ref("delta")); !errors.Is(err, connections.ErrTableUnsupported) {
+		t.Errorf("400 on a tolerant reader = %v, want ErrTableUnsupported", err)
+	}
+	if _, err := tolerant.LoadTable(ctx, ref("broken")); err == nil || errors.Is(err, connections.ErrTableUnsupported) {
+		t.Errorf("500 on a tolerant reader = %v, want a plain error", err)
+	}
+	strict := New(srv.URL, Auth{}, nil, srv.Client()).ReaderWithCatalogs(list, same)
+	if _, err := strict.LoadTable(ctx, ref("delta")); err == nil || errors.Is(err, connections.ErrTableUnsupported) {
+		t.Errorf("400 on a strict reader = %v, want a plain error", err)
 	}
 }
