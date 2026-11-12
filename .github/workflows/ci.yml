@@ -5,9 +5,71 @@ on:
     branches: [main, develop]
   pull_request:
 
+# A new push to a pull request supersedes the run in flight. Pushes to main and
+# develop get a group per commit: a shared group would cancel queued runs even
+# without cancel-in-progress, and every commit there keeps its own result.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Which job groups a pull request can affect. Pushes run everything. A job
+  # whose `if` is false is reported as skipped, which satisfies a required
+  # check, so a docs-only pull request never waits on the Go suite.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      go: ${{ github.event_name != 'pull_request' || steps.go.outputs.code == 'true' || steps.inputs.outputs.go_data == 'true' }}
+      image: ${{ github.event_name != 'pull_request' || steps.image.outputs.image == 'true' }}
+      web: ${{ github.event_name != 'pull_request' || steps.inputs.outputs.web == 'true' }}
+    steps:
+      # Everything but the website, the SPA and prose is a Go input.
+      - id: go
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - "**"
+              - "!website/**"
+              - "!web/**"
+              - "!docs/**"
+              - "!**/*.md"
+      # The image builds the SPA and every Go binary.
+      - id: image
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          predicate-quantifier: every
+          filters: |
+            image:
+              - "**"
+              - "!website/**"
+              - "!docs/**"
+              - "!**/*.md"
+      - id: inputs
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            # Files outside Go packages that Go tests read.
+            go_data:
+              - "web/messages/**"
+              - "docs/connections.md"
+              - "docs/connections/**"
+            web:
+              - "web/**"
+              - "api/swagger.yaml"
+              - ".github/workflows/ci.yml"
+
   test:
     name: Test
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     # DB-backed tests (internal/testdb) fail instead of skipping when CI=true.
     services:
@@ -56,54 +118,72 @@ jobs:
         # Tests are independent and parallel (#374): a random order keeps them so.
         # The suite creates a migrated database per test (testdb.maxTests=4), so
         # the default 10m per-package timeout is too tight for internal/api;
-        # 30m gives headroom without masking a real hang.
-        run: go test -race -shuffle=on -timeout 30m ./...
+        # 30m gives headroom without masking a real hang. The store suite runs
+        # in the Store job, once per backend.
+        run: |
+          go test -race -shuffle=on -timeout 30m \
+            $(go list ./... | grep -vE '/internal/store(/|$)|/internal/persistence/partitioning$')
 
-  # Existing findings are a baseline: only new issues fail the job (#369). A
-  # pull request is compared with its merge base on main; a push with the
-  # commit before it (a branch's first push has none and falls back).
-  # The store supports MySQL and MariaDB through the same single
+  # The store supports Postgres, MySQL and MariaDB through the same single
   # DATABASE_URL contract: the DSN picks the dialector. This job points that
   # one variable at each server and runs the whole store suite on it, not a
   # selection: a selection let two broken unique keys, a 128 character cap on the
   # query history and a foreign key that MySQL checks row by row go unnoticed.
-  store-mysql:
-    name: Store on MySQL/MariaDB
+  store:
+    name: Store (${{ matrix.db }})
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: postgres
+            image: postgres:18
+            port: 5432
+            health: pg_isready -U postgres
+            url: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres?sslmode=disable
+          - db: mysql
+            image: mysql:8.4
+            port: 3306
+            health: mysqladmin ping -h 127.0.0.1 -uroot -pbaleia_dev
+            url: root:baleia_dev@tcp(127.0.0.1:3306)/
+          - db: mariadb
+            image: mariadb:11.4
+            port: 3306
+            health: healthcheck.sh --connect --innodb_initialized
+            url: root:baleia_dev@tcp(127.0.0.1:3306)/
     services:
-      mysql:
-        image: mysql:8.4
+      db:
+        image: ${{ matrix.image }}
+        # Each image reads only its own variables and ignores the others.
         env:
+          POSTGRES_PASSWORD: baleia_dev
           MYSQL_ROOT_PASSWORD: baleia_dev
           MYSQL_ROOT_HOST: "%"
-        ports: ["3306:3306"]
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pbaleia_dev" --health-interval 5s --health-timeout 5s --health-retries 20
-      mariadb:
-        image: mariadb:11.4
-        env:
           MARIADB_ROOT_PASSWORD: baleia_dev
           MARIADB_ROOT_HOST: "%"
-        ports: ["3307:3306"]
+        ports: ["${{ matrix.port }}:${{ matrix.port }}"]
         options: >-
-          --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 20
+          --health-cmd "${{ matrix.health }}" --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
-      - name: MySQL
+      - name: Store suite
         env:
-          BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3306)/
-        run: go test -race -count=1 -timeout 60m ./internal/store/... ./internal/persistence/partitioning
-      - name: MariaDB
-        env:
-          BALEIA_TEST_DATABASE_URL: root:baleia_dev@tcp(127.0.0.1:3307)/
-        run: go test -race -count=1 -timeout 60m ./internal/store/... ./internal/persistence/partitioning
+          BALEIA_TEST_DATABASE_URL: ${{ matrix.url }}
+        run: go test -race -shuffle=on -count=1 -timeout 60m ./internal/store/... ./internal/persistence/partitioning
 
+  # Existing findings are a baseline: only new issues fail the job (#369). A
+  # pull request is compared with its merge base on main; a push with the
+  # commit before it (a branch's first push has none and falls back).
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -125,6 +205,8 @@ jobs:
   # (golang:1.26-alpine), so a standard-library fix only needs a rebuild.
   vuln:
     name: Vulnerabilities
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -136,10 +218,28 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
+  # Functions nothing reaches from a binary, a test or a build-tagged suite
+  # (make deadcode); golangci-lint's unused misses exported ones.
+  deadcode:
+    name: Dead code
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: deadcode
+        run: make deadcode
+
   # Baleia's half of the registry contract against the fixtures of the pinned
   # plugin release (#39): the Makefile's BALEIA_PLUGIN_VERSION.
   contract:
     name: Contract
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -191,6 +291,8 @@ jobs:
 
   build:
     name: Build
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -205,6 +307,8 @@ jobs:
   # ARM-only break shows up on the PR, not at release time. Nothing is pushed.
   image:
     name: Image (amd64, arm64)
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -220,6 +324,8 @@ jobs:
 
   web:
     name: Web
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

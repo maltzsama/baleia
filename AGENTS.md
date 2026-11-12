@@ -13,6 +13,7 @@ the phase-3 issues reference as **FD1–FD16**.
 | `make generate` | Regenerate OpenAPI handlers. |
 | `make lint` / `make lint-all` | `golangci-lint` on what is new since `origin/main` / on everything. |
 | `make vuln` | `govulncheck`. |
+| `make deadcode` | Fails on functions nothing calls (binaries, tests and the `contract`/`e2e`/`integration` tags). |
 | `cd website && npm ci && npm run build` | Build the documentation site (Docusaurus over `docs/`); `npm start` serves it with reload. |
 | `make build` / `build-web` / `build-all` | Compile binaries / frontend / both. |
 | `make e2e` | minikube (`make k8s-up`) + `cmd/e2e-seed` + the BI gateway JDBC e2e (`make e2e-bi`) + Playwright (`web/e2e`). |
@@ -20,10 +21,14 @@ the phase-3 issues reference as **FD1–FD16**.
 
 Backend definition of done (`DoD-standard`): `go vet ./...`, `go test -race
 ./...` (with `BALEIA_TEST_DATABASE_URL` for the DB-backed tests), `make lint`,
-`make vuln`, regenerated OpenAPI when the contract changes, and a Bruno
+`make vuln`, `make deadcode`, regenerated OpenAPI when the contract changes, and a Bruno
 case for every new endpoint. CI (`.github/workflows/ci.yml`) runs the same:
-`Test` with Postgres and `-race`, `Lint` (golangci-lint, `.golangci.yml`, new
-issues only) and `Vulnerabilities` (govulncheck).
+`Test` with Postgres and `-race`, `Store` (the store suite once per backend:
+Postgres, MySQL, MariaDB), `Lint` (golangci-lint, `.golangci.yml`, new issues
+only), `Vulnerabilities` (govulncheck) and `Dead code` (deadcode). On a pull request the `Changes` job
+skips the jobs its paths cannot affect; pushes run everything. The release
+workflow starts only after CI succeeds on `main`, and a failed nightly
+(`web-e2e`, `k8s-smoke`, `sources`) opens a `Nightly failure` issue.
 
 ## Pull requests
 

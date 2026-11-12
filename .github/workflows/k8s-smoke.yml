@@ -21,13 +21,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install minikube, kubectl and helm
-        run: |
-          curl -fsSLo /tmp/minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-          sudo install -m 0755 /tmp/minikube /usr/local/bin/minikube
-          curl -fsSLo /tmp/kubectl "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - uses: ./.github/actions/setup-minikube
 
       - name: Bring the stack up
         run: make k8s-up
@@ -62,3 +56,16 @@ jobs:
           done
           echo "-- baleia-trino failed queries"
           kubectl -n baleia-dev logs deploy/baleia-trino --tail=3000 | grep -E 'FAILED|Query .* failed' | tail -10 || true
+
+  # Scheduled runs only: a failed pull request run is already visible on the PR.
+  report:
+    name: Report nightly failure
+    needs: smoke
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/report-nightly-failure

@@ -1,0 +1,38 @@
+name: Set up minikube
+description: >-
+  Installs pinned minikube, kubectl and Helm for the workflows that run the dev
+  stack on minikube (web-e2e, k8s-smoke). Pinned, so a tool release cannot
+  break a nightly without a change in this repository; bump them here.
+
+inputs:
+  minikube-version:
+    description: minikube release
+    default: v1.39.0
+  kubectl-version:
+    description: kubectl release
+    default: v1.37.2
+  helm-version:
+    description: Helm release
+    default: v3.22.1
+
+runs:
+  using: composite
+  steps:
+    - name: Install minikube, kubectl and helm
+      shell: bash
+      env:
+        MINIKUBE_VERSION: ${{ inputs.minikube-version }}
+        KUBECTL_VERSION: ${{ inputs.kubectl-version }}
+        HELM_VERSION: ${{ inputs.helm-version }}
+      run: |
+        set -euo pipefail
+        tmp="$(mktemp -d)"
+        curl -fsSLo "$tmp/minikube" "https://github.com/kubernetes/minikube/releases/download/${MINIKUBE_VERSION}/minikube-linux-amd64"
+        sudo install -m 0755 "$tmp/minikube" /usr/local/bin/minikube
+        curl -fsSLo "$tmp/kubectl" "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+        sudo install -m 0755 "$tmp/kubectl" /usr/local/bin/kubectl
+        curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar -xz -C "$tmp" linux-amd64/helm
+        sudo install -m 0755 "$tmp/linux-amd64/helm" /usr/local/bin/helm
+        minikube version --short
+        kubectl version --client
+        helm version --short

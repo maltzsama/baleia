@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
@@ -599,14 +598,6 @@ func (h *core) writeAPIError(w http.ResponseWriter, r *http.Request, status int,
 
 func chiURLParam(r *http.Request, key string) string {
 	return chi.URLParam(r, key)
-}
-
-// pathParam returns a route parameter percent-decoded. chi returns it still
-// encoded whenever net/http preserved RawPath (an escape that differs from the
-// default encoding, e.g. %24 for $ or %3B for ;), which would send
-// "events%24snapshots" to Trino instead of "events$snapshots".
-func pathParam(r *http.Request, key string) (string, error) {
-	return url.PathUnescape(chi.URLParam(r, key))
 }
 
 func uuidStr(u db.UUID) string {
