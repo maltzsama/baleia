@@ -166,8 +166,9 @@ comes from biGateway.port so the listener and its Service cannot disagree. */}}
 {{- if .Values.biGateway.enabled }}:{{ .Values.biGateway.port | int }}{{ end }}
 {{- end }}
 
-{{/* BALEIA_BI_GATEWAY_URL: the base URL the gateway rewrites Trino URIs to.
-Required when the gateway is on: the BI tool follows those URIs. */}}
+{{/* BALEIA_BI_GATEWAY_URL: the base URL the gateway rewrites Trino URIs to; the
+BI tool follows those URIs. biGateway.publicURL when set, else the gateway
+Service's in-cluster address. */}}
 {{- define "baleia.biGatewayURL" -}}
-{{- if .Values.biGateway.enabled }}{{ required "biGateway.publicURL is required when biGateway.enabled: it must be the URL BI tools reach, e.g. https://bi.example.com" .Values.biGateway.publicURL }}{{ end }}
+{{- if .Values.biGateway.enabled }}{{ .Values.biGateway.publicURL | default (printf "http://%s-bi-gateway.%s.svc.cluster.local:%d" (include "baleia.fullname" .) .Release.Namespace (.Values.biGateway.port | int)) }}{{ end }}
 {{- end }}

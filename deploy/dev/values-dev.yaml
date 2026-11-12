@@ -17,6 +17,10 @@ secrets:
     S3_ACCESS_KEY: rustfsadmin
     S3_SECRET_KEY: rustfsadmin
 
+# The dev stack runs its own Redis (config.BALEIA_REDIS_URL below).
+redis:
+  enabled: false
+
 config:
   PUBLIC_URL: http://localhost:8080
   TEMPORAL_HOST: temporal.baleia-dev.svc:7233

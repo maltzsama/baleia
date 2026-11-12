@@ -5,9 +5,9 @@
 #   BALEIA_REGISTRY_KEY (Phase B registry encryption, >= 32 chars, differs from
 #   JWT_SECRET and BALEIA_ENCRYPTION_KEY), BALEIA_REGISTRY_KEY_PREVIOUS (rotation only),
 #   S3_ACCESS_KEY, S3_SECRET_KEY, SMTP_PASSWORD (optional),
-#   BALEIA_BI_GATEWAY_SECRET (required when biGateway.enabled: the HMAC key that
-#   signs the gateway's rewritten Trino URIs, >= 32 chars, the same on every
-#   replica),
+#   BALEIA_BI_GATEWAY_SECRET (required in an existingSecret when biGateway.enabled:
+#   the HMAC key that signs the gateway's rewritten Trino URIs, >= 32 chars, the
+#   same on every replica; with secrets.create it is generated once when unset),
 #   BALEIA_TRINO_PASSWORD (optional: the password of config.BALEIA_TRINO_ADMIN_USER
 #   on an authenticated Trino; needs an https TRINO_URL)
 
@@ -87,18 +87,19 @@ api:
   port: 8080
 
 # BI gateway (ADR 0017): serves Trino's HTTP client protocol from the API pods,
-# so BI tools reach the engines only through Baleia. Off by default. It is a
-# data path: gateway replicas scale with BI concurrency (see
-# docs/operations.md#bi-gateway-capacity).
+# so BI tools reach the engines only through Baleia. On by default; set
+# enabled: false to turn it off. It is a data path: gateway replicas scale with
+# BI concurrency (see docs/operations.md#bi-gateway-capacity).
 biGateway:
-  enabled: false
+  enabled: true
   # Listener port inside the API pods; becomes BALEIA_BI_GATEWAY_ADDR=:port and
   # the port of the dedicated Service.
   port: 8443
   # Base URL the gateway rewrites Trino nextUri/infoUri/partialCancelUri to,
-  # e.g. https://bi.example.com. It must be the address BI tools can reach, so
-  # it is required when the gateway is enabled; with TLS terminating before the
-  # Service it must be https.
+  # e.g. https://bi.example.com. It must be the address BI tools can reach: set
+  # it when they connect from outside the cluster (with TLS terminating before
+  # the Service it must be https). Empty means the gateway Service's in-cluster
+  # address, http://<release>-bi-gateway.<namespace>.svc.cluster.local:<port>.
   publicURL: ""
   service:
     type: ClusterIP
@@ -124,13 +125,14 @@ worker:
 migrate:
   enabled: true
 
-# Redis (ADR 0022): the shared real-time, cache and rate-limit backbone. Enable
-# the in-chart instance for a single-node deployment, or leave it off and set
-# config.BALEIA_REDIS_URL at a managed Redis. A multi-replica API needs one of
-# the two; without it each replica keeps its own state and the real-time
-# features stay process-local.
+# Redis (ADR 0022): the shared real-time, cache and rate-limit backbone. The
+# in-chart instance is on by default; set enabled: false and
+# config.BALEIA_REDIS_URL at a managed Redis to use your own (the URL wins over
+# the in-chart instance). A multi-replica API needs one of the two; without it
+# each replica keeps its own state and the real-time features stay
+# process-local.
 redis:
-  enabled: false
+  enabled: true
   image:
     repository: docker.io/library/redis
     tag: "7-alpine"
