@@ -29,6 +29,7 @@ Put the credentials in a Secret and name it in `existingSecret`. These keys are 
 | `BALEIA_ENCRYPTION_KEY` | Seals stored connection credentials; at least 32 characters, different from `JWT_SECRET` |
 | `DATABASE_URL` | Baleia's store; the DSN selects PostgreSQL or the MySQL/MariaDB go-sql-driver DSN |
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Result storage |
+| `BALEIA_BI_GATEWAY_SECRET` | Signs the BI gateway's Trino URIs (on by default); at least 32 characters, the same on every API replica. Not needed with `biGateway.enabled: false` |
 
 With the in-chart Trino, add `BALEIA_TRINO_DB_PASSWORD`, which the catalog-store plugin uses to read the catalog registry. See [Secrets](secrets.md) for key rotation and the optional keys.
 
@@ -39,7 +40,8 @@ kubectl -n baleia create secret generic baleia-secrets \
   --from-literal=BALEIA_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
   --from-literal=DATABASE_URL='postgres://baleia:…@postgres:5432/baleia?sslmode=require' \
   --from-literal=S3_ACCESS_KEY='…' \
-  --from-literal=S3_SECRET_KEY='…'
+  --from-literal=S3_SECRET_KEY='…' \
+  --from-literal=BALEIA_BI_GATEWAY_SECRET="$(openssl rand -hex 32)"
 ```
 
 Keep `BALEIA_ENCRYPTION_KEY` safe: without it, stored connection credentials cannot be read.
