@@ -12,6 +12,7 @@ on:
       - "internal/server/**"
       - "scripts/bi-e2e/**"
       - ".github/workflows/web-e2e.yml"
+      - ".github/actions/setup-minikube/**"
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
@@ -41,13 +42,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Install minikube, kubectl and helm
-        run: |
-          curl -fsSLo /tmp/minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-          sudo install -m 0755 /tmp/minikube /usr/local/bin/minikube
-          curl -fsSLo /tmp/kubectl "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - uses: ./.github/actions/setup-minikube
 
       - name: Install web dependencies
         working-directory: web
