@@ -296,6 +296,9 @@ function createEditorStore() {
 		tabs.splice(0, tabs.length, emptyTab('1'));
 		activeId = '1';
 		counter = 1;
+		// An insert or run asked for before the reset must not land in the new tabs.
+		pendingInsert = null;
+		pendingRun = null;
 		generation++;
 	}
 
