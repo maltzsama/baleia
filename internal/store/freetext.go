@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/store/model"
@@ -58,6 +59,28 @@ func unboundFreeText(db *gorm.DB) error {
 		}
 		return nil
 	})
+}
+
+// dropCapIndexes drops the leftover index of a free-text column from a database
+// that still has it, before AutoMigrate reconciles models that include that
+// column. Without it an earlier migration, which reads the current model, would
+// widen the column under its index and MySQL would refuse ("BLOB/TEXT column used
+// in key specification without a key length"), leaving that migration dirty.
+func dropCapIndexes(db *gorm.DB, models []any) error {
+	for _, c := range freeTexts() {
+		for _, m := range models {
+			if reflect.TypeOf(m) != reflect.TypeOf(c.model) {
+				continue
+			}
+			if !db.Migrator().HasTable(c.model) || !db.Migrator().HasIndex(c.model, c.index) {
+				continue
+			}
+			if err := db.Migrator().DropIndex(c.model, c.index); err != nil {
+				return fmt.Errorf("drop %s: %w", c.index, err)
+			}
+		}
+	}
+	return nil
 }
 
 // isCapped reports whether the column is a bounded character type.

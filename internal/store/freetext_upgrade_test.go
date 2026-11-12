@@ -147,3 +147,43 @@ func TestUnboundFreeTextUpgrades(t *testing.T) {
 		t.Errorf("a long description after the migration: %v", err)
 	}
 }
+
+// TestAutoMigrateWithTheCapIndex is the path of an earlier migration, which
+// reconciles the current model on a database that still has the capped column
+// and its index: the index must go first, or MySQL refuses to widen the column
+// and leaves the migration dirty.
+func TestAutoMigrateWithTheCapIndex(t *testing.T) {
+	t.Parallel()
+	db := testdb.New(t)
+	dropForeignKeys(t, db, &model.QueryExecution{})
+	dropForeignKeys(t, db, &model.SemanticDoc{})
+
+	for _, c := range []struct {
+		old    any
+		model  any
+		field  string
+		index  string
+		column string
+	}{
+		{&oldExecSQL{}, &model.QueryExecution{}, "SQL", "query_executions_sql_trgm", "sql"},
+		{&oldDocDescription{}, &model.SemanticDoc{}, "Description", "semantic_docs_description_trgm", "description"},
+	} {
+		if err := db.Migrator().AlterColumn(c.old, c.field); err != nil {
+			t.Fatalf("cap %s: %v", c.column, err)
+		}
+		if !db.Migrator().HasIndex(c.old, c.index) {
+			if err := db.Migrator().CreateIndex(c.old, c.index); err != nil {
+				t.Fatalf("index %s: %v", c.index, err)
+			}
+		}
+		if err := store.AutoMigrate(db, c.model); err != nil {
+			t.Fatalf("AutoMigrate over the capped %s: %v", c.column, err)
+		}
+		if capped(t, db, c.model, c.column) {
+			t.Errorf("%s is still capped", c.column)
+		}
+		if db.Migrator().HasIndex(c.model, c.index) {
+			t.Errorf("index %s is still there", c.index)
+		}
+	}
+}
