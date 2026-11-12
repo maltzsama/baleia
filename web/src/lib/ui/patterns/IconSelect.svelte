@@ -98,7 +98,8 @@
 				}
 				break;
 			case 'Tab':
-				open = false;
+				// Commit the highlighted option before focus moves on.
+				if (open) pick(active);
 				break;
 		}
 	}

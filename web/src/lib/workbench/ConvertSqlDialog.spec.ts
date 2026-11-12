@@ -47,4 +47,12 @@ describe('ConvertSqlDialog', () => {
 		await fireEvent.keyDown(dropdown, { key: 'Enter' });
 		expect(dropdown.textContent).toContain('PostgreSQL');
 	});
+
+	it('commits the highlighted dialect when Tab moves focus away', async () => {
+		const dropdown = open('trino');
+		for (let i = 0; i < 3; i++) await fireEvent.keyDown(dropdown, { key: 'ArrowDown' });
+		await fireEvent.keyDown(dropdown, { key: 'Tab' });
+		expect(screen.queryByRole('listbox')).toBeNull();
+		expect(dropdown.textContent).toContain('PostgreSQL');
+	});
 });
