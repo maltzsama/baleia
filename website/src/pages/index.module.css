@@ -54,10 +54,18 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
-/* The released version, under the tagline; it links to its release. */
+/* The released version and the beta badge, under the tagline. */
+.release {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+/* The version links to its release; the beta badge states the stage. */
 .version {
   display: inline-block;
-  margin-top: 0.85rem;
   padding: 0.15rem 0.7rem;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 999px;
@@ -70,6 +78,19 @@
   border-color: var(--baleia-yellow);
   color: var(--baleia-yellow);
   text-decoration: none;
+}
+
+.stage {
+  display: inline-block;
+  padding: 0.15rem 0.7rem;
+  border: 1px solid #c62828;
+  border-radius: 999px;
+  background: #c62828;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
 }
 
 .buttons {

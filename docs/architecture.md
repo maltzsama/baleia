@@ -4,26 +4,15 @@ description: "Baleia's architecture: a control plane over your SQL engines. See 
 
 # Architecture
 
-Baleia is a **control plane**: it manages connections, catalogs and engines, runs your SQL on those engines and shows the results. The engines are the data plane. Baleia is not a query proxy, a JDBC/ODBC/Flight SQL server or a federation layer: external clients talk to the engines directly, and joins across engines are the job of a federated engine such as Trino ([ADR 0001](adr/0001-control-plane-only.md)).
+Baleia is a **control plane**: it manages connections, catalogs and engines, runs your SQL on those engines and shows the results. The engines are the data plane. Baleia is not a general-purpose query proxy, a federation layer or a JDBC/ODBC/Flight SQL server for arbitrary SQL: joins across engines stay the job of a federated engine such as Trino ([ADR 0001](adr/0001-control-plane-only.md)). External clients keep talking to the engines directly, with one exception: when the deployment keeps Trino private (the chart's NetworkPolicy; the default compose stack does not publish it), an external SQL client reaches Trino only through the **BI gateway** ([ADR 0017](adr/0017-bi-gateway.md)), read-only and scoped to a workspace, so Tableau and Power BI's queries land in history, audit and monitoring. Publishing Trino for local debugging, as the compose override does, opens a direct authenticated path.
 
 Architectural decisions are recorded in [`adr/`](adr/README.md). They are the current truth: where this page or the code disagrees with an ADR, the ADR's "Current compliance" section names the issue that closes the gap.
-
-## Components
-
-| Component | What it does |
-|---|---|
-| **Web app** (`web/`) | SvelteKit single-page app: workbench, data explorer, connections, content, monitoring, settings. |
-| **API** (`cmd/api`) | Go HTTP server. The OpenAPI spec (`api/swagger.yaml`) is the contract. Serves the web app, the REST API, the execution WebSocket and `/mcp`. |
-| **Worker** (`cmd/worker`) | Temporal worker: runs executions, metadata syncs, binding reconciliation, monitoring pollers and other recurring jobs. |
-| **PostgreSQL** | Baleia's own metadata: users, workspaces, connections, catalogs, content, executions, audit. |
-| **Object storage** | Any S3-compatible store (RustFS in the dev stacks) holding each statement's result as an Arrow file. |
-| **Temporal** | Durable workflows for everything long-running. It carries ids and statuses, never result rows. |
-| **Engines** | Where SQL runs: Trino (federated) and the direct engines PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, SQLite, ClickHouse and Arrow Flight SQL ([ADR 0006](adr/0006-multi-engine-scope.md)). |
-| **Catalog managers** | Polaris, Nessie, Lakekeeper, Iceberg REST, Unity, Glue and Hive Metastore, reached by Baleia for metadata and bound into Trino as catalogs ([connections.md](connections.md)). |
 
 ```mermaid
 flowchart LR
     Browser["Web app"] -->|REST and WebSocket| API
+    BI["BI tools"] -->|Trino protocol| Gateway["BI gateway"]
+    Gateway -->|read-only SQL| Engines
     API -->|starts workflows| Temporal
     Temporal --> Worker
     Worker -->|runs SQL| Engines
@@ -31,8 +20,25 @@ flowchart LR
     API -->|reads result pages| Storage
     API --- DB[("PostgreSQL")]
     Worker --- DB
+    API --- Redis[("Redis")]
+    Worker --- Redis
     Engines -->|Trino catalogs| Managers["Catalog managers"]
 ```
+
+## Components
+
+| Component | What it does |
+|---|---|
+| **Web app** (`web/`) | SvelteKit single-page app: workbench, data explorer, connections, content, monitoring, settings. |
+| **API** (`cmd/api`) | Go HTTP server. The OpenAPI spec (`api/swagger.yaml`) is the contract. Serves the web app, the REST API, the execution WebSocket, `/mcp` and the BI gateway listener. |
+| **BI gateway** | A read-only listener (`internal/bigateway`, `BALEIA_BI_GATEWAY_ADDR`) that speaks the Trino HTTP client protocol, so Tableau and Power BI query the Trino engines through Baleia, scoped to a workspace ([ADR 0017](adr/0017-bi-gateway.md)). Only Trino engines are served. |
+| **Worker** (`cmd/worker`) | Temporal worker: runs executions, metadata syncs, binding reconciliation, monitoring pollers and other recurring jobs. |
+| **PostgreSQL** | Baleia's own metadata: users, workspaces, connections, catalogs, content, executions, audit. PostgreSQL is the default; the GORM store ([ADR 0020](adr/0020-gorm-store.md)) also runs on MySQL/MariaDB. |
+| **Redis** | The shared real-time, cache and rate-limit backbone ([ADR 0022](adr/0022-shared-realtime-backbone.md)): it relays execution status to the WebSocket across replicas, backs the shared cache and the distributed rate limiter, and carries monitoring and assistant events. |
+| **Object storage** | Any S3-compatible store (RustFS in the dev stacks) holding each statement's result as an Arrow file, and the cold copies of the audit trail and query history, offloaded one UTC day at a time as gzip NDJSON objects and a manifest per day to a configured S3-compatible bucket ([ADR 0024](adr/0024-cold-storage-and-retention.md), [ADR 0026](adr/0026-daily-partitions-and-retention-cadence.md)). |
+| **Temporal** | Durable workflows for everything long-running. It carries ids and statuses, never result rows. |
+| **Engines** | Where SQL runs: Trino (federated) and the direct engines PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, SQLite, ClickHouse and Arrow Flight SQL ([ADR 0006](adr/0006-multi-engine-scope.md)). |
+| **Catalog managers** | Polaris, Nessie, Lakekeeper, Iceberg REST, Unity, Glue and Hive Metastore, reached by Baleia for metadata and bound into Trino as catalogs ([connections.md](connections.md)). |
 
 ## How a query runs
 
@@ -40,7 +46,7 @@ flowchart LR
 2. The API checks access, decides the run's workload class, records the execution and starts a Temporal workflow. With [workload management](guides/workload.md) on, the workflow first asks the engine's admission workflow for a slot in that class, and the execution is `queued` until it gets one.
 3. The worker splits the script with the engine's dialect and runs the statements in order in one engine session (on Trino, as the signed-in user's Trino identity). It stops at the first error; the rest are marked skipped.
 4. Each statement's rows are written to object storage as an Arrow file, capped by `BALEIA_RESULT_MAX_ROWS` and `BALEIA_RESULT_MAX_BYTES`.
-5. The WebSocket sends status events only: a snapshot first, then statement and execution status. Rows never travel over it.
+5. The web app follows the run on the execution WebSocket. With Redis on, a status change commits with a row in the transactional outbox, a relay publishes a wake-up on the bus, and the WebSocket handler on every replica re-reads the execution and its statements (the database is the source of truth) and sends the diff. Without Redis, the API does not start the relay and each connection polls the database instead. It sends a snapshot first — execution and statement SQL included — then status changes, queue position, admission events and statement progress; it never sends result rows.
 6. The web app reads the result in pages (`GET …/statements/{position}/results?offset=&limit=`). The API seeks the covering Arrow batches in the stored file, so neither side loads the whole result. Exports (CSV, TSV, JSON Lines, Arrow) stream from the same file.
 
 ## Trino security model
