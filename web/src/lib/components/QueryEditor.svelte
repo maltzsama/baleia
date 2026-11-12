@@ -645,6 +645,21 @@
 	);
 	const complete = sqlCompletionSource(() => completionScope);
 
+	// The Inspector's SQL reference asks the API about the target of the active
+	// tab (#979); the editor is the one that knows it.
+	$effect(() => {
+		editor.setReferenceScope(
+			completionScope
+				? {
+						workspaceId: completionScope.workspaceId,
+						catalogId: completionScope.catalogId,
+						bindingId: completionScope.bindingId
+					}
+				: null
+		);
+		return () => editor.setReferenceScope(null);
+	});
+
 	// Insert a function from the reference panel with the cursor inside the
 	// parentheses (#556).
 	function insertFunction(fn: DialectFunction) {
@@ -784,7 +799,7 @@
 		const { from, to } = editorView.state.selection.main;
 		editorView.dispatch({
 			changes: { from, to, insert: pending.text },
-			selection: { anchor: from + pending.text.length }
+			selection: { anchor: from + (pending.caret ?? pending.text.length) }
 		});
 		editorView.focus();
 	});

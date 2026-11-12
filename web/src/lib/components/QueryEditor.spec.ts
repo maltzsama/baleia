@@ -141,6 +141,28 @@ describe('QueryEditor', () => {
 		expect(screen.getByText('Ln 1, Col 1')).toBeTruthy();
 	});
 
+	it('publishes its target for the SQL reference in the Inspector (#979)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		await waitFor(() =>
+			expect(editor.referenceScope).toEqual({
+				workspaceId: WS,
+				catalogId: CATALOG,
+				bindingId: BINDING
+			})
+		);
+	});
+
+	it('inserts what the Inspector sends at the cursor (#979)', async () => {
+		mockWorkbench();
+		render(QueryEditor);
+		await waitFor(() => expect(editor.referenceScope).not.toBeNull());
+		editor.insert('count()', 6);
+		await waitFor(() =>
+			expect(document.querySelector('.cm-content')?.textContent).toContain('count()')
+		);
+	});
+
 	it('shows the name a query uses beside the catalog display name', async () => {
 		mockWorkbench();
 		render(QueryEditor);
