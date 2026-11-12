@@ -5,6 +5,13 @@ on:
     branches: [main, develop]
   pull_request:
 
+# A new push to a pull request supersedes the run in flight. Pushes to main and
+# develop get a group per commit: a shared group would cancel queued runs even
+# without cancel-in-progress, and every commit there keeps its own result.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     name: Test
