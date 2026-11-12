@@ -1,6 +1,6 @@
 ---
 sidebar_label: Unity Catalog
-description: "Connect Unity Catalog to Baleia. Unity Catalog, exposed through Trino. For now tables are read through the Iceberg REST endpoint: Iceberg tables and Delta tables with UniForm. Plain Delta tables are not read yet; the metadata sync skips them instead of failing. See its settings and what Baleia does with it."
+description: "Connect Unity Catalog to Baleia. Unity Catalog, exposed through Trino over its Iceberg REST endpoint. Baleia reads only tables that expose Iceberg metadata: Iceberg tables and Delta tables with Iceberg compatibility (UniForm) enabled. On Databricks, enable it on each Delta table ('delta.universalFormat.enabledFormats' = 'iceberg') and set iceberg_path to /api/2.1/unity-catalog/iceberg-rest. A table without it, such as a plain Delta table, is not readable through Baleia: the endpoint answers it with 400, and the metadata sync skips it and still syncs the rest of the catalog. See its settings and what Baleia does with it."
 ---
 
 # Connect Unity Catalog to Baleia
@@ -8,7 +8,7 @@ description: "Connect Unity Catalog to Baleia. Unity Catalog, exposed through Tr
 <!-- Generated from internal/connections/providers. Do not edit by hand:
      BALEIA_UPDATE_DOCS=1 go test ./internal/connections/providers/ -->
 
-Unity Catalog, exposed through Trino. For now tables are read through the Iceberg REST endpoint: Iceberg tables and Delta tables with UniForm. Plain Delta tables are not read yet; the metadata sync skips them instead of failing.
+Unity Catalog, exposed through Trino over its Iceberg REST endpoint. Baleia reads only tables that expose Iceberg metadata: Iceberg tables and Delta tables with Iceberg compatibility (UniForm) enabled. On Databricks, enable it on each Delta table ('delta.universalFormat.enabledFormats' = 'iceberg') and set iceberg_path to /api/2.1/unity-catalog/iceberg-rest. A table without it, such as a plain Delta table, is not readable through Baleia: the endpoint answers it with 400, and the metadata sync skips it and still syncs the rest of the catalog.
 
 ## What Baleia does with it
 
