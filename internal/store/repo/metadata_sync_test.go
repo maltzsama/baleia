@@ -69,3 +69,46 @@ func TestGetCatalogSyncState_NoFinishedRun(t *testing.T) {
 		t.Fatalf("GetCatalogSyncState(finished) = %+v, %v; want SyncedAt set", state, err)
 	}
 }
+
+// TestListMetadataTablesPage_UnsupportedReason: a table the source lists but
+// cannot read carries its reason in the page row; a readable one, and one whose
+// stored properties are not the expected shape, carry none (#977).
+func TestListMetadataTablesPage_UnsupportedReason(t *testing.T) {
+	t.Parallel()
+	f := newWorkbenchFixture(t)
+	ctx := context.Background()
+	ns := []string{"s"}
+	for name, props := range map[string]string{
+		"readable":    `{"format":"iceberg"}`,
+		"unsupported": `{"unsupported_code":"table_kind","unsupported_detail":"TABLE_DB_STORAGE"}`,
+		"refused":     `{"unsupported_code":"refused"}`,
+		"malformed":   `["not","an","object"]`,
+	} {
+		if _, err := f.r.UpsertMetadataTable(ctx, db.UpsertMetadataTableParams{
+			CatalogID: f.catalogPG(), Namespace: ns, Name: name, Kind: "table",
+			Fingerprint: "fp-" + name, Properties: []byte(props),
+		}); err != nil {
+			t.Fatalf("UpsertMetadataTable(%s): %v", name, err)
+		}
+	}
+
+	page, err := f.r.ListMetadataTablesPage(ctx, db.ListMetadataTablesPageParams{CatalogID: f.catalogPG(), Namespace: ns, Lim: 10})
+	if err != nil {
+		t.Fatalf("ListMetadataTablesPage: %v", err)
+	}
+	got := map[string][2]string{}
+	for _, row := range page {
+		got[row.Name] = [2]string{row.UnsupportedCode, row.UnsupportedDetail}
+	}
+	want := map[string][2]string{
+		"readable":    {"", ""},
+		"unsupported": {"table_kind", "TABLE_DB_STORAGE"},
+		"refused":     {"refused", ""},
+		"malformed":   {"", ""},
+	}
+	for name, w := range want {
+		if got[name] != w {
+			t.Errorf("table %q reason = %v, want %v", name, got[name], w)
+		}
+	}
+}

@@ -427,20 +427,13 @@ func diffed(t TableSnapshot, fingerprint string, known func([]string, string) (K
 }
 
 // snapshotOf converts a reader's table.
-// Properties a table that cannot be read carries instead of columns; the API
-// turns them into the reason it shows (#977).
-const (
-	PropUnsupportedCode   = "unsupported_code"
-	PropUnsupportedDetail = "unsupported_detail"
-)
-
 // unsupportedSnapshot records a table the provider lists but cannot read: no
 // columns, and the reason in its properties. The fingerprint carries the reason,
 // so a table that becomes readable (or unreadable) is seen as changed.
 func unsupportedSnapshot(ref connections.TableRef, u connections.Unsupported) TableSnapshot {
-	props := map[string]string{PropUnsupportedCode: u.Code}
+	props := map[string]string{db.TablePropUnsupportedCode: u.Code}
 	if u.Detail != "" {
-		props[PropUnsupportedDetail] = u.Detail
+		props[db.TablePropUnsupportedDetail] = u.Detail
 	}
 	return TableSnapshot{
 		Namespace:   slices.Clone(ref.Namespace),

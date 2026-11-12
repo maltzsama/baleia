@@ -10,6 +10,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/queryengine"
 )
@@ -191,14 +192,14 @@ func TestIcebergSource_RecordsUnsupportedTables(t *testing.T) {
 		t.Fatalf("tables = %+v, want the two of the namespace page", rec.tables)
 	}
 	a, b := rec.tables[0], rec.tables[1]
-	if a.Name != "a" || a.Properties[PropUnsupportedCode] != connections.UnsupportedKind ||
-		a.Properties[PropUnsupportedDetail] != "TABLE_DB_STORAGE" || len(a.Columns) != 0 || a.Unchanged {
+	if a.Name != "a" || a.Properties[db.TablePropUnsupportedCode] != connections.UnsupportedKind ||
+		a.Properties[db.TablePropUnsupportedDetail] != "TABLE_DB_STORAGE" || len(a.Columns) != 0 || a.Unchanged {
 		t.Errorf("flagged table = %+v", a)
 	}
 	if fake.loads != 0 {
 		t.Errorf("loads = %d, want the flagged table never loaded", fake.loads)
 	}
-	if b.Name != "b" || b.Properties[PropUnsupportedCode] != connections.UnsupportedRefused || len(b.Columns) != 0 {
+	if b.Name != "b" || b.Properties[db.TablePropUnsupportedCode] != connections.UnsupportedRefused || len(b.Columns) != 0 {
 		t.Errorf("refused table = %+v", b)
 	}
 	if a.Fingerprint == b.Fingerprint {
