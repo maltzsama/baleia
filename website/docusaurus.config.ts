@@ -111,10 +111,20 @@ const config: Config = {
       logo: { alt: 'Baleia', src: 'img/baleia.svg' },
       items: [
         { type: 'docSidebar', sidebarId: 'docs', position: 'left', label: 'Docs' },
-        { to: '/docs/adr', label: 'Decisions', position: 'left' },
-        { href: demo, label: 'Live demo', position: 'right' },
+        { to: '/docs/architecture', label: 'Architecture', position: 'left' },
         { href: `${repo}/releases`, label: 'Releases', position: 'right' },
-        { href: repo, label: 'GitHub', position: 'right' }
+        // One link to the repository: the GitHub mark and the live star count.
+        // A raw anchor avoids swizzling the navbar for two elements, and the
+        // badge is a shields.io image, not a third-party frame.
+        {
+          type: 'html',
+          position: 'right',
+          value:
+            `<a class="navbar-github" href="${repo}" target="_blank" rel="noopener" aria-label="Baleia on GitHub" data-umami-event="github-star">` +
+            `<svg class="navbar-github__mark" viewBox="0 0 16 16" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>` +
+            `<img class="navbar-github__stars" src="https://img.shields.io/github/stars/maltzsama/baleia?style=flat" alt="GitHub stars" loading="lazy" referrerpolicy="no-referrer" />` +
+            `</a>`
+        }
       ]
     },
     footer: {
