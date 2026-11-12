@@ -197,6 +197,14 @@ func (s *icebergSource) walkTables(ctx context.Context, ns connections.Namespace
 			return err
 		}
 		for _, ref := range page {
+			if ref.Unsupported.Is() {
+				// Listed but unreadable: record it with the reason instead of
+				// loading it, so the catalog shows it disabled.
+				if err := v.Table(unsupportedSnapshot(ref, ref.Unsupported)); err != nil {
+					return err
+				}
+				continue
+			}
 			k, seen := known(ref.Namespace, ref.Name)
 			var meta *connections.TableMeta
 			etag := ""
@@ -212,7 +220,11 @@ func (s *icebergSource) walkTables(ctx context.Context, ns connections.Namespace
 				continue // dropped between the listing and the load
 			}
 			if errors.Is(err, connections.ErrTableUnsupported) {
-				continue // listed, but not readable through this protocol (plain Delta behind Unity)
+				// The protocol refused a table the listing did not flag.
+				if err := v.Table(unsupportedSnapshot(ref, connections.Unsupported{Code: connections.UnsupportedRefused})); err != nil {
+					return err
+				}
+				continue
 			}
 			if err != nil {
 				return fmt.Errorf("load %v.%s: %w", ref.Namespace, ref.Name, err)
@@ -415,6 +427,30 @@ func diffed(t TableSnapshot, fingerprint string, known func([]string, string) (K
 }
 
 // snapshotOf converts a reader's table.
+// Properties a table that cannot be read carries instead of columns; the API
+// turns them into the reason it shows (#977).
+const (
+	PropUnsupportedCode   = "unsupported_code"
+	PropUnsupportedDetail = "unsupported_detail"
+)
+
+// unsupportedSnapshot records a table the provider lists but cannot read: no
+// columns, and the reason in its properties. The fingerprint carries the reason,
+// so a table that becomes readable (or unreadable) is seen as changed.
+func unsupportedSnapshot(ref connections.TableRef, u connections.Unsupported) TableSnapshot {
+	props := map[string]string{PropUnsupportedCode: u.Code}
+	if u.Detail != "" {
+		props[PropUnsupportedDetail] = u.Detail
+	}
+	return TableSnapshot{
+		Namespace:   slices.Clone(ref.Namespace),
+		Name:        ref.Name,
+		Kind:        kindOf(ref.Type),
+		Fingerprint: "unsupported:" + u.Code + ":" + u.Detail,
+		Properties:  props,
+	}
+}
+
 func snapshotOf(m connections.TableMeta) TableSnapshot {
 	t := TableSnapshot{
 		Namespace:  slices.Clone(m.Ref.Namespace),

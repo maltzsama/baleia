@@ -154,29 +154,55 @@ func TestIcebergSource_ConditionalLoads(t *testing.T) {
 	}
 }
 
-// unsupportedReader reports the table named "a" as one the provider cannot read.
+// unsupportedReader flags the table "a" as one the provider lists but cannot read
+// (listing), and the table "c" as one the protocol refuses only when it is loaded.
 type unsupportedReader struct{ *fakeReader }
 
+func (r unsupportedReader) ListTables(ctx context.Context, catalog string, ns connections.Namespace, token string) ([]connections.TableRef, string, error) {
+	tables, next, err := r.fakeReader.ListTables(ctx, catalog, ns, token)
+	for i := range tables {
+		if tables[i].Name == "a" {
+			tables[i].Unsupported = connections.Unsupported{Code: connections.UnsupportedKind, Detail: "TABLE_DB_STORAGE"}
+		}
+	}
+	return tables, next, err
+}
+
 func (r unsupportedReader) LoadTableIfChanged(ctx context.Context, t connections.TableRef, etag string) (*connections.TableMeta, string, error) {
-	if t.Name == "a" {
+	if t.Name == "b" {
 		return nil, "", fmt.Errorf("%w: load table", connections.ErrTableUnsupported)
 	}
 	return r.fakeReader.LoadTableIfChanged(ctx, t, etag)
 }
 
-// TestIcebergSource_SkipsUnsupportedTables: a table the provider cannot read
-// (a plain Delta table behind Unity) is skipped; the rest of the catalog still
-// syncs instead of the whole run failing.
-func TestIcebergSource_SkipsUnsupportedTables(t *testing.T) {
+// TestIcebergSource_RecordsUnsupportedTables: a table the provider cannot read
+// (flagged when listed, or refused when loaded) is recorded with its reason and no
+// columns; the rest of the catalog still syncs instead of the whole run failing.
+func TestIcebergSource_RecordsUnsupportedTables(t *testing.T) {
 	t.Parallel()
-	src := &icebergSource{r: unsupportedReader{&fakeReader{etag: `W/"1"`}}, catalog: "wh"}
+	fake := &fakeReader{etag: `W/"1"`}
+	src := &icebergSource{r: unsupportedReader{fake}, catalog: "wh"}
 	none := func([]string, string) (Known, bool) { return Known{}, false }
 	rec := &recorder{}
 	if err := src.Walk(context.Background(), none, rec); err != nil {
 		t.Fatalf("walk failed on an unsupported table: %v", err)
 	}
-	if len(rec.tables) != 1 || rec.tables[0].Name != "b" {
-		t.Fatalf("tables = %+v, want only b", rec.tables)
+	if len(rec.tables) != 2 {
+		t.Fatalf("tables = %+v, want the two of the namespace page", rec.tables)
+	}
+	a, b := rec.tables[0], rec.tables[1]
+	if a.Name != "a" || a.Properties[PropUnsupportedCode] != connections.UnsupportedKind ||
+		a.Properties[PropUnsupportedDetail] != "TABLE_DB_STORAGE" || len(a.Columns) != 0 || a.Unchanged {
+		t.Errorf("flagged table = %+v", a)
+	}
+	if fake.loads != 0 {
+		t.Errorf("loads = %d, want the flagged table never loaded", fake.loads)
+	}
+	if b.Name != "b" || b.Properties[PropUnsupportedCode] != connections.UnsupportedRefused || len(b.Columns) != 0 {
+		t.Errorf("refused table = %+v", b)
+	}
+	if a.Fingerprint == b.Fingerprint {
+		t.Errorf("fingerprints %q and %q must differ by reason", a.Fingerprint, b.Fingerprint)
 	}
 }
 
