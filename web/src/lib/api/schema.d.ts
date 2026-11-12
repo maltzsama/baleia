@@ -5644,11 +5644,11 @@ export interface components {
         /** @description Why the source lists the table but Baleia cannot read it. Such a table has no columns and cannot be queried. */
         MetadataTableUnsupported: {
             /**
-             * @description table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded.
+             * @description table_kind: the source reports a kind of table its protocol cannot serve (detail is that kind). refused: the source refused the table when it was loaded. registration: the table is registered in a way the engine's connector does not recognize (detail is that registration).
              * @enum {string}
              */
-            code: "table_kind" | "refused";
-            /** @description The source's own table kind when code is table_kind, for example TABLE_DB_STORAGE */
+            code: "table_kind" | "refused" | "registration";
+            /** @description The source's own table kind when code is table_kind (for example TABLE_DB_STORAGE), or the registration found when code is registration (for example table_type=DELTA) */
             detail?: string | null;
         };
         MetadataTableSummary: {
