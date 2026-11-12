@@ -490,7 +490,7 @@ Trino federated query engine.
 
 ## `unity` — Unity Catalog
 
-Unity Catalog, exposed through Trino over its Iceberg REST endpoint. Baleia reads only tables that expose Iceberg metadata: Iceberg tables and Delta tables with Iceberg compatibility (UniForm) enabled. On Databricks, enable it on each Delta table ('delta.universalFormat.enabledFormats' = 'iceberg') and set iceberg_path to /api/2.1/unity-catalog/iceberg-rest. A table without it, such as a plain Delta table, is not readable through Baleia: the endpoint answers it with 400, and the metadata sync skips it and still syncs the rest of the catalog.
+Unity Catalog, exposed through Trino over its Iceberg REST endpoint. Baleia reads only tables that expose Iceberg metadata: Iceberg tables and Delta tables with Iceberg compatibility (UniForm) enabled. On Databricks, enable it on each Delta table by setting both 'delta.enableIcebergCompatV2' = 'true' and 'delta.universalFormat.enabledFormats' = 'iceberg' (see Databricks' UniForm documentation for the prerequisites, such as column mapping) and set iceberg_path to /api/2.1/unity-catalog/iceberg-rest. A table without it, such as a plain Delta table, is not readable through Baleia: the endpoint answers it with 400, and the metadata sync skips it and still syncs the rest of the catalog.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
