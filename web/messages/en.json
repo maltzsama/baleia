@@ -2738,5 +2738,10 @@
 	"metadata_unsupported_table_refused": "The source refused to serve this table, so it cannot be read.",
 	"metadata_unsupported_table_unreadable": "This table cannot be read, so it has no columns and cannot be queried.",
 	"components_rightsidebar_sql_reference": "SQL reference",
-	"components_rightsidebar_reference_pick_a_target": "Choose a catalog in the editor to see the functions its engine supports."
+	"components_rightsidebar_reference_pick_a_target": "Choose a catalog in the editor to see the functions its engine supports.",
+	"components_queryeditor_transform": "Transform",
+	"components_queryeditor_transform_hint": "Operates on the SQL in the editor",
+	"components_queryeditor_convert_dialect": "Convert dialect",
+	"components_queryeditor_saved": "Saved",
+	"components_queryeditor_unsaved_changes": "Unsaved changes"
 }
