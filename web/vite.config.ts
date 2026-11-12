@@ -6,6 +6,8 @@ import { releaseVersion } from './release-version';
 
 export default defineConfig({
 	define: { __APP_VERSION__: JSON.stringify(releaseVersion()) },
+	// Keep Kit's cookie version in the server bundle instead of resolving MSW's hoisted major.
+	ssr: { noExternal: ['cookie'] },
 	plugins: [
 		tailwindcss(),
 		// Compiled, tree-shakable messages (#67). A missing m.* key is a
@@ -14,7 +16,9 @@ export default defineConfig({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
 			strategy: ['globalVariable', 'localStorage', 'preferredLanguage', 'baseLocale'],
-			emitTsDeclarations: true
+			emitTsDeclarations: true,
+			// Match CLI generation so tests can consume the same physical message files.
+			outputStructure: 'message-modules'
 		}),
 		sveltekit()
 	]
