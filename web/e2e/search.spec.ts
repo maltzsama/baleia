@@ -40,7 +40,7 @@ async function signInAndSync(
 
 async function searchPalette(page: Page, text: string) {
 	await page.goto('/sql');
-	await page.getByRole('button', { name: 'Commands' }).click();
+	await page.keyboard.press('ControlOrMeta+k');
 	await page.getByRole('combobox', { name: 'Command palette' }).fill(text);
 }
 
