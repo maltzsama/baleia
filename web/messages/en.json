@@ -1227,6 +1227,7 @@
 	"components_datasourcetree_this_workspace_has_no_granted_catalogs": "This workspace has no granted catalogs. Ask an owner to bind one.",
 	"components_datasourcetree_group_catalogs": "Group catalogs",
 	"components_datasourcetree_by_catalog": "By catalog",
+	"components_datasourcetree_query_name": "Name to use in queries",
 	"components_datasourcetree_by_engine": "By engine",
 	"components_datasourcetree_could_not_load_this_level": "Could not load this level",
 	"components_datasourcetree_could_not_load_tables": "Could not load tables",

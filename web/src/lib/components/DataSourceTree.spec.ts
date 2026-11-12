@@ -89,6 +89,18 @@ describe('DataSourceTree', () => {
 		);
 	});
 
+	it('shows the name a query uses beside a catalog whose display name differs', async () => {
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([makeMetadataCatalog({ name: 'Polaris Lake' })])
+			)
+		);
+		render(DataSourceTree, { props: { onSelectTable: vi.fn() } });
+
+		await screen.findByText('Polaris Lake');
+		expect(screen.getByText('lake_t')).toBeTruthy();
+	});
+
 	it('renders namespaces before tables finish loading', async () => {
 		let resolveTables!: () => void;
 		const tablesGate = new Promise<void>((resolve) => (resolveTables = resolve));

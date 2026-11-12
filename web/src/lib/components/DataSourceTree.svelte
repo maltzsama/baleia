@@ -541,6 +541,11 @@
 {#snippet catalogNode(refKey: string, catalog: MetadataCatalog)}
 	{@const key = nodeKey(refKey, [])}
 	{@const open = expanded.has(key)}
+	{@const queryNames = [
+		...new Set(
+			catalog.bindings.map((b) => b.engine_catalog_name).filter((n) => n && n !== catalog.name)
+		)
+	]}
 	<button
 		class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-left text-[13px] text-inherit hover:bg-slate-100 dark:hover:bg-[#1c2128]"
 		onclick={() => toggleNode(refKey, catalog, [])}
@@ -554,7 +559,11 @@
 		>
 		<KindIcon kind={catalog.provider_kind} family="catalog" size={14} />
 		<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium"
-			>{catalog.name}</span
+			>{catalog.name}{#if queryNames.length > 0}&nbsp;
+				<span
+					class="font-mono text-[11px] font-normal text-text-muted"
+					title={m.components_datasourcetree_query_name()}>{queryNames.join(', ')}</span
+				>{/if}</span
 		>
 		<span class="flex shrink-0 items-center gap-1">
 			{#each catalog.bindings as binding (binding.binding_id)}

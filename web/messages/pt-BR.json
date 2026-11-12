@@ -1225,6 +1225,7 @@
 	"components_datasourcetree_this_workspace_has_no_granted_catalogs": "Este workspace não tem catálogos concedidos. Peça a um proprietário para vincular um.",
 	"components_datasourcetree_group_catalogs": "Agrupar catálogos",
 	"components_datasourcetree_by_catalog": "Por catálogo",
+	"components_datasourcetree_query_name": "Nome para usar nas queries",
 	"components_datasourcetree_by_engine": "Por motor",
 	"components_datasourcetree_could_not_load_this_level": "Não foi possível carregar este nível",
 	"components_datasourcetree_could_not_load_tables": "Não foi possível carregar as tabelas",
