@@ -2743,5 +2743,19 @@
 	"components_queryeditor_convert_dialect": "Convert dialect",
 	"components_queryeditor_saved": "Saved",
 	"components_queryeditor_unsaved_changes": "Unsaved changes",
-	"metadata_unsupported_table_registration": "registered as: {registration}\nThe engine does not recognize this registration. A Delta table in Glue needs spark.sql.sources.provider=delta, as Spark and Databricks register it."
+	"metadata_unsupported_table_registration": "registered as: {registration}\nThe engine does not recognize this registration. A Delta table in Glue needs spark.sql.sources.provider=delta, as Spark and Databricks register it.",
+	"workspace_catalogs_title": "Workspace catalogs",
+	"workspace_catalogs_context": "Catalog access for {name}. Adding a catalog makes it available to this workspace; running queries also requires an available engine.",
+	"workspace_catalogs_search": "Search catalogs or connections",
+	"workspace_catalogs_add": "Add catalog",
+	"workspace_catalogs_request": "Request access",
+	"workspace_catalogs_available": "Available in workspace",
+	"workspace_catalogs_pending": "Awaiting catalog approval",
+	"workspace_catalogs_offer": "Awaiting your approval",
+	"workspace_catalogs_empty": "No catalogs found",
+	"workspace_catalogs_empty_hint": "Try another search. Only catalogs you can add or request are listed, alongside existing access.",
+	"workspace_catalogs_no_permission": "Catalog access is managed by a workspace administrator",
+	"workspace_catalogs_ask_admin": "Ask a workspace administrator to add a catalog or request access.",
+	"workspace_catalogs_empty_explorer": "Add a catalog to this workspace to browse its data.",
+	"workspace_catalogs_manage": "Manage access in workspace settings"
 }
