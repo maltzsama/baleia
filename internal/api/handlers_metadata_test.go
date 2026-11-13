@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
-	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metadata/browse"
 	"github.com/galileostudio/baleia/internal/temporal/workflows"
@@ -134,23 +133,6 @@ func TestUpdateCatalog_StartsSync(t *testing.T) {
 	resp, err = h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: &UpdateCatalogRequest{Warehouse: strp("wh3")}})
 	if err != nil || visitCode(t, resp) != 200 {
 		t.Fatalf("update with temporal down: %v", err)
-	}
-}
-
-// TestCreateDirectEngine_StartsMetadataSyncs: every native catalog of a new
-// engine gets a metadata pass right away.
-func TestCreateDirectEngine_StartsMetadataSyncs(t *testing.T) {
-	t.Parallel()
-	q := &engineQuerier{conn: ownedConnection(t, "clickhouse", testUserID)}
-	p := &fakeEngineProvider{kind: "clickhouse", roles: []connections.Role{connections.RoleMetadata, connections.RoleDirect}, catalogs: []string{"default", "logs"}}
-	h := engineHandlers(t, q, p)
-	tc := &metadataTemporal{}
-	h.temporalClient = tc
-	if rec := createEngine(t, h, "ch"); rec.Code != 201 {
-		t.Fatalf("response = %d %s", rec.Code, rec.Body)
-	}
-	if len(tc.starts) != 2 {
-		t.Fatalf("starts = %+v", tc.starts)
 	}
 }
 

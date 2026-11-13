@@ -159,6 +159,24 @@ func TestRegisterDirect_CreatesTheConnectionAndItsEngineInOneTransaction(t *test
 	}
 }
 
+// Every native catalog of a new direct engine gets a metadata pass right away.
+func TestRegisterDirect_StartsAMetadataSyncPerNativeCatalog(t *testing.T) {
+	t.Parallel()
+	h, _ := directRegistration(t, nil)
+	tc := &metadataTemporal{}
+	h.temporalClient = tc
+	resp, err := registerConnection(t, h, directBody("Sales DB"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(CreateCatalogConnection201JSONResponse); !ok {
+		t.Fatalf("response = %d", visitCreate(t, resp).Code)
+	}
+	if len(tc.starts) != 2 {
+		t.Fatalf("starts = %+v", tc.starts)
+	}
+}
+
 // A failure at any write leaves nothing: the connection is part of the same
 // transaction as the engine, its catalogs and their bindings.
 func TestRegisterDirect_RollsBackEveryStage(t *testing.T) {

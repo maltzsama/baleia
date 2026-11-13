@@ -236,21 +236,6 @@ func TestEngineHealth_FromProbe(t *testing.T) {
 	}
 }
 
-func TestConnectionAllows_ChecksComputedActions(t *testing.T) {
-	t.Parallel()
-	actions := []CatalogConnectionAllowedAction{CatalogConnectionAllowedActionRegisterEngine}
-	conn := CatalogConnection{AllowedActions: &actions}
-	if !connectionAllows(conn, "register_engine") {
-		t.Fatal("register_engine should be allowed")
-	}
-	if connectionAllows(conn, "delete") {
-		t.Fatal("delete should not be allowed")
-	}
-	if connectionAllows(CatalogConnection{}, "register_engine") {
-		t.Fatal("nil actions should allow nothing")
-	}
-}
-
 // noEngineRows has no connection or binding for any engine, so describeEngine
 // reports neither.
 type noEngineRows struct{ db.Querier }

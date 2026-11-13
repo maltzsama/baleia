@@ -15,7 +15,6 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // fakeEngineProvider is a direct-engine provider whose metadata reader lists
@@ -146,39 +145,7 @@ func ownedConnection(t *testing.T, typ string, owner string) db.CatalogConnectio
 	}
 }
 
-func createEngine(t *testing.T, h *API, name string) *httptest.ResponseRecorder {
-	t.Helper()
-	resp, err := h.CreateEngine(testContext(), CreateEngineRequestObject{Body: &CreateEngineRequest{Name: name, ConnectionId: openapi_types.UUID{0xC1}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	rec := httptest.NewRecorder()
-	if err := resp.VisitCreateEngineResponse(rec); err != nil {
-		t.Fatal(err)
-	}
-	return rec
-}
-
-func TestCreateDirectEngine_DiscoversNativeCatalogs(t *testing.T) {
-	t.Parallel()
-	q := &engineQuerier{conn: ownedConnection(t, "clickhouse", testUserID)}
-	p := &fakeEngineProvider{kind: "clickhouse", roles: []connections.Role{connections.RoleMetadata, connections.RoleDirect}, catalogs: []string{"default", "logs"}}
-	rec := createEngine(t, engineHandlers(t, q, p), "ch")
-	if rec.Code != 201 {
-		t.Fatalf("response = %d %s", rec.Code, rec.Body)
-	}
-	if len(q.created) != 1 || q.created[0].Class != "direct" || q.created[0].Kind != "clickhouse" || q.created[0].IdentityMode != "connection" || !q.created[0].CreatedBy.Valid {
-		t.Fatalf("engine = %+v", q.created)
-	}
-	if len(q.natives) != 2 || q.natives[0].Name != "default" || q.natives[1].Name != "logs" || q.natives[0].ConnectionID != q.conn.ID {
-		t.Fatalf("native catalogs = %+v", q.natives)
-	}
-	if len(q.bindings) != 2 || q.bindings[1].EngineCatalogName != "logs" || !q.bindings[1].EngineID.Valid {
-		t.Fatalf("native bindings = %+v", q.bindings)
-	}
-}
-
-func TestCreateDirectEngine_NativeCatalogPerKind(t *testing.T) {
+func TestNativeCatalogNames_PerKind(t *testing.T) {
 	t.Parallel()
 	cases := map[connections.Kind]string{
 		connections.KindPostgreSQL: "sales",        // the configured database
@@ -187,44 +154,11 @@ func TestCreateDirectEngine_NativeCatalogPerKind(t *testing.T) {
 	for kind, want := range cases {
 		t.Run(string(kind), func(t *testing.T) {
 			t.Parallel()
-			q := &engineQuerier{conn: ownedConnection(t, string(kind), testUserID)}
 			p := &fakeEngineProvider{kind: kind, roles: []connections.Role{connections.RoleDirect}, catalogs: []string{"ignored"}}
-			if rec := createEngine(t, engineHandlers(t, q, p), "e"); rec.Code != 201 {
-				t.Fatalf("response = %d %s", rec.Code, rec.Body)
-			}
-			if len(q.natives) != 1 || q.natives[0].Name != want {
-				t.Fatalf("native catalogs = %+v, want %q", q.natives, want)
-			}
-		})
-	}
-}
-
-func TestCreateEngine_Rejects(t *testing.T) {
-	t.Parallel()
-	direct := []connections.Role{connections.RoleDirect}
-	cases := map[string]struct {
-		conn db.CatalogConnection
-		p    *fakeEngineProvider
-		name string
-		code int
-		want string
-	}{
-		"not an engine kind": {ownedConnection(t, "polaris", testUserID), &fakeEngineProvider{kind: "polaris", roles: []connections.Role{connections.RoleMetadata}}, "e", 422, "engine_unsupported"},
-		"no provider":        {ownedConnection(t, "glue", testUserID), &fakeEngineProvider{kind: "x", roles: direct}, "e", 422, "engine_unsupported"},
-		"unreachable":        {ownedConnection(t, "clickhouse", testUserID), &fakeEngineProvider{kind: "clickhouse", roles: direct, pingErr: connections.ErrDeniedNetwork}, "e", 422, "connection_denied_network"},
-		"bad name":           {ownedConnection(t, "clickhouse", testUserID), &fakeEngineProvider{kind: "clickhouse", roles: direct}, "Bad Name", 422, "validation_error"},
-		"foreign connection": {ownedConnection(t, "clickhouse", "00000000-0000-0000-0000-00000000beef"), &fakeEngineProvider{kind: "clickhouse", roles: direct}, "e", 404, "not_found"},
-	}
-	for name, c := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			q := &engineQuerier{conn: c.conn}
-			rec := createEngine(t, engineHandlers(t, q, c.p), c.name)
-			if rec.Code != c.code || !strings.Contains(rec.Body.String(), c.want) {
-				t.Fatalf("response = %d %s, want %d with %q", rec.Code, rec.Body, c.code, c.want)
-			}
-			if len(q.created) != 0 {
-				t.Fatal("an engine was created")
+			cfg := connections.Config{Values: map[string]string{"database": "sales"}}
+			got, err := catalogs.NativeNames(context.Background(), p, cfg, "warehouse-db")
+			if err != nil || len(got) != 1 || got[0] != want {
+				t.Fatalf("native catalogs = %v, %v, want %q", got, err, want)
 			}
 		})
 	}
