@@ -244,7 +244,10 @@ func AllMigrations() (*Registry, error) {
 // until bootstrap.SplitDualPathConnections splits them; engine-family and
 // unused connections have no data access mode.
 func backfillAccessMode(db *gorm.DB) error {
-	if err := recreateAccessModeCheck(db); err != nil {
+	// A database that reaches this migration from an older version still has
+	// the check that allows only direct and trino, and may hold trino rows from
+	// an interrupted run; the rename swaps the check and rewrites them first.
+	if err := renameTrinoAccessMode(db); err != nil {
 		return err
 	}
 	var rows []model.CatalogConnection

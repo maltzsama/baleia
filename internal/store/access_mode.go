@@ -29,19 +29,6 @@ func createAccessModeCheck(tx *gorm.DB) error {
 	return nil
 }
 
-// recreateAccessModeCheck replaces the installed check with the one the model
-// declares. Migration 8 calls it before writing "federated": a database that
-// reaches it from an older version still has the check that allows only
-// "direct" and "trino".
-func recreateAccessModeCheck(db *gorm.DB) error {
-	return db.Transaction(func(tx *gorm.DB) error {
-		if err := dropAccessModeCheck(tx); err != nil {
-			return err
-		}
-		return createAccessModeCheck(tx)
-	})
-}
-
 // renameTrinoAccessMode turns the access mode "trino" into "federated" (ADR
 // 0029): Trino is an engine kind, not an execution path. The old check goes,
 // the rows are rewritten while nothing constrains the column, and the check is
