@@ -66,6 +66,8 @@
 	const registerProvider = $derived(
 		engineProviders.find((provider) => provider.kind === registerProviderKind)
 	);
+	// The empty state carries its own call to action, so the header one would repeat it.
+	const emptyList = $derived(!loading && !error && engines.length === 0);
 	const canRegister = $derived(
 		canGlobal(authStore.user, 'create_connection') && engineProviders.length > 0
 	);
@@ -147,7 +149,7 @@
 				{m.engines_what_runs_your_sql_what_it_guarantees_and()}
 			</p>
 		</div>
-		{#if canRegister}
+		{#if canRegister && !emptyList}
 			<Button variant="primary" onclick={openRegister}>{m.engines_register_engine()}</Button>
 		{/if}
 	</div>

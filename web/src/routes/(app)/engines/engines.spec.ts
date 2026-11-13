@@ -129,7 +129,10 @@ describe('engines list', () => {
 		);
 		render(EnginesPage);
 
-		await fireEvent.click(await screen.findByRole('button', { name: 'Register engine' }));
+		await screen.findByText('No engines yet');
+		// One action in the empty state: the header does not repeat it.
+		expect(screen.getAllByRole('button', { name: 'Register engine' })).toHaveLength(1);
+		await fireEvent.click(screen.getByRole('button', { name: 'Register engine' }));
 		expect(screen.queryByLabelText('Connection name')).toBeNull();
 		const kind = screen.getByRole('combobox', { name: 'Engine kind' });
 		expect(kind.textContent).toContain('Trino');
