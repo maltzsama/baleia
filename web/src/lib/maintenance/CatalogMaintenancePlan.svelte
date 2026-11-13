@@ -19,9 +19,12 @@
 
 	let {
 		catalogId,
+		readOnly = false,
 		onconfigure
 	}: {
 		catalogId: string;
+		/** The catalog is read-only: its tables are analyzed, never maintained. */
+		readOnly?: boolean;
 		/** Opens the editor in place instead of linking to the maintenance page. */
 		onconfigure?: (item: CatalogMaintenancePlanItem) => void;
 	} = $props();
@@ -79,6 +82,13 @@
 		</div>
 		<Button size="sm" loading={analyzing} onclick={analyze}>{m.maintenance_analyze_now()}</Button>
 	</div>
+
+	{#if readOnly}
+		<p class="mb-3 flex items-center gap-2 text-[12px] text-text-muted" role="note">
+			<Badge tone="neutral">{m.common_read_only()}</Badge>
+			{m.maintenance_catalog_read_only()}
+		</p>
+	{/if}
 
 	{#if loading}
 		<div class="space-y-2" role="status" aria-label={m.maintenance_loading()}>

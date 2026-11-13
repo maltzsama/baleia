@@ -45,8 +45,10 @@ func (r *Repo) ListMetadataCatalogs(ctx context.Context, workspaceID db.UUID) ([
 			return err
 		}
 		kinds := make(map[string]string, len(connections))
+		readOnly := make(map[string]bool, len(connections))
 		for _, connection := range connections {
 			kinds[string(connection.ID)] = connection.Type
+			readOnly[string(connection.ID)] = connection.CredentialsReadOnly
 		}
 		synced, err := r.syncTimes(tx, visible)
 		if err != nil {
@@ -75,13 +77,14 @@ func (r *Repo) ListMetadataCatalogs(ctx context.Context, workspaceID db.UUID) ([
 				status = "never"
 			}
 			out = append(out, db.ListMetadataCatalogsRow{
-				ID:                 PGUUID(string(catalog.ID)),
-				Name:               string(catalog.Name),
-				Origin:             string(catalog.Origin),
-				ProviderKind:       kinds[string(catalog.ConnectionID)],
-				MetadataSyncedAt:   synced[string(catalog.ID)],
-				MetadataSyncStatus: status,
-				Bindings:           encoded,
+				ID:                  PGUUID(string(catalog.ID)),
+				Name:                string(catalog.Name),
+				Origin:              string(catalog.Origin),
+				ProviderKind:        kinds[string(catalog.ConnectionID)],
+				CredentialsReadOnly: readOnly[string(catalog.ConnectionID)],
+				MetadataSyncedAt:    synced[string(catalog.ID)],
+				MetadataSyncStatus:  status,
+				Bindings:            encoded,
 			})
 		}
 		return nil

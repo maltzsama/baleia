@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/catalogs/admin"
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -379,6 +380,8 @@ func (h *core) catalogSummary(ctx context.Context, cat db.Catalog, p authz.Princ
 		out.Connection = &EngineConnectionRef{Id: openapi_types.UUID(conn.ID.Bytes), Name: conn.Name}
 		kind := conn.Type
 		out.ProviderKind = &kind
+		out.TableHealth = cat.Origin == "source" && h.connections.HasTableHealth(connections.Kind(kind))
+		out.ReadOnly = h.connections.CatalogReadOnly(connections.Kind(kind), conn.CredentialsReadOnly)
 	}
 	rows, err := h.topology.BindingsOfCatalog(ctx, cat.ID)
 	if err == nil {

@@ -55,8 +55,12 @@ func New(d *connections.Dialer) *Provider { return &Provider{dialer: d} }
 func (*Provider) Kind() connections.Kind     { return connections.KindUnity }
 func (*Provider) Label() string              { return "Unity Catalog" }
 func (*Provider) Family() connections.Family { return connections.FamilyIceberg }
-func (*Provider) Roles() []connections.Role  { return []connections.Role{connections.RoleMetadata} }
-func (*Provider) EngineKind() string         { return "" }
+
+// ReadOnlyKind: Unity's Iceberg endpoint promises reads only, so Baleia never
+// runs table maintenance on its catalogs.
+func (*Provider) ReadOnlyKind() bool        { return true }
+func (*Provider) Roles() []connections.Role { return []connections.Role{connections.RoleMetadata} }
+func (*Provider) EngineKind() string        { return "" }
 
 // Meta implements connections.Provider (ADR 0021).
 func (*Provider) Meta() connections.TypeMeta {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metadata"
@@ -77,6 +78,8 @@ func (h *CatalogHandlers) ListMetadataCatalogs(ctx context.Context, request List
 			Name:               r.Name,
 			Origin:             MetadataCatalogOrigin(r.Origin),
 			ProviderKind:       r.ProviderKind,
+			TableHealth:        r.Origin == "source" && h.connections.HasTableHealth(connections.Kind(r.ProviderKind)),
+			ReadOnly:           h.connections.CatalogReadOnly(connections.Kind(r.ProviderKind), r.CredentialsReadOnly),
 			MetadataSyncedAt:   timePtr(r.MetadataSyncedAt),
 			MetadataSyncStatus: MetadataCatalogMetadataSyncStatus(r.MetadataSyncStatus),
 			Bindings:           []MetadataCatalogBinding{},

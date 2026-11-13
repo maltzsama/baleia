@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 )
@@ -96,6 +97,16 @@ func TestPostgresDSN(t *testing.T) {
 	options := q.Get("options")
 	if !strings.Contains(options, "statement_timeout=5000") || !strings.Contains(options, "lock_timeout=2000") {
 		t.Fatalf("options = %q", options)
+	}
+
+	// The driver must read the same options: pgx 5.12 took a "+" literally and
+	// the server rejected "+statement_timeout" at startup.
+	cfg, err := pgconn.ParseConfig(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "-c statement_timeout=5000 -c lock_timeout=2000"; cfg.RuntimeParams["options"] != want {
+		t.Fatalf("pgx options = %q, want %q", cfg.RuntimeParams["options"], want)
 	}
 }
 

@@ -9,7 +9,6 @@
 	import { loadCatalogs, type MetadataCatalog } from '$lib/metadata/client';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
-	import { hasTableHealth } from '$lib/ui/patterns/kindIcon';
 	import { analyzeCatalogTableHealth, runTableMaintenance } from '$lib/maintenance/client';
 	import TableMaintenance from '$lib/maintenance/TableMaintenance.svelte';
 	import CatalogMaintenancePlan from '$lib/maintenance/CatalogMaintenancePlan.svelte';
@@ -205,6 +204,10 @@
 
 	let catalogs = $state<MetadataCatalog[]>([]);
 	let catalogId = $state('');
+	// Read-only catalogs are analyzed, never maintained (#996).
+	const isReadOnly = (id: string) =>
+		catalogs.find((catalog) => catalog.id === id)?.read_only ?? false;
+	const selectedReadOnly = $derived(isReadOnly(catalogId));
 	let health = $state<TableHealth[]>([]);
 	let healthLoading = $state(false);
 	let healthError = $state('');
@@ -341,8 +344,8 @@
 	async function loadCatalogList() {
 		if (!workspaceId || catalogs.length > 0) return;
 		try {
-			// Table health covers Iceberg catalogs only (#500).
-			catalogs = (await loadCatalogs(workspaceId)).filter((catalog) => hasTableHealth(catalog));
+			// Table health covers the catalogs the server marks (#500, #996).
+			catalogs = (await loadCatalogs(workspaceId)).filter((catalog) => catalog.table_health);
 			catalogId = catalogs[0]?.id ?? '';
 		} catch {
 			catalogs = [];
@@ -1202,6 +1205,12 @@
 					<Button variant="secondary" onclick={exportHealth}>{m.monitoring_export_csv()}</Button>
 				</div>
 			</div>
+			{#if selectedReadOnly}
+				<p class="mb-3 flex items-center gap-2 text-[12px] text-text-muted" role="note">
+					<Badge tone="neutral">{m.common_read_only()}</Badge>
+					{m.maintenance_catalog_read_only()}
+				</p>
+			{/if}
 			{#if catalogs.length === 0}
 				<EmptyState
 					title={m.monitoring_no_catalogs()}
@@ -1320,11 +1329,16 @@
 												>{m.maintenance_configure()}</Button
 											>
 											{#if row.maintenance_mode === 'managed' || row.maintenance_mode === 'off'}
-												<Button size="sm" onclick={() => runDue(row)}
-													>{m.maintenance_run_now()}</Button
+												<Button
+													size="sm"
+													disabled={isReadOnly(row.catalog_id)}
+													onclick={() => runDue(row)}>{m.maintenance_run_now()}</Button
 												>
 											{:else if !row.maintenance_mode}
-												<Button size="sm" onclick={() => openMaintenance(row)}
+												<Button
+													size="sm"
+													disabled={isReadOnly(row.catalog_id)}
+													onclick={() => openMaintenance(row)}
 													>{m.monitoring_run_maintenance_2()}</Button
 												>
 											{/if}
@@ -1454,6 +1468,7 @@
 			{:else if catalogId}
 				<CatalogMaintenancePlan
 					{catalogId}
+					readOnly={selectedReadOnly}
 					onconfigure={(item) => openEditor(catalogId, item.namespace, item.table_name)}
 				/>
 			{/if}
@@ -1620,6 +1635,7 @@
 			catalogId={editor.catalogId}
 			namespace={editor.namespace}
 			table={editor.table}
+			readOnly={isReadOnly(editor.catalogId)}
 		/>
 	{/if}
 </Drawer>

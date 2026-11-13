@@ -14,7 +14,9 @@ const summary = (overrides: Parameters<typeof makeCatalog>[0]) => ({
 	...makeCatalog(overrides),
 	origin: 'native',
 	bindings: [],
-	needs_attention: false
+	needs_attention: false,
+	table_health: false,
+	read_only: false
 });
 
 describe('catalogs page', () => {

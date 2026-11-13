@@ -11,6 +11,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring"
 	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
@@ -50,6 +51,21 @@ func (h *OpsHandlers) maintenanceTable(ctx context.Context, catalogID openapi_ty
 		catalog: catalog,
 		actor:   p.UserID,
 	}, true, nil
+}
+
+// catalogReadOnly reports whether Baleia must never write to the catalog
+// (#996): its connection kind promises no writes, or its credentials are
+// asserted read-only.
+func (h *OpsHandlers) catalogReadOnly(ctx context.Context, catalog db.Catalog) (bool, error) {
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, catalog.ConnectionID)
+	if err != nil {
+		return false, err
+	}
+	return h.connections.CatalogReadOnly(connections.Kind(conn.Type), conn.CredentialsReadOnly), nil
+}
+
+func catalogReadOnlyConflict() ConflictJSONResponse {
+	return ConflictJSONResponse{Code: ErrorCodeCatalogReadOnly, Message: "the catalog is read-only: Baleia only analyzes it"}
 }
 
 func (h *OpsHandlers) capableEngine(ctx context.Context, engineID db.UUID) bool {
@@ -313,6 +329,11 @@ func (h *OpsHandlers) RunTableMaintenance(ctx context.Context, request RunTableM
 	if request.Body == nil {
 		return RunTableMaintenance422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
 	}
+	if readOnly, err := h.catalogReadOnly(ctx, t.catalog); err != nil {
+		return nil, err
+	} else if readOnly {
+		return RunTableMaintenance409JSONResponse{ConflictJSONResponse: catalogReadOnlyConflict()}, nil
+	}
 	row, err := h.monitor.TablePolicy(ctx, t.key)
 	if errors.Is(err, monitoring.ErrPolicyNotFound) {
 		return RunTableMaintenance404JSONResponse{NotFoundJSONResponse: notFound("the table has no maintenance parameters")}, nil
@@ -430,7 +451,7 @@ func icebergCatalogRef(c db.ListEnabledIcebergCatalogsRow) string {
 // startAnalysis starts the pass and returns its workflow id; ok is false when
 // the catalog is not an enabled Iceberg catalog.
 func (h *OpsHandlers) startAnalysis(ctx context.Context, t maintenanceTarget, namespace, table string) (bool, string, error) {
-	catalogs, err := h.opsStore().ListEnabledIcebergCatalogs(ctx)
+	catalogs, err := h.opsStore().ListEnabledIcebergCatalogs(ctx, h.connections.TableHealthKinds())
 	if err != nil {
 		return false, "", err
 	}
