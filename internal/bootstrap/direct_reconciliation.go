@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -18,6 +19,23 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+// errConnectionChanged means the connection was edited between discovery and
+// the transaction. The catalogs found for the old settings must not be written,
+// so the repair rolls back and the next start tries again.
+var errConnectionChanged = errors.New("connection changed during reconciliation")
+
+// sameConnection reports whether b still holds what discovery read from a: the
+// name, type, endpoint, configuration and sealed credentials.
+func sameConnection(a, b model.CatalogConnection) bool {
+	if a.Name != b.Name || a.Type != b.Type || a.URL != b.URL || string(a.Config) != string(b.Config) {
+		return false
+	}
+	if (a.CredentialsEnc == nil) != (b.CredentialsEnc == nil) {
+		return false
+	}
+	return a.CredentialsEnc == nil || *a.CredentialsEnc == *b.CredentialsEnc
+}
 
 // ReconcileIncompleteDirectConnections repairs rows left by the legacy
 // two-request workflow. Remote validation and discovery happen before the
@@ -111,6 +129,9 @@ func reconcileDirectConnection(
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ?", row.ID).First(&locked).Error; err != nil {
 			return err
+		}
+		if !sameConnection(row, locked) {
+			return errConnectionChanged
 		}
 		var count int64
 		if err := tx.Model(&model.Engine{}).Where("connection_id = ?", row.ID).Count(&count).Error; err != nil {

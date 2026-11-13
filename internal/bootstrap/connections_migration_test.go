@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"log/slog"
 	"net/url"
 	"os"
@@ -346,6 +347,51 @@ func TestReconcileIncompleteDirectConnections(t *testing.T) {
 		Where("catalogs.connection_id = ?", connection.ID).Count(&bindings)
 	if engines != 1 || catalogs != 1 || bindings != 1 {
 		t.Fatalf("engines=%d catalogs=%d bindings=%d, want 1 each", engines, catalogs, bindings)
+	}
+}
+
+// An edit that commits between discovery and the transaction leaves the catalogs
+// found for the old settings stale: the repair must roll back, keep the
+// connection and succeed once it reads the new settings.
+func TestReconcileDirectConnectionRefusesAConnectionEditedDuringDiscovery(t *testing.T) {
+	t.Parallel()
+	gdb := openIsolatedStore(t)
+	ctx := context.Background()
+	mode := "direct"
+	connection := model.CatalogConnection{
+		ID: model.UUID(uuid.NewString()), Name: "Sales DB", Type: "clickhouse",
+		AccessMode: &mode, URL: "", Config: model.JSON("{}"),
+		CreatedAt: nowUTC(), UpdatedAt: nowUTC(),
+	}
+	if err := gdb.Create(&connection).Error; err != nil {
+		t.Fatal(err)
+	}
+	registry, err := connections.NewRegistry(&reconcileProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stale := connection
+	if err := gdb.Model(&model.CatalogConnection{}).Where("id = ?", connection.ID).
+		Update("config", model.JSON(`{"database":"other"}`)).Error; err != nil {
+		t.Fatal(err)
+	}
+	err = reconcileDirectConnection(ctx, gdb, nil, registry, stale)
+	if !errors.Is(err, errConnectionChanged) {
+		t.Fatalf("err = %v, want errConnectionChanged", err)
+	}
+	var engines int64
+	gdb.Model(&model.Engine{}).Where("connection_id = ?", connection.ID).Count(&engines)
+	if engines != 0 {
+		t.Fatalf("engines = %d after a refused repair, want 0", engines)
+	}
+
+	if err := ReconcileIncompleteDirectConnections(ctx, gdb, nil, registry, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
+	gdb.Model(&model.Engine{}).Where("connection_id = ?", connection.ID).Count(&engines)
+	if engines != 1 {
+		t.Fatalf("engines = %d after the next pass, want 1", engines)
 	}
 }
 
