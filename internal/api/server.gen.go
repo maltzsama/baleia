@@ -336,6 +336,9 @@ type ServerInterface interface {
 	// Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces
 	// (GET /engines)
 	ListEngines(w http.ResponseWriter, r *http.Request)
+	// Register a standalone federated engine
+	// (POST /engines)
+	CreateEngine(w http.ResponseWriter, r *http.Request)
 	// Remove an engine (owner of its connection or an admin)
 	// (DELETE /engines/{id})
 	DeleteEngine(w http.ResponseWriter, r *http.Request, id PathId)
@@ -1470,6 +1473,12 @@ func (_ Unimplemented) SplitStatements(w http.ResponseWriter, r *http.Request, n
 // Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces
 // (GET /engines)
 func (_ Unimplemented) ListEngines(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Register a standalone federated engine
+// (POST /engines)
+func (_ Unimplemented) CreateEngine(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6149,6 +6158,28 @@ func (siw *ServerInterfaceWrapper) ListEngines(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListEngines(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateEngine operation middleware
+func (siw *ServerInterfaceWrapper) CreateEngine(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateEngine(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13598,6 +13629,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/engines", wrapper.ListEngines)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engines", wrapper.CreateEngine)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/engines/{id}", wrapper.DeleteEngine)
 	})
 	r.Group(func(r chi.Router) {
@@ -18632,6 +18666,70 @@ type ListEngines401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response ListEngines401JSONResponse) VisitListEnginesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngineRequestObject struct {
+	Body *CreateEngineJSONRequestBody
+}
+
+type CreateEngineResponseObject interface {
+	VisitCreateEngineResponse(w http.ResponseWriter) error
+}
+
+type CreateEngine201JSONResponse Engine
+
+func (response CreateEngine201JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngine401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateEngine401JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngine403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateEngine403JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngine404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateEngine404JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngine409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateEngine409JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateEngine422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateEngine422JSONResponse) VisitCreateEngineResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -26402,6 +26500,9 @@ type StrictServerInterface interface {
 	// Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces
 	// (GET /engines)
 	ListEngines(ctx context.Context, request ListEnginesRequestObject) (ListEnginesResponseObject, error)
+	// Register a standalone federated engine
+	// (POST /engines)
+	CreateEngine(ctx context.Context, request CreateEngineRequestObject) (CreateEngineResponseObject, error)
 	// Remove an engine (owner of its connection or an admin)
 	// (DELETE /engines/{id})
 	DeleteEngine(ctx context.Context, request DeleteEngineRequestObject) (DeleteEngineResponseObject, error)
@@ -29880,6 +29981,37 @@ func (sh *strictHandler) ListEngines(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListEnginesResponseObject); ok {
 		if err := validResponse.VisitListEnginesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateEngine operation middleware
+func (sh *strictHandler) CreateEngine(w http.ResponseWriter, r *http.Request) {
+	var request CreateEngineRequestObject
+
+	var body CreateEngineJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateEngine(ctx, request.(CreateEngineRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateEngine")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateEngineResponseObject); ok {
+		if err := validResponse.VisitCreateEngineResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

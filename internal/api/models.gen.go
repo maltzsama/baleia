@@ -2464,6 +2464,15 @@ type CreateCatalogRequest struct {
 	Warehouse *string `json:"warehouse,omitempty"`
 }
 
+// CreateEngineRequest defines model for CreateEngineRequest.
+type CreateEngineRequest struct {
+	// Connection Configuration of the engine-family connection backing this engine. Its provider must have the federated_engine role and no data-source access mode. The connection and engine are persisted atomically.
+	Connection CreateCatalogConnectionRequest `json:"connection"`
+
+	// Name Name of the federated engine instance
+	Name string `json:"name"`
+}
+
 // CreateFolderRequest defines model for CreateFolderRequest.
 type CreateFolderRequest struct {
 	Name     string              `json:"name"`
@@ -6210,6 +6219,9 @@ type ExplainSQLJSONRequestBody = ExplainRequest
 
 // SplitStatementsJSONRequestBody defines body for SplitStatements for application/json ContentType.
 type SplitStatementsJSONRequestBody = SplitStatementsRequest
+
+// CreateEngineJSONRequestBody defines body for CreateEngine for application/json ContentType.
+type CreateEngineJSONRequestBody = CreateEngineRequest
 
 // UpdateEngineJSONRequestBody defines body for UpdateEngine for application/json ContentType.
 type UpdateEngineJSONRequestBody = UpdateEngineRequest

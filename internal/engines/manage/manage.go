@@ -159,6 +159,25 @@ type NewEngine struct {
 	Natives []string
 }
 
+// NewFederatedEngine registers an engine-family endpoint without creating
+// native catalogs. Source catalogs are bound to the engine separately.
+type NewFederatedEngine struct {
+	Name         string
+	Kind         string
+	ConnectionID db.UUID
+	CreatedBy    db.UUID
+}
+
+// CreateFederatedIn writes a federated engine through q, which the caller has
+// already bound to a transaction. It opens no transaction, so an engine-family
+// connection created by the caller commits or rolls back with the engine.
+func CreateFederatedIn(ctx context.Context, q TxStore, n NewFederatedEngine) (db.Engine, error) {
+	return q.CreateEngine(ctx, db.CreateEngineParams{
+		Name: n.Name, Kind: n.Kind, Class: "federated", ConnectionID: n.ConnectionID,
+		IdentityMode: "connection", CreatedBy: n.CreatedBy,
+	})
+}
+
 // Create stores the engine with its native catalogs and their bindings. It
 // returns the native catalogs, whose metadata the caller syncs.
 func (s *Service) Create(ctx context.Context, n NewEngine) (db.Engine, []db.UUID, error) {

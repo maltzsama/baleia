@@ -3,16 +3,20 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/engines/manage"
+	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// enginePingTimeout bounds the reachability check of a new engine.
+// enginePingTimeout bounds validation of an engine endpoint.
 const enginePingTimeout = 15 * time.Second
 
 // isFKViolation reports a delete blocked by a foreign key: 23503 for NO
@@ -100,6 +104,82 @@ func (h *CatalogHandlers) GetEngine(ctx context.Context, request GetEngineReques
 		return nil, err
 	}
 	return GetEngine200JSONResponse(h.describeEngine(ctx, eng)), nil
+}
+
+// CreateEngine atomically registers an engine-family connection and its
+// federated engine. The engine starts without user-defined catalog bindings.
+func (h *CatalogHandlers) CreateEngine(ctx context.Context, request CreateEngineRequestObject) (CreateEngineResponseObject, error) {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return CreateEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
+	}
+	body := request.Body
+	invalid := func(code ErrorCode, field, msg string) CreateEngineResponseObject {
+		return CreateEngine422JSONResponse{UnprocessableEntityJSONResponse: (&configError{code: code, fields: []connections.FieldError{{Key: field, Message: msg}}}).response()}
+	}
+	if body == nil {
+		return invalid(ErrorCodeValidationError, "body", "a body is required"), nil
+	}
+	if err := manage.CheckName(body.Name); err != nil {
+		return invalid("validation_error", "name", err.Error()), nil
+	}
+	if !h.mayManageConnections(p) {
+		return CreateEngine403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only admins may register engines"}}, nil
+	}
+	connID := db.UUID{Bytes: uuid.New(), Valid: true}
+	ev := audit.Event{Action: audit.ConnectionCreate, ResourceType: "connection", ResourceID: idString(connID)}
+	reg, resp, err := h.prepareRegistration(ctx, p, connID, ev, &body.Connection)
+	if resp != nil {
+		switch r := resp.(type) {
+		case CreateCatalogConnection409JSONResponse:
+			return CreateEngine409JSONResponse(r), nil
+		case CreateCatalogConnection422JSONResponse:
+			return CreateEngine422JSONResponse(r), nil
+		default:
+			return invalid("validation_error", "connection", "invalid engine connection"), nil
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if reg.params.AccessMode != nil || !connections.HasRole(reg.provider, connections.RoleFederated) || reg.provider.Family() != connections.FamilyEngine {
+		return invalid("engine_unsupported", "connection.type", fmt.Sprintf("connections of type %q are not federated engine endpoints", reg.params.Type)), nil
+	}
+	if body.Connection.EngineIds != nil || body.Connection.CatalogRegistration != nil {
+		return invalid("validation_error", "connection", "engine-family connections take no engine_ids or catalog_registration"), nil
+	}
+
+	pingCtx, cancel := context.WithTimeout(ctx, enginePingTimeout)
+	defer cancel()
+	if err := reg.provider.Ping(pingCtx, reg.config); err != nil {
+		return invalid("engine_unreachable", "connection.config", connectionTestError(err)), nil
+	}
+
+	var created db.Engine
+	stage := "connection"
+	err = h.inRegistrationTx(ctx, func(q registrationStore) error {
+		if _, err := q.CreateCatalogConnection(ctx, reg.params); err != nil {
+			return err
+		}
+		stage = "engine"
+		var err error
+		created, err = manage.CreateFederatedIn(ctx, q, manage.NewFederatedEngine{
+			Name: body.Name, Kind: reg.provider.EngineKind(), ConnectionID: connID, CreatedBy: p.UserID,
+		})
+		return err
+	})
+	if resp, ok := registrationConflict(stage, err); ok {
+		if conflict, ok := resp.(CreateCatalogConnection409JSONResponse); ok {
+			return CreateEngine409JSONResponse(conflict), nil
+		}
+		return nil, fmt.Errorf("map federated engine conflict: unexpected response %T", resp)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("register federated engine: %w", err)
+	}
+	h.catalogCache.Clear()
+	h.audited(ctx, ev.Allowed())
+	return CreateEngine201JSONResponse(h.withEngineActions(ctx, created)), nil
 }
 
 func (h *CatalogHandlers) UpdateEngine(ctx context.Context, request UpdateEngineRequestObject) (UpdateEngineResponseObject, error) {
