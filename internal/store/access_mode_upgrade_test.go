@@ -61,9 +61,16 @@ func TestRenameTrinoAccessModeUpgrades(t *testing.T) {
 		}
 	}
 
-	// The new check refuses the old value.
-	bad := conn(4, ptr("trino"))
-	if err := db.Create(&bad).Error; err == nil {
-		t.Error("a connection with access_mode trino was accepted after the migration")
+	// The expanded check accepts a legacy write from an older binary during a
+	// rolling deployment; the next new-process startup rewrites it.
+	legacy := conn(4, ptr("trino"))
+	if err := db.Create(&legacy).Error; err != nil {
+		t.Fatalf("legacy trino write was rejected: %v", err)
+	}
+	if err := store.RenameTrinoAccessMode(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&legacy, "id = ?", legacy.ID).Error; err != nil || legacy.AccessMode == nil || *legacy.AccessMode != "federated" {
+		t.Fatalf("legacy access mode = %v, err = %v", legacy.AccessMode, err)
 	}
 }

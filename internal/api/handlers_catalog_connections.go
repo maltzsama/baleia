@@ -436,7 +436,11 @@ func dbCatalogConnectionToPublic(logger *slog.Logger, c db.CatalogConnection) Ca
 	id := openapi_types.UUID(c.ID.Bytes)
 	var accessMode *CatalogConnectionAccessMode
 	if c.AccessMode != nil {
-		mode := CatalogConnectionAccessMode(*c.AccessMode)
+		value := *c.AccessMode
+		if value == "trino" {
+			value = "federated"
+		}
+		mode := CatalogConnectionAccessMode(value)
 		accessMode = &mode
 	}
 	return CatalogConnection{
