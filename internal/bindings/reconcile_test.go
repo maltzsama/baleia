@@ -2,10 +2,12 @@ package bindings_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -75,8 +77,12 @@ func (s *manyStore) TransitionBinding(_ context.Context, a db.TransitionBindingP
 	if !ok || !slices.Contains(a.FromStates, b.LifecycleState) {
 		return db.CatalogBinding{}, db.ErrNoRows
 	}
+	if a.StableSince != nil && b.StateChangedAt.Time.After(*a.StableSince) {
+		return db.CatalogBinding{}, db.ErrNoRows
+	}
 	s.transitions++
 	b.LifecycleState, b.LastErrorCode = a.ToState, a.ErrorCode
+	b.StateChangedAt = db.Timestamptz{Time: time.Now(), Valid: true}
 	if a.DesiredVersion != nil {
 		b.DesiredVersion = a.DesiredVersion
 	}
@@ -120,6 +126,16 @@ func (s *manyStore) MarkEngineCatalogManaged(context.Context, db.MarkEngineCatal
 func (s *manyStore) add(name, state string) {
 	id := [16]byte{byte(len(s.bindings) + 1)}
 	s.bindings[id] = &db.CatalogBinding{ID: db.UUID{Bytes: id, Valid: true}, EngineCatalogName: name, Mode: "managed", LifecycleState: state, Enabled: true}
+}
+
+// addAged adds a binding that entered its state age ago.
+func (s *manyStore) addAged(name, state string, age time.Duration) {
+	s.add(name, state)
+	for _, b := range s.bindings {
+		if b.EngineCatalogName == name {
+			b.StateChangedAt = db.Timestamptz{Time: time.Now().Add(-age), Valid: true}
+		}
+	}
 }
 
 func (s *manyStore) state(name string) string {
@@ -304,5 +320,118 @@ func TestReconcile_LeftoverDropped(t *testing.T) {
 	rep, _ := reconciler(st, eng).Run(context.Background(), false)
 	if _, ok := eng.loaded["sales_old"]; ok || len(rep.Adopted) != 0 {
 		t.Fatalf("engine %v report %+v", eng.loaded, rep)
+	}
+}
+
+// TestReconcile_InterruptedApplyIsAppliedAgain: a binding that stayed in
+// provisioning or updating past any engine call was cut off; the reconciler
+// marks it failed and applies it like a binding in error.
+func TestReconcile_InterruptedApplyIsAppliedAgain(t *testing.T) {
+	t.Parallel()
+	for _, state := range []string{bindings.StateProvisioning, bindings.StateUpdating} {
+		t.Run(state, func(t *testing.T) {
+			t.Parallel()
+			st, eng := newSim()
+			st.addAged("sales", state, 10*time.Minute)
+			rep, err := reconciler(st, eng).Run(context.Background(), false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rep.Actions) != 1 || rep.Actions[0].Reason != bindings.ReasonInterrupted || rep.Actions[0].Kind != bindings.ActionRecreate || rep.Actions[0].Result != bindings.ResultApplied {
+				t.Fatalf("actions = %+v", rep.Actions)
+			}
+			if st.state("sales") != bindings.StateActive || eng.loaded["sales"] != "v2" {
+				t.Fatalf("state = %q, engine %v; want active and applied", st.state("sales"), eng.loaded)
+			}
+		})
+	}
+}
+
+// TestReconcile_ApplyInFlightIsLeftAlone: inside the window an apply may
+// still be running, so nothing is touched.
+func TestReconcile_ApplyInFlightIsLeftAlone(t *testing.T) {
+	t.Parallel()
+	st, eng := newSim()
+	st.addAged("fresh", bindings.StateProvisioning, time.Minute)
+	st.addAged("renaming", bindings.StateUpdating, bindings.DefaultInterruptedAfter-30*time.Second)
+	rep, err := reconciler(st, eng).Run(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Actions) != 0 || st.transitions != 0 {
+		t.Fatalf("actions = %+v, %d transitions; want none", rep.Actions, st.transitions)
+	}
+}
+
+// TestReconcile_InterruptedApplyDryRun: a dry run reports the repair and
+// changes nothing.
+func TestReconcile_InterruptedApplyDryRun(t *testing.T) {
+	t.Parallel()
+	st, eng := newSim()
+	st.addAged("sales", bindings.StateProvisioning, time.Hour)
+	rep, err := reconciler(st, eng).Run(context.Background(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Actions) != 1 || rep.Actions[0].Reason != bindings.ReasonInterrupted || rep.Actions[0].Result != bindings.ResultDryRun {
+		t.Fatalf("actions = %+v", rep.Actions)
+	}
+	if st.transitions != 0 || st.state("sales") != bindings.StateProvisioning {
+		t.Fatalf("a dry run changed the binding: %d transitions, state %q", st.transitions, st.state("sales"))
+	}
+}
+
+// TestReconcile_DisabledInterruptedApplyIsSkipped: a disabled binding is not
+// brought back by the repair.
+func TestReconcile_DisabledInterruptedApplyIsSkipped(t *testing.T) {
+	t.Parallel()
+	st, eng := newSim()
+	st.addAged("off", bindings.StateProvisioning, time.Hour)
+	for _, b := range st.bindings {
+		b.Enabled = false
+	}
+	rep, err := reconciler(st, eng).Run(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Actions) != 0 || st.state("off") != bindings.StateProvisioning {
+		t.Fatalf("actions = %+v, state %q", rep.Actions, st.state("off"))
+	}
+}
+
+// TestReconcile_InterruptedWindowFollowsTheEngineDeadline: a long engine
+// deadline widens the window, so a slow apply is not taken for a dead one.
+func TestReconcile_InterruptedWindowFollowsTheEngineDeadline(t *testing.T) {
+	t.Parallel()
+	st, eng := newSim()
+	st.addAged("slow", bindings.StateProvisioning, 10*time.Minute)
+	r := reconciler(st, eng)
+	r.Lifecycle.DDLTimeout = 5 * time.Minute // 4 deadlines = 20m
+	rep, err := r.Run(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Actions) != 0 {
+		t.Fatalf("actions = %+v; a 10m apply is within four 5m deadlines", rep.Actions)
+	}
+}
+
+// TestInterrupt_NeverOverwritesALaterChange: if the binding entered its state
+// again after the reconciler looked, the write is refused.
+func TestInterrupt_NeverOverwritesALaterChange(t *testing.T) {
+	t.Parallel()
+	st, eng := newSim()
+	st.addAged("sales", bindings.StateProvisioning, time.Second) // changed just now
+	var b db.CatalogBinding
+	for _, v := range st.bindings {
+		b = *v
+	}
+	l := reconciler(st, eng).Lifecycle
+	_, err := l.Interrupt(context.Background(), b, time.Now().Add(-time.Hour))
+	if !errors.Is(err, bindings.ErrConcurrentChange) {
+		t.Fatalf("Interrupt = %v, want ErrConcurrentChange", err)
+	}
+	if st.state("sales") != bindings.StateProvisioning || st.transitions != 0 {
+		t.Fatalf("state = %q after %d transitions", st.state("sales"), st.transitions)
 	}
 }
