@@ -423,6 +423,37 @@ func TestIcebergMetricsStatements(t *testing.T) {
 	}
 }
 
+// TestIcebergHealthStatements: the health reads go to the table's metadata
+// tables, quoted, with the hour and day windows ending at now (#997).
+func TestIcebergHealthStatements(t *testing.T) {
+	t.Parallel()
+	e := testEngine(t, &fakeCoordinator{})
+	now := time.Unix(1_800_000_000, 0)
+	got, err := e.IcebergHealthStatements([]string{"glue_iceberg", "sales", "orders"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `SELECT CAST(count(*) AS varchar), CAST(CAST(to_unixtime(min(committed_at)) * 1000 AS bigint) AS varchar), ` +
+		`CAST(count_if(committed_at >= from_unixtime(1799996400)) AS varchar), CAST(count_if(committed_at >= from_unixtime(1799913600)) AS varchar) ` +
+		`FROM "glue_iceberg"."sales"."orders$snapshots"`; got.Snapshots != want {
+		t.Errorf("snapshots = %q\nwant        %q", got.Snapshots, want)
+	}
+	if want := `SELECT CAST(s.snapshot_id AS varchar), json_format(CAST(s.summary AS json)) FROM "glue_iceberg"."sales"."orders$snapshots" s ` +
+		`JOIN "glue_iceberg"."sales"."orders$refs" r ON r.snapshot_id = s.snapshot_id WHERE r.name = 'main' AND r.type = 'BRANCH'`; got.Current != want {
+		t.Errorf("current = %q\nwant      %q", got.Current, want)
+	}
+	if want := `SELECT key, value FROM "glue_iceberg"."sales"."orders$properties"`; got.Properties != want {
+		t.Errorf("properties = %q", got.Properties)
+	}
+	// A name the dialect cannot quote is refused before anything runs.
+	if _, err := e.IcebergHealthStatements(nil, now); err == nil {
+		t.Error("an empty table name was accepted")
+	}
+	if _, err := e.IcebergHealthStatements([]string{"lake", "x\x00y", "t"}, now); err == nil {
+		t.Error("an unquotable name was accepted")
+	}
+}
+
 func TestSessionCarriesWorkloadClass(t *testing.T) {
 	t.Parallel()
 	f := &fakeCoordinator{respond: func(string) (http.Header, map[string]any) {

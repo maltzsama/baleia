@@ -272,24 +272,63 @@ func (e *Engine) IcebergMetricsStatements(table []string, targetFileSize int64) 
 	if len(table) == 0 {
 		return "", "", errors.New("invalid table name: empty")
 	}
-	d := e.Dialect()
-	last := len(table) - 1
-	meta := func(suffix string) (string, error) {
-		parts := append(append([]string{}, table[:last]...), table[last]+suffix)
-		return d.QualifiedName(parts...)
-	}
-	files, err := meta("$files")
+	files, err := e.metadataTable(table, "$files")
 	if err != nil {
-		return "", "", fmt.Errorf("invalid table name: %w", err)
+		return "", "", err
 	}
-	mans, err := meta("$manifests")
+	mans, err := e.metadataTable(table, "$manifests")
 	if err != nil {
-		return "", "", fmt.Errorf("invalid table name: %w", err)
+		return "", "", err
 	}
 	// content 0 is a data file; delete files are counted from the snapshot.
 	smallFiles = fmt.Sprintf("SELECT count(*) FROM %s WHERE content = 0 AND file_size_in_bytes < %d", files, targetFileSize)
 	manifests = fmt.Sprintf("SELECT count(*) FROM %s", mans)
 	return smallFiles, manifests, nil
+}
+
+// IcebergHealthStatements read the table's health from its $snapshots,
+// $refs and $properties tables, which the Iceberg connector serves from the
+// table's metadata file. The hour and day windows end at now, so the counts
+// match the ones Baleia derives from a catalog's snapshot log. Values are
+// cast to varchar: the caller reads every column as a string.
+func (e *Engine) IcebergHealthStatements(table []string, now time.Time) (queryengine.IcebergHealthSQL, error) {
+	if len(table) == 0 {
+		return queryengine.IcebergHealthSQL{}, errors.New("invalid table name: empty")
+	}
+	snapshots, err := e.metadataTable(table, "$snapshots")
+	if err != nil {
+		return queryengine.IcebergHealthSQL{}, err
+	}
+	refs, err := e.metadataTable(table, "$refs")
+	if err != nil {
+		return queryengine.IcebergHealthSQL{}, err
+	}
+	props, err := e.metadataTable(table, "$properties")
+	if err != nil {
+		return queryengine.IcebergHealthSQL{}, err
+	}
+	hourAgo, dayAgo := now.Add(-time.Hour).Unix(), now.Add(-24*time.Hour).Unix()
+	return queryengine.IcebergHealthSQL{
+		Snapshots: fmt.Sprintf("SELECT CAST(count(*) AS varchar), "+
+			"CAST(CAST(to_unixtime(min(committed_at)) * 1000 AS bigint) AS varchar), "+
+			"CAST(count_if(committed_at >= from_unixtime(%d)) AS varchar), "+
+			"CAST(count_if(committed_at >= from_unixtime(%d)) AS varchar) FROM %s", hourAgo, dayAgo, snapshots),
+		Current: fmt.Sprintf("SELECT CAST(s.snapshot_id AS varchar), json_format(CAST(s.summary AS json)) "+
+			"FROM %s s JOIN %s r ON r.snapshot_id = s.snapshot_id WHERE r.name = 'main' AND r.type = 'BRANCH'", snapshots, refs),
+		Properties: fmt.Sprintf("SELECT key, value FROM %s", props),
+	}, nil
+}
+
+// metadataTable names one of the table's Iceberg metadata tables: the last
+// part of table with suffix ($files, $snapshots, …), quoted by the dialect.
+func (e *Engine) metadataTable(table []string, suffix string) (string, error) {
+	last := len(table) - 1
+	parts := append(append([]string{}, table[:last]...), table[last]+suffix)
+	name, err := e.Dialect().QualifiedName(parts...)
+	if err != nil {
+		return "", fmt.Errorf("invalid table name: %w", err)
+	}
+	return name, nil
 }
 
 func procArgs(args []string) string {
