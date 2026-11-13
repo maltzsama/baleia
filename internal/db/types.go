@@ -7,6 +7,7 @@ package db
 
 import (
 	"net/netip"
+	"time"
 )
 
 type AbandonRunningStatementsParams struct {
@@ -2246,6 +2247,10 @@ type TransitionBindingParams struct {
 	DesiredVersion    *string  `json:"desired_version"`
 	ID                UUID     `json:"id"`
 	FromStates        []string `json:"from_states"`
+	// StableSince, when set, also requires that the binding has been in its
+	// state since then or earlier, so a state that was left and entered again
+	// since the caller looked is not overwritten.
+	StableSince *time.Time `json:"stable_since"`
 }
 
 type UpdateAgentParams struct {

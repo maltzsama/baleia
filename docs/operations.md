@@ -471,13 +471,16 @@ managed binding of a federated engine against what the engine reports (#37):
 |---|---|
 | active or in error, missing in the engine | `create` (sync) |
 | active, loaded with an older version or not confirmed by the plugin | `recreate` (sync) |
+| provisioning or updating for over 5 minutes (the apply was cut off, for example by a restart) | `recreate` (sync), reason `interrupted_apply` |
 | deprovisioning, still in the engine | `drop`, then disabled |
 | deprovisioning, already gone | disabled |
 | a name Baleia managed that no binding owns any more | `drop` |
 | a catalog the engine has that Baleia does not manage | reported as `adopted`; **never dropped or changed** |
 
 Every change goes through the binding lifecycle's guarded transitions, so a binding a user is
-changing is skipped. At most `BALEIA_RECONCILE_MAX_ACTIONS` (20) changes per run; the rest are
+changing is skipped. A binding still inside its provisioning or updating window is never touched;
+past it (5 minutes, or four engine call deadlines if that is longer) the reconciler marks it failed
+with the code `interrupted` and applies it again, unless it was disabled or changed meanwhile. At most `BALEIA_RECONCILE_MAX_ACTIONS` (20) changes per run; the rest are
 reported. Each run is kept (the last 100 per engine, `GET /api/v1/engines/{id}/reconcile-runs`), and
 each applied change is audited as `catalog.reconcile`. The worker logs one dry run at boot (counts
 only). A schedule (`catalog-reconcile`) runs only when `BALEIA_RECONCILE_INTERVAL` is set (at least

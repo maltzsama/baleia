@@ -92,13 +92,17 @@ func (l Lifecycle) ddl(action string, err error) {
 // stateWriteTimeout bounds a state write once the request may be gone.
 const stateWriteTimeout = 10 * time.Second
 
+// engineDeadline bounds each call to the engine.
+func (l Lifecycle) engineDeadline() time.Duration {
+	if l.DDLTimeout == 0 {
+		return 30 * time.Second
+	}
+	return l.DDLTimeout
+}
+
 // engine is the context of one call to the engine.
 func (l Lifecycle) engine(ctx context.Context) (context.Context, context.CancelFunc) {
-	d := l.DDLTimeout
-	if d == 0 {
-		d = 30 * time.Second
-	}
-	return context.WithTimeout(ctx, d)
+	return context.WithTimeout(ctx, l.engineDeadline())
 }
 
 func (l Lifecycle) transition(ctx context.Context, id db.UUID, to string, from []string, cause error, rename *string) (db.CatalogBinding, error) {
@@ -108,9 +112,13 @@ func (l Lifecycle) transition(ctx context.Context, id db.UUID, to string, from [
 // transitionTo is transition that also sets the desired version. The write
 // survives the request and the engine's deadline (stateWriteTimeout).
 func (l Lifecycle) transitionTo(ctx context.Context, id db.UUID, to string, from []string, cause error, rename, version *string) (db.CatalogBinding, error) {
+	return l.transitionGuarded(ctx, db.TransitionBindingParams{ID: id, ToState: to, FromStates: from, EngineCatalogName: rename, DesiredVersion: version}, cause)
+}
+
+// transitionGuarded writes arg, recording cause as the binding's error.
+func (l Lifecycle) transitionGuarded(ctx context.Context, arg db.TransitionBindingParams, cause error) (db.CatalogBinding, error) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stateWriteTimeout)
 	defer cancel()
-	arg := db.TransitionBindingParams{ID: id, ToState: to, FromStates: from, EngineCatalogName: rename, DesiredVersion: version}
 	if cause != nil {
 		code, msg := ErrorCode(cause), cause.Error()
 		arg.ErrorCode, arg.ErrorMessage = &code, &msg
@@ -120,6 +128,16 @@ func (l Lifecycle) transitionTo(ctx context.Context, id db.UUID, to string, from
 		return db.CatalogBinding{}, ErrConcurrentChange
 	}
 	return b, err
+}
+
+// Interrupt marks a binding whose apply never finished as failed, so the
+// reconciler can apply it again. A binding that is still in flight at stable
+// (its state changed after that moment) is left alone: the write then fails
+// with ErrConcurrentChange.
+func (l Lifecycle) Interrupt(ctx context.Context, b db.CatalogBinding, stable time.Time) (db.CatalogBinding, error) {
+	return l.transitionGuarded(ctx, db.TransitionBindingParams{
+		ID: b.ID, ToState: StateError, FromStates: []string{b.LifecycleState}, StableSince: &stable,
+	}, coded("interrupted", "the apply was interrupted before it finished"))
 }
 
 // codedError is a lifecycle failure with its own code.

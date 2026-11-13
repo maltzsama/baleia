@@ -26,6 +26,15 @@ const (
 // DefaultMaxActions bounds the mutating actions of one run.
 const DefaultMaxActions = 20
 
+// DefaultInterruptedAfter is how long a binding may stay in provisioning or
+// updating before the reconciler takes it for interrupted: well past the
+// longest apply, which is a few engine calls under their own deadlines.
+const DefaultInterruptedAfter = 5 * time.Minute
+
+// ReasonInterrupted is the reason of the action that repairs a binding whose
+// apply was cut off.
+const ReasonInterrupted = "interrupted_apply"
+
 // Action is one thing a reconcile run found, and what it did about it.
 type Action struct {
 	Catalog   string `json:"catalog"`
@@ -77,6 +86,22 @@ type Reconciler struct {
 	MaxActions int
 	// OnAction is told about every mutating action applied (audit).
 	OnAction func(ctx context.Context, a Action)
+	// InterruptedAfter is how long a binding may stay in provisioning or
+	// updating before it counts as interrupted (0 = DefaultInterruptedAfter,
+	// and never less than four engine deadlines).
+	InterruptedAfter time.Duration
+}
+
+// interruptedAfter is the age at which an unfinished apply is given up on.
+func (r Reconciler) interruptedAfter() time.Duration {
+	d := r.InterruptedAfter
+	if d <= 0 {
+		d = DefaultInterruptedAfter
+	}
+	if floor := 4 * r.Lifecycle.engineDeadline(); d < floor {
+		d = floor
+	}
+	return d
 }
 
 // Run checks every managed binding of the engine against what the engine
@@ -139,6 +164,7 @@ func (r Reconciler) Run(ctx context.Context, dryRun bool) (Report, error) {
 		rep.Actions = append(rep.Actions, a)
 	}
 
+	window := r.interruptedAfter()
 	for _, b := range managed {
 		owned[b.EngineCatalogName] = true
 		name := b.EngineCatalogName
@@ -174,8 +200,28 @@ func (r Reconciler) Run(ctx context.Context, dryRun bool) (Report, error) {
 				kind, reason = ActionNone, "already_dropped"
 			}
 			act(Action{Catalog: name, Kind: kind, Reason: reason}, func() (db.CatalogBinding, error) { return l.Deprovision(ctx, b) })
+		case StateProvisioning, StateUpdating:
+			// An apply that is still running is left alone. One that has
+			// outlived any engine call was cut off (a restart, a crash): the
+			// binding is marked failed and applied again like any other.
+			if !b.Enabled || !b.StateChangedAt.Valid || rep.StartedAt.Sub(b.StateChangedAt.Time) < window {
+				continue
+			}
+			p, err := r.Project(ctx, b)
+			if err != nil {
+				rep.Actions = append(rep.Actions, Action{Catalog: name, Kind: ActionNone, Reason: "unprojectable", Result: ResultReported, ErrorCode: ErrorCode(err)})
+				continue
+			}
+			stable := rep.StartedAt.Add(-window)
+			act(Action{Catalog: name, Kind: ActionRecreate, Reason: ReasonInterrupted}, func() (db.CatalogBinding, error) {
+				cur, err := l.Interrupt(ctx, b, stable)
+				if err != nil {
+					return cur, err
+				}
+				return l.Sync(ctx, cur, p)
+			})
 		}
-		// provisioning and updating are in flight; disabled is done.
+		// disabled is done.
 	}
 
 	// Names Baleia managed that no binding owns any more (an old name a
