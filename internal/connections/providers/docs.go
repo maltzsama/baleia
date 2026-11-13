@@ -138,7 +138,7 @@ func page(p connections.Provider) string {
 			b.WriteString("- Runs SQL as a federated engine, so one query can join across the sources registered with it.\n")
 		}
 	}
-	if slices.Contains(meta.AccessModes, connections.AccessModeTrino) && len(meta.TrinoCatalogTypes) > 0 {
+	if slices.Contains(meta.AccessModes, connections.AccessModeFederated) && len(meta.TrinoCatalogTypes) > 0 {
 		fmt.Fprintf(&b, "- Sets up and keeps the matching Trino catalog (type `%s`), so Trino can query it.\n",
 			strings.Join(meta.TrinoCatalogTypes, "`, `"))
 	}

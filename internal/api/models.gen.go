@@ -213,8 +213,8 @@ const (
 
 // Defines values for CatalogConnectionAccessMode.
 const (
-	CatalogConnectionAccessModeDirect CatalogConnectionAccessMode = "direct"
-	CatalogConnectionAccessModeTrino  CatalogConnectionAccessMode = "trino"
+	CatalogConnectionAccessModeDirect    CatalogConnectionAccessMode = "direct"
+	CatalogConnectionAccessModeFederated CatalogConnectionAccessMode = "federated"
 )
 
 // Defines values for CatalogConnectionAllowedAction.
@@ -277,8 +277,8 @@ const (
 
 // Defines values for ConnectionProviderAccessModes.
 const (
-	ConnectionProviderAccessModesDirect ConnectionProviderAccessModes = "direct"
-	ConnectionProviderAccessModesTrino  ConnectionProviderAccessModes = "trino"
+	ConnectionProviderAccessModesDirect    ConnectionProviderAccessModes = "direct"
+	ConnectionProviderAccessModesFederated ConnectionProviderAccessModes = "federated"
 )
 
 // Defines values for ConnectionProviderCapabilities.
@@ -362,8 +362,8 @@ const (
 
 // Defines values for CreateCatalogConnectionRequestAccessMode.
 const (
-	CreateCatalogConnectionRequestAccessModeDirect CreateCatalogConnectionRequestAccessMode = "direct"
-	CreateCatalogConnectionRequestAccessModeTrino  CreateCatalogConnectionRequestAccessMode = "trino"
+	CreateCatalogConnectionRequestAccessModeDirect    CreateCatalogConnectionRequestAccessMode = "direct"
+	CreateCatalogConnectionRequestAccessModeFederated CreateCatalogConnectionRequestAccessMode = "federated"
 )
 
 // Defines values for CreateMigrationRequestSourceType.
@@ -1095,8 +1095,8 @@ const (
 
 // Defines values for TestConnectionRequestAccessMode.
 const (
-	Direct TestConnectionRequestAccessMode = "direct"
-	Trino  TestConnectionRequestAccessMode = "trino"
+	Direct    TestConnectionRequestAccessMode = "direct"
+	Federated TestConnectionRequestAccessMode = "federated"
 )
 
 // Defines values for TrashItemEntityType.

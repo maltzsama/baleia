@@ -79,7 +79,7 @@ func (p *Provider) EngineKind() string { return string(p.Kind()) }
 
 // Meta implements connections.Provider (ADR 0021).
 func (p *Provider) Meta() connections.TypeMeta {
-	modes := []connections.AccessMode{connections.AccessModeDirect, connections.AccessModeTrino}
+	modes := []connections.AccessMode{connections.AccessModeDirect, connections.AccessModeFederated}
 	catalogType, description := "mysql", "MySQL relational database, queried directly or exposed through Trino."
 	if p.mariadb {
 		catalogType, description = "mariadb", "MariaDB relational database, queried directly or exposed through Trino."

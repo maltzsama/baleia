@@ -42,7 +42,7 @@ func (*Provider) EngineKind() string         { return "" }
 
 // Meta implements connections.Provider (ADR 0021).
 func (*Provider) Meta() connections.TypeMeta {
-	modes := []connections.AccessMode{connections.AccessModeTrino}
+	modes := []connections.AccessMode{connections.AccessModeFederated}
 	return connections.TypeMeta{
 		Description:       "Lakekeeper Iceberg REST catalog, exposed through Trino.",
 		Category:          connections.CategoryCatalogManager,

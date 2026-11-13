@@ -38,7 +38,7 @@ func (p *Provider) Family() connections.Family { return p.family }
 func (p *Provider) Meta() connections.TypeMeta {
 	var modes []connections.AccessMode
 	if p.catalogType != "" {
-		modes = []connections.AccessMode{connections.AccessModeTrino}
+		modes = []connections.AccessMode{connections.AccessModeFederated}
 	}
 	meta := connections.TypeMeta{
 		Description: p.description,

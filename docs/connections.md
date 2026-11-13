@@ -18,51 +18,51 @@ user-facing connector selection.
 
 | Kind | Label | Category | Access modes | Roles | Engine kind | Trino catalog types | Status |
 |---|---|---|---|---|---|---|---|
-| `bigquery` | BigQuery | cloud_platform | trino | — | — | bigquery | planned |
-| `blackhole` | Black Hole | internal_catalog | trino | — | — | blackhole | experimental |
-| `cassandra` | Apache Cassandra | nosql | trino | — | — | cassandra | planned |
+| `bigquery` | BigQuery | cloud_platform | federated | — | — | bigquery | planned |
+| `blackhole` | Black Hole | internal_catalog | federated | — | — | blackhole | experimental |
+| `cassandra` | Apache Cassandra | nosql | federated | — | — | cassandra | planned |
 | `clickhouse` | ClickHouse | analytical | direct | metadata, direct_engine | clickhouse | — | supported |
-| `delta` | Delta Lake | lakehouse | trino | — | — | delta_lake | planned |
+| `delta` | Delta Lake | lakehouse | federated | — | — | delta_lake | planned |
 | `doris` | Apache Doris | engine | — | federated_engine | doris | — | planned (planned after v1 (#21)) |
-| `druid` | Apache Druid | analytics | trino | — | — | druid | planned |
-| `duckdb` | DuckDB | analytical | trino | — | — | duckdb | planned |
-| `elasticsearch` | Elasticsearch | search | trino | — | — | elasticsearch | planned |
-| `exasol` | Exasol | relational | trino | — | — | exasol | planned |
-| `faker` | Faker | synthetic | trino | — | — | faker | experimental |
+| `druid` | Apache Druid | analytics | federated | — | — | druid | planned |
+| `duckdb` | DuckDB | analytical | federated | — | — | duckdb | planned |
+| `elasticsearch` | Elasticsearch | search | federated | — | — | elasticsearch | planned |
+| `exasol` | Exasol | relational | federated | — | — | exasol | planned |
+| `faker` | Faker | synthetic | federated | — | — | faker | experimental |
 | `flightsql` | Arrow Flight SQL | engine | direct | metadata, direct_engine | flightsql | — | supported |
-| `glue` | AWS Glue Data Catalog | metastore | trino | metadata | — | iceberg, hive, delta_lake | supported |
-| `gsheets` | Google Sheets | external_service | trino | — | — | gsheets | planned |
-| `hive` | Hive Metastore | metastore | trino | — | — | iceberg, hive, delta_lake | supported |
-| `hudi` | Apache Hudi | lakehouse | trino | — | — | hudi | planned |
-| `iceberg` | Iceberg REST catalog | catalog_manager | trino | metadata | — | iceberg | supported |
-| `ignite` | Apache Ignite | relational | trino | — | — | ignite | planned |
-| `jmx` | JMX | internal_catalog | trino | — | — | jmx | experimental |
-| `kafka` | Apache Kafka | streaming | trino | — | — | kafka | planned |
-| `lakekeeper` | Lakekeeper | catalog_manager | trino | metadata | — | iceberg | supported |
-| `loki` | Grafana Loki | observability | trino | — | — | loki | planned |
-| `mariadb` | MariaDB | relational | direct, trino | metadata, direct_engine | mariadb | mariadb | supported |
-| `memory` | Memory | internal_catalog | trino | — | — | memory | experimental |
-| `mongodb` | MongoDB | nosql | trino | — | — | mongodb | planned |
-| `mysql` | MySQL | relational | direct, trino | metadata, direct_engine | mysql | mysql | supported |
-| `nessie` | Project Nessie | catalog_manager | trino | metadata | — | iceberg | supported |
-| `opensearch` | OpenSearch | search | trino | — | — | opensearch | planned |
-| `oracle` | Oracle Database | relational | direct, trino | metadata, direct_engine | oracle | oracle | supported |
-| `pinot` | Apache Pinot | analytics | trino | — | — | pinot | planned |
-| `polaris` | Apache Polaris | catalog_manager | trino | metadata | — | iceberg | supported |
-| `postgresql` | PostgreSQL | relational | direct, trino | metadata, direct_engine | postgresql | postgresql | supported |
-| `prometheus` | Prometheus | observability | trino | — | — | prometheus | planned |
-| `redis` | Redis | nosql | trino | — | — | redis | planned |
-| `redshift` | Amazon Redshift | cloud_platform | trino | — | — | redshift | planned |
-| `singlestore` | SingleStore | relational | trino | — | — | singlestore | planned |
-| `snowflake` | Snowflake | cloud_platform | trino | — | — | snowflake | planned |
+| `glue` | AWS Glue Data Catalog | metastore | federated | metadata | — | iceberg, hive, delta_lake | supported |
+| `gsheets` | Google Sheets | external_service | federated | — | — | gsheets | planned |
+| `hive` | Hive Metastore | metastore | federated | — | — | iceberg, hive, delta_lake | supported |
+| `hudi` | Apache Hudi | lakehouse | federated | — | — | hudi | planned |
+| `iceberg` | Iceberg REST catalog | catalog_manager | federated | metadata | — | iceberg | supported |
+| `ignite` | Apache Ignite | relational | federated | — | — | ignite | planned |
+| `jmx` | JMX | internal_catalog | federated | — | — | jmx | experimental |
+| `kafka` | Apache Kafka | streaming | federated | — | — | kafka | planned |
+| `lakekeeper` | Lakekeeper | catalog_manager | federated | metadata | — | iceberg | supported |
+| `loki` | Grafana Loki | observability | federated | — | — | loki | planned |
+| `mariadb` | MariaDB | relational | direct, federated | metadata, direct_engine | mariadb | mariadb | supported |
+| `memory` | Memory | internal_catalog | federated | — | — | memory | experimental |
+| `mongodb` | MongoDB | nosql | federated | — | — | mongodb | planned |
+| `mysql` | MySQL | relational | direct, federated | metadata, direct_engine | mysql | mysql | supported |
+| `nessie` | Project Nessie | catalog_manager | federated | metadata | — | iceberg | supported |
+| `opensearch` | OpenSearch | search | federated | — | — | opensearch | planned |
+| `oracle` | Oracle Database | relational | direct, federated | metadata, direct_engine | oracle | oracle | supported |
+| `pinot` | Apache Pinot | analytics | federated | — | — | pinot | planned |
+| `polaris` | Apache Polaris | catalog_manager | federated | metadata | — | iceberg | supported |
+| `postgresql` | PostgreSQL | relational | direct, federated | metadata, direct_engine | postgresql | postgresql | supported |
+| `prometheus` | Prometheus | observability | federated | — | — | prometheus | planned |
+| `redis` | Redis | nosql | federated | — | — | redis | planned |
+| `redshift` | Amazon Redshift | cloud_platform | federated | — | — | redshift | planned |
+| `singlestore` | SingleStore | relational | federated | — | — | singlestore | planned |
+| `snowflake` | Snowflake | cloud_platform | federated | — | — | snowflake | planned |
 | `sqlite` | SQLite | relational | direct | metadata, direct_engine | sqlite | — | unsupported (BALEIA_SQLITE_ROOT not set) |
-| `sqlserver` | SQL Server | relational | direct, trino | metadata, direct_engine | sqlserver | sqlserver | supported |
+| `sqlserver` | SQL Server | relational | direct, federated | metadata, direct_engine | sqlserver | sqlserver | supported |
 | `starrocks` | StarRocks | engine | — | federated_engine | starrocks | — | planned (planned after v1 (#30)) |
 | `system` | System | internal_catalog | — | — | — | — | not_applicable (reserved system catalog; not user-creatable) |
-| `tpcds` | TPC-DS | synthetic | trino | — | — | tpcds | experimental |
-| `tpch` | TPC-H | synthetic | trino | — | — | tpch | experimental |
+| `tpcds` | TPC-DS | synthetic | federated | — | — | tpcds | experimental |
+| `tpch` | TPC-H | synthetic | federated | — | — | tpch | experimental |
 | `trino` | Trino | engine | — | metadata, federated_engine | trino | — | supported |
-| `unity` | Unity Catalog | catalog_manager | trino | metadata | — | iceberg | supported |
+| `unity` | Unity Catalog | catalog_manager | federated | metadata | — | iceberg | supported |
 
 ## `bigquery` — BigQuery
 

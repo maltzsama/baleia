@@ -63,7 +63,7 @@ func (*Provider) EngineKind() string { return "" }
 
 // Meta implements connections.Provider (ADR 0021).
 func (*Provider) Meta() connections.TypeMeta {
-	modes := []connections.AccessMode{connections.AccessModeTrino}
+	modes := []connections.AccessMode{connections.AccessModeFederated}
 	return connections.TypeMeta{
 		Description:       "AWS Glue Data Catalog holding Iceberg, Hive and Delta Lake tables, exposed through Trino. A Delta table is read only when Glue registers it with spark.sql.sources.provider=delta, as Spark, Databricks and the Glue Delta crawler do; one registered only with Athena's table_type=DELTA stays in the catalog greyed out with the reason, since Trino's Delta connector does not recognize it.",
 		Category:          connections.CategoryMetastore,
