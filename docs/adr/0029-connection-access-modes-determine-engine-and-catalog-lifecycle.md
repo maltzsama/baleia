@@ -1,10 +1,12 @@
 # 0029. Connection access modes determine engine and catalog lifecycle
 
-- **Status:** Proposed
-- **Date:** 2026-11-13
-- **Issues:** #998
-- **Builds on:** [0002](0002-connections-engines-catalogs-bindings.md), [0006](0006-multi-engine-scope.md), [0021](0021-unified-connection-model.md)
-- **Amends:** ADR 0002's standalone direct-engine registration flow and ADR 0021's access-mode vocabulary and connection-creation lifecycle.
+- Status: Proposed
+- Date: 2026-11-13
+- Issues: #998
+- Builds on: [0002](0002-connections-engines-catalogs-bindings.md),
+  [0006](0006-multi-engine-scope.md), [0021](0021-unified-connection-model.md)
+- Amends: ADR 0002's standalone direct-engine registration flow and ADR 0021's
+  access-mode vocabulary and connection-creation lifecycle.
 
 ## Context
 
