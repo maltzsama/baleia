@@ -1,523 +1,294 @@
-# 0029. Connection access modes determine engine and catalog lifecycle
+# 0029. Connection and engine registration lifecycles
 
 - Status: Proposed
 - Date: 2026-11-13
 - Issues: #998
 - Builds on: [0002](0002-connections-engines-catalogs-bindings.md),
   [0006](0006-multi-engine-scope.md), [0021](0021-unified-connection-model.md)
-- Amends: ADR 0002's standalone direct-engine registration flow and ADR 0021's
-  access-mode vocabulary and connection-creation lifecycle.
+- Amends: ADR 0002's direct-engine registration flow and ADR 0021's access-mode
+  vocabulary and registration lifecycle.
 
 ## Context
 
-ADR 0002 separates connections, engines, catalogs and bindings into distinct domain concepts.
+ADR 0002 separates four concepts that remain valid:
 
-A connection represents a configured resource. An engine executes SQL. A catalog represents a logical data container, while a binding exposes that catalog through an engine.
+- A **connection** stores the configuration and credentials for an external resource.
+- An **engine** is a concrete query-engine instance backed by a connection.
+- A **catalog** is a logical data container owned by a connection or native to an engine.
+- A **binding** exposes a catalog through an engine.
 
-Engines belong to two architectural classes:
+Registration nevertheless conflates three independent choices:
 
-- **Direct engines:** Execute SQL through a connection's native query-engine adapter, such as PostgreSQL, MySQL or ClickHouse.
-- **Federated engines:** Execute SQL against catalogs exposed through a separate query-engine instance, such as Trino, with Doris and StarRocks planned for future support.
+- `access_mode`: how Baleia accesses a data source.
+- `engine_kind`: the query-engine implementation, such as `trino` or `postgresql`.
+- `engine_id`: one registered engine instance.
 
-ADR 0021 introduced an exclusive `access_mode` for data-source connections, initially using `direct` and `trino`.
+ADR 0021 originally named the access modes `direct` and `trino`. Trino is an engine kind, not an
+access mode. That vocabulary would require another access mode for Doris, StarRocks and every
+future federated engine.
 
-However, `trino` identifies a specific engine implementation rather than an architectural access mode.
+The creation lifecycle is also split across frontend requests. A direct data-source connection can
+be committed before its native engine, catalogs and bindings are created. A federated data-source
+connection can be committed before its logical catalogs, bindings and desired registration state.
+Failures therefore leave partial resources and make the frontend responsible for backend
+orchestration.
 
-This creates an unnecessary dependency between the connection model and Trino. Supporting Doris or StarRocks should not require introducing additional access modes or changing the connection lifecycle again.
+At the same time, standalone registration of federated query-engine instances is a separate,
+permanent requirement. A user must be able to register a Trino instance before registering any
+data source and before creating any catalog binding. Removing standalone registration would make
+the federated data-source workflow impossible to bootstrap.
 
-The appropriate distinction is between direct and federated execution.
+The architecture consequently has three registration workflows. They must not be merged:
 
-### Current implementation
-
-The backend already declares supported access modes through `connections.TypeMeta.AccessModes` and persists the selected mode in `catalog_connections.access_mode`.
-
-The connection wizard also allows the user to select a supported mode.
-
-However, several inconsistencies remain.
-
-**Direct connections are created through two API requests.**
-
-`ConnectionWizard.svelte` first calls `POST /catalog-connections`, then `POST /engines`.
-
-If engine registration fails, an incomplete direct connection remains persisted.
-
-**Federated connections are also assembled through multiple requests.**
-
-The wizard creates the connection, then creates logical catalogs and their bindings through subsequent API operations.
-
-This makes the frontend responsible for coordinating resource creation and handling partial failures.
-
-**Standalone direct-engine registration remains available.**
-
-`catalogConnectionActions` (`internal/api/actions.go`) grants `register_engine` to every writable connection.
-
-Consequently, the Engines page and connection detail pages offer engine registration for catalog managers and metastores that cannot execute SQL.
-
-`CreateEngine` (`internal/api/handlers_engines.go`) checks `RoleDirect`, but does not validate the connection's persisted access mode.
-
-A provider may support direct execution even when a particular connection was explicitly configured for federated access.
-
-**Provider capabilities and connection configuration are being conflated.**
-
-A PostgreSQL provider may support both execution paths.
-
-A specific PostgreSQL connection must use exactly one selected access mode.
-
-The provider's supported modes describe what is possible; the connection's persisted mode describes what was chosen.
-
-The connection-creation lifecycle must enforce that distinction.
+1. Register a standalone federated engine.
+2. Register a direct data-source connection and its native engine.
+3. Register a federated data-source connection against existing federated engines.
 
 ## Decision
 
-### 1. Access modes are direct and federated
+### 1. Access modes are `direct` and `federated`
 
-Data-source connections support two architectural access modes:
+Data-source connections have exactly one immutable access mode:
 
 | Access mode | Meaning |
 |---|---|
-| `direct` | Baleia executes SQL through a native query-engine adapter associated with the connection. |
-| `federated` | Baleia executes SQL through a separately registered federated engine exposing the connection's catalogs. |
+| `direct` | Execute SQL through the data source's native query-engine adapter. |
+| `federated` | Execute SQL through one or more separately registered federated engines. |
 
-The existing `trino` access-mode value is replaced by `federated`.
+`trino`, `doris`, `starrocks`, `postgresql` and similar values are engine kinds. An
+`engine_id` identifies a concrete registered instance. Adding a federated engine kind does not
+add an access mode.
 
-Trino remains an engine kind, not an access mode.
+Connections whose family is itself a query engine, such as Trino, configure an engine instance;
+they are not data-source access paths and have no `access_mode`.
 
-Future support for Doris, StarRocks or another compatible federated engine extends the engine registry and binding implementations without introducing new access-mode values.
+Provider metadata declares the access modes a data-source type supports. A provider's capabilities
+describe what is possible; the persisted access mode records what was selected for one connection.
+Direct capability must never override a connection configured as `federated`.
 
-The following concepts remain independent:
+A PostgreSQL server may have two Baleia connections, one `direct` and one `federated`. They have
+independent configuration, credentials, ownership, authorization and lifecycle.
 
-- **Access mode:** `direct` or `federated`.
-- **Engine kind:** `postgresql`, `trino`, `doris`, `starrocks`, etc.
-- **Engine instance:** A specific registered query engine identified by its engine ID.
+### 2. The wizard makes execution mode explicit
 
-A connection has exactly one access mode when it represents a data source.
-
-Engine-family connections do not have a data-source access mode. Their purpose is to configure federated engine instances.
-
-### 2. Provider metadata declares supported access modes
-
-The provider registry remains the source of truth for supported access modes.
-
-Examples:
-
-| Connection type | Supported access modes |
-|---|---|
-| PostgreSQL | `direct`, `federated` |
-| MySQL | `direct`, `federated` |
-| MariaDB | `direct`, `federated` |
-| SQL Server | `direct`, `federated` |
-| Oracle | `direct`, `federated` |
-| SQLite | `direct` |
-| ClickHouse | `direct` until a federated binding is implemented |
-| Polaris | `federated` |
-| Unity Catalog | `federated` |
-| Iceberg REST | `federated` |
-| Lakekeeper | `federated` |
-| Nessie | `federated` |
-| Hive Metastore | `federated` |
-| AWS Glue | `federated` |
-| Trino | No data-source access mode |
-
-A provider declares a mode only when the corresponding implementation is supported.
-
-Planned engine integrations do not make a mode or a particular engine binding available.
-
-Existing metadata and implementation-status capabilities remain independent of access mode.
-
-### 3. Access mode is selected during connection creation
-
-The connection wizard must expose the supported execution paths before creating a connection.
-
-The user-facing options are:
+For a provider supporting both modes, the connection wizard displays an **Execution mode** choice
+and does not preselect either option:
 
 **Direct**
 
-Baleia queries the source using its native query-engine adapter.
+Execute queries directly against this data source.
 
 **Through a query engine**
 
-Baleia queries the source through a compatible federated engine.
+Execute queries using a registered query engine.
 
-The selection rules are:
+When a provider supports only one mode, the wizard selects it automatically. The backend validates
+the submitted mode independently. Access mode cannot be changed after creation; registering the
+other access path creates another connection.
 
-1. If the provider supports both modes, the user must explicitly choose one.
-2. If the provider supports exactly one mode, it is selected automatically.
-3. If the provider supports no data-source access mode, the resource follows its engine-family lifecycle.
-4. Unsupported access modes are never displayed.
-5. The backend independently validates the requested mode against provider metadata.
-6. A connection's access mode is immutable after creation.
+When `federated` is selected, the wizard lists compatible registered federated engine instances.
+Compatibility is derived from the backend provider, engine and binder registries, not from a
+Trino-specific frontend list. Each option identifies both the engine instance and its kind.
 
-The frontend must not silently default to direct or federated when both options are supported.
+### 3. Workflow A registers a standalone federated engine
 
-The selected mode determines the resources created by the backend.
+The Engines page retains a **Register Engine** button. It starts a workflow for selecting and
+configuring a federated engine kind. Trino is currently supported; Doris, StarRocks and other
+federated engines can be added through the registries.
 
-### 4. Federated execution requires engine selection
+The backend owns the entire operation:
 
-When the user selects `federated`, the wizard presents the compatible registered federated engines.
+1. Validate authorization, engine kind, configuration, credentials and name.
+2. Perform required remote validation before opening a database transaction.
+3. Persist the engine-family connection and its engine resource in one transaction.
+4. Return the registered engine, which may initially have no user-defined catalog bindings.
 
-The engine selection is a separate dimension from access mode.
+The user does not first register a data-source connection and the frontend does not coordinate two
+creation requests. The public API must preserve a standalone federated-engine registration
+operation. `POST /engines` may be adapted or replaced, but it must not be deleted without an
+equivalent public operation.
 
-For example:
+The engine registry remains the source of supported engine kinds. This workflow is not the old
+connection-level **Register as Engine** action.
 
-- Access mode: `federated`
-- Engine instance: `trino-production`
-- Engine kind: `trino`
+### 4. Workflow B registers a direct data-source connection
 
-The interface displays engine instances, including their names and kinds, rather than asking users to configure an abstract connector implementation.
+For `access_mode=direct`, one backend creation operation:
 
-Only engines with a validated, supported binding implementation for the selected connection type may be offered.
+1. Validates authorization, provider support, configuration and the derived engine name.
+2. Checks connectivity and discovers native catalogs before opening a transaction.
+3. Seals credentials.
+4. Persists the connection, exactly one native engine, native catalogs and native bindings in one
+   database transaction.
+5. Commits and only then starts metadata synchronization.
 
-Compatibility must come from the backend's provider and binder registries, including applicable runtime availability checks.
+The frontend makes one request. The user never registers the native engine separately. The adapter
+is the provider's native query-engine adapter and must not be generically described as JDBC.
 
-The initial implementation supports Trino.
+The existing persistence behavior in `internal/engines/manage` is reused inside the encompassing
+transaction. It must not be duplicated or invoked through a nested independent transaction.
 
-Doris and StarRocks become selectable only when their engine adapters and binding implementations are available.
+Remote connectivity and discovery do not run while the database transaction is open. A failure
+before commit leaves no new connection, engine, catalog or binding. Uniqueness constraints and
+idempotent orchestration prevent concurrent requests from creating duplicate resources.
 
-A federated connection may be exposed through multiple compatible engine instances, subject to the existing catalog and binding model.
+### 5. Workflow C registers a federated data-source connection
 
-Selecting more than one engine does not change the connection's access mode.
+For `access_mode=federated`, the user selects one or more existing compatible federated engine
+instances. One backend creation operation:
 
-The connection wizard must require at least one federated engine for a completed federated data-source registration.
+1. Validates authorization, provider support, configuration, selected engine instances and
+   provider-to-engine binder compatibility.
+2. Validates or discovers initial logical catalogs and registration options before opening a
+   transaction where remote work is required.
+3. Seals credentials.
+4. Persists the data-source connection, logical catalogs, bindings and desired catalog-registration
+   state in one database transaction.
+5. Commits, then applies external catalog configuration through the existing reconciliation
+   lifecycle and starts metadata synchronization as appropriate.
 
-### 5. One creation request for both access modes
+This workflow creates no engine. Selecting `trino-production` uses that registered Trino instance;
+it does not create another Trino engine or a PostgreSQL native engine.
 
-`POST /catalog-connections` owns the complete initial registration of a data-source connection.
+The database transaction owns Baleia's authoritative desired state. External Trino, Doris or
+StarRocks operations cannot participate in it. Desired, effective and observed state remain
+distinct. A committed registration may be pending or failed externally, and that status must be
+observable and recoverable through reconciliation.
 
-The frontend performs one creation request regardless of the selected access mode.
+### 6. API and authorization boundaries
 
-The request includes:
+The three public operations remain independent:
 
-- Connection type and name.
-- Connection configuration and credentials.
-- Selected `access_mode`.
-- Federated engine selections when `access_mode=federated`.
-- Initial catalog registration options where required.
+| Operation | Initiated from | Creates |
+|---|---|---|
+| Register federated engine | Engines | Engine-family connection + federated engine |
+| Register direct data source | Connections | Data-source connection + native engine + native catalogs/bindings |
+| Register federated data source | Connections | Data-source connection + logical catalogs/bindings + desired registration state |
 
-The backend validates the request and orchestrates the appropriate lifecycle.
+Each operation is one backend-owned creation request from the frontend. An endpoint may use an
+internal service shared with another endpoint, but the public contracts and user intent remain
+separate.
 
-The frontend does not make subsequent engine-registration or initial catalog-creation calls to complete the new connection.
+The connection-level `register_engine` allowed action and **Register as Engine** UI are removed.
+They incorrectly advertise native-engine registration on any writable connection. Their removal
+does not remove standalone federated-engine registration or the Engines page button.
 
-The API response retains the connection as its primary resource and includes the identifiers or representations needed to navigate to the resources created by the operation.
+Errors distinguish authorization, validation, connectivity, compatibility, conflict, persistence
+and post-commit external activation failures. Engine and connection names, ownership and bootstrap
+authorization continue to follow the existing contracts.
 
-### 6. Direct connection lifecycle
+### 7. Transaction boundaries
 
-A `direct` connection automatically owns exactly one native engine.
+No remote network operation is performed while a Baleia database transaction is open.
 
-The backend:
+- Workflow A atomically persists the engine-family connection and federated engine.
+- Workflow B atomically persists the direct connection, native engine, native catalogs and native
+  bindings.
+- Workflow C atomically persists the federated connection, logical catalogs, bindings and desired
+  external-registration state.
 
-1. Validates authorization, provider support, configuration and engine naming.
-2. Checks source connectivity.
-3. Discovers the source's native catalogs.
-4. Seals credentials.
-5. Begins a database transaction.
-6. Persists the connection with `access_mode=direct`.
-7. Persists its native engine.
-8. Persists native catalogs.
-9. Persists native bindings.
-10. Commits the transaction.
-11. Schedules metadata synchronization after commit.
+Post-commit metadata synchronization and external catalog activation are not evidence that the
+database transaction failed. Their state and failures are recorded for retry and inspection.
 
-The native engine name is derived from the connection name using the existing engine-name normalization and validation rules.
+### 8. Existing `trino` access modes are migrated
 
-The user does not separately select or register a native engine.
+Persisted values are migrated as follows:
 
-The transaction must include all database resources required for a complete direct connection.
-
-Any failure before commit leaves no newly persisted connection, engine, native catalog or binding.
-
-Connectivity checks and catalog discovery occur before opening the database transaction.
-
-Metadata synchronization occurs after commit and does not determine whether connection creation succeeds.
-
-The existing native-engine persistence logic in `internal/engines/manage` must be reused inside the encompassing transaction.
-
-Nested independent transactions and duplicate implementations of native catalog or binding creation are prohibited.
-
-### 7. Federated connection lifecycle
-
-A `federated` connection does not create a native engine.
-
-Instead, the backend uses the selected existing federated engine instances.
-
-The backend:
-
-1. Validates authorization, provider support and connection configuration.
-2. Validates the selected engine instances.
-3. Verifies provider-to-engine binding compatibility.
-4. Validates catalog names, formats and required registration options.
-5. Performs external validation and discovery that can safely occur before persistence.
-6. Seals credentials.
-7. Begins a database transaction.
-8. Persists the connection with `access_mode=federated`.
-9. Persists its logical catalogs.
-10. Persists bindings and the corresponding desired catalog-registration state.
-11. Commits the transaction.
-12. Applies the desired catalog configuration to the selected engines through the existing binding lifecycle.
-13. Records observed state and synchronization outcomes.
-
-The database transaction covers the application's authoritative desired state.
-
-External engine operations are not part of the database transaction.
-
-For Trino, the existing catalog-store lifecycle remains authoritative:
-
-- Persist desired catalog configuration.
-- Stage catalog registration.
-- Apply the catalog through Trino.
-- Confirm the desired version.
-- Observe the resulting catalog state.
-
-The initial creation request does not bypass or replace this lifecycle.
-
-The API must distinguish between:
-
-- **Creation committed:** The connection and desired catalog/binding state have been persisted.
-- **Catalog active:** The federated engine has successfully applied and confirmed the registration.
-- **Catalog pending or failed:** Registration is awaiting application or reconciliation.
-
-A successful database commit must never be presented as proof that external catalog activation has completed.
-
-If external application fails after commit, the desired state remains persisted and observable through the existing binding lifecycle.
-
-The reconciler retries or repairs the failed application according to the existing catalog-store guarantees.
-
-### 8. Access-mode isolation
-
-The persisted access mode controls which lifecycle operations are permitted.
-
-A connection with `access_mode=direct`:
-
-- Owns a native engine.
-- Uses the native query-engine adapter.
-- Does not create federated bindings as part of its access path.
-
-A connection with `access_mode=federated`:
-
-- Does not own a native engine.
-- Uses one or more compatible federated engines.
-- Exposes its catalogs through the existing binding system.
-
-The backend must not infer the active access mode from `RoleDirect`, provider kind, category or the presence of an engine implementation.
-
-The same external PostgreSQL server may be represented by two independent connections:
-
-- One configured for direct execution.
-- One configured for federated execution.
-
-These connections have independent credentials, ownership, lifecycle and authorization.
-
-The frontend cannot change a connection's access mode after creation.
-
-Changing the access path requires registering a separate connection.
-
-### 9. Remove standalone direct-engine registration
-
-The standalone `register_engine` action is removed.
-
-This includes:
-
-- The Engines page's direct-engine registration dropdown.
-- The Connections page's standalone registration button.
-- The connection detail page's **Register as Engine** action.
-- `register_engine` in connection `allowed_actions`.
-- The obsolete `action=register_engine` API filtering contract.
-- The public direct-engine registration operation `POST /engines`.
-
-The persistence functionality currently used by `POST /engines` remains available internally to the connection-creation service.
-
-Federated-engine bootstrap and registration remain separate from direct-connection creation and are not removed.
-
-The Engines page continues to display and administer registered engines.
-
-Creating a direct engine is achieved by creating a direct connection.
-
-### 10. Transaction boundaries and failure handling
-
-Connection creation has one backend orchestration entry point, but transaction boundaries must reflect the underlying systems.
-
-**Direct mode**
-
-The connection, engine, native catalogs and native bindings commit atomically in the Baleia database.
-
-A failure before commit leaves none of those newly created resources.
-
-**Federated mode**
-
-The connection, logical catalogs, bindings and desired registration state commit atomically in the Baleia database.
-
-External catalog application follows the existing desired/effective/observed lifecycle.
-
-A failed external operation does not retroactively roll back a committed database transaction.
-
-Both modes must avoid holding database transactions open during external network operations.
-
-Errors must distinguish validation, authorization, connectivity, name conflicts, persistence failures and federated activation failures.
-
-Creation retries must not silently duplicate engines, catalogs or bindings.
-
-### 11. Migration of existing access modes
-
-Existing persisted values must be migrated:
-
-| Existing value | New value |
+| Existing value | Result |
 |---|---|
 | `direct` | `direct` |
 | `trino` | `federated` |
-| `NULL` for engine-family resources | `NULL` |
+| `NULL` on engine-family connections | `NULL` |
 
-Provider metadata must replace `AccessModeTrino` with `AccessModeFederated`.
+The migration updates database constraints, backend constants, provider metadata, OpenAPI,
+generated Go and TypeScript clients, frontend code, tests and documentation. Existing engine,
+catalog and binding identifiers and relationships are preserved. A migrated Trino-backed
+connection does not acquire a native engine.
 
-The migration includes:
+The rollout must tolerate mixed application versions without letting old and new binaries assign
+different semantics to the same stored value. It uses the repository's expand/contract migration
+conventions where compatibility requires them.
 
-- Persisted `catalog_connections.access_mode` values.
-- Database constraints and validation.
-- Backend access-mode constants.
-- Provider metadata.
-- OpenAPI schemas.
-- Generated Go and TypeScript types.
-- Frontend mode selection.
-- Connection tests and compatibility checks.
-- Documentation and examples.
+### 9. Incomplete direct connections are reconciled
 
-The migration must preserve existing catalog and binding relationships.
+The old two-request workflow may have persisted `direct` connections without native engines. An
+idempotent reconciliation path:
 
-A connection previously configured with `access_mode=trino` remains associated with its existing Trino bindings.
+1. Finds direct connections with no associated engine.
+2. Resolves and validates stored configuration and credentials.
+3. Checks connectivity and discovers native catalogs outside the transaction.
+4. Transactionally creates the missing engine, native catalogs and native bindings.
+5. Rechecks invariants under concurrency and creates no duplicates.
+6. Records failures for operator inspection and retry.
 
-It must not acquire a native engine.
+Reconciliation never deletes an existing connection as a repair strategy.
 
-No migration may infer `direct` merely because the provider supports direct execution.
+### 10. Required implementation changes
 
-The rollout must account for mixed application versions. Old and new binaries must not interpret the same persisted access-mode value differently.
+The implementation of this decision must update, as applicable:
 
-Use the repository's existing expand/contract migration conventions where required.
-
-### 12. Reconciliation of incomplete direct connections
-
-The previous two-request workflow may have left connections with `access_mode=direct` but no native engine.
-
-The rollout must identify and reconcile these records.
-
-For each incomplete direct connection:
-
-1. Verify that no engine is already associated.
-2. Resolve stored configuration and credentials.
-3. Validate connectivity.
-4. Discover native catalogs.
-5. Create the missing engine, catalogs and bindings in one database transaction.
-6. Record failures for operator inspection.
-
-Reconciliation must be idempotent and safe under concurrent execution.
-
-Existing resources must never be duplicated.
-
-The reconciler must not delete incomplete connections without explicit operator action.
-
-New direct connections cannot enter this partial state through the creation API.
-
-### 13. Federated engine registration remains independent
-
-Engine-family connections, including Trino, represent query-engine resources rather than data sources.
-
-They do not use the data-source `direct` or `federated` access modes.
-
-Their own registration and bootstrap lifecycle remains separate.
-
-This ADR does not require implementing Doris, StarRocks or any additional federated engine.
-
-It ensures that adding such engines later does not require redefining data-source access modes.
+- `api/swagger.yaml`, generated server models and the generated TypeScript client.
+- Provider, engine and binder registry metadata and compatibility responses.
+- Connection registration orchestration and `internal/engines/manage` transaction integration.
+- Federated-engine registration so its backend operation owns both connection and engine creation.
+- `internal/api/actions.go`, removing only obsolete connection-level `register_engine` semantics.
+- `internal/api/handlers_engines.go` without removing public federated-engine registration.
+- `internal/api/handlers_catalog_connections.go` for direct and federated atomic creation.
+- `ConnectionWizard.svelte` for explicit mode and compatible-engine selection.
+- The Engines page, preserving **Register Engine** for federated engines.
+- Connection pages, removing **Register as Engine**.
+- Store migrations and the incomplete-direct reconciliation path.
+- Bruno, backend, frontend, migration, concurrency and end-to-end tests for all three workflows.
 
 ## Consequences
 
-- Access modes describe execution architecture rather than specific engine products.
-- PostgreSQL and other compatible providers can be registered for either direct or federated execution.
-- The selected mode becomes authoritative for connection lifecycle.
-- Direct connections automatically own a native engine.
-- Federated connections use selected existing federated engines.
-- Connection creation is initiated through one API request in either mode.
-- Database persistence is atomic for all resources belonging to the initial registration.
-- External federated catalog activation retains its existing reconciliation and observation guarantees.
-- Standalone direct-engine registration disappears from the UI and public API.
-- Legacy `trino` access-mode values are migrated to `federated`.
-- Existing Trino bindings remain intact.
-- Incomplete direct connections are reconciled during rollout.
-- Future federated engines extend the registry and binding implementations without introducing new access modes.
+- Access mode describes execution architecture, not a product.
+- Standalone federated engines can be registered before any data source and can initially be empty.
+- Direct connections always own exactly one automatically created native engine.
+- Federated data-source connections reference existing compatible federated engines and create no
+  engine.
+- Every registration workflow is owned by one backend operation with atomic database persistence.
+- External catalog activation preserves the desired/effective/observed lifecycle.
+- The obsolete connection-level **Register as Engine** action disappears while the Engines page's
+  **Register Engine** action remains.
+- Existing Trino relationships survive the vocabulary migration.
+- Legacy incomplete direct connections have an observable, idempotent repair path.
 
 ## Current compliance
 
-**Partially implemented.**
-
-- Provider metadata already declares supported access modes.
-- Connection creation already persists an exclusive access-mode selection.
-- The wizard already offers a mode selection when a provider supports multiple modes.
-- The current mode vocabulary uses `direct` and `trino`, rather than `direct` and `federated`.
-- The wizard currently creates direct engines through a second API request.
-- The wizard currently creates federated catalogs and bindings through subsequent API operations.
-- `internal/engines/manage` already creates native engines, catalogs and bindings transactionally, but connection creation is outside that transaction.
-- The current Trino catalog-store and binding lifecycle already separates desired, effective and observed state.
-- `catalogConnectionActions` still grants `register_engine` to every writable connection.
-- `CreateEngine` checks provider roles without enforcing the persisted connection access mode.
-- Standalone registration remains visible in multiple frontend pages.
-
-Issue #998 implements the complete lifecycle change, the access-mode migration and the corresponding API/frontend updates.
+Partially compliant. The registries and four-domain model exist, and the current branch contains
+work toward exclusive access modes and atomic data-source registration. The architecture is not
+complete until standalone federated-engine registration is backend-owned end to end, all three
+workflows have public contracts and tests, the migration is safe for mixed versions, and incomplete
+direct connections can be reconciled.
 
 ## Alternatives considered
 
-### Keep `trino` as an access mode
+### Use one access mode per federated engine kind
 
-Rejected.
+Rejected. It conflates the access path with engine kind and would repeat the migration for every
+new federated engine.
 
-Trino is an engine implementation, not an architectural execution path.
+### Remove standalone engine registration
 
-Adding Doris or StarRocks would otherwise introduce more engine-specific access modes and duplicate the federated lifecycle.
+Rejected. Federated data-source registration depends on pre-existing federated engines, and Trino
+must be registerable without first creating a data-source connection.
 
-### Introduce one access mode per federated engine
+### Keep standalone native-engine registration
 
-Rejected.
+Rejected. A native engine is an implementation resource owned by one direct connection and must be
+created atomically with it.
 
-Modes such as `trino`, `doris` and `starrocks` conflate execution architecture with engine selection.
+### Let the frontend compose creation requests
 
-The engine kind and instance are already represented by the existing engine model.
+Rejected. The frontend cannot provide atomic persistence or reliably recover from process,
+network and concurrency failures.
 
-### Keep standalone direct-engine registration
+### Put external catalog activation in the database transaction
 
-Rejected.
+Rejected. External engines do not participate in Baleia's transaction. The existing
+desired/effective/observed lifecycle is the appropriate consistency boundary.
 
-A direct engine is an implementation resource owned by a direct connection. It should not require a separate user-facing registration action.
+### Introduce another domain abstraction
 
-### Keep the frontend responsible for creating related resources
-
-Rejected.
-
-The frontend must not orchestrate a multi-resource lifecycle or implement recovery from partial backend persistence.
-
-### Use compensating deletion instead of database transactions
-
-Rejected.
-
-Compensating deletion cannot guarantee atomicity when requests fail, processes crash or concurrent operations occur.
-
-All initial database resources must commit together.
-
-### Require federated catalog activation to participate in the database transaction
-
-Rejected.
-
-External query engines do not participate in Baleia's database transactions.
-
-The existing desired/effective/observed catalog lifecycle provides the appropriate consistency model.
-
-### Allow access-mode changes after creation
-
-Rejected.
-
-Switching from direct to federated execution changes engine ownership, catalog relationships, credentials and lifecycle semantics.
-
-A separate connection must be registered instead.
-
-### Create another abstraction for federated execution
-
-Rejected.
-
-The existing connection, engine, catalog and binding contracts already represent the required relationships.
-
-The change concerns access-mode vocabulary, registration orchestration and lifecycle ownership.
+Rejected. Connection, engine, catalog and binding already express every required relationship.

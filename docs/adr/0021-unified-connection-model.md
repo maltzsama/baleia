@@ -124,7 +124,7 @@ The frontend must consume the registry through the existing `GET /connection-pro
 The frontend must not independently determine:
 
 - Whether a connection supports direct access.
-- Whether a connection supports Trino access.
+- Whether a connection supports federated access through a given engine kind.
 - Which Trino catalog types a connection can produce.
 - Which engine kinds can consume a connection.
 - Which capabilities are available for a connection type.
@@ -138,7 +138,11 @@ A connection has one access mode.
 The supported data access modes are:
 
 - `direct`: Baleia accesses the resource through a native query-engine implementation.
-- `trino`: Baleia exposes the resource through a Trino engine.
+- `federated`: Baleia exposes the resource through an existing compatible federated engine.
+
+Trino is an engine kind, not an access mode. The selected `engine_id` identifies the concrete
+federated engine instance. Doris, StarRocks and future engine kinds use `federated`; they do not
+add access-mode values.
 
 A connection cannot use both modes simultaneously.
 
@@ -173,7 +177,7 @@ The existing `RoleFederated` behavior also remains relevant for connection types
 
 Trino, Doris and StarRocks are engine-family resources, not data sources.
 
-They do not have a `direct` or `trino` access mode.
+They do not have a `direct` or `federated` access mode.
 
 They remain registered connection types because their connection configuration is used to create federated engines.
 
@@ -181,13 +185,10 @@ The existing `federated_engine` role remains applicable.
 
 #### Mode mutability
 
-**OPEN:** whether `access_mode` is immutable after creation.
+Access mode is immutable after creation.
 
-Recommended decision: immutable.
-
-Changing a connection from direct to Trino, or vice versa, is a resource lifecycle change, not an ordinary configuration update.
-
-The recommended behavior is to create a new connection for the other access path.
+Changing a connection from direct to federated, or vice versa, is a resource lifecycle change, not
+an ordinary configuration update. The user creates a new connection for the other access path.
 
 Configuration changes within the same access mode remain allowed.
 
@@ -274,11 +275,11 @@ For Hive and Glue, the UI may present the resulting catalog formats as user-faci
 
 The current wizard's single `connector` selection is insufficient for this requirement and must be removed.
 
-### D.4 — Trino registration and lifecycle remain unchanged
+### D.4 — Federated data-source lifecycle preserves engine-specific reconciliation
 
 The existing Trino catalog-store integration defined by ADR 0003 remains the source of truth for the Trino plugin's desired catalog configuration.
 
-For Trino-backed connections, the lifecycle remains:
+For a data-source connection using an existing Trino engine, the lifecycle remains:
 
 1. Persist the connection.
 2. Persist the logical catalog and binding in Baleia.
@@ -295,7 +296,13 @@ Desired, effective and observed states remain distinct.
 
 No change to the catalog-store plugin contract is required by this ADR.
 
-The change is limited to who declares the connection type's Trino catalog mapping and how the application selects it.
+This catalog lifecycle is distinct from registering the Trino engine itself. Standalone federated
+engine registration remains a first-class Engines-page workflow. Its backend operation creates the
+engine-family connection and engine resource atomically; the engine may initially have no
+user-defined bindings.
+
+The change to data-source registration is limited to who declares compatibility and how the
+application selects an existing engine instance.
 
 ### D.5 — The interoperability matrix has three independent layers
 
@@ -679,13 +686,20 @@ When `direct` is selected:
 - Create native catalogs as required.
 - Do not create Trino catalog registrations.
 
-When `trino` is selected:
+When `federated` is selected:
 
 - Do not create a direct engine.
-- Register the corresponding logical catalogs and bindings in the selected Trino engine or engines.
+- Register the corresponding logical catalogs and bindings in the selected compatible federated
+  engine or engines.
 - Persist the resulting catalog configurations through the catalog store.
 
-Selecting multiple Trino engine instances, if supported, remains a choice of where the connection is exposed. It does not create additional access modes.
+Selecting multiple federated engine instances, if supported, remains a choice of where the
+connection is exposed. It does not create additional access modes or new engines.
+
+This connection workflow does not replace standalone federated-engine registration. The Engines
+page retains **Register Engine**, and one backend operation creates the engine-family connection
+and federated engine. The connection-level **Register as Engine** action is removed because native
+engines are created automatically with `direct` connections.
 
 ### CR-08 — Support multiple catalog registrations per connection
 
@@ -815,7 +829,8 @@ The migration must preserve:
 - Workspace grants.
 - Connection ownership.
 
-Connections that currently use both direct and Trino access must be split into two connections.
+Connections that currently use both direct and Trino-backed federated access must be split into two
+connections.
 
 Recommended migration policy:
 
@@ -825,7 +840,10 @@ Recommended migration policy:
 4. Re-seal credentials using the new connection identity where required by the encryption contract.
 5. Update the existing direct engine's `connection_id` to the new direct connection.
 6. Preserve the existing Trino catalogs, bindings, grants and their identifiers.
-7. Assign `access_mode = trino` to the original connection and `access_mode = direct` to the new connection.
+7. Assign `access_mode = federated` to the original connection and `access_mode = direct` to the new connection.
+
+Existing persisted `access_mode=trino` values are migrated to `federated` without changing
+their Trino catalogs or bindings. The rollout must preserve semantics in mixed-version deployments.
 
 The migration must report every connection that requires splitting.
 
@@ -909,9 +927,9 @@ The change is complete when:
 3. Connection types declare their access modes.
 4. A connection has exactly one data access mode when it represents a data source.
 5. Engine-family connections have no data access mode.
-6. PostgreSQL, MySQL, MariaDB, Oracle and SQL Server support both direct and Trino access where implemented.
+6. PostgreSQL, MySQL, MariaDB, Oracle and SQL Server support both direct and federated access where implemented.
 7. Direct access creates a native engine and does not create Trino catalog registrations.
-8. Trino access does not create a direct engine.
+8. Federated access uses selected existing compatible engines and creates no engine.
 9. All 37 identified Trino catalog types are represented in the interoperability inventory with explicit status.
 10. Planned types cannot be created.
 11. Endpointless types can be registered without fabricated endpoints or credentials.
@@ -924,18 +942,21 @@ The change is complete when:
 18. Capabilities are declared per connection type and access mode.
 19. Existing connections are migrated without silently losing access paths.
 20. Existing catalog IDs, bindings, grants and ownership are preserved.
+21. A Trino instance can be registered from the Engines page before any data-source connection.
+22. **Register Engine** remains available for standalone federated engines.
+23. Direct connection creation automatically and atomically creates its native engine.
+24. The obsolete connection-level **Register as Engine** action is absent.
 
 ---
 
 ## Open decisions
 
-1. **Mode mutability:** whether `access_mode` is immutable after creation. Recommendation: immutable.
-2. **Delta Lake and Hudi:** finalize their endpoint protocols and configuration schemas.
-3. **Thrift:** confirm whether it is a separate connection type or part of Hive Metastore configuration.
-4. **Lakehouse:** confirm whether this is an actual connection type or only a UI category.
-5. **System:** retain as `not_applicable` and exclude it from user registration.
-6. **Hive/Glue one-to-many UX:** confirm whether all three catalog outputs should be created by default or whether the user should choose which logical formats to expose.
-7. **Trino plugin inventory:** define how deployment-level plugin availability is reported, since existing catalog observation alone cannot enumerate unused installed plugins.
+1. **Delta Lake and Hudi:** finalize their endpoint protocols and configuration schemas.
+2. **Thrift:** confirm whether it is a separate connection type or part of Hive Metastore configuration.
+3. **Lakehouse:** confirm whether this is an actual connection type or only a UI category.
+4. **System:** retain as `not_applicable` and exclude it from user registration.
+5. **Hive/Glue one-to-many UX:** confirm whether all three catalog outputs should be created by default or whether the user should choose which logical formats to expose.
+6. **Trino plugin inventory:** define how deployment-level plugin availability is reported, since existing catalog observation alone cannot enumerate unused installed plugins.
 
 ---
 
@@ -997,7 +1018,8 @@ The following changes are required:
 
 - One connection workflow represents every supported resource type.
 - The user selects a connection type and, when applicable, one access mode.
-- Direct and Trino access are independent connections, even when they point to the same external system.
+- Direct and federated access are independent connections, even when they point to the same external system.
+- Standalone federated-engine registration remains independent of both data-source workflows.
 - Trino catalog implementation details remain internal to the connection type and binding implementation.
 - The binder retains engine-specific projection and lifecycle responsibilities without owning connection compatibility.
 - Synthetic and internal Trino catalogs become ordinary registered connections.
