@@ -7,6 +7,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
@@ -20,6 +21,8 @@ type APIState struct {
 	Keyring *crypto.Keyring
 	// TrinoCA is the PEM bundle of BALEIA_TRINO_CA_FILE, empty when unset.
 	TrinoCA string
+	// Connections validates and discovers incomplete direct connections.
+	Connections *connections.Registry
 }
 
 // PrepareAPI applies the API's deploy-time state in order: the baleia_trino
@@ -52,6 +55,9 @@ func PrepareAPI(ctx context.Context, logger *slog.Logger, cfg *config.Config, st
 	// migration backfilled single-path connections; this handles the rest.
 	if err := SplitDualPathConnections(ctx, st.Store, st.Keyring, logger); err != nil {
 		return fmt.Errorf("split dual-path connections: %w", err)
+	}
+	if err := ReconcileIncompleteDirectConnections(ctx, st.Store, st.Keyring, st.Connections, logger); err != nil {
+		return fmt.Errorf("reconcile incomplete direct connections: %w", err)
 	}
 	return nil
 }
