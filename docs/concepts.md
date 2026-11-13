@@ -9,7 +9,7 @@ Baleia keeps four ideas apart: where credentials point, what runs SQL, where dat
 
 ## Connections
 
-A **connection** is a provider kind with an endpoint and its credentials. It can point at a catalog manager (Polaris, Nessie, Lakekeeper, Iceberg REST, Unity, AWS Glue, Hive Metastore), a database (PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, ClickHouse, SQLite, Arrow Flight SQL) or a query engine (Trino).
+A **connection** is a provider kind with an endpoint and its credentials. It can point at a catalog manager (Polaris, Nessie, Lakekeeper, Iceberg REST, Unity, AWS Glue, Hive Metastore), a database (PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, ClickHouse, SQLite, Arrow Flight SQL) or a query engine (Trino). A connection to a data source has one access mode, `direct` or `federated`, chosen when it is created and never changed; a query-engine connection is not a data source and has none.
 
 Credentials are sealed with `BALEIA_ENCRYPTION_KEY` before they are stored, and every outbound connection goes through the same network policy ([ADR 0011](adr/0011-direct-connections-security.md)). [Connections](connections.md) lists each kind and its fields.
 
@@ -19,6 +19,8 @@ An **engine** runs SQL and is backed by one connection. There are two classes:
 
 - **Federated** engines host catalogs that come from other connections. Trino is the federated engine.
 - **Direct** engines run SQL on their own connection: PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, ClickHouse, SQLite and Arrow Flight SQL.
+
+A direct engine is created together with its `direct` connection, in one transaction, and takes the connection's name; it is never registered separately. A federated engine is registered on its own from the **Engines** page, before any data source, and may have no catalogs at first. A `federated` data-source connection then names one or more registered federated engines and creates no engine of its own. To reach one server both ways, register two connections.
 
 ## Catalogs
 
