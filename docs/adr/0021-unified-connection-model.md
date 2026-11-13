@@ -530,47 +530,47 @@ The catalog type values are internal Trino mappings, not user-facing connector s
 
 | Kind | Display name | Category | Access mode | Direct engine | Trino catalog types | Status |
 |---|---|---|---|---|---|---|
-| `postgresql` | PostgreSQL | Relational database | `direct`, `trino` | `postgresql` | `postgresql` | supported |
-| `mysql` | MySQL | Relational database | `direct`, `trino` | `mysql` | `mysql` | supported |
-| `mariadb` | MariaDB | Relational database | `direct`, `trino` | `mariadb` | `mariadb` | supported |
-| `sqlserver` | SQL Server | Relational database | `direct`, `trino` | `sqlserver` | `sqlserver` | supported |
-| `oracle` | Oracle | Relational database | `direct`, `trino` | `oracle` | `oracle` | supported |
+| `postgresql` | PostgreSQL | Relational database | `direct`, `federated` | `postgresql` | `postgresql` | supported |
+| `mysql` | MySQL | Relational database | `direct`, `federated` | `mysql` | `mysql` | supported |
+| `mariadb` | MariaDB | Relational database | `direct`, `federated` | `mariadb` | `mariadb` | supported |
+| `sqlserver` | SQL Server | Relational database | `direct`, `federated` | `sqlserver` | `sqlserver` | supported |
+| `oracle` | Oracle | Relational database | `direct`, `federated` | `oracle` | `oracle` | supported |
 | `sqlite` | SQLite | Relational database | `direct` | `sqlite` | — | supported |
 | `clickhouse` | ClickHouse | Analytical database | `direct` | `clickhouse` | `clickhouse` | direct supported / Trino planned |
 | `flightsql` | Apache Arrow Flight SQL | Engine service | `direct` | `flightsql` | — | supported |
-| `polaris` | Apache Polaris | Catalog manager | `trino` | — | `iceberg` | supported |
-| `nessie` | Nessie | Catalog manager | `trino` | — | `iceberg` | supported |
-| `iceberg` | Iceberg REST | Catalog manager | `trino` | — | `iceberg` | supported |
-| `lakekeeper` | Lakekeeper | Catalog manager | `trino` | — | `iceberg` | supported |
-| `unity` | Unity Catalog | Catalog manager | `trino` | — | `iceberg` | supported |
-| `hive` | Hive Metastore | Metastore | `trino` | — | `iceberg`, `hive`, `delta_lake` | supported |
-| `glue` | AWS Glue | Metastore | `trino` | — | `iceberg`, `hive`, `delta_lake` | supported |
-| `delta` | Delta Lake | Lakehouse | `trino` | — | `delta_lake` | planned |
-| `hudi` | Apache Hudi | Lakehouse | `trino` | — | `hudi` | planned |
-| `bigquery` | BigQuery | Cloud data platform | `trino` | — | `bigquery` | planned |
-| `snowflake` | Snowflake | Cloud data platform | `trino` | — | `snowflake` | planned |
-| `redshift` | Amazon Redshift | Cloud data platform | `trino` | — | `redshift` | planned |
-| `singlestore` | SingleStore | Relational database | `trino` | — | `singlestore` | planned |
-| `exasol` | Exasol | Relational database | `trino` | — | `exasol` | planned |
-| `cassandra` | Apache Cassandra | NoSQL | `trino` | — | `cassandra` | planned |
-| `mongodb` | MongoDB | NoSQL | `trino` | — | `mongodb` | planned |
-| `redis` | Redis | Key-value store | `trino` | — | `redis` | planned |
-| `elasticsearch` | Elasticsearch | Search | `trino` | — | `elasticsearch` | planned |
-| `opensearch` | OpenSearch | Search | `trino` | — | `opensearch` | planned |
-| `druid` | Apache Druid | Analytics | `trino` | — | `druid` | planned |
-| `pinot` | Apache Pinot | Analytics | `trino` | — | `pinot` | planned |
-| `duckdb` | DuckDB | Analytical database | `trino` | — | `duckdb` | planned |
-| `ignite` | Apache Ignite | Distributed database | `trino` | — | `ignite` | planned |
-| `kafka` | Apache Kafka | Streaming | `trino` | — | `kafka` | planned |
-| `loki` | Grafana Loki | Observability | `trino` | — | `loki` | planned |
-| `prometheus` | Prometheus | Observability | `trino` | — | `prometheus` | planned |
-| `gsheets` | Google Sheets | External service | `trino` | — | `gsheets` | planned |
-| `faker` | Faker | Synthetic data | `trino` | — | `faker` | planned |
-| `memory` | Memory | Internal catalog | `trino` | — | `memory` | planned |
-| `blackhole` | Black Hole | Internal catalog | `trino` | — | `blackhole` | planned |
-| `jmx` | JMX | Internal / monitoring | `trino` | — | `jmx` | planned |
-| `tpch` | TPC-H | Synthetic data | `trino` | — | `tpch` | planned |
-| `tpcds` | TPC-DS | Synthetic data | `trino` | — | `tpcds` | planned |
+| `polaris` | Apache Polaris | Catalog manager | `federated` | — | `iceberg` | supported |
+| `nessie` | Nessie | Catalog manager | `federated` | — | `iceberg` | supported |
+| `iceberg` | Iceberg REST | Catalog manager | `federated` | — | `iceberg` | supported |
+| `lakekeeper` | Lakekeeper | Catalog manager | `federated` | — | `iceberg` | supported |
+| `unity` | Unity Catalog | Catalog manager | `federated` | — | `iceberg` | supported |
+| `hive` | Hive Metastore | Metastore | `federated` | — | `iceberg`, `hive`, `delta_lake` | supported |
+| `glue` | AWS Glue | Metastore | `federated` | — | `iceberg`, `hive`, `delta_lake` | supported |
+| `delta` | Delta Lake | Lakehouse | `federated` | — | `delta_lake` | planned |
+| `hudi` | Apache Hudi | Lakehouse | `federated` | — | `hudi` | planned |
+| `bigquery` | BigQuery | Cloud data platform | `federated` | — | `bigquery` | planned |
+| `snowflake` | Snowflake | Cloud data platform | `federated` | — | `snowflake` | planned |
+| `redshift` | Amazon Redshift | Cloud data platform | `federated` | — | `redshift` | planned |
+| `singlestore` | SingleStore | Relational database | `federated` | — | `singlestore` | planned |
+| `exasol` | Exasol | Relational database | `federated` | — | `exasol` | planned |
+| `cassandra` | Apache Cassandra | NoSQL | `federated` | — | `cassandra` | planned |
+| `mongodb` | MongoDB | NoSQL | `federated` | — | `mongodb` | planned |
+| `redis` | Redis | Key-value store | `federated` | — | `redis` | planned |
+| `elasticsearch` | Elasticsearch | Search | `federated` | — | `elasticsearch` | planned |
+| `opensearch` | OpenSearch | Search | `federated` | — | `opensearch` | planned |
+| `druid` | Apache Druid | Analytics | `federated` | — | `druid` | planned |
+| `pinot` | Apache Pinot | Analytics | `federated` | — | `pinot` | planned |
+| `duckdb` | DuckDB | Analytical database | `federated` | — | `duckdb` | planned |
+| `ignite` | Apache Ignite | Distributed database | `federated` | — | `ignite` | planned |
+| `kafka` | Apache Kafka | Streaming | `federated` | — | `kafka` | planned |
+| `loki` | Grafana Loki | Observability | `federated` | — | `loki` | planned |
+| `prometheus` | Prometheus | Observability | `federated` | — | `prometheus` | planned |
+| `gsheets` | Google Sheets | External service | `federated` | — | `gsheets` | planned |
+| `faker` | Faker | Synthetic data | `federated` | — | `faker` | planned |
+| `memory` | Memory | Internal catalog | `federated` | — | `memory` | planned |
+| `blackhole` | Black Hole | Internal catalog | `federated` | — | `blackhole` | planned |
+| `jmx` | JMX | Internal / monitoring | `federated` | — | `jmx` | planned |
+| `tpch` | TPC-H | Synthetic data | `federated` | — | `tpch` | planned |
+| `tpcds` | TPC-DS | Synthetic data | `federated` | — | `tpcds` | planned |
 | `system` | System | Internal catalog | — | — | reserved | not_applicable |
 
 The following entries remain unresolved:
@@ -590,7 +590,7 @@ DuckDB must remain Trino-only in this scope. Direct DuckDB access remains exclud
 
 ## Access-mode matrix
 
-| Connection type | Direct | Trino |
+| Connection type | Direct | Federated |
 |---|---|---|
 | PostgreSQL, MySQL, MariaDB, SQL Server, Oracle | supported | supported |
 | SQLite, Flight SQL | supported | not applicable |
