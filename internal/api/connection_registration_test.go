@@ -357,11 +357,15 @@ func TestRegisterFederated_Refusals(t *testing.T) {
 	twice := federatedBody(engineOne, engineOne)
 	wrongCount := federatedBody(engineOne)
 	wrongCount.CatalogRegistration = catalogRequest("a", "a", "b", "b")
+	disabled := federatedBody(engineOne)
+	off := false
+	disabled.CatalogRegistration.Enabled = &off
 	cases := map[string]struct {
 		body *CreateCatalogConnectionRequest
 		want string
 	}{
 		"no engines":             {noEngines, `"engine_ids"`},
+		"a disabled catalog":     {disabled, `catalog_registration.enabled`},
 		"no catalogs":            {noRegistration, `"catalog_registration"`},
 		"an engine listed twice": {twice, "listed twice"},
 		"wrong output count":     {wrongCount, "exposes 1 catalog outputs"},

@@ -1927,7 +1927,7 @@ components:
         `engine` and native `catalogs`. A `federated` connection returns its
         logical `catalogs`: the database transaction has committed, and each
         catalog's `sync_status` says whether the federated engine has applied it
-        yet (`active`), is still applying it (`pending`) or refused it
+        yet (`synced`), is still applying it (`pending`) or refused it
         (`error`). A commit is never proof of activation.
       allOf:
         - $ref: "#/components/schemas/CatalogConnection"

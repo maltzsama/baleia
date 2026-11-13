@@ -340,6 +340,10 @@ func (h *CatalogHandlers) registerFederated(ctx context.Context, r registration)
 			"required for a federated connection"))
 	}
 	reg := *r.body.CatalogRegistration
+	if reg.Enabled != nil && !*reg.Enabled {
+		return fail(audit.ReasonValidation, registrationFieldError(ErrorCodeValidationError, "catalog_registration.enabled",
+			"a catalog registered with its connection is enabled; disable it afterwards"))
+	}
 
 	targets, resp, err := h.federatedEngines(ctx, r)
 	if err != nil {
@@ -475,7 +479,13 @@ func (h *CatalogHandlers) registerFederated(ctx context.Context, r registration)
 	cats := make([]Catalog, 0, len(made))
 	for _, m := range made {
 		h.startMetadataSync(ctx, m.cat.ID)
-		cats = append(cats, h.catalogResponse(ctx, m.cat, m.bindings[0], m.proj.Version))
+		// A hive binding may have been projected again after the commit; report
+		// the version the engine applied.
+		version := m.proj.Version
+		if v := m.bindings[0].DesiredVersion; v != nil {
+			version = *v
+		}
+		cats = append(cats, h.catalogResponse(ctx, m.cat, m.bindings[0], version))
 	}
 	return h.registered(ctx, r, conn, nil, cats), nil
 }

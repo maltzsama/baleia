@@ -5320,7 +5320,7 @@ export interface components {
             /** @description The logical catalogs to register, as in POST /connections/{connection_id}/catalogs. Required when `access_mode` is `federated` and refused for `direct`, whose native catalogs are discovered from the source. */
             catalog_registration?: components["schemas"]["CreateCatalogRequest"];
         };
-        /** @description The connection created by POST /catalog-connections, with the resources the request created with it. A `direct` connection returns its native `engine` and native `catalogs`. A `federated` connection returns its logical `catalogs`: the database transaction has committed, and each catalog's `sync_status` says whether the federated engine has applied it yet (`active`), is still applying it (`pending`) or refused it (`error`). A commit is never proof of activation. */
+        /** @description The connection created by POST /catalog-connections, with the resources the request created with it. A `direct` connection returns its native `engine` and native `catalogs`. A `federated` connection returns its logical `catalogs`: the database transaction has committed, and each catalog's `sync_status` says whether the federated engine has applied it yet (`synced`), is still applying it (`pending`) or refused it (`error`). A commit is never proof of activation. */
         CatalogConnectionCreated: components["schemas"]["CatalogConnection"] & {
             /** @description The native engine a direct connection owns; absent for federated connections */
             engine?: components["schemas"]["Engine"] | null;
