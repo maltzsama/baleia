@@ -61,7 +61,7 @@ func (*Provider) ConfigSchema() []connections.Field {
 		{Key: "admin_user", Label: "Admin user", Type: connections.FieldText, Default: "baleia-admin", Help: "Identity that cancels queries; never runs user SQL"},
 		{Key: "username", Label: "Login user", Type: connections.FieldText, Help: "Password authentication (HTTPS only); must be allowed to impersonate the identities Baleia sends"},
 		{Key: "password", Label: "Password", Type: connections.FieldSecret},
-		{Key: "ca_cert", Label: "CA certificate", Type: connections.FieldText, Help: "PEM bundle trusted for the coordinator's certificate, besides the system roots"},
+		{Key: "ca_cert", Label: "CA certificate", Type: connections.FieldTextarea, Help: "PEM bundle trusted for the coordinator's certificate, besides the system roots"},
 	}
 }
 

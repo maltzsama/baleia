@@ -344,6 +344,7 @@ const (
 	Secret   ConnectionProviderFieldType = "secret"
 	Select   ConnectionProviderFieldType = "select"
 	Text     ConnectionProviderFieldType = "text"
+	Textarea ConnectionProviderFieldType = "textarea"
 	Url      ConnectionProviderFieldType = "url"
 )
 

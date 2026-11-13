@@ -3,6 +3,7 @@
 	import Checkbox from '$lib/ui/Checkbox.svelte';
 	import Input from '$lib/ui/Input.svelte';
 	import Select from '$lib/ui/Select.svelte';
+	import Textarea from '$lib/ui/Textarea.svelte';
 	import type { ConnectionProvider } from './providers';
 
 	let {
@@ -69,6 +70,17 @@
 					{disabled}
 					error={errors[field.key]}
 					onchange={(e) => setValue(field.key, (e.target as HTMLSelectElement).value)}
+				/>
+			{:else if field.type === 'textarea'}
+				<Textarea
+					label={field.label + (field.required ? ' *' : '')}
+					bind:value={() => value, (next) => setValue(field.key, next)}
+					placeholder={field.default ??
+						(field.required ? m.connections_providerform_required() : m.common_optional())}
+					rows={6}
+					{disabled}
+					error={errors[field.key]}
+					class="font-mono"
 				/>
 			{:else if field.secret}
 				<Input

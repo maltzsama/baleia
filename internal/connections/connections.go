@@ -279,6 +279,8 @@ const (
 	FieldSelect   = "select"
 	FieldURL      = "url"
 	FieldFilePath = "file_path"
+	// FieldTextarea is a non-secret value that spans lines, such as a PEM bundle.
+	FieldTextarea = "textarea"
 )
 
 // Field describes one config or secret value of a provider.

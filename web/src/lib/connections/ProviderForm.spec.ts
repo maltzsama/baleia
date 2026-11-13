@@ -42,6 +42,29 @@ describe('ProviderForm', () => {
 		expect((screen.getByLabelText('Verify TLS') as HTMLInputElement).type).toBe('checkbox');
 	});
 
+	it('keeps the line breaks of a multi-line field such as a PEM bundle', async () => {
+		const pem = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----';
+		const provider = makeProvider({
+			config_schema: [
+				{
+					key: 'ca_cert',
+					label: 'CA certificate',
+					type: 'textarea',
+					required: false,
+					secret: false
+				}
+			]
+		});
+		render(ProviderForm, { props: { provider } });
+
+		const field = screen.getByLabelText('CA certificate') as HTMLTextAreaElement;
+		expect(field.tagName).toBe('TEXTAREA');
+		await fireEvent.input(field, { target: { value: pem } });
+
+		expect(field.value).toBe(pem);
+		expect(field.value).toContain('\n');
+	});
+
 	it('turns a secret into a reference input when the toggle is used', async () => {
 		render(ProviderForm, { props: { provider: makeProvider(), allowReferences: true } });
 

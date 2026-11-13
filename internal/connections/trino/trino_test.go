@@ -2,13 +2,21 @@ package trino
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/dialect"
@@ -38,6 +46,41 @@ func TestValidate(t *testing.T) {
 	cfg, err := p.Validate(connections.Config{Values: map[string]string{"url": "https://trino:8443/", "username": "u"}, Secrets: map[string]string{"password": "p"}})
 	if err != nil || cfg.Values["url"] != "https://trino:8443" || cfg.Values["service_user"] != "baleia" {
 		t.Errorf("cfg = %+v, %v", cfg, err)
+	}
+}
+
+// A PEM bundle spans lines and is unreadable once they are joined, so the field
+// must be a multi-line one: a single-line input drops the breaks on paste.
+func TestCACertIsAMultiLineField(t *testing.T) {
+	t.Parallel()
+	p := provider(t)
+	for _, f := range p.ConfigSchema() {
+		if f.Key == "ca_cert" && f.Type != connections.FieldTextarea {
+			t.Errorf("ca_cert type = %q, want %q", f.Type, connections.FieldTextarea)
+		}
+	}
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "test ca"},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+
+	if _, err := p.Validate(connections.Config{Values: map[string]string{"url": "https://trino:8443", "ca_cert": bundle}}); err != nil {
+		t.Errorf("a PEM bundle with its line breaks was refused: %v", err)
+	}
+	joined := strings.ReplaceAll(bundle, "\n", " ")
+	if _, err := p.Validate(connections.Config{Values: map[string]string{"url": "https://trino:8443", "ca_cert": joined}}); !errors.Is(err, connections.ErrValidation) {
+		t.Errorf("a bundle with its line breaks removed was accepted: %v", err)
 	}
 }
 

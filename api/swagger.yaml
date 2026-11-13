@@ -2935,7 +2935,7 @@ components:
       properties:
         key: { type: string }
         label: { type: string }
-        type: { type: string, enum: [text, secret, int, bool, select, url, file_path] }
+        type: { type: string, enum: [text, secret, int, bool, select, url, file_path, textarea] }
         required: { type: boolean }
         secret: { type: boolean, description: "Sent in credentials, stored sealed, never returned" }
         default: { type: string }

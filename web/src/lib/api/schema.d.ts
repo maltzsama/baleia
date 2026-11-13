@@ -6220,7 +6220,7 @@ export interface components {
             key: string;
             label: string;
             /** @enum {string} */
-            type: "text" | "secret" | "int" | "bool" | "select" | "url" | "file_path";
+            type: "text" | "secret" | "int" | "bool" | "select" | "url" | "file_path" | "textarea";
             required: boolean;
             /** @description Sent in credentials, stored sealed, never returned */
             secret: boolean;

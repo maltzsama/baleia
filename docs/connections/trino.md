@@ -26,7 +26,7 @@ Create it under **Connections**. Credentials are sealed with `BALEIA_ENCRYPTION_
 | `admin_user` | text |  | `baleia-admin` | Identity that cancels queries; never runs user SQL |
 | `username` | text |  |  | Password authentication (HTTPS only); must be allowed to impersonate the identities Baleia sends |
 | `password` | secret |  |  |  |
-| `ca_cert` | text |  |  | PEM bundle trusted for the coordinator's certificate, besides the system roots |
+| `ca_cert` | textarea |  |  | PEM bundle trusted for the coordinator's certificate, besides the system roots |
 
 ## Next steps
 
