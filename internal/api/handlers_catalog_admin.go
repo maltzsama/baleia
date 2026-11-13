@@ -380,7 +380,11 @@ func (h *core) catalogSummary(ctx context.Context, cat db.Catalog, p authz.Princ
 		out.Connection = &EngineConnectionRef{Id: openapi_types.UUID(conn.ID.Bytes), Name: conn.Name}
 		kind := conn.Type
 		out.ProviderKind = &kind
-		out.TableHealth = cat.Origin == "source" && h.connections.HasTableHealth(connections.Kind(kind))
+		connector := ""
+		if cat.Connector != nil {
+			connector = *cat.Connector
+		}
+		out.TableHealth = cat.Origin == "source" && h.connections.CatalogTableHealth(connections.Kind(kind), connector)
 		out.ReadOnly = h.connections.CatalogReadOnly(connections.Kind(kind), conn.CredentialsReadOnly)
 	}
 	rows, err := h.topology.BindingsOfCatalog(ctx, cat.ID)

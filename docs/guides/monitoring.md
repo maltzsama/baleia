@@ -17,7 +17,11 @@ The queries on the engine, filterable by state and text, with their detail: SQL,
 
 ## Table health
 
-**Table health** lists the tables of source catalogs whose connection is an Iceberg catalog: Polaris, Iceberg REST, Nessie, Lakekeeper and Unity. Iceberg tables registered in a metastore, such as Glue or Hive, are not listed. A catalog is marked **read-only** when its connection kind promises no writes (Unity) or an administrator asserted its credentials are read-only. Baleia still analyzes its tables, but the maintenance buttons are disabled and no run, manual or automatic, starts on it. For each table it shows:
+**Table health** lists the tables of source catalogs whose connection is an Iceberg catalog: Polaris, Iceberg REST, Nessie, Lakekeeper and Unity. Baleia reads those tables' metadata from the catalog itself.
+
+A **Glue** catalog bound with the Iceberg connector is listed too. Glue tells Baleia which of its tables are Iceberg tables, and the engine that binds the catalog reads each one's metadata tables (`$snapshots`, `$refs`, `$properties`) in a read-only session. The catalog needs an enabled binding on an engine that supports Iceberg maintenance. Its Hive and Delta Lake catalogs, and their tables, are not listed. A pass reads at most `BALEIA_TABLE_HEALTH_MAX_ENGINE_TABLES` tables of such a catalog, in database and table order. The tables past the limit are skipped and the worker logs how many: raise the limit to cover them. Iceberg tables in a Hive Metastore are not listed yet.
+
+A catalog is marked **read-only** when its connection kind promises no writes (Unity) or an administrator asserted its credentials are read-only. Baleia still analyzes its tables, but the maintenance buttons are disabled and no run, manual or automatic, starts on it. For each table it shows:
 - **Size and files:** snapshots, data and delete files, size and commits per hour.
 - **Freshness:** the oldest snapshot.
 - **Maintenance:** what is due, its mode and the last maintenance.

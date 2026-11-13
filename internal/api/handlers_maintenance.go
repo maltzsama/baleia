@@ -451,7 +451,7 @@ func icebergCatalogRef(c db.ListEnabledIcebergCatalogsRow) string {
 // startAnalysis starts the pass and returns its workflow id; ok is false when
 // the catalog is not an enabled Iceberg catalog.
 func (h *OpsHandlers) startAnalysis(ctx context.Context, t maintenanceTarget, namespace, table string) (bool, string, error) {
-	catalogs, err := h.opsStore().ListEnabledIcebergCatalogs(ctx, h.connections.TableHealthKinds())
+	catalogs, err := h.opsStore().ListTableHealthCatalogs(ctx, h.connections.TableHealthKinds(), h.connections.EngineTableHealthKinds())
 	if err != nil {
 		return false, "", err
 	}

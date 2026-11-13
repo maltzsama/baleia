@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
@@ -249,6 +250,57 @@ func (r *Repo) ListEnabledIcebergCatalogs(ctx context.Context, kinds []string) (
 		Select("c.id, c.connection_id, c.name, COALESCE(c.trino_catalog_name, '') AS trino_catalog_name, c.source_ref, c.warehouse").
 		Joins("JOIN catalog_connections cc ON cc.id = c.connection_id").
 		Where("c.enabled = ? AND c.origin = ? AND cc.type IN ?", true, "source", kinds).
+		Order("c.name").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]db.ListEnabledIcebergCatalogsRow, len(rows))
+	for i, row := range rows {
+		out[i] = db.ListEnabledIcebergCatalogsRow{
+			ID:               PGUUID(string(row.ID)),
+			ConnectionID:     PGUUID(string(row.ConnectionID)),
+			Name:             row.Name,
+			TrinoCatalogName: row.TrinoCatalogName,
+			SourceRef:        row.SourceRef,
+			Warehouse:        row.Warehouse,
+		}
+	}
+	return out, nil
+}
+
+// ListTableHealthCatalogs lists the enabled source catalogs that get table
+// health: every catalog whose connection is one of restKinds
+// (connections.Registry.TableHealthKinds), and the Iceberg-connector catalogs
+// of the engineKinds connections (EngineTableHealthKinds, #997).
+func (r *Repo) ListTableHealthCatalogs(ctx context.Context, restKinds, engineKinds []string) ([]db.ListEnabledIcebergCatalogsRow, error) {
+	var conds []string
+	var args []any
+	if len(restKinds) > 0 {
+		conds = append(conds, "cc.type IN ?")
+		args = append(args, restKinds)
+	}
+	if len(engineKinds) > 0 {
+		conds = append(conds, "(cc.type IN ? AND c.connector = ?)")
+		args = append(args, engineKinds, "iceberg")
+	}
+	if len(conds) == 0 {
+		return nil, nil
+	}
+	var rows []struct {
+		ID               model.UUID
+		ConnectionID     model.UUID
+		Name             string
+		TrinoCatalogName string
+		SourceRef        *string
+		Warehouse        *string
+	}
+	err := r.Users.db.WithContext(ctx).
+		Table("catalogs c").
+		Select("c.id, c.connection_id, c.name, COALESCE(c.trino_catalog_name, '') AS trino_catalog_name, c.source_ref, c.warehouse").
+		Joins("JOIN catalog_connections cc ON cc.id = c.connection_id").
+		Where("c.enabled = ? AND c.origin = ?", true, "source").
+		Where("("+strings.Join(conds, " OR ")+")", args...).
 		Order("c.name").
 		Scan(&rows).Error
 	if err != nil {

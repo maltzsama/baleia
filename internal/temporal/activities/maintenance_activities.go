@@ -40,13 +40,8 @@ type snapshotMetrics struct {
 // readSnapshotMetrics reads the current snapshot's summary, the snapshot log
 // and the format version. A value the metadata does not carry stays nil.
 func readSnapshotMetrics(meta *connections.TableMeta, now time.Time) snapshotMetrics {
-	m := snapshotMetrics{properties: meta.TableProperties}
-	if meta.FormatVersion > 0 {
-		v := clampInt32(int64(meta.FormatVersion))
-		m.formatVersion = &v
-	}
 	if len(meta.Snapshots) == 0 {
-		return m
+		return summaryMetrics(meta.TableProperties, meta.FormatVersion, nil)
 	}
 	current := meta.Snapshots[len(meta.Snapshots)-1]
 	if id, err := strconv.ParseInt(meta.Properties["current_snapshot_id"], 10, 64); err == nil {
@@ -56,8 +51,37 @@ func readSnapshotMetrics(meta *connections.TableMeta, now time.Time) snapshotMet
 			}
 		}
 	}
+	m := summaryMetrics(meta.TableProperties, meta.FormatVersion, current.Summary)
+	var hour, day int32
+	for _, s := range meta.Snapshots {
+		age := now.Sub(time.UnixMilli(s.TimestampMs))
+		if age <= time.Hour {
+			hour++
+		}
+		if age <= 24*time.Hour {
+			day++
+		}
+	}
+	m.commitsHour, m.commitsDay = &hour, &day
+	oldest := int32(now.Sub(time.UnixMilli(meta.Snapshots[0].TimestampMs)).Hours())
+	m.oldestAgeHours = &oldest
+	return m
+}
+
+// summaryMetrics reads what the table's properties, its format version and
+// its current snapshot's summary say; the snapshot log is the caller's. It is
+// shared by the catalog read and the engine read (#997), so both score alike.
+func summaryMetrics(properties map[string]string, formatVersion int, current map[string]string) snapshotMetrics {
+	m := snapshotMetrics{properties: properties}
+	if formatVersion > 0 {
+		v := clampInt32(int64(formatVersion))
+		m.formatVersion = &v
+	}
+	if current == nil {
+		return m
+	}
 	summary := func(key string) *int64 {
-		v, err := strconv.ParseInt(current.Summary[key], 10, 64)
+		v, err := strconv.ParseInt(current[key], 10, 64)
 		if err != nil {
 			return nil
 		}
@@ -73,24 +97,11 @@ func readSnapshotMetrics(meta *connections.TableMeta, now time.Time) snapshotMet
 		m.avgFileSize = &v
 	}
 	// Delete counts exist from format v2 on; a v1 table has none to count.
-	if meta.FormatVersion >= 2 {
+	if formatVersion >= 2 {
 		m.deleteFiles = summary("total-delete-files")
 		m.equalityDel = summary("total-equality-deletes")
 		m.positionDel = summary("total-position-deletes")
 	}
-	var hour, day int32
-	for _, s := range meta.Snapshots {
-		age := now.Sub(time.UnixMilli(s.TimestampMs))
-		if age <= time.Hour {
-			hour++
-		}
-		if age <= 24*time.Hour {
-			day++
-		}
-	}
-	m.commitsHour, m.commitsDay = &hour, &day
-	oldest := int32(now.Sub(time.UnixMilli(meta.Snapshots[0].TimestampMs)).Hours())
-	m.oldestAgeHours = &oldest
 	return m
 }
 
@@ -155,7 +166,9 @@ func (a *Activities) engineMetrics(ctx context.Context, eng queryengine.Engine, 
 	if err != nil {
 		return nil, nil
 	}
-	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "maintenance"}}
+	// A probe only reads: the session is read-only, as for every probe of
+	// Baleia's own (ADR 0005), and runs as the service identity.
+	spec := queryengine.SessionSpec{ReadOnly: true, Tags: queryengine.Tags{Source: "maintenance"}}
 	count := func(sql string) *int64 {
 		qctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()

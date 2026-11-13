@@ -241,6 +241,23 @@ type IcebergMaintainer interface {
 	// IcebergMetricsStatements render the counts of the table's data files
 	// smaller than targetFileSize and of its manifests.
 	IcebergMetricsStatements(table []string, targetFileSize int64) (smallFiles, manifests string, err error)
+	// IcebergHealthStatements render the reads of the table's health from
+	// its metadata tables, for catalogs Baleia cannot read itself (#997).
+	IcebergHealthStatements(table []string, now time.Time) (IcebergHealthSQL, error)
+}
+
+// IcebergHealthSQL reads one Iceberg table's health through the engine.
+// Every statement reads the table's metadata only, never its manifests.
+type IcebergHealthSQL struct {
+	// Snapshots returns one row: the number of snapshots, the oldest commit
+	// in epoch milliseconds ("" when there is none), and the commits in the
+	// hour and in the day up to now.
+	Snapshots string
+	// Current returns the main branch's snapshot id and its summary as a
+	// JSON object; no row for a table without snapshots.
+	Current string
+	// Properties returns the table's properties as key and value rows.
+	Properties string
 }
 
 // IcebergOperation is one Iceberg maintenance procedure and its arguments.

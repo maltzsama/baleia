@@ -1574,6 +1574,7 @@ type ListMetadataCatalogsRow struct {
 	Name                string      `json:"name"`
 	Origin              string      `json:"origin"`
 	ProviderKind        string      `json:"provider_kind"`
+	Connector           string      `json:"connector"`
 	CredentialsReadOnly bool        `json:"credentials_read_only"`
 	MetadataSyncedAt    Timestamptz `json:"metadata_synced_at"`
 	MetadataSyncStatus  string      `json:"metadata_sync_status"`

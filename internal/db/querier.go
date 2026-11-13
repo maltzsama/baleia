@@ -432,6 +432,10 @@ type Querier interface {
 	// Iceberg-family kinds of the connection registry), used by the Lens
 	// table-health fan-out.
 	ListEnabledIcebergCatalogs(ctx context.Context, kinds []string) ([]ListEnabledIcebergCatalogsRow, error)
+	// Enabled source catalogs that get table health: those of restKinds, and
+	// the Iceberg-connector catalogs of engineKinds, read through the engine
+	// (#997).
+	ListTableHealthCatalogs(ctx context.Context, restKinds, engineKinds []string) ([]ListEnabledIcebergCatalogsRow, error)
 	ListEnabledLDAPProviders(ctx context.Context) ([]AuthProvider, error)
 	// Catalogs the engine reported, with the managed/adopted mode (#38).
 	ListEngineObservations(ctx context.Context, engineID UUID) ([]EngineCatalogObservation, error)

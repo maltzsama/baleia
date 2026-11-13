@@ -526,24 +526,58 @@ func (r *Registry) CatalogReadOnly(kind Kind, credentialsReadOnly bool) bool {
 	return ok && ro.ReadOnlyKind()
 }
 
-// HasTableHealth reports whether catalogs of kind get table health; an
-// unknown kind does not.
-func (r *Registry) HasTableHealth(kind Kind) bool {
+// TableHealthKinds lists, ordered, the kinds whose catalogs get table health.
+func (r *Registry) TableHealthKinds() []string {
+	return r.kindsWhere(HasTableHealth)
+}
+
+// EngineTableHealth is implemented by metastore providers whose catalogs
+// bound with the Iceberg connector get table health through the engine
+// (#997): the provider lists the tables and tells their format, and the
+// engine that binds the catalog reads each Iceberg table's metadata tables.
+type EngineTableHealth interface {
+	EngineTableHealth() bool
+}
+
+// HasEngineTableHealth reports whether p's Iceberg-connector catalogs get
+// table health through the engine.
+func HasEngineTableHealth(p Provider) bool {
+	st := p.Status().State
+	e, ok := p.(EngineTableHealth)
+	return ok && e.EngineTableHealth() && (st == StateSupported || st == StateExperimental)
+}
+
+// EngineTableHealthKinds lists, ordered, the kinds whose Iceberg-connector
+// catalogs get table health through the engine.
+func (r *Registry) EngineTableHealthKinds() []string {
+	return r.kindsWhere(HasEngineTableHealth)
+}
+
+// CatalogTableHealth reports whether a source catalog of kind, bound with
+// connector, gets table health: every catalog of an Iceberg catalog manager,
+// and a metastore's Iceberg-connector catalog when the provider supports it.
+// An unknown kind does not.
+func (r *Registry) CatalogTableHealth(kind Kind, connector string) bool {
 	if r == nil {
 		return false
 	}
 	p, err := r.Get(kind)
-	return err == nil && HasTableHealth(p)
+	if err != nil {
+		return false
+	}
+	return HasTableHealth(p) || (connector == IcebergConnector && HasEngineTableHealth(p))
 }
 
-// TableHealthKinds lists, ordered, the kinds whose catalogs get table health.
-func (r *Registry) TableHealthKinds() []string {
+// IcebergConnector is the Trino catalog type that reads Iceberg tables.
+const IcebergConnector = "iceberg"
+
+func (r *Registry) kindsWhere(keep func(Provider) bool) []string {
 	if r == nil {
 		return nil
 	}
 	var out []string
 	for _, p := range r.All() {
-		if HasTableHealth(p) {
+		if keep(p) {
 			out = append(out, string(p.Kind()))
 		}
 	}

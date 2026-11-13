@@ -256,7 +256,7 @@ func ListEnabledIcebergCatalogs(ctx context.Context, params ListEnabledIcebergCa
 }
 
 func (a *Activities) listEnabledIcebergCatalogs(ctx context.Context) ([]EnabledIcebergCatalog, error) {
-	rows, err := a.monitoring().ListEnabledIcebergCatalogs(ctx, a.connections.TableHealthKinds())
+	rows, err := a.monitoring().ListTableHealthCatalogs(ctx, a.connections.TableHealthKinds(), a.connections.EngineTableHealthKinds())
 	if err != nil {
 		return nil, fmt.Errorf("list enabled iceberg catalogs: %w", err)
 	}
@@ -326,7 +326,10 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 	if err != nil {
 		return err
 	}
-	if provider.Family() != connections.FamilyIceberg {
+	// A metastore's Iceberg tables are measured through the engine that binds
+	// the catalog (#997); the provider only lists them.
+	throughEngine := provider.Family() != connections.FamilyIceberg
+	if throughEngine && !connections.HasEngineTableHealth(provider) {
 		return fmt.Errorf("table health needs an Iceberg catalog, connection is %q: %w", conn.Type, connections.ErrUnsupported)
 	}
 	cfg, err := providers.FromStored(reg, connections.Kind(conn.Type), conn.ID, conn.Url, conn.Config, plain)
@@ -356,6 +359,9 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 			return err
 		}
 		target = resolved
+	}
+	if throughEngine {
+		return a.engineTableHealth(ctx, &h, reader, catalogs, target, params)
 	}
 	var recorded int
 	var firstErr error
@@ -457,9 +463,14 @@ func (h *healthPass) prepare(ctx context.Context) {
 	}
 }
 
+// record scores and stores a table read from its catalog.
 func (h *healthPass) record(ctx context.Context, catalog, namespace, table string, meta *connections.TableMeta) error {
-	m := readSnapshotMetrics(meta, h.now)
-	snapshotCount := clampInt32(int64(len(meta.Snapshots)))
+	return h.save(ctx, catalog, namespace, table, clampInt32(int64(len(meta.Snapshots))), readSnapshotMetrics(meta, h.now))
+}
+
+// save scores a table's metrics, by its parameters when it has some, and
+// stores the result; the catalog read and the engine read (#997) both end here.
+func (h *healthPass) save(ctx context.Context, catalog, namespace, table string, snapshotCount int32, m snapshotMetrics) error {
 	score, needsCompaction, needsExpiry := defaultScore(snapshotCount, m)
 
 	var small, manifests *int64

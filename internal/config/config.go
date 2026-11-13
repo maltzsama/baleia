@@ -167,6 +167,10 @@ type Config struct {
 	// MaintenanceMaxConcurrentRuns bounds the automatic Iceberg maintenance
 	// runs in progress at once, across tables (#500).
 	MaintenanceMaxConcurrentRuns int
+	// TableHealthMaxEngineTables bounds the tables one health pass reads
+	// through the engine, for a metastore catalog (#997); the tables past it
+	// are skipped and logged.
+	TableHealthMaxEngineTables int
 	// IcebergMaintenanceMinRetention is projected into managed Iceberg
 	// catalogs as Trino's minimum retention for expire_snapshots and
 	// remove_orphan_files (#500); shorter retentions are refused at save.
@@ -390,6 +394,7 @@ func Load() *Config {
 		WorkloadAdaptiveMemoryHeadroomPct: getEnvInt("BALEIA_WORKLOAD_ADAPTIVE_MEMORY_HEADROOM_PCT", 10),
 		MetadataSyncInterval:              getEnvDuration("BALEIA_METADATA_SYNC_INTERVAL", 15*time.Minute),
 		MaintenanceMaxConcurrentRuns:      getEnvInt("BALEIA_MAINTENANCE_MAX_CONCURRENT_RUNS", 4),
+		TableHealthMaxEngineTables:        getEnvInt("BALEIA_TABLE_HEALTH_MAX_ENGINE_TABLES", DefaultTableHealthMaxEngineTables),
 		IcebergMaintenanceMinRetention:    getEnvDuration("BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION", time.Hour),
 		ReconcileMaxActions:               getEnvInt("BALEIA_RECONCILE_MAX_ACTIONS", 20),
 		ReconcileInterval:                 getEnvDuration("BALEIA_RECONCILE_INTERVAL", 0),
@@ -559,6 +564,9 @@ func (c *Config) Validate() error {
 	}
 	if c.MaintenanceMaxConcurrentRuns < 0 {
 		return fmt.Errorf("BALEIA_MAINTENANCE_MAX_CONCURRENT_RUNS must be at least 1 (got %d)", c.MaintenanceMaxConcurrentRuns)
+	}
+	if c.TableHealthMaxEngineTables < 0 {
+		return fmt.Errorf("BALEIA_TABLE_HEALTH_MAX_ENGINE_TABLES must be at least 1 (got %d)", c.TableHealthMaxEngineTables)
 	}
 	if c.IcebergMaintenanceMinRetention != 0 && c.IcebergMaintenanceMinRetention < time.Minute {
 		return fmt.Errorf("BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION must be at least 1m (got %s)", c.IcebergMaintenanceMinRetention)
@@ -732,6 +740,19 @@ func (c *Config) MetadataSyncEvery() time.Duration {
 		return DefaultMetadataSyncInterval
 	}
 	return c.MetadataSyncInterval
+}
+
+// DefaultTableHealthMaxEngineTables is the tables a health pass reads through
+// the engine when BALEIA_TABLE_HEALTH_MAX_ENGINE_TABLES is unset.
+const DefaultTableHealthMaxEngineTables = 500
+
+// TableHealthEngineTableLimit is TableHealthMaxEngineTables, the default when
+// unset.
+func (c *Config) TableHealthEngineTableLimit() int {
+	if c == nil || c.TableHealthMaxEngineTables <= 0 {
+		return DefaultTableHealthMaxEngineTables
+	}
+	return c.TableHealthMaxEngineTables
 }
 
 // MaintenanceConcurrency is MaintenanceMaxConcurrentRuns, 4 when unset.

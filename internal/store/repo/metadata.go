@@ -81,6 +81,7 @@ func (r *Repo) ListMetadataCatalogs(ctx context.Context, workspaceID db.UUID) ([
 				Name:                string(catalog.Name),
 				Origin:              string(catalog.Origin),
 				ProviderKind:        kinds[string(catalog.ConnectionID)],
+				Connector:           derefText(catalog.Connector),
 				CredentialsReadOnly: readOnly[string(catalog.ConnectionID)],
 				MetadataSyncedAt:    synced[string(catalog.ID)],
 				MetadataSyncStatus:  status,
