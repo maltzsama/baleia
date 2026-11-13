@@ -459,9 +459,12 @@ func (r *Repo) TransitionBinding(ctx context.Context, arg db.TransitionBindingPa
 	if arg.DesiredVersion != nil {
 		changes["desired_version"] = *arg.DesiredVersion
 	}
-	res := r.Users.db.WithContext(ctx).Model(&model.CatalogBinding{}).
-		Where("id = ? AND lifecycle_state IN ?", UUIDString(arg.ID), arg.FromStates).
-		Updates(changes)
+	query := r.Users.db.WithContext(ctx).Model(&model.CatalogBinding{}).
+		Where("id = ? AND lifecycle_state IN ?", UUIDString(arg.ID), arg.FromStates)
+	if arg.StableSince != nil {
+		query = query.Where("state_changed_at <= ?", arg.StableSince.UTC())
+	}
+	res := query.Updates(changes)
 	if res.Error != nil {
 		return db.CatalogBinding{}, res.Error
 	}

@@ -344,6 +344,18 @@ func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 	if err != nil || transitioned.LifecycleState != "active" || *transitioned.DesiredVersion != "v4" {
 		t.Fatalf("TransitionBinding = %+v, %v", transitioned, err)
 	}
+	// StableSince lets a transition through only for a state held since then:
+	// the binding entered active just now, so an hour-old cutoff refuses it.
+	if _, err := r.TransitionBinding(ctx, db.TransitionBindingParams{
+		ID: binding.ID, ToState: "active", FromStates: []string{"active"}, StableSince: timePtr(time.Now().Add(-time.Hour)),
+	}); !errors.Is(err, db.ErrNoRows) {
+		t.Errorf("transition of a state entered after the cutoff = %v, want db.ErrNoRows", err)
+	}
+	if got, err := r.TransitionBinding(ctx, db.TransitionBindingParams{
+		ID: binding.ID, ToState: "active", FromStates: []string{"active"}, StableSince: timePtr(time.Now().Add(time.Hour)),
+	}); err != nil || got.LifecycleState != "active" {
+		t.Errorf("transition of a state held past the cutoff = %+v, %v", got, err)
+	}
 
 	// The registry row decides the derived binding status.
 	if err := r.UpsertTrinoCatalogRegistry(ctx, db.UpsertTrinoCatalogRegistryParams{
@@ -551,3 +563,5 @@ func TestCatalogConnectionUniqueName(t *testing.T) {
 		t.Fatalf("duplicate create = %v, want a 23505 unique violation", err)
 	}
 }
+
+func timePtr(t time.Time) *time.Time { return &t }
