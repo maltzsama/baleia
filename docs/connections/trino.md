@@ -17,7 +17,7 @@ Trino federated query engine.
 
 ## Configuration
 
-Create it under **Connections**. Credentials are sealed with `BALEIA_ENCRYPTION_KEY` before they are stored, and every outbound connection goes through the same [network policy](../adr/0011-direct-connections-security.md).
+Register it from **Engines** with **Register engine**, which creates the connection and the engine together. Credentials are sealed with `BALEIA_ENCRYPTION_KEY` before they are stored, and every outbound connection goes through the same [network policy](../adr/0011-direct-connections-security.md).
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
