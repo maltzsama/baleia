@@ -36,6 +36,8 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0024](0024-cold-storage-and-retention.md) | Cold storage and retention for the audit trail and query history | Accepted; amends 0020 (table partitioning); interval, defaults and cadence amended by 0026 |
 | [0025](0025-semantic-search.md) | Semantic search behind a vector store seam, embedded by Baleia | Proposed; extends 0023 |
 | [0026](0026-daily-partitions-and-retention-cadence.md) | Daily partitions, configurable retention and a weekly drop cadence | Accepted; amends 0024 |
+| [0027](0027-catalog-manager-rbac-administration.md) | Catalog-manager RBAC is administered through Baleia and owned by the manager | Proposed |
+| [0028](0028-data-policies-opa-trino.md) | Row filters and column masks: authored in Baleia, decided by OPA, enforced by Trino | Proposed (gated on a spike); extends 0005 |
 
 ## Owner decisions
 
