@@ -483,6 +483,37 @@ func TestTableMaintenance_Analyze(t *testing.T) {
 	}
 }
 
+// TestTableMaintenance_AnalyzeGlue: a Glue catalog is analyzed when it is
+// bound with the Iceberg connector, whose tables the engine measures; its
+// Hive and Delta Lake catalogs are refused (#997).
+func TestTableMaintenance_AnalyzeGlue(t *testing.T) {
+	t.Parallel()
+	for connector, analyzed := range map[string]bool{"iceberg": true, "hive": false, "delta_lake": false} {
+		t.Run(connector, func(t *testing.T) {
+			t.Parallel()
+			f := newMaintenanceFixture(t, "managed")
+			if err := f.gdb.Model(&model.CatalogConnection{}).Where("id = ?", repo.UUIDString(f.connectionID)).
+				Update("type", "glue").Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := f.gdb.Model(&model.Catalog{}).Where("id = ?", repo.UUIDString(f.catalogID)).
+				Update("connector", connector).Error; err != nil {
+				t.Fatal(err)
+			}
+			resp, err := f.h.AnalyzeCatalogTableHealth(f.admin, AnalyzeCatalogTableHealthRequestObject{CatalogId: f.catalog()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := isType[AnalyzeCatalogTableHealth202JSONResponse](resp); got != analyzed {
+				t.Fatalf("analyze a Glue %s catalog = %T, want analyzed %v", connector, resp, analyzed)
+			}
+			if !analyzed && !isType[AnalyzeCatalogTableHealth422JSONResponse](resp) {
+				t.Fatalf("analyze a Glue %s catalog = %T, want 422", connector, resp)
+			}
+		})
+	}
+}
+
 // TestTableMaintenance_ReadOnlyCatalog: a catalog whose credentials are
 // asserted read-only, or whose connection kind promises no writes (Unity),
 // is analyzed but never maintained: manual and legacy runs answer 409

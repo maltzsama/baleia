@@ -259,6 +259,25 @@ func TestMetadata_UngrantedCatalog404(t *testing.T) {
 			t.Fatalf("%s: catalogs = %+v", name, list)
 		}
 	}
+
+	// A Glue catalog has table health only with the Iceberg connector, whose
+	// tables the engine measures (#997).
+	for connector, want := range map[string]bool{"iceberg": true, "hive": false, "delta_lake": false} {
+		if err := f.gdb.Model(&model.CatalogConnection{}).Where("name = ?", "pol").
+			Updates(map[string]any{"type": "glue", "credentials_read_only": false}).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := f.gdb.Model(&model.Catalog{}).Where("id = ?", f.lake.String()).Update("connector", connector).Error; err != nil {
+			t.Fatal(err)
+		}
+		cats, err = f.h.ListMetadataCatalogs(ctx, ListMetadataCatalogsRequestObject{Id: f.ws})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if list := cats.(ListMetadataCatalogs200JSONResponse); len(list) != 1 || list[0].TableHealth != want {
+			t.Fatalf("glue %s: catalogs = %+v, want table health %v", connector, list, want)
+		}
+	}
 }
 
 func is404(r any) bool {

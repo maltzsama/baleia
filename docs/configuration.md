@@ -46,6 +46,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_RECONCILE_MAX_ACTIONS` | `20` | Changes one reconcile run may apply; the rest are reported |
 | `BALEIA_METADATA_SYNC_INTERVAL` | `15m` | How often every catalog's metadata snapshot is refreshed (at least `5m`) |
 | `BALEIA_MAINTENANCE_MAX_CONCURRENT_RUNS` | `4` | Automatic Iceberg maintenance runs in progress at once, across tables (#500) |
+| `BALEIA_TABLE_HEALTH_MAX_ENGINE_TABLES` | `500` | Iceberg tables a health pass reads through the engine for one metastore catalog, such as Glue (#997); the tables past it, in database and table order, are skipped and logged |
 | `BALEIA_ICEBERG_MAINTENANCE_MIN_RETENTION` | `1h` | Minimum retention projected into managed Iceberg catalogs for `expire_snapshots` and `remove_orphan_files`; table parameters below the floor a catalog has loaded are refused (at least `1m`). Changing it, including the first deploy that introduces it, changes the catalog version: every managed Iceberg catalog is re-created on its engine once, and until that reconcile the old floor (Trino's `7d`) still applies |
 | `BALEIA_EXECUTION_TIMEOUT` | `2h` | Cap for a whole execution: all statements run in one engine session, so a script may take statements × statement timeout, capped by this |
 | `BALEIA_WORKLOAD_ENABLED` | `false` | Record each run's workload class and admit it through its engine queue (#399); off, runs start immediately and are never `queued` |

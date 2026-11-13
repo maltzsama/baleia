@@ -61,6 +61,11 @@ func (*Provider) Roles() []connections.Role {
 }
 func (*Provider) EngineKind() string { return "" }
 
+// EngineTableHealth implements connections.EngineTableHealth: the reader tells
+// Iceberg tables apart (Format), and the engine that binds the Iceberg
+// catalog reads their metadata tables (#997).
+func (*Provider) EngineTableHealth() bool { return true }
+
 // Meta implements connections.Provider (ADR 0021).
 func (*Provider) Meta() connections.TypeMeta {
 	modes := []connections.AccessMode{connections.AccessModeFederated}

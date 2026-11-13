@@ -576,13 +576,41 @@ func TestTableHealthKinds(t *testing.T) {
 		t.Fatalf("TableHealthKinds = %v, want %v", got, want)
 	}
 	for _, kind := range []connections.Kind{"glue", "hive", "postgresql", "trino", "delta", "nope"} {
-		if reg.HasTableHealth(kind) {
-			t.Errorf("HasTableHealth(%q) = true", kind)
+		if reg.CatalogTableHealth(kind, "hive") {
+			t.Errorf("CatalogTableHealth(%q, hive) = true", kind)
 		}
 	}
 	var none *connections.Registry
-	if none.TableHealthKinds() != nil || none.HasTableHealth("polaris") {
+	if none.TableHealthKinds() != nil || none.EngineTableHealthKinds() != nil || none.CatalogTableHealth("polaris", "iceberg") {
 		t.Fatal("a nil registry has table health kinds")
+	}
+}
+
+// TestEngineTableHealth: a Glue catalog bound with the Iceberg connector gets
+// table health through the engine; its Hive and Delta Lake catalogs, and every
+// Hive Metastore catalog, do not (#997).
+func TestEngineTableHealth(t *testing.T) {
+	t.Parallel()
+	reg := registry(t, connections.DialerOptions{})
+	if got, want := reg.EngineTableHealthKinds(), []string{"glue"}; !slices.Equal(got, want) {
+		t.Fatalf("EngineTableHealthKinds = %v, want %v", got, want)
+	}
+	for _, c := range []struct {
+		kind      connections.Kind
+		connector string
+		want      bool
+	}{
+		{"glue", "iceberg", true},
+		{"glue", "hive", false},
+		{"glue", "delta_lake", false},
+		{"hive", "iceberg", false},
+		{"polaris", "iceberg", true},
+		{"polaris", "", true},
+		{"postgresql", "iceberg", false},
+	} {
+		if got := reg.CatalogTableHealth(c.kind, c.connector); got != c.want {
+			t.Errorf("CatalogTableHealth(%q, %q) = %v, want %v", c.kind, c.connector, got, c.want)
+		}
 	}
 }
 
