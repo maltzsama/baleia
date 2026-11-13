@@ -108,6 +108,16 @@ func TestBackfillAccessMode(t *testing.T) {
 
 	unused := newConn("unused", "trino")
 
+	// A database that reaches migration 8 from an older version still has the
+	// check that allows only direct and trino; the backfill must replace it.
+	if err := db.Migrator().DropConstraint(&model.CatalogConnection{}, accessModeCheck); err != nil {
+		t.Fatalf("drop check: %v", err)
+	}
+	if err := db.Exec("ALTER TABLE catalog_connections ADD CONSTRAINT " + accessModeCheck +
+		" CHECK (access_mode IS NULL OR access_mode IN ('direct', 'trino'))").Error; err != nil {
+		t.Fatalf("restore the old check: %v", err)
+	}
+
 	if err := backfillAccessMode(db); err != nil {
 		t.Fatalf("backfill: %v", err)
 	}

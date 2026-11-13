@@ -244,6 +244,9 @@ func AllMigrations() (*Registry, error) {
 // until bootstrap.SplitDualPathConnections splits them; engine-family and
 // unused connections have no data access mode.
 func backfillAccessMode(db *gorm.DB) error {
+	if err := recreateAccessModeCheck(db); err != nil {
+		return err
+	}
 	var rows []model.CatalogConnection
 	if err := db.Where("access_mode IS NULL").Find(&rows).Error; err != nil {
 		return fmt.Errorf("list connections to backfill: %w", err)
