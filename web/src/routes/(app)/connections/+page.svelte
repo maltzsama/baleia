@@ -24,7 +24,6 @@
 	import {
 		bindingSupport,
 		createCatalog,
-		createEngine,
 		deleteConnection,
 		listCatalogBindings,
 		listConnectionCatalogs,
@@ -41,12 +40,7 @@
 	} from '$lib/connections/api';
 	import EditConnectionDialog from '$lib/connections/EditConnectionDialog.svelte';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
-	import {
-		canDirect,
-		catalogIdentity,
-		normalizeCatalogName,
-		normalizeEngineName
-	} from '$lib/connections/providers';
+	import { catalogIdentity, normalizeCatalogName } from '$lib/connections/providers';
 
 	// Cards whose catalogs load at once; the rest wait their turn.
 	const CATALOG_LOOKUPS = 4;
@@ -75,7 +69,6 @@
 	let addName = $state('');
 	let addConnector = $state('');
 	let addingBusy = $state(false);
-	let registeringId = $state('');
 	let testingId = $state('');
 	let activity = $state<CatalogConnection | null>(null);
 	let activityOpen = $state(false);
@@ -197,21 +190,6 @@
 			toasts.error(e instanceof Error ? e.message : String(e));
 		} finally {
 			testingId = '';
-		}
-	}
-
-	async function registerEngine(connection: CatalogConnection) {
-		registeringId = connection.id;
-		try {
-			const name = normalizeEngineName(connection.name);
-			if (!name) throw new Error('The connection name cannot be used as an engine name.');
-			const engine = await createEngine({ name, connection_id: connection.id });
-			engines = [...engines, engine];
-			toasts.success(m.connections_engine_registered({ name: engine.name }));
-		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
-		} finally {
-			registeringId = '';
 		}
 	}
 
@@ -451,15 +429,6 @@
 						>
 							{m.connections_test()}
 						</Button>
-						{#if provider && canDirect(provider) && ownEngines.length === 0}
-							<Button
-								size="sm"
-								loading={registeringId === connection.id}
-								onclick={() => registerEngine(connection)}
-							>
-								{m.connections_register_engine()}
-							</Button>
-						{/if}
 						{#if compatibleEngines(connection.type).length > 0}
 							<Button size="sm" onclick={() => openAdd(connection)}
 								>{m.connections_add_catalog()}</Button

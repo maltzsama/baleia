@@ -9,24 +9,14 @@
 	import Button from '$lib/ui/Button.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
-	import Input from '$lib/ui/Input.svelte';
-	import Modal from '$lib/ui/Modal.svelte';
 	import Select from '$lib/ui/Select.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
 	import EngineBadge from '$lib/ui/patterns/EngineBadge.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
-	import {
-		createEngine,
-		listCatalogConnections,
-		listEngines,
-		readOnlyGuarantee,
-		type CatalogConnection,
-		type Engine
-	} from '$lib/engines/admin';
+	import { listEngines, readOnlyGuarantee, type Engine } from '$lib/engines/admin';
 
 	let engines = $state<Engine[]>([]);
-	let connections = $state<CatalogConnection[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 
@@ -34,12 +24,6 @@
 	let kindFilter = $state('');
 	let healthFilter = $state('');
 	let enabledFilter = $state('');
-
-	let registerOpen = $state(false);
-	let registerConnectionId = $state('');
-	let registerName = $state('');
-	let registering = $state(false);
-	let registerError = $state('');
 
 	const kinds = $derived([...new Set(engines.map((engine) => engine.kind))].sort());
 	const filtered = $derived(
@@ -52,7 +36,6 @@
 			return true;
 		})
 	);
-	const canRegister = $derived(connections.length > 0);
 
 	function clearFilters() {
 		classFilter = '';
@@ -71,42 +54,10 @@
 		error = '';
 		try {
 			engines = await listEngines();
-			connections = await listCatalogConnections({
-				action: 'register_engine',
-				without_engine: true
-			});
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
 			loading = false;
-		}
-	}
-
-	function openRegister() {
-		registerName = '';
-		registerError = '';
-		registerConnectionId = connections[0]?.id ?? '';
-		registerOpen = true;
-	}
-
-	async function submitRegister() {
-		if (!registerName.trim() || !registerConnectionId) {
-			registerError = m.engines_choose_a_connection_and_name_the_engine();
-			return;
-		}
-		registering = true;
-		registerError = '';
-		try {
-			const engine = await createEngine({
-				name: registerName.trim(),
-				connection_id: registerConnectionId
-			});
-			registerOpen = false;
-			void goto(resolve(`/engines/${engine.id}`));
-		} catch (e) {
-			registerError = e instanceof Error ? e.message : String(e);
-		} finally {
-			registering = false;
 		}
 	}
 
@@ -121,9 +72,6 @@
 				{m.engines_what_runs_your_sql_what_it_guarantees_and()}
 			</p>
 		</div>
-		{#if canRegister}
-			<Button variant="primary" onclick={openRegister}>{m.engines_register_engine()}</Button>
-		{/if}
 	</div>
 
 	{#if loading}
@@ -139,10 +87,8 @@
 			title={m.engines_no_engines_yet()}
 			description={m.engines_a_trino_engine_is_usually_registered_by_the_deployment()}
 		>
-			<!-- The next step (#476): register one, or first add a database connection. -->
-			{#if canRegister}
-				<Button variant="primary" onclick={openRegister}>{m.engines_register_engine()}</Button>
-			{:else if canGlobal(authStore.user, 'create_connection')}
+			<!-- The next step (#476): a direct engine is created with its connection. -->
+			{#if canGlobal(authStore.user, 'create_connection')}
 				<Button variant="primary" onclick={() => goto(resolve('/connections/new'))}>
 					{m.connections_new_connection()}
 				</Button>
@@ -294,43 +240,3 @@
 		{/if}
 	{/if}
 </div>
-
-<Modal bind:open={registerOpen} title={m.engines_register_engine()}>
-	<div class="flex flex-col gap-3 text-[12px]">
-		<p class="text-slate-600 dark:text-slate-300">
-			{m.engines_registering_probes_the_connection_and_disc()}
-		</p>
-		<Select
-			label={m.engines_connection()}
-			bind:value={registerConnectionId}
-			options={connections.map((connection) => ({
-				value: connection.id,
-				label: `${connection.name} (${connection.type})`
-			}))}
-		/>
-		<Input
-			label={m.common_name()}
-			bind:value={registerName}
-			placeholder={m.engines_analytics_pg()}
-			class="font-mono"
-		/>
-		{#if registerError}
-			<p class="text-danger" role="alert">{registerError}</p>
-		{/if}
-	</div>
-	{#snippet footer()}
-		<div class="flex justify-end gap-2">
-			<Button onclick={() => (registerOpen = false)} disabled={registering}
-				>{m.common_cancel()}</Button
-			>
-			<Button
-				variant="primary"
-				loading={registering}
-				disabled={registering}
-				onclick={submitRegister}
-			>
-				{m.common_register()}
-			</Button>
-		</div>
-	{/snippet}
-</Modal>

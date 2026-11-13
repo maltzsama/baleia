@@ -2486,11 +2486,7 @@ export interface paths {
         /** Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces */
         get: operations["listEngines"];
         put?: never;
-        /**
-         * Register a direct engine on a connection (its owner or an admin)
-         * @description The connection's provider must have the direct_engine role. Baleia checks that it can reach the engine, then creates the engine and one native catalog with a native binding per catalog the engine exposes. Federated engines are registered by Baleia (the default Trino engine).
-         */
-        post: operations["createEngine"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4806,7 +4802,7 @@ export interface components {
             locale?: components["schemas"]["Locale"] | null;
         };
         /** @enum {string} */
-        CatalogConnectionAllowedAction: "view" | "update" | "delete" | "test" | "register_engine" | "create_catalog";
+        CatalogConnectionAllowedAction: "view" | "update" | "delete" | "test" | "create_catalog";
         /** @enum {string} */
         EngineAllowedAction: "view" | "update" | "delete" | "test" | "reconcile" | "bind_into";
         /** @enum {string} */
@@ -5509,14 +5505,6 @@ export interface components {
         StatementSpan: {
             start: number;
             end: number;
-        };
-        CreateEngineRequest: {
-            name: string;
-            /**
-             * Format: uuid
-             * @description A connection whose provider has the direct_engine role
-             */
-            connection_id: string;
         };
         UpdateEngineRequest: {
             enabled?: boolean;
@@ -11835,12 +11823,7 @@ export interface operations {
     };
     listCatalogConnections: {
         parameters: {
-            query?: {
-                /** @description Only connections whose allowed_actions include this action, e.g. register_engine */
-                action?: string;
-                /** @description Only connections that do not back an engine yet */
-                without_engine?: boolean;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -12042,34 +12025,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-        };
-    };
-    createEngine: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateEngineRequest"];
-            };
-        };
-        responses: {
-            /** @description Engine created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Engine"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
         };
     };
     getEngine: {

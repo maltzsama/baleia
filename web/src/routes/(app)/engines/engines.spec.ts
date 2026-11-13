@@ -63,8 +63,7 @@ describe('engines list', () => {
 						capabilities: caps({ dialect: 'sqlite', read_only: 'none' })
 					})
 				])
-			),
-			http.get('/catalog-connections', ({ response }) => response(200).json([]))
+			)
 		);
 
 		render(EnginesPage);
@@ -77,32 +76,6 @@ describe('engines list', () => {
 		expect(screen.getAllByText('Unreachable').length).toBeGreaterThan(0);
 	});
 
-	it('offers registration only when a connection grants register_engine', async () => {
-		server.use(
-			http.get('/engines', ({ response }) =>
-				response(200).json([makeEngine({ capabilities: caps() })])
-			),
-			http.get('/catalog-connections', ({ response }) =>
-				response(200).json([
-					{
-						id: '00000000-0000-0000-0000-0000000000c1',
-						name: 'analytics_pg',
-						type: 'postgresql',
-						url: '',
-						config: {},
-						has_credentials: true,
-						credentials_read_only: false,
-						created_at: '2026-01-01T00:00:00Z',
-						allowed_actions: ['view', 'update', 'test', 'register_engine']
-					}
-				])
-			)
-		);
-
-		render(EnginesPage);
-
-		expect(await screen.findByText('Register engine')).toBeTruthy();
-	});
 	// #476: filters that match nothing can be cleared; no engine at all
 	// points to the next step.
 	it('clears filters that match nothing', async () => {
@@ -121,7 +94,7 @@ describe('engines list', () => {
 		expect(await screen.findByText('main_cluster')).toBeTruthy();
 	});
 
-	it('offers a new connection when there is no engine and nothing to register from', async () => {
+	it('offers a new connection when there is no engine', async () => {
 		authStore.set(makeMe());
 		server.use(
 			http.get('/engines', ({ response }) => response(200).json([])),

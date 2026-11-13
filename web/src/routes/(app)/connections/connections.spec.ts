@@ -43,17 +43,7 @@ function mockApi() {
 		http.get('/catalogs/{id}/bindings', ({ response }) =>
 			response(200).json([makeCatalogBinding({ id: 'b1', catalog_id: CATALOG })])
 		),
-		http.delete('/catalog-connections/{id}', ({ response }) => response(204).empty()),
-		http.post('/engines', ({ response }) =>
-			response(201).json(
-				makeEngine({
-					id: '00000000-0000-0000-0000-0000000000e9',
-					name: 'warehouse-engine',
-					kind: 'testengine',
-					connection_id: CONNECTION
-				})
-			)
-		)
+		http.delete('/catalog-connections/{id}', ({ response }) => response(204).empty())
 	);
 }
 
@@ -85,14 +75,13 @@ describe('connections page', () => {
 		await waitFor(() => expect(screen.queryByText('Warehouse')).toBeNull());
 	});
 
-	it('registers a direct engine from the connection card', async () => {
+	it('has no standalone engine registration: a direct engine comes with its connection', async () => {
 		render(ConnectionsPage);
 		await screen.findByText('Warehouse');
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Register engine' }));
-
-		expect(await screen.findByText('warehouse-engine')).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Register engine' })).toBeNull();
 	});
+
 	// #476: no connections at all is onboarding; a search with no match is not.
 	it('offers to create the first connection when there is none', async () => {
 		authStore.set(makeMe());
