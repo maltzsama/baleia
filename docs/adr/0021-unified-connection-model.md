@@ -279,14 +279,19 @@ The current wizard's single `connector` selection is insufficient for this requi
 
 The existing Trino catalog-store integration defined by ADR 0003 remains the source of truth for the Trino plugin's desired catalog configuration.
 
-For a data-source connection using an existing Trino engine, the lifecycle remains:
+For a data-source connection using existing federated engines (ADR 0029, workflow C), one backend
+operation runs the lifecycle:
 
-1. Persist the connection.
-2. Persist the logical catalog and binding in Baleia.
-3. Stage the catalog-store registry row.
-4. Apply `CREATE CATALOG`.
-5. Confirm the desired catalog version through the plugin.
-6. Observe the catalog state.
+1. In one database transaction, persist the connection, the logical catalogs, the bindings and the
+   desired catalog-registration state, including the catalog-store registry row.
+2. Commit.
+3. Apply `CREATE CATALOG` through the existing reconciliation.
+4. Confirm the desired catalog version through the plugin.
+5. Observe the catalog state.
+
+Steps 3 to 5 cannot take part in the database transaction. A failure there leaves the committed
+desired state pending or failed, observable and recoverable through reconciliation; it does not
+undo steps 1 and 2.
 
 The catalog row and registry row must continue to be written transactionally where the existing lifecycle requires it.
 
@@ -301,8 +306,9 @@ engine registration remains a first-class Engines-page workflow. Its backend ope
 engine-family connection and engine resource atomically; the engine may initially have no
 user-defined bindings.
 
-The change to data-source registration is limited to who declares compatibility and how the
-application selects an existing engine instance.
+The change to data-source registration is who declares compatibility, how the application selects
+an existing engine instance, and that one backend operation persists the connection, catalogs,
+bindings and desired registration state atomically instead of the frontend sequencing them.
 
 ### D.5 — The interoperability matrix has three independent layers
 
