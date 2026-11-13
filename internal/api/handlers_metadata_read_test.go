@@ -156,7 +156,7 @@ func newMetaFixture(t *testing.T) *metaFixture {
 		})
 	}
 
-	f.h = testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: q, store: gdb, tx: storeTx{db: pool}}) // no engines: reads never call one
+	f.h = testAPI(handlerFields{connections: testRegistry(t), dialects: dialect.NewRegistry(), queries: q, store: gdb, tx: storeTx{db: pool}}) // no engines: reads never call one
 	return f
 }
 
@@ -217,8 +217,47 @@ func TestMetadata_UngrantedCatalog404(t *testing.T) {
 		t.Fatalf("catalogs = %+v", list)
 	}
 	if list[0].Id != f.lake || list[0].MetadataSyncStatus != "finished" || list[0].MetadataSyncedAt == nil ||
-		len(list[0].Bindings) != 1 || list[0].Bindings[0].BindingId != f.binding || list[0].Bindings[0].EngineKind != "trino" || list[0].ProviderKind != "polaris" {
+		len(list[0].Bindings) != 1 || list[0].Bindings[0].BindingId != f.binding || list[0].Bindings[0].EngineKind != "trino" || list[0].ProviderKind != "polaris" || list[0].TableHealth {
 		t.Fatalf("catalogs = %+v", list)
+	}
+
+	// A native catalog gets no table health; the same Polaris catalog as a
+	// source catalog does (#996).
+	cluster := model.TrinoCluster{
+		ID: model.UUID(repo.NewUUID()), Name: "metadata-health-cluster", CoordinatorURL: "http://trino.test", CreatedAt: time.Now().UTC(),
+	}
+	if err := f.gdb.Create(&cluster).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gdb.Model(&model.Catalog{}).Where("id = ?", f.lake.String()).Updates(map[string]any{
+		"origin": "source", "trino_catalog_name": "lake_t", "cluster_id": string(cluster.ID), "warehouse": "lake", "connector": "iceberg",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	cats, err = f.h.ListMetadataCatalogs(ctx, ListMetadataCatalogsRequestObject{Id: f.ws})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list := cats.(ListMetadataCatalogs200JSONResponse); len(list) != 1 || list[0].Origin != "source" || !list[0].TableHealth || list[0].ReadOnly {
+		t.Fatalf("source catalogs = %+v", list)
+	}
+
+	// Read-only follows the connection: the administrator's assertion, or a
+	// kind that promises no writes (Unity).
+	for name, update := range map[string]map[string]any{
+		"credentials asserted read-only": {"credentials_read_only": true},
+		"kind promises no writes":        {"type": "unity", "credentials_read_only": false},
+	} {
+		if err := f.gdb.Model(&model.CatalogConnection{}).Where("name = ?", "pol").Updates(update).Error; err != nil {
+			t.Fatal(err)
+		}
+		cats, err = f.h.ListMetadataCatalogs(ctx, ListMetadataCatalogsRequestObject{Id: f.ws})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if list := cats.(ListMetadataCatalogs200JSONResponse); len(list) != 1 || !list[0].ReadOnly || !list[0].TableHealth {
+			t.Fatalf("%s: catalogs = %+v", name, list)
+		}
 	}
 }
 

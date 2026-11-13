@@ -494,6 +494,61 @@ func TrinoBindable(p Provider) bool {
 	return slices.Contains(m.AccessModes, AccessModeTrino) && len(m.TrinoCatalogTypes) > 0
 }
 
+// HasTableHealth reports whether p is a creatable Iceberg catalog: its tables
+// get health passes and Iceberg maintenance (#996).
+func HasTableHealth(p Provider) bool {
+	st := p.Status().State
+	return p.Family() == FamilyIceberg && (st == StateSupported || st == StateExperimental)
+}
+
+// ReadOnlyKind is implemented by providers whose catalogs promise no writes:
+// Baleia never runs maintenance on them, whatever the credentials allow.
+type ReadOnlyKind interface {
+	ReadOnlyKind() bool
+}
+
+// CatalogReadOnly reports whether a catalog of kind must be treated as
+// read-only: its provider promises no writes, or the administrator asserted
+// that the connection's credentials cannot modify data (#996).
+func (r *Registry) CatalogReadOnly(kind Kind, credentialsReadOnly bool) bool {
+	if credentialsReadOnly {
+		return true
+	}
+	if r == nil {
+		return false
+	}
+	p, err := r.Get(kind)
+	if err != nil {
+		return false
+	}
+	ro, ok := p.(ReadOnlyKind)
+	return ok && ro.ReadOnlyKind()
+}
+
+// HasTableHealth reports whether catalogs of kind get table health; an
+// unknown kind does not.
+func (r *Registry) HasTableHealth(kind Kind) bool {
+	if r == nil {
+		return false
+	}
+	p, err := r.Get(kind)
+	return err == nil && HasTableHealth(p)
+}
+
+// TableHealthKinds lists, ordered, the kinds whose catalogs get table health.
+func (r *Registry) TableHealthKinds() []string {
+	if r == nil {
+		return nil
+	}
+	var out []string
+	for _, p := range r.All() {
+		if HasTableHealth(p) {
+			out = append(out, string(p.Kind()))
+		}
+	}
+	return out
+}
+
 // All returns every provider ordered by kind.
 func (r *Registry) All() []Provider {
 	out := make([]Provider, 0, len(r.providers))

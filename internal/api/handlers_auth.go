@@ -284,7 +284,7 @@ func (h *core) features(ctx context.Context) Features {
 			}
 		}
 	}
-	f.Retrievers = h.access.RetrieversAvailable(ctx)
+	f.Retrievers = h.access.RetrieversAvailable(ctx, h.connections.TableHealthKinds())
 	return f
 }
 

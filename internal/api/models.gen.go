@@ -503,6 +503,7 @@ const (
 	ErrorCodeCancelFailed              ErrorCode = "cancel_failed"
 	ErrorCodeCancelled                 ErrorCode = "cancelled"
 	ErrorCodeCatalogNotManaged         ErrorCode = "catalog_not_managed"
+	ErrorCodeCatalogReadOnly           ErrorCode = "catalog_read_only"
 	ErrorCodeConcurrentChange          ErrorCode = "concurrent_change"
 	ErrorCodeConflict                  ErrorCode = "conflict"
 	ErrorCodeConnectionError           ErrorCode = "connection_error"
@@ -2108,12 +2109,18 @@ type CatalogSummary struct {
 	// Origin source or native
 	Origin       string  `json:"origin"`
 	ProviderKind *string `json:"provider_kind"`
-	SourceRef    *string `json:"source_ref"`
-	SyncError    *string `json:"sync_error"`
+
+	// ReadOnly Baleia never writes to this catalog: its connection kind promises no writes, or the administrator asserted its credentials are read-only. Table health still runs; maintenance does not. False when the caller cannot read the connection.
+	ReadOnly  bool    `json:"read_only"`
+	SourceRef *string `json:"source_ref"`
+	SyncError *string `json:"sync_error"`
 
 	// SyncStatus The derived sync status of the catalog's binding on its Trino cluster (see CatalogBinding.sync_status; draining is no longer produced).
 	SyncStatus *CatalogSummarySyncStatus `json:"sync_status,omitempty"`
 	TableCount *int                      `json:"table_count,omitempty"`
+
+	// TableHealth The catalog is a source catalog of an Iceberg-family connection: its tables get health passes and Iceberg maintenance. False when the caller cannot read the connection.
+	TableHealth bool `json:"table_health"`
 
 	// TrinoCatalogName Trino catalog identifier (lowercase, letters/digits/underscore).
 	TrinoCatalogName *string    `json:"trino_catalog_name,omitempty"`
@@ -3600,6 +3607,12 @@ type MetadataCatalog struct {
 
 	// ProviderKind The kind of the catalog's connection (polaris, postgresql, trino, …)
 	ProviderKind string `json:"provider_kind"`
+
+	// ReadOnly Baleia never writes to this catalog: its connection kind promises no writes, or the administrator asserted its credentials are read-only. Table health still runs; maintenance does not.
+	ReadOnly bool `json:"read_only"`
+
+	// TableHealth The catalog is a source catalog of an Iceberg-family connection: its tables get health passes and Iceberg maintenance
+	TableHealth bool `json:"table_health"`
 }
 
 // MetadataCatalogMetadataSyncStatus defines model for MetadataCatalog.MetadataSyncStatus.

@@ -40,7 +40,7 @@ type Principals interface {
 // implements it.
 type Platform interface {
 	GetDefaultTrinoCluster(ctx context.Context) (db.TrinoCluster, error)
-	ListEnabledIcebergCatalogs(ctx context.Context) ([]db.ListEnabledIcebergCatalogsRow, error)
+	ListEnabledIcebergCatalogs(ctx context.Context, kinds []string) ([]db.ListEnabledIcebergCatalogsRow, error)
 }
 
 // Store is Workspaces, Principals and Platform.
@@ -194,13 +194,13 @@ func (s *Service) TrinoIdentity(ctx context.Context, mode string, uid db.UUID) (
 
 // RetrieversAvailable reports whether a Trino engine can host retriever
 // destinations: there is a default cluster with an engine and an enabled
-// Iceberg catalog.
-func (s *Service) RetrieversAvailable(ctx context.Context) bool {
+// catalog of one of the Iceberg kinds.
+func (s *Service) RetrieversAvailable(ctx context.Context, icebergKinds []string) bool {
 	cluster, err := s.store.GetDefaultTrinoCluster(ctx)
 	if err != nil || !cluster.EngineID.Valid {
 		return false
 	}
-	cats, err := s.store.ListEnabledIcebergCatalogs(ctx)
+	cats, err := s.store.ListEnabledIcebergCatalogs(ctx, icebergKinds)
 	return err == nil && len(cats) > 0
 }
 

@@ -80,6 +80,8 @@ describe('DataSourceTree', () => {
 						origin: 'native',
 						bindings: [],
 						needs_attention: false,
+						table_health: false,
+						read_only: false,
 						allowed_actions: ['grant']
 					}
 				])

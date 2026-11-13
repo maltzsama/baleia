@@ -48,11 +48,14 @@
 		catalogId,
 		namespace,
 		table,
+		readOnly = false,
 		onruns
 	}: {
 		catalogId: string;
 		namespace: string;
 		table: string;
+		/** The catalog is read-only: the table is analyzed, never maintained. */
+		readOnly?: boolean;
 		/** The most recent runs, for the page's summary. */
 		onruns?: (runs: MaintenanceRun[]) => void;
 	} = $props();
@@ -293,6 +296,12 @@
 		{#if !canEdit}
 			<p class="mb-3 text-[12px] text-text-muted">{m.maintenance_read_only()}</p>
 		{/if}
+		{#if readOnly}
+			<p class="mb-3 flex items-center gap-2 text-[12px] text-text-muted" role="note">
+				<Badge tone="neutral">{m.common_read_only()}</Badge>
+				{m.maintenance_catalog_read_only()}
+			</p>
+		{/if}
 
 		<fieldset disabled={!canEdit} class="m-0 min-w-0 border-0 p-0">
 			<div class="grid gap-3 sm:grid-cols-2">
@@ -503,7 +512,9 @@
 								options={runOptions}
 							/>
 						</div>
-						<Button size="sm" onclick={() => (runOpen = true)}>{m.maintenance_run_now()}</Button>
+						<Button size="sm" disabled={readOnly} onclick={() => (runOpen = true)}
+							>{m.maintenance_run_now()}</Button
+						>
 					</div>
 				{/if}
 			</div>

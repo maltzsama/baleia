@@ -256,7 +256,7 @@ func ListEnabledIcebergCatalogs(ctx context.Context, params ListEnabledIcebergCa
 }
 
 func (a *Activities) listEnabledIcebergCatalogs(ctx context.Context) ([]EnabledIcebergCatalog, error) {
-	rows, err := a.monitoring().ListEnabledIcebergCatalogs(ctx)
+	rows, err := a.monitoring().ListEnabledIcebergCatalogs(ctx, a.connections.TableHealthKinds())
 	if err != nil {
 		return nil, fmt.Errorf("list enabled iceberg catalogs: %w", err)
 	}

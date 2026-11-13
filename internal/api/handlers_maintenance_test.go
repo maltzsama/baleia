@@ -159,6 +159,7 @@ func newMaintenanceFixture(t *testing.T, bindingMode string) *maintenanceFixture
 	f.setApplied(t, `{"iceberg.expire-snapshots.min-retention": "1h", "iceberg.remove-orphan-files.min-retention": "1h"}`, "trino")
 	f.h = testAPI(handlerFields{
 		queries:        q,
+		connections:    testRegistry(t),
 		tx:             storeTx{db: pool},
 		engines:        maintEngines{},
 		audit:          f.audit,
@@ -479,6 +480,49 @@ func TestTableMaintenance_Analyze(t *testing.T) {
 	catalog, err := f.h.AnalyzeCatalogTableHealth(f.admin, AnalyzeCatalogTableHealthRequestObject{CatalogId: f.catalog()})
 	if err != nil || !isType[AnalyzeCatalogTableHealth422JSONResponse](catalog) {
 		t.Fatalf("analyze a disabled catalog = %T, %v", catalog, err)
+	}
+}
+
+// TestTableMaintenance_ReadOnlyCatalog: a catalog whose credentials are
+// asserted read-only, or whose connection kind promises no writes (Unity),
+// is analyzed but never maintained: manual and legacy runs answer 409
+// catalog_read_only and start nothing (#996).
+func TestTableMaintenance_ReadOnlyCatalog(t *testing.T) {
+	t.Parallel()
+	cases := map[string]map[string]any{
+		"credentials asserted read-only": {"credentials_read_only": true},
+		"kind promises no writes":        {"type": "unity"},
+	}
+	for name, update := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			f := newMaintenanceFixture(t, "managed")
+			f.put(f.admin, t, expiryParams(3600), nil)
+			if err := f.gdb.Model(&model.CatalogConnection{}).Where("id = ?", repo.UUIDString(f.connectionID)).
+				Updates(update).Error; err != nil {
+				t.Fatal(err)
+			}
+			tc := f.h.temporalClient.(*fakeTemporalClient)
+
+			run, err := f.h.RunTableMaintenance(f.admin, RunTableMaintenanceRequestObject{CatalogId: f.catalog(), Namespace: "cdc", Table: "orders",
+				Body: &ManualMaintenanceRequest{Operation: "optimize"}})
+			if resp, ok := run.(RunTableMaintenance409JSONResponse); err != nil || !ok || resp.Code != ErrorCodeCatalogReadOnly {
+				t.Fatalf("manual run = %T %+v, %v", run, run, err)
+			}
+			legacy, err := f.h.CreateMaintenanceRun(f.admin, CreateMaintenanceRunRequestObject{CatalogId: f.catalog(),
+				Body: &CreateMaintenanceRequest{Namespace: "cdc", Table: "orders", Operations: []string{"optimize"}}})
+			if resp, ok := legacy.(CreateMaintenanceRun409JSONResponse); err != nil || !ok || resp.Code != ErrorCodeCatalogReadOnly {
+				t.Fatalf("legacy run = %T %+v, %v", legacy, legacy, err)
+			}
+			if len(tc.started) != 0 {
+				t.Fatalf("workflows started = %v, want none", tc.started)
+			}
+			// Reading stays open: the table can still be analyzed.
+			analyze, err := f.h.AnalyzeTableHealth(f.admin, AnalyzeTableHealthRequestObject{CatalogId: f.catalog(), Namespace: "cdc", Table: "orders"})
+			if err != nil || !isType[AnalyzeTableHealth202JSONResponse](analyze) {
+				t.Fatalf("analyze = %T, %v", analyze, err)
+			}
+		})
 	}
 }
 

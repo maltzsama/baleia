@@ -106,15 +106,3 @@ export function hasTrinoResourceGroups(kind: string | null | undefined): boolean
 export function canOpenInBI(kind: string): boolean {
 	return kind === 'trino';
 }
-
-// Connection kinds whose catalogs get Iceberg table health and maintenance
-// (#500): the same list the health pass reads (ListEnabledIcebergCatalogs).
-const tableHealthKinds = ['polaris', 'iceberg', 'nessie'];
-
-/** Whether a catalog gets table health and maintenance: a source Iceberg catalog. */
-export function hasTableHealth(catalog: {
-	origin: string;
-	provider_kind?: string | null;
-}): boolean {
-	return catalog.origin === 'source' && tableHealthKinds.includes(catalog.provider_kind ?? '');
-}
