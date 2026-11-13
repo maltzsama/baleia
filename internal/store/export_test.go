@@ -33,3 +33,6 @@ func GuardedIndexes() []GuardedIndex {
 
 // UnboundFreeText exposes migration 18 to the external tests.
 var UnboundFreeText = unboundFreeText
+
+// RenameTrinoAccessMode exposes migration 19 to the external tests.
+var RenameTrinoAccessMode = renameTrinoAccessMode

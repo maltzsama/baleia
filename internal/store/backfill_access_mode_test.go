@@ -50,7 +50,7 @@ func openBackfillTestDB(t *testing.T) *gorm.DB {
 }
 
 // TestBackfillAccessMode pins the single-path rule: a direct engine without
-// source catalogs is direct, source catalogs without a direct engine are trino,
+// source catalogs is direct, source catalogs without a direct engine are federated,
 // and a connection with both (or neither) stays NULL for the split.
 func TestBackfillAccessMode(t *testing.T) {
 	t.Parallel()
@@ -99,8 +99,8 @@ func TestBackfillAccessMode(t *testing.T) {
 	directOnly := newConn("direct_only", "postgresql")
 	newEngine(directOnly, "direct")
 
-	trinoOnly := newConn("trino_only", "postgresql")
-	newSourceCatalog(trinoOnly)
+	federatedOnly := newConn("federated_only", "postgresql")
+	newSourceCatalog(federatedOnly)
 
 	dual := newConn("dual", "postgresql")
 	newEngine(dual, "direct")
@@ -122,8 +122,8 @@ func TestBackfillAccessMode(t *testing.T) {
 	if m := modeOf(directOnly); m == nil || *m != "direct" {
 		t.Errorf("direct-only mode = %v, want direct", m)
 	}
-	if m := modeOf(trinoOnly); m == nil || *m != "trino" {
-		t.Errorf("trino-only mode = %v, want trino", m)
+	if m := modeOf(federatedOnly); m == nil || *m != "federated" {
+		t.Errorf("federated-only mode = %v, want federated", m)
 	}
 	if m := modeOf(dual); m != nil {
 		t.Errorf("dual-path mode = %v, want NULL (split handles it)", m)

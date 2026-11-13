@@ -63,9 +63,9 @@ func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 
 	// ── connections ────────────────────────────────────────────────────────
 	connID := db.UUID{Bytes: uuid.New(), Valid: true}
-	trino := "trino"
+	federated := "federated"
 	conn, err := r.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
-		ID: connID, Name: "polaris-prod", Type: "polaris", AccessMode: &trino, Url: "http://polaris.test",
+		ID: connID, Name: "polaris-prod", Type: "polaris", AccessMode: &federated, Url: "http://polaris.test",
 		Config: []byte(`{"realm":"prod"}`), CredentialsEnc: strPtr("sealed"),
 		CredentialsReadOnly: true, CreatedBy: ownerID,
 	})
@@ -75,8 +75,8 @@ func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 	if conn.Name != "polaris-prod" || conn.CreatedBy != ownerID || !conn.CredentialsReadOnly || !conn.CreatedAt.Valid {
 		t.Fatalf("CreateCatalogConnection = %+v", conn)
 	}
-	if conn.AccessMode == nil || *conn.AccessMode != "trino" {
-		t.Fatalf("access_mode = %v, want trino", conn.AccessMode)
+	if conn.AccessMode == nil || *conn.AccessMode != "federated" {
+		t.Fatalf("access_mode = %v, want federated", conn.AccessMode)
 	}
 
 	got, err := r.GetCatalogConnectionByID(ctx, connID)
