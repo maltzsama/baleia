@@ -1,0 +1,37 @@
+meta {
+  name: Register Standalone Federated Engine
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/engines
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "trino-secondary",
+    "connection": {
+      "name": "Trino secondary",
+      "type": "trino",
+      "config": {
+        "url": "{{trino_url}}"
+      }
+    }
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Registers a federated Trino engine independently. The backend creates its
+  engine-family connection and engine resource atomically (ADR 0029).
+}

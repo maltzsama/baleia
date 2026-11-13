@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"log/slog"
 	"net/url"
 	"os"
@@ -10,12 +11,55 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/store"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+type reconcileProvider struct{}
+
+func (*reconcileProvider) Kind() connections.Kind     { return connections.KindClickHouse }
+func (*reconcileProvider) Label() string              { return "ClickHouse" }
+func (*reconcileProvider) Family() connections.Family { return connections.FamilyDatabase }
+func (*reconcileProvider) Meta() connections.TypeMeta {
+	return connections.TypeMeta{AccessModes: []connections.AccessMode{connections.AccessModeDirect}}
+}
+func (*reconcileProvider) Roles() []connections.Role {
+	return []connections.Role{connections.RoleMetadata, connections.RoleDirect}
+}
+func (*reconcileProvider) ConfigSchema() []connections.Field { return nil }
+func (*reconcileProvider) Validate(c connections.Config) (connections.Config, error) {
+	return c, nil
+}
+func (*reconcileProvider) EngineKind() string { return "clickhouse" }
+func (*reconcileProvider) Ping(context.Context, connections.Config) error {
+	return nil
+}
+func (*reconcileProvider) Status() connections.Status {
+	return connections.Status{State: connections.StateSupported}
+}
+func (*reconcileProvider) OpenMetadata(context.Context, connections.Config) (connections.MetadataReader, error) {
+	return reconcileReader{}, nil
+}
+
+type reconcileReader struct{}
+
+func (reconcileReader) ListCatalogs(context.Context) ([]connections.CatalogRef, error) {
+	return []connections.CatalogRef{{Name: "sales"}}, nil
+}
+func (reconcileReader) ListNamespaces(context.Context, string, connections.Namespace) ([]connections.Namespace, error) {
+	return nil, nil
+}
+func (reconcileReader) ListTables(context.Context, string, connections.Namespace, string) ([]connections.TableRef, string, error) {
+	return nil, "", nil
+}
+func (reconcileReader) LoadTable(context.Context, connections.TableRef) (*connections.TableMeta, error) {
+	return nil, nil
+}
+func (reconcileReader) Close() error { return nil }
 
 // openIsolatedStore creates a throwaway database and migrates it. The split
 // test needs the real dialect: the credentials use the connection id as AAD
@@ -268,6 +312,86 @@ func TestSplitDualPathConnectionsLeavesUnreadableCredentials(t *testing.T) {
 	store.Model(&model.CatalogConnection{}).Where("access_mode = ?", "direct").Count(&direct)
 	if direct != 0 {
 		t.Fatalf("created %d direct connections, want 0", direct)
+	}
+}
+
+func TestReconcileIncompleteDirectConnections(t *testing.T) {
+	t.Parallel()
+	gdb := openIsolatedStore(t)
+	ctx := context.Background()
+	mode := "direct"
+	connection := model.CatalogConnection{
+		ID: model.UUID(uuid.NewString()), Name: "Sales DB", Type: "clickhouse",
+		AccessMode: &mode, URL: "", Config: model.JSON("{}"),
+		CreatedAt: nowUTC(), UpdatedAt: nowUTC(),
+	}
+	if err := gdb.Create(&connection).Error; err != nil {
+		t.Fatal(err)
+	}
+	registry, err := connections.NewRegistry(&reconcileProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logger := slog.New(slog.DiscardHandler)
+	if err := ReconcileIncompleteDirectConnections(ctx, gdb, nil, registry, logger); err != nil {
+		t.Fatal(err)
+	}
+	if err := ReconcileIncompleteDirectConnections(ctx, gdb, nil, registry, logger); err != nil {
+		t.Fatal(err)
+	}
+	var engines, catalogs, bindings int64
+	gdb.Model(&model.Engine{}).Where("connection_id = ?", connection.ID).Count(&engines)
+	gdb.Model(&model.Catalog{}).Where("connection_id = ?", connection.ID).Count(&catalogs)
+	gdb.Model(&model.CatalogBinding{}).
+		Joins("JOIN catalogs ON catalogs.id = catalog_bindings.catalog_id").
+		Where("catalogs.connection_id = ?", connection.ID).Count(&bindings)
+	if engines != 1 || catalogs != 1 || bindings != 1 {
+		t.Fatalf("engines=%d catalogs=%d bindings=%d, want 1 each", engines, catalogs, bindings)
+	}
+}
+
+// An edit that commits between discovery and the transaction leaves the catalogs
+// found for the old settings stale: the repair must roll back, keep the
+// connection and succeed once it reads the new settings.
+func TestReconcileDirectConnectionRefusesAConnectionEditedDuringDiscovery(t *testing.T) {
+	t.Parallel()
+	gdb := openIsolatedStore(t)
+	ctx := context.Background()
+	mode := "direct"
+	connection := model.CatalogConnection{
+		ID: model.UUID(uuid.NewString()), Name: "Sales DB", Type: "clickhouse",
+		AccessMode: &mode, URL: "", Config: model.JSON("{}"),
+		CreatedAt: nowUTC(), UpdatedAt: nowUTC(),
+	}
+	if err := gdb.Create(&connection).Error; err != nil {
+		t.Fatal(err)
+	}
+	registry, err := connections.NewRegistry(&reconcileProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stale := connection
+	if err := gdb.Model(&model.CatalogConnection{}).Where("id = ?", connection.ID).
+		Update("config", model.JSON(`{"database":"other"}`)).Error; err != nil {
+		t.Fatal(err)
+	}
+	err = reconcileDirectConnection(ctx, gdb, nil, registry, stale)
+	if !errors.Is(err, errConnectionChanged) {
+		t.Fatalf("err = %v, want errConnectionChanged", err)
+	}
+	var engines int64
+	gdb.Model(&model.Engine{}).Where("connection_id = ?", connection.ID).Count(&engines)
+	if engines != 0 {
+		t.Fatalf("engines = %d after a refused repair, want 0", engines)
+	}
+
+	if err := ReconcileIncompleteDirectConnections(ctx, gdb, nil, registry, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
+	gdb.Model(&model.Engine{}).Where("connection_id = ?", connection.ID).Count(&engines)
+	if engines != 1 {
+		t.Fatalf("engines = %d after the next pass, want 1", engines)
 	}
 }
 

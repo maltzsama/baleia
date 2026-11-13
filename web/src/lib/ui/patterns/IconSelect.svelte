@@ -8,13 +8,16 @@
 		options,
 		label,
 		id,
-		class: className = ''
+		class: className = '',
+		onchange
 	}: {
 		value?: string;
 		options: { value: string; label: string; kind: string }[];
 		label?: string;
 		id?: string;
 		class?: string;
+		/** Called with the new value when the user picks a different option. */
+		onchange?: (value: string) => void;
 	} = $props();
 
 	const uid = $props.id();
@@ -54,8 +57,10 @@
 
 	function pick(index: number) {
 		const option = options[index];
+		const changed = option !== undefined && option.value !== value;
 		if (option) value = option.value;
 		open = false;
+		if (changed) onchange?.(option.value);
 	}
 
 	function onkeydown(event: KeyboardEvent) {

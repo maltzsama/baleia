@@ -536,6 +536,46 @@ each catalog's `sync_status` is `synced` once its engine confirmed it, `pending`
 applied, and `error` when the engine refused it. An `error` is not rolled back; the desired state
 stays and the reconciler repairs it (see [Binding reconciliation](#binding-reconciliation)).
 
+## Registering a federated engine
+
+`POST /api/v1/engines` registers a query engine on its own, before any data source exists
+([ADR 0029](adr/0029-connection-access-modes-determine-engine-and-catalog-lifecycle.md)). The
+**Register engine** button on the Engines page sends this one request. The body is the engine's
+`name` (lowercase letters, digits, `-` and `_`) and a `connection` holding the engine kind's
+`type`, `config` and `credentials`; the kinds on offer come from the provider registry (Trino today).
+
+The endpoint is pinged with `SELECT 1` through the connection dialer before the transaction opens,
+so an unreachable or refused endpoint answers `422 engine_unreachable` and writes nothing. One
+transaction then writes the engine-family connection and the federated engine, so a failure leaves
+neither. The `201` body is the engine, which starts with no bindings; its catalogs arrive when a
+federated data source names it in `engine_ids` (see above).
+
+| Status | Cause |
+|---|---|
+| `403` | the caller may not create connections (admins only unless `BALEIA_CONNECTIONS_CREATE=everyone`) |
+| `409` | the engine or connection name is taken (the connection takes the engine's name) |
+| `422` | invalid name or settings; a `type` that is not a federated engine kind (`engine_unsupported`); `engine_ids` or `catalog_registration` in the body; an unreachable endpoint (`engine_unreachable`) |
+
+A Trino that needs HTTPS and a login takes `username` and `password`, and a private or self-signed
+certificate needs its PEM bundle in `ca_cert`. There is no option to skip certificate verification.
+`BALEIA_TRINO_CA_FILE` trusts the CA of the bundled Trino only, not of the engines registered here.
+
+### Direct connections left without an engine
+
+Before a direct connection created its engine in the same transaction, the two were separate
+requests, and a failure between them could leave a `direct` connection with no engine. On start the
+API repairs each one: it opens the stored credentials, pings the source and discovers its catalogs,
+then one transaction creates the engine (named after the connection), its native catalogs and their
+bindings. A lock on the connection and a recheck inside the transaction keep concurrent starts from
+creating a second engine, and the repair never deletes a connection. A connection that cannot be
+repaired (unreachable, credentials that no longer open) is logged at error level as
+`incomplete direct connection reconciliation failed`, with its id and name, and tried again at the
+next start. The log is the only record of the failure.
+
+An older binary can still write the access mode `trino` during a rolling upgrade. The database check
+keeps accepting it and the API reports such a row as `federated`; nothing rewrites it afterwards, so
+it stays `trino` in the table.
+
 ## Connection tests
 
 `POST /api/v1/catalog-connections/test` checks connection settings before they are saved and

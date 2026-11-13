@@ -143,7 +143,16 @@ func page(p connections.Provider) string {
 			strings.Join(meta.TrinoCatalogTypes, "`, `"))
 	}
 	b.WriteString("\n## Configuration\n\n")
-	b.WriteString("Create it under **Connections**. Credentials are sealed with `BALEIA_ENCRYPTION_KEY` before they are stored, and every outbound connection goes through the same [network policy](../adr/0011-direct-connections-security.md).\n\n")
+	if p.Family() == connections.FamilyEngine && connections.HasRole(p, connections.RoleFederated) {
+		// A federated engine is not a data source: it is registered from Engines,
+		// which creates its connection and the engine together (ADR 0029). Flight
+		// SQL is also an engine family but a direct data source, so it stays under
+		// Connections.
+		b.WriteString("Register it from **Engines** with **Register engine**, which creates the connection and the engine together. ")
+	} else {
+		b.WriteString("Create it under **Connections**. ")
+	}
+	b.WriteString("Credentials are sealed with `BALEIA_ENCRYPTION_KEY` before they are stored, and every outbound connection goes through the same [network policy](../adr/0011-direct-connections-security.md).\n\n")
 	writeFieldTable(&b, p.ConfigSchema())
 
 	b.WriteString("\n## Next steps\n\n")

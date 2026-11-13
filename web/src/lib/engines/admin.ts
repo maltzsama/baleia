@@ -9,10 +9,10 @@ export type EngineImpact = components['schemas']['EngineImpact'];
 export type EngineObservation = components['schemas']['EngineObservation'];
 export type DiscoverResult = components['schemas']['DiscoverResult'];
 export type CatalogBinding = components['schemas']['CatalogBinding'];
-export type CatalogConnection = components['schemas']['CatalogConnection'];
 export type ReconcileRun = components['schemas']['ReconcileRun'];
 export type ReconcileAction = components['schemas']['ReconcileAction'];
 export type TestResult = components['schemas']['TestCatalogConnectionResult'];
+export type CreateEngineRequest = components['schemas']['CreateEngineRequest'];
 
 type Result<T> = { data?: T; error?: unknown; response?: Response };
 
@@ -49,6 +49,11 @@ export async function getEngine(id: string): Promise<Engine> {
 		'Could not load the engine'
 	);
 }
+
+export async function createEngine(body: CreateEngineRequest): Promise<Engine> {
+	return fail(await client.POST('/engines', { body }), m.engines_could_not_register_the_engine());
+}
+
 export async function updateEngine(
 	id: string,
 	body: components['schemas']['UpdateEngineRequest']

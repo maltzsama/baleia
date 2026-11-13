@@ -344,6 +344,7 @@ const (
 	Secret   ConnectionProviderFieldType = "secret"
 	Select   ConnectionProviderFieldType = "select"
 	Text     ConnectionProviderFieldType = "text"
+	Textarea ConnectionProviderFieldType = "textarea"
 	Url      ConnectionProviderFieldType = "url"
 )
 
@@ -2462,6 +2463,15 @@ type CreateCatalogRequest struct {
 
 	// Warehouse Warehouse or logical source the connector addresses. Required for catalog managers and Iceberg REST catalogs; omitted for databases (their catalog falls back to the connection's database) and for endpointless catalogs (memory, blackhole, faker, jmx, tpch, tpcds).
 	Warehouse *string `json:"warehouse,omitempty"`
+}
+
+// CreateEngineRequest defines model for CreateEngineRequest.
+type CreateEngineRequest struct {
+	// Connection Configuration of the engine-family connection backing this engine. Its provider must have the federated_engine role and no data-source access mode. The connection and engine are persisted atomically.
+	Connection CreateCatalogConnectionRequest `json:"connection"`
+
+	// Name Name of the federated engine instance
+	Name string `json:"name"`
 }
 
 // CreateFolderRequest defines model for CreateFolderRequest.
@@ -6210,6 +6220,9 @@ type ExplainSQLJSONRequestBody = ExplainRequest
 
 // SplitStatementsJSONRequestBody defines body for SplitStatements for application/json ContentType.
 type SplitStatementsJSONRequestBody = SplitStatementsRequest
+
+// CreateEngineJSONRequestBody defines body for CreateEngine for application/json ContentType.
+type CreateEngineJSONRequestBody = CreateEngineRequest
 
 // UpdateEngineJSONRequestBody defines body for UpdateEngine for application/json ContentType.
 type UpdateEngineJSONRequestBody = UpdateEngineRequest

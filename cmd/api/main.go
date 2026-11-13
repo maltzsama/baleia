@@ -31,7 +31,7 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	defer core.Close()
 
 	if err := bootstrap.PrepareAPI(ctx, logger, cfg, bootstrap.APIState{
-		Store: core.Store, Keyring: core.Keyring, TrinoCA: core.TrinoCA,
+		Store: core.Store, Keyring: core.Keyring, TrinoCA: core.TrinoCA, Connections: core.Connections,
 	}); err != nil {
 		return err
 	}

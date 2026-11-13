@@ -1889,6 +1889,7 @@ components:
           { type: boolean, default: false, description: "The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)" }
         credentials:
           type: object
+          additionalProperties: true
           description: "Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config"
         nessie_credentials:
           $ref: "#/components/schemas/NessieCredentials"
@@ -2187,6 +2188,22 @@ components:
       properties:
         start: { type: integer }
         end: { type: integer }
+
+    CreateEngineRequest:
+      type: object
+      required: [name, connection]
+      properties:
+        name:
+          type: string
+          pattern: "^[a-z][a-z0-9_-]{0,62}$"
+          description: "Name of the federated engine instance"
+        connection:
+          allOf:
+            - $ref: "#/components/schemas/CreateCatalogConnectionRequest"
+          description: >
+            Configuration of the engine-family connection backing this engine.
+            Its provider must have the federated_engine role and no data-source
+            access mode. The connection and engine are persisted atomically.
 
     UpdateEngineRequest:
       type: object
@@ -2918,7 +2935,7 @@ components:
       properties:
         key: { type: string }
         label: { type: string }
-        type: { type: string, enum: [text, secret, int, bool, select, url, file_path] }
+        type: { type: string, enum: [text, secret, int, bool, select, url, file_path, textarea] }
         required: { type: boolean }
         secret: { type: boolean, description: "Sent in credentials, stored sealed, never returned" }
         default: { type: string }
@@ -7923,6 +7940,31 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Engine" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Engines]
+      operationId: createEngine
+      summary: "Register a standalone federated engine"
+      description: >
+        Creates an engine-family connection and its federated engine resource
+        in one backend-owned database transaction. The engine may initially
+        have no user-defined catalog bindings. Trino is supported today; engine
+        kinds remain extensible through the provider and engine registries.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateEngineRequest" }
+      responses:
+        "201":
+          description: "Engine created"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Engine" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /engines/{id}:
     parameters:

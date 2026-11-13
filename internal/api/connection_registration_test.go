@@ -27,6 +27,11 @@ func (*directFake) Meta() connections.TypeMeta {
 	return connections.TypeMeta{AccessModes: []connections.AccessMode{connections.AccessModeDirect}}
 }
 
+type federatedFake struct{ fakeEngineProvider }
+
+func (*federatedFake) Family() connections.Family { return connections.FamilyEngine }
+func (*federatedFake) Meta() connections.TypeMeta { return connections.TypeMeta{} }
+
 // registrationFake is an in-memory store whose transaction either commits what
 // it staged or discards it, so a test sees what a rollback leaves behind.
 type registrationFake struct {
@@ -125,6 +130,59 @@ func directRegistration(t *testing.T, ping error) (*API, *registrationFake) {
 		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
 	})
 	return h, f
+}
+
+func federatedRegistration(t *testing.T, failOn string) (*API, *registrationFake) {
+	t.Helper()
+	f := &registrationFake{failOn: failOn, failErr: errors.New("write failed")}
+	p := &federatedFake{fakeEngineProvider{kind: "trino", roles: []connections.Role{connections.RoleFederated}}}
+	reg, err := connections.NewRegistry(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := testAPI(handlerFields{
+		queries: f, tx: f, keyring: testKeyring(t), connections: reg,
+		settings:     SettingsFromConfig(&config.Config{}),
+		catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute),
+	})
+	return h, f
+}
+
+func TestRegisterFederatedEngine_CreatesConnectionAndEngineAtomically(t *testing.T) {
+	t.Parallel()
+	h, f := federatedRegistration(t, "")
+	resp, err := h.CreateEngine(ctxAs(adminID, "admin"), CreateEngineRequestObject{Body: &CreateEngineRequest{
+		Name: "trino_production",
+		Connection: CreateCatalogConnectionRequest{
+			Name: "Trino production", Type: "trino", Config: strMap("url", "http://trino:8080"),
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(CreateEngine201JSONResponse); !ok {
+		t.Fatalf("response = %#v", resp)
+	}
+	if f.txs != 1 || len(f.committed) != 2 || !strings.HasPrefix(f.committed[0], "connection:") || f.committed[1] != "engine:trino_production" {
+		t.Fatalf("transaction = %d, writes = %v", f.txs, f.committed)
+	}
+}
+
+func TestRegisterFederatedEngine_RollsBackConnectionWhenEngineWriteFails(t *testing.T) {
+	t.Parallel()
+	h, f := federatedRegistration(t, "engine")
+	_, err := h.CreateEngine(ctxAs(adminID, "admin"), CreateEngineRequestObject{Body: &CreateEngineRequest{
+		Name: "trino_production",
+		Connection: CreateCatalogConnectionRequest{
+			Name: "Trino production", Type: "trino", Config: strMap("url", "http://trino:8080"),
+		},
+	}})
+	if err == nil {
+		t.Fatal("expected persistence error")
+	}
+	if len(f.committed) != 0 {
+		t.Fatalf("committed writes = %v", f.committed)
+	}
 }
 
 func directBody(name string) *CreateCatalogConnectionRequest {

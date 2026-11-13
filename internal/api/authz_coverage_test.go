@@ -166,6 +166,7 @@ var operationAccess = map[string]access{
 	"TestCatalogConnection":   checked("Connection"),
 	// Any signed-in user tests settings they hold; bind: intents go through the engine check.
 	"TestConnectionDraft": checked("PrincipalFromContext", "mayManageConnections", "planTest"),
+	"CreateEngine":        checked("PrincipalFromContext", "mayManageConnections"), // registers the engine-family connection and its engine together; the caller owns both
 	"GetEngine":           checked("Engine"),
 	"UpdateEngine":        checked("Engine"),
 	"DeleteEngine":        checked("Engine"),
