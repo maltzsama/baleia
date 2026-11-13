@@ -9,14 +9,26 @@
 	import Button from '$lib/ui/Button.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
+	import Input from '$lib/ui/Input.svelte';
+	import Modal from '$lib/ui/Modal.svelte';
 	import Select from '$lib/ui/Select.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
 	import EngineBadge from '$lib/ui/patterns/EngineBadge.svelte';
+	import IconSelect from '$lib/ui/patterns/IconSelect.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 	import StatusBadge from '$lib/ui/patterns/StatusBadge.svelte';
-	import { listEngines, readOnlyGuarantee, type Engine } from '$lib/engines/admin';
+	import ProviderForm from '$lib/connections/ProviderForm.svelte';
+	import { loadProviders } from '$lib/connections/api';
+	import {
+		initialValues,
+		missingFields,
+		normalizeEngineName,
+		type ConnectionProvider
+	} from '$lib/connections/providers';
+	import { createEngine, listEngines, readOnlyGuarantee, type Engine } from '$lib/engines/admin';
 
 	let engines = $state<Engine[]>([]);
+	let providers = $state<ConnectionProvider[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 
@@ -24,6 +36,14 @@
 	let kindFilter = $state('');
 	let healthFilter = $state('');
 	let enabledFilter = $state('');
+
+	let registerOpen = $state(false);
+	let registerProviderKind = $state('');
+	let registerName = $state('');
+	let registerValues = $state<Record<string, string>>({});
+	let registerSecrets = $state<Record<string, string>>({});
+	let registering = $state(false);
+	let registerError = $state('');
 
 	const kinds = $derived([...new Set(engines.map((engine) => engine.kind))].sort());
 	const filtered = $derived(
@@ -35,6 +55,19 @@
 			if (enabledFilter === 'disabled' && engine.enabled) return false;
 			return true;
 		})
+	);
+	const engineProviders = $derived(
+		providers.filter(
+			(provider) =>
+				provider.roles.includes('federated_engine') &&
+				(provider.status.state === 'supported' || provider.status.state === 'experimental')
+		)
+	);
+	const registerProvider = $derived(
+		engineProviders.find((provider) => provider.kind === registerProviderKind)
+	);
+	const canRegister = $derived(
+		canGlobal(authStore.user, 'create_connection') && engineProviders.length > 0
 	);
 
 	function clearFilters() {
@@ -53,11 +86,53 @@
 		loading = true;
 		error = '';
 		try {
-			engines = await listEngines();
+			[engines, providers] = await Promise.all([listEngines(), loadProviders()]);
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
 			loading = false;
+		}
+	}
+
+	function openRegister() {
+		registerName = '';
+		registerError = '';
+		registerProviderKind = engineProviders[0]?.kind ?? '';
+		registerValues = engineProviders[0] ? initialValues(engineProviders[0]) : {};
+		registerSecrets = {};
+		registerOpen = true;
+	}
+
+	async function submitRegister() {
+		if (!registerProvider || !registerName.trim()) {
+			registerError = m.engines_choose_a_kind_and_name_the_engine();
+			return;
+		}
+		if (missingFields(registerProvider, registerValues, registerSecrets).length > 0) {
+			registerError = m.connections_providerform_required();
+			return;
+		}
+		registering = true;
+		registerError = '';
+		try {
+			// An engine is not a data source: its backing connection takes the engine's name.
+			const name = normalizeEngineName(registerName.trim());
+			const engine = await createEngine({
+				name,
+				connection: {
+					name,
+					type: registerProvider.kind,
+					config: registerValues,
+					credentials: registerSecrets,
+					credentials_read_only: false
+				}
+			});
+			registerOpen = false;
+			void goto(resolve(`/engines/${engine.id}`));
+		} catch (e) {
+			registerError = e instanceof Error ? e.message : String(e);
+		} finally {
+			registering = false;
 		}
 	}
 
@@ -72,6 +147,9 @@
 				{m.engines_what_runs_your_sql_what_it_guarantees_and()}
 			</p>
 		</div>
+		{#if canRegister}
+			<Button variant="primary" onclick={openRegister}>{m.engines_register_engine()}</Button>
+		{/if}
 	</div>
 
 	{#if loading}
@@ -87,8 +165,10 @@
 			title={m.engines_no_engines_yet()}
 			description={m.engines_a_trino_engine_is_usually_registered_by_the_deployment()}
 		>
-			<!-- The next step (#476): a direct engine is created with its connection. -->
-			{#if canGlobal(authStore.user, 'create_connection')}
+			<!-- The next step (#476): register one, or first add a database connection. -->
+			{#if canRegister}
+				<Button variant="primary" onclick={openRegister}>{m.engines_register_engine()}</Button>
+			{:else if canGlobal(authStore.user, 'create_connection')}
 				<Button variant="primary" onclick={() => goto(resolve('/connections/new'))}>
 					{m.connections_new_connection()}
 				</Button>
@@ -240,3 +320,56 @@
 		{/if}
 	{/if}
 </div>
+
+<Modal bind:open={registerOpen} title={m.engines_register_engine()}>
+	<div class="flex flex-col gap-3 text-[12px]">
+		<p class="text-slate-600 dark:text-slate-300">
+			{m.engines_you_are_registering_a_query_engine()}
+		</p>
+		<IconSelect
+			label={m.engines_provider()}
+			bind:value={registerProviderKind}
+			options={engineProviders.map((provider) => ({
+				value: provider.kind,
+				label: provider.label,
+				kind: provider.kind
+			}))}
+			onchange={() => {
+				registerValues = registerProvider ? initialValues(registerProvider) : {};
+				registerSecrets = {};
+			}}
+		/>
+		<Input
+			label={m.engines_engine_name()}
+			bind:value={registerName}
+			placeholder={m.engines_trino_production()}
+			class="font-mono"
+		/>
+		{#if registerProvider}
+			<ProviderForm
+				provider={registerProvider}
+				bind:values={registerValues}
+				bind:secrets={registerSecrets}
+				disabled={registering}
+			/>
+		{/if}
+		{#if registerError}
+			<p class="text-danger" role="alert">{registerError}</p>
+		{/if}
+	</div>
+	{#snippet footer()}
+		<div class="flex justify-end gap-2">
+			<Button onclick={() => (registerOpen = false)} disabled={registering}
+				>{m.common_cancel()}</Button
+			>
+			<Button
+				variant="primary"
+				loading={registering}
+				disabled={registering}
+				onclick={submitRegister}
+			>
+				{m.common_register()}
+			</Button>
+		</div>
+	{/snippet}
+</Modal>

@@ -2486,7 +2486,11 @@ export interface paths {
         /** Engines the caller may see: all for an admin; else those on connections they own or hosting a catalog granted to one of their workspaces */
         get: operations["listEngines"];
         put?: never;
-        post?: never;
+        /**
+         * Register a standalone federated engine
+         * @description Creates an engine-family connection and its federated engine resource in one backend-owned database transaction. The engine may initially have no user-defined catalog bindings. Trino is supported today; engine kinds remain extensible through the provider and engine registries.
+         */
+        post: operations["createEngine"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5304,7 +5308,9 @@ export interface components {
              */
             credentials_read_only: boolean;
             /** @description Secret fields of the provider's config schema. Older clients also send non-secret fields here (client_id, username); they are moved to config */
-            credentials?: Record<string, never>;
+            credentials?: {
+                [key: string]: unknown;
+            };
             nessie_credentials?: components["schemas"]["NessieCredentials"];
             glue_credentials?: components["schemas"]["GlueCredentials"];
             hive_credentials?: components["schemas"]["HiveCredentials"];
@@ -5505,6 +5511,12 @@ export interface components {
         StatementSpan: {
             start: number;
             end: number;
+        };
+        CreateEngineRequest: {
+            /** @description Name of the federated engine instance */
+            name: string;
+            /** @description Configuration of the engine-family connection backing this engine. Its provider must have the federated_engine role and no data-source access mode. The connection and engine are persisted atomically. */
+            connection: components["schemas"]["CreateCatalogConnectionRequest"];
         };
         UpdateEngineRequest: {
             enabled?: boolean;
@@ -12025,6 +12037,35 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    createEngine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEngineRequest"];
+            };
+        };
+        responses: {
+            /** @description Engine created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engine"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     getEngine: {
