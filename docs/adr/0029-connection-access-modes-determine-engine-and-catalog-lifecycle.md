@@ -256,11 +256,24 @@ The implementation of this decision must update, as applicable:
 
 ## Current compliance
 
-Partially compliant. The registries and four-domain model exist, and the current branch contains
-work toward exclusive access modes and atomic data-source registration. The architecture is not
-complete until standalone federated-engine registration is backend-owned end to end, all three
-workflows have public contracts and tests, the migration is safe for mixed versions, and incomplete
-direct connections can be reconciled.
+Compliant, with two gaps.
+
+- All three workflows are backend-owned and have a public contract: `POST /engines` (workflow A),
+  and `POST /catalog-connections` with `access_mode` `direct` (B) or `federated` (C). Each persists
+  its resources in one transaction after the remote checks. The Engines page keeps **Register
+  engine**, and connection-level `register_engine` is gone.
+- The `trino` access mode is migrated to `federated`. The check constraint keeps accepting `trino`
+  during a rolling upgrade, the API reports it as `federated`, and the next start rewrites it.
+- Direct connections without an engine are repaired on API start, idempotently and under a row lock,
+  and are never deleted.
+
+Gaps:
+
+- Reconciliation failures are recorded in the log only. An operator-visible record (a column or a
+  table) needs a schema change and is not part of this decision's implementation.
+- The wizard asks "How will you use it?" and its option texts differ from the wording in section 2.
+  The behavior is the same: two options, none preselected when both are supported, and the sole
+  mode selected automatically.
 
 ## Alternatives considered
 
