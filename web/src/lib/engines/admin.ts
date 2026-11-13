@@ -51,7 +51,7 @@ export async function getEngine(id: string): Promise<Engine> {
 }
 
 export async function createEngine(body: CreateEngineRequest): Promise<Engine> {
-	return fail(await client.POST('/engines', { body }), 'Could not register the engine');
+	return fail(await client.POST('/engines', { body }), m.engines_could_not_register_the_engine());
 }
 
 export async function updateEngine(

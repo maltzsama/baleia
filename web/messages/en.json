@@ -400,6 +400,7 @@
 	"engines_provider": "Engine kind",
 	"engines_engine_name": "Engine name",
 	"engines_you_are_registering_a_query_engine": "You are registering a query engine.",
+	"engines_could_not_register_the_engine": "Could not register the engine",
 	"semantic_doceditor_reload": "Reload",
 	"workbench_savequerydialog_remember_where_this_runs": "Remember where this runs",
 	"metrics_metricbuilder_remove": "Remove",
