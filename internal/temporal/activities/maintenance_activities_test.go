@@ -21,7 +21,13 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/stretchr/testify/mock"
+	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
+	workflowpb "go.temporal.io/api/workflow/v1"
+	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/mocks"
 	"go.temporal.io/sdk/testsuite"
 	"gorm.io/gorm"
 )
@@ -484,6 +490,138 @@ func TestRunMaintenanceOperation_ReadOnlyCatalog(t *testing.T) {
 			if runErr != nil || got.Status != "finished" || eng.sessions == 0 {
 				t.Fatalf("writable: err=%v status=%q sessions=%d", runErr, got.Status, eng.sessions)
 			}
+		})
+	}
+}
+
+// seedRunningRun records a running run on table, started age ago.
+func seedRunningRun(t *testing.T, gdb *gorm.DB, store *repo.Repo, catalog, binding, user db.UUID, table string, age time.Duration) db.MaintenanceRun {
+	t.Helper()
+	step := maintenance.Step{Operation: maintenance.OpOptimize, Due: true, WouldRun: true}
+	run, err := RecordMaintenanceRun(context.Background(), store, monitoring.TableKey{CatalogID: catalog, Namespace: "cdc", Table: table},
+		db.CatalogBinding{ID: binding}, db.TableMaintenancePolicy{}, step, maintenance.Settings{}, "manual", user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gdb.Model(&model.MaintenanceRun{}).Where("id = ?", repo.UUIDString(run.ID)).
+		Update("started_at", time.Now().Add(-age)).Error; err != nil {
+		t.Fatal(err)
+	}
+	return run
+}
+
+// TestCloseMaintenanceRun: the workflow closes a run that is still running
+// once its activity returned, and leaves one the activity already closed.
+func TestCloseMaintenanceRun(t *testing.T) {
+	gdb := testdb.New(t)
+	store := repo.New(gdb)
+	user := seedUser(t, gdb, "close-run", "close-run@maint.test")
+	conn := seedConnection(t, gdb, "close-run-src", user)
+	engine := seedEngine(t, gdb, "close-run-e", seedConnection(t, gdb, "close-run-eng", user), user)
+	catalog, binding := seedCatalogBinding(t, gdb, conn, engine, "close_run_lake")
+	a := &Activities{store: store, logger: slog.New(slog.DiscardHandler)}
+
+	tests := []struct {
+		name       string
+		table      string
+		failure    string
+		preStatus  string
+		wantStatus string
+		wantMsg    string
+	}{
+		{name: "success closes a running run as finished", table: "t_ok", wantStatus: "finished"},
+		{name: "failure closes a running run as failed", table: "t_fail", failure: "activity StartToClose timeout", wantStatus: "failed", wantMsg: "activity StartToClose timeout"},
+		{name: "a run the activity closed is left alone", table: "t_done", failure: "late failure", preStatus: "finished", wantStatus: "finished"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			run := seedRunningRun(t, gdb, store, catalog, binding, user, tt.table, time.Minute)
+			if tt.preStatus != "" {
+				finishMaintenanceRun(context.Background(), store, repo.UUIDString(run.ID), tt.preStatus, "", "")
+			}
+
+			err := a.closeMaintenanceRun(context.Background(), CloseMaintenanceRunParams{RunID: repo.UUIDString(run.ID), Failure: tt.failure})
+
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := store.GetMaintenanceRun(context.Background(), run.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != tt.wantStatus {
+				t.Fatalf("status = %q, want %q", got.Status, tt.wantStatus)
+			}
+			if tt.wantMsg != "" && (got.ErrorMessage == nil || *got.ErrorMessage != tt.wantMsg) {
+				t.Fatalf("error message = %v, want %q", got.ErrorMessage, tt.wantMsg)
+			}
+		})
+	}
+
+	t.Run("a missing run is an error", func(t *testing.T) {
+		if err := a.closeMaintenanceRun(context.Background(), CloseMaintenanceRunParams{RunID: repo.NewUUID()}); err == nil {
+			t.Fatal("closing a run that does not exist succeeded")
+		}
+	})
+}
+
+// TestReconcileMaintenanceRuns: a run left running whose workflow Temporal
+// reports closed is closed with that outcome; a live, unreadable or just
+// started one is left alone.
+func TestReconcileMaintenanceRuns(t *testing.T) {
+	gdb := testdb.New(t)
+	store := repo.New(gdb)
+	user := seedUser(t, gdb, "reconcile", "reconcile@maint.test")
+	conn := seedConnection(t, gdb, "reconcile-src", user)
+	engine := seedEngine(t, gdb, "reconcile-e", seedConnection(t, gdb, "reconcile-eng", user), user)
+	catalog, binding := seedCatalogBinding(t, gdb, conn, engine, "reconcile_lake")
+
+	describe := func(s enumspb.WorkflowExecutionStatus) *workflowservice.DescribeWorkflowExecutionResponse {
+		return &workflowservice.DescribeWorkflowExecutionResponse{
+			WorkflowExecutionInfo: &workflowpb.WorkflowExecutionInfo{Status: s},
+		}
+	}
+	tests := []struct {
+		name       string
+		age        time.Duration
+		describe   *workflowservice.DescribeWorkflowExecutionResponse
+		describeEr error
+		asked      bool
+		wantStatus string
+		wantCode   string
+	}{
+		{name: "completed workflow finishes the run", age: time.Hour, describe: describe(enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED), asked: true, wantStatus: "finished"},
+		{name: "failed workflow fails the run", age: time.Hour, describe: describe(enumspb.WORKFLOW_EXECUTION_STATUS_FAILED), asked: true, wantStatus: "failed", wantCode: "maintenance_failed"},
+		{name: "timed out workflow fails the run", age: time.Hour, describe: describe(enumspb.WORKFLOW_EXECUTION_STATUS_TIMED_OUT), asked: true, wantStatus: "failed", wantCode: "maintenance_failed"},
+		{name: "a workflow that no longer exists fails the run", age: time.Hour, describeEr: serviceerror.NewNotFound("gone"), asked: true, wantStatus: "failed", wantCode: "maintenance_failed"},
+		{name: "a running workflow leaves the run", age: time.Hour, describe: describe(enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING), asked: true, wantStatus: "running"},
+		{name: "an unreadable workflow leaves the run", age: time.Hour, describeEr: errors.New("temporal down"), asked: true, wantStatus: "running"},
+		{name: "a run that just started is not asked about", age: time.Second, wantStatus: "running"},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			run := seedRunningRun(t, gdb, store, catalog, binding, user, fmt.Sprintf("t%d", i), tt.age)
+			tc := &mocks.Client{}
+			if tt.asked {
+				tc.On("DescribeWorkflowExecution", mock.Anything, run.WorkflowID, "").Return(tt.describe, tt.describeEr)
+			}
+			a := &Activities{store: store, logger: slog.New(slog.DiscardHandler), temporalClient: tc}
+
+			a.reconcileMaintenanceRuns(context.Background(), catalog)
+
+			got, err := store.GetMaintenanceRun(context.Background(), run.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != tt.wantStatus {
+				t.Fatalf("status = %q, want %q", got.Status, tt.wantStatus)
+			}
+			if tt.wantCode != "" && (got.ErrorCode == nil || *got.ErrorCode != tt.wantCode) {
+				t.Fatalf("error code = %v, want %q", got.ErrorCode, tt.wantCode)
+			}
+			tc.AssertExpectations(t)
+			// Close the run so the next case's table is the only one running.
+			finishMaintenanceRun(context.Background(), store, repo.UUIDString(run.ID), "finished", "", "")
 		})
 	}
 }

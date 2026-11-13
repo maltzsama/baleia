@@ -153,6 +153,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(PlanMaintenanceRound)
 	w.RegisterActivity(RunMaintenanceOperation)
 	w.RegisterActivity(FailMaintenanceRun)
+	w.RegisterActivity(CloseMaintenanceRun)
 	w.RegisterActivity(RetrieverRefresh)
 	w.RegisterActivity(RetrieverDispatch)
 	w.RegisterActivity(AdvanceRetrieverSchedule)
