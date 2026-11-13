@@ -230,15 +230,26 @@ func AllMigrations() (*Registry, error) {
 			Name:    "store query history SQL and semantic descriptions without a length cap",
 			Up:      unboundFreeText,
 		},
+		Migration{
+			Version: 19,
+			Name:    "rename the trino access mode to federated",
+			Up:      renameTrinoAccessMode,
+		},
 	)
 }
 
 // backfillAccessMode sets access_mode on single-path connections (ADR 0021
 // CR-17): a connection with a direct engine and no catalogs is direct, and one
-// with catalogs and no direct engine is trino. Dual-path connections stay NULL
+// with catalogs and no direct engine is federated. Dual-path connections stay NULL
 // until bootstrap.SplitDualPathConnections splits them; engine-family and
 // unused connections have no data access mode.
 func backfillAccessMode(db *gorm.DB) error {
+	// A database that reaches this migration from an older version still has
+	// the check that allows only direct and trino, and may hold trino rows from
+	// an interrupted run; the rename swaps the check and rewrites them first.
+	if err := renameTrinoAccessMode(db); err != nil {
+		return err
+	}
 	var rows []model.CatalogConnection
 	if err := db.Where("access_mode IS NULL").Find(&rows).Error; err != nil {
 		return fmt.Errorf("list connections to backfill: %w", err)
@@ -258,7 +269,7 @@ func backfillAccessMode(db *gorm.DB) error {
 		case direct > 0 && trino == 0:
 			mode = "direct"
 		case direct == 0 && trino > 0:
-			mode = "trino"
+			mode = "federated"
 		}
 		if mode == "" {
 			continue

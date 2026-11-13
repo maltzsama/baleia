@@ -106,8 +106,9 @@ type AccessMode string
 const (
 	// AccessModeDirect runs queries through a native query-engine adapter.
 	AccessModeDirect AccessMode = "direct"
-	// AccessModeTrino exposes the source through a Trino engine.
-	AccessModeTrino AccessMode = "trino"
+	// AccessModeFederated exposes the source through a separately registered
+	// federated query engine (Trino today); the engine kind is independent of it.
+	AccessModeFederated AccessMode = "federated"
 )
 
 // Category groups connection types for presentation only (ADR 0021 D.10); it
@@ -491,7 +492,7 @@ func TrinoBindable(p Provider) bool {
 		return false
 	}
 	m := p.Meta()
-	return slices.Contains(m.AccessModes, AccessModeTrino) && len(m.TrinoCatalogTypes) > 0
+	return slices.Contains(m.AccessModes, AccessModeFederated) && len(m.TrinoCatalogTypes) > 0
 }
 
 // HasTableHealth reports whether p is a creatable Iceberg catalog: its tables

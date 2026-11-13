@@ -57,14 +57,14 @@ func SplitDualPathConnections(ctx context.Context, store *gorm.DB, kr *crypto.Ke
 			continue
 		}
 		logger.InfoContext(ctx, "dual-path connection split",
-			"original_id", orig.ID, "original_mode", "trino",
+			"original_id", orig.ID, "original_mode", "federated",
 			"direct_connection_id", newID, "name", orig.Name)
 	}
 	return nil
 }
 
 // splitDualPathConnection creates the direct connection, repoints the direct
-// engine to it and marks the original as the Trino path, in one transaction.
+// engine to it and marks the original as the federated path, in one transaction.
 func splitDualPathConnection(ctx context.Context, store *gorm.DB, kr *crypto.Keyring, orig model.CatalogConnection, engine model.Engine) (model.UUID, error) {
 	newID := model.UUID(uuid.NewString())
 	newAAD, err := aadFor(newID)
@@ -89,7 +89,7 @@ func splitDualPathConnection(ctx context.Context, store *gorm.DB, kr *crypto.Key
 	}
 	now := time.Now().UTC()
 	direct := "direct"
-	trino := "trino"
+	federated := "federated"
 	txErr := store.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		name, err := uniqueDirectName(tx, orig.Name)
 		if err != nil {
@@ -126,7 +126,7 @@ func splitDualPathConnection(ctx context.Context, store *gorm.DB, kr *crypto.Key
 			return fmt.Errorf("repoint direct engine: %w", err)
 		}
 		if err := tx.Model(&model.CatalogConnection{}).Where("id = ?", orig.ID).
-			Update("access_mode", trino).Error; err != nil {
+			Update("access_mode", federated).Error; err != nil {
 			return fmt.Errorf("set original access mode: %w", err)
 		}
 		return nil

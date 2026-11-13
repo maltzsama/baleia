@@ -134,9 +134,9 @@ func TestCreateConnection_SplitsConfigAndSecrets(t *testing.T) {
 		"mysql":      "jdbc:mysql://db:3306",
 	}
 	wantMode := map[string]string{
-		"polaris":    "trino",
-		"nessie":     "trino",
-		"iceberg":    "trino",
+		"polaris":    "federated",
+		"nessie":     "federated",
+		"iceberg":    "federated",
 		"postgresql": "direct",
 		"mysql":      "direct",
 	}
@@ -242,12 +242,12 @@ func TestAccessMode(t *testing.T) {
 	}{
 		{"engine family has no mode", get(connections.KindTrino), "", "", false},
 		{"engine family rejects a mode", get(connections.KindTrino), "direct", "", true},
-		{"one mode is auto-selected", get(connections.KindPolaris), "", "trino", false},
-		{"one mode accepts itself", get(connections.KindPolaris), "trino", "trino", false},
+		{"one mode is auto-selected", get(connections.KindPolaris), "", "federated", false},
+		{"one mode accepts itself", get(connections.KindPolaris), "federated", "federated", false},
 		{"one mode rejects another", get(connections.KindPolaris), "direct", "", true},
 		{"two modes require a choice", get(connections.KindPostgreSQL), "", "", true},
 		{"two modes choose direct", get(connections.KindPostgreSQL), "direct", "direct", false},
-		{"two modes choose trino", get(connections.KindPostgreSQL), "trino", "trino", false},
+		{"two modes choose federated", get(connections.KindPostgreSQL), "federated", "federated", false},
 		{"two modes reject an unknown", get(connections.KindPostgreSQL), "gopher", "", true},
 	}
 	for _, c := range cases {
@@ -571,7 +571,7 @@ func TestListConnectionProviders(t *testing.T) {
 	if pg.EngineKind == nil || *pg.EngineKind != "postgresql" || pg.Family != "database" {
 		t.Errorf("postgresql = %+v", pg)
 	}
-	if pg.AccessModes == nil || !slices.Equal(*pg.AccessModes, []ConnectionProviderAccessModes{ConnectionProviderAccessModesDirect, ConnectionProviderAccessModesTrino}) {
+	if pg.AccessModes == nil || !slices.Equal(*pg.AccessModes, []ConnectionProviderAccessModes{ConnectionProviderAccessModesDirect, ConnectionProviderAccessModesFederated}) {
 		t.Errorf("postgresql access modes = %v", pg.AccessModes)
 	}
 	if pg.TrinoCatalogTypes == nil || !slices.Equal(*pg.TrinoCatalogTypes, []string{"postgresql"}) {

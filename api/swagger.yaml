@@ -1845,7 +1845,7 @@ components:
         type: { type: string, description: "Connection kind; one of the kinds listed by GET /connection-providers" }
         access_mode:
           type: string
-          enum: [direct, trino]
+          enum: [direct, federated]
           description: "The connection's data access mode (ADR 0021). Absent for engine-family resources, which are not a data access path"
         url:  { type: string, description: "Deprecated: read config. Kept while the Trino projection still reads it (#80)" }
         config:
@@ -1873,7 +1873,7 @@ components:
         type: { type: string, description: "A kind listed by GET /connection-providers" }
         access_mode:
           type: string
-          enum: [direct, trino]
+          enum: [direct, federated]
           description: >
             Data access mode (ADR 0021). Required when the type declares both
             direct and Trino access, auto-selected when it declares one, and
@@ -2905,7 +2905,7 @@ components:
         access_modes:
           type: array
           description: "Data access paths the type supports (ADR 0021 D.2); empty for engine-family resources"
-          items: { type: string, enum: [direct, trino] }
+          items: { type: string, enum: [direct, federated] }
         trino_catalog_types:
           type: array
           description: "Internal Trino catalog implementations the type is exposed through (ADR 0021 D.3)"

@@ -62,7 +62,7 @@ func TestEveryProviderIsComplete(t *testing.T) {
 				t.Error("description and category are required (ADR 0021 D.1)")
 			}
 			for _, mode := range meta.AccessModes {
-				if mode != connections.AccessModeDirect && mode != connections.AccessModeTrino {
+				if mode != connections.AccessModeDirect && mode != connections.AccessModeFederated {
 					t.Errorf("unknown access mode %q", mode)
 				}
 				if _, ok := meta.Capabilities[mode]; !ok {
@@ -72,7 +72,7 @@ func TestEveryProviderIsComplete(t *testing.T) {
 			if slices.Contains(meta.AccessModes, connections.AccessModeDirect) && p.EngineKind() == "" {
 				t.Error("direct access requires an engine kind")
 			}
-			if len(meta.TrinoCatalogTypes) > 0 && !slices.Contains(meta.AccessModes, connections.AccessModeTrino) {
+			if len(meta.TrinoCatalogTypes) > 0 && !slices.Contains(meta.AccessModes, connections.AccessModeFederated) {
 				t.Error("Trino catalog types require the Trino access mode (ADR 0021 D.3)")
 			}
 			// Roles may be empty: a metastore that is only a bindable source

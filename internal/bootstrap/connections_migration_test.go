@@ -131,8 +131,8 @@ func TestSplitDualPathConnections(t *testing.T) {
 	if err := store.Where("id = ?", origID).First(&updated).Error; err != nil {
 		t.Fatal(err)
 	}
-	if updated.AccessMode == nil || *updated.AccessMode != "trino" {
-		t.Fatalf("original access_mode = %v, want trino", updated.AccessMode)
+	if updated.AccessMode == nil || *updated.AccessMode != "federated" {
+		t.Fatalf("original access_mode = %v, want federated", updated.AccessMode)
 	}
 
 	var direct model.CatalogConnection

@@ -45,7 +45,7 @@ func (*Provider) EngineKind() string { return "sqlserver" }
 
 // Meta implements connections.Provider (ADR 0021).
 func (*Provider) Meta() connections.TypeMeta {
-	modes := []connections.AccessMode{connections.AccessModeDirect, connections.AccessModeTrino}
+	modes := []connections.AccessMode{connections.AccessModeDirect, connections.AccessModeFederated}
 	return connections.TypeMeta{
 		Description:       "Microsoft SQL Server relational database, queried directly or exposed through Trino.",
 		Category:          connections.CategoryRelational,

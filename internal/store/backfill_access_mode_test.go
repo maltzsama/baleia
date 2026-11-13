@@ -50,7 +50,7 @@ func openBackfillTestDB(t *testing.T) *gorm.DB {
 }
 
 // TestBackfillAccessMode pins the single-path rule: a direct engine without
-// source catalogs is direct, source catalogs without a direct engine are trino,
+// source catalogs is direct, source catalogs without a direct engine are federated,
 // and a connection with both (or neither) stays NULL for the split.
 func TestBackfillAccessMode(t *testing.T) {
 	t.Parallel()
@@ -99,14 +99,31 @@ func TestBackfillAccessMode(t *testing.T) {
 	directOnly := newConn("direct_only", "postgresql")
 	newEngine(directOnly, "direct")
 
-	trinoOnly := newConn("trino_only", "postgresql")
-	newSourceCatalog(trinoOnly)
+	federatedOnly := newConn("federated_only", "postgresql")
+	newSourceCatalog(federatedOnly)
 
 	dual := newConn("dual", "postgresql")
 	newEngine(dual, "direct")
 	newSourceCatalog(dual)
 
 	unused := newConn("unused", "trino")
+
+	// A database that reaches migration 8 from an older version still has the
+	// check that allows only direct and trino; the backfill must replace it.
+	if err := db.Migrator().DropConstraint(&model.CatalogConnection{}, accessModeCheck); err != nil {
+		t.Fatalf("drop check: %v", err)
+	}
+	if err := db.Exec("ALTER TABLE catalog_connections ADD CONSTRAINT " + accessModeCheck +
+		" CHECK (access_mode IS NULL OR access_mode IN ('direct', 'trino'))").Error; err != nil {
+		t.Fatalf("restore the old check: %v", err)
+	}
+
+	// A trino row left by an interrupted earlier run must not block the new check.
+	stale := newConn("stale_trino", "postgresql")
+	if err := db.Model(&model.CatalogConnection{}).Where("id = ?", stale.ID).
+		UpdateColumn("access_mode", "trino").Error; err != nil {
+		t.Fatalf("seed stale trino row: %v", err)
+	}
 
 	if err := backfillAccessMode(db); err != nil {
 		t.Fatalf("backfill: %v", err)
@@ -122,8 +139,11 @@ func TestBackfillAccessMode(t *testing.T) {
 	if m := modeOf(directOnly); m == nil || *m != "direct" {
 		t.Errorf("direct-only mode = %v, want direct", m)
 	}
-	if m := modeOf(trinoOnly); m == nil || *m != "trino" {
-		t.Errorf("trino-only mode = %v, want trino", m)
+	if m := modeOf(federatedOnly); m == nil || *m != "federated" {
+		t.Errorf("federated-only mode = %v, want federated", m)
+	}
+	if m := modeOf(stale); m == nil || *m != "federated" {
+		t.Errorf("stale trino row mode = %v, want federated", m)
 	}
 	if m := modeOf(dual); m != nil {
 		t.Errorf("dual-path mode = %v, want NULL (split handles it)", m)

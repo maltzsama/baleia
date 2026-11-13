@@ -7,7 +7,7 @@ type CatalogConnection struct {
 	ID                  UUID      `gorm:"column:id;primaryKey;not null;check:catalog_connections_type_check,((type IN ('polaris', 'nessie', 'iceberg', 'lakekeeper', 'unity', 'hive', 'glue', 'postgresql', 'mysql', 'mariadb', 'sqlserver', 'oracle', 'sqlite', 'clickhouse', 'flightsql', 'trino', 'doris', 'starrocks', 'bigquery', 'snowflake', 'redshift', 'singlestore', 'exasol', 'cassandra', 'mongodb', 'redis', 'elasticsearch', 'opensearch', 'druid', 'pinot', 'duckdb', 'ignite', 'kafka', 'loki', 'prometheus', 'gsheets', 'faker', 'memory', 'blackhole', 'jmx', 'tpch', 'tpcds', 'delta', 'hudi', 'system')))"`
 	Name                Text      `gorm:"column:name;not null;size:128;uniqueIndex:catalog_connections_name_key,priority:1"`
 	Type                string    `gorm:"column:type;not null"`
-	AccessMode          *string   `gorm:"column:access_mode;check:catalog_connections_access_mode_check,(((access_mode IS NULL) OR (access_mode IN ('direct', 'trino'))))"`
+	AccessMode          *string   `gorm:"column:access_mode;check:catalog_connections_access_mode_check,(((access_mode IS NULL) OR (access_mode IN ('direct', 'federated'))))"`
 	URL                 string    `gorm:"column:url;not null"`
 	CredentialsEnc      *string   `gorm:"column:credentials_enc"`
 	CreatedAt           time.Time `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`

@@ -26,7 +26,7 @@ func (p *Provider) Family() connections.Family { return connections.FamilyDataba
 // Meta implements connections.Provider (ADR 0021 D.1). The type is Trino-only
 // and has no endpoint, so it declares no configuration fields.
 func (p *Provider) Meta() connections.TypeMeta {
-	modes := []connections.AccessMode{connections.AccessModeTrino}
+	modes := []connections.AccessMode{connections.AccessModeFederated}
 	return connections.TypeMeta{
 		Description:       p.description,
 		Category:          categoryOf(p.kind),
