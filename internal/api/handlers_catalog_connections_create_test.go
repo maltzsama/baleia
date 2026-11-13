@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/catalogs"
@@ -89,6 +90,25 @@ func createHandlers(t *testing.T, q db.Querier, kr *crypto.Keyring) *API {
 	return testAPI(handlerFields{queries: q, tx: directTx{q: q}, keyring: kr, connections: testRegistry(t), settings: SettingsFromConfig(&config.Config{}), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
 }
 
+// prepareCreate validates a create request and builds the row it would store,
+// without persisting anything.
+func prepareCreate(t *testing.T, kr *crypto.Keyring, body *CreateCatalogConnectionRequest) registration {
+	t.Helper()
+	p, err := authz.PrincipalFromContext(testContext())
+	if err != nil {
+		t.Fatal(err)
+	}
+	connID := db.UUID{Bytes: [16]byte{0xC0, 0xFF, 0xEE}, Valid: true}
+	reg, resp, err := createHandlers(t, &recordingConnQuerier{}, kr).prepareRegistration(testContext(), p, connID, audit.Event{}, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp != nil {
+		t.Fatalf("the request was refused: %d %s", visitCreate(t, resp).Code, visitCreate(t, resp).Body)
+	}
+	return reg
+}
+
 func visitCreate(t *testing.T, resp CreateCatalogConnectionResponseObject) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
@@ -143,15 +163,7 @@ func TestCreateConnection_SplitsConfigAndSecrets(t *testing.T) {
 	for kind, body := range validCreateRequests() {
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()
-			q := &recordingConnQuerier{}
-			resp, err := createHandlers(t, q, kr).CreateCatalogConnection(testContext(), CreateCatalogConnectionRequestObject{Body: body})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if rec := visitCreate(t, resp); rec.Code != 201 {
-				t.Fatalf("response = %d %s", rec.Code, rec.Body)
-			}
-			p := q.created[0]
+			p := prepareCreate(t, kr, body).params
 			if !p.ID.Valid || p.Type != kind || p.Url != wantURL[kind] {
 				t.Fatalf("row = id %v type %q url %q", p.ID.Valid, p.Type, p.Url)
 			}
@@ -281,13 +293,9 @@ func TestAccessMode(t *testing.T) {
 func TestCreateConnection_LegacyShapeMovesValuesToConfig(t *testing.T) {
 	t.Parallel()
 	kr := testKeyring(t)
-	q := &recordingConnQuerier{}
 	url := "http://polaris:8181/"
 	body := &CreateCatalogConnectionRequest{Name: "p", Type: "polaris", Url: &url, Credentials: anyMap("client_id", "cid", "client_secret", "sec")}
-	if _, err := createHandlers(t, q, kr).CreateCatalogConnection(testContext(), CreateCatalogConnectionRequestObject{Body: body}); err != nil {
-		t.Fatal(err)
-	}
-	p := q.created[0]
+	p := prepareCreate(t, kr, body).params
 	var cfg map[string]string
 	_ = json.Unmarshal(p.Config, &cfg)
 	if cfg["client_id"] != "cid" || cfg["url"] != "http://polaris:8181" || cfg["realm"] != "POLARIS" {
@@ -512,7 +520,6 @@ func TestUpdateConnection_EncryptionFailureIs500(t *testing.T) {
 func TestCreateConnection_CredentialsReadOnly(t *testing.T) {
 	t.Parallel()
 	kr := testKeyring(t)
-	q := &recordingConnQuerier{}
 	readOnly := true
 	body := &CreateCatalogConnectionRequest{
 		Name: "pg", Type: "postgresql",
@@ -524,14 +531,7 @@ func TestCreateConnection_CredentialsReadOnly(t *testing.T) {
 		Credentials:         anyMap("password", "p"),
 		CredentialsReadOnly: &readOnly,
 	}
-	resp, err := createHandlers(t, q, kr).CreateCatalogConnection(testContext(), CreateCatalogConnectionRequestObject{Body: body})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rec := visitCreate(t, resp); rec.Code != 201 {
-		t.Fatalf("response = %d %s", rec.Code, rec.Body)
-	}
-	if !q.created[0].CredentialsReadOnly {
+	if !prepareCreate(t, kr, body).params.CredentialsReadOnly {
 		t.Fatal("credentials_read_only was not stored")
 	}
 }
@@ -684,7 +684,8 @@ func TestMayManageConnections_DefaultIsAdminsOnly(t *testing.T) {
 // validated or stored; an admin still creates.
 func TestCreateConnection_AdminsOnly(t *testing.T) {
 	t.Parallel()
-	body := validCreateRequests()["polaris"]
+	// An engine-family connection stores on its own, so the test needs no engine.
+	body := &CreateCatalogConnectionRequest{Name: "t", Type: "trino", Config: strMap("url", "http://trino:8080")}
 
 	q := &recordingConnQuerier{}
 	resp, err := adminsOnlyHandlers(t, q, testKeyring(t)).CreateCatalogConnection(roleContext("member"), CreateCatalogConnectionRequestObject{Body: body})

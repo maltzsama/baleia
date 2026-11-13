@@ -113,7 +113,7 @@ func TestAuditMatrix(t *testing.T) {
 	owner, stranger, admin := ctxAs(f.owner, "member"), ctxAs(f.stranger, "member"), ctxAs(f.admin, "admin")
 
 	// Connections.
-	resp, err := h.CreateCatalogConnection(owner, CreateCatalogConnectionRequestObject{Body: validCreateRequests()["polaris"]})
+	resp, err := h.CreateCatalogConnection(owner, CreateCatalogConnectionRequestObject{Body: registerOnlyRequest()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestAuditMatrix(t *testing.T) {
 func TestAuditDenialsOnce(t *testing.T) {
 	t.Parallel()
 	f := newAuditFixture(t)
-	resp, _ := f.h.CreateCatalogConnection(ctxAs(f.owner, "member"), CreateCatalogConnectionRequestObject{Body: validCreateRequests()["polaris"]})
+	resp, _ := f.h.CreateCatalogConnection(ctxAs(f.owner, "member"), CreateCatalogConnectionRequestObject{Body: registerOnlyRequest()})
 	id := resp.(CreateCatalogConnection201JSONResponse).Id
 	f.mem.take()
 	_, _ = f.h.TestCatalogConnection(ctxAs(f.stranger, "member"), TestCatalogConnectionRequestObject{Id: id})
@@ -238,12 +238,12 @@ func TestAuditNoSecrets(t *testing.T) {
 	t.Parallel()
 	f := newAuditFixture(t)
 	owner := ctxAs(f.owner, "member")
-	resp, _ := f.h.CreateCatalogConnection(owner, CreateCatalogConnectionRequestObject{Body: validCreateRequests()["polaris"]})
+	resp, _ := f.h.CreateCatalogConnection(owner, CreateCatalogConnectionRequestObject{Body: registerOnlyRequest()})
 	id := resp.(CreateCatalogConnection201JSONResponse).Id
-	_, _ = f.h.UpdateCatalogConnection(owner, UpdateCatalogConnectionRequestObject{Id: id, Body: &UpdateCatalogConnectionRequest{Credentials: anyMap("client_secret", "n3w-s3cr3t")}})
+	_, _ = f.h.UpdateCatalogConnection(owner, UpdateCatalogConnectionRequestObject{Id: id, Body: &UpdateCatalogConnectionRequest{Credentials: anyMap("password", "n3w-s3cr3t")}})
 	events := f.mem.take()
 	ev := events[len(events)-1]
-	if ev.Action != audit.ConnectionUpdate || ev.Changes["credentials.client_secret"].To != "***" {
+	if ev.Action != audit.ConnectionUpdate || ev.Changes["credentials.password"].To != "***" {
 		t.Fatalf("update = %+v", ev)
 	}
 	raw, _ := json.Marshal(events)
@@ -284,4 +284,10 @@ func mustUUID(t *testing.T, s string) db.UUID {
 		t.Fatal(err)
 	}
 	return id
+}
+
+// registerOnlyRequest is an engine-family connection: it has no access mode, so
+// it stores on its own. Audit tests need a connection row, not an engine.
+func registerOnlyRequest() *CreateCatalogConnectionRequest {
+	return &CreateCatalogConnectionRequest{Name: "p", Type: "trino", Config: strMap("url", "https://trino:8443", "username", "svc"), Credentials: anyMap("password", "p-s3cr3t")}
 }
