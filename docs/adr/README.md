@@ -11,7 +11,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-control-plane-only.md) | Baleia is a control plane, never a data plane | Accepted; BI clause amended by 0017 |
-| [0002](0002-connections-engines-catalogs-bindings.md) | Connections, engines, catalogs and bindings | Accepted; access modes amended by 0021 |
+| [0002](0002-connections-engines-catalogs-bindings.md) | Connections, engines, catalogs and bindings | Accepted; access modes amended by 0021, direct-engine registration amended by 0029 |
 | [0003](0003-trino-binding.md) | How a catalog reaches Trino (the Trino binder) | Accepted |
 | [0004](0004-plugin-distribution.md) | Catalog-store plugin distribution | Accepted |
 | [0005](0005-trino-security-model.md) | Trino security model | Accepted; Polaris identity superseded by 0015, scope added by 0018 |
@@ -38,6 +38,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0026](0026-daily-partitions-and-retention-cadence.md) | Daily partitions, configurable retention and a weekly drop cadence | Accepted; amends 0024 |
 | [0027](0027-catalog-manager-rbac-administration.md) | Catalog-manager RBAC is administered through Baleia and owned by the manager | Proposed |
 | [0028](0028-data-policies-opa-trino.md) | Row filters and column masks: authored in Baleia, decided by OPA, enforced by Trino | Proposed (gated on a spike); extends 0005 |
+| [0029](0029-direct-engine-lifecycle-owned-by-connection-creation.md) | Direct engine lifecycle is owned by connection creation | Proposed; builds on 0002, 0006, 0021; amends 0002 |
 
 ## Owner decisions
 
