@@ -428,9 +428,10 @@ type Querier interface {
 	// Every enabled engine with its connection and, for a Trino engine, its
 	// cluster: the metadata dispatcher refreshes their catalogs (#17).
 	ListEnabledEnginesWithConnection(ctx context.Context) ([]ListEnabledEnginesWithConnectionRow, error)
-	// Enabled catalogs backed by an Iceberg-family catalog manager (Polaris,
-	// Iceberg REST, Nessie), used by the Lens table-health fan-out.
-	ListEnabledIcebergCatalogs(ctx context.Context) ([]ListEnabledIcebergCatalogsRow, error)
+	// Enabled source catalogs whose connection is one of kinds (the
+	// Iceberg-family kinds of the connection registry), used by the Lens
+	// table-health fan-out.
+	ListEnabledIcebergCatalogs(ctx context.Context, kinds []string) ([]ListEnabledIcebergCatalogsRow, error)
 	ListEnabledLDAPProviders(ctx context.Context) ([]AuthProvider, error)
 	// Catalogs the engine reported, with the managed/adopted mode (#38).
 	ListEngineObservations(ctx context.Context, engineID UUID) ([]EngineCatalogObservation, error)

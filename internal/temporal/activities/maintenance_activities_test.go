@@ -4,13 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring"
 	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
@@ -18,6 +21,8 @@ import (
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/testdb"
+	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/testsuite"
 	"gorm.io/gorm"
 )
 
@@ -349,5 +354,116 @@ func TestReserveRunsStore_DuplicateRecovery(t *testing.T) {
 	}
 	if running != 2 {
 		t.Fatalf("running runs = %d; want the existing plus the new one", running)
+	}
+}
+
+// TestCatalogReadOnly: the worker refuses to maintain a catalog whose
+// credentials are asserted read-only or whose connection kind promises no
+// writes, and its round plans nothing for it (#996).
+func TestCatalogReadOnly(t *testing.T) {
+	t.Parallel()
+	gdb := testdb.New(t)
+	user := seedUser(t, gdb, "ro", "ro@maint.test")
+	engConn := seedConnection(t, gdb, "ro-eng", user)
+	engine := seedEngine(t, gdb, "ro-e", engConn, user)
+	dialer, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, err := providers.New(dialer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &Activities{store: repo.New(gdb), connections: reg, cfg: &config.Config{MaintenanceMaxConcurrentRuns: 10}}
+	ctx := context.Background()
+
+	for name, tc := range map[string]struct {
+		update   map[string]any
+		readOnly bool
+	}{
+		"writable polaris":      {map[string]any{}, false},
+		"credentials read-only": {map[string]any{"credentials_read_only": true}, true},
+		"unity promises reads":  {map[string]any{"type": "unity"}, true},
+	} {
+		conn := seedConnection(t, gdb, "ro-src-"+strings.ReplaceAll(name, " ", "-"), user)
+		catalog, _ := seedCatalogBinding(t, gdb, conn, engine, "ro_"+strings.ReplaceAll(strings.ReplaceAll(name, " ", "_"), "-", "_"))
+		if len(tc.update) > 0 {
+			if err := gdb.Model(&model.CatalogConnection{}).Where("id = ?", repo.UUIDString(conn)).Updates(tc.update).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+		got, err := a.catalogReadOnly(ctx, catalog)
+		if err != nil || got != tc.readOnly {
+			t.Errorf("%s: catalogReadOnly = %v, %v; want %v", name, got, err, tc.readOnly)
+		}
+		runs, err := a.planMaintenanceRound(ctx, PlanMaintenanceRoundParams{CatalogID: repo.UUIDString(catalog)})
+		if err != nil || len(runs) != 0 {
+			t.Errorf("%s: round = %v, %v; want no runs", name, runs, err)
+		}
+	}
+}
+
+// TestRunMaintenanceOperation_ReadOnlyCatalog: a run planned before the
+// catalog became read-only ends as catalog_read_only and never reaches the
+// engine; the same run on a writable catalog executes (#996).
+func TestRunMaintenanceOperation_ReadOnlyCatalog(t *testing.T) {
+	// Not parallel: it swaps the package-level defaultActivities, which other
+	// parallel tests also write.
+	for name, readOnly := range map[string]bool{"writable": false, "read-only": true} {
+		t.Run(name, func(t *testing.T) {
+			gdb := testdb.New(t)
+			ctx := context.Background()
+			store := repo.New(gdb)
+			user := seedUser(t, gdb, "run-ro", "run-ro@maint.test")
+			conn := seedConnection(t, gdb, "run-ro-src", user)
+			engine := seedEngine(t, gdb, "run-ro-e", seedConnection(t, gdb, "run-ro-eng", user), user)
+			catalog, binding := seedCatalogBinding(t, gdb, conn, engine, "run_ro_lake")
+			if readOnly {
+				if err := gdb.Model(&model.CatalogConnection{}).Where("id = ?", repo.UUIDString(conn)).
+					Update("credentials_read_only", true).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			step := maintenance.Step{Operation: maintenance.OpOptimize, Due: true, WouldRun: true}
+			run, err := RecordMaintenanceRun(ctx, store, monitoring.TableKey{CatalogID: catalog, Namespace: "cdc", Table: "orders"},
+				db.CatalogBinding{ID: binding}, db.TableMaintenancePolicy{}, step, maintenance.Settings{}, "manual", user)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			dialer, err := connections.NewDialer(connections.DialerOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			reg, err := providers.New(dialer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			eng := &fakeEngine{Engine: testTrino}
+			a := &Activities{store: store, engines: eng, connections: reg, logger: slog.New(slog.DiscardHandler), cfg: &config.Config{}}
+			old := defaultActivities
+			defaultActivities = a
+			defer func() { defaultActivities = old }()
+			env := (&testsuite.WorkflowTestSuite{}).NewTestActivityEnvironment()
+			env.RegisterActivityWithOptions(RunMaintenanceOperation, activity.RegisterOptions{Name: "RunMaintenanceOperation"})
+			_, runErr := env.ExecuteActivity(RunMaintenanceOperation, RunMaintenanceOperationParams{RunID: repo.UUIDString(run.ID)})
+
+			got, err := store.GetMaintenanceRun(ctx, run.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if readOnly {
+				if runErr == nil || got.Status != "failed" || got.ErrorCode == nil || *got.ErrorCode != "catalog_read_only" {
+					t.Fatalf("read-only: err=%v status=%q code=%v", runErr, got.Status, got.ErrorCode)
+				}
+				if eng.sessions != 0 {
+					t.Fatalf("read-only run opened %d engine sessions, want none", eng.sessions)
+				}
+				return
+			}
+			if runErr != nil || got.Status != "finished" || eng.sessions == 0 {
+				t.Fatalf("writable: err=%v status=%q sessions=%d", runErr, got.Status, eng.sessions)
+			}
+		})
 	}
 }

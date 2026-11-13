@@ -16,6 +16,8 @@ const catalog = {
 	provider_kind: 'postgresql',
 	bindings: [],
 	needs_attention: false,
+	table_health: false,
+	read_only: false,
 	connection: { id: 'connection', name: 'Production' }
 } satisfies Summary;
 const requested = { id: 'requested', name: 'Shared lake', connection_name: 'Team connection' };

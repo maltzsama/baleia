@@ -1570,13 +1570,14 @@ type ListMaintenanceRunsParams struct {
 }
 
 type ListMetadataCatalogsRow struct {
-	ID                 UUID        `json:"id"`
-	Name               string      `json:"name"`
-	Origin             string      `json:"origin"`
-	ProviderKind       string      `json:"provider_kind"`
-	MetadataSyncedAt   Timestamptz `json:"metadata_synced_at"`
-	MetadataSyncStatus string      `json:"metadata_sync_status"`
-	Bindings           []byte      `json:"bindings"`
+	ID                  UUID        `json:"id"`
+	Name                string      `json:"name"`
+	Origin              string      `json:"origin"`
+	ProviderKind        string      `json:"provider_kind"`
+	CredentialsReadOnly bool        `json:"credentials_read_only"`
+	MetadataSyncedAt    Timestamptz `json:"metadata_synced_at"`
+	MetadataSyncStatus  string      `json:"metadata_sync_status"`
+	Bindings            []byte      `json:"bindings"`
 }
 
 type ListMetadataColumnsRow struct {

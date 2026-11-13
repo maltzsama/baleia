@@ -230,9 +230,12 @@ func (r *Repo) GetDefaultTrinoCluster(ctx context.Context) (db.TrinoCluster, err
 	}, nil
 }
 
-// ListEnabledIcebergCatalogs lists the enabled catalogs backed by an
-// Iceberg-family catalog manager.
-func (r *Repo) ListEnabledIcebergCatalogs(ctx context.Context) ([]db.ListEnabledIcebergCatalogsRow, error) {
+// ListEnabledIcebergCatalogs lists the enabled source catalogs whose
+// connection is one of kinds (connections.Registry.TableHealthKinds).
+func (r *Repo) ListEnabledIcebergCatalogs(ctx context.Context, kinds []string) ([]db.ListEnabledIcebergCatalogsRow, error) {
+	if len(kinds) == 0 {
+		return nil, nil
+	}
 	var rows []struct {
 		ID               model.UUID
 		ConnectionID     model.UUID
@@ -245,7 +248,7 @@ func (r *Repo) ListEnabledIcebergCatalogs(ctx context.Context) ([]db.ListEnabled
 		Table("catalogs c").
 		Select("c.id, c.connection_id, c.name, COALESCE(c.trino_catalog_name, '') AS trino_catalog_name, c.source_ref, c.warehouse").
 		Joins("JOIN catalog_connections cc ON cc.id = c.connection_id").
-		Where("c.enabled = ? AND c.origin = ? AND cc.type IN ?", true, "source", []string{"polaris", "iceberg", "nessie"}).
+		Where("c.enabled = ? AND c.origin = ? AND cc.type IN ?", true, "source", kinds).
 		Order("c.name").
 		Scan(&rows).Error
 	if err != nil {

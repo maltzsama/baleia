@@ -161,12 +161,68 @@ describe('monitoring page', () => {
 		expect(within(rows[1]).getByText('SELECT slow')).toBeTruthy();
 	});
 
+	it('marks a read-only catalog and disables its maintenance buttons (#996)', async () => {
+		const RO = '00000000-0000-0000-0000-0000000000a1';
+		const RW = '00000000-0000-0000-0000-0000000000b1';
+		const row = (catalog: string, name: string, mode?: 'managed') => ({
+			catalog_id: catalog,
+			catalog_name: name,
+			namespace: 'sales',
+			table_name: 'orders',
+			health_score: 40,
+			needs_compaction: true,
+			needs_snapshot_expiry: false,
+			maintenance_mode: mode,
+			due_operations: [] as TableHealth['due_operations']
+		});
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([
+					makeMetadataCatalog({
+						id: RO,
+						name: 'sumeh_demo',
+						origin: 'source',
+						provider_kind: 'unity',
+						table_health: true,
+						read_only: true
+					}),
+					makeMetadataCatalog({ id: RW, name: 'Lake', origin: 'source', table_health: true })
+				])
+			),
+			http.get('/catalogs/{catalog_id}/table-health', ({ params, response }) =>
+				response(200).json([
+					params.catalog_id === RO ? row(RO, 'sumeh_demo') : row(RW, 'Lake', 'managed')
+				])
+			),
+			http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) => response(200).json([]))
+		);
+		render(MonitoringPage);
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Iceberg health' }));
+
+		// The first catalog (sorted as returned) is the read-only one.
+		await screen.findByText('sales.orders');
+		expect(screen.getByRole('note').textContent).toContain('read-only');
+		const runMaintenance = screen.getByRole('button', { name: 'Run maintenance…' });
+		expect((runMaintenance as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByRole('button', { name: 'Configure' }) as HTMLButtonElement).disabled).toBe(
+			false
+		);
+
+		// A writable catalog keeps its button and shows no note.
+		await fireEvent.change(screen.getByLabelText('Catalog'), { target: { value: RW } });
+		const runNow = await screen.findByRole('button', { name: 'Run now' });
+		expect((runNow as HTMLButtonElement).disabled).toBe(false);
+		expect(screen.queryByRole('note')).toBeNull();
+	});
+
 	it('filters Iceberg health by schema and opens the maintenance editor', async () => {
 		const CATALOG = '00000000-0000-0000-0000-0000000000c1';
 		const healthQueries: URLSearchParams[] = [];
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
-				response(200).json([makeMetadataCatalog({ id: CATALOG, origin: 'source' })])
+				response(200).json([
+					makeMetadataCatalog({ id: CATALOG, origin: 'source', table_health: true })
+				])
 			),
 			http.get('/catalogs/{catalog_id}/table-health', ({ request, response }) => {
 				healthQueries.push(new URL(request.url).searchParams);
@@ -207,7 +263,9 @@ describe('monitoring page', () => {
 		const CATALOG = '00000000-0000-0000-0000-0000000000c1';
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
-				response(200).json([makeMetadataCatalog({ id: CATALOG, origin: 'source' })])
+				response(200).json([
+					makeMetadataCatalog({ id: CATALOG, origin: 'source', table_health: true })
+				])
 			),
 			http.get('/catalogs/{catalog_id}/maintenance-plan', ({ response }) =>
 				response(200).json([
@@ -477,7 +535,9 @@ describe('monitoring page', () => {
 		) {
 			server.use(
 				http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
-					response(200).json([makeMetadataCatalog({ id: CATALOG, origin: 'source' })])
+					response(200).json([
+						makeMetadataCatalog({ id: CATALOG, origin: 'source', table_health: true })
+					])
 				),
 				http.get('/catalogs/{catalog_id}/table-health', ({ response }) =>
 					response(200).json(options.health ?? [healthRow])
@@ -731,8 +791,8 @@ describe('monitoring page', () => {
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
 				response(200).json([
-					makeMetadataCatalog({ id: A, name: 'lake', origin: 'source' }),
-					makeMetadataCatalog({ id: B, name: 'warehouse', origin: 'source' })
+					makeMetadataCatalog({ id: A, name: 'lake', origin: 'source', table_health: true }),
+					makeMetadataCatalog({ id: B, name: 'warehouse', origin: 'source', table_health: true })
 				])
 			),
 			http.get('/catalogs/{catalog_id}/table-health', async ({ params, response }) => {
@@ -780,6 +840,44 @@ describe('monitoring page', () => {
 		await waitFor(() => expect(posted).toEqual([B]));
 	});
 
+	it('lists the catalogs the server marks for table health, whatever their kind (#996)', async () => {
+		const LAKE = '00000000-0000-0000-0000-0000000000a1';
+		const UNITY = '00000000-0000-0000-0000-0000000000b1';
+		const GLUE = '00000000-0000-0000-0000-0000000000c2';
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+				response(200).json([
+					makeMetadataCatalog({ id: LAKE, name: 'Lake', origin: 'source', table_health: true }),
+					makeMetadataCatalog({
+						id: UNITY,
+						name: 'sumeh_demo',
+						origin: 'source',
+						provider_kind: 'unity',
+						table_health: true
+					}),
+					makeMetadataCatalog({
+						id: GLUE,
+						name: 'glue_iceberg',
+						origin: 'source',
+						provider_kind: 'glue',
+						table_health: false
+					})
+				])
+			),
+			http.get('/catalogs/{catalog_id}/table-health', ({ response }) => response(200).json([])),
+			http.get('/catalogs/{catalog_id}/maintenance-runs', ({ response }) => response(200).json([]))
+		);
+		render(MonitoringPage);
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Iceberg health' }));
+		const picker = (await screen.findByLabelText('Catalog')) as HTMLSelectElement;
+		await waitFor(() =>
+			expect([...picker.options].map((option) => option.textContent)).toEqual([
+				'Lake',
+				'sumeh_demo'
+			])
+		);
+	});
+
 	it('ignores a late health response from the previous catalog', async () => {
 		const A = '00000000-0000-0000-0000-0000000000a1';
 		const B = '00000000-0000-0000-0000-0000000000b1';
@@ -799,8 +897,8 @@ describe('monitoring page', () => {
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
 				response(200).json([
-					makeMetadataCatalog({ id: A, name: 'lake', origin: 'source' }),
-					makeMetadataCatalog({ id: B, name: 'warehouse', origin: 'source' })
+					makeMetadataCatalog({ id: A, name: 'lake', origin: 'source', table_health: true }),
+					makeMetadataCatalog({ id: B, name: 'warehouse', origin: 'source', table_health: true })
 				])
 			),
 			http.get('/catalogs/{catalog_id}/table-health', async ({ params, response }) => {
@@ -928,7 +1026,9 @@ describe('monitoring page', () => {
 		const bodies: { operations: string[]; retention?: string }[] = [];
 		server.use(
 			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
-				response(200).json([makeMetadataCatalog({ id: CATALOG, origin: 'source' })])
+				response(200).json([
+					makeMetadataCatalog({ id: CATALOG, origin: 'source', table_health: true })
+				])
 			),
 			http.get('/catalogs/{catalog_id}/table-health', ({ response }) =>
 				response(200).json([

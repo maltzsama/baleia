@@ -565,3 +565,44 @@ func TestLegacyURL(t *testing.T) {
 		}
 	}
 }
+
+// TestTableHealthKinds: table health covers every creatable Iceberg-family
+// kind, read from the providers rather than a list of its own (#996).
+func TestTableHealthKinds(t *testing.T) {
+	t.Parallel()
+	reg := registry(t, connections.DialerOptions{})
+	want := []string{"iceberg", "lakekeeper", "nessie", "polaris", "unity"}
+	if got := reg.TableHealthKinds(); !slices.Equal(got, want) {
+		t.Fatalf("TableHealthKinds = %v, want %v", got, want)
+	}
+	for _, kind := range []connections.Kind{"glue", "hive", "postgresql", "trino", "delta", "nope"} {
+		if reg.HasTableHealth(kind) {
+			t.Errorf("HasTableHealth(%q) = true", kind)
+		}
+	}
+	var none *connections.Registry
+	if none.TableHealthKinds() != nil || none.HasTableHealth("polaris") {
+		t.Fatal("a nil registry has table health kinds")
+	}
+}
+
+// TestCatalogReadOnly: a catalog is read-only when the administrator asserted
+// its credentials are, or when its provider promises no writes (#996).
+func TestCatalogReadOnly(t *testing.T) {
+	t.Parallel()
+	reg := registry(t, connections.DialerOptions{})
+	for kind, want := range map[connections.Kind]bool{
+		"unity": true, "polaris": false, "nessie": false, "iceberg": false, "lakekeeper": false, "glue": false, "nope": false,
+	} {
+		if got := reg.CatalogReadOnly(kind, false); got != want {
+			t.Errorf("CatalogReadOnly(%q, false) = %v, want %v", kind, got, want)
+		}
+		if !reg.CatalogReadOnly(kind, true) {
+			t.Errorf("CatalogReadOnly(%q, true) = false, want true", kind)
+		}
+	}
+	var none *connections.Registry
+	if none.CatalogReadOnly("unity", false) || !none.CatalogReadOnly("polaris", true) {
+		t.Fatal("a nil registry only honors the credentials flag")
+	}
+}

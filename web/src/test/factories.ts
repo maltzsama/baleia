@@ -168,6 +168,8 @@ export function makeMetadataCatalog(overrides: Partial<MetadataCatalog> = {}): M
 		name: 'lake',
 		origin: 'native',
 		provider_kind: 'polaris',
+		table_health: false,
+		read_only: false,
 		metadata_synced_at: '2026-01-01T00:00:00Z',
 		metadata_sync_status: 'finished',
 		bindings: [makeMetadataBinding()],

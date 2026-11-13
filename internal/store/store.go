@@ -182,7 +182,10 @@ func postgresDSN(dsn string, opts Options) (string, error) {
 		}
 		q.Set("options", strings.Join(settings, " "))
 	}
-	u.RawQuery = q.Encode()
+	// Encode spaces as %20, not "+": pgx 5.12 reads "+" in the options
+	// parameter literally, so the server saw "+statement_timeout". A literal
+	// plus is already %2B.
+	u.RawQuery = strings.ReplaceAll(q.Encode(), "+", "%20")
 	return u.String(), nil
 }
 

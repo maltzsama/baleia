@@ -184,6 +184,20 @@ func (a *Activities) capableEngine(ctx context.Context, engineID db.UUID) bool {
 	return err == nil && eng.Capabilities().IcebergMaintenance
 }
 
+// catalogReadOnly reports whether Baleia must never write to the catalog: its
+// connection kind promises no writes, or its credentials are read-only.
+func (a *Activities) catalogReadOnly(ctx context.Context, catalogID db.UUID) (bool, error) {
+	cat, err := a.monitoring().GetCatalogByID(ctx, catalogID)
+	if err != nil {
+		return false, fmt.Errorf("get catalog: %w", err)
+	}
+	conn, err := a.monitoring().GetCatalogConnectionByID(ctx, cat.ConnectionID)
+	if err != nil {
+		return false, fmt.Errorf("get catalog connection: %w", err)
+	}
+	return a.connections.CatalogReadOnly(connections.Kind(conn.Type), conn.CredentialsReadOnly), nil
+}
+
 // PlanMaintenanceRoundParams names the catalog of one round.
 type PlanMaintenanceRoundParams struct {
 	CatalogID string
@@ -208,6 +222,9 @@ func (a *Activities) planMaintenanceRound(ctx context.Context, params PlanMainte
 	catalogID := engineUUID(params.CatalogID)
 	if !catalogID.Valid {
 		return nil, fmt.Errorf("invalid catalog id %q", params.CatalogID)
+	}
+	if readOnly, err := a.catalogReadOnly(ctx, catalogID); err != nil || readOnly {
+		return nil, err // a read-only catalog is analyzed, never maintained (#996)
 	}
 	policies, err := a.monitoring().ListManagedMaintenancePolicies(ctx, catalogID)
 	if err != nil || len(policies) == 0 {
@@ -423,6 +440,13 @@ func (a *Activities) runMaintenanceOperation(ctx context.Context, params RunMain
 	}}
 	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "maintenance", ExecutionID: params.RunID}}
 	for attempt := 1; ; attempt++ {
+		// Checked on every attempt: an administrator can mark the catalog
+		// read-only after the run was planned, and a retry waits minutes (#996).
+		if readOnly, err := a.catalogReadOnly(ctx, run.CatalogID); err != nil {
+			return fail("maintenance_failed", err)
+		} else if readOnly {
+			return fail("catalog_read_only", errors.New("the catalog is read-only: Baleia only analyzes it"))
+		}
 		if attempt > 1 {
 			_ = a.monitoring().SetMaintenanceRunAttempts(ctx, db.SetMaintenanceRunAttemptsParams{ID: id, Attempts: int32(attempt)})
 		}

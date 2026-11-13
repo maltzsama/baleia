@@ -186,7 +186,7 @@ components:
     # web/messages/{en,pt-BR}.json (enforced by TestErrorCodesClosed).
     ErrorCode:
       type: string
-      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceMemberNotInTeam, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspaceOwnerRoleFixed, ErrorCodeWorkspacePersonal]
+      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeCatalogReadOnly, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceMemberNotInTeam, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspaceOwnerRoleFixed, ErrorCodeWorkspacePersonal]
       enum:
         - account_suspended
         - agent_token_not_allowed
@@ -201,6 +201,7 @@ components:
         - cancel_failed
         - cancelled
         - catalog_not_managed
+        - catalog_read_only
         - concurrent_change
         - conflict
         - connection_error
@@ -1651,10 +1652,12 @@ components:
       allOf:
         - $ref: "#/components/schemas/Catalog"
         - type: object
-          required: [origin, bindings, needs_attention]
+          required: [origin, bindings, needs_attention, table_health, read_only]
           properties:
             origin: { type: string, description: "source or native" }
             provider_kind: { type: string, nullable: true }
+            table_health: { type: boolean, description: "The catalog is a source catalog of an Iceberg-family connection: its tables get health passes and Iceberg maintenance. False when the caller cannot read the connection." }
+            read_only: { type: boolean, description: "Baleia never writes to this catalog: its connection kind promises no writes, or the administrator asserted its credentials are read-only. Table health still runs; maintenance does not. False when the caller cannot read the connection." }
             connection:
               allOf: [{ $ref: "#/components/schemas/EngineConnectionRef" }]
               nullable: true
@@ -2285,12 +2288,14 @@ components:
 
     MetadataCatalog:
       type: object
-      required: [id, name, origin, provider_kind, metadata_sync_status, bindings]
+      required: [id, name, origin, provider_kind, table_health, read_only, metadata_sync_status, bindings]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         origin: { type: string, enum: [source, native] }
         provider_kind: { type: string, description: "The kind of the catalog's connection (polaris, postgresql, trino, …)" }
+        table_health: { type: boolean, description: "The catalog is a source catalog of an Iceberg-family connection: its tables get health passes and Iceberg maintenance" }
+        read_only: { type: boolean, description: "Baleia never writes to this catalog: its connection kind promises no writes, or the administrator asserted its credentials are read-only. Table health still runs; maintenance does not." }
         metadata_synced_at: { type: string, format: date-time, nullable: true }
         metadata_sync_status: { type: string, enum: [never, running, finished, failed] }
         bindings:

@@ -569,12 +569,17 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 		return CreateMaintenanceRun401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 	catalogID := db.UUID{Bytes: request.CatalogId, Valid: true}
-	_, ok, err := h.catalogForMonitoring(ctx, p, catalogID, authz.ActWrite)
+	catalog, ok, err := h.catalogForMonitoring(ctx, p, catalogID, authz.ActWrite)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return CreateMaintenanceRun404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
+	}
+	if readOnly, err := h.catalogReadOnly(ctx, catalog); err != nil {
+		return nil, err
+	} else if readOnly {
+		return CreateMaintenanceRun409JSONResponse{ConflictJSONResponse: catalogReadOnlyConflict()}, nil
 	}
 	if request.Body == nil {
 		return CreateMaintenanceRun422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil

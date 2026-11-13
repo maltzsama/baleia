@@ -10,7 +10,6 @@
 	import type { components } from '$lib/api/schema';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import CatalogMaintenancePlan from '$lib/maintenance/CatalogMaintenancePlan.svelte';
-	import { hasTableHealth } from '$lib/ui/patterns/kindIcon';
 	import {
 		bindingProjection,
 		bindingRemediation,
@@ -539,7 +538,7 @@
 			role="tablist"
 			aria-label={m.catalogs_detail_catalog_tabs()}
 		>
-			{#each [['overview', m.catalogs_detail_overview()], ['bindings', m.catalogs_detail_bindings()], ['metadata', m.catalogs_detail_metadata()], ...(hasTableHealth(catalog) ? [['maintenance', m.maintenance_title()]] : []), ['access', m.catalogs_access()], ['activity', m.catalogs_detail_activity()]] as [value, label] (value)}
+			{#each [['overview', m.catalogs_detail_overview()], ['bindings', m.catalogs_detail_bindings()], ['metadata', m.catalogs_detail_metadata()], ...(catalog.table_health ? [['maintenance', m.maintenance_title()]] : []), ['access', m.catalogs_access()], ['activity', m.catalogs_detail_activity()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -869,7 +868,7 @@
 				</div>
 			{/if}
 		{:else if tab === 'maintenance'}
-			<CatalogMaintenancePlan {catalogId} />
+			<CatalogMaintenancePlan {catalogId} readOnly={catalog.read_only} />
 		{:else if tab === 'activity'}
 			<ActivityPanel
 				resourceType="catalog"

@@ -6,6 +6,7 @@ import { http, server } from '../../../test/server';
 import { setTestUrl } from '../../../test/nav.svelte';
 import {
 	makeMaintenanceRun,
+	makeMetadataCatalog,
 	makeSearchResult,
 	makeTableDetail,
 	makeTableMaintenance,
@@ -22,8 +23,21 @@ const WS = '00000000-0000-0000-0000-000000000001';
 const CATALOG = '00000000-0000-0000-0000-0000000000c1';
 const URL = `/maintenance?catalog=${CATALOG}&ns=sales&table=orders`;
 
-function useBackend({ found = true }: { found?: boolean } = {}) {
+function useBackend({
+	found = true,
+	readOnly = false
+}: { found?: boolean; readOnly?: boolean } = {}) {
 	server.use(
+		http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
+			response(200).json([
+				makeMetadataCatalog({
+					id: CATALOG,
+					origin: 'source',
+					table_health: true,
+					read_only: readOnly
+				})
+			])
+		),
 		http.get('/workspaces/{id}/metadata/search', ({ response }) =>
 			response(200).json(found ? [makeSearchResult()] : [])
 		),
@@ -58,6 +72,15 @@ describe('maintenance page', () => {
 		expect(await screen.findByRole('heading', { level: 1, name: 'Maintenance' })).toBeTruthy();
 		expect(await screen.findByText('"lake_t"."sales"."orders"')).toBeTruthy();
 		expect(await screen.findByText(/has no maintenance parameters/)).toBeTruthy();
+	});
+
+	it('says so when the catalog is read-only (#996)', async () => {
+		useBackend({ readOnly: true });
+		setTestUrl(URL);
+		render(MaintenancePage);
+
+		const note = await screen.findByRole('note');
+		expect(note.textContent).toContain('read-only');
 	});
 
 	it('shows the latest run next to the table name', async () => {

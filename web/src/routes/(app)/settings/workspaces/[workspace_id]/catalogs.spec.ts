@@ -57,7 +57,9 @@ describe('workspace catalog administration (#985)', () => {
 						...catalog,
 						origin: 'native',
 						bindings: [],
-						needs_attention: false
+						needs_attention: false,
+						table_health: false,
+						read_only: false
 					}
 				])
 			),

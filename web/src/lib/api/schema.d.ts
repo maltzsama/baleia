@@ -4049,7 +4049,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_member_not_in_team" | "workspace_not_found" | "workspace_owner_role_fixed" | "workspace_personal";
+        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "catalog_read_only" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_member_not_in_team" | "workspace_not_found" | "workspace_owner_role_fixed" | "workspace_personal";
         /** @enum {string} */
         Locale: "en" | "pt-BR";
         /** @enum {string} */
@@ -5130,6 +5130,10 @@ export interface components {
             /** @description source or native */
             origin: string;
             provider_kind?: string | null;
+            /** @description The catalog is a source catalog of an Iceberg-family connection: its tables get health passes and Iceberg maintenance. False when the caller cannot read the connection. */
+            table_health: boolean;
+            /** @description Baleia never writes to this catalog: its connection kind promises no writes, or the administrator asserted its credentials are read-only. Table health still runs; maintenance does not. False when the caller cannot read the connection. */
+            read_only: boolean;
             /** @description Null when the caller cannot view the connection */
             connection?: components["schemas"]["EngineConnectionRef"] | null;
             source_ref?: string | null;
@@ -5629,6 +5633,10 @@ export interface components {
             origin: "source" | "native";
             /** @description The kind of the catalog's connection (polaris, postgresql, trino, …) */
             provider_kind: string;
+            /** @description The catalog is a source catalog of an Iceberg-family connection: its tables get health passes and Iceberg maintenance */
+            table_health: boolean;
+            /** @description Baleia never writes to this catalog: its connection kind promises no writes, or the administrator asserted its credentials are read-only. Table health still runs; maintenance does not. */
+            read_only: boolean;
             /** Format: date-time */
             metadata_synced_at?: string | null;
             /** @enum {string} */

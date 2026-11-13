@@ -15,7 +15,7 @@ type monitoringStore interface {
 	UpsertTrinoQuerySnapshot(ctx context.Context, arg db.UpsertTrinoQuerySnapshotParams) (db.TrinoQuerySnapshot, error)
 	SetTrinoQueryProfile(ctx context.Context, arg db.SetTrinoQueryProfileParams) error
 	InsertClusterSnapshot(ctx context.Context, arg db.InsertClusterSnapshotParams) (db.ClusterSnapshot, error)
-	ListEnabledIcebergCatalogs(ctx context.Context) ([]db.ListEnabledIcebergCatalogsRow, error)
+	ListEnabledIcebergCatalogs(ctx context.Context, kinds []string) ([]db.ListEnabledIcebergCatalogsRow, error)
 	ListTableMaintenancePolicies(ctx context.Context, catalogID db.UUID) ([]db.TableMaintenancePolicy, error)
 	UpsertTableHealthSnapshot(ctx context.Context, arg db.UpsertTableHealthSnapshotParams) (db.TableHealthSnapshot, error)
 	GetCatalogConnectionByID(ctx context.Context, id db.UUID) (db.CatalogConnection, error)

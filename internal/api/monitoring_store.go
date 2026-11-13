@@ -14,7 +14,7 @@ type opsReads interface {
 	GetTableHealthByTable(ctx context.Context, arg db.GetTableHealthByTableParams) (db.TableHealthSnapshot, error)
 	ListTableMaintenancePolicies(ctx context.Context, catalogID db.UUID) ([]db.TableMaintenancePolicy, error)
 	ListLastMaintenancePerOperation(ctx context.Context, arg db.ListLastMaintenancePerOperationParams) ([]db.ListLastMaintenancePerOperationRow, error)
-	ListEnabledIcebergCatalogs(ctx context.Context) ([]db.ListEnabledIcebergCatalogsRow, error)
+	ListEnabledIcebergCatalogs(ctx context.Context, kinds []string) ([]db.ListEnabledIcebergCatalogsRow, error)
 	ListBindingsByCatalog(ctx context.Context, catalogID db.UUID) ([]db.CatalogBinding, error)
 	ListQueryClasses(ctx context.Context, arg db.ListQueryClassesParams) ([]db.ListQueryClassesRow, error)
 	CreatePlannedMaintenanceRun(ctx context.Context, arg db.CreatePlannedMaintenanceRunParams) (db.MaintenanceRun, error)

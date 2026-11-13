@@ -6,7 +6,12 @@
 	import { resolve } from '$app/paths';
 	import { selection } from '$lib/stores/selection.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
-	import { findTable, loadTable, type MetadataTableDetail } from '$lib/metadata/client';
+	import {
+		findTable,
+		loadCatalogs,
+		loadTable,
+		type MetadataTableDetail
+	} from '$lib/metadata/client';
 	import TableMaintenance from '$lib/maintenance/TableMaintenance.svelte';
 	import type { MaintenanceRun } from '$lib/maintenance/client';
 	import { operationLabel, triggerLabel } from '$lib/maintenance/labels';
@@ -39,7 +44,7 @@
 		| { kind: 'empty' }
 		| { kind: 'missing' }
 		| { kind: 'error'; message: string }
-		| { kind: 'found'; detail: MetadataTableDetail };
+		| { kind: 'found'; detail: MetadataTableDetail; readOnly: boolean };
 
 	let retryTick = $state(0);
 
@@ -65,7 +70,9 @@
 		try {
 			const tableId = await findTable(ws, catalog, ns, table);
 			if (!tableId) return { kind: 'missing' };
-			return { kind: 'found', detail: await loadTable(ws, tableId) };
+			const [detail, catalogs] = await Promise.all([loadTable(ws, tableId), loadCatalogs(ws)]);
+			const readOnly = catalogs.find((c) => c.id === detail.catalog_id)?.read_only ?? false;
+			return { kind: 'found', detail, readOnly };
 		} catch (e) {
 			return { kind: 'error', message: e instanceof Error ? e.message : String(e) };
 		}
@@ -144,6 +151,7 @@
 				catalogId={state.detail.catalog_id}
 				namespace={state.detail.namespace.join('.')}
 				table={state.detail.name}
+				readOnly={state.readOnly}
 				onruns={(next) => (runs = next)}
 			/>
 			<div class="mt-4">
