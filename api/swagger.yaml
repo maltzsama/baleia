@@ -1875,9 +1875,11 @@ components:
           type: string
           enum: [direct, federated]
           description: >
-            Data access mode (ADR 0021). Required when the type declares both
-            direct and Trino access, auto-selected when it declares one, and
-            omitted for engine-family types.
+            Data access mode (ADR 0029). `direct` runs SQL through a native
+            query-engine adapter owned by this connection; `federated` runs it
+            through the registered federated engines in `engine_ids`. Required
+            when the type declares both, auto-selected when it declares one,
+            and omitted for engine-family types. Immutable after creation.
         url: { type: string, description: "Older shape: the endpoint URL (a JDBC URL for databases). Prefer config" }
         config:
           type: object
@@ -1900,6 +1902,46 @@ components:
           $ref: "#/components/schemas/SqlCredentials"
         mysql_credentials:
           $ref: "#/components/schemas/SqlCredentials"
+        engine_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, format: uuid }
+          description: >
+            Federated engines that expose the connection's catalogs. Required
+            when `access_mode` is `federated` (the first one is the catalogs'
+            primary engine) and refused for `direct`. Each engine must be one
+            the caller may write to and one whose binder supports the type.
+        catalog_registration:
+          $ref: "#/components/schemas/CreateCatalogRequest"
+          description: >
+            The logical catalogs to register, as in POST
+            /connections/{connection_id}/catalogs. Required when `access_mode`
+            is `federated` and refused for `direct`, whose native catalogs are
+            discovered from the source.
+
+    CatalogConnectionCreated:
+      description: >
+        The connection created by POST /catalog-connections, with the resources
+        the request created with it. A `direct` connection returns its native
+        `engine` and native `catalogs`. A `federated` connection returns its
+        logical `catalogs`: the database transaction has committed, and each
+        catalog's `sync_status` says whether the federated engine has applied it
+        yet (`active`), is still applying it (`pending`) or refused it
+        (`error`). A commit is never proof of activation.
+      allOf:
+        - $ref: "#/components/schemas/CatalogConnection"
+        - type: object
+          required: [catalogs]
+          properties:
+            engine:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/Engine"
+              description: "The native engine a direct connection owns; absent for federated connections"
+            catalogs:
+              type: array
+              items: { $ref: "#/components/schemas/Catalog" }
 
     # ── Catalog Connection Credentials ───────────────────
 
@@ -7774,12 +7816,13 @@ paths:
               { $ref: "#/components/schemas/CreateCatalogConnectionRequest" }
       responses:
         "201":
-          description: "Connection created"
+          description: "Connection created, with its engine and catalogs"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/CatalogConnection" }
+              schema: { $ref: "#/components/schemas/CatalogConnectionCreated" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
