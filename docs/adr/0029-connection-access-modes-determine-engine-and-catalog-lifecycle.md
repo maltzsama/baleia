@@ -263,7 +263,8 @@ Compliant, with two gaps.
   its resources in one transaction after the remote checks. The Engines page keeps **Register
   engine**, and connection-level `register_engine` is gone.
 - The `trino` access mode is migrated to `federated`. The check constraint keeps accepting `trino`
-  during a rolling upgrade, the API reports it as `federated`, and the next start rewrites it.
+  during a rolling upgrade and the API reports such a row as `federated`. No later step rewrites it,
+  so a row written by an older binary stays `trino` in the table.
 - Direct connections without an engine are repaired on API start, idempotently and under a row lock,
   and are never deleted.
 

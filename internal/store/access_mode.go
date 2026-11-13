@@ -33,9 +33,9 @@ func createAccessModeCheck(tx *gorm.DB) error {
 // 0029): Trino is an engine kind, not an execution path. The old check goes,
 // the rows are rewritten while nothing constrains the column, and the check is
 // recreated from the model tag. The expanded constraint continues accepting
-// legacy "trino" writes from an older binary during a rolling deployment; a
-// subsequent new-process startup rewrites those rows again. New code emits only
-// "federated". The steps share a transaction where the backend
+// legacy "trino" writes from an older binary during a rolling deployment. No
+// later startup step rewrites those rows: the API reports them as federated. New
+// code emits only "federated". The steps share a transaction where the backend
 // has transactional DDL (PostgreSQL); MySQL and MariaDB commit DDL per
 // statement. Rows already federated, direct or NULL are untouched, so a rerun
 // changes nothing.

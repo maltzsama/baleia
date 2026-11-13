@@ -62,7 +62,8 @@ func TestRenameTrinoAccessModeUpgrades(t *testing.T) {
 	}
 
 	// The expanded check accepts a legacy write from an older binary during a
-	// rolling deployment; the next new-process startup rewrites it.
+	// rolling deployment. Only a rerun of the rename rewrites it; the API reports
+	// such a row as federated meanwhile.
 	legacy := conn(4, ptr("trino"))
 	if err := db.Create(&legacy).Error; err != nil {
 		t.Fatalf("legacy trino write was rejected: %v", err)

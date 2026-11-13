@@ -572,8 +572,9 @@ repaired (unreachable, credentials that no longer open) is logged at error level
 `incomplete direct connection reconciliation failed`, with its id and name, and tried again at the
 next start. The log is the only record of the failure.
 
-An older binary can still write the access mode `trino` during a rolling upgrade. The API reports it
-as `federated` and the next start rewrites it.
+An older binary can still write the access mode `trino` during a rolling upgrade. The database check
+keeps accepting it and the API reports such a row as `federated`; nothing rewrites it afterwards, so
+it stays `trino` in the table.
 
 ## Connection tests
 
