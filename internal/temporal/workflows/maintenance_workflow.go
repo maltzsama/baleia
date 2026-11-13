@@ -22,6 +22,10 @@ func MaintenanceRunWorkflow(ctx workflow.Context, runID, engineID, catalog, name
 		StartToCloseTimeout: 30 * time.Minute,
 		HeartbeatTimeout:    60 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+		// Closing the run releases the table: on cancellation, wait until the
+		// activity has stopped before doing so, or a second run could start
+		// while the engine still executes this one.
+		WaitForCancellation: closesRun,
 	})
 	runErr := workflow.ExecuteActivity(actCtx, activities.LensRunMaintenance, activities.LensRunMaintenanceParams{
 		RunID:       runID,

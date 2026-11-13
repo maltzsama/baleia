@@ -625,3 +625,82 @@ func TestReconcileMaintenanceRuns(t *testing.T) {
 		})
 	}
 }
+
+// TestCloseRunningMaintenanceRun_KeepsAClosedOutcome: a run that ended while
+// the caller was deciding to close it keeps the outcome recorded for it.
+func TestCloseRunningMaintenanceRun_KeepsAClosedOutcome(t *testing.T) {
+	gdb := testdb.New(t)
+	store := repo.New(gdb)
+	user := seedUser(t, gdb, "keep-closed", "keep-closed@maint.test")
+	conn := seedConnection(t, gdb, "keep-closed-src", user)
+	engine := seedEngine(t, gdb, "keep-closed-e", seedConnection(t, gdb, "keep-closed-eng", user), user)
+	catalog, binding := seedCatalogBinding(t, gdb, conn, engine, "keep_closed_lake")
+	run := seedRunningRun(t, gdb, store, catalog, binding, user, "orders", time.Hour)
+	ctx := context.Background()
+	id := repo.UUIDString(run.ID)
+
+	finishMaintenanceRun(ctx, store, id, "gave_up", "commit_conflict", "lost the race")
+	err := closeRunningMaintenanceRun(ctx, store, id, "finished", "", "")
+
+	if err != nil {
+		t.Fatalf("closing a closed run = %v, want nil", err)
+	}
+	got, err := store.GetMaintenanceRun(ctx, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "gave_up" || got.ErrorCode == nil || *got.ErrorCode != "commit_conflict" {
+		t.Fatalf("run = %q %v, want the recorded gave_up/commit_conflict kept", got.Status, got.ErrorCode)
+	}
+}
+
+// failingCloseStore refuses to close one run, as a database error would.
+type failingCloseStore struct {
+	*repo.Repo
+	failFor db.UUID
+}
+
+func (s failingCloseStore) UpdateMaintenanceRun(ctx context.Context, arg db.UpdateMaintenanceRunParams) (db.MaintenanceRun, error) {
+	if arg.ID == s.failFor {
+		return db.MaintenanceRun{}, errors.New("database down")
+	}
+	return s.Repo.UpdateMaintenanceRun(ctx, arg)
+}
+
+// TestReconcileMaintenanceRuns_ContinuesPastAFailedWrite: one run that cannot
+// be closed does not stop the others from being closed.
+func TestReconcileMaintenanceRuns_ContinuesPastAFailedWrite(t *testing.T) {
+	gdb := testdb.New(t)
+	store := repo.New(gdb)
+	user := seedUser(t, gdb, "reconcile-fail", "reconcile-fail@maint.test")
+	conn := seedConnection(t, gdb, "reconcile-fail-src", user)
+	engine := seedEngine(t, gdb, "reconcile-fail-e", seedConnection(t, gdb, "reconcile-fail-eng", user), user)
+	catalog, binding := seedCatalogBinding(t, gdb, conn, engine, "reconcile_fail_lake")
+	stuck := seedRunningRun(t, gdb, store, catalog, binding, user, "stuck", time.Hour)
+	other := seedRunningRun(t, gdb, store, catalog, binding, user, "other", time.Hour)
+	tc := &mocks.Client{}
+	done := &workflowservice.DescribeWorkflowExecutionResponse{
+		WorkflowExecutionInfo: &workflowpb.WorkflowExecutionInfo{Status: enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED},
+	}
+	tc.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, "").Return(done, nil)
+	a := &Activities{
+		store:          failingCloseStore{Repo: store, failFor: stuck.ID},
+		logger:         slog.New(slog.DiscardHandler),
+		temporalClient: tc,
+	}
+
+	a.reconcileMaintenanceRuns(context.Background(), catalog)
+
+	for name, tt := range map[string]struct {
+		id   db.UUID
+		want string
+	}{"the run that cannot be written stays running": {stuck.ID, "running"}, "the other run is closed": {other.ID, "finished"}} {
+		got, err := store.GetMaintenanceRun(context.Background(), tt.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status != tt.want {
+			t.Errorf("%s: status = %q, want %q", name, got.Status, tt.want)
+		}
+	}
+}

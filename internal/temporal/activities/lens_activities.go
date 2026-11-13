@@ -729,12 +729,20 @@ func (a *Activities) maintenanceEngine(ctx context.Context, engineID string) (qu
 
 // finishMaintenanceRun records the terminal state of an engine-aware run.
 func finishMaintenanceRun(ctx context.Context, queries monitoringStore, runID, status, code, message string) {
+	// Best effort: the run's own outcome is returned to the workflow.
+	_ = closeRunningMaintenanceRun(ctx, queries, runID, status, code, message)
+}
+
+// closeRunningMaintenanceRun closes a run that is still running and reports a
+// write that failed. A run already closed keeps its outcome and is not an
+// error.
+func closeRunningMaintenanceRun(ctx context.Context, queries monitoringStore, runID, status, code, message string) error {
 	if runID == "" {
-		return
+		return nil
 	}
 	var id db.UUID
 	if err := id.Scan(runID); err != nil {
-		return
+		return nil
 	}
 	var codePtr, messagePtr *string
 	if code != "" {
@@ -743,10 +751,13 @@ func finishMaintenanceRun(ctx context.Context, queries monitoringStore, runID, s
 	if message != "" {
 		messagePtr = &message
 	}
-	// Best effort: the run's own outcome is returned to the workflow.
-	_, _ = queries.UpdateMaintenanceRun(context.WithoutCancel(ctx), db.UpdateMaintenanceRunParams{
+	_, err := queries.UpdateMaintenanceRun(context.WithoutCancel(ctx), db.UpdateMaintenanceRunParams{
 		ID: id, Status: status, ErrorCode: codePtr, ErrorMessage: messagePtr,
 	})
+	if errors.Is(err, db.ErrNoRows) {
+		return nil
+	}
+	return err
 }
 
 // maintenanceMaxResultRows bounds what a maintenance statement may return.

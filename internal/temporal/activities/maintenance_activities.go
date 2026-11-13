@@ -584,7 +584,7 @@ func (a *Activities) closeMaintenanceRun(ctx context.Context, params CloseMainte
 		code := "maintenance_failed"
 		arg.Status, arg.ErrorCode, arg.ErrorMessage = "failed", &code, &params.Failure
 	}
-	if _, err := a.monitoring().UpdateMaintenanceRun(ctx, arg); err != nil {
+	if _, err := a.monitoring().UpdateMaintenanceRun(ctx, arg); err != nil && !errors.Is(err, db.ErrNoRows) {
 		return fmt.Errorf("close maintenance run %s: %w", params.RunID, err)
 	}
 	return nil
@@ -626,7 +626,11 @@ func (a *Activities) reconcileMaintenanceRuns(ctx context.Context, catalogID db.
 		if status == "failed" {
 			code = "maintenance_failed"
 		}
-		finishMaintenanceRun(ctx, a.monitoring(), repo.UUIDString(run.ID), status, code, message)
+		if err := closeRunningMaintenanceRun(ctx, a.monitoring(), repo.UUIDString(run.ID), status, code, message); err != nil {
+			a.logger.WarnContext(ctx, "close a maintenance run whose workflow had closed",
+				"run", repo.UUIDString(run.ID), "workflow", run.WorkflowID, "err", err)
+			continue
+		}
 		a.logger.InfoContext(ctx, "closed a maintenance run whose workflow had closed",
 			"run", repo.UUIDString(run.ID), "workflow", run.WorkflowID, "status", status)
 	}
