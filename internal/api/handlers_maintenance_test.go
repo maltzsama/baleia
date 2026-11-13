@@ -429,9 +429,9 @@ func TestTableMaintenance_RunsAndPlans(t *testing.T) {
 }
 
 // TestCreateMaintenanceRun_WorkflowGetsRowID: the legacy run must start
-// MaintenanceRunWorkflow with the recorded row's id, so the activity can
-// close it. A fresh uuid leaves the row running and blocks the next run
-// (#883).
+// MaintenanceRunWorkflow with the stored row's id, so the activity can close
+// it, and name the workflow after that same id. A fresh uuid leaves the row
+// running and blocks the next run (#883).
 func TestCreateMaintenanceRun_WorkflowGetsRowID(t *testing.T) {
 	t.Parallel()
 	f := newMaintenanceFixture(t, "managed")
@@ -461,6 +461,16 @@ func TestCreateMaintenanceRun_WorkflowGetsRowID(t *testing.T) {
 	}
 	if got != run.Id.String() {
 		t.Fatalf("workflow run id = %q, want the recorded row id %q", got, run.Id.String())
+	}
+	if want := "maintenance-" + run.Id.String(); tc.startedID != want {
+		t.Fatalf("workflow id = %q, want %q", tc.startedID, want)
+	}
+	var stored model.MaintenanceRun
+	if err := f.gdb.Where("workflow_id = ?", tc.startedID).First(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if string(stored.ID) != run.Id.String() {
+		t.Fatalf("stored row id = %q, want %q: the workflow would close a row that does not exist", stored.ID, run.Id.String())
 	}
 }
 

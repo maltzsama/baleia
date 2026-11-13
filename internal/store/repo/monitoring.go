@@ -504,8 +504,12 @@ func (r *Repo) ListLastMaintenancePerOperation(ctx context.Context, arg db.ListL
 
 // CreateMaintenanceRun records a run started by the manual maintenance path.
 func (r *Repo) CreateMaintenanceRun(ctx context.Context, arg db.CreateMaintenanceRunParams) (db.MaintenanceRun, error) {
+	id := NewUUID()
+	if arg.ID.Valid {
+		id = UUIDString(arg.ID)
+	}
 	row := model.MaintenanceRun{
-		ID:             model.UUID(NewUUID()),
+		ID:             model.UUID(id),
 		CatalogID:      model.UUID(UUIDString(arg.CatalogID)),
 		BindingID:      modelUUIDPtr(arg.BindingID),
 		Namespace:      model.Text(arg.Namespace),

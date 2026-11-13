@@ -234,6 +234,29 @@ func TestTableMaintenancePolicies(t *testing.T) {
 	}
 }
 
+// TestCreateMaintenanceRun_KeepsTheGivenID: the run is stored under the id the
+// caller chose, so the workflow started with that id closes this very row.
+func TestCreateMaintenanceRun_KeepsTheGivenID(t *testing.T) {
+	t.Parallel()
+	f := monitoringFixture(t)
+	want := PGUUID(NewUUID())
+
+	run, err := f.r.CreateMaintenanceRun(context.Background(), db.CreateMaintenanceRunParams{
+		ID: want, CatalogID: f.catalogID(), BindingID: f.bindingID(), Namespace: "sales", TableName: "orders",
+		Operations: []string{"optimize"}, StartedBy: f.ownerID(), WorkflowID: "maintenance-" + UUIDString(want),
+	})
+	if err != nil {
+		t.Fatalf("CreateMaintenanceRun: %v", err)
+	}
+	if run.ID != want {
+		t.Fatalf("run id = %s, want the given %s", UUIDString(run.ID), UUIDString(want))
+	}
+	got, err := f.r.GetMaintenanceRun(context.Background(), want)
+	if err != nil || got.WorkflowID != run.WorkflowID {
+		t.Fatalf("GetMaintenanceRun(given id) = %+v, %v", got, err)
+	}
+}
+
 // TestMaintenanceRuns covers the manual and planned run writes, the running
 // reads, the list filters and the catalog planning aggregates (#500, #773).
 func TestMaintenanceRuns(t *testing.T) {

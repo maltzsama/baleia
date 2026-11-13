@@ -217,6 +217,9 @@ type CreateEngineParams struct {
 }
 
 type CreateMaintenanceRunParams struct {
+	// ID is the run's id; the zero value lets the store pick one. The API sets
+	// it so the row, the workflow id and the workflow input share one id.
+	ID         UUID     `json:"id"`
 	CatalogID  UUID     `json:"catalog_id"`
 	BindingID  UUID     `json:"binding_id"`
 	Namespace  string   `json:"namespace"`
