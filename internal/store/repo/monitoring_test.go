@@ -234,6 +234,35 @@ func TestTableMaintenancePolicies(t *testing.T) {
 	}
 }
 
+// TestUpdateMaintenanceRun_KeepsAClosedRun: only a running run is closed; one
+// already closed keeps its outcome and the call reports no rows.
+func TestUpdateMaintenanceRun_KeepsAClosedRun(t *testing.T) {
+	t.Parallel()
+	f := monitoringFixture(t)
+	ctx := context.Background()
+	run, err := f.r.CreateMaintenanceRun(ctx, db.CreateMaintenanceRunParams{
+		CatalogID: f.catalogID(), BindingID: f.bindingID(), Namespace: "sales", TableName: "orders",
+		Operations: []string{"optimize"}, StartedBy: f.ownerID(), WorkflowID: "maintenance-closed",
+	})
+	if err != nil {
+		t.Fatalf("CreateMaintenanceRun: %v", err)
+	}
+	code := "commit_conflict"
+	if _, err := f.r.UpdateMaintenanceRun(ctx, db.UpdateMaintenanceRunParams{ID: run.ID, Status: "gave_up", ErrorCode: &code}); err != nil {
+		t.Fatalf("close a running run: %v", err)
+	}
+
+	_, err = f.r.UpdateMaintenanceRun(ctx, db.UpdateMaintenanceRunParams{ID: run.ID, Status: "finished"})
+
+	if !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("closing a closed run = %v, want ErrNoRows", err)
+	}
+	got, err := f.r.GetMaintenanceRun(ctx, run.ID)
+	if err != nil || got.Status != "gave_up" || got.ErrorCode == nil || *got.ErrorCode != code {
+		t.Fatalf("run = %+v, %v, want gave_up/commit_conflict kept", got, err)
+	}
+}
+
 // TestCreateMaintenanceRun_KeepsTheGivenID: the run is stored under the id the
 // caller chose, so the workflow started with that id closes this very row.
 func TestCreateMaintenanceRun_KeepsTheGivenID(t *testing.T) {

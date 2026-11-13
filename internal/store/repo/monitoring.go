@@ -531,10 +531,12 @@ func (r *Repo) CreateMaintenanceRun(ctx context.Context, arg db.CreateMaintenanc
 	return toDBMaintenanceRun(row), nil
 }
 
-// UpdateMaintenanceRun closes a run with its outcome.
+// UpdateMaintenanceRun closes a run with its outcome. Only a run that is still
+// running is closed: one already closed keeps the outcome recorded for it and
+// the call returns db.ErrNoRows, as for a run that does not exist.
 func (r *Repo) UpdateMaintenanceRun(ctx context.Context, arg db.UpdateMaintenanceRunParams) (db.MaintenanceRun, error) {
 	res := r.Users.db.WithContext(ctx).Model(&model.MaintenanceRun{}).
-		Where("id = ?", UUIDString(arg.ID)).
+		Where("id = ? AND status = ?", UUIDString(arg.ID), "running").
 		Updates(map[string]any{
 			"status":        arg.Status,
 			"running_guard": model.RunningGuard(arg.Status),
