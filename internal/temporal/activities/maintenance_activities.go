@@ -155,7 +155,9 @@ func (a *Activities) engineMetrics(ctx context.Context, eng queryengine.Engine, 
 	if err != nil {
 		return nil, nil
 	}
-	spec := queryengine.SessionSpec{Tags: queryengine.Tags{Source: "maintenance"}}
+	// A probe only reads: the session is read-only, as for every probe of
+	// Baleia's own (ADR 0005), and runs as the service identity.
+	spec := queryengine.SessionSpec{ReadOnly: true, Tags: queryengine.Tags{Source: "maintenance"}}
 	count := func(sql string) *int64 {
 		qctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()

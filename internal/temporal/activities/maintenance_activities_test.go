@@ -360,6 +360,26 @@ func TestReserveRunsStore_DuplicateRecovery(t *testing.T) {
 // TestCatalogReadOnly: the worker refuses to maintain a catalog whose
 // credentials are asserted read-only or whose connection kind promises no
 // writes, and its round plans nothing for it (#996).
+// TestEngineMetricsReadOnly: the small-file and manifest counts are read in a
+// read-only session of the service identity, as every probe (ADR 0005).
+func TestEngineMetricsReadOnly(t *testing.T) {
+	t.Parallel()
+	eng := &fakeEngine{Engine: testTrino, ctasCount: "9"}
+	a := &Activities{engines: eng}
+	p := maintenance.Policy{
+		Optimize: maintenance.Settings{Enabled: true, Trigger: maintenance.Trigger{SmallFileRatio: new(0.5)},
+			Params: maintenance.Params{TargetFileSizeBytes: i64(1024)}},
+		OptimizeManifests: maintenance.Settings{Enabled: true, Trigger: maintenance.Trigger{Manifests: i64(10)}},
+	}
+	small, manifests := a.engineMetrics(context.Background(), eng, []string{"lake", "cdc", "orders"}, p)
+	if small == nil || *small != 9 || manifests == nil || *manifests != 9 {
+		t.Fatalf("small %v, manifests %v; want 9 and 9", small, manifests)
+	}
+	if eng.callCount != 2 || !eng.lastSpec.ReadOnly || eng.lastSpec.Identity.UserID != "" {
+		t.Fatalf("calls %d, last session read-only %v as %q; want two read-only service reads", eng.callCount, eng.lastSpec.ReadOnly, eng.lastSpec.Identity.UserID)
+	}
+}
+
 func TestCatalogReadOnly(t *testing.T) {
 	t.Parallel()
 	gdb := testdb.New(t)
