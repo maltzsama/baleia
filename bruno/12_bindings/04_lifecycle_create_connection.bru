@@ -19,16 +19,25 @@ body:json {
     "name": "bruno-lifecycle",
     "type": "polaris",
     "config": { "url": "{{polaris_url}}", "client_id": "admin" },
-    "credentials": { "client_secret": "admin" }
+    "credentials": { "client_secret": "admin" },
+    "engine_ids": ["{{trino_engine_id}}"],
+    "catalog_registration": {
+      "catalogs": [
+        { "name": "Bruno Lifecycle", "trino_catalog_name": "bruno_lifecycle" }
+      ],
+      "warehouse": "baleia_polaris"
+    }
   }
 }
 
 assert {
   res.status: eq 201
+  res.body.catalogs: length 1
 }
 
 script:post-response {
   bru.setVar("lifecycle_connection_id", res.getBody().id);
+  bru.setVar("lifecycle_catalog_id", res.getBody().catalogs[0].id);
 }
 
 docs {

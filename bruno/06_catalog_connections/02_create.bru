@@ -25,6 +25,13 @@ body:json {
     },
     "credentials": {
       "client_secret": "admin"
+    },
+    "engine_ids": ["{{trino_engine_id}}"],
+    "catalog_registration": {
+      "catalogs": [
+        { "name": "Local Polaris", "trino_catalog_name": "local_polaris" }
+      ],
+      "warehouse": "baleia_polaris"
     }
   }
 }
@@ -35,6 +42,9 @@ assert {
   res.body.config.realm: eq POLARIS
   res.body.has_credentials: eq true
   res.body.credentials_read_only: eq true
+  res.body.access_mode: eq federated
+  res.body.catalogs: length 1
+  res.body.catalogs[0].trino_catalog_name: eq local_polaris
 }
 
 vars:post-response {
@@ -42,6 +52,10 @@ vars:post-response {
 }
 
 docs {
+  A federated connection is created with its engines and catalogs in one
+  request (ADR 0029). The database commit and the engine's activation are
+  separate: each catalog's `sync_status` says whether the engine applied it.
+
   Non-secret fields go in `config`, secret fields in `credentials`, both as
   listed by GET /connection-providers. The older shape (`url` plus a
   `credentials` object that also carries `client_id`) is still accepted.

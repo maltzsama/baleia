@@ -1,0 +1,30 @@
+meta {
+  name: Find the Federated Engine
+  type: http
+  seq: 0
+}
+
+get {
+  url: {{base_url}}/engines
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  const trino = res.getBody().find((e) => e.kind === "trino");
+  bru.setVar("trino_engine_id", trino ? trino.id : "");
+}
+
+docs {
+  A federated connection is registered through an engine (ADR 0029): the
+  default Trino engine of the dev cluster. Later cases send its id as
+  `engine_ids`.
+}
