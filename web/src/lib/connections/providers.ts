@@ -6,7 +6,7 @@
 // `binding-support` for an engine — never compared to a literal.
 import type { components } from '$lib/api/schema';
 import { m } from '$lib/paraglide/messages';
-import { DIRECT, TRINO, type AccessMode } from './accessModes';
+import { DIRECT, FEDERATED, type AccessMode } from './accessModes';
 
 export type ConnectionProvider = components['schemas']['ConnectionProvider'];
 export type ConnectionCategory = components['schemas']['ConnectionCategory'];
@@ -67,9 +67,9 @@ export function canDirect(provider: ConnectionProvider): boolean {
 	return (provider.access_modes ?? []).includes(DIRECT);
 }
 
-/** The type declares the Trino access mode (ADR 0021 D.2). */
-export function canTrino(provider: ConnectionProvider): boolean {
-	return (provider.access_modes ?? []).includes(TRINO);
+/** The type declares the federated access mode (ADR 0029). */
+export function canFederated(provider: ConnectionProvider): boolean {
+	return (provider.access_modes ?? []).includes(FEDERATED);
 }
 
 export function readsMetadata(provider: ConnectionProvider): boolean {
@@ -143,7 +143,7 @@ export function intentsFor(provider: ConnectionProvider, usage: Usage): string[]
 
 /** Whether the usage means "create at least one logical catalog". */
 export function needsCatalogs(usage: Usage): boolean {
-	return usage.accessMode === TRINO && usage.bindEngineIds.length > 0;
+	return usage.accessMode === FEDERATED && usage.bindEngineIds.length > 0;
 }
 
 const engineNamePattern = /^[a-z][a-z0-9_-]{0,62}$/;

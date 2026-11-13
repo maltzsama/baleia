@@ -5264,7 +5264,7 @@ export interface components {
              * @description The connection's data access mode (ADR 0021). Absent for engine-family resources, which are not a data access path
              * @enum {string}
              */
-            access_mode?: "direct" | "trino";
+            access_mode?: "direct" | "federated";
             /** @description Deprecated: read config. Kept while the Trino projection still reads it (#80) */
             url: string;
             /** @description Non-secret values of the provider's config schema. Secret fields are never returned */
@@ -5291,7 +5291,7 @@ export interface components {
              * @description Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
              * @enum {string}
              */
-            access_mode?: "direct" | "trino";
+            access_mode?: "direct" | "federated";
             /** @description Older shape: the endpoint URL (a JDBC URL for databases). Prefer config */
             url?: string;
             /** @description Non-secret fields of the provider's config schema */
@@ -6223,7 +6223,7 @@ export interface components {
              */
             category?: "relational" | "analytical" | "catalog_manager" | "metastore" | "lakehouse" | "cloud_platform" | "nosql" | "search" | "analytics" | "streaming" | "observability" | "external_service" | "synthetic" | "internal_catalog" | "engine";
             /** @description Data access paths the type supports (ADR 0021 D.2); empty for engine-family resources */
-            access_modes?: ("direct" | "trino")[];
+            access_modes?: ("direct" | "federated")[];
             /** @description Internal Trino catalog implementations the type is exposed through (ADR 0021 D.3) */
             trino_catalog_types?: string[];
             /** @description Declared capabilities per access mode (ADR 0021 D.6) */

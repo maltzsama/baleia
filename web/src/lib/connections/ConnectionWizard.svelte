@@ -33,10 +33,10 @@
 		type Workspace
 	} from './api';
 	import ProviderForm from './ProviderForm.svelte';
-	import { DIRECT, TRINO, type AccessMode } from './accessModes';
+	import { DIRECT, FEDERATED, type AccessMode } from './accessModes';
 	import {
 		canDirect,
-		canTrino,
+		canFederated,
 		databaseName,
 		initialValues,
 		intentsFor,
@@ -171,7 +171,7 @@
 	const modes = $derived(provider?.access_modes ?? []);
 
 	const selectedSupport = $derived(
-		provider && accessMode === TRINO && bindEngineIds.length > 0
+		provider && accessMode === FEDERATED && bindEngineIds.length > 0
 			? support[bindEngineIds[0]]?.[provider.kind]
 			: undefined
 	);
@@ -306,7 +306,7 @@
 				engine = await createEngine({ name: engineName, connection_id: connection.id });
 				created = { connection, engine, catalogs };
 			}
-			if (accessMode === TRINO && bindEngineIds.length > 0) {
+			if (accessMode === FEDERATED && bindEngineIds.length > 0) {
 				const base = catalogName.trim() || connection.name;
 				const outputs = connectors.map((item, i) => {
 					const raw = i === 0 ? base : `${base}_${item}`;
@@ -551,19 +551,20 @@
 							</span>
 						</label>
 					{/if}
-					{#if canTrino(provider)}
+					{#if canFederated(provider)}
 						<label
-							class="flex items-start gap-2 rounded-lg border bg-bg-panel p-3 {accessMode === TRINO
+							class="flex items-start gap-2 rounded-lg border bg-bg-panel p-3 {accessMode ===
+							FEDERATED
 								? 'border-primary'
 								: 'border-border'}"
 						>
 							<input
 								type="radio"
 								name="access_mode"
-								value="trino"
+								value="federated"
 								class="mt-0.5 h-4 w-4 accent-primary"
-								checked={accessMode === TRINO}
-								onchange={() => (accessMode = TRINO)}
+								checked={accessMode === FEDERATED}
+								onchange={() => (accessMode = FEDERATED)}
 							/>
 							<span>
 								<span class="block text-[13px] font-semibold"
@@ -578,7 +579,7 @@
 				</fieldset>
 			{/if}
 
-			{#if accessMode === TRINO}
+			{#if accessMode === FEDERATED}
 				{#if compatibleEngines.length > 0}
 					<div class="rounded-lg border border-border bg-bg-panel p-3">
 						<p class="text-[13px] font-semibold">

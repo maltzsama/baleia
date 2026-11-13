@@ -313,7 +313,7 @@ export function makeProvider(overrides: Partial<ConnectionProvider> = {}): Conne
 		label: 'Test Database',
 		family: 'database',
 		category: 'relational',
-		access_modes: ['direct', 'trino'],
+		access_modes: ['direct', 'federated'],
 		roles: ['metadata', 'direct_engine', 'federated_engine'],
 		status: { state: 'supported' },
 		config_schema: [

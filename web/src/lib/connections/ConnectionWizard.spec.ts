@@ -64,7 +64,7 @@ async function fillConfiguration() {
 async function reachTestStep() {
 	await fillConfiguration();
 	await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-	await fireEvent.click(screen.getByRole('radio', { name: /Query it directly/ }));
+	await fireEvent.click(screen.getByRole('radio', { name: /^Direct/ }));
 	await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 }
 
@@ -120,7 +120,7 @@ describe('ConnectionWizard', () => {
 		render(ConnectionWizard);
 		await fillConfiguration();
 		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-		await fireEvent.click(screen.getByRole('radio', { name: /Expose through a federated engine/ }));
+		await fireEvent.click(screen.getByRole('radio', { name: /Through a query engine/ }));
 		await fireEvent.click(await screen.findByRole('checkbox', { name: /warehouse/ }));
 		await fireEvent.input(screen.getByLabelText('Database name'), { target: { value: 'sales' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
