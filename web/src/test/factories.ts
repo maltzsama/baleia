@@ -21,6 +21,7 @@ type SearchGlossaryEntry = components['schemas']['SearchGlossaryEntry'];
 type ConnectionProvider = components['schemas']['ConnectionProvider'];
 type ConnectionCategory = components['schemas']['ConnectionCategory'];
 type CatalogConnection = components['schemas']['CatalogConnection'];
+type CatalogConnectionCreated = components['schemas']['CatalogConnectionCreated'];
 type Catalog = components['schemas']['Catalog'];
 type CatalogBinding = components['schemas']['CatalogBinding'];
 type BindingSupport = components['schemas']['BindingSupport'];
@@ -352,6 +353,13 @@ export function makeConnection(overrides: Partial<CatalogConnection> = {}): Cata
 		allowed_actions: ['view', 'update', 'delete'],
 		...overrides
 	};
+}
+
+/** The 201 of POST /catalog-connections: the connection with what its creation made. */
+export function makeCreatedConnection(
+	overrides: Partial<CatalogConnectionCreated> = {}
+): CatalogConnectionCreated {
+	return { ...makeConnection(), catalogs: [], engine: null, ...overrides };
 }
 
 export function makeCatalog(overrides: Partial<Catalog> = {}): Catalog {

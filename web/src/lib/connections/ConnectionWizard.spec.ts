@@ -4,7 +4,7 @@ import {
 	makeBindingSupport,
 	makeCatalog,
 	makeCategory,
-	makeConnection,
+	makeCreatedConnection,
 	makeEngine,
 	makeProvider,
 	makeTestResult,
@@ -34,11 +34,10 @@ function mockApi() {
 			response(200).json({ testdb: makeBindingSupport() })
 		),
 		http.post('/catalog-connections/test', ({ response }) => response(200).json(makeTestResult())),
-		http.post('/catalog-connections', ({ response }) => response(201).json(makeConnection())),
-		http.post('/engines', ({ response }) =>
-			response(201).json(
-				makeEngine({ id: ENGINE, name: 'analytics', kind: 'testengine', connection_id: 'x' })
-			)
+		// The creation request registers everything: no second request creates
+		// the engine or the catalogs, and an unmocked one fails the test.
+		http.post('/catalog-connections', ({ response }) =>
+			response(201).json(makeCreatedConnection())
 		),
 		http.get('/connections/{connection_id}/catalogs', ({ response }) =>
 			response(200).json([makeCatalog()])
@@ -129,5 +128,71 @@ describe('ConnectionWizard', () => {
 		expect(await screen.findByText('Tested')).toBeTruthy();
 		expect(sent?.intents).toContain(`bind:${ENGINE}`);
 		expect(sent?.warehouse).toBe('sales');
+	});
+
+	it('registers a direct connection with one request that names no engine', async () => {
+		const bodies: Record<string, unknown>[] = [];
+		server.use(
+			http.post('/catalog-connections', async ({ request, response }) => {
+				bodies.push((await request.json()) as Record<string, unknown>);
+				return response(201).json(
+					makeCreatedConnection({
+						access_mode: 'direct',
+						engine: makeEngine({ name: 'analytics', class: 'direct' }),
+						catalogs: [makeCatalog()]
+					})
+				);
+			})
+		);
+		render(ConnectionWizard);
+		await reachTestStep();
+		await fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+		expect(await screen.findByText('Tested')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+		expect(await screen.findByText('Created')).toBeTruthy();
+
+		expect(bodies).toHaveLength(1);
+		expect(bodies[0].access_mode).toBe('direct');
+		expect(bodies[0].engine_ids).toBeUndefined();
+		expect(bodies[0].catalog_registration).toBeUndefined();
+	});
+
+	it('registers a federated connection with its engines and catalogs in one request', async () => {
+		const bodies: Record<string, unknown>[] = [];
+		server.use(
+			http.post('/catalog-connections', async ({ request, response }) => {
+				bodies.push((await request.json()) as Record<string, unknown>);
+				return response(201).json(
+					makeCreatedConnection({ access_mode: 'federated', catalogs: [makeCatalog()] })
+				);
+			})
+		);
+		render(ConnectionWizard);
+		await fillConfiguration();
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('radio', { name: /Through a query engine/ }));
+		await fireEvent.click(await screen.findByRole('checkbox', { name: /warehouse/ }));
+		await fireEvent.input(screen.getByLabelText('Database name'), { target: { value: 'sales' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+		expect(await screen.findByText('Tested')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+		expect(await screen.findByText('Created')).toBeTruthy();
+
+		expect(bodies).toHaveLength(1);
+		expect(bodies[0].access_mode).toBe('federated');
+		expect(bodies[0].engine_ids).toEqual([ENGINE]);
+		expect(bodies[0].catalog_registration).toMatchObject({ warehouse: 'sales' });
+	});
+
+	it('does not continue a federated connection without an engine', async () => {
+		render(ConnectionWizard);
+		await fillConfiguration();
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('radio', { name: /Through a query engine/ }));
+		const next = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement;
+		expect(next.disabled).toBe(true);
+		await fireEvent.click(await screen.findByRole('checkbox', { name: /warehouse/ }));
+		expect(next.disabled).toBe(false);
 	});
 });
