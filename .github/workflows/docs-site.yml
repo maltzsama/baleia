@@ -28,11 +28,11 @@ jobs:
       run:
         working-directory: website
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so lastmod and "last updated" come from real git dates.
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -45,7 +45,7 @@ jobs:
           # in the public HTML, so masking it in the logs is the only effect.
           UMAMI: ${{ secrets.UMAMI }}
       - if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: website/build
 
@@ -62,7 +62,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
       # Tell IndexNow search engines (Bing, Yandex and others; Google does not
       # use it) which URLs to crawl. The key is public by design: the same value
       # is served as website/static/<key>.txt. A failure here never fails the
