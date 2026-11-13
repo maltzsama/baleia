@@ -185,6 +185,33 @@ describe('ConnectionWizard', () => {
 		expect(bodies[0].catalog_registration).toMatchObject({ warehouse: 'sales' });
 	});
 
+	it('says so when a committed catalog is not applied by the engine yet', async () => {
+		server.use(
+			http.post('/catalog-connections', ({ response }) =>
+				response(201).json(
+					makeCreatedConnection({
+						access_mode: 'federated',
+						catalogs: [makeCatalog({ name: 'analytics', sync_status: 'error' })]
+					})
+				)
+			)
+		);
+		render(ConnectionWizard);
+		await fillConfiguration();
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('radio', { name: /Through a query engine/ }));
+		await fireEvent.click(await screen.findByRole('checkbox', { name: /warehouse/ }));
+		await fireEvent.input(screen.getByLabelText('Database name'), { target: { value: 'sales' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+		expect(await screen.findByText('Tested')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+		expect(await screen.findByText(/has not applied analytics yet/)).toBeTruthy();
+		expect(screen.queryByText('The connection is ready.')).toBeNull();
+		expect(screen.getByRole('link', { name: 'Review the connection' })).toBeTruthy();
+	});
+
 	it('does not continue a federated connection without an engine', async () => {
 		render(ConnectionWizard);
 		await fillConfiguration();

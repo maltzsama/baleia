@@ -93,6 +93,13 @@
 
 	let grantable = $state<Workspace[]>([]);
 	let grantCatalog = $state('');
+	// Catalogs the engine has not applied yet: the connection is committed, but
+	// they are not usable until the reconciler or a retry applies them.
+	const unapplied = $derived(
+		(created?.catalogs ?? []).filter(
+			(c) => c.sync_status === 'error' || c.sync_status === 'pending'
+		)
+	);
 	let grantWorkspace = $state('');
 	let granting = $state(false);
 	let grantError = $state<ConnectionRequestError | null>(null);
@@ -744,9 +751,22 @@
 				<Badge tone="success">{m.connections_connectionwizard_created()}</Badge>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{created?.connection.name}</h1>
 			</div>
-			<p class="text-[13px] text-slate-600 dark:text-slate-300">
-				{m.connections_connectionwizard_the_connection_is_ready()}
-			</p>
+			{#if unapplied.length > 0}
+				<p class="text-[13px] text-amber-700 dark:text-amber-300" role="status">
+					{m.connections_connectionwizard_saved_but_not_applied({
+						catalogs: unapplied.map((c) => c.name).join(', ')
+					})}
+				</p>
+				{#if created}
+					<a class="text-[13px] underline" href={resolve(`/connections/${created.connection.id}`)}>
+						{m.connections_connectionwizard_review_the_connection()}
+					</a>
+				{/if}
+			{:else}
+				<p class="text-[13px] text-slate-600 dark:text-slate-300">
+					{m.connections_connectionwizard_the_connection_is_ready()}
+				</p>
+			{/if}
 		</header>
 
 		<div class="rounded-lg border border-border bg-bg-panel p-4 text-[13px]">

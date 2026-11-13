@@ -1348,6 +1348,8 @@
 	"connections_connectionwizard_create": "Create",
 	"connections_connectionwizard_created": "Created",
 	"connections_connectionwizard_the_connection_is_ready": "The connection is ready.",
+	"connections_connectionwizard_saved_but_not_applied": "The connection is saved, but the engine has not applied {catalogs} yet. It will retry; open the connection to follow it.",
+	"connections_connectionwizard_review_the_connection": "Review the connection",
 	"connections_connectionwizard_engine": "Engine",
 	"connections_connectionwizard_registered_with_its_native_catalogs": "registered with its native catalogs.",
 	"connections_connectionwizard_catalogs": "Catalogs:",
