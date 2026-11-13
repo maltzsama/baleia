@@ -176,7 +176,7 @@ Workspace/catalog/namespace/table/tab selection is URL-backed through
 
 - `src/test/server.ts` creates typed handlers with `openapi-msw` and a
   `baseUrl` of `/api/v1`; `src/test/setup.ts` starts the server with
-  `onUnhandledRequest: 'error'`.
+  `onUnhandledFrame: 'error'`.
 - `src/test/factories.ts` has a factory per schema (`makeWorkspace`,
   `makeSavedQuery`, `makeEngine`, `makeMe`, `asViewer`, `asOwner`).
 - `src/test/render.ts` exports `renderPage(Component, { me, url })` to mount a
