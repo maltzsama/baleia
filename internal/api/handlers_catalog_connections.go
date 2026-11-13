@@ -33,39 +33,16 @@ func (h *CatalogHandlers) ListCatalogConnections(ctx context.Context, request Li
 		return ListCatalogConnections401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
 
-	filter := conns.Filter{WithoutEngine: request.Params.WithoutEngine != nil && *request.Params.WithoutEngine}
-	visible, err := h.conns.List(ctx, p.UserID, p.IsAdmin(), filter)
+	visible, err := h.conns.List(ctx, p.UserID, p.IsAdmin())
 	if err != nil {
 		return nil, err
 	}
 
-	action := ""
-	if request.Params.Action != nil {
-		action = *request.Params.Action
-	}
 	result := make([]CatalogConnection, 0, len(visible))
 	for _, c := range visible {
-		conn := h.withConnectionActions(ctx, c)
-		if action != "" && !connectionAllows(conn, action) {
-			continue
-		}
-		result = append(result, conn)
+		result = append(result, h.withConnectionActions(ctx, c))
 	}
 	return ListCatalogConnections200JSONResponse(result), nil
-}
-
-// connectionAllows reports whether the computed allowed_actions include the
-// requested action (#110).
-func connectionAllows(conn CatalogConnection, action string) bool {
-	if conn.AllowedActions == nil {
-		return false
-	}
-	for _, allowed := range *conn.AllowedActions {
-		if string(allowed) == action {
-			return true
-		}
-	}
-	return false
 }
 
 func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request CreateCatalogConnectionRequestObject) (CreateCatalogConnectionResponseObject, error) {

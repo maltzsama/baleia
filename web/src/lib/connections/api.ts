@@ -38,11 +38,6 @@ export type ConnectionDraft = {
 	catalog_registration?: CreateCatalogInput;
 };
 
-export type CreateEngineInput = {
-	name: string;
-	connection_id: string;
-};
-
 export type CreateCatalogInput = {
 	catalogs: { name: string; trino_catalog_name: string }[];
 	warehouse?: string;
@@ -204,12 +199,6 @@ export async function bindingSupport(engineId: string): Promise<Record<string, B
 	});
 	if (error || !data)
 		throw toError(error, response?.status, 'Could not load the engine binding support');
-	return data;
-}
-
-export async function createEngine(input: CreateEngineInput): Promise<Engine> {
-	const { data, error, response } = await client.POST('/engines', { body: input });
-	if (error || !data) throw toError(error, response?.status, 'Could not register the engine');
 	return data;
 }
 

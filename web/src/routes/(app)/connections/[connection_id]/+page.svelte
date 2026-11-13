@@ -6,7 +6,6 @@
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
 	import {
 		createCatalog,
-		createEngine,
 		deleteConnection,
 		getConnection,
 		bindingSupport,
@@ -45,11 +44,6 @@
 	let testResult = $state<TestResult | null>(null);
 	let testError = $state('');
 	let testing = $state(false);
-
-	let registerOpen = $state(false);
-	let engineName = $state('');
-	let registering = $state(false);
-	let registerError = $state('');
 
 	let catalogOpen = $state(false);
 	let catalogName = $state('');
@@ -99,33 +93,6 @@
 			testOpen = true;
 		} finally {
 			testing = false;
-		}
-	}
-
-	function openRegister() {
-		registerError = '';
-		engineName = (conn?.name ?? '')
-			.toLowerCase()
-			.replace(/[^a-z0-9_-]+/g, '_')
-			.replace(/^[^a-z]+/, '');
-		registerOpen = true;
-	}
-
-	async function submitRegister() {
-		if (!engineName) {
-			registerError = m.connections_name_the_engine();
-			return;
-		}
-		registering = true;
-		registerError = '';
-		try {
-			const created = await createEngine({ name: engineName, connection_id: connectionId });
-			registerOpen = false;
-			void goto(resolve(`/engines/${created.id}`));
-		} catch (e) {
-			registerError = e instanceof Error ? e.message : String(e);
-		} finally {
-			registering = false;
 		}
 	}
 
@@ -221,9 +188,6 @@
 				<Button loading={testing} disabled={testing} onclick={runTest}
 					>{m.connections_detail_test()}</Button
 				>
-				{#if !engine && (conn.allowed_actions ?? []).includes('register_engine')}
-					<Button onclick={openRegister}>{m.connections_detail_register_as_engine()}</Button>
-				{/if}
 				<Button variant="danger" onclick={() => (deleteOpen = true)}
 					>{m.connections_detail_delete()}</Button
 				>
@@ -333,31 +297,6 @@
 			</ul>
 		</div>
 	{/if}
-</Modal>
-
-<Modal bind:open={registerOpen} title={m.connections_register_as_engine()}>
-	<div class="flex flex-col gap-3 text-[12px]">
-		<Input label={m.connections_engine_name()} bind:value={engineName} class="font-mono" />
-		<p class="text-[11px] text-slate-600 dark:text-slate-300">
-			{m.connections_the_engine_probes_this_connection_and_disc()}
-		</p>
-		{#if registerError}<p class="text-danger" role="alert">{registerError}</p>{/if}
-	</div>
-	{#snippet footer()}
-		<div class="flex justify-end gap-2">
-			<Button onclick={() => (registerOpen = false)} disabled={registering}
-				>{m.common_cancel()}</Button
-			>
-			<Button
-				variant="primary"
-				loading={registering}
-				disabled={registering}
-				onclick={submitRegister}
-			>
-				{m.common_register()}
-			</Button>
-		</div>
-	{/snippet}
 </Modal>
 
 <Modal bind:open={catalogOpen} title={m.common_add_catalog()}>

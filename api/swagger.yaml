@@ -1255,7 +1255,7 @@ components:
     # ── Allowed actions (#104) ──────────────────────────────────
     CatalogConnectionAllowedAction:
       type: string
-      enum: [view, update, delete, test, register_engine, create_catalog]
+      enum: [view, update, delete, test, create_catalog]
     EngineAllowedAction:
       type: string
       enum: [view, update, delete, test, reconcile, bind_into]
@@ -2187,13 +2187,6 @@ components:
       properties:
         start: { type: integer }
         end: { type: integer }
-
-    CreateEngineRequest:
-      type: object
-      required: [name, connection_id]
-      properties:
-        name: { type: string, pattern: "^[a-z][a-z0-9_-]{0,62}$" }
-        connection_id: { type: string, format: uuid, description: "A connection whose provider has the direct_engine role" }
 
     UpdateEngineRequest:
       type: object
@@ -7785,15 +7778,6 @@ paths:
       tags: [CatalogConnections]
       operationId: listCatalogConnections
       summary: "List the catalog connections the caller can see"
-      parameters:
-        - name: action
-          in: query
-          schema: { type: string }
-          description: "Only connections whose allowed_actions include this action, e.g. register_engine"
-        - name: without_engine
-          in: query
-          schema: { type: boolean, default: false }
-          description: "Only connections that do not back an engine yet"
       responses:
         "200":
           description: "Connections"
@@ -7939,30 +7923,6 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Engine" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-    post:
-      tags: [Engines]
-      operationId: createEngine
-      summary: "Register a direct engine on a connection (its owner or an admin)"
-      description: >
-        The connection's provider must have the direct_engine role. Baleia
-        checks that it can reach the engine, then creates the engine and one
-        native catalog with a native binding per catalog the engine exposes.
-        Federated engines are registered by Baleia (the default Trino engine).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/CreateEngineRequest" }
-      responses:
-        "201":
-          description: "Engine created"
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Engine" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /engines/{id}:
     parameters:

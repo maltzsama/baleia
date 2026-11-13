@@ -13,7 +13,6 @@ export type CatalogConnection = components['schemas']['CatalogConnection'];
 export type ReconcileRun = components['schemas']['ReconcileRun'];
 export type ReconcileAction = components['schemas']['ReconcileAction'];
 export type TestResult = components['schemas']['TestCatalogConnectionResult'];
-export type CreateEngineRequest = components['schemas']['CreateEngineRequest'];
 
 type Result<T> = { data?: T; error?: unknown; response?: Response };
 
@@ -50,11 +49,6 @@ export async function getEngine(id: string): Promise<Engine> {
 		'Could not load the engine'
 	);
 }
-
-export async function createEngine(body: CreateEngineRequest): Promise<Engine> {
-	return fail(await client.POST('/engines', { body }), 'Could not register the engine');
-}
-
 export async function updateEngine(
 	id: string,
 	body: components['schemas']['UpdateEngineRequest']
@@ -127,16 +121,6 @@ export async function getReconcileRun(id: string, runId: string): Promise<Reconc
 			params: { path: { id, run_id: runId } }
 		}),
 		'Could not load the reconcile run'
-	);
-}
-
-export async function listCatalogConnections(params: {
-	action?: string;
-	without_engine?: boolean;
-}): Promise<CatalogConnection[]> {
-	return fail(
-		await client.GET('/catalog-connections', { params: { query: params } }),
-		'Could not load catalog connections'
 	);
 }
 

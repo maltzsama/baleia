@@ -219,12 +219,11 @@ const (
 
 // Defines values for CatalogConnectionAllowedAction.
 const (
-	CatalogConnectionAllowedActionCreateCatalog  CatalogConnectionAllowedAction = "create_catalog"
-	CatalogConnectionAllowedActionDelete         CatalogConnectionAllowedAction = "delete"
-	CatalogConnectionAllowedActionRegisterEngine CatalogConnectionAllowedAction = "register_engine"
-	CatalogConnectionAllowedActionTest           CatalogConnectionAllowedAction = "test"
-	CatalogConnectionAllowedActionUpdate         CatalogConnectionAllowedAction = "update"
-	CatalogConnectionAllowedActionView           CatalogConnectionAllowedAction = "view"
+	CatalogConnectionAllowedActionCreateCatalog CatalogConnectionAllowedAction = "create_catalog"
+	CatalogConnectionAllowedActionDelete        CatalogConnectionAllowedAction = "delete"
+	CatalogConnectionAllowedActionTest          CatalogConnectionAllowedAction = "test"
+	CatalogConnectionAllowedActionUpdate        CatalogConnectionAllowedAction = "update"
+	CatalogConnectionAllowedActionView          CatalogConnectionAllowedAction = "view"
 )
 
 // Defines values for CatalogConnectionCreatedAccessMode.
@@ -2463,13 +2462,6 @@ type CreateCatalogRequest struct {
 
 	// Warehouse Warehouse or logical source the connector addresses. Required for catalog managers and Iceberg REST catalogs; omitted for databases (their catalog falls back to the connection's database) and for endpointless catalogs (memory, blackhole, faker, jmx, tpch, tpcds).
 	Warehouse *string `json:"warehouse,omitempty"`
-}
-
-// CreateEngineRequest defines model for CreateEngineRequest.
-type CreateEngineRequest struct {
-	// ConnectionId A connection whose provider has the direct_engine role
-	ConnectionId openapi_types.UUID `json:"connection_id"`
-	Name         string             `json:"name"`
 }
 
 // CreateFolderRequest defines model for CreateFolderRequest.
@@ -5681,15 +5673,6 @@ type OidcRedirectParams struct {
 	Next *string `form:"next,omitempty" json:"next,omitempty"`
 }
 
-// ListCatalogConnectionsParams defines parameters for ListCatalogConnections.
-type ListCatalogConnectionsParams struct {
-	// Action Only connections whose allowed_actions include this action, e.g. register_engine
-	Action *string `form:"action,omitempty" json:"action,omitempty"`
-
-	// WithoutEngine Only connections that do not back an engine yet
-	WithoutEngine *bool `form:"without_engine,omitempty" json:"without_engine,omitempty"`
-}
-
 // ListCatalogGrantItemsParams defines parameters for ListCatalogGrantItems.
 type ListCatalogGrantItemsParams struct {
 	WorkspaceId *openapi_types.UUID `form:"workspace_id,omitempty" json:"workspace_id,omitempty"`
@@ -6227,9 +6210,6 @@ type ExplainSQLJSONRequestBody = ExplainRequest
 
 // SplitStatementsJSONRequestBody defines body for SplitStatements for application/json ContentType.
 type SplitStatementsJSONRequestBody = SplitStatementsRequest
-
-// CreateEngineJSONRequestBody defines body for CreateEngine for application/json ContentType.
-type CreateEngineJSONRequestBody = CreateEngineRequest
 
 // UpdateEngineJSONRequestBody defines body for UpdateEngine for application/json ContentType.
 type UpdateEngineJSONRequestBody = UpdateEngineRequest

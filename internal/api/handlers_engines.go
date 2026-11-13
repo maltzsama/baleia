@@ -3,13 +3,10 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/catalogs"
-	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/engines/manage"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -103,67 +100,6 @@ func (h *CatalogHandlers) GetEngine(ctx context.Context, request GetEngineReques
 		return nil, err
 	}
 	return GetEngine200JSONResponse(h.describeEngine(ctx, eng)), nil
-}
-
-// CreateEngine registers a direct engine on a connection the caller owns (or
-// any connection, for an admin), after checking Baleia can reach it, together
-// with the native catalogs it exposes.
-func (h *CatalogHandlers) CreateEngine(ctx context.Context, request CreateEngineRequestObject) (CreateEngineResponseObject, error) {
-	p, err := authz.PrincipalFromContext(ctx)
-	if err != nil {
-		return CreateEngine401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
-	}
-	body := request.Body
-	invalid := func(code ErrorCode, field, msg string) CreateEngineResponseObject {
-		return CreateEngine422JSONResponse{UnprocessableEntityJSONResponse: (&configError{code: code, fields: []connections.FieldError{{Key: field, Message: msg}}}).response()}
-	}
-	if err := manage.CheckName(body.Name); err != nil {
-		return invalid("validation_error", "name", err.Error()), nil
-	}
-
-	conn, err := h.authz().Connection(ctx, p, db.UUID{Bytes: body.ConnectionId, Valid: true}, authz.ActWrite)
-	if errors.Is(err, authz.ErrNotFound) {
-		return CreateEngine404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog connection not found"}}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	provider, cfg, err := h.connectionConfig(conn)
-	switch {
-	case errors.Is(err, connections.ErrUnknownKind):
-		return invalid("engine_unsupported", "connection_id", fmt.Sprintf("connections of type %q cannot be engines", conn.Type)), nil
-	case err != nil:
-		return nil, err
-	}
-	if !connections.HasRole(provider, connections.RoleDirect) {
-		return invalid("engine_unsupported", "connection_id", fmt.Sprintf("connections of type %q cannot be direct engines", conn.Type)), nil
-	}
-
-	pingCtx, cancel := context.WithTimeout(ctx, enginePingTimeout)
-	defer cancel()
-	if err := provider.Ping(pingCtx, cfg); err != nil {
-		h.logger.InfoContext(ctx, "engine reachability check failed", "connection", conn.Name, "err", err)
-		return invalid("engine_unreachable", "connection_id", connectionTestError(err)), nil
-	}
-	natives, err := catalogs.NativeNames(pingCtx, provider, cfg, conn.Name)
-	if err != nil {
-		return invalid("engine_unreachable", "connection_id", connectionTestError(err)), nil
-	}
-
-	created, nativeIDs, err := h.engineAdmin.Create(ctx, manage.NewEngine{
-		Name: body.Name, Kind: provider.EngineKind(), ConnectionID: conn.ID, CreatedBy: p.UserID, Natives: natives,
-	})
-	if errors.Is(err, manage.ErrNameTaken) || errors.Is(err, manage.ErrConnectionTaken) {
-		return CreateEngine409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	for _, id := range nativeIDs {
-		h.startMetadataSync(ctx, id)
-	}
-	return CreateEngine201JSONResponse(h.withEngineActions(ctx, created)), nil
 }
 
 func (h *CatalogHandlers) UpdateEngine(ctx context.Context, request UpdateEngineRequestObject) (UpdateEngineResponseObject, error) {

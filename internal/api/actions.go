@@ -69,7 +69,7 @@ func (h *core) catalogConnectionActions(ctx context.Context, id db.UUID) []Catal
 	acts := []CatalogConnectionAllowedAction{CatalogConnectionAllowedActionView}
 	if _, err := h.authz().Connection(ctx, p, id, authz.ActWrite); err == nil {
 		acts = append(acts, CatalogConnectionAllowedActionUpdate, CatalogConnectionAllowedActionDelete,
-			CatalogConnectionAllowedActionTest, CatalogConnectionAllowedActionRegisterEngine, CatalogConnectionAllowedActionCreateCatalog)
+			CatalogConnectionAllowedActionTest, CatalogConnectionAllowedActionCreateCatalog)
 	}
 	return acts
 }
