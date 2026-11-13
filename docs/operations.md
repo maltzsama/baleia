@@ -510,6 +510,29 @@ catalog runs at a time (an advisory lock, and the workflow id). `GET
 the source's own message is in `metadata_sync_runs.error_message` and the worker's log. A pass left
 `running` by a crashed worker is failed with `interrupted` by the next pass of the catalog.
 
+## Registering a connection
+
+`POST /api/v1/catalog-connections` registers a data source with everything its access mode
+creates, in one request ([ADR 0029](adr/0029-connection-access-modes-determine-engine-and-catalog-lifecycle.md)).
+`access_mode` is `direct` or `federated`; a type that declares both needs an explicit choice, one
+that declares a single mode gets it, and the mode cannot change afterwards.
+
+| Mode | The request also carries | One transaction writes | After the commit |
+|---|---|---|---|
+| `direct` | nothing | the connection, its native engine (named after the connection), the native catalogs and their bindings | the metadata sync starts |
+| `federated` | `engine_ids` (at least one) and `catalog_registration` (the catalogs, as in `POST /connections/{id}/catalogs`) | the connection, the logical catalogs, their bindings on every selected engine and any `share_with_workspace_id` grants | each engine applies its catalogs through the binding lifecycle |
+
+A direct registration pings the source and discovers its catalogs before the transaction opens, so
+an unreachable source answers `422 engine_unreachable` and writes nothing. Any failure inside the
+transaction leaves no connection, engine, catalog or binding. A taken connection or engine name is a
+`409`.
+
+The 201 body is the connection with its `catalogs` and, for `direct`, its `engine`. A federated
+registration commits the desired state first, so a `201` does not say the engines have applied it:
+each catalog's `sync_status` is `synced` once its engine confirmed it, `pending` while it is being
+applied, and `error` when the engine refused it. An `error` is not rolled back; the desired state
+stays and the reconciler repairs it (see [Binding reconciliation](#binding-reconciliation)).
+
 ## Connection tests
 
 `POST /api/v1/catalog-connections/test` checks connection settings before they are saved and

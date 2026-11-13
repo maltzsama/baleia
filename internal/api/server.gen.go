@@ -16511,7 +16511,7 @@ type CreateCatalogConnectionResponseObject interface {
 	VisitCreateCatalogConnectionResponse(w http.ResponseWriter) error
 }
 
-type CreateCatalogConnection201JSONResponse CatalogConnection
+type CreateCatalogConnection201JSONResponse CatalogConnectionCreated
 
 func (response CreateCatalogConnection201JSONResponse) VisitCreateCatalogConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -16534,6 +16534,15 @@ type CreateCatalogConnection403JSONResponse struct{ ForbiddenJSONResponse }
 func (response CreateCatalogConnection403JSONResponse) VisitCreateCatalogConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCatalogConnection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateCatalogConnection404JSONResponse) VisitCreateCatalogConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }

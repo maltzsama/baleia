@@ -9,6 +9,7 @@ import type { AccessMode } from './accessModes';
 export type ConnectionProvider = components['schemas']['ConnectionProvider'];
 export type ConnectionCategory = components['schemas']['ConnectionCategory'];
 export type CatalogConnection = components['schemas']['CatalogConnection'];
+export type CatalogConnectionCreated = components['schemas']['CatalogConnectionCreated'];
 export type Engine = components['schemas']['Engine'];
 export type Catalog = components['schemas']['Catalog'];
 export type CatalogBinding = components['schemas']['CatalogBinding'];
@@ -31,6 +32,10 @@ export type ConnectionDraft = {
 	credentials: Record<string, string>;
 	credentials_read_only?: boolean;
 	intents?: string[];
+	/** Federated engines that expose the catalogs; required for `federated`. */
+	engine_ids?: string[];
+	/** The logical catalogs to register; required for `federated`. */
+	catalog_registration?: CreateCatalogInput;
 };
 
 export type CreateEngineInput = {
@@ -111,7 +116,12 @@ export async function listConnections(): Promise<CatalogConnection[]> {
 	return data;
 }
 
-export async function createConnection(draft: ConnectionDraft): Promise<CatalogConnection> {
+/**
+ * Registers a connection with everything its access mode creates: a direct
+ * connection returns its native engine and catalogs, a federated one its
+ * catalogs with their engine sync status.
+ */
+export async function createConnection(draft: ConnectionDraft): Promise<CatalogConnectionCreated> {
 	const { data, error, response } = await client.POST('/catalog-connections', {
 		body: draft as unknown as components['schemas']['CreateCatalogConnectionRequest']
 	});

@@ -73,8 +73,6 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 	if err != nil {
 		return CreateCatalogConnection401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
 	}
-	uid := p.UserID
-
 	// The connection id is generated here, not by the database default: the
 	// credentials are sealed with it as additional authenticated data.
 	connID := db.UUID{Bytes: uuid.New(), Valid: true}
@@ -83,86 +81,95 @@ func (h *CatalogHandlers) CreateCatalogConnection(ctx context.Context, request C
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
 		return CreateCatalogConnection403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only admins may create connections"}}, nil
 	}
-	if request.Body == nil {
-		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")}, nil
+	reg, resp, err := h.prepareRegistration(ctx, p, connID, ev, request.Body)
+	if resp != nil || err != nil {
+		return resp, err
 	}
-	if !requiredName(request.Body.Name) {
+	switch {
+	case reg.params.AccessMode == nil:
+		return h.registerOnly(ctx, reg)
+	case connections.AccessMode(*reg.params.AccessMode) == connections.AccessModeDirect:
+		return h.registerDirect(ctx, reg)
+	default:
+		return h.registerFederated(ctx, reg)
+	}
+}
+
+// prepareRegistration validates a create request and builds what is stored: the
+// provider, its validated config, the resolved access mode and the connection
+// columns with the credentials sealed under the new id. A refused request comes
+// back as the response to send, and nothing has been written.
+func (h *CatalogHandlers) prepareRegistration(ctx context.Context, p authz.Principal, connID db.UUID, ev audit.Event, body *CreateCatalogConnectionRequest) (registration, CreateCatalogConnectionResponseObject, error) {
+	refuse := func(resp CreateCatalogConnectionResponseObject) (registration, CreateCatalogConnectionResponseObject, error) {
+		return registration{}, resp, nil
+	}
+	if body == nil {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
+		return refuse(CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "missing body")})
+	}
+	if !requiredName(body.Name) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return refuse(CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
 			"name is required",
 			FieldError{Field: "name", Code: FieldCodeRequired},
-		)}, nil
+		)})
 	}
-	cfg, err := h.createConfig(connID, request.Body)
+	cfg, err := h.createConfig(connID, body)
 	var ce *configError
 	if errors.As(err, &ce) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
+		return refuse(CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()})
 	}
 	if err != nil {
-		return nil, err
+		return registration{}, nil, err
 	}
 	prov, err := h.provider(string(cfg.Kind))
-	if err != nil {
+	if errors.As(err, &ce) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		var ce *configError
-		if errors.As(err, &ce) {
-			return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
-		}
-		return nil, err
+		return refuse(CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()})
+	}
+	if err != nil {
+		return registration{}, nil, err
 	}
 	requestedMode := ""
-	if request.Body.AccessMode != nil {
-		requestedMode = string(*request.Body.AccessMode)
+	if body.AccessMode != nil {
+		requestedMode = string(*body.AccessMode)
 	}
 	mode, err := accessMode(prov, requestedMode)
-	if err != nil {
+	if errors.As(err, &ce) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		var ce *configError
-		if errors.As(err, &ce) {
-			return CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
-		}
-		return nil, err
+		return refuse(CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: ce.response()})
+	}
+	if err != nil {
+		return registration{}, nil, err
 	}
 	config, connURL, credsEnc, err := storedColumns(h.core, cfg)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "encrypt connection credentials", "err", err)
-		return catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not encrypt the connection credentials"}, nil
+		return refuse(catalogConnectionEncryptionFailedJSONResponse{Code: ErrorCodeEncryptionFailed, Message: "could not encrypt the connection credentials"})
 	}
-
 	credentialsReadOnly := false
-	if request.Body.CredentialsReadOnly != nil {
-		credentialsReadOnly = *request.Body.CredentialsReadOnly
+	if body.CredentialsReadOnly != nil {
+		credentialsReadOnly = *body.CredentialsReadOnly
 	}
-
-	conn, err := h.conns.Create(ctx, db.CreateCatalogConnectionParams{
-		ID:                  connID,
-		Name:                request.Body.Name,
-		Type:                string(cfg.Kind),
-		AccessMode:          mode,
-		Url:                 connURL,
-		Config:              config,
-		CredentialsEnc:      credsEnc,
-		CredentialsReadOnly: credentialsReadOnly,
-		CreatedBy:           uid,
-	})
-	if errors.Is(err, conns.ErrNameTaken) {
-		h.audited(ctx, ev.Failed(audit.ReasonConflict))
-		return CreateCatalogConnection409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{Code: ErrorCodeConflict, Message: err.Error()}}, nil
-	}
-	if err != nil {
-		h.logger.ErrorContext(ctx, "CreateCatalogConnection failed", "err", err)
-		return nil, err
-	}
-
-	h.catalogCache.Clear()
-	ev.Changes = map[string]audit.Change{"name": {To: conn.Name}, "type": {To: conn.Type}, "url": {To: conn.Url}}
-	if conn.AccessMode != nil {
-		ev.Changes["access_mode"] = audit.Change{To: *conn.AccessMode}
-	}
-	h.audited(ctx, ev.Allowed())
-	return CreateCatalogConnection201JSONResponse(h.withConnectionActions(ctx, conn)), nil
+	return registration{
+		principal: p,
+		event:     ev,
+		body:      body,
+		config:    cfg,
+		provider:  prov,
+		params: db.CreateCatalogConnectionParams{
+			ID:                  connID,
+			Name:                body.Name,
+			Type:                string(cfg.Kind),
+			AccessMode:          mode,
+			Url:                 connURL,
+			Config:              config,
+			CredentialsEnc:      credsEnc,
+			CredentialsReadOnly: credentialsReadOnly,
+			CreatedBy:           p.UserID,
+		},
+	}, nil, nil
 }
 
 func (h *CatalogHandlers) GetCatalogConnection(ctx context.Context, request GetCatalogConnectionRequestObject) (GetCatalogConnectionResponseObject, error) {

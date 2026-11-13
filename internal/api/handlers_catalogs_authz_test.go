@@ -76,6 +76,8 @@ type authzFake struct {
 	g               grantsState
 	syncState       db.GetCatalogSyncStateRow
 	createdCatalogs []db.Catalog
+	createdConns    []db.CreateCatalogConnectionParams
+	secondary       []db.CreateManagedBindingParams
 }
 
 func (q *authzFake) GetCatalogSyncState(context.Context, db.UUID) (db.GetCatalogSyncStateRow, error) {

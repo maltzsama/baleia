@@ -15,9 +15,7 @@
 	import {
 		bindingSupport,
 		ConnectionRequestError,
-		createCatalog,
 		createConnection,
-		createEngine,
 		grantCatalogAccess,
 		listEngines,
 		listGrantableWorkspaces,
@@ -28,6 +26,7 @@
 		type Catalog,
 		type CatalogConnection,
 		type ConnectionCategory,
+		type ConnectionDraft,
 		type Engine,
 		type TestResult,
 		type Workspace
@@ -94,6 +93,13 @@
 
 	let grantable = $state<Workspace[]>([]);
 	let grantCatalog = $state('');
+	// Catalogs the engine has not applied yet: the connection is committed, but
+	// they are not usable until the reconciler or a retry applies them.
+	const unapplied = $derived(
+		(created?.catalogs ?? []).filter(
+			(c) => c.sync_status === 'error' || c.sync_status === 'pending'
+		)
+	);
 	let grantWorkspace = $state('');
 	let granting = $state(false);
 	let grantError = $state<ConnectionRequestError | null>(null);
@@ -276,38 +282,25 @@
 		if (!provider || !tested) return;
 		creating = true;
 		createError = '';
-		// Validate the engine name before saving: a direct connection must never
-		// be persisted without its engine, so the user corrects the name here
-		// instead of discovering the failure after the connection was created.
-		let engineName = '';
-		if (accessMode === DIRECT) {
-			engineName = normalizeEngineName(name);
-			if (!engineName) {
-				createError = m.connections_connectionwizard_connection_name_not_usable_as_engine();
-				creating = false;
-				return;
-			}
+		// A direct connection owns an engine named after it, so the name must
+		// be usable as one; the user corrects it here instead of after the API
+		// refused the request.
+		if (accessMode === DIRECT && !normalizeEngineName(name)) {
+			createError = m.connections_connectionwizard_connection_name_not_usable_as_engine();
+			creating = false;
+			return;
 		}
 		try {
-			const connection = await createConnection({
+			const draft: ConnectionDraft = {
 				name,
 				type: provider.kind,
 				access_mode: accessMode ?? undefined,
 				config: values,
 				credentials: secrets,
 				credentials_read_only: credentialsReadOnly
-			});
-			let engine: Engine | undefined;
-			const catalogs: Catalog[] = [];
-			created = { connection, engine, catalogs };
-			// Direct mode creates the native engine and never a Trino catalog;
-			// Trino mode creates the catalog registrations and never an engine.
-			if (accessMode === DIRECT) {
-				engine = await createEngine({ name: engineName, connection_id: connection.id });
-				created = { connection, engine, catalogs };
-			}
-			if (accessMode === FEDERATED && bindEngineIds.length > 0) {
-				const base = catalogName.trim() || connection.name;
+			};
+			if (accessMode === FEDERATED) {
+				const base = catalogName.trim() || name;
 				const outputs = connectors.map((item, i) => {
 					const raw = i === 0 ? base : `${base}_${item}`;
 					return { name: raw, trino_catalog_name: normalizeCatalogName(raw) };
@@ -318,15 +311,15 @@
 				if (outputs.some((o) => reservedNames.includes(o.trino_catalog_name))) {
 					throw new Error('A catalog name is reserved by the engine. Choose another name.');
 				}
-				catalogs.push(
-					...(await createCatalog(connection.id, {
-						catalogs: outputs,
-						warehouse: base,
-						description: ''
-					}))
-				);
-				created = { connection, engine, catalogs };
+				draft.engine_ids = bindEngineIds;
+				draft.catalog_registration = { catalogs: outputs, warehouse: base, description: '' };
 			}
+			// One request registers everything: the backend creates the engine
+			// (direct) or the catalogs and bindings (federated) with the
+			// connection, in one transaction.
+			const result = await createConnection(draft);
+			const catalogs: Catalog[] = result.catalogs;
+			created = { connection: result, engine: result.engine ?? undefined, catalogs };
 			try {
 				grantable = await listGrantableWorkspaces();
 			} catch {
@@ -643,7 +636,8 @@
 			<Button onclick={() => (step = 2)}>{m.connections_connectionwizard_back()}</Button>
 			<Button
 				variant="primary"
-				disabled={modes.length === 2 && accessMode === null}
+				disabled={(modes.length === 2 && accessMode === null) ||
+					(accessMode === FEDERATED && bindEngineIds.length === 0)}
 				onclick={() => (step = 4)}>{m.connections_connectionwizard_continue()}</Button
 			>
 		</div>
@@ -757,9 +751,22 @@
 				<Badge tone="success">{m.connections_connectionwizard_created()}</Badge>
 				<h1 class="text-xl font-semibold tracking-[-0.3px]">{created?.connection.name}</h1>
 			</div>
-			<p class="text-[13px] text-slate-600 dark:text-slate-300">
-				{m.connections_connectionwizard_the_connection_is_ready()}
-			</p>
+			{#if unapplied.length > 0}
+				<p class="text-[13px] text-amber-700 dark:text-amber-300" role="status">
+					{m.connections_connectionwizard_saved_but_not_applied({
+						catalogs: unapplied.map((c) => c.name).join(', ')
+					})}
+				</p>
+				{#if created}
+					<a class="text-[13px] underline" href={resolve(`/connections/${created.connection.id}`)}>
+						{m.connections_connectionwizard_review_the_connection()}
+					</a>
+				{/if}
+			{:else}
+				<p class="text-[13px] text-slate-600 dark:text-slate-300">
+					{m.connections_connectionwizard_the_connection_is_ready()}
+				</p>
+			{/if}
 		</header>
 
 		<div class="rounded-lg border border-border bg-bg-panel p-4 text-[13px]">

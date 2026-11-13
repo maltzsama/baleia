@@ -5292,7 +5292,7 @@ export interface components {
             /** @description A kind listed by GET /connection-providers */
             type: string;
             /**
-             * @description Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
+             * @description Data access mode (ADR 0029). `direct` runs SQL through a native query-engine adapter owned by this connection; `federated` runs it through the registered federated engines in `engine_ids`. Required when the type declares both, auto-selected when it declares one, and omitted for engine-family types. Immutable after creation.
              * @enum {string}
              */
             access_mode?: "direct" | "federated";
@@ -5315,6 +5315,16 @@ export interface components {
             iceberg_credentials?: components["schemas"]["IcebergCredentials"];
             postgresql_credentials?: components["schemas"]["SqlCredentials"];
             mysql_credentials?: components["schemas"]["SqlCredentials"];
+            /** @description Federated engines that expose the connection's catalogs. Required when `access_mode` is `federated` (the first one is the catalogs' primary engine) and refused for `direct`. Each engine must be one the caller may write to and one whose binder supports the type. */
+            engine_ids?: string[];
+            /** @description The logical catalogs to register, as in POST /connections/{connection_id}/catalogs. Required when `access_mode` is `federated` and refused for `direct`, whose native catalogs are discovered from the source. */
+            catalog_registration?: components["schemas"]["CreateCatalogRequest"];
+        };
+        /** @description The connection created by POST /catalog-connections, with the resources the request created with it. A `direct` connection returns its native `engine` and native `catalogs`. A `federated` connection returns its logical `catalogs`: the database transaction has committed, and each catalog's `sync_status` says whether the federated engine has applied it yet (`synced`), is still applying it (`pending`) or refused it (`error`). A commit is never proof of activation. */
+        CatalogConnectionCreated: components["schemas"]["CatalogConnection"] & {
+            /** @description The native engine a direct connection owns; absent for federated connections */
+            engine?: components["schemas"]["Engine"] | null;
+            catalogs: components["schemas"]["Catalog"][];
         };
         IcebergCredentials: {
             /** @description Bearer token */
@@ -11863,17 +11873,18 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Connection created */
+            /** @description Connection created, with its engine and catalogs */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CatalogConnection"];
+                    "application/json": components["schemas"]["CatalogConnectionCreated"];
                 };
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
         };

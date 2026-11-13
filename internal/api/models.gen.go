@@ -227,6 +227,12 @@ const (
 	CatalogConnectionAllowedActionView           CatalogConnectionAllowedAction = "view"
 )
 
+// Defines values for CatalogConnectionCreatedAccessMode.
+const (
+	CatalogConnectionCreatedAccessModeDirect    CatalogConnectionCreatedAccessMode = "direct"
+	CatalogConnectionCreatedAccessModeFederated CatalogConnectionCreatedAccessMode = "federated"
+)
+
 // Defines values for CatalogGrantItemInitiatedBySide.
 const (
 	CatalogGrantItemInitiatedBySideCatalog   CatalogGrantItemInitiatedBySide = "catalog"
@@ -1096,8 +1102,8 @@ const (
 
 // Defines values for TestConnectionRequestAccessMode.
 const (
-	Direct    TestConnectionRequestAccessMode = "direct"
-	Federated TestConnectionRequestAccessMode = "federated"
+	TestConnectionRequestAccessModeDirect    TestConnectionRequestAccessMode = "direct"
+	TestConnectionRequestAccessModeFederated TestConnectionRequestAccessMode = "federated"
 )
 
 // Defines values for TrashItemEntityType.
@@ -1997,6 +2003,41 @@ type CatalogConnectionAccessMode string
 // CatalogConnectionAllowedAction defines model for CatalogConnectionAllowedAction.
 type CatalogConnectionAllowedAction string
 
+// CatalogConnectionCreated defines model for CatalogConnectionCreated.
+type CatalogConnectionCreated struct {
+	// AccessMode The connection's data access mode (ADR 0021). Absent for engine-family resources, which are not a data access path
+	AccessMode     *CatalogConnectionCreatedAccessMode `json:"access_mode,omitempty"`
+	AllowedActions *[]CatalogConnectionAllowedAction   `json:"allowed_actions,omitempty"`
+	Catalogs       []Catalog                           `json:"catalogs"`
+
+	// Config Non-secret values of the provider's config schema. Secret fields are never returned
+	Config    map[string]string `json:"config"`
+	CreatedAt time.Time         `json:"created_at"`
+
+	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
+	CredentialsReadOnly bool `json:"credentials_read_only"`
+
+	// Engine The native engine a direct connection owns; absent for federated connections
+	Engine *Engine `json:"engine"`
+
+	// HasCredentials Whether stored credentials exist; the secret itself is never returned
+	HasCredentials bool               `json:"has_credentials"`
+	Host           *string            `json:"host,omitempty"`
+	Id             openapi_types.UUID `json:"id"`
+	Name           string             `json:"name"`
+	Port           *string            `json:"port,omitempty"`
+
+	// Type Connection kind; one of the kinds listed by GET /connection-providers
+	Type      string     `json:"type"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+
+	// Url Deprecated: read config. Kept while the Trino projection still reads it (#80)
+	Url string `json:"url"`
+}
+
+// CatalogConnectionCreatedAccessMode The connection's data access mode (ADR 0021). Absent for engine-family resources, which are not a data access path
+type CatalogConnectionCreatedAccessMode string
+
 // CatalogConnectionImpact defines model for CatalogConnectionImpact.
 type CatalogConnectionImpact struct {
 	Bindings int `json:"bindings"`
@@ -2370,8 +2411,11 @@ type CreateBindingRequest struct {
 
 // CreateCatalogConnectionRequest Values and secrets are validated against the provider's config schema (GET /connection-providers): unknown keys, missing required fields and kinds without a provider answer 422. Non-secret fields go in `config`, secret fields in `credentials`. `url` and the typed `*_credentials` objects are the older shape and are still accepted.
 type CreateCatalogConnectionRequest struct {
-	// AccessMode Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
+	// AccessMode Data access mode (ADR 0029). `direct` runs SQL through a native query-engine adapter owned by this connection; `federated` runs it through the registered federated engines in `engine_ids`. Required when the type declares both, auto-selected when it declares one, and omitted for engine-family types. Immutable after creation.
 	AccessMode *CreateCatalogConnectionRequestAccessMode `json:"access_mode,omitempty"`
+
+	// CatalogRegistration Registers the connection's logical catalog outputs. Each entry names one of the connection type's Trino catalog types, in the order GET /connection-providers lists them; the backend derives the connector.
+	CatalogRegistration *CreateCatalogRequest `json:"catalog_registration,omitempty"`
 
 	// Config Non-secret fields of the provider's config schema
 	Config *map[string]string `json:"config,omitempty"`
@@ -2380,14 +2424,17 @@ type CreateCatalogConnectionRequest struct {
 	Credentials *map[string]interface{} `json:"credentials,omitempty"`
 
 	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
-	CredentialsReadOnly   *bool               `json:"credentials_read_only,omitempty"`
-	GlueCredentials       *GlueCredentials    `json:"glue_credentials,omitempty"`
-	HiveCredentials       *HiveCredentials    `json:"hive_credentials,omitempty"`
-	IcebergCredentials    *IcebergCredentials `json:"iceberg_credentials,omitempty"`
-	MysqlCredentials      *SqlCredentials     `json:"mysql_credentials,omitempty"`
-	Name                  string              `json:"name"`
-	NessieCredentials     *NessieCredentials  `json:"nessie_credentials,omitempty"`
-	PostgresqlCredentials *SqlCredentials     `json:"postgresql_credentials,omitempty"`
+	CredentialsReadOnly *bool `json:"credentials_read_only,omitempty"`
+
+	// EngineIds Federated engines that expose the connection's catalogs. Required when `access_mode` is `federated` (the first one is the catalogs' primary engine) and refused for `direct`. Each engine must be one the caller may write to and one whose binder supports the type.
+	EngineIds             *[]openapi_types.UUID `json:"engine_ids,omitempty"`
+	GlueCredentials       *GlueCredentials      `json:"glue_credentials,omitempty"`
+	HiveCredentials       *HiveCredentials      `json:"hive_credentials,omitempty"`
+	IcebergCredentials    *IcebergCredentials   `json:"iceberg_credentials,omitempty"`
+	MysqlCredentials      *SqlCredentials       `json:"mysql_credentials,omitempty"`
+	Name                  string                `json:"name"`
+	NessieCredentials     *NessieCredentials    `json:"nessie_credentials,omitempty"`
+	PostgresqlCredentials *SqlCredentials       `json:"postgresql_credentials,omitempty"`
 
 	// Type A kind listed by GET /connection-providers
 	Type string `json:"type"`
@@ -2396,7 +2443,7 @@ type CreateCatalogConnectionRequest struct {
 	Url *string `json:"url,omitempty"`
 }
 
-// CreateCatalogConnectionRequestAccessMode Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
+// CreateCatalogConnectionRequestAccessMode Data access mode (ADR 0029). `direct` runs SQL through a native query-engine adapter owned by this connection; `federated` runs it through the registered federated engines in `engine_ids`. Required when the type declares both, auto-selected when it declares one, and omitted for engine-family types. Immutable after creation.
 type CreateCatalogConnectionRequestAccessMode string
 
 // CreateCatalogRequest Registers the connection's logical catalog outputs. Each entry names one of the connection type's Trino catalog types, in the order GET /connection-providers lists them; the backend derives the connector.
@@ -4864,8 +4911,11 @@ type TestCatalogConnectionResultErrorCode string
 
 // TestConnectionRequest defines model for TestConnectionRequest.
 type TestConnectionRequest struct {
-	// AccessMode Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
+	// AccessMode Data access mode (ADR 0029). `direct` runs SQL through a native query-engine adapter owned by this connection; `federated` runs it through the registered federated engines in `engine_ids`. Required when the type declares both, auto-selected when it declares one, and omitted for engine-family types. Immutable after creation.
 	AccessMode *TestConnectionRequestAccessMode `json:"access_mode,omitempty"`
+
+	// CatalogRegistration Registers the connection's logical catalog outputs. Each entry names one of the connection type's Trino catalog types, in the order GET /connection-providers lists them; the backend derives the connector.
+	CatalogRegistration *CreateCatalogRequest `json:"catalog_registration,omitempty"`
 
 	// Config Non-secret fields of the provider's config schema
 	Config *map[string]string `json:"config,omitempty"`
@@ -4874,10 +4924,13 @@ type TestConnectionRequest struct {
 	Credentials *map[string]interface{} `json:"credentials,omitempty"`
 
 	// CredentialsReadOnly The administrator asserts these credentials cannot modify data. Required for agents and semantic custom SQL on engines that cannot enforce read-only sessions (#11/#59, #651)
-	CredentialsReadOnly *bool               `json:"credentials_read_only,omitempty"`
-	GlueCredentials     *GlueCredentials    `json:"glue_credentials,omitempty"`
-	HiveCredentials     *HiveCredentials    `json:"hive_credentials,omitempty"`
-	IcebergCredentials  *IcebergCredentials `json:"iceberg_credentials,omitempty"`
+	CredentialsReadOnly *bool `json:"credentials_read_only,omitempty"`
+
+	// EngineIds Federated engines that expose the connection's catalogs. Required when `access_mode` is `federated` (the first one is the catalogs' primary engine) and refused for `direct`. Each engine must be one the caller may write to and one whose binder supports the type.
+	EngineIds          *[]openapi_types.UUID `json:"engine_ids,omitempty"`
+	GlueCredentials    *GlueCredentials      `json:"glue_credentials,omitempty"`
+	HiveCredentials    *HiveCredentials      `json:"hive_credentials,omitempty"`
+	IcebergCredentials *IcebergCredentials   `json:"iceberg_credentials,omitempty"`
 
 	// Intents Checks to run: metadata, direct_engine, bind:<engine_id>. Default: every role the provider declares (a bind check on the default Trino engine for databases it can bind).
 	Intents               *[]string          `json:"intents,omitempty"`
@@ -4896,7 +4949,7 @@ type TestConnectionRequest struct {
 	Warehouse *string `json:"warehouse,omitempty"`
 }
 
-// TestConnectionRequestAccessMode Data access mode (ADR 0021). Required when the type declares both direct and Trino access, auto-selected when it declares one, and omitted for engine-family types.
+// TestConnectionRequestAccessMode Data access mode (ADR 0029). `direct` runs SQL through a native query-engine adapter owned by this connection; `federated` runs it through the registered federated engines in `engine_ids`. Required when the type declares both, auto-selected when it declares one, and omitted for engine-family types. Immutable after creation.
 type TestConnectionRequestAccessMode string
 
 // TestIdentityProviderRequest An unsaved provider configuration to probe. Nothing is persisted.

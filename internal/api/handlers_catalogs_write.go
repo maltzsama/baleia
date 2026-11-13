@@ -107,34 +107,10 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	// The connection type drives the connectors, in the order the registry
 	// declares them (ADR 0021 D.3, CR-08): one request output per catalog type.
 	connectors := h.connections.CatalogTypes(connections.Kind(conn.Type))
-	if len(connectors) != len(body.Catalogs) {
+	ordered, invalid := planCatalogOutputs(connectors, body)
+	if invalid != nil {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: UnprocessableEntityJSONResponse{Code: ErrorCodeValidationError, Message: fmt.Sprintf("this connection type exposes %d catalog outputs", len(connectors))}}, nil
-	}
-	seenName := map[string]bool{}
-	seenTrino := map[string]bool{}
-	for _, c := range body.Catalogs {
-		if c.Name == "" {
-			h.audited(ctx, ev.Failed(audit.ReasonValidation))
-			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("name is required", FieldError{Field: "name", Code: FieldCodeRequired})}, nil
-		}
-		if seenName[c.Name] {
-			h.audited(ctx, ev.Failed(audit.ReasonValidation))
-			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("catalog names must be unique", FieldError{Field: "name", Code: FieldCodeInvalidFormat})}, nil
-		}
-		seenName[c.Name] = true
-		if !validEngineCatalogName(c.TrinoCatalogName) {
-			h.audited(ctx, ev.Failed(audit.ReasonValidation))
-			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields(
-				"trino_catalog_name must match ^[a-z][a-z0-9_]{0,62}$",
-				FieldError{Field: "trino_catalog_name", Code: FieldCodeInvalidFormat},
-			)}, nil
-		}
-		if seenTrino[c.TrinoCatalogName] {
-			h.audited(ctx, ev.Failed(audit.ReasonValidation))
-			return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: unprocessableFields("trino catalog names must be unique", FieldError{Field: "trino_catalog_name", Code: FieldCodeInvalidFormat})}, nil
-		}
-		seenTrino[c.TrinoCatalogName] = true
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: *invalid}, nil
 	}
 	// The warehouse is optional: the binder requires it only for the catalog
 	// types that address a warehouse (ADR 0021 D.7, CR-10).
@@ -179,31 +155,16 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 
 	l := h.lifecycleOn(cluster, eng)
 
-	// Provision the hive connector last: its table redirection (#86) names only
-	// siblings that are already active.
-	type output struct{ name, trinoName, connector string }
-	ordered := make([]output, 0, len(connectors))
-	for i, connector := range connectors {
-		if connector != "hive" {
-			ordered = append(ordered, output{body.Catalogs[i].Name, body.Catalogs[i].TrinoCatalogName, connector})
-		}
-	}
-	for i, connector := range connectors {
-		if connector == "hive" {
-			ordered = append(ordered, output{body.Catalogs[i].Name, body.Catalogs[i].TrinoCatalogName, connector})
-		}
-	}
-
 	// Project every output up front so a validation failure surfaces before any
 	// catalog row is written. The hive projection is re-done after its siblings
 	// are provisioned, when table redirection can name them.
 	type plan struct {
-		out  output
+		out  catalogOutput
 		proj bindings.Projection
 	}
 	plans := make([]plan, 0, len(ordered))
 	for _, out := range ordered {
-		spec := bindings.BindingSpec{EngineCatalog: out.trinoName, Connector: out.connector, SourceRef: warehouse, ExtraProps: extra}
+		spec := bindings.BindingSpec{EngineCatalog: out.engineName, Connector: out.connector, SourceRef: warehouse, ExtraProps: extra}
 		proj, err := h.projectBinding(ctx, conn, cluster.EngineID, db.UUID{}, spec)
 		if bindingInvalid(err) {
 			h.audited(ctx, ev.Failed(audit.ReasonValidation))
@@ -219,7 +180,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	for _, pl := range plans {
 		proj := pl.proj
 		if pl.out.connector == "hive" {
-			spec := bindings.BindingSpec{EngineCatalog: pl.out.trinoName, Connector: pl.out.connector, SourceRef: warehouse, ExtraProps: extra}
+			spec := bindings.BindingSpec{EngineCatalog: pl.out.engineName, Connector: pl.out.connector, SourceRef: warehouse, ExtraProps: extra}
 			proj, err = h.projectBinding(ctx, conn, cluster.EngineID, db.UUID{}, spec)
 			if bindingInvalid(err) {
 				h.audited(ctx, ev.Failed(audit.ReasonValidation))
@@ -238,7 +199,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 				ConnectionID:     connID,
 				Name:             pl.out.name,
 				Description:      body.Description,
-				TrinoCatalogName: &pl.out.trinoName,
+				TrinoCatalogName: &pl.out.engineName,
 				ClusterID:        cluster.ID,
 				Warehouse:        &warehouse,
 				Connector:        &proj.Connector,

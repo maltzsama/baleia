@@ -1346,6 +1346,8 @@
 	"connections_connectionwizard_create": "Criar",
 	"connections_connectionwizard_created": "Criado",
 	"connections_connectionwizard_the_connection_is_ready": "A conexão está pronta.",
+	"connections_connectionwizard_saved_but_not_applied": "A conexão foi salva, mas o motor ainda não aplicou {catalogs}. Abra a conexão para ver o erro e tentar de novo.",
+	"connections_connectionwizard_review_the_connection": "Ver a conexão",
 	"connections_connectionwizard_engine": "Motor",
 	"connections_connectionwizard_registered_with_its_native_catalogs": "registrado com seus catálogos nativos.",
 	"connections_connectionwizard_catalogs": "Catálogos:",

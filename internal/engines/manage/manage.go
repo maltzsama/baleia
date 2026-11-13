@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/galileostudio/baleia/internal/db"
 )
@@ -102,6 +103,42 @@ func CheckName(name string) error {
 	return nil
 }
 
+// NormalizeName derives an engine name from a connection name: lower case, runs
+// of characters outside [a-z0-9_-] become one underscore, edge separators are
+// trimmed and the result is cut to 62 characters; one that does not start with a
+// letter gets an "e_" prefix. It returns "" when nothing usable is left. The
+// result always satisfies CheckName.
+func NormalizeName(value string) string {
+	var b strings.Builder
+	pendingSep := false
+	for _, r := range strings.ToLower(value) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-':
+			if pendingSep {
+				b.WriteByte('_')
+				pendingSep = false
+			}
+			b.WriteRune(r)
+		default:
+			pendingSep = true
+		}
+	}
+	slug := strings.Trim(b.String(), "_-")
+	if len(slug) > 62 {
+		slug = slug[:62]
+	}
+	if slug == "" {
+		return ""
+	}
+	if !NameRe.MatchString(slug) {
+		slug = ("e_" + slug)
+		if len(slug) > 63 {
+			slug = slug[:63]
+		}
+	}
+	return slug
+}
+
 // List returns every engine to an admin, and to anyone else the engines
 // they may see.
 func (s *Service) List(ctx context.Context, userID db.UUID, admin bool) ([]db.Engine, error) {
@@ -131,40 +168,59 @@ func (s *Service) Create(ctx context.Context, n NewEngine) (db.Engine, []db.UUID
 	var created db.Engine
 	var natives []db.UUID
 	err := s.tx(ctx, func(q TxStore) error {
-		eng, err := q.CreateEngine(ctx, db.CreateEngineParams{
-			Name:         n.Name,
-			Kind:         n.Kind,
-			Class:        "direct",
-			ConnectionID: n.ConnectionID,
-			IdentityMode: "connection", // v1: the connection's credentials (docs/adr/0011)
-			CreatedBy:    n.CreatedBy,
-		})
-		if err != nil {
-			return err
-		}
-		created = eng
-		for _, name := range n.Natives {
-			cat, err := q.UpsertNativeCatalog(ctx, db.UpsertNativeCatalogParams{ConnectionID: n.ConnectionID, Name: name})
-			if err != nil {
-				return err
-			}
-			natives = append(natives, cat.ID)
-			if _, err := q.UpsertNativeBinding(ctx, db.UpsertNativeBindingParams{CatalogID: cat.ID, EngineID: eng.ID, EngineCatalogName: name}); err != nil {
-				return err
-			}
-		}
-		return nil
+		var err error
+		created, natives, err = CreateIn(ctx, q, n)
+		return err
 	})
-	if pgErr, ok := db.AsPGError(err); ok && pgErr.Code == "23505" {
-		if pgErr.ConstraintName == "engines_connection_id_key" {
-			return db.Engine{}, nil, ErrConnectionTaken
-		}
-		return db.Engine{}, nil, ErrNameTaken
+	if err != nil {
+		return db.Engine{}, nil, CreateError(err)
 	}
+	return created, natives, nil
+}
+
+// CreateIn writes the engine, its native catalogs and their bindings through q,
+// which the caller has already bound to a transaction: it opens none, so a
+// connection created in the same transaction commits or rolls back with it. The
+// name is not checked here; use CheckName or NormalizeName first. A unique
+// violation is returned as it came; CreateError turns it into ErrNameTaken or
+// ErrConnectionTaken.
+func CreateIn(ctx context.Context, q TxStore, n NewEngine) (db.Engine, []db.UUID, error) {
+	eng, err := q.CreateEngine(ctx, db.CreateEngineParams{
+		Name:         n.Name,
+		Kind:         n.Kind,
+		Class:        "direct",
+		ConnectionID: n.ConnectionID,
+		IdentityMode: "connection", // v1: the connection's credentials (docs/adr/0011)
+		CreatedBy:    n.CreatedBy,
+	})
 	if err != nil {
 		return db.Engine{}, nil, err
 	}
-	return created, natives, nil
+	natives := make([]db.UUID, 0, len(n.Natives))
+	for _, name := range n.Natives {
+		cat, err := q.UpsertNativeCatalog(ctx, db.UpsertNativeCatalogParams{ConnectionID: n.ConnectionID, Name: name})
+		if err != nil {
+			return db.Engine{}, nil, err
+		}
+		natives = append(natives, cat.ID)
+		if _, err := q.UpsertNativeBinding(ctx, db.UpsertNativeBindingParams{CatalogID: cat.ID, EngineID: eng.ID, EngineCatalogName: name}); err != nil {
+			return db.Engine{}, nil, err
+		}
+	}
+	return eng, natives, nil
+}
+
+// CreateError maps the unique violations CreateIn can hit to ErrConnectionTaken
+// (the connection already backs an engine) and ErrNameTaken (another engine has
+// the name). Any other error is returned unchanged.
+func CreateError(err error) error {
+	if pgErr, ok := db.AsPGError(err); ok && pgErr.Code == "23505" {
+		if pgErr.ConstraintName == "engines_connection_id_key" {
+			return ErrConnectionTaken
+		}
+		return ErrNameTaken
+	}
+	return err
 }
 
 // SetEnabled enables or disables an engine; nil keeps it as it is.
