@@ -3,6 +3,7 @@ package manage
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
@@ -223,5 +224,64 @@ func TestReconcileRuns(t *testing.T) {
 	}
 	if _, err := s.ReconcileRun(ctx, e.ID, newID()); !errors.Is(err, ErrRunNotFound) {
 		t.Errorf("unknown run = %v, want ErrRunNotFound", err)
+	}
+}
+
+func TestNormalizeName(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"already valid", "sales_db", "sales_db"},
+		{"upper case and spaces", "Sales DB", "sales_db"},
+		{"runs of invalid characters collapse", "a !! b", "a_b"},
+		{"edges are trimmed", "  --prod--  ", "prod"},
+		{"leading digit gets a prefix", "2024 sales", "e_2024_sales"},
+		{"nothing usable", "!!!", ""},
+		{"empty", "", ""},
+		{"cut to the column limit", strings.Repeat("a", 80), strings.Repeat("a", 62)},
+		{"prefix stays within the limit", "1" + strings.Repeat("a", 80), "e_1" + strings.Repeat("a", 60)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := NormalizeName(tt.in)
+			if got != tt.want {
+				t.Fatalf("NormalizeName(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+			if got != "" {
+				if err := CheckName(got); err != nil {
+					t.Fatalf("NormalizeName(%q) = %q is refused by CheckName: %v", tt.in, got, err)
+				}
+			}
+		})
+	}
+}
+
+// CreateIn writes through the store it is given and opens no transaction of
+// its own, so the caller's transaction owns the commit.
+func TestCreateIn_UsesTheCallersStore(t *testing.T) {
+	t.Parallel()
+	f := newStore()
+	conn := newID()
+	eng, natives, err := CreateIn(context.Background(), f, NewEngine{Name: "pg", Kind: "postgresql", ConnectionID: conn, Natives: []string{"a", "b"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if eng.Name != "pg" || len(natives) != 2 || len(f.engines) != 1 {
+		t.Fatalf("engine %q natives %d engines %d", eng.Name, len(natives), len(f.engines))
+	}
+}
+
+func TestCreateError(t *testing.T) {
+	t.Parallel()
+	plain := errors.New("boom")
+	if got := CreateError(plain); !errors.Is(got, plain) {
+		t.Fatalf("an unrelated error changed: %v", got)
+	}
+	if CreateError(nil) != nil {
+		t.Fatal("nil became an error")
 	}
 }
