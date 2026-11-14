@@ -56,7 +56,7 @@ content of spaces you can open.
 
 ## The glossary
 
-Teams call the same thing by different names. **Settings → Search glossary**
+Teams call the same thing by different names. **Models → Glossary**
 holds sets of words that mean the same in the workspace, for example
 `receita` = `faturamento`, `revenue`. Searching for one of them also looks for
 the others, in the palette, the sidebar (for plain text) and the `search` tool,

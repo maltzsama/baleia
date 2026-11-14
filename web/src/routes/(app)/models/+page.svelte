@@ -77,6 +77,7 @@
 			<p class="mt-1 text-[13px] text-text-muted">{m.models_subtitle()}</p>
 		</div>
 		<div class="flex gap-2">
+			<Button onclick={() => goto(resolve('/models/glossary'))}>{m.search_glossary_title()}</Button>
 			<Button onclick={() => (migrateOpen = true)}>{m.models_migrate_button()}</Button>
 			<Button onclick={() => goto(resolve('/explore'))}>{m.models_open_explore()}</Button>
 			<Button variant="primary" onclick={() => goto(resolve('/models/new'))}

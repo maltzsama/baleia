@@ -2731,7 +2731,6 @@
 	"search_glossary_added": "Entry added",
 	"search_glossary_removed": "Entry removed",
 	"search_glossary_no_workspace": "Pick a workspace to see its glossary.",
-	"settings_sections_search_glossary": "Search glossary",
 	"search_glossary_created": "Added",
 	"metadata_unsupported_table": "Unsupported table",
 	"metadata_unsupported_table_kind": "type: {kind}\nUnsupported type: the source does not give external engines access to this kind of table.",

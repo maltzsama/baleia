@@ -65,7 +65,7 @@ test('@issue-943 the palette finds a table by its plural, ranked, with its kind'
 test('@issue-943 a glossary synonym finds the table it stands for', async ({ page, loginAs }) => {
 	const token = await signInAndSync(page, loginAs);
 
-	await page.goto('/settings/search');
+	await page.goto('/models/glossary');
 	await expect(page.getByRole('heading', { name: 'Search glossary', level: 1 })).toBeVisible();
 	await page.getByLabel('Term').fill('Country');
 	await page.getByLabel('Synonyms').fill('nation, state');
