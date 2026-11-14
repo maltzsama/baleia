@@ -258,7 +258,7 @@
 							</td>
 							<td class="px-3 py-1.5"><RelativeTime at={account.created_at} /></td>
 							<td class="px-3 py-1.5 text-right">
-								<Button size="sm" variant="ghost" onclick={() => select(account)}>
+								<Button size="sm" variant="primary" onclick={() => select(account)}>
 									{m.service_accounts_manage()}
 								</Button>
 							</td>
