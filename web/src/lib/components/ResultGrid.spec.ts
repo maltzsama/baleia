@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ResultsStore } from '$lib/results/store.svelte';
@@ -74,5 +74,18 @@ describe('ResultGrid keyboard', () => {
 		const grid = screen.getByRole('grid');
 		await fireEvent.focus(grid);
 		expect(grid.getAttribute('aria-activedescendant')).toBeNull();
+	});
+
+	it('clears the active cell when the result is reset', async () => {
+		const store = await loaded({ id: [1], note: ['a'] });
+		render(ResultGrid, { props: { store } });
+		const grid = screen.getByRole('grid');
+
+		await fireEvent.focus(grid);
+		await fireEvent.keyDown(grid, { key: 'ArrowRight' });
+		expect(grid.getAttribute('aria-activedescendant')).not.toBeNull();
+
+		store.reset();
+		await waitFor(() => expect(grid.getAttribute('aria-activedescendant')).toBeNull());
 	});
 });

@@ -23,8 +23,16 @@
 
 	let widths = $state<Record<string, number>>({});
 	let selected = $state<{ row: number; col: number } | null>(null);
+	let observedColumns: ColumnMeta[] | undefined;
 	let expanded = $state<{ value: unknown; column: ColumnMeta } | null>(null);
 	let retryTick = $state(0);
+
+	$effect(() => {
+		const columns = store.columns;
+		if (columns === observedColumns) return;
+		observedColumns = columns;
+		selected = null;
+	});
 
 	type Layout = { column: ColumnMeta; index: number; start: number; width: number };
 
