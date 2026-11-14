@@ -558,6 +558,9 @@ func (h *AgentHandlers) DeleteAssistantConversation(ctx context.Context, request
 		return nil, err
 	}
 	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	if runner := h.assistantRunner.Load(); runner != nil {
+		runner.Cancel(id)
+	}
 	if err := svc.DeleteConversation(ctx, p.UserID, id); err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
 			return DeleteAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
