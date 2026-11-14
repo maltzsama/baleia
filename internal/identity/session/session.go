@@ -163,8 +163,9 @@ func (s *Service) End(ctx context.Context, refreshToken string) (userID db.UUID,
 	return rt.UserID, true, nil
 }
 
-// RevokeAll ends every session of a user after a security-relevant change;
-// access tokens already issued expire within the access TTL. A failure is
+// RevokeAll ends every session of a user after a security-relevant change; the
+// access tokens bound to those sessions are refused on their next request
+// (#1030). A failure is
 // logged, not returned: the triggering change already succeeded.
 func (s *Service) RevokeAll(ctx context.Context, userID db.UUID) {
 	if err := s.tokens.RevokeUserRefreshTokens(ctx, userID); err != nil {
