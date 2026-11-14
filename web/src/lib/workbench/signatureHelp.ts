@@ -16,6 +16,58 @@ const isWord = (ch: string) => /[\w$]/.test(ch);
 // count (` names columns, it does not call `count`.
 const TABLE_CONTEXT = new Set(['INTO', 'FROM', 'JOIN', 'TABLE', 'COPY', 'REFERENCES', 'UPDATE']);
 
+/** Mask strings and comments while preserving offsets and line breaks. */
+function maskIgnored(doc: string): string {
+	const chars = doc.split('');
+	let quote = '';
+	let lineComment = false;
+	let blockComment = false;
+	for (let i = 0; i < chars.length; i++) {
+		const current = chars[i];
+		const next = chars[i + 1];
+		if (lineComment) {
+			if (current === '\n' || current === '\r') lineComment = false;
+			else chars[i] = ' ';
+			continue;
+		}
+		if (blockComment) {
+			if (current === '*' && next === '/') {
+				chars[i] = ' ';
+				chars[++i] = ' ';
+				blockComment = false;
+			} else if (current !== '\n' && current !== '\r') {
+				chars[i] = ' ';
+			}
+			continue;
+		}
+		if (quote) {
+			if (current === quote && next === quote) {
+				chars[i] = ' ';
+				chars[++i] = ' ';
+			} else if (current === quote) {
+				chars[i] = ' ';
+				quote = '';
+			} else if (current !== '\n' && current !== '\r') {
+				chars[i] = ' ';
+			}
+			continue;
+		}
+		if ((current === '-' && next === '-') || current === '#') {
+			if (current === '-') chars[++i] = ' ';
+			chars[i - (current === '-' ? 1 : 0)] = ' ';
+			lineComment = true;
+		} else if (current === '/' && next === '*') {
+			chars[i] = ' ';
+			chars[++i] = ' ';
+			blockComment = true;
+		} else if (current === "'" || current === '"' || current === '`') {
+			chars[i] = ' ';
+			quote = current;
+		}
+	}
+	return chars.join('');
+}
+
 /** The word ending at `end` (exclusive), or "" when there is not one. */
 function wordBefore(doc: string, end: number): string {
 	let i = end - 1;
@@ -27,10 +79,11 @@ function wordBefore(doc: string, end: number): string {
 
 /**
  * callAt returns the innermost function call containing `pos` and the argument
- * the cursor is in, or null. It counts only top-level commas; a comma inside a
- * string literal is not distinguished, which is acceptable for a hint.
+ * the cursor is in, or null. Strings and comments are masked before scanning,
+ * so punctuation in them cannot create a false function call.
  */
 export function callAt(doc: string, pos: number): CallContext | null {
+	doc = maskIgnored(doc);
 	let depth = 0;
 	for (let i = pos - 1; i >= 0; i--) {
 		const ch = doc[i];
@@ -99,7 +152,7 @@ export function signatureHelp(scope: () => CompletionScope | null): Extension {
 		if (!current?.workspaceId) return;
 		void loadBindingFunctions(current.workspaceId, current.catalogId, current.bindingId)
 			.then((refs) => {
-				if (ticket !== seq) return; // a newer edit superseded this
+				if (!view.dom.isConnected || ticket !== seq) return; // a newer edit or destroy superseded this
 				const fn = refs?.find((row) => row.name.toLowerCase() === ctx.name.toLowerCase());
 				if (!fn?.signature) {
 					if (view.state.field(helpField)) view.dispatch({ effects: setHelp.of(null) });
@@ -118,7 +171,7 @@ export function signatureHelp(scope: () => CompletionScope | null): Extension {
 			.catch(() => {
 				// Signature help is optional; a failed function lookup should not
 				// create an unhandled rejection or disturb the editor.
-				if (ticket === seq && view.state.field(helpField)) {
+				if (view.dom.isConnected && ticket === seq && view.state.field(helpField)) {
 					view.dispatch({ effects: setHelp.of(null) });
 				}
 			});

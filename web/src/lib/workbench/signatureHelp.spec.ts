@@ -27,6 +27,12 @@ describe('callAt (#790)', () => {
 		expect(at('INSERT INTO t (a, |')).toBeNull();
 	});
 
+	it('ignores parentheses inside strings and comments', () => {
+		expect(at("SELECT 'call(|'")).toBeNull();
+		expect(at('SELECT /* call(| */ 1')).toBeNull();
+		expect(at('SELECT 1 -- call(|')).toBeNull();
+	});
+
 	it('returns null outside a call', () => {
 		expect(at('SELECT count(*) FROM t|')).toBeNull();
 		expect(at('SELECT 1|')).toBeNull();
