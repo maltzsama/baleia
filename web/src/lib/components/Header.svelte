@@ -2,6 +2,7 @@
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import CirclePlusIcon from '@lucide/svelte/icons/circle-plus';
 	import MoonIcon from '@lucide/svelte/icons/moon';
+	import SunIcon from '@lucide/svelte/icons/sun';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages';
@@ -342,6 +343,7 @@
 			>
 			</span>
 		</div>
+		<SunIcon class="w-[13px] h-[13px]" />
 	</div>
 </header>
 

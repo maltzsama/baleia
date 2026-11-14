@@ -2,6 +2,7 @@
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	import LogInIcon from '@lucide/svelte/icons/log-in';
 	import MoonIcon from '@lucide/svelte/icons/moon';
+	import SunIcon from '@lucide/svelte/icons/sun';
 	import SendIcon from '@lucide/svelte/icons/send';
 	import { m } from '$lib/paraglide/messages';
 	import { resolve } from '$app/paths';
@@ -275,6 +276,7 @@
 					{dark ? 'translate-x-[14px]' : 'translate-x-0'}"
 				></span>
 			</button>
+			<SunIcon class="w-[13px] h-[13px]" />
 		</div>
 
 		<div class="w-full max-w-[360px]">
