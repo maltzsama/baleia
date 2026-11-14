@@ -92,11 +92,7 @@ export function loadBindingFunctions(
 	const key = `${workspaceId}:${catalogId}:${bindingId}`;
 	const hit = bindingFunctionsCache.get(key);
 	if (hit && Date.now() - hit.at < BINDING_FUNCTIONS_TTL) return hit.promise;
-	let pending: Promise<DialectFunction[] | null>;
-	const evictIfCurrent = () => {
-		if (bindingFunctionsCache.get(key)?.promise === pending) bindingFunctionsCache.delete(key);
-	};
-	pending = client
+	const pending = client
 		.GET('/workspaces/{id}/metadata/functions', {
 			params: {
 				path: { id: workspaceId },
@@ -111,7 +107,7 @@ export function loadBindingFunctions(
 		})
 		.catch((error) => {
 			// Do not evict a newer retry when an older request settles late.
-			evictIfCurrent();
+			if (bindingFunctionsCache.get(key)?.promise === pending) bindingFunctionsCache.delete(key);
 			throw error;
 		});
 	bindingFunctionsCache.set(key, { at: Date.now(), promise: pending });
