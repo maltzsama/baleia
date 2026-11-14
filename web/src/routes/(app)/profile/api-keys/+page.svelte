@@ -10,6 +10,7 @@
 	import Modal from '$lib/ui/Modal.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
+	import ApiKeyUsage from '$lib/ui/patterns/ApiKeyUsage.svelte';
 	import OneTimeSecret from '$lib/ui/patterns/OneTimeSecret.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 	import { toasts } from '$lib/ui/toast.svelte';
@@ -178,7 +179,11 @@
 	secret={secret ?? ''}
 	title={m.settings_api_keys_copy_this_api_key_now()}
 	onacknowledge={() => (secret = null)}
-/>
+>
+	{#snippet details()}
+		<ApiKeyUsage secret={secret ?? ''} />
+	{/snippet}
+</OneTimeSecret>
 
 <ConfirmDialog
 	bind:open={revokeOpen}

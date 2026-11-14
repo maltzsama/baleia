@@ -35,6 +35,13 @@ describe('api keys settings', () => {
 		await fireEvent.click(createButtons[createButtons.length - 1]);
 
 		expect(await screen.findByText('bal_secret_once')).toBeTruthy();
+		// #1020: where to send it is shown next to the secret.
+		expect(screen.getByText('http://localhost:3000/api/v1')).toBeTruthy();
+		expect(
+			screen.getByText(
+				"curl -H 'X-Api-Key: bal_secret_once' http://localhost:3000/api/v1/workspaces"
+			)
+		).toBeTruthy();
 
 		await fireEvent.click(screen.getByLabelText('I have copied this value'));
 		await fireEvent.click(screen.getByRole('button', { name: 'Done' }));

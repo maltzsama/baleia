@@ -57,5 +57,8 @@ describe('Settings · Service accounts (#653)', () => {
 		await fireEvent.input(screen.getByLabelText('Token name'), { target: { value: 'ci' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Issue token' }));
 		expect(await screen.findByText('bal_the-secret')).toBeTruthy();
+		// #1020: a token says where it is used, too.
+		expect(screen.getByText('http://localhost:3000/api/v1')).toBeTruthy();
+		expect(screen.getByText(/curl -H 'X-Api-Key: bal_the-secret'/)).toBeTruthy();
 	});
 });
