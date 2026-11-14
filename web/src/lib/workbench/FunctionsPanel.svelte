@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import { loadBindingFunctions, type DialectFunction } from '$lib/engines/client';
+	import {
+		invalidateBindingFunctions,
+		loadBindingFunctions,
+		type DialectFunction
+	} from '$lib/engines/client';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -27,6 +31,7 @@
 	const LOAD_TIMEOUT_MS = 15_000;
 
 	function retry() {
+		invalidateBindingFunctions(workspaceId, catalogId, bindingId);
 		requestId += 1;
 	}
 

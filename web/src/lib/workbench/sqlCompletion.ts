@@ -270,8 +270,13 @@ function namespaceOption(scope: CompletionScope, path: string[]): Option {
 
 async function functionOptions(scope: CompletionScope): Promise<Option[]> {
 	// The connected engine's own catalog (introspected at runtime, #788).
-	const refs: DialectFunction[] =
-		(await loadBindingFunctions(scope.workspaceId, scope.catalogId, scope.bindingId)) ?? [];
+	let refs: DialectFunction[] = [];
+	try {
+		refs = (await loadBindingFunctions(scope.workspaceId, scope.catalogId, scope.bindingId)) ?? [];
+	} catch {
+		// Function metadata is best effort for autocomplete; other completion
+		// sources must remain available when the engine catalog is unavailable.
+	}
 	const seen = new Set<string>();
 	const out: Option[] = [];
 	for (const ref of [...refs].sort((a, b) => lower(a.name).localeCompare(lower(b.name)))) {

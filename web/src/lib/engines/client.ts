@@ -92,7 +92,11 @@ export function loadBindingFunctions(
 	const key = `${workspaceId}:${catalogId}:${bindingId}`;
 	const hit = bindingFunctionsCache.get(key);
 	if (hit && Date.now() - hit.at < BINDING_FUNCTIONS_TTL) return hit.promise;
-	const pending = client
+	let pending: Promise<DialectFunction[] | null>;
+	const evictIfCurrent = () => {
+		if (bindingFunctionsCache.get(key)?.promise === pending) bindingFunctionsCache.delete(key);
+	};
+	pending = client
 		.GET('/workspaces/{id}/metadata/functions', {
 			params: {
 				path: { id: workspaceId },
@@ -101,18 +105,26 @@ export function loadBindingFunctions(
 		})
 		.then(({ data, error }) => {
 			if (error || !data) {
-				// Evict a failed lookup so a recovered engine is retried.
-				bindingFunctionsCache.delete(key);
 				throw new EngineRequestError(apiErrorMessage(error, m.functions_panel_failed()));
 			}
 			return data;
 		})
 		.catch((error) => {
-			bindingFunctionsCache.delete(key);
+			// Do not evict a newer retry when an older request settles late.
+			evictIfCurrent();
 			throw error;
 		});
 	bindingFunctionsCache.set(key, { at: Date.now(), promise: pending });
 	return pending;
+}
+
+/** Forces the next function lookup for a binding to issue a new request. */
+export function invalidateBindingFunctions(
+	workspaceId: string,
+	catalogId: string,
+	bindingId: string
+): void {
+	bindingFunctionsCache.delete(`${workspaceId}:${catalogId}:${bindingId}`);
 }
 
 export function loadDialect(name: string): Promise<Dialect> {

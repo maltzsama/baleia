@@ -97,8 +97,8 @@ export function signatureHelp(scope: () => CompletionScope | null): Extension {
 		}
 		const current = scope();
 		if (!current?.workspaceId) return;
-		void loadBindingFunctions(current.workspaceId, current.catalogId, current.bindingId).then(
-			(refs) => {
+		void loadBindingFunctions(current.workspaceId, current.catalogId, current.bindingId)
+			.then((refs) => {
 				if (ticket !== seq) return; // a newer edit superseded this
 				const fn = refs?.find((row) => row.name.toLowerCase() === ctx.name.toLowerCase());
 				if (!fn?.signature) {
@@ -114,8 +114,14 @@ export function signatureHelp(scope: () => CompletionScope | null): Extension {
 						pos
 					})
 				});
-			}
-		);
+			})
+			.catch(() => {
+				// Signature help is optional; a failed function lookup should not
+				// create an unhandled rejection or disturb the editor.
+				if (ticket === seq && view.state.field(helpField)) {
+					view.dispatch({ effects: setHelp.of(null) });
+				}
+			});
 	});
 
 	const tooltip = showTooltip.computeN([helpField], (state) => {
