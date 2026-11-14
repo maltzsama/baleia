@@ -3,6 +3,7 @@ import { clearSession, client } from '$lib/api/client';
 import { logout as endSession } from '$lib/auth/session';
 import { applyUserLocale } from '$lib/i18n/locale.svelte';
 import { clearDrafts } from '$lib/workbench/drafts';
+import type { GlobalAction } from '$lib/authz/can';
 
 export type Features = {
 	agents: boolean;
@@ -25,7 +26,7 @@ export type AuthUser = {
 	// login responses carry only the user; /auth/me fills them.
 	personal_workspace_id?: string | null;
 	features?: Features;
-	global_actions?: string[];
+	global_actions?: GlobalAction[];
 };
 
 function createAuthStore() {
