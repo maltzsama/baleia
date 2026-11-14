@@ -436,7 +436,6 @@
 		namespace: string[],
 		table: { id: string; name: string }
 	): Promise<boolean> {
-		search = '';
 		const catalog = await catalogById(catalogId);
 		if (!catalog) return false;
 		view = 'catalog';
