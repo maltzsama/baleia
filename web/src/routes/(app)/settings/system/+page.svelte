@@ -3,7 +3,6 @@
 	import { onMount } from 'svelte';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
-	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -31,6 +30,29 @@
 				return 'neutral';
 		}
 	}
+
+	// A quiet dot says "ok"; anything else is named and colored, so a problem
+	// stands out of a page of healthy rows.
+	const dots: Record<Tone, string> = {
+		success: 'bg-green-500',
+		warning: 'bg-amber-500',
+		danger: 'bg-red-500',
+		neutral: 'bg-slate-400'
+	};
+	const texts: Record<Tone, string> = {
+		success: 'text-green-700 dark:text-green-300',
+		warning: 'text-amber-700 dark:text-amber-300',
+		danger: 'text-red-700 dark:text-red-300',
+		neutral: 'text-text-muted'
+	};
+	const accents: Record<Tone, string> = {
+		success: 'border-border',
+		warning: 'border-amber-300 dark:border-amber-700',
+		danger: 'border-red-300 dark:border-red-800',
+		neutral: 'border-border'
+	};
+
+	const statLabel = 'text-[10px] uppercase tracking-wide text-text-muted';
 
 	const core = $derived(
 		status
@@ -94,6 +116,13 @@
 	onMount(load);
 </script>
 
+{#snippet state(value: string)}
+	<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold {texts[tone(value)]}">
+		<span class="h-2 w-2 rounded-full {dots[tone(value)]}" aria-hidden="true"></span>
+		{value}
+	</span>
+{/snippet}
+
 <div class="flex-1 overflow-y-auto p-7">
 	<!-- Lists and tables use the full width (#468). -->
 	<div class="w-full">
@@ -134,46 +163,61 @@
 				<h2 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
 					{m.settings_system_core()}
 				</h2>
-				<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
+				<div
+					class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] items-start gap-3"
+				>
 					{#each core as card (card.label)}
-						<article class="rounded-lg border border-border bg-bg-panel p-3">
-							<div class="flex items-center justify-between gap-2">
+						<article
+							class="rounded-xl border bg-bg-panel p-4 shadow-sm {accents[
+								tone(card.section.status)
+							]}"
+						>
+							<header class="flex items-center justify-between gap-2">
 								<h3 class="text-[13px] font-semibold">{card.label}</h3>
-								<Badge tone={tone(card.section.status)}>{card.section.status}</Badge>
-							</div>
+								{@render state(card.section.status)}
+							</header>
 							{#if card.section.error_code}
 								<p class="mt-1 font-mono text-[11px] text-danger">{card.section.error_code}</p>
 							{/if}
-							<dl class="mt-2 space-y-0.5 text-[11px] text-text-muted">
+							<dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5">
 								{#if card.section.latency_ms !== undefined}
-									<div>{m.settings_system_latency_ms({ latency_ms: card.section.latency_ms })}</div>
+									<div>
+										<dt class={statLabel}>{m.settings_system_stat_latency()}</dt>
+										<dd class="font-mono text-[13px]">
+											{m.settings_system_stat_ms({ ms: card.section.latency_ms })}
+										</dd>
+									</div>
 								{/if}
 								{#if card.section.version}
-									<div>{m.settings_system_version({ version: card.section.version })}</div>
+									<div>
+										<dt class={statLabel}>{m.settings_system_stat_version()}</dt>
+										<dd class="truncate font-mono text-[13px]">{card.section.version}</dd>
+									</div>
 								{/if}
 								{#if card.section.commit}
-									<div>{m.settings_system_commit({ commit: card.section.commit })}</div>
+									<div>
+										<dt class={statLabel}>{m.settings_system_stat_commit()}</dt>
+										<dd class="truncate font-mono text-[13px]">{card.section.commit}</dd>
+									</div>
 								{/if}
 								{#if card.section.started_at}
 									<div>
-										{m.settings_system_started()}
-										<RelativeTime at={card.section.started_at} />
+										<dt class={statLabel}>{m.settings_system_stat_started()}</dt>
+										<dd class="text-[13px]"><RelativeTime at={card.section.started_at} /></dd>
 									</div>
 								{/if}
 								{#if card.section.migration_version !== undefined}
 									<div>
-										{m.settings_system_migration({
-											migration_version: card.section.migration_version
-										})}
+										<dt class={statLabel}>{m.settings_system_stat_migration()}</dt>
+										<dd class="font-mono text-[13px]">{card.section.migration_version}</dd>
 									</div>
 								{/if}
 								{#if card.section.configured !== undefined}
 									<div>
-										{m.settings_system_configured({
-											value: card.section.configured
-												? m.settings_system_yes()
-												: m.settings_system_no()
-										})}
+										<dt class={statLabel}>{m.settings_system_stat_configured()}</dt>
+										<dd class="text-[13px]">
+											{card.section.configured ? m.settings_system_yes() : m.settings_system_no()}
+										</dd>
 									</div>
 								{/if}
 							</dl>
@@ -186,29 +230,44 @@
 				<h2 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
 					{m.settings_system_platform()}
 				</h2>
-				<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3">
+				<div class="columns-[19rem] gap-3">
 					{#each resources as card (card.label)}
-						<article class="rounded-lg border border-border bg-bg-panel p-3">
-							<div class="flex items-center justify-between gap-2">
+						<article
+							class="mb-3 break-inside-avoid rounded-xl border bg-bg-panel p-4 shadow-sm {accents[
+								tone(card.resource.status)
+							]}"
+						>
+							<header class="flex items-center justify-between gap-2">
 								<h3 class="text-[13px] font-semibold">{card.label}</h3>
-								<Badge tone={tone(card.resource.status)}>{card.resource.status}</Badge>
-							</div>
+								{@render state(card.resource.status)}
+							</header>
 							{#if card.resource.error_code}
 								<p class="mt-1 font-mono text-[11px] text-danger">{card.resource.error_code}</p>
 							{/if}
 							{#if card.resource.items && card.resource.items.length > 0}
-								<ul class="mt-2 flex flex-col gap-1">
+								<ul class="mt-3 divide-y divide-border/60">
 									{#each card.resource.items as item (item.name)}
-										<li class="flex items-center justify-between gap-2 text-[12px]">
-											<span class="truncate font-medium">{item.name}</span>
-											<span class="flex items-center gap-2">
+										<li class="flex items-center justify-between gap-3 py-1.5 text-[12px]">
+											<span class="flex min-w-0 items-center gap-2">
+												<span
+													class="h-2 w-2 shrink-0 rounded-full {dots[tone(item.status)]}"
+													aria-hidden="true"
+												></span>
+												<span class="truncate font-medium">{item.name}</span>
+											</span>
+											<span class="flex shrink-0 items-center gap-2 text-[11px]">
 												{#if item.detail}
-													<span class="text-[11px] text-text-muted">{item.detail}</span>
+													<span class="font-mono text-text-muted">{item.detail}</span>
 												{/if}
 												{#if item.value !== undefined}
-													<span class="text-[11px] text-text-muted">{item.value}</span>
+													<span class="font-mono text-text-muted">{item.value}</span>
 												{/if}
-												<Badge tone={tone(item.status)}>{item.status}</Badge>
+												{#if item.status === 'ok'}
+													<span class="sr-only">{item.status}</span>
+												{:else}
+													<span class="font-semibold {texts[tone(item.status)]}">{item.status}</span
+													>
+												{/if}
 											</span>
 										</li>
 									{/each}
