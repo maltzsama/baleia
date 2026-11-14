@@ -223,14 +223,25 @@ func (r *Runner) Start(ctx context.Context, userID, id db.UUID, text string) (in
 	r.mu.Lock()
 	r.cancels[id.Bytes] = cancel
 	r.mu.Unlock()
+	cancelEvents, unsubscribe := r.hub.Subscribe(id.Bytes)
 	go func() {
 		defer func() {
+			unsubscribe()
 			cancel()
 			r.mu.Lock()
 			delete(r.cancels, id.Bytes)
 			r.mu.Unlock()
 			// Best effort: a claim left behind is freed by RunSweeper.
 			_ = r.svc.Release(context.WithoutCancel(turnCtx), id, turnOwner)
+		}()
+		go func() {
+			select {
+			case ev := <-cancelEvents:
+				if ev.Type == "cancel" {
+					cancel()
+				}
+			case <-turnCtx.Done():
+			}
 		}()
 		r.run(turnCtx, claimed, settings)
 	}()
@@ -239,6 +250,7 @@ func (r *Runner) Start(ctx context.Context, userID, id db.UUID, text string) (in
 
 // Cancel stops the running turn, if any.
 func (r *Runner) Cancel(id db.UUID) bool {
+	r.hub.Publish(id.Bytes, Event{Type: "cancel"})
 	r.mu.Lock()
 	cancel, ok := r.cancels[id.Bytes]
 	r.mu.Unlock()
