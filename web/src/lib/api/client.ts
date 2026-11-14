@@ -78,10 +78,26 @@ client.use(authMiddleware);
  * replaces them with `/metadata/*`). Everything documented should use `client`.
  */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-	const headers = new Headers(init.headers);
+	const send = () => {
+		const headers = new Headers(init.headers);
+		const token = getAccessToken();
+		if (token) headers.set('Authorization', `Bearer ${token}`);
+		return fetch(`${API_ROOT}${path}`, { ...init, headers });
+	};
+	const response = await send();
+	if (response.status !== 401) return response;
+
+	// Same recovery as the typed client (#1034): refresh once, then retry with
+	// the new token. A streamed body was consumed by the first attempt.
+	if (init.body instanceof ReadableStream) return response;
+	const refreshed = await refresh(true);
+	if (!refreshed) {
+		handlers.onSessionExpired?.();
+		return response;
+	}
 	const token = getAccessToken();
-	if (token) headers.set('Authorization', `Bearer ${token}`);
-	return fetch(`${API_ROOT}${path}`, { ...init, headers });
+	if (token) handlers.onTokenRefreshed?.(token);
+	return send();
 }
 
 /** Error body shared by the API (`Error` / `ValidationError`). */
