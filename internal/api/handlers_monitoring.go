@@ -606,9 +606,11 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 		return nil, err
 	}
 
+	// One id names the row, the workflow and its input, so nothing that
+	// rewrites or derives an id between them can make them diverge.
 	runID := uuid.New()
 	workflowID := "maintenance-" + runID.String()
-	run, err := h.monitor.Record(ctx, plan, workflowID)
+	run, err := h.monitor.Record(ctx, plan, db.UUID{Bytes: runID, Valid: true}, workflowID)
 	if isUniqueViolation(err) {
 		return CreateMaintenanceRun409JSONResponse{ConflictJSONResponse: ConflictJSONResponse{
 			Code: ErrorCodeConflict, Message: "a maintenance run is already in progress on this table"}}, nil
@@ -617,8 +619,7 @@ func (h *OpsHandlers) CreateMaintenanceRun(ctx context.Context, request CreateMa
 		return nil, err
 	}
 	if h.temporalClient != nil {
-		// The activity closes the run by this id, so it must be the recorded
-		// row's id, not the workflow id's uuid (#883).
+		// The activity closes the run by this id: the recorded row's id (#883).
 		_, err = h.temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 			ID: workflowID, TaskQueue: "baleia-task-queue",
 		}, workflows.MaintenanceRunWorkflow, uuid.UUID(run.ID.Bytes).String(), uuid.UUID(plan.Binding.EngineID.Bytes).String(),

@@ -171,7 +171,7 @@ func TestPrepare(t *testing.T) {
 		t.Errorf("explicit incapable binding = %v, want ErrNoCapableBinding", err)
 	}
 
-	run, err := s.Record(ctx, Plan{Maintenance: Maintenance{Operations: []string{"optimize"}}, Binding: plan.Binding}, "maintenance-1")
+	run, err := s.Record(ctx, Plan{Maintenance: Maintenance{Operations: []string{"optimize"}}, Binding: plan.Binding}, db.UUID{}, "maintenance-1")
 	if err != nil || run.Retention != nil {
 		t.Errorf("Record = %+v, %v; an empty retention is stored as NULL", run, err)
 	}

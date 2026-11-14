@@ -289,14 +289,15 @@ func (s *Service) Prepare(ctx context.Context, m Maintenance, capable Capable) (
 	return Plan{}, ErrNoCapableBinding
 }
 
-// Record stores a planned run under workflowID.
-func (s *Service) Record(ctx context.Context, p Plan, workflowID string) (db.MaintenanceRun, error) {
+// Record stores a planned run under runID, started as workflowID. The caller
+// picks runID so the row, the workflow id and the workflow input share it.
+func (s *Service) Record(ctx context.Context, p Plan, runID db.UUID, workflowID string) (db.MaintenanceRun, error) {
 	var retention *string
 	if p.Retention != "" {
 		retention = &p.Retention
 	}
 	return s.store.CreateMaintenanceRun(ctx, db.CreateMaintenanceRunParams{
-		CatalogID: p.CatalogID, BindingID: p.Binding.ID, Namespace: p.Namespace, TableName: p.Table,
+		ID: runID, CatalogID: p.CatalogID, BindingID: p.Binding.ID, Namespace: p.Namespace, TableName: p.Table,
 		Operations: p.Operations, Retention: retention, StartedBy: p.StartedBy, WorkflowID: workflowID,
 	})
 }

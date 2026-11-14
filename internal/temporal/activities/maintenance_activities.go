@@ -18,6 +18,8 @@ import (
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
+	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/activity"
 	"gorm.io/gorm"
 )
@@ -236,6 +238,7 @@ func (a *Activities) planMaintenanceRound(ctx context.Context, params PlanMainte
 	if !catalogID.Valid {
 		return nil, fmt.Errorf("invalid catalog id %q", params.CatalogID)
 	}
+	a.reconcileMaintenanceRuns(ctx, catalogID)
 	if readOnly, err := a.catalogReadOnly(ctx, catalogID); err != nil || readOnly {
 		return nil, err // a read-only catalog is analyzed, never maintained (#996)
 	}
@@ -545,6 +548,115 @@ func icebergOperation(op string, s maintenance.Settings) queryengine.IcebergOper
 		}
 	}
 	return out
+}
+
+// CloseMaintenanceRunParams is what MaintenanceRunWorkflow knows about a run
+// when its activity returns. Failure is empty when the activity succeeded.
+type CloseMaintenanceRunParams struct {
+	RunID   string
+	Failure string
+}
+
+// CloseMaintenanceRun closes a run that is still "running" once its activity
+// has returned: finished when the activity succeeded, failed otherwise. A run
+// the activity already closed is left as it is.
+func CloseMaintenanceRun(ctx context.Context, params CloseMaintenanceRunParams) error {
+	return defaultActivities.closeMaintenanceRun(ctx, params)
+}
+
+func (a *Activities) closeMaintenanceRun(ctx context.Context, params CloseMaintenanceRunParams) error {
+	id := engineUUID(params.RunID)
+	if !id.Valid {
+		return fmt.Errorf("invalid maintenance run id %q", params.RunID)
+	}
+	run, err := a.monitoring().GetMaintenanceRun(ctx, id)
+	if errors.Is(err, db.ErrNoRows) {
+		return fmt.Errorf("maintenance run %s does not exist", params.RunID)
+	}
+	if err != nil {
+		return fmt.Errorf("load maintenance run %s: %w", params.RunID, err)
+	}
+	if run.Status != "running" {
+		return nil
+	}
+	arg := db.UpdateMaintenanceRunParams{ID: id, Status: "finished"}
+	if params.Failure != "" {
+		code := "maintenance_failed"
+		arg.Status, arg.ErrorCode, arg.ErrorMessage = "failed", &code, &params.Failure
+	}
+	if _, err := a.monitoring().UpdateMaintenanceRun(ctx, arg); err != nil && !errors.Is(err, db.ErrNoRows) {
+		return fmt.Errorf("close maintenance run %s: %w", params.RunID, err)
+	}
+	return nil
+}
+
+// reconcileGrace keeps a run that has just started out of the reconciliation:
+// its workflow may not be visible yet.
+const reconcileGrace = 2 * time.Minute
+
+// reconcileLimit bounds the runs looked at per catalog and round.
+const reconcileLimit = 200
+
+// reconcileMaintenanceRuns closes the catalog's runs that are still "running"
+// although their workflow has closed, as a worker lost mid-run or a missed
+// write leaves them. Temporal is the source of truth for whether a run is
+// alive; the row only mirrors it. It is best effort: a failure is logged and
+// the round goes on.
+func (a *Activities) reconcileMaintenanceRuns(ctx context.Context, catalogID db.UUID) {
+	if a.temporalClient == nil {
+		return
+	}
+	running := "running"
+	runs, err := a.monitoring().ListMaintenanceRuns(ctx, db.ListMaintenanceRunsParams{
+		CatalogID: catalogID, Status: &running, Lim: reconcileLimit,
+	})
+	if err != nil {
+		a.logger.WarnContext(ctx, "list running maintenance runs", "catalog", repo.UUIDString(catalogID), "err", err)
+		return
+	}
+	for _, run := range runs {
+		if time.Since(run.StartedAt.Time) < reconcileGrace {
+			continue
+		}
+		status, message, closed := a.closedWorkflowOutcome(ctx, run.WorkflowID)
+		if !closed {
+			continue
+		}
+		code := ""
+		if status == "failed" {
+			code = "maintenance_failed"
+		}
+		if err := closeRunningMaintenanceRun(ctx, a.monitoring(), repo.UUIDString(run.ID), status, code, message); err != nil {
+			a.logger.WarnContext(ctx, "close a maintenance run whose workflow had closed",
+				"run", repo.UUIDString(run.ID), "workflow", run.WorkflowID, "err", err)
+			continue
+		}
+		a.logger.InfoContext(ctx, "closed a maintenance run whose workflow had closed",
+			"run", repo.UUIDString(run.ID), "workflow", run.WorkflowID, "status", status)
+	}
+}
+
+// closedWorkflowOutcome reports how a closed workflow ended, as the run status
+// it maps to. closed is false while the workflow is still running or cannot be
+// read: such a run is left alone.
+func (a *Activities) closedWorkflowOutcome(ctx context.Context, workflowID string) (status, message string, closed bool) {
+	resp, err := a.temporalClient.DescribeWorkflowExecution(ctx, workflowID, "")
+	var notFound *serviceerror.NotFound
+	switch {
+	case errors.As(err, &notFound):
+		return "failed", "the run's workflow no longer exists", true
+	case err != nil:
+		a.logger.WarnContext(ctx, "describe maintenance workflow", "workflow", workflowID, "err", err)
+		return "", "", false
+	}
+	switch s := resp.GetWorkflowExecutionInfo().GetStatus(); s {
+	case enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING, enumspb.WORKFLOW_EXECUTION_STATUS_UNSPECIFIED:
+		return "", "", false
+	case enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED:
+		return "finished", "", true
+	default:
+		return "failed", "the run's workflow closed (" + s.String() + ") without recording its outcome", true
+	}
 }
 
 // FailMaintenanceRunParams closes a run whose workflow did not start.

@@ -295,10 +295,13 @@ type fakeTemporalClient struct {
 	client.Client
 	startErr error
 	started  []any // the args of the last ExecuteWorkflow
+	// startedID is the workflow id of the last ExecuteWorkflow.
+	startedID string
 }
 
 func (f *fakeTemporalClient) ExecuteWorkflow(ctx context.Context, options client.StartWorkflowOptions, wf any, args ...any) (client.WorkflowRun, error) {
 	f.started = args
+	f.startedID = options.ID
 	return nil, f.startErr
 }
 
