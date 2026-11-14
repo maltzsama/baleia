@@ -2,6 +2,7 @@
 // engine name: the dialect, formatter language and CodeMirror base all come
 // from the API.
 import { apiErrorMessage, client } from '$lib/api/client';
+import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import {
 	Cassandra,
@@ -102,13 +103,13 @@ export function loadBindingFunctions(
 			if (error || !data) {
 				// Evict a failed lookup so a recovered engine is retried.
 				bindingFunctionsCache.delete(key);
-				return null;
+				throw new EngineRequestError(apiErrorMessage(error, m.functions_panel_failed()));
 			}
 			return data;
 		})
-		.catch(() => {
+		.catch((error) => {
 			bindingFunctionsCache.delete(key);
-			return null;
+			throw error;
 		});
 	bindingFunctionsCache.set(key, { at: Date.now(), promise: pending });
 	return pending;
