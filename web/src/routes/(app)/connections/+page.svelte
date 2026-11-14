@@ -471,6 +471,8 @@
 		bind:open={editOpen}
 		connection={editing}
 		{providers}
+		{engines}
+		{support}
 		onsaved={(updated) => {
 			onSaved(updated);
 			editing = null;

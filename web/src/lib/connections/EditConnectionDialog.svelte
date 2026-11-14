@@ -19,16 +19,22 @@
 		open = $bindable(false),
 		connection,
 		providers,
+		engines = [],
+		support = {},
 		onsaved
 	}: {
 		open?: boolean;
 		connection: CatalogConnection;
 		providers: ConnectionProvider[];
+		engines?: { id: string }[];
+		support?: Record<string, Record<string, unknown>>;
 		onsaved: (connection: CatalogConnection) => void;
 	} = $props();
 
 	const provider = $derived(providers.find((item) => item.kind === connection.type) ?? null);
-	const canBind = $derived(provider?.family === 'database' || provider?.family === 'metastore');
+	const canBind = $derived(
+		provider ? engines.some((engine) => Boolean(support[engine.id]?.[provider.kind])) : false
+	);
 
 	let name = $state('');
 	let values = $state<Record<string, string>>({});
