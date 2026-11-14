@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.9.1](https://github.com/maltzsama/baleia/compare/v0.9.0...v0.9.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **api:** bound the login delay and share it across replicas ([83feca3](https://github.com/maltzsama/baleia/commit/83feca37498ffa073d6223619688cbc85a822631))
+* **api:** count local login failures when Redis reads succeed ([b145585](https://github.com/maltzsama/baleia/commit/b14558516ae6555e3120708b51ddbaf14c2be521))
+* **api:** store a maintenance run under the id its workflow gets ([480759a](https://github.com/maltzsama/baleia/commit/480759ac70e62450fce97022b541ea3b6ada8b55))
+* **audit:** lay the filters out as a form and show the actor id ([ac84496](https://github.com/maltzsama/baleia/commit/ac844960817e23513a1b28a896b664a765d0cd5f))
+* **audit:** let the id filters fill their row ([bd8c361](https://github.com/maltzsama/baleia/commit/bd8c3613ee0a10ba45282eabe4be13b984bdd159))
+* **auth:** bind access tokens to their session and check it per request ([00be416](https://github.com/maltzsama/baleia/commit/00be4169b64bac98fc875bd1a13ddf63e5c67a5f))
+* **credentials:** show where a new API key or token is used ([069265d](https://github.com/maltzsama/baleia/commit/069265d4faeecdf65fcb02cd5b9e5e1ba4ca99c7))
+* **glossary:** move the search glossary next to the models and align its form ([c11c3eb](https://github.com/maltzsama/baleia/commit/c11c3eb26fd62b07d3d5a81c7d7c22a39f35c124))
+* **identity:** correct the comments on access token lifetime ([f032edd](https://github.com/maltzsama/baleia/commit/f032edda6dc24a42c3b7955ed3545955b5f2ac01))
+* **identity:** keep revoked refresh tokens until they expire ([e8039e8](https://github.com/maltzsama/baleia/commit/e8039e8c427ade16843059b88756ca28e5e58b76))
+* **identity:** serialize refresh revocation with rotation ([dcd24b7](https://github.com/maltzsama/baleia/commit/dcd24b7475b6caeea3ea836de0e3738de07b32ef))
+* **monitoring:** keep the cluster chart when the window has no points ([2ad84f5](https://github.com/maltzsama/baleia/commit/2ad84f55e768c1dc5f3c6cbe9d7cc0e55c725134))
+* **monitoring:** remove the redundant Maintenance tab ([dcc1153](https://github.com/maltzsama/baleia/commit/dcc11532d2e5a02e83f1323f551c01f53051a109))
+* **service-accounts:** make the Manage action look like a button ([2bee30b](https://github.com/maltzsama/baleia/commit/2bee30bd2b1e823a29afc3c70370f1cc62ccef21))
+* **store:** close a maintenance run only while it is running ([2d12ecd](https://github.com/maltzsama/baleia/commit/2d12ecd69b6536ea1b75da297c2e3c13a86ea837))
+* **system-status:** refresh the visual design of the page ([51b373e](https://github.com/maltzsama/baleia/commit/51b373ef1780154f1c144b6c3e17ea6413ee0fc2))
+* **web:** refresh and retry apiFetch requests on 401 ([6218609](https://github.com/maltzsama/baleia/commit/62186091cc4b73033bd34b8b00d46873e9746301))
+* **worker:** close maintenance runs from the workflow and reconcile stale ones ([8ef935f](https://github.com/maltzsama/baleia/commit/8ef935f0e6ee74b4be93e964803a3570b9e70cbd))
+* **worker:** report failed run closes and wait for a cancelled activity ([2d27722](https://github.com/maltzsama/baleia/commit/2d27722695c16cb736a67e100f86b0a6d2b92628))
+* **workload:** enlarge the move icons ([4bc86bf](https://github.com/maltzsama/baleia/commit/4bc86bf579cb8b97dbcfe12fb3e0b05dcf532aab))
+* **workload:** use icon buttons to move a rule ([6ea5e89](https://github.com/maltzsama/baleia/commit/6ea5e8913d3a0e0ecb55d3fa7488c1b038f866a8))
+
 ## [0.9.0](https://github.com/maltzsama/baleia/compare/v0.8.0...v0.9.0) (2026-11-13)
 
 
