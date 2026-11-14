@@ -33,7 +33,7 @@ describe('command palette', () => {
 			{ id: 'q', label: 'Revenue', group: 'Saved queries', run: vi.fn() }
 		]);
 		const tables = vi.fn(() => [{ id: 't', label: 'Orders', group: 'Tables', run: vi.fn() }]);
-		registerProvider({ id: 'queries', label: 'Saved queries', search: queries });
+		registerProvider({ id: 'queries', label: 'Saved queries', quick: true, search: queries });
 		registerProvider({ id: 'tables', label: 'Tables', search: tables });
 
 		render(CommandPalette, { props: { open: true, mode: 'quick' } });

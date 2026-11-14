@@ -41,9 +41,10 @@
 		const q = query.trim();
 		const selected =
 			mode === 'quick'
-				? providersList().filter((p) => p.id === 'queries')
+				? providersList().filter((p) => p.quick)
 				: providersList().filter((p) => !p.quickOnly);
 		let cancelled = false;
+		active = 0;
 		const timer = setTimeout(async () => {
 			loading = true;
 			const lists = await Promise.all(
@@ -73,6 +74,7 @@
 	}
 
 	function onkeydown(event: KeyboardEvent) {
+		if (loading) return;
 		if (event.key === 'ArrowDown') {
 			event.preventDefault();
 			moveTo(Math.min(active + 1, items.length - 1));
