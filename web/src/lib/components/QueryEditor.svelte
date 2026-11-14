@@ -435,6 +435,7 @@
 	}
 
 	function onGlobalKeydown(event: KeyboardEvent) {
+		if (isTextTarget(event.target)) return;
 		const mod = event.metaKey || event.ctrlKey;
 		if (mod && event.key.toLowerCase() === 's') {
 			event.preventDefault();
@@ -459,7 +460,7 @@
 		} else if (event.altKey && event.key.toLowerCase() === 'w') {
 			event.preventDefault();
 			closeTab(activeIdx);
-		} else if (event.key === '?' && !isTextTarget(event.target)) {
+		} else if (event.key === '?') {
 			shortcutsOpen = true;
 		}
 	}
@@ -474,17 +475,23 @@
 
 	/** Inserts the SQL a metric renders to, for the active tab's binding. */
 	async function insertMetricSql(metricId: string) {
-		const tabBinding = editor.activeTab?.bindingId ?? '';
-		const { data: rendered } = await client.GET(
-			'/workspaces/{id}/semantic/metrics/{metric_id}/sql',
-			{
-				params: {
-					path: { id: workspaceId, metric_id: metricId },
-					query: tabBinding ? { binding_id: tabBinding } : {}
+		try {
+			const tabBinding = editor.activeTab?.bindingId ?? '';
+			const { data: rendered, error } = await client.GET(
+				'/workspaces/{id}/semantic/metrics/{metric_id}/sql',
+				{
+					params: {
+						path: { id: workspaceId, metric_id: metricId },
+						query: tabBinding ? { binding_id: tabBinding } : {}
+					}
 				}
-			}
-		);
-		if (rendered?.sql) editor.insert(rendered.sql);
+			);
+			if (error || !rendered?.sql)
+				throw new Error(apiErrorMessage(error, m.metrics_detail_could_not_load_the_metric()));
+			editor.insert(rendered.sql);
+		} catch (e) {
+			activeTab.errorMsg = errorMessage(e);
+		}
 	}
 
 	function registerPalette() {
@@ -815,6 +822,8 @@
 	async function submit(sqlText: string, opts?: { explain?: boolean }) {
 		const text = sqlText.trim();
 		if (!text) return;
+		const runningTab = tabs[activeIdx];
+		if (executingTabs[runningTab.id]) return;
 		// A run is not a completion choice: drop an open suggestion list.
 		if (editorView) closeCompletion(editorView);
 		const idx = activeIdx;
@@ -979,6 +988,8 @@
 	async function rerun(fromPosition: number) {
 		const tab = activeTab;
 		if (!tab?.executionId || !workspaceId) return;
+		if (executingTabs[tab.id]) return;
+		flushSql();
 		try {
 			const { data, error } = await client.POST('/workspaces/{id}/executions', {
 				params: { path: { id: workspaceId } },
