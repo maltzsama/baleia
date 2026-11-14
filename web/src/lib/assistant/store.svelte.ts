@@ -16,29 +16,41 @@ class AssistantStore {
 	state = $state<'idle' | 'running' | 'interrupted'>('idle');
 	loading = $state(false);
 	error = $state('');
+	loadError = $state('');
 
 	private abort: AbortController | null = null;
 	private workspaceId = '';
+	private loadRun = 0;
+	private openRun = 0;
 
 	async loadStatus() {
-		const { data } = await client.GET('/assistant/status');
-		if (data) {
-			this.enabled = data.enabled;
-			this.dataSharing = data.data_sharing;
+		try {
+			const { data } = await client.GET('/assistant/status');
+			if (data) {
+				this.enabled = data.enabled;
+				this.dataSharing = data.data_sharing;
+			}
+		} catch {
+			this.enabled = false;
 		}
 	}
 
 	async load(workspaceId: string) {
 		this.workspaceId = workspaceId;
+		const run = ++this.loadRun;
 		if (!this.enabled || !workspaceId) return;
 		this.loading = true;
-		this.error = '';
+		this.loadError = '';
 		try {
 			const { data, error } = await client.GET('/assistant/conversations', {
 				params: { query: { workspace_id: workspaceId } }
 			});
+			if (run !== this.loadRun) return;
 			if (error || !data) {
-				this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_load_conversations());
+				this.loadError = apiErrorMessage(
+					error,
+					m.assistant_storesvelte_could_not_load_conversations()
+				);
 				return;
 			}
 			this.conversations = data;
@@ -46,16 +58,25 @@ class AssistantStore {
 				this.active = null;
 				this.messages = [];
 			}
-			if (!this.active && data.length > 0) await this.open(data[0].id);
+			if (!this.active && data.length > 0 && run === this.loadRun) await this.open(data[0].id);
+		} catch (error) {
+			if (run === this.loadRun) {
+				this.loadError = apiErrorMessage(
+					error,
+					m.assistant_storesvelte_could_not_load_conversations()
+				);
+			}
 		} finally {
-			this.loading = false;
+			if (run === this.loadRun) this.loading = false;
 		}
 	}
 
 	async open(id: string) {
+		const run = ++this.openRun;
 		const { data, error } = await client.GET('/assistant/conversations/{id}', {
 			params: { path: { id } }
 		});
+		if (run !== this.openRun) return;
 		if (error || !data) {
 			this.error = apiErrorMessage(
 				error,
@@ -92,11 +113,12 @@ class AssistantStore {
 		await this.open(data.id);
 	}
 
-	async send(text: string) {
+	async send(text: string): Promise<boolean> {
 		if (!this.active) await this.create();
-		if (!this.active) return;
+		if (!this.active) return false;
 		this.state = 'running';
 		this.streamingText = '';
+		this.error = '';
 		const { error } = await client.POST('/assistant/conversations/{id}/messages', {
 			params: { path: { id: this.active.id } },
 			body: { text }
@@ -104,23 +126,40 @@ class AssistantStore {
 		if (error) {
 			this.state = 'idle';
 			this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_send_the_message());
+			return false;
 		}
+		return true;
 	}
 
 	async cancel() {
 		if (!this.active) return;
-		await client.POST('/assistant/conversations/{id}/cancel', {
+		this.state = 'idle';
+		this.streamingText = '';
+		const { error } = await client.POST('/assistant/conversations/{id}/cancel', {
 			params: { path: { id: this.active.id } }
 		});
+		if (error)
+			this.error = apiErrorMessage(
+				error,
+				m.assistant_storesvelte_the_assistant_stream_disconnected()
+			);
 	}
 
 	async remove(id: string) {
-		await client.DELETE('/assistant/conversations/{id}', { params: { path: { id } } });
+		if (this.active?.id === id) this.stop();
+		const { error } = await client.DELETE('/assistant/conversations/{id}', {
+			params: { path: { id } }
+		});
+		if (error) {
+			this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_load_conversations());
+			return;
+		}
 		this.conversations = this.conversations.filter((c) => c.id !== id);
 		if (this.active?.id === id) {
-			this.stop();
 			this.active = null;
 			this.messages = [];
+			this.streamingText = '';
+			this.state = 'idle';
 		}
 	}
 
@@ -139,8 +178,11 @@ class AssistantStore {
 			signal: controller.signal,
 			onEvent: (frame) => this.onFrame(frame)
 		}).catch(() => {
-			if (!controller.signal.aborted)
+			if (!controller.signal.aborted) {
+				this.state = 'idle';
+				this.streamingText = '';
 				this.error = m.assistant_storesvelte_the_assistant_stream_disconnected();
+			}
 		});
 	}
 
@@ -157,7 +199,7 @@ class AssistantStore {
 		if (frame.event !== 'message') return;
 		try {
 			const message = JSON.parse(frame.data) as Message;
-			if (this.messages.some((m) => m.seq === message.seq)) return;
+			if (this.messages.some((msg) => msg.seq === message.seq)) return;
 			this.messages = [...this.messages, message];
 			if (message.role === 'assistant' || message.role === 'notice') {
 				this.streamingText = '';
