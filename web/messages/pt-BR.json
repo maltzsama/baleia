@@ -482,6 +482,7 @@
 	"login_sign_in_with": "Entrar com",
 	"metrics_metricbuilder_slug": "Slug",
 	"workbench_savequerydialog_slug": "Slug *",
+	"workbench_savequerydialog_slug_already_in_use": "Este slug já está em uso em outro espaço.",
 	"settings_agents_snippet": "trecho",
 	"semantic_doceditor_someone_else_changed_this_doc_reload_to_se": "Outra pessoa alterou este documento. Recarregue para ver a versão dela ou sobrescreva.",
 	"common_space": "Espaço",
