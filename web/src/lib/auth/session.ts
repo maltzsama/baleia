@@ -24,7 +24,8 @@ const DEFAULT_TTL_MS = 15 * 60 * 1000;
 
 let accessToken: string | null = null;
 let expiresAtMs = 0;
-let refreshInFlight: Promise<boolean> | null = null;
+let epoch = 0;
+let refreshInFlight: { force: boolean; promise: Promise<boolean> } | null = null;
 let handlers: SessionHandlers = {};
 let channel: BroadcastChannel | null = null;
 
@@ -64,8 +65,14 @@ function authChannel(): BroadcastChannel | null {
 	if (!channel) {
 		channel = new BroadcastChannel(AUTH_CHANNEL);
 		channel.onmessage = (event: MessageEvent) => {
-			const message = event.data as { type?: string } | null;
-			if (message?.type === 'logout') {
+			const message = event.data as
+				{ type?: 'logout' } | { type?: 'refreshed'; token?: unknown; expiresAt?: unknown } | null;
+			if (message?.type === 'refreshed' && typeof message.token === 'string') {
+				setToken(
+					message.token,
+					typeof message.expiresAt === 'string' ? message.expiresAt : undefined
+				);
+			} else if (message?.type === 'logout') {
 				clear();
 				handlers.onLogout?.();
 			}
@@ -88,6 +95,7 @@ function withRefreshLock<T>(callback: () => Promise<T>): Promise<T> {
 }
 
 async function performRefresh(): Promise<boolean> {
+	const started = epoch;
 	try {
 		const response = await fetch(`${API_ROOT}/auth/refresh`, {
 			method: 'POST',
@@ -100,8 +108,13 @@ async function performRefresh(): Promise<boolean> {
 			return false;
 		}
 		const data = (await response.json()) as RefreshResponse;
+		if (epoch !== started) return false;
 		setToken(data.token, data.expires_at);
-		authChannel()?.postMessage({ type: 'refreshed', at: Date.now() });
+		authChannel()?.postMessage({
+			type: 'refreshed',
+			token: data.token,
+			expiresAt: data.expires_at
+		});
 		return true;
 	} catch {
 		return false;
@@ -115,19 +128,26 @@ async function performRefresh(): Promise<boolean> {
  */
 export async function refresh(force = false): Promise<boolean> {
 	if (!force && hasFreshToken()) return true;
-	if (refreshInFlight) return refreshInFlight;
+	if (refreshInFlight) {
+		if (!force || refreshInFlight.force) return refreshInFlight.promise;
+		const previous = refreshInFlight.promise;
+		return previous.then(
+			() => refresh(true),
+			() => refresh(true)
+		);
+	}
 
-	refreshInFlight = withRefreshLock(async () => {
+	const promise = withRefreshLock(async () => {
 		// A tab that waited for the lock may already have a valid token.
 		if (!force && hasFreshToken()) return true;
 		return performRefresh();
 	}).catch(() => false);
-
-	try {
-		return await refreshInFlight;
-	} finally {
-		refreshInFlight = null;
-	}
+	refreshInFlight = { force, promise };
+	const clearInFlight = () => {
+		if (refreshInFlight?.promise === promise) refreshInFlight = null;
+	};
+	promise.then(clearInFlight, clearInFlight);
+	return promise;
 }
 
 /** Restores the session from the HttpOnly cookie on app boot. */
@@ -169,6 +189,7 @@ function codeFor(status: number, body: unknown): string {
  * share this path; the caller decides which fields to send.
  */
 export async function login(request: LoginRequest): Promise<LoginResult> {
+	const started = ++epoch;
 	try {
 		const response = await fetch(`${API_ROOT}/auth/login`, {
 			method: 'POST',
@@ -186,8 +207,13 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
 			};
 		}
 		const data = body as LoginResponse;
+		if (epoch !== started) return { ok: false, status: 0, code: 'network_error' };
 		setToken(data.token, data.expires_at);
-		authChannel()?.postMessage({ type: 'refreshed', at: Date.now() });
+		authChannel()?.postMessage({
+			type: 'refreshed',
+			token: data.token,
+			expiresAt: data.expires_at
+		});
 		return { ok: true, user: data.user };
 	} catch {
 		return { ok: false, status: 0, code: 'network_error' };
@@ -196,6 +222,8 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
 
 /** Ends the session in this tab and tells every other tab to do the same. */
 export async function logout(): Promise<void> {
+	clear();
+	authChannel()?.postMessage({ type: 'logout' });
 	try {
 		await fetch(`${API_ROOT}/auth/logout`, {
 			method: 'POST',
@@ -206,12 +234,16 @@ export async function logout(): Promise<void> {
 	} catch {
 		/* best effort: log out locally even if the API is unreachable */
 	}
-	clear();
-	authChannel()?.postMessage({ type: 'logout' });
 }
 
 /** Only same-origin relative paths are honoured after login (#263). */
 export function safeNext(next: string | null | undefined, fallback = '/sql'): string {
-	if (!next || !next.startsWith('/') || next.startsWith('//')) return fallback;
+	const hasUnsafeCharacter =
+		next?.split('').some((character) => {
+			const code = character.charCodeAt(0);
+			return character === '\\' || code < 0x20 || code === 0x7f;
+		}) ?? false;
+	if (!next || !next.startsWith('/') || next.startsWith('//') || hasUnsafeCharacter)
+		return fallback;
 	return next;
 }

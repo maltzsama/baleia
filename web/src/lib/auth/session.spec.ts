@@ -86,9 +86,31 @@ describe('session client', () => {
 	it('ignores an absolute next path', async () => {
 		const { safeNext } = await import('./session');
 		expect(safeNext('//evil.com')).toBe('/sql');
+		expect(safeNext('/\\evil.com')).toBe('/sql');
+		expect(safeNext('/\t/evil.com')).toBe('/sql');
 		expect(safeNext('https://evil.com')).toBe('/sql');
 		expect(safeNext('/sql?tab=1')).toBe('/sql?tab=1');
 		expect(safeNext(null, '/connections')).toBe('/connections');
+	});
+
+	it('adopts a refreshed token broadcast by another tab', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(null, { status: 204 }))
+		);
+		const { getAccessToken, logout } = await import('./session');
+		await logout();
+		const channel = FakeBroadcastChannel.instances.at(-1);
+
+		channel?.onmessage?.({
+			data: {
+				type: 'refreshed',
+				token: 'access-from-other-tab',
+				expiresAt: '2030-01-01T00:00:00Z'
+			}
+		} as MessageEvent);
+
+		expect(getAccessToken()).toBe('access-from-other-tab');
 	});
 
 	it('reports anonymous when the refresh cookie is gone', async () => {
