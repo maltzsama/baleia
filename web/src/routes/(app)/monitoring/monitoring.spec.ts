@@ -76,7 +76,8 @@ describe('monitoring page', () => {
 		render(MonitoringPage);
 
 		expect(await screen.findByText('Workers')).toBeTruthy();
-		expect(screen.getByText('Running')).toBeTruthy();
+		// The tile and, now that a single snapshot is drawn, the chart legend.
+		expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
 		await waitFor(() => expect(screen.getByText('3')).toBeTruthy());
 		expect(screen.queryByLabelText('Engine')).toBeNull();
 	});
@@ -256,6 +257,37 @@ describe('monitoring page', () => {
 		const dialog = await screen.findByRole('dialog');
 		expect(await within(dialog).findByText(/has no maintenance parameters/)).toBeTruthy();
 		expect(within(dialog).getByText('Optimize')).toBeTruthy();
+	});
+
+	// #1025: the cluster chart is part of the page whatever the window holds.
+	it('draws the cluster chart for a window with a single snapshot', async () => {
+		render(MonitoringPage);
+
+		expect(await screen.findByRole('slider', { name: 'Queries' })).toBeTruthy();
+	});
+
+	it('keeps the cluster chart, with a note, for a window with no snapshot', async () => {
+		server.use(
+			http.get('/engines/{id}/monitoring/cluster', ({ response }) =>
+				// The latest snapshot is older than the window, as when the poller was off.
+				response(200).json({
+					latest: {
+						captured_at: '2026-01-01T00:00:00Z',
+						active_workers: 1,
+						running_queries: 0,
+						queued_queries: 0,
+						blocked_queries: 0,
+						total_memory_bytes: 100,
+						free_memory_bytes: 40
+					},
+					series: []
+				})
+			)
+		);
+		render(MonitoringPage);
+
+		expect(await screen.findByRole('img', { name: 'Queries' })).toBeTruthy();
+		expect(screen.getAllByText('No snapshots in this window yet.').length).toBeGreaterThan(0);
 	});
 
 	it('has no separate Maintenance tab: Iceberg health carries it (#1014)', async () => {

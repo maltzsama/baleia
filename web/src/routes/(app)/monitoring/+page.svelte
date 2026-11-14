@@ -991,13 +991,11 @@
 						</div>
 					</div>
 				</div>
-				{#if cluster.series.length > 1}
-					<TimeSeriesChart
-						series={clusterSeries}
-						title={m.monitoring_queries()}
-						yLabel={m.monitoring_queries()}
-					/>
-				{/if}
+				<TimeSeriesChart
+					series={clusterSeries}
+					title={m.monitoring_queries()}
+					yLabel={m.monitoring_queries()}
+				/>
 			{/if}
 		{:else if tab === 'queries'}
 			<div

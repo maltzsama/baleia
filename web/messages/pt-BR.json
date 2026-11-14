@@ -1126,6 +1126,7 @@
 	"monitoring_chart_from_to": "De {from} a {to}.",
 	"monitoring_chart_series_stats": "{label}: {latest} agora, pico {peak}.",
 	"monitoring_chart_point": "{time}: {values}.",
+	"monitoring_chart_no_data": "Nenhum snapshot nesta janela ainda.",
 	"nav_sql": "SQL",
 	"nav_data": "Dados",
 	"nav_explore": "Explorar",
