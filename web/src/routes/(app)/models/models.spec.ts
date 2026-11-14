@@ -54,6 +54,17 @@ describe('models list', () => {
 		expect(screen.getByText('Certified')).toBeTruthy();
 	});
 
+	// #1019: the search glossary is reached from the models.
+	it('opens the search glossary from the header', async () => {
+		baseHandlers();
+		render(ModelsPage);
+		await screen.findByText('Orders');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Search glossary' }));
+
+		expect(nav.goto).toHaveBeenCalledWith('/models/glossary');
+	});
+
 	it('shows the empty state', async () => {
 		baseHandlers([]);
 

@@ -2731,7 +2731,6 @@
 	"search_glossary_added": "Entrada adicionada",
 	"search_glossary_removed": "Entrada removida",
 	"search_glossary_no_workspace": "Escolha um workspace para ver o glossário.",
-	"settings_sections_search_glossary": "Glossário de busca",
 	"search_glossary_created": "Adicionada",
 	"metadata_unsupported_table": "Tabela não suportada",
 	"metadata_unsupported_table_kind": "tipo: {kind}\nTipo não suportado: a origem não dá acesso a este tipo de tabela para motores externos.",

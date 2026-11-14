@@ -12,7 +12,7 @@ function mockWorkspace() {
 	server.use(http.get('/workspaces', ({ response }) => response(200).json([makeWorkspace()])));
 }
 
-describe('Settings · Search glossary (#943)', () => {
+describe('Models · Search glossary (#943, #1019)', () => {
 	beforeEach(() => {
 		workspaceStore.select(makeWorkspace());
 	});
@@ -132,5 +132,20 @@ describe('Settings · Search glossary (#943)', () => {
 		fail = false;
 		await fireEvent.click(screen.getByRole('button', { name: /try again/i }));
 		expect(await screen.findByText('No synonyms yet')).toBeTruthy();
+	});
+
+	// #1019: the glossary lives next to the models, and says how to get back.
+	it('links back to the models', async () => {
+		mockWorkspace();
+		server.use(
+			http.get('/workspaces/{id}/search/glossary', ({ response }) =>
+				response(200).json({ entries: [ENTRY], allowed_actions: ['view', 'edit'] })
+			)
+		);
+		renderPage(SearchGlossaryPage, { me: makeMe() });
+
+		const back = await screen.findByRole('link', { name: 'Models' });
+
+		expect(back.getAttribute('href')).toBe('/models');
 	});
 });
