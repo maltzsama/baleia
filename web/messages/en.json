@@ -1128,6 +1128,7 @@
 	"monitoring_chart_from_to": "From {from} to {to}.",
 	"monitoring_chart_series_stats": "{label}: {latest} now, peak {peak}.",
 	"monitoring_chart_point": "{time}: {values}.",
+	"monitoring_chart_no_data": "No snapshots in this window yet.",
 	"nav_sql": "SQL",
 	"nav_data": "Data",
 	"nav_explore": "Explore",

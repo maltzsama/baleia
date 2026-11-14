@@ -6,6 +6,7 @@
 	import { toasts } from '$lib/ui/toast.svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
+	import IconButton from '$lib/ui/IconButton.svelte';
 	import Checkbox from '$lib/ui/Checkbox.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
@@ -774,20 +775,38 @@
 										<td class="px-3 py-2 text-text-muted">{rule.weight}</td>
 										<td class="px-3 py-2">
 											<div class="flex items-center justify-end gap-1">
-												<Button
-													size="sm"
+												<IconButton
+													label={m.workload_rule_move_up()}
 													disabled={rulesBusy || index === 0}
 													onclick={() => move(rule, -1)}
 												>
-													{m.workload_rule_move_up()}
-												</Button>
-												<Button
-													size="sm"
+													<svg
+														viewBox="0 0 16 16"
+														class="h-4 w-4"
+														fill="none"
+														stroke="currentColor"
+														stroke-width="2"
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														aria-hidden="true"><path d="m4 10 4-4 4 4" /></svg
+													>
+												</IconButton>
+												<IconButton
+													label={m.workload_rule_move_down()}
 													disabled={rulesBusy || index === sortedRules.length - 1}
 													onclick={() => move(rule, 1)}
 												>
-													{m.workload_rule_move_down()}
-												</Button>
+													<svg
+														viewBox="0 0 16 16"
+														class="h-4 w-4"
+														fill="none"
+														stroke="currentColor"
+														stroke-width="2"
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg
+													>
+												</IconButton>
 												<Button size="sm" onclick={() => openEdit(rule)}>
 													{m.workload_edit_rule()}
 												</Button>

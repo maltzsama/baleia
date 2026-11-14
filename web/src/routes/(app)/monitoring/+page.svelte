@@ -11,7 +11,6 @@
 	import { goto } from '$app/navigation';
 	import { analyzeCatalogTableHealth, runTableMaintenance } from '$lib/maintenance/client';
 	import TableMaintenance from '$lib/maintenance/TableMaintenance.svelte';
-	import CatalogMaintenancePlan from '$lib/maintenance/CatalogMaintenancePlan.svelte';
 	import { operationLabel, triggerLabel } from '$lib/maintenance/labels';
 	import { poll, type PollController } from '$lib/util/poll';
 	import { streamEvents } from '$lib/assistant/sse';
@@ -59,7 +58,7 @@
 
 	let engines = $state<MonitoringEngine[]>([]);
 	let engineId = $state('');
-	let tab = $state<'cluster' | 'queries' | 'tables' | 'maintenance'>('cluster');
+	let tab = $state<'cluster' | 'queries' | 'tables'>('cluster');
 	let loading = $state(true);
 	let error = $state('');
 
@@ -388,7 +387,7 @@
 		const seq = ++activeSeq;
 		stopPolls();
 		stopEvents();
-		if (!engineId && tab !== 'tables' && tab !== 'maintenance') return;
+		if (!engineId && tab !== 'tables') return;
 		if (tab === 'cluster') {
 			void loadOverview();
 			await loadCluster();
@@ -422,10 +421,6 @@
 			polls.push(
 				poll(loadHealth, { until: () => false, intervals: [60_000], maxDurationMs: 3_600_000 })
 			);
-		} else {
-			// The Maintenance tab only needs the catalog list; the plan loads
-			// in the component itself.
-			await loadCatalogList();
 		}
 	}
 
@@ -556,7 +551,7 @@
 		}
 	}
 
-	function selectTab(next: 'cluster' | 'queries' | 'tables' | 'maintenance') {
+	function selectTab(next: 'cluster' | 'queries' | 'tables') {
 		tab = next;
 		void loadActive();
 	}
@@ -819,7 +814,7 @@
 	{:else}
 		<div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border">
 			<div class="flex gap-1" role="tablist" aria-label={m.monitoring_monitoring_tabs()}>
-				{#each [['cluster', m.monitoring_cluster()], ['queries', m.monitoring_queries()], ['tables', m.monitoring_iceberg_health()], ['maintenance', m.maintenance_title()]] as [value, label] (value)}
+				{#each [['cluster', m.monitoring_cluster()], ['queries', m.monitoring_queries()], ['tables', m.monitoring_iceberg_health()]] as [value, label] (value)}
 					<button
 						type="button"
 						role="tab"
@@ -827,7 +822,7 @@
 						class="-mb-px border-b-2 px-3 py-1.5 text-[12px] font-semibold {tab === value
 							? 'border-primary text-primary'
 							: 'border-transparent text-slate-600 hover:text-text-main dark:text-slate-300'}"
-						onclick={() => selectTab(value as 'cluster' | 'queries' | 'tables' | 'maintenance')}
+						onclick={() => selectTab(value as 'cluster' | 'queries' | 'tables')}
 					>
 						{label}
 					</button>
@@ -996,13 +991,11 @@
 						</div>
 					</div>
 				</div>
-				{#if cluster.series.length > 1}
-					<TimeSeriesChart
-						series={clusterSeries}
-						title={m.monitoring_queries()}
-						yLabel={m.monitoring_queries()}
-					/>
-				{/if}
+				<TimeSeriesChart
+					series={clusterSeries}
+					title={m.monitoring_queries()}
+					yLabel={m.monitoring_queries()}
+				/>
 			{/if}
 		{:else if tab === 'queries'}
 			<div
@@ -1445,32 +1438,6 @@
 						</tbody>
 					</table>
 				</div>
-			{/if}
-		{:else}
-			<div
-				class="mb-3 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
-			>
-				<Select
-					label={m.monitoring_catalog()}
-					bind:value={catalogId}
-					options={catalogs.map((catalog) => ({ value: catalog.id, label: catalog.name }))}
-				/>
-			</div>
-			{#if catalogs.length === 0}
-				<EmptyState
-					title={m.monitoring_no_catalogs()}
-					description={m.maintenance_no_iceberg_catalog()}
-				>
-					<a class="text-[12px] font-semibold text-primary" href={resolve('/connections')}
-						>{m.maintenance_go_to_connections()}</a
-					>
-				</EmptyState>
-			{:else if catalogId}
-				<CatalogMaintenancePlan
-					{catalogId}
-					readOnly={selectedReadOnly}
-					onconfigure={(item) => openEditor(catalogId, item.namespace, item.table_name)}
-				/>
 			{/if}
 		{/if}
 	{/if}

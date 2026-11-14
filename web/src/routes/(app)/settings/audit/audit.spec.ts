@@ -85,4 +85,40 @@ describe('audit page', () => {
 		await waitFor(() => expect(from).not.toBeNull());
 		expect(new Date(from!).getTime()).toBeLessThan(Date.now());
 	});
+
+	// #1018: the actor filter takes an id, so an admin can see it.
+	it('shows the actor id the filter takes, to an admin', async () => {
+		render(AuditPage);
+
+		await screen.findByText('Ada Lovelace');
+
+		expect(screen.getByText(ACTOR)).toBeTruthy();
+	});
+
+	it('does not show actor ids to a member', async () => {
+		authStore.set(makeMe({ role: 'member', global_actions: [] }));
+		render(AuditPage);
+
+		await screen.findByText('Ada Lovelace');
+
+		expect(screen.queryByText(ACTOR)).toBeNull();
+	});
+
+	// #1017: the filters apply from the keyboard, as any form does.
+	it('applies the filters when the form is submitted', async () => {
+		const actors: (string | null)[] = [];
+		server.use(
+			http.get('/audit/events', ({ request, response }) => {
+				actors.push(new URL(request.url).searchParams.get('actor_id'));
+				return response(200).json({ items: [event()], next_cursor: null });
+			})
+		);
+		render(AuditPage);
+		await screen.findByText('Ada Lovelace');
+
+		await fireEvent.input(screen.getByLabelText('Actor id'), { target: { value: ACTOR } });
+		await fireEvent.submit(screen.getByRole('button', { name: 'Search' }).closest('form')!);
+
+		await waitFor(() => expect(actors).toContain(ACTOR));
+	});
 });

@@ -93,4 +93,28 @@ describe('TimeSeriesChart', () => {
 		const table = screen.getByRole('table');
 		expect(within(table).getAllByText('—')).toHaveLength(2);
 	});
+
+	// #1025: a window with no snapshot, or one, still draws the chart.
+	it('keeps the frame, with a note, when the window has no point', () => {
+		const empty: TimeSeries = { key: 'running', label: 'Running', points: [] };
+		const { container } = renderChart([empty]);
+
+		expect(screen.getByRole('img', { name: 'Running queries' })).toBeTruthy();
+		expect(screen.getAllByText('No snapshots in this window yet.').length).toBeGreaterThan(0);
+		const ticks = [...container.querySelectorAll('text')].map((t) => t.textContent?.trim());
+		expect(ticks).toEqual(expect.arrayContaining(['0', '1']));
+		expect(container.querySelectorAll('path[stroke]')).toHaveLength(0);
+	});
+
+	it('draws a single sample as a dot per series', () => {
+		const one = (key: string, v: number): TimeSeries => ({
+			key,
+			label: key,
+			points: [{ t: new Date(base).toISOString(), v }]
+		});
+		const { container } = renderChart([one('running', 0), one('queued', 0)]);
+
+		expect(screen.getByRole('slider', { name: 'Running queries' })).toBeTruthy();
+		expect(container.querySelectorAll('circle')).toHaveLength(2);
+	});
 });

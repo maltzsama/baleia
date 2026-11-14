@@ -251,6 +251,14 @@
 						stroke-linejoin="round"
 					/>
 				{/each}
+				{#if times.length === 1}
+					<!-- One sample has no line to draw: show it as a dot. -->
+					{#each values as line, i (lines[i].key)}
+						{#if line[0] !== null}
+							<circle cx={x(times[0])} cy={y(line[0])} r="3" fill={lines[i].color} />
+						{/if}
+					{/each}
+				{/if}
 				{#if tip}
 					<line
 						x1={tip.x}
@@ -295,6 +303,53 @@
 			{/if}
 		</div>
 		<p id={summaryId} class="sr-only">{summary}</p>
+	{:else}
+		<!-- No snapshot in the window: keep the frame so the section does not
+		     vanish, with its axis at zero and a note saying why it is empty. -->
+		<div class="relative mt-2" bind:clientWidth={width}>
+			<svg
+				{width}
+				height={HEIGHT}
+				style="width: {width}px; height: {HEIGHT}px;"
+				role="img"
+				aria-labelledby={titleId}
+				aria-describedby={summaryId}
+				class="block"
+			>
+				{#if yLabel}
+					<text x={PAD.left} y={PAD.top - 8} stroke="none" class="fill-text-muted text-[10px]"
+						>{yLabel}</text
+					>
+				{/if}
+				{#each yTicks as tick (tick)}
+					<line
+						x1={PAD.left}
+						x2={PAD.left + plotW}
+						y1={y(tick)}
+						y2={y(tick)}
+						class="stroke-border"
+						stroke-width="1"
+					/>
+					<text
+						x={PAD.left - 6}
+						y={y(tick)}
+						text-anchor="end"
+						dominant-baseline="middle"
+						stroke="none"
+						class="fill-text-muted text-[10px]">{tick}</text
+					>
+				{/each}
+				<text
+					x={PAD.left + plotW / 2}
+					y={PAD.top + plotH / 2}
+					text-anchor="middle"
+					dominant-baseline="middle"
+					stroke="none"
+					class="fill-text-muted text-[11px]">{m.monitoring_chart_no_data()}</text
+				>
+			</svg>
+		</div>
+		<p id={summaryId} class="sr-only">{m.monitoring_chart_no_data()}</p>
 	{/if}
 
 	{#if tableOpen && times.length > 0}
