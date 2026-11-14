@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.9.1](https://github.com/maltzsama/baleia/compare/v0.9.0...v0.9.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **api:** bound the login delay and share it across replicas ([83feca3](https://github.com/maltzsama/baleia/commit/83feca37498ffa073d6223619688cbc85a822631))
+* **api:** count local login failures when Redis reads succeed ([b145585](https://github.com/maltzsama/baleia/commit/b14558516ae6555e3120708b51ddbaf14c2be521))
+* **api:** store a maintenance run under the id its workflow gets ([480759a](https://github.com/maltzsama/baleia/commit/480759ac70e62450fce97022b541ea3b6ada8b55))
+* **audit:** lay the filters out as a form and show the actor id ([ac84496](https://github.com/maltzsama/baleia/commit/ac844960817e23513a1b28a896b664a765d0cd5f))
+* **audit:** let the id filters fill their row ([bd8c361](https://github.com/maltzsama/baleia/commit/bd8c3613ee0a10ba45282eabe4be13b984bdd159))
+* **auth:** bind access tokens to their session and check it per request ([00be416](https://github.com/maltzsama/baleia/commit/00be4169b64bac98fc875bd1a13ddf63e5c67a5f))
+* **credentials:** show where a new API key or token is used ([069265d](https://github.com/maltzsama/baleia/commit/069265d4faeecdf65fcb02cd5b9e5e1ba4ca99c7))
+* **glossary:** move the search glossary next to the models and align its form ([c11c3eb](https://github.com/maltzsama/baleia/commit/c11c3eb26fd62b07d3d5a81c7d7c22a39f35c124))
+* **identity:** correct the comments on access token lifetime ([f032edd](https://github.com/maltzsama/baleia/commit/f032edda6dc24a42c3b7955ed3545955b5f2ac01))
+* **identity:** keep revoked refresh tokens until they expire ([e8039e8](https://github.com/maltzsama/baleia/commit/e8039e8c427ade16843059b88756ca28e5e58b76))
+* **identity:** serialize refresh revocation with rotation ([dcd24b7](https://github.com/maltzsama/baleia/commit/dcd24b7475b6caeea3ea836de0e3738de07b32ef))
+* **monitoring:** keep the cluster chart when the window has no points ([2ad84f5](https://github.com/maltzsama/baleia/commit/2ad84f55e768c1dc5f3c6cbe9d7cc0e55c725134))
+* **monitoring:** remove the redundant Maintenance tab ([dcc1153](https://github.com/maltzsama/baleia/commit/dcc11532d2e5a02e83f1323f551c01f53051a109))
+* **service-accounts:** make the Manage action look like a button ([2bee30b](https://github.com/maltzsama/baleia/commit/2bee30bd2b1e823a29afc3c70370f1cc62ccef21))
+* **store:** close a maintenance run only while it is running ([2d12ecd](https://github.com/maltzsama/baleia/commit/2d12ecd69b6536ea1b75da297c2e3c13a86ea837))
+* **system-status:** refresh the visual design of the page ([51b373e](https://github.com/maltzsama/baleia/commit/51b373ef1780154f1c144b6c3e17ea6413ee0fc2))
+* **web:** adapt brand mark colours to the theme they are drawn on ([ccdeeed](https://github.com/maltzsama/baleia/commit/ccdeeed64a19d980917b8228813e29253d10631f))
+* **web:** add the sun beside the theme switch ([4b23b5b](https://github.com/maltzsama/baleia/commit/4b23b5b683662ad5555f5973fb0b085f02c88752))
+* **web:** credit Lucide and Simple Icons and record the icon rule ([5371ac8](https://github.com/maltzsama/baleia/commit/5371ac87732740dbd3205b2416eaaef86e5caf97))
+* **web:** draw connector brand marks from simple-icons and vendored official SVGs ([e5c6770](https://github.com/maltzsama/baleia/commit/e5c6770f618c8bd741108e85345141942adae647))
+* **web:** draw the interface icons with Lucide ([c2860cb](https://github.com/maltzsama/baleia/commit/c2860cba8e74294ee00151c4bb943804c6a28652))
+* **web:** enlarge the connector icons in the picker, badges and catalog tree ([28576bc](https://github.com/maltzsama/baleia/commit/28576bcff6d74688e17cfb13c6c41dd28f2a1180))
+* **web:** guard stale session operations ([3933102](https://github.com/maltzsama/baleia/commit/39331028bf124b8b88da7e9548bcd389aedb0a3a))
+* **web:** handle function catalog failures safely ([8bdb42a](https://github.com/maltzsama/baleia/commit/8bdb42a7b8ed09e3f1aad082271a4669873eaf0e))
+* **web:** harden navigation section matching ([60cb71f](https://github.com/maltzsama/baleia/commit/60cb71f3b78d6f60350cf4d050586b3777229115))
+* **web:** ignore SQL literals in signature help ([e1f36ac](https://github.com/maltzsama/baleia/commit/e1f36acfcdcbc1b8b5a2a60990614d845885569e))
+* **web:** localize catalog binding remediation ([ffd6642](https://github.com/maltzsama/baleia/commit/ffd6642e98ff0e6a422fc402adb82bf00727d82d))
+* **web:** localize function panel kinds ([2798e24](https://github.com/maltzsama/baleia/commit/2798e24b608d18ff4c1a4ee6af000f2474bf7f6b))
+* **web:** make quick palette providers explicit ([595d4a9](https://github.com/maltzsama/baleia/commit/595d4a97c040a4c734ee82f71929a2b74f082b51))
+* **web:** minify the vendored brand SVGs ([52677c4](https://github.com/maltzsama/baleia/commit/52677c41f45d96c6fff3c3c5b586f7b7d12d0065))
+* **web:** preserve SQL statement terminators ([f0d29e5](https://github.com/maltzsama/baleia/commit/f0d29e524173ef76863379395596b4b1f49b7030))
+* **web:** prevent SQL reference from hanging ([59076a1](https://github.com/maltzsama/baleia/commit/59076a16794a4d160b796ac332f149b1dcfa6ca2))
+* **web:** refresh and retry apiFetch requests on 401 ([6218609](https://github.com/maltzsama/baleia/commit/62186091cc4b73033bd34b8b00d46873e9746301))
+* **web:** refuse scheme-relative external URLs in the asset guard ([0923880](https://github.com/maltzsama/baleia/commit/0923880e193adef7e36a9914055387f0b2ec3964))
+* **web:** replace character and emoji icons with Lucide ([2ead331](https://github.com/maltzsama/baleia/commit/2ead331577dd121bb5127cff02dcfff393606a39))
+* **web:** retain eligible workbench drafts ([144df4a](https://github.com/maltzsama/baleia/commit/144df4af75ffa50d7af9b16c9c239f8fd9510e06))
+* **web:** route saved query conflicts to their fields ([2d99e4f](https://github.com/maltzsama/baleia/commit/2d99e4f8e156360d3221437e41f9cdbc7c85b646))
+* **web:** satisfy function cache lint ([5640a9e](https://github.com/maltzsama/baleia/commit/5640a9e88669d1fdf001d6a672c8f754cf027a69))
+* **web:** stop loading the UI font from Google Fonts ([f244e13](https://github.com/maltzsama/baleia/commit/f244e13baafa151e72312ab104c45cae5f5167da))
+* **worker:** close maintenance runs from the workflow and reconcile stale ones ([8ef935f](https://github.com/maltzsama/baleia/commit/8ef935f0e6ee74b4be93e964803a3570b9e70cbd))
+* **worker:** report failed run closes and wait for a cancelled activity ([2d27722](https://github.com/maltzsama/baleia/commit/2d27722695c16cb736a67e100f86b0a6d2b92628))
+* **workload:** enlarge the move icons ([4bc86bf](https://github.com/maltzsama/baleia/commit/4bc86bf579cb8b97dbcfe12fb3e0b05dcf532aab))
+* **workload:** use icon buttons to move a rule ([6ea5e89](https://github.com/maltzsama/baleia/commit/6ea5e8913d3a0e0ecb55d3fa7488c1b038f866a8))
+
+
+### Miscellaneous
+
+* **web:** avoid layout reads outside split drags ([6f1a68e](https://github.com/maltzsama/baleia/commit/6f1a68ec73b6472862869e8714538ac2b59db667))
+
 ## [0.9.0](https://github.com/maltzsama/baleia/compare/v0.8.0...v0.9.0) (2026-11-13)
 
 
