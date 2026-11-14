@@ -43,6 +43,16 @@ The web app bundles IBM Plex Sans, DM Mono, Sometype Mono and Monoton through
 [Fontsource](https://fontsource.org). These fonts are licensed under the
 [SIL Open Font License 1.1](https://openfontlicense.org).
 
+## Icons
+
+The interface icons are [Lucide](https://lucide.dev), bundled through
+`@lucide/svelte` under the ISC license. The product logos in the connection
+pickers come from [Simple Icons](https://simpleicons.org) (CC0 1.0) and, for the
+products it does not carry (AWS Glue and Redshift, Apache Iceberg, Nessie,
+Apache Pinot, Apache Ignite, Exasol and others), from each project's official
+artwork vendored under `web/src/lib/ui/patterns/icons/`. Product names and logos
+belong to their owners and only identify the connector.
+
 ## Third-party software
 
 Go modules and npm packages keep the licenses declared in their own

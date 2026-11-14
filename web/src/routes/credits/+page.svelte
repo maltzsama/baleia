@@ -126,6 +126,31 @@
 
 		<section class="mt-4 rounded-lg border border-border bg-bg-panel p-5">
 			<h2 class="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+				{m.credits_icons_heading()}
+			</h2>
+			<p class="mt-2 text-[13px] leading-relaxed">{m.credits_icons_body()}</p>
+			<ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
+				<li>
+					<a
+						class="text-primary hover:underline"
+						href="https://lucide.dev"
+						target="_blank"
+						rel="noopener noreferrer">{m.credits_lucide()}</a
+					>
+				</li>
+				<li>
+					<a
+						class="text-primary hover:underline"
+						href="https://simpleicons.org"
+						target="_blank"
+						rel="noopener noreferrer">{m.credits_simple_icons()}</a
+					>
+				</li>
+			</ul>
+		</section>
+
+		<section class="mt-4 rounded-lg border border-border bg-bg-panel p-5">
+			<h2 class="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
 				{m.credits_software_heading()}
 			</h2>
 			<p class="mt-2 text-[13px] leading-relaxed">
