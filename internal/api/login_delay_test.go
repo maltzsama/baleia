@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -183,5 +184,75 @@ func TestLoginDelaySharedAcrossReplicas(t *testing.T) {
 	replicaB.Success(ctx, "user@example.test")
 	if err := replicaA.Wait(ctx, "user@example.test"); err != nil || slept != 1 {
 		t.Errorf("a success on one replica must clear it on every replica (slept %d)", slept)
+	}
+}
+
+// flakyShared is a shared counter whose writes and reads fail on demand.
+type flakyShared struct {
+	failIncr, failGet bool
+	counts            map[string]int64
+}
+
+func (f *flakyShared) Enabled() bool { return true }
+
+func (f *flakyShared) CounterIncr(_ context.Context, key string, _ time.Duration) (int64, error) {
+	if f.failIncr {
+		return 0, errors.New("redis down")
+	}
+	f.counts[key]++
+	return f.counts[key], nil
+}
+
+func (f *flakyShared) CounterGet(_ context.Context, key string) (int64, error) {
+	if f.failGet {
+		return 0, errors.New("redis down")
+	}
+	return f.counts[key], nil
+}
+
+func (f *flakyShared) CounterReset(_ context.Context, key string) error {
+	delete(f.counts, key)
+	return nil
+}
+
+// TestLoginDelayKeepsLocalFailuresWhenRedisReadsRecover (#1032): failures
+// counted locally while Redis writes failed still delay once reads succeed.
+func TestLoginDelayKeepsLocalFailuresWhenRedisReadsRecover(t *testing.T) {
+	t.Parallel()
+	shared := &flakyShared{failIncr: true, counts: map[string]int64{}}
+	slept := 0
+	d := NewLoginDelay(LoginDelayConfig{Shared: shared, Threshold: 3, Sleep: func(context.Context, time.Duration) error { slept++; return nil }})
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		d.Failure(ctx, "a@b.c")
+	}
+	// Reads succeed (and report zero) while increments keep failing.
+	if err := d.Wait(ctx, "a@b.c"); err != nil || slept != 1 {
+		t.Fatalf("slept %d times, want 1: local failures must count while reads succeed", slept)
+	}
+	// Redis recovers: its count and the local one add up.
+	shared.failIncr = false
+	d.Failure(ctx, "a@b.c")
+	if err := d.Wait(ctx, "a@b.c"); err != nil || slept != 2 {
+		t.Fatalf("slept %d times, want 2", slept)
+	}
+	// A success clears both.
+	d.Success(ctx, "a@b.c")
+	if err := d.Wait(ctx, "a@b.c"); err != nil || slept != 2 {
+		t.Errorf("slept %d times after a success, want 2", slept)
+	}
+}
+
+// TestLoginDelayFallsBackWhenRedisReadsFail (#1032).
+func TestLoginDelayFallsBackWhenRedisReadsFail(t *testing.T) {
+	t.Parallel()
+	shared := &flakyShared{failIncr: true, failGet: true, counts: map[string]int64{}}
+	slept := 0
+	d := NewLoginDelay(LoginDelayConfig{Shared: shared, Threshold: 2, Sleep: func(context.Context, time.Duration) error { slept++; return nil }})
+	ctx := context.Background()
+	d.Failure(ctx, "a@b.c")
+	d.Failure(ctx, "a@b.c")
+	if err := d.Wait(ctx, "a@b.c"); err != nil || slept != 1 {
+		t.Errorf("slept %d times, want 1", slept)
 	}
 }
