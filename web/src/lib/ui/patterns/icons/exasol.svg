@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" version="1.1">
-  <defs id="defs5" />
-  <g id="g5">
-    <g id="g6" transform="translate(-6.9,-23.741175)">
-      <path d="M 148.19412,26.8 H 12.9 L 189.37059,279.74118 12.9,532.68235 H 154.07647 L 330.54706,279.74118 154.07647,26.8 Z" fill="#75be1e" id="path4" style="stroke-width:58.8235" />
-      <path d="M 512.9,26.8 H 371.72353 l -88.23529,123.52941 70.58823,100 z M 354.07647,309.15294 283.48824,403.27059 371.72353,526.8 512.9,532.68235 Z" fill="#093e52" id="path5" style="stroke-width:58.8235" />
-    </g>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" version="1.1"><defs id="defs5"/><g id="g5"><g id="g6" transform="translate(-6.9,-23.7412)"><path d="M148.19,26.8H12.9L189.37,279.74 12.9,532.68H154.08L330.55,279.74 154.08,26.8Z" fill="#75be1e" id="path4" style="stroke-width:58.8235"/><path d="M512.9,26.8H371.72l-88.24,123.53 70.59,100zM354.08,309.15 283.49,403.27 371.72,526.8 512.9,532.68Z" fill="#093e52" id="path5" style="stroke-width:58.8235"/></g></g></svg>
