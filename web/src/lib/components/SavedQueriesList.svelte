@@ -18,6 +18,9 @@
 	const spaces = $derived(savedQueries.spaces);
 	const loading = $derived(savedQueries.loading);
 	const loadError = $derived(savedQueries.error);
+	const canCreateSpace = $derived(
+		!!workspaceStore.current?.allowed_actions?.includes('create_space')
+	);
 
 	let actionError = $state('');
 	let collapsed = $state<Record<string, boolean>>({});
@@ -35,9 +38,26 @@
 	let deleteQueryOpen = $state(false);
 	let deletingSpace = $state<Space | null>(null);
 	let deleteSpaceOpen = $state(false);
+	let menuRoot: HTMLDivElement | undefined = $state();
 
 	$effect(() => {
 		if (workspaceId) void savedQueries.reload(workspaceId);
+	});
+
+	$effect(() => {
+		if (!menuOpen) return;
+		function onKey(event: KeyboardEvent) {
+			if (event.key === 'Escape') menuOpen = null;
+		}
+		function onClick(event: MouseEvent) {
+			if (menuRoot && !menuRoot.contains(event.target as Node)) menuOpen = null;
+		}
+		document.addEventListener('keydown', onKey);
+		document.addEventListener('click', onClick);
+		return () => {
+			document.removeEventListener('keydown', onKey);
+			document.removeEventListener('click', onClick);
+		};
 	});
 
 	function toggle(spaceId: string) {
@@ -50,8 +70,12 @@
 
 	async function renameQuery(q: SavedQuery) {
 		const res = await savedQueries.renameQuery(q, renameValue.trim());
+		if (res.error) {
+			actionError = res.error;
+			return;
+		}
+		actionError = '';
 		renameId = null;
-		if (res.error) actionError = res.error;
 	}
 
 	function startRename(q: SavedQuery) {
@@ -92,21 +116,31 @@
 	}
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col">
+<div class="flex min-h-0 flex-1 flex-col" bind:this={menuRoot}>
 	<div class="flex items-center gap-2 border-b border-border px-2 py-1.5">
 		<span class="flex-1 text-[10px] font-bold tracking-wide text-text-muted uppercase"
 			>{m.common_content()}</span
 		>
-		<Button variant="ghost" size="sm" onclick={startSpaceCreate}
-			>{m.components_savedquerieslist_space()}</Button
-		>
+		{#if canCreateSpace}
+			<Button variant="ghost" size="sm" onclick={startSpaceCreate}
+				>{m.components_savedquerieslist_space()}</Button
+			>
+		{/if}
 	</div>
+	{#if actionError}
+		<p
+			class="border-b border-danger/30 bg-danger/5 px-2 py-1.5 text-[11px] text-danger"
+			role="alert"
+		>
+			{actionError}
+		</p>
+	{/if}
 
 	<div class="flex-1 overflow-y-auto px-1.5 pt-1.5 pb-2">
 		{#if loading}
 			<p class="px-2 py-4 text-xs text-text-muted">{m.common_loading()}</p>
-		{:else if loadError || actionError}
-			<p class="px-2 py-4 text-xs text-red-500" role="alert">{loadError || actionError}</p>
+		{:else if loadError}
+			<p class="px-2 py-4 text-xs text-red-500" role="alert">{loadError}</p>
 		{:else if spaces.length === 0}
 			<p class="px-2 py-6 text-center text-xs text-text-muted">
 				{m.components_savedquerieslist_no_spaces_yet()}
