@@ -2,6 +2,7 @@
 // grants, projections and impact. Reads never filter visibility client-side.
 import { apiErrorMessage, client } from '$lib/api/client';
 import type { components } from '$lib/api/schema';
+import { m } from '$lib/paraglide/messages';
 import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 
 export type CatalogSummary = components['schemas']['CatalogSummary'];
@@ -15,6 +16,8 @@ export type BindingSupport = components['schemas']['BindingSupport'];
 export type MetadataSyncRun = components['schemas']['MetadataSyncRun'];
 export type MetadataSyncStarted = components['schemas']['MetadataSyncStarted'];
 export type UpdateBindingRequest = components['schemas']['UpdateBindingRequest'];
+export type CreateBindingRequest = components['schemas']['CreateBindingRequest'];
+export type UpdateCatalogRequest = components['schemas']['UpdateCatalogRequest'];
 
 type Result<T> = { data?: T; error?: unknown; response?: Response };
 
@@ -39,6 +42,10 @@ function fail<T>(result: Result<T>, fallback: string): T {
 		);
 	}
 	return result.data;
+}
+
+function failVoid(result: Result<unknown>, fallback: string): void {
+	if (result.error) fail(result, fallback);
 }
 
 export async function listCatalogs(
@@ -69,7 +76,7 @@ export async function getCatalog(id: string): Promise<CatalogSummary> {
 
 export async function updateCatalogMeta(
 	id: string,
-	body: { name?: string; description?: string | null }
+	body: Pick<UpdateCatalogRequest, 'name'> & { description?: string | null }
 ): Promise<Catalog> {
 	return fail(
 		await client.PATCH('/catalogs/{catalog_id}', {
@@ -84,7 +91,8 @@ export async function deleteCatalog(id: string): Promise<void> {
 	const result = await client.DELETE('/catalogs/{catalog_id}', {
 		params: { path: { catalog_id: id } }
 	});
-	if (result.error) fail(result, 'Could not delete the catalog');
+	failVoid(result, 'Could not delete the catalog');
+	catalogAccessStore.changed();
 }
 
 export async function catalogImpact(id: string): Promise<CatalogImpact> {
@@ -152,17 +160,12 @@ export async function updateBinding(
 
 export async function deleteBinding(id: string): Promise<void> {
 	const result = await client.DELETE('/bindings/{id}', { params: { path: { id } } });
-	if (result.error) fail(result, 'Could not delete the binding');
+	failVoid(result, 'Could not delete the binding');
 }
 
 export async function createBinding(
 	catalogId: string,
-	body: {
-		engine_id: string;
-		engine_catalog_name: string;
-		connector?: string;
-		extra_props?: Record<string, string>;
-	}
+	body: CreateBindingRequest
 ): Promise<CatalogBinding> {
 	return fail(
 		await client.POST('/catalogs/{id}/bindings', {
@@ -185,7 +188,7 @@ export async function grantCatalog(workspaceId: string, catalogId: string): Prom
 		params: { path: { id: workspaceId } },
 		body: { catalog_id: catalogId }
 	});
-	if (result.error) fail(result, 'Could not grant access');
+	failVoid(result, 'Could not grant access');
 	catalogAccessStore.changed();
 }
 
@@ -193,24 +196,24 @@ export async function revokeCatalog(workspaceId: string, catalogId: string): Pro
 	const result = await client.DELETE('/workspaces/{id}/catalog-access/{catalog_id}', {
 		params: { path: { id: workspaceId, catalog_id: catalogId } }
 	});
-	if (result.error) fail(result, 'Could not revoke access');
+	failVoid(result, 'Could not revoke access');
 	catalogAccessStore.changed();
 }
 
-/** The remediation sentence for a binding error code (FD7). */
+/** The localized remediation sentence for a binding error code (FD7). */
 export function bindingRemediation(code: string | null | undefined): string {
 	switch (code) {
 		case 'plugin_not_confirmed':
-			return 'Trino did not confirm the catalog. Check that the Baleia catalog-store plugin is installed and running.';
+			return m.catalog_remediation_plugin_not_confirmed();
 		case 'secret_mismatch':
-			return 'Baleia and Trino resolved different values for a secret reference.';
+			return m.catalog_remediation_secret_mismatch();
 		case 'engine_load_failed':
-			return 'The engine refused to load the catalog; sync the binding to apply it again.';
+			return m.catalog_remediation_engine_load_failed();
 		case 'engine_unavailable':
-			return 'The engine is unreachable; bring it back and sync the binding.';
+			return m.catalog_remediation_engine_unavailable();
 		case 'engine_catalog_exists':
-			return 'The engine already has a catalog with this name.';
+			return m.catalog_remediation_engine_catalog_exists();
 		default:
-			return 'The engine did not apply this binding; check the engine and sync again.';
+			return m.catalog_remediation_default();
 	}
 }

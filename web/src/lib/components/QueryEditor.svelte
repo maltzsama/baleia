@@ -544,6 +544,7 @@
 		registerProvider({
 			id: 'queries',
 			label: m.components_queryeditor_saved_queries(),
+			quick: true,
 			quickOnly: true,
 			search: async (query) => {
 				if (workspaceId && savedQueries.workspaceId !== workspaceId)

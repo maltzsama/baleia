@@ -165,17 +165,19 @@ export async function statementSpans(
 // Parse `text` with the `read` grammar and render every statement with the
 // `write` grammar. The default (raising) error level rejects malformed SQL, so a
 // partial parse is never rewritten into different SQL; the filter only drops the
-// `undefined` sqlingo yields for empty input.
+// `undefined` sqlingo yields for empty input. sqlingo's AST renderer does not
+// preserve comments, so callers should not treat formatting as lossless.
 async function render(read: DialectClass, write: DialectClass, text: string): Promise<string> {
 	const { parse } = await import('sqlingo');
 	const expressions = parse(text, { read });
-	return expressions
+	const output = expressions
 		.filter((expression): expression is Expression => expression != null)
 		.map((expression) => expression.sql({ dialect: write, pretty: true }))
 		.join(';\n');
+	return output && text.trimEnd().endsWith(';') ? `${output};` : output;
 }
 
-/** Format `text` for its dialect, preserving comments and whitespace intent. A
+/** Format `text` for its dialect, preserving statement boundaries but not comments. A
  *  malformed script throws rather than being rewritten, so the editor keeps the
  *  original text. */
 export async function formatSQL(name: string | null | undefined, text: string): Promise<string> {

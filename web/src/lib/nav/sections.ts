@@ -10,21 +10,23 @@ export type AreaKey =
 	'sql' | 'data' | 'explore' | 'content' | 'connections' | 'monitoring' | 'settings' | 'profile';
 
 export type NavPage = {
-	href: string;
-	label: () => string;
+	readonly href: string;
+	readonly label: () => string;
 	/** Shown only when this /auth/me feature flag is on. */
-	feature?: keyof Features;
+	readonly feature?: keyof Features;
 };
 
 export type NavArea = {
-	key: AreaKey;
-	label: () => string;
+	readonly key: AreaKey;
+	readonly label: () => string;
 	/** Where the area opens: its first page. */
-	href: string;
-	pages: NavPage[];
+	readonly href: string;
+	readonly pages: readonly NavPage[];
+	/** Outside the rail, for example pages opened from the avatar menu. */
+	readonly hideFromRail?: boolean;
 };
 
-export const navAreas: NavArea[] = [
+export const navAreas: readonly NavArea[] = [
 	{
 		key: 'sql',
 		label: m.nav_sql,
@@ -86,6 +88,7 @@ export const navAreas: NavArea[] = [
 		key: 'profile',
 		label: m.nav_profile,
 		href: '/profile',
+		hideFromRail: true,
 		pages: [
 			{ href: '/profile', label: m.nav_profile },
 			{ href: '/profile/api-keys', label: m.nav_page_api_keys }
@@ -94,7 +97,7 @@ export const navAreas: NavArea[] = [
 ];
 
 /** Areas with a rail entry; profile lives in the avatar menu. */
-export const railAreas = navAreas.filter((area) => area.key !== 'profile');
+export const railAreas: readonly NavArea[] = navAreas.filter((area) => !area.hideFromRail);
 
 function under(pathname: string, href: string): boolean {
 	return pathname === href || pathname.startsWith(`${href}/`);
@@ -105,6 +108,19 @@ export function visiblePages(area: NavArea, features: Features | undefined): Nav
 	return area.pages.filter((page) => !page.feature || features?.[page.feature]);
 }
 
+function longestByHref<T extends { href: string }>(
+	pathname: string,
+	items: readonly T[]
+): T | null {
+	let best: T | null = null;
+	for (const item of items) {
+		if (under(pathname, item.href) && (!best || item.href.length > best.href.length)) {
+			best = item;
+		}
+	}
+	return best;
+}
+
 /**
  * The area and page a path belongs to. The longest matching page wins, so
  * /data/docs is Docs (not Explorer) and /content/trash is Trash.
@@ -112,14 +128,13 @@ export function visiblePages(area: NavArea, features: Features | undefined): Nav
 export function locate(pathname: string): { area: NavArea; page: NavPage | null } | null {
 	let best: { area: NavArea; page: NavPage } | null = null;
 	for (const area of navAreas) {
-		for (const page of area.pages) {
-			if (under(pathname, page.href) && (!best || page.href.length > best.page.href.length)) {
-				best = { area, page };
-			}
+		const page = longestByHref(pathname, area.pages);
+		if (page && (!best || page.href.length > best.page.href.length)) {
+			best = { area, page };
 		}
 	}
 	if (best) return best;
-	const area = navAreas.find((item) => under(pathname, item.href));
+	const area = longestByHref(pathname, navAreas);
 	return area ? { area, page: null } : null;
 }
 
@@ -127,14 +142,18 @@ export function locate(pathname: string): { area: NavArea; page: NavPage | null 
  * The header title for a path: the area, plus the page when the area has
  * several (SQL · History, Data · Docs), or the settings section.
  */
-export function sectionTitle(pathname: string): string {
+export function sectionTitle(pathname: string, features?: Features): string {
 	const found = locate(pathname);
 	if (!found) return '';
 	const { area, page } = found;
+	const areaLabel = area.label();
 	if (area.key === 'settings') {
 		const section = sectionForPath(pathname);
-		return section ? `${area.label()} · ${section.label}` : area.label();
+		return section ? `${areaLabel} · ${section.label}` : areaLabel;
 	}
-	if (!page || area.pages.length < 2 || page.label() === area.label()) return area.label();
-	return `${area.label()} · ${page.label()}`;
+	const pages = features === undefined ? area.pages : visiblePages(area, features);
+	const pageLabel = page?.label();
+	if (!page || !pages.includes(page) || pages.length < 2 || pageLabel === areaLabel)
+		return areaLabel;
+	return `${areaLabel} · ${pageLabel}`;
 }

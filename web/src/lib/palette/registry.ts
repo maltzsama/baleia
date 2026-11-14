@@ -11,6 +11,8 @@ export type PaletteItem = {
 export type PaletteProvider = {
 	id: string;
 	label: string;
+	/** Included when the quick-open palette is active. */
+	quick?: boolean;
 	/** Only quick open asks it; the command palette leaves it out. */
 	quickOnly?: boolean;
 	search: (query: string) => PaletteItem[] | Promise<PaletteItem[]>;

@@ -67,7 +67,7 @@
 			slug = saved && mode === 'save' ? saved.slug : slugify(name);
 			slugTouched = saved !== null && mode === 'save';
 			spaceId =
-				saved?.space_id && spaces.some((s) => s.id === saved.space_id)
+				saved?.space_id && editableSpaces.some((s) => s.id === saved.space_id)
 					? saved.space_id
 					: (editableSpaces[0]?.id ?? '');
 			folderId = mode === 'save' ? (saved?.folder_id ?? '') : '';
@@ -147,9 +147,13 @@
 						return;
 					}
 				}
-				if (err?.code === 'name_conflict' || err?.code === 'slug_conflict_other_space') {
+				if (err?.code === 'name_conflict') {
 					fieldError = {
 						name: apiErrorMessage(saved.error, m.workbench_savequerydialog_name_already_in_use())
+					};
+				} else if (err?.code === 'slug_conflict_other_space') {
+					fieldError = {
+						slug: apiErrorMessage(saved.error, m.workbench_savequerydialog_slug_already_in_use())
 					};
 				} else {
 					error = apiErrorMessage(

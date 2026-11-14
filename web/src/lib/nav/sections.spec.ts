@@ -22,7 +22,9 @@ describe('nav sections', () => {
 		['/engines', 'Connections · Engines', 'Conexões · Engines'],
 		['/monitoring', 'Monitoring', 'Monitoramento'],
 		['/settings', 'Settings', 'Configurações'],
-		['/settings/users', 'Settings · Users', 'Configurações · Usuários']
+		['/settings/users', 'Settings · Users', 'Configurações · Usuários'],
+		['/profile', 'Profile', 'Perfil'],
+		['/profile/api-keys', 'Profile · API keys', 'Perfil · Chaves de API']
 	])('%s is "%s" (en) and "%s" (pt-BR)', (path, en, pt) => {
 		setAppLocale('en');
 		expect(sectionTitle(path)).toBe(en);
@@ -34,7 +36,12 @@ describe('nav sections', () => {
 		expect(locate('/data/docs')?.page?.href).toBe('/data/docs');
 		expect(locate('/content/trash')?.page?.href).toBe('/content/trash');
 		expect(locate('/content')?.page?.href).toBe('/content');
+		expect(locate('/sql/anything')?.page?.href).toBe('/sql');
 		expect(locate('/database')).toBeNull();
+	});
+
+	it('returns the area title for an unknown descendant route', () => {
+		expect(sectionTitle('/connections/new')).toBe('Connections');
 	});
 
 	it('hides a page behind its feature flag', () => {
@@ -48,5 +55,16 @@ describe('nav sections', () => {
 			}).map((page) => page.href);
 		expect(hrefs(true)).toContain('/retrievers');
 		expect(hrefs(false)).not.toContain('/retrievers');
+	});
+
+	it('does not title a hidden feature-gated page when features are supplied', () => {
+		expect(
+			sectionTitle('/retrievers', {
+				agents: false,
+				assistant: false,
+				bi_gateway: false,
+				retrievers: false
+			})
+		).toBe('Content');
 	});
 });
