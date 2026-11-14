@@ -187,9 +187,12 @@
 	let previewError = $state('');
 	let previewColumns = $state<string[]>([]);
 	let previewRows = $state<unknown[][]>([]);
+	let previewRun = 0;
+	let stopPreviewPoll: (() => void) | undefined;
 
 	async function runPreview() {
 		if (!detailCurrent || !detail?.preview_sql || !table) return;
+		const runId = ++previewRun;
 		previewOpen = true;
 		previewLoading = true;
 		previewError = '';
@@ -207,6 +210,7 @@
 			if (startError || !data) throw new Error('Could not start the preview');
 
 			const executionId = data.id;
+			if (runId !== previewRun) return;
 			const controller = poll(
 				async () => {
 					const { data: execution } = await client.GET(
@@ -221,7 +225,9 @@
 					intervals: [400, 800, 1500, 2500]
 				}
 			);
+			stopPreviewPoll = controller.stop;
 			const execution = await controller.done;
+			if (runId !== previewRun) return;
 			if (!execution || typeof execution === 'string') {
 				throw new Error(m.components_tabledetail_the_preview_did_not_finish_in_time());
 			}
@@ -253,8 +259,18 @@
 		} catch (e) {
 			previewError = e instanceof Error ? e.message : String(e);
 		} finally {
-			previewLoading = false;
+			if (runId === previewRun) {
+				stopPreviewPoll = undefined;
+				previewLoading = false;
+			}
 		}
+	}
+
+	function closePreview() {
+		previewRun += 1;
+		stopPreviewPoll?.();
+		stopPreviewPoll = undefined;
+		previewLoading = false;
 	}
 
 	function typeClass(type: string): string {
@@ -546,6 +562,7 @@
 	bind:open={previewOpen}
 	title={`${m.components_tabledetail_preview()} ${detail?.name ?? ''}`}
 	size="lg"
+	onclose={closePreview}
 >
 	{#if previewLoading}
 		<div class="space-y-2" aria-label={m.components_tabledetail_running_preview()}>
