@@ -67,7 +67,7 @@ func (h *Hub) SetBus(bus *realtime.Client) {
 // Subscribe returns a channel and an unsubscribe function. With the bus on,
 // the subscriber receives every replica's events through it; without it, only
 // this process's.
-func (h *Hub) Subscribe(id [16]byte) (<-chan Event, func()) {
+func (h *Hub) Subscribe(ctx context.Context, id [16]byte) (<-chan Event, func()) {
 	ch := make(chan Event, 32)
 	h.mu.Lock()
 	bus := h.bus
@@ -90,7 +90,7 @@ func (h *Hub) Subscribe(id [16]byte) (<-chan Event, func()) {
 	}
 	h.mu.Unlock()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		for ctx.Err() == nil {
 			err := bus.SubscribeError(ctx, channel(id), nil, func(payload []byte) {
@@ -116,7 +116,7 @@ func (h *Hub) Subscribe(id [16]byte) (<-chan Event, func()) {
 
 // Publish sends an event without blocking a turn. With the bus on it goes to
 // every replica (including this one); otherwise it stays local.
-func (h *Hub) Publish(id [16]byte, ev Event) {
+func (h *Hub) Publish(ctx context.Context, id [16]byte, ev Event) {
 	h.mu.Lock()
 	bus := h.bus
 	if bus == nil || !bus.Enabled() {
@@ -135,7 +135,7 @@ func (h *Hub) Publish(id [16]byte, ev Event) {
 	if err != nil {
 		return
 	}
-	_ = bus.Publish(context.Background(), channel(id), raw)
+	_ = bus.Publish(ctx, channel(id), raw)
 }
 
 // channel names one conversation's bus channel.
@@ -223,7 +223,7 @@ func (r *Runner) Start(ctx context.Context, userID, id db.UUID, text string) (in
 	r.mu.Lock()
 	r.cancels[id.Bytes] = cancel
 	r.mu.Unlock()
-	cancelEvents, unsubscribe := r.hub.Subscribe(id.Bytes)
+	cancelEvents, unsubscribe := r.hub.Subscribe(turnCtx, id.Bytes)
 	go func() {
 		defer func() {
 			unsubscribe()
@@ -235,12 +235,16 @@ func (r *Runner) Start(ctx context.Context, userID, id db.UUID, text string) (in
 			_ = r.svc.Release(context.WithoutCancel(turnCtx), id, turnOwner)
 		}()
 		go func() {
-			select {
-			case ev := <-cancelEvents:
-				if ev.Type == "cancel" {
-					cancel()
+			for {
+				select {
+				case ev := <-cancelEvents:
+					if ev.Type == "cancel" {
+						cancel()
+						return
+					}
+				case <-turnCtx.Done():
+					return
 				}
-			case <-turnCtx.Done():
 			}
 		}()
 		r.run(turnCtx, claimed, settings)
@@ -249,8 +253,8 @@ func (r *Runner) Start(ctx context.Context, userID, id db.UUID, text string) (in
 }
 
 // Cancel stops the running turn, if any.
-func (r *Runner) Cancel(id db.UUID) bool {
-	r.hub.Publish(id.Bytes, Event{Type: "cancel"})
+func (r *Runner) Cancel(ctx context.Context, id db.UUID) bool {
+	r.hub.Publish(ctx, id.Bytes, Event{Type: "cancel"})
 	r.mu.Lock()
 	cancel, ok := r.cancels[id.Bytes]
 	r.mu.Unlock()
@@ -327,7 +331,7 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 		heartbeatStop := make(chan struct{})
 		go r.heartbeat(ctx, conversation.ID, heartbeatStop)
 		resp, err := provider.Stream(ctx, req, func(delta string) {
-			r.hub.Publish(conversation.ID.Bytes, Event{Type: "delta", Delta: delta})
+			r.hub.Publish(ctx, conversation.ID.Bytes, Event{Type: "delta", Delta: delta})
 		})
 		close(heartbeatStop)
 		if err != nil {
@@ -415,7 +419,7 @@ func (r *Runner) append(ctx context.Context, id db.UUID, role string, content an
 	if err != nil {
 		return msg, err
 	}
-	r.hub.Publish(id.Bytes, Event{Type: "message", Seq: msg.Seq, Role: msg.Role, Content: msg.Content, CreatedAt: msg.CreatedAt.Time})
+	r.hub.Publish(ctx, id.Bytes, Event{Type: "message", Seq: msg.Seq, Role: msg.Role, Content: msg.Content, CreatedAt: msg.CreatedAt.Time})
 	return msg, nil
 }
 

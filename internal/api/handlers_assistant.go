@@ -410,7 +410,7 @@ func (h *AgentHandlers) CancelAssistantTurn(ctx context.Context, request CancelA
 		return nil, err
 	}
 	if runner := h.assistantRunner.Load(); runner != nil {
-		runner.Cancel(id)
+		runner.Cancel(ctx, id)
 	}
 	return CancelAssistantTurn202Response{}, nil
 }
@@ -438,7 +438,7 @@ func (h *AgentHandlers) StreamAssistantConversation(ctx context.Context, request
 	var events <-chan assistant.Event
 	var unsubscribe func()
 	if runner := h.assistantRunner.Load(); runner != nil {
-		events, unsubscribe = runner.Hub().Subscribe(id.Bytes)
+		events, unsubscribe = runner.Hub().Subscribe(ctx, id.Bytes)
 	}
 	after := int32(0)
 	if request.Params.AfterSeq != nil {
@@ -558,8 +558,14 @@ func (h *AgentHandlers) DeleteAssistantConversation(ctx context.Context, request
 		return nil, err
 	}
 	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
+		if errors.Is(err, assistant.ErrNotFound) {
+			return DeleteAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
+		}
+		return nil, err
+	}
 	if runner := h.assistantRunner.Load(); runner != nil {
-		runner.Cancel(id)
+		runner.Cancel(ctx, id)
 	}
 	if err := svc.DeleteConversation(ctx, p.UserID, id); err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
