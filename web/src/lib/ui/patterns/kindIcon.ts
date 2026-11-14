@@ -71,6 +71,9 @@ export type KindAppearance = {
 	/** The brand colour is too light for the light theme: this darker shade of it
 	 *  is drawn there instead, with no backdrop. */
 	lightHex?: string;
+	/** The brand colour is too dark for the dark theme: this lighter shade of it
+	 *  is drawn there instead, with no backdrop. */
+	darkHex?: string;
 };
 
 // Relative luminance of a 6-digit hex colour (WCAG).
@@ -82,21 +85,38 @@ function luminance(hex: string): number {
 	return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-// Darkens a 6-digit hex colour, keeping its hue, until it holds 3:1 against
-// white (relative luminance 0.3).
+const toHex = (channels: number[]) =>
+	channels
+		.map((c) => Math.round(c).toString(16).padStart(2, '0'))
+		.join('')
+		.toUpperCase();
+
+// Darkens a 6-digit hex colour, keeping its hue, until it holds 6:1 against
+// white (relative luminance 0.12).
 function darken(hex: string): string {
 	const channels = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
-	for (let f = 0.95; f > 0.2; f -= 0.05) {
-		const scaled = channels.map((c) => Math.round(c * f));
-		const shade = scaled.map((c) => c.toString(16).padStart(2, '0')).join('');
-		if (luminance(shade) <= 0.3) return shade.toUpperCase();
+	for (let f = 0.95; f > 0.1; f -= 0.05) {
+		const shade = toHex(channels.map((c) => c * f));
+		if (luminance(shade) <= 0.12) return shade;
+	}
+	return hex;
+}
+
+// Lightens a 6-digit hex colour, towards white, until it holds 7:1 against the
+// dark theme's background (relative luminance 0.35).
+function lighten(hex: string): string {
+	const channels = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+	for (let t = 0.05; t < 1; t += 0.05) {
+		const tint = toHex(channels.map((c) => c + (255 - c) * t));
+		if (luminance(tint) >= 0.35) return tint;
 	}
 	return hex;
 }
 
 // A package mark in its brand colour. How it holds up on each theme follows
-// from the colour, so a new mark never needs it spelled out: a dark mark gets a
-// light chip in dark mode, a light one a darker shade in light mode.
+// from the colour, so a new mark never needs it spelled out: one too light for
+// white gets a darker shade in the light theme, one too dark for the dark
+// background a lighter shade there.
 function simpleMark(
 	icon: { path: string; hex: string },
 	color: string,
@@ -107,8 +127,8 @@ function simpleMark(
 		color,
 		glyph,
 		mark: { path: icon.path, hex: icon.hex },
-		contrast: lum < 0.1 || undefined,
-		lightHex: lum > 0.4 ? darken(icon.hex) : undefined
+		lightHex: lum > 0.3 ? darken(icon.hex) : undefined,
+		darkHex: lum < 0.2 ? lighten(icon.hex) : undefined
 	};
 }
 

@@ -15,8 +15,8 @@
 
 	const appearance = $derived(appearanceFor(kind, family));
 
-	// A dark mark gets a light chip in dark mode so it stays legible; a light one
-	// is drawn in a darker shade of its colour in light mode (see .kind-mark).
+	// A vendored dark mark (an image, so it cannot be recoloured) gets a light chip
+	// in dark mode. A package mark is recoloured per theme instead (see .kind-mark).
 	const chip = $derived(
 		appearance.contrast ? 'dark:bg-white/90 dark:p-px dark:ring-1 dark:ring-black/10' : ''
 	);
@@ -35,6 +35,7 @@
 				class="kind-mark h-full w-full"
 				style:--mark={`#${appearance.mark.hex}`}
 				style:--mark-light={`#${appearance.lightHex ?? appearance.mark.hex}`}
+				style:--mark-dark={`#${appearance.darkHex ?? appearance.mark.hex}`}
 			>
 				<path d={appearance.mark.path} />
 			</svg>
@@ -108,13 +109,13 @@
 
 <style>
 	/* app.css gives every svg a stroke and no fill: a brand mark is a filled
-	   silhouette, in its own colour on the dark theme and in --mark-light on the
-	   light one. */
+	   silhouette, in --mark-light on the light theme and --mark-dark on the dark
+	   one (its own colour unless that is hard to see there). */
 	.kind-mark {
 		fill: var(--mark-light);
 		stroke: none;
 	}
 	:global(.dark) .kind-mark {
-		fill: var(--mark);
+		fill: var(--mark-dark);
 	}
 </style>

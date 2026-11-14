@@ -37,13 +37,31 @@ describe('KindIcon', () => {
 		expect(container.querySelector('img')).toBeNull();
 	});
 
-	it('derives the chip from the brand colour', () => {
-		// Dark marks need a light chip in dark mode, yellow ones a dark chip in light mode.
-		expect(appearanceFor('sqlite').contrast).toBe(true);
-		expect(appearanceFor('kafka').contrast).toBe(true);
-		expect(appearanceFor('duckdb').lightHex).toBeTruthy();
-		expect(appearanceFor('postgresql').contrast).toBeFalsy();
-		expect(appearanceFor('postgresql').lightHex).toBeUndefined();
+	it('adapts a brand colour that is hard to see on a theme', () => {
+		// Too dark for the dark theme: lightened there, never given a backdrop.
+		for (const kind of ['sqlite', 'kafka', 'mysql', 'postgresql']) {
+			expect(appearanceFor(kind).darkHex, kind).toBeTruthy();
+			expect(appearanceFor(kind).contrast, kind).toBeFalsy();
+		}
+		// Too light for the light theme: darkened there.
+		for (const kind of ['hive', 'duckdb', 'clickhouse', 'druid']) {
+			expect(appearanceFor(kind).lightHex, kind).toBeTruthy();
+		}
+		// Visible on both: left as the brand has it.
+		expect(appearanceFor('redis').lightHex).toBeUndefined();
+		expect(appearanceFor('redis').darkHex).toBeUndefined();
+	});
+
+	it('holds contrast: dark shades on white, light shades on the dark theme', () => {
+		const lum = (hex: string) => {
+			const [r, g, b] = [1, 3, 5].map((i) => {
+				const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+				return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+			});
+			return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+		};
+		expect(lum('#' + appearanceFor('hive').lightHex!)).toBeLessThanOrEqual(0.12);
+		expect(lum('#' + appearanceFor('mysql').darkHex!)).toBeGreaterThanOrEqual(0.35);
 	});
 
 	it('shares the Databricks mark between Databricks projects', () => {
