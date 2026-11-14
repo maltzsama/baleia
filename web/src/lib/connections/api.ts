@@ -2,6 +2,7 @@
 //
 // Every provider/engine kind comes from the API; this module never names one.
 import { apiErrorMessage, client } from '$lib/api/client';
+import { fieldErrorMessage, type FieldError } from '$lib/api/errors';
 import type { components } from '$lib/api/schema';
 import { catalogAccessStore } from '$lib/stores/catalogAccess.svelte';
 import type { AccessMode } from './accessModes';
@@ -53,6 +54,7 @@ type ApiErrorBody = {
 	code?: string;
 	message?: string;
 	errors?: { field?: string; message?: string }[];
+	fields?: FieldError[];
 	params?: Record<string, unknown>;
 };
 
@@ -79,6 +81,9 @@ function toError(
 		const body = error as ApiErrorBody;
 		const message = body.errors?.[0]?.message ?? body.message ?? fallback;
 		const fields: Record<string, string> = {};
+		for (const item of body.fields ?? []) {
+			fields[item.field] = fieldErrorMessage(item) ?? item.code;
+		}
 		for (const item of body.errors ?? []) {
 			if (item.field && item.message) fields[item.field] = item.message;
 		}

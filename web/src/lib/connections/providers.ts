@@ -21,24 +21,36 @@ export type Usage = {
 	bindEngineIds: string[];
 };
 
-const roleLabels: Record<ProviderRole, string> = {
-	metadata: 'Reads metadata',
-	direct_engine: 'Query directly',
-	federated_engine: 'Runs queries'
+const roleLabels: Record<ProviderRole, () => string> = {
+	get metadata() {
+		return m.connections_role_metadata;
+	},
+	get direct_engine() {
+		return m.connections_role_direct_engine;
+	},
+	get federated_engine() {
+		return m.connections_role_federated_engine;
+	}
 };
 
-const roleDescriptions: Record<ProviderRole, string> = {
-	metadata: 'Baleia lists its catalogs, schemas and tables after connecting.',
-	direct_engine: 'Baleia can run SQL on it as its own query engine.',
-	federated_engine: 'Baleia runs queries on it for federated catalogs.'
+const roleDescriptions: Record<ProviderRole, () => string> = {
+	get metadata() {
+		return m.connections_role_metadata_description;
+	},
+	get direct_engine() {
+		return m.connections_role_direct_engine_description;
+	},
+	get federated_engine() {
+		return m.connections_role_federated_engine_description;
+	}
 };
 
 export function roleLabel(role: ProviderRole): string {
-	return roleLabels[role];
+	return roleLabels[role]();
 }
 
 export function roleDescription(role: ProviderRole): string {
-	return roleDescriptions[role];
+	return roleDescriptions[role]();
 }
 
 /** Statuses that cannot be created (ADR 0021 D.9 / CR-12). */
