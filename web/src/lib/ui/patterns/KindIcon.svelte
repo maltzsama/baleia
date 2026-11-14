@@ -4,7 +4,7 @@
 	let {
 		kind,
 		family,
-		size = 16,
+		size = 32,
 		class: className = ''
 	}: {
 		kind: string;

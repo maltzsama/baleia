@@ -428,7 +428,7 @@
 							onclick={() => choose(p)}
 						>
 							<div class="flex items-center gap-2">
-								<KindIcon kind={p.kind} family={p.family} size={18} />
+								<KindIcon kind={p.kind} family={p.family} size={32} />
 								<span class="flex-1 text-[13px] font-semibold">{p.label}</span>
 								{#if providerBadge(p)}
 									<Badge tone={providerBadgeTone(p.status.state)}>
