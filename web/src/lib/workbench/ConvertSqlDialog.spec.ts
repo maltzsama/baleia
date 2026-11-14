@@ -22,7 +22,8 @@ describe('ConvertSqlDialog', () => {
 	it('is a dropdown that shows the selected dialect with its icon', () => {
 		const dropdown = open('trino');
 		expect(dropdown.textContent).toContain('Trino');
-		expect(dropdown.querySelector('img')).not.toBeNull();
+		// A brand mark is an <img> (vendored) or an inline svg (simple-icons).
+		expect(dropdown.querySelector('img, svg.kind-mark')).not.toBeNull();
 		expect(screen.queryByRole('listbox')).toBeNull();
 	});
 
@@ -33,7 +34,7 @@ describe('ConvertSqlDialog', () => {
 		const list = screen.getByRole('listbox');
 		const items = within(list).getAllByRole('option');
 		expect(items.length).toBeGreaterThan(5);
-		expect(list.querySelectorAll('li img').length).toBeGreaterThan(5);
+		expect(list.querySelectorAll('li img, li svg.kind-mark').length).toBeGreaterThan(5);
 
 		await fireEvent.click(within(list).getByRole('option', { name: 'PostgreSQL' }));
 		expect(screen.queryByRole('listbox')).toBeNull();

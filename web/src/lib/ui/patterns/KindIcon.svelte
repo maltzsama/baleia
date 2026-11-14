@@ -15,31 +15,38 @@
 
 	const appearance = $derived(appearanceFor(kind, family));
 
-	// A brand mark's chip: dark marks get a light one in dark mode, light marks
-	// get a dark one in light mode, so the mark stays legible on both themes.
+	// A dark mark gets a light chip in dark mode so it stays legible; a light one
+	// is drawn in a darker shade of its colour in light mode (see .kind-mark).
 	const chip = $derived(
-		appearance.contrast
-			? 'dark:bg-white/90 dark:p-px dark:ring-1 dark:ring-black/10'
-			: appearance.lightMark
-				? 'bg-brand-dark p-px ring-1 ring-black/10 dark:bg-transparent dark:p-0 dark:ring-0'
-				: ''
+		appearance.contrast ? 'dark:bg-white/90 dark:p-px dark:ring-1 dark:ring-black/10' : ''
 	);
 </script>
 
-{#if appearance.brand}
+{#if appearance.mark || appearance.brand}
 	<span
 		class="inline-flex shrink-0 items-center justify-center rounded-[3px] {chip} {className}"
 		style:width={`${size}px`}
 		style:height={`${size}px`}
 		aria-hidden="true"
 	>
-		<img
-			src={appearance.brand}
-			alt=""
-			class="h-full w-full object-contain"
-			draggable="false"
-			loading="lazy"
-		/>
+		{#if appearance.mark}
+			<svg
+				viewBox="0 0 24 24"
+				class="kind-mark h-full w-full"
+				style:--mark={`#${appearance.mark.hex}`}
+				style:--mark-light={`#${appearance.lightHex ?? appearance.mark.hex}`}
+			>
+				<path d={appearance.mark.path} />
+			</svg>
+		{:else}
+			<img
+				src={appearance.brand}
+				alt=""
+				class="h-full w-full object-contain"
+				draggable="false"
+				loading="lazy"
+			/>
+		{/if}
 	</span>
 {:else}
 	<svg
@@ -74,6 +81,23 @@
 		{:else if appearance.glyph === 'waves'}
 			<path d="M2 13c2.5-3 5-3 7.5 0s5 3 7.5 0 3-2 5-1" />
 			<path d="M2 18c2.5-3 5-3 7.5 0s5 3 7.5 0 3-2 5-1" />
+		{:else if appearance.glyph === 'memory'}
+			<rect x="6" y="6" width="12" height="12" rx="1" />
+			<path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4" />
+		{:else if appearance.glyph === 'gauge'}
+			<path d="M4 18a9 9 0 1 1 16 0" />
+			<path d="m12 14 4-5" />
+			<circle cx="12" cy="15" r="1" />
+		{:else if appearance.glyph === 'bars'}
+			<path d="M4 20V10m6 10V4m6 16v-7m4 7H2" />
+		{:else if appearance.glyph === 'void'}
+			<circle cx="12" cy="12" r="9" />
+			<circle cx="12" cy="12" r="4" />
+			<circle cx="12" cy="12" r="0.5" />
+		{:else if appearance.glyph === 'sliders'}
+			<path d="M4 7h10m4 0h2M4 17h2m4 0h10" />
+			<circle cx="16" cy="7" r="2" />
+			<circle cx="8" cy="17" r="2" />
 		{:else}
 			<ellipse cx="12" cy="5" rx="9" ry="3" />
 			<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
@@ -81,3 +105,16 @@
 		{/if}
 	</svg>
 {/if}
+
+<style>
+	/* app.css gives every svg a stroke and no fill: a brand mark is a filled
+	   silhouette, in its own colour on the dark theme and in --mark-light on the
+	   light one. */
+	.kind-mark {
+		fill: var(--mark-light);
+		stroke: none;
+	}
+	:global(.dark) .kind-mark {
+		fill: var(--mark);
+	}
+</style>

@@ -55,9 +55,8 @@ describe('WorkspaceCatalogs (#985)', () => {
 		render(WorkspaceCatalogs, { workspace, onchange });
 		await screen.findByText('analytics');
 		expect(row('analytics').getByText('Production')).toBeTruthy();
-		expect(
-			screen.getByText('analytics').closest('li')!.querySelector('img')?.getAttribute('src')
-		).toContain('postgresql');
+		const mark = screen.getByText('analytics').closest('li')!.querySelector('svg.kind-mark');
+		expect((mark as SVGElement | null)?.style.getPropertyValue('--mark')).toBe('#4169E1');
 		// The requestable endpoint has no provider kind: retain a generic icon and a visible name.
 		expect(screen.getByText('Shared lake').closest('li')!.querySelector('svg')).toBeTruthy();
 		await fireEvent.input(screen.getByLabelText('Search catalogs or connections'), {
