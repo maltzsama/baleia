@@ -23,6 +23,8 @@
 	let busy = $state(false);
 	let principals = $state<WorkspacePrincipal[]>([]);
 	let principalsError = $state('');
+	let principalLabels = $state<Record<string, string>>({});
+	let principalRequest = 0;
 
 	const roleOptions = [
 		{
@@ -56,11 +58,40 @@
 		if (!open || !space) return;
 		const workspaceId = savedQueries.workspaceId;
 		if (!workspaceId) return;
+		const request = ++principalRequest;
+		principalId = '';
 		principalsError = '';
-		void listPrincipals(workspaceId, '', principalType as 'user' | 'team')
-			.then((data) => (principals = data))
-			.catch((e) => (principalsError = e instanceof Error ? e.message : String(e)));
+		void Promise.all([
+			listPrincipals(workspaceId, '', 'user'),
+			listPrincipals(workspaceId, '', 'team')
+		])
+			.then(([users, teams]) => {
+				if (request !== principalRequest) return;
+				principals = principalType === 'user' ? users : teams;
+				const labels: Record<string, string> = {};
+				for (const [type, list] of [
+					['user', users],
+					['team', teams]
+				] as const) {
+					for (const principal of list) {
+						labels[`${type}:${principal.id}`] = principal.email
+							? `${principal.name} (${principal.email})`
+							: principal.name;
+					}
+				}
+				principalLabels = labels;
+			})
+			.catch((e) => {
+				if (request === principalRequest)
+					principalsError = e instanceof Error ? e.message : String(e);
+			});
 	});
+
+	function principalLabel(member: SpaceMember): string {
+		return (
+			principalLabels[`${member.principal_type}:${member.principal_id}`] ?? member.principal_id
+		);
+	}
 
 	async function load(spaceId: string) {
 		loading = true;
@@ -81,7 +112,11 @@
 		);
 		if (res.error) error = res.error;
 		else
-			members = members.map((m) => (m.principal_id === member.principal_id ? { ...m, role } : m));
+			members = members.map((m) =>
+				m.principal_type === member.principal_type && m.principal_id === member.principal_id
+					? { ...m, role }
+					: m
+			);
 	}
 
 	async function removeMember(member: SpaceMember) {
@@ -92,7 +127,10 @@
 			member.principal_id
 		);
 		if (res.error) error = res.error;
-		else members = members.filter((m) => m.principal_id !== member.principal_id);
+		else
+			members = members.filter(
+				(m) => m.principal_type !== member.principal_type || m.principal_id !== member.principal_id
+			);
 	}
 
 	async function add() {
@@ -139,8 +177,12 @@
 				{#each members as member (member.principal_type + ':' + member.principal_id)}
 					<li class="flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
 						<span class="flex-1 truncate text-xs">
-							<span class="font-semibold">{member.principal_type}</span>
-							<span class="text-text-muted"> {member.principal_id}</span>
+							<span class="font-semibold"
+								>{member.principal_type === 'team'
+									? m.components_spaceaccessdialog_team()
+									: m.components_spaceaccessdialog_user()}</span
+							>
+							<span class="text-text-muted"> {principalLabel(member)}</span>
 						</span>
 						<Select
 							label={m.components_spaceaccessdialog_role()}

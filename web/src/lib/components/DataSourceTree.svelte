@@ -82,6 +82,7 @@
 	let catalogs = $state<MetadataCatalog[]>([]);
 	let loading = $state(true);
 	let loadError = $state('');
+	let rootsRequest = 0;
 
 	// Every loaded node keyed by rendered ref + namespace path. The ref is the
 	// catalog id in "by catalog" and `<engine>:<catalog>` in "by engine", so the
@@ -113,6 +114,7 @@
 	}
 
 	async function loadRoots(wid: string) {
+		const request = ++rootsRequest;
 		resetTree();
 		if (!wid) {
 			loading = false;
@@ -121,11 +123,14 @@
 		loading = true;
 		loadError = '';
 		try {
-			catalogs = await loadCatalogs(wid);
+			const loaded = await loadCatalogs(wid);
+			if (request !== rootsRequest) return;
+			catalogs = loaded;
 		} catch (e) {
+			if (request !== rootsRequest) return;
 			loadError = e instanceof Error ? e.message : String(e);
 		} finally {
-			loading = false;
+			if (request === rootsRequest) loading = false;
 		}
 	}
 
@@ -140,13 +145,18 @@
 	 */
 	async function refreshRoots(wid: string) {
 		if (!wid) return;
+		const request = ++rootsRequest;
 		invalidateCatalogs();
 		try {
-			catalogs = await loadCatalogs(wid);
+			const loaded = await loadCatalogs(wid);
+			if (request !== rootsRequest) return;
+			catalogs = loaded;
 			// A root error from the first load is stale once a refresh worked.
 			loadError = '';
 		} catch {
 			return;
+		} finally {
+			if (request === rootsRequest) loading = false;
 		}
 	}
 
@@ -408,6 +418,7 @@
 
 	/** Expands a catalog's root, for a link that names only the catalog. */
 	export async function revealCatalog(catalogId: string): Promise<boolean> {
+		search = '';
 		const catalog = await catalogById(catalogId);
 		if (!catalog) return false;
 		view = 'catalog';
@@ -425,6 +436,7 @@
 		namespace: string[],
 		table: { id: string; name: string }
 	): Promise<boolean> {
+		search = '';
 		const catalog = await catalogById(catalogId);
 		if (!catalog) return false;
 		view = 'catalog';
