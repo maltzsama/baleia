@@ -290,7 +290,7 @@
 			/>
 		</div>
 		{#if isAdmin}
-			<div class="w-72">
+			<div class="min-w-64 flex-1">
 				<Input
 					label={m.settings_audit_actor_id()}
 					bind:value={actorId}
@@ -299,7 +299,7 @@
 				/>
 			</div>
 		{/if}
-		<div class="w-72">
+		<div class="min-w-64 flex-1">
 			<Input
 				label={m.settings_audit_request_id()}
 				bind:value={requestId}
