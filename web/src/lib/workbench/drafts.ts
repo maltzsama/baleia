@@ -61,8 +61,8 @@ export async function saveDrafts(
 ): Promise<void> {
 	try {
 		const persisted = tabs
-			.slice(0, MAX_DRAFT_TABS)
 			.filter((tab) => tab.sql.length <= MAX_DRAFT_SQL)
+			.slice(0, MAX_DRAFT_TABS)
 			.map(toPersisted);
 		await set(key(userId, workspaceId), persisted);
 	} catch {

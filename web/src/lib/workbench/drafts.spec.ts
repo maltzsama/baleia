@@ -47,8 +47,10 @@ describe('workbench drafts', () => {
 	});
 
 	it('persists at most 30 tabs and skips SQL over 1 MiB', async () => {
-		const tabs = Array.from({ length: MAX_DRAFT_TABS + 5 }, (_, i) => tab(String(i)));
-		tabs.push(tab('huge', 'x'.repeat(MAX_DRAFT_SQL + 1)));
+		const tabs = [
+			tab('huge', 'x'.repeat(MAX_DRAFT_SQL + 1)),
+			...Array.from({ length: MAX_DRAFT_TABS + 5 }, (_, i) => tab(String(i)))
+		];
 
 		await saveDrafts('u1', 'w1', tabs);
 
