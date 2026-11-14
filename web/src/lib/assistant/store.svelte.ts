@@ -22,6 +22,9 @@ class AssistantStore {
 	private workspaceId = '';
 	private loadRun = 0;
 	private openRun = 0;
+	private streamConnected = false;
+	private streamReady: Promise<boolean> | null = null;
+	private resolveStreamReady: ((connected: boolean) => void) | null = null;
 
 	async loadStatus() {
 		try {
@@ -36,8 +39,18 @@ class AssistantStore {
 	}
 
 	async load(workspaceId: string) {
+		const workspaceChanged = this.workspaceId !== workspaceId;
 		this.workspaceId = workspaceId;
 		const run = ++this.loadRun;
+		if (workspaceChanged) {
+			this.openRun += 1;
+			this.stop();
+			this.active = null;
+			this.messages = [];
+			this.streamingText = '';
+			this.state = 'idle';
+			this.error = '';
+		}
 		if (!this.enabled || !workspaceId) return;
 		this.loading = true;
 		this.loadError = '';
@@ -72,11 +85,12 @@ class AssistantStore {
 	}
 
 	async open(id: string) {
+		const workspaceId = this.workspaceId;
 		const run = ++this.openRun;
 		const { data, error } = await client.GET('/assistant/conversations/{id}', {
 			params: { path: { id } }
 		});
-		if (run !== this.openRun) return;
+		if (run !== this.openRun || workspaceId !== this.workspaceId) return;
 		if (error || !data) {
 			this.error = apiErrorMessage(
 				error,
@@ -114,21 +128,28 @@ class AssistantStore {
 	}
 
 	async send(text: string): Promise<boolean> {
-		if (!this.active) await this.create();
-		if (!this.active) return false;
-		this.state = 'running';
-		this.streamingText = '';
-		this.error = '';
-		const { error } = await client.POST('/assistant/conversations/{id}/messages', {
-			params: { path: { id: this.active.id } },
-			body: { text }
-		});
-		if (error) {
+		try {
+			if (!this.active) await this.create();
+			if (!this.active || !(await this.ensureConnected())) return false;
+			this.state = 'running';
+			this.streamingText = '';
+			this.error = '';
+			const { error } = await client.POST('/assistant/conversations/{id}/messages', {
+				params: { path: { id: this.active.id } },
+				body: { text }
+			});
+			if (error) {
+				this.state = 'idle';
+				this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_send_the_message());
+				return false;
+			}
+			return true;
+		} catch (error) {
 			this.state = 'idle';
+			this.streamingText = '';
 			this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_send_the_message());
 			return false;
 		}
-		return true;
 	}
 
 	async cancel() {
@@ -146,7 +167,7 @@ class AssistantStore {
 	}
 
 	async remove(id: string) {
-		if (this.active?.id === id) this.stop();
+		const removingActive = this.active?.id === id;
 		const { error } = await client.DELETE('/assistant/conversations/{id}', {
 			params: { path: { id } }
 		});
@@ -154,8 +175,9 @@ class AssistantStore {
 			this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_load_conversations());
 			return;
 		}
+		if (removingActive) this.stop();
 		this.conversations = this.conversations.filter((c) => c.id !== id);
-		if (this.active?.id === id) {
+		if (removingActive) {
 			this.active = null;
 			this.messages = [];
 			this.streamingText = '';
@@ -166,24 +188,73 @@ class AssistantStore {
 	stop() {
 		this.abort?.abort();
 		this.abort = null;
+		this.streamConnected = false;
+		this.resolveStreamReady?.(false);
+		this.resolveStreamReady = null;
+		this.streamReady = null;
 	}
 
-	private connect() {
-		if (!this.active) return;
+	private connect(): Promise<boolean> | null {
+		if (!this.active) return null;
 		this.stop();
 		const controller = new AbortController();
 		this.abort = controller;
+		const ready = new Promise<boolean>((resolve) => {
+			this.resolveStreamReady = resolve;
+		});
+		this.streamReady = ready;
 		const last = this.messages.reduce((max, msg) => Math.max(max, msg.seq), 0);
-		streamEvents(`/assistant/conversations/${this.active.id}/events?after_seq=${last}`, {
-			signal: controller.signal,
-			onEvent: (frame) => this.onFrame(frame)
-		}).catch(() => {
-			if (!controller.signal.aborted) {
+		const stream = streamEvents(
+			`/assistant/conversations/${this.active.id}/events?after_seq=${last}`,
+			{
+				signal: controller.signal,
+				onOpen: () => {
+					if (this.abort !== controller) return;
+					this.streamConnected = true;
+					this.resolveStreamReady?.(true);
+				},
+				onEvent: (frame) => this.onFrame(frame)
+			}
+		);
+		void stream.then(
+			() => {
+				if (this.abort !== controller) return;
+				this.abort = null;
+				this.streamConnected = false;
+				this.resolveStreamReady?.(false);
+				this.resolveStreamReady = null;
+				this.streamReady = null;
 				this.state = 'idle';
 				this.streamingText = '';
 				this.error = m.assistant_storesvelte_the_assistant_stream_disconnected();
+			},
+			(error) => {
+				if (this.abort !== controller) return;
+				this.abort = null;
+				this.streamConnected = false;
+				this.resolveStreamReady?.(false);
+				this.resolveStreamReady = null;
+				this.streamReady = null;
+				if (!controller.signal.aborted) {
+					this.state = 'idle';
+					this.streamingText = '';
+					this.error =
+						error instanceof Error
+							? error.message
+							: m.assistant_storesvelte_the_assistant_stream_disconnected();
+				}
 			}
-		});
+		);
+		return ready;
+	}
+
+	private async ensureConnected(): Promise<boolean> {
+		if (this.streamConnected) return true;
+		const ready = this.streamReady ?? this.connect();
+		if (!ready) return false;
+		const connected = await ready;
+		if (connected) this.error = '';
+		return connected;
 	}
 
 	private onFrame(frame: SseFrame) {
