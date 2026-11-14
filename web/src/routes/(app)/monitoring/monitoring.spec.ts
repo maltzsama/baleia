@@ -3,7 +3,6 @@ import { HttpResponse, http as mswHttp } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { http, server } from '../../../test/server';
 import {
-	makeMaintenancePlan,
 	makeMe,
 	makeMetadataCatalog,
 	makeTableMaintenance,
@@ -259,36 +258,16 @@ describe('monitoring page', () => {
 		expect(within(dialog).getByText('Optimize')).toBeTruthy();
 	});
 
-	it('lists the catalog maintenance plan and opens the editor', async () => {
-		const CATALOG = '00000000-0000-0000-0000-0000000000c1';
-		server.use(
-			http.get('/workspaces/{id}/metadata/catalogs', ({ response }) =>
-				response(200).json([
-					makeMetadataCatalog({ id: CATALOG, origin: 'source', table_health: true })
-				])
-			),
-			http.get('/catalogs/{catalog_id}/maintenance-plan', ({ response }) =>
-				response(200).json([
-					{
-						namespace: 'sales',
-						table_name: 'orders',
-						mode: 'managed',
-						plan: makeMaintenancePlan(),
-						last_run: null
-					}
-				])
-			),
-			http.get('/catalogs/{catalog_id}/tables/{namespace}/{table}/maintenance', ({ response }) =>
-				response(200).json(makeTableMaintenance({ properties: {} }))
-			)
-		);
+	it('has no separate Maintenance tab: Iceberg health carries it (#1014)', async () => {
 		render(MonitoringPage);
 
-		await fireEvent.click(await screen.findByRole('tab', { name: 'Maintenance' }));
-		await fireEvent.click(await screen.findByRole('button', { name: 'sales.orders' }));
+		await screen.findByRole('tab', { name: 'Iceberg health' });
 
-		const dialog = await screen.findByRole('dialog');
-		expect(await within(dialog).findByText(/has no maintenance parameters/)).toBeTruthy();
+		expect(screen.getAllByRole('tab').map((tab) => tab.textContent?.trim())).toEqual([
+			'Cluster',
+			'Queries',
+			'Iceberg health'
+		]);
 	});
 
 	it('exports every query page with the current filters', async () => {
