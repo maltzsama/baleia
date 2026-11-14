@@ -31,8 +31,9 @@
 	}
 
 	function onpointermove(event: PointerEvent) {
+		if (!dragging) return;
 		const box = container()?.getBoundingClientRect();
-		if (!dragging || !box) return;
+		if (!box) return;
 		value = splitFromPointer(event.clientY, box);
 	}
 
