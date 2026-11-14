@@ -782,10 +782,10 @@
 												>
 													<svg
 														viewBox="0 0 16 16"
-														class="h-3.5 w-3.5"
+														class="h-4 w-4"
 														fill="none"
 														stroke="currentColor"
-														stroke-width="1.75"
+														stroke-width="2"
 														stroke-linecap="round"
 														stroke-linejoin="round"
 														aria-hidden="true"><path d="m4 10 4-4 4 4" /></svg
@@ -798,10 +798,10 @@
 												>
 													<svg
 														viewBox="0 0 16 16"
-														class="h-3.5 w-3.5"
+														class="h-4 w-4"
 														fill="none"
 														stroke="currentColor"
-														stroke-width="1.75"
+														stroke-width="2"
 														stroke-linecap="round"
 														stroke-linejoin="round"
 														aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg
