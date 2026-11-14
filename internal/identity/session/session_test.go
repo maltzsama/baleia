@@ -28,12 +28,14 @@ func (f *fakeStore) CreateRefreshToken(_ context.Context, arg db.CreateRefreshTo
 	return rt, nil
 }
 
-func (f *fakeStore) ConsumeRefreshToken(_ context.Context, hash string) (db.ConsumeRefreshTokenRow, error) {
-	rt, ok := f.tokens[hash]
+func (f *fakeStore) RotateRefreshToken(_ context.Context, arg db.RotateRefreshTokenParams) (db.ConsumeRefreshTokenRow, error) {
+	rt, ok := f.tokens[arg.TokenHash]
 	if !ok || rt.Revoked {
 		return db.ConsumeRefreshTokenRow{}, db.ErrNoRows
 	}
 	rt.Revoked = true
+	next := db.RefreshToken{ID: newID(), UserID: rt.UserID, TokenHash: arg.NewTokenHash, ExpiresAt: arg.NewExpiresAt, FamilyID: rt.FamilyID}
+	f.tokens[arg.NewTokenHash] = &next
 	return db.ConsumeRefreshTokenRow{ID: rt.ID, UserID: rt.UserID, FamilyID: rt.FamilyID}, nil
 }
 
@@ -125,6 +127,15 @@ func TestRotate(t *testing.T) {
 		t.Error("a rotation stays in its family")
 	}
 
+	// The access token names the session it belongs to (#1030).
+	claims, err := auth.ParseToken(next.AccessToken, "0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := f.tokens[auth.HashRefreshToken(first.RefreshToken)].FamilyID.String(); claims.SessionID != want {
+		t.Errorf("sid = %q, want the family %q", claims.SessionID, want)
+	}
+
 	// Replaying the consumed token revokes the family, including the new token.
 	if _, _, err := s.Rotate(ctx, first.RefreshToken); !errors.Is(err, ErrReused) {
 		t.Fatalf("replay = %v, want ErrReused", err)
@@ -202,7 +213,7 @@ type brokenTokens struct{ *fakeStore }
 
 var errDown = errors.New("connection refused")
 
-func (brokenTokens) ConsumeRefreshToken(context.Context, string) (db.ConsumeRefreshTokenRow, error) {
+func (brokenTokens) RotateRefreshToken(context.Context, db.RotateRefreshTokenParams) (db.ConsumeRefreshTokenRow, error) {
 	return db.ConsumeRefreshTokenRow{}, errDown
 }
 
@@ -228,7 +239,7 @@ func TestStoreFailureIsNotInvalid(t *testing.T) {
 // the lookup that decides which.
 type lostLookup struct{ *fakeStore }
 
-func (lostLookup) ConsumeRefreshToken(context.Context, string) (db.ConsumeRefreshTokenRow, error) {
+func (lostLookup) RotateRefreshToken(context.Context, db.RotateRefreshTokenParams) (db.ConsumeRefreshTokenRow, error) {
 	return db.ConsumeRefreshTokenRow{}, db.ErrNoRows
 }
 

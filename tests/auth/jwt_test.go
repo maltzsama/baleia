@@ -12,7 +12,7 @@ import (
 func TestNewAccessToken(t *testing.T) {
 	t.Parallel()
 	secret := "test-secret"
-	token, err := auth.NewAccessToken("user-1", "admin", secret)
+	token, err := auth.NewAccessToken("user-1", "admin", "session-1", secret)
 	if err != nil {
 		t.Fatalf("NewAccessToken failed: %v", err)
 	}
@@ -30,6 +30,9 @@ func TestNewAccessToken(t *testing.T) {
 	}
 	if claims.Role != "admin" {
 		t.Errorf("expected admin, got %s", claims.Role)
+	}
+	if claims.SessionID != "session-1" {
+		t.Errorf("expected session-1, got %s", claims.SessionID)
 	}
 	if claims.ID == "" {
 		t.Error("expected a jti claim for audit correlation")
@@ -51,7 +54,7 @@ func TestParseTokenInvalid(t *testing.T) {
 
 func TestParseTokenWrongSecret(t *testing.T) {
 	t.Parallel()
-	token, err := auth.NewAccessToken("user-1", "member", "secret-a")
+	token, err := auth.NewAccessToken("user-1", "member", "session-1", "secret-a")
 	if err != nil {
 		t.Fatal(err)
 	}

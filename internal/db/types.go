@@ -69,10 +69,18 @@ type ClearWorkspaceDefaultForCatalogParams struct {
 	CatalogID   UUID `json:"catalog_id"`
 }
 
+// ConsumeRefreshTokenRow is the rotated token's identity.
 type ConsumeRefreshTokenRow struct {
 	ID       UUID `json:"id"`
 	UserID   UUID `json:"user_id"`
 	FamilyID UUID `json:"family_id"`
+}
+
+// RotateRefreshTokenParams names the token to rotate and its successor.
+type RotateRefreshTokenParams struct {
+	TokenHash    string      `json:"token_hash"`
+	NewTokenHash string      `json:"new_token_hash"`
+	NewExpiresAt Timestamptz `json:"new_expires_at"`
 }
 
 type CountCatalogAccessImpactParams struct {

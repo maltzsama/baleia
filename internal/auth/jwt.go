@@ -22,26 +22,30 @@ const (
 type Claims struct {
 	UserID string `json:"uid"`
 	Role   string `json:"role"`
+	// SessionID is the refresh-token family the access token belongs to. The
+	// server checks it is still live on every request (#1030).
+	SessionID string `json:"sid,omitempty"`
 	jwt.RegisteredClaims
 }
 
 // NewAccessToken signs an access token with the default lifetime.
-func NewAccessToken(userID, role, secret string) (string, error) {
-	return NewAccessTokenWithTTL(userID, role, secret, AccessTokenTTL)
+func NewAccessToken(userID, role, sessionID, secret string) (string, error) {
+	return NewAccessTokenWithTTL(userID, role, sessionID, secret, AccessTokenTTL)
 }
 
 // NewAccessTokenWithTTL signs an access token that expires after ttl. The jti
 // claim is an opaque id used only to correlate audit records, never for
 // authorization.
-func NewAccessTokenWithTTL(userID, role, secret string, ttl time.Duration) (string, error) {
+func NewAccessTokenWithTTL(userID, role, sessionID, secret string, ttl time.Duration) (string, error) {
 	jti, err := randomID()
 	if err != nil {
 		return "", err
 	}
 	now := time.Now()
 	claims := Claims{
-		UserID: userID,
-		Role:   role,
+		UserID:    userID,
+		Role:      role,
+		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        jti,
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),

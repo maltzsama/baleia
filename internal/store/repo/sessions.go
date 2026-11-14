@@ -33,13 +33,15 @@ func (s *Sessions) CreateRefreshToken(ctx context.Context, arg db.CreateRefreshT
 	return toDBRefreshToken(row), nil
 }
 
-// ConsumeRefreshToken rotates the token atomically: of two concurrent
-// refreshes with the same token, exactly one updates a row.
-func (s *Sessions) ConsumeRefreshToken(ctx context.Context, tokenHash string) (db.ConsumeRefreshTokenRow, error) {
+// RotateRefreshToken revokes the live token and inserts its successor in the
+// same family in one transaction: of two concurrent refreshes with the same
+// token exactly one succeeds, and the family never looks dead in between, so an
+// access token bound to it is not refused mid-rotation.
+func (s *Sessions) RotateRefreshToken(ctx context.Context, arg db.RotateRefreshTokenParams) (db.ConsumeRefreshTokenRow, error) {
 	var row model.RefreshToken
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		res := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("token_hash = ? AND revoked = ? AND expires_at > ?", tokenHash, false, time.Now().UTC()).
+			Where("token_hash = ? AND revoked = ? AND expires_at > ?", arg.TokenHash, false, time.Now().UTC()).
 			First(&row)
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			return db.ErrNoRows
@@ -47,9 +49,19 @@ func (s *Sessions) ConsumeRefreshToken(ctx context.Context, tokenHash string) (d
 		if res.Error != nil {
 			return res.Error
 		}
-		return tx.Model(&model.RefreshToken{}).
+		if err := tx.Model(&model.RefreshToken{}).
 			Where("id = ?", string(row.ID)).
-			Update("revoked", true).Error
+			Update("revoked", true).Error; err != nil {
+			return err
+		}
+		return tx.Create(&model.RefreshToken{
+			ID:        model.UUID(NewUUID()),
+			UserID:    row.UserID,
+			TokenHash: model.Text(arg.NewTokenHash),
+			ExpiresAt: arg.NewExpiresAt.Time,
+			FamilyID:  row.FamilyID,
+			CreatedAt: time.Now().UTC(),
+		}).Error
 	})
 	if err != nil {
 		return db.ConsumeRefreshTokenRow{}, err
@@ -59,6 +71,16 @@ func (s *Sessions) ConsumeRefreshToken(ctx context.Context, tokenHash string) (d
 		UserID:   PGUUID(string(row.UserID)),
 		FamilyID: PGUUID(string(row.FamilyID)),
 	}, nil
+}
+
+// LiveRefreshFamily reports whether the family has a token that is neither
+// revoked nor expired.
+func (s *Sessions) LiveRefreshFamily(ctx context.Context, familyID db.UUID) (bool, error) {
+	var n int64
+	err := s.db.WithContext(ctx).Model(&model.RefreshToken{}).
+		Where("family_id = ? AND revoked = ? AND expires_at > ?", UUIDString(familyID), false, time.Now().UTC()).
+		Limit(1).Count(&n).Error
+	return n > 0, err
 }
 
 // GetRefreshTokenByHashAny returns the row even when revoked, for reuse

@@ -461,24 +461,80 @@ func staticHandler(users staticUsers, dir string, opts ...staticOption) http.Han
 // provider's client-credentials token (#653); nil disables it.
 type serviceAccountAuth func(ctx context.Context, raw string) (db.User, error)
 
+// sessionStore is what a bearer check reads: the account and the liveness of
+// the session an access token is bound to. db.Querier satisfies it.
+type sessionStore interface {
+	GetUserByID(ctx context.Context, id db.UUID) (db.User, error)
+	LiveRefreshFamily(ctx context.Context, familyID db.UUID) (bool, error)
+}
+
+// errSessionCheck marks a failure to verify a session, as opposed to a token
+// that was verified and refused. It is a 503, never a 401: a client that gets
+// a 401 refreshes or signs out.
+var errSessionCheck = errors.New("session check unavailable")
+
 // bearerContext authenticates a bearer token: a Baleia access token, else a
 // service account's client-credentials token.
-func bearerContext(ctx context.Context, token, secret string, sa serviceAccountAuth) (context.Context, bool) {
+//
+// An access token is only a claim to a session (#1030): the account must still
+// exist and be active, the session (refresh family) must still be live, and the
+// role is the account's current one, not the claim's. Logout, suspension,
+// removal and a role change therefore apply on the next request, on every
+// replica, with or without Redis. A token without a session id is refused.
+func bearerContext(ctx context.Context, token, secret string, store sessionStore, sa serviceAccountAuth) (context.Context, bool, error) {
 	if claims, err := auth.ParseToken(token, secret); err == nil {
-		ctx = context.WithValue(ctx, auth.ContextKeyUserID, claims.UserID)
-		ctx = context.WithValue(ctx, auth.ContextKeyRole, claims.Role)
-		return audit.WithAuthMethod(ctx, audit.AuthAccessToken), true
+		user, ok, err := verifySession(ctx, store, claims)
+		if err != nil || !ok {
+			return ctx, false, err
+		}
+		ctx = context.WithValue(ctx, auth.ContextKeyUserID, user.ID.String())
+		ctx = context.WithValue(ctx, auth.ContextKeyRole, user.Role)
+		return audit.WithAuthMethod(ctx, audit.AuthAccessToken), true, nil
 	}
 	if sa == nil {
-		return ctx, false
+		return ctx, false, nil
 	}
 	user, err := sa(ctx, token)
 	if err != nil {
-		return ctx, false
+		return ctx, false, nil
 	}
 	ctx = context.WithValue(ctx, auth.ContextKeyUserID, user.ID.String())
 	ctx = context.WithValue(ctx, auth.ContextKeyRole, user.Role)
-	return audit.WithAuthMethod(ctx, audit.AuthClientToken), true
+	return audit.WithAuthMethod(ctx, audit.AuthClientToken), true, nil
+}
+
+// verifySession checks the claims against the account and the session. ok is
+// false for a refused token; err is set when the check itself failed.
+func verifySession(ctx context.Context, store sessionStore, claims *auth.Claims) (db.User, bool, error) {
+	var uid, sid db.UUID
+	if uid.Scan(claims.UserID) != nil || sid.Scan(claims.SessionID) != nil || claims.SessionID == "" {
+		return db.User{}, false, nil
+	}
+	user, err := store.GetUserByID(ctx, uid)
+	if errors.Is(err, db.ErrNoRows) {
+		return db.User{}, false, nil
+	}
+	if err != nil {
+		return db.User{}, false, fmt.Errorf("%w: %w", errSessionCheck, err)
+	}
+	if auth.RequireActive(user.Status) != nil {
+		return db.User{}, false, nil
+	}
+	live, err := store.LiveRefreshFamily(ctx, sid)
+	if err != nil {
+		return db.User{}, false, fmt.Errorf("%w: %w", errSessionCheck, err)
+	}
+	return user, live, nil
+}
+
+// writeBearerFailure answers a refused bearer token: 503 when the session could
+// not be checked, 401 otherwise.
+func writeBearerFailure(w http.ResponseWriter, err error) {
+	if errors.Is(err, errSessionCheck) {
+		writeAuthError(w, http.StatusServiceUnavailable, "service_unavailable", "session check unavailable")
+		return
+	}
+	writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
 }
 
 func authMiddlewareFunc(secret string, queries db.Querier, sa serviceAccountAuth) api.StrictMiddlewareFunc {
@@ -531,9 +587,9 @@ func authMiddlewareFunc(secret string, queries db.Querier, sa serviceAccountAuth
 				return nil, nil
 			}
 
-			ctx, ok := bearerContext(ctx, token, secret, sa)
+			ctx, ok, err := bearerContext(ctx, token, secret, queries, sa)
 			if !ok {
-				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
+				writeBearerFailure(w, err)
 				return nil, nil
 			}
 			return f(ctx, w, r, args)
@@ -567,9 +623,9 @@ func chiAuthMiddleware(secret string, queries db.Querier, sa serviceAccountAuth)
 				writeAuthError(w, http.StatusUnauthorized, "agent_token_not_allowed", "agent tokens are only valid on /mcp")
 				return
 			}
-			ctx, ok := bearerContext(r.Context(), token, secret, sa)
+			ctx, ok, err := bearerContext(r.Context(), token, secret, queries, sa)
 			if !ok {
-				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
+				writeBearerFailure(w, err)
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(ctx))
