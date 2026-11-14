@@ -84,6 +84,7 @@
 	let testResult = $state<TestResult | null>(null);
 	let testError = $state<ConnectionRequestError | null>(null);
 	let testedSnapshot = $state('');
+	let testRun = 0;
 
 	let creating = $state(false);
 	let createError = $state('');
@@ -211,6 +212,10 @@
 	);
 	const tested = $derived(testedSnapshot !== '' && testedSnapshot === snapshot);
 
+	$effect(() => {
+		if (testedSnapshot && testedSnapshot !== snapshot) testResult = null;
+	});
+
 	function choose(next: ConnectionProvider) {
 		if (!isUsable(next)) return;
 		provider = next;
@@ -256,6 +261,7 @@
 
 	async function runTest() {
 		if (!provider) return;
+		const run = ++testRun;
 		testing = true;
 		testError = null;
 		testResult = null;
@@ -272,15 +278,17 @@
 				// check binds the same one.
 				warehouse: needsCatalogs(usage()) ? catalogName.trim() || name : undefined
 			});
+			if (run !== testRun || snap !== snapshot) return;
 			testResult = result;
 			if (result.success) testedSnapshot = snap;
 		} catch (e) {
+			if (run !== testRun || snap !== snapshot) return;
 			testError =
 				e instanceof ConnectionRequestError
 					? e
 					: new ConnectionRequestError(e instanceof Error ? e.message : String(e));
 		} finally {
-			testing = false;
+			if (run === testRun) testing = false;
 		}
 	}
 
