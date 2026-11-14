@@ -106,7 +106,7 @@
 				bindings: catalog?.bindings ?? []
 			});
 		} catch {
-			openError = m.components_tabledetail_could_not_load_the_table();
+			openError = m.components_lineage_could_not_open_table();
 		} finally {
 			opening = '';
 		}
