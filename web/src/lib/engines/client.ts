@@ -2,6 +2,7 @@
 // engine name: the dialect, formatter language and CodeMirror base all come
 // from the API.
 import { apiErrorMessage, client } from '$lib/api/client';
+import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import {
 	Cassandra,
@@ -100,18 +101,26 @@ export function loadBindingFunctions(
 		})
 		.then(({ data, error }) => {
 			if (error || !data) {
-				// Evict a failed lookup so a recovered engine is retried.
-				bindingFunctionsCache.delete(key);
-				return null;
+				throw new EngineRequestError(apiErrorMessage(error, m.functions_panel_failed()));
 			}
 			return data;
 		})
-		.catch(() => {
-			bindingFunctionsCache.delete(key);
-			return null;
+		.catch((error) => {
+			// Do not evict a newer retry when an older request settles late.
+			if (bindingFunctionsCache.get(key)?.promise === pending) bindingFunctionsCache.delete(key);
+			throw error;
 		});
 	bindingFunctionsCache.set(key, { at: Date.now(), promise: pending });
 	return pending;
+}
+
+/** Forces the next function lookup for a binding to issue a new request. */
+export function invalidateBindingFunctions(
+	workspaceId: string,
+	catalogId: string,
+	bindingId: string
+): void {
+	bindingFunctionsCache.delete(`${workspaceId}:${catalogId}:${bindingId}`);
 }
 
 export function loadDialect(name: string): Promise<Dialect> {

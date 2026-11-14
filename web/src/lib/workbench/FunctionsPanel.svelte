@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
-	import { loadBindingFunctions, type DialectFunction } from '$lib/engines/client';
+	import {
+		invalidateBindingFunctions,
+		loadBindingFunctions,
+		type DialectFunction
+	} from '$lib/engines/client';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -22,6 +26,14 @@
 	let error = $state('');
 	let query = $state('');
 	let kind = $state('all');
+	let requestId = $state(0);
+
+	const LOAD_TIMEOUT_MS = 15_000;
+
+	function retry() {
+		invalidateBindingFunctions(workspaceId, catalogId, bindingId);
+		requestId += 1;
+	}
 
 	$effect(() => {
 		const ws = workspaceId;
@@ -34,17 +46,36 @@
 			return;
 		}
 		let cancelled = false;
+		const id = requestId;
+		let timeout: ReturnType<typeof setTimeout> | undefined;
 		loading = true;
 		error = '';
-		void loadBindingFunctions(ws, cat, bind)
+		let load: Promise<DialectFunction[] | null>;
+		try {
+			load = loadBindingFunctions(ws, cat, bind);
+		} catch (e) {
+			loading = false;
+			error = e instanceof Error ? e.message : m.functions_panel_failed();
+			return () => {
+				cancelled = true;
+			};
+		}
+		void Promise.race([
+			load,
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(() => reject(new Error(m.functions_panel_failed())), LOAD_TIMEOUT_MS);
+			})
+		])
 			.then((data) => {
-				if (!cancelled) functions = data ?? [];
+				if (!cancelled && id === requestId) functions = data ?? [];
 			})
 			.catch((e) => {
-				if (!cancelled) error = e instanceof Error ? e.message : String(e);
+				if (!cancelled && id === requestId)
+					error = e instanceof Error ? e.message : m.functions_panel_failed();
 			})
 			.finally(() => {
-				if (!cancelled) loading = false;
+				if (timeout) clearTimeout(timeout);
+				if (!cancelled && id === requestId) loading = false;
 			});
 		return () => {
 			cancelled = true;
@@ -106,7 +137,7 @@
 			<Skeleton class="h-6 w-5/6" />
 		</div>
 	{:else if error}
-		<ErrorState title={m.functions_panel_failed()} message={error} />
+		<ErrorState title={m.functions_panel_failed()} message={error} onretry={retry} />
 	{:else if shown.length === 0}
 		<EmptyState title={m.functions_panel_empty()} description={m.functions_panel_search()} />
 	{:else}
