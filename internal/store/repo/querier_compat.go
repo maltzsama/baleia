@@ -78,11 +78,13 @@ func (s *Sessions) RevokeRefreshToken(ctx context.Context, id db.UUID) error {
 		Update("revoked", true).Error
 }
 
-// DeleteExpiredRefreshTokens prunes tokens past their expiry.
+// DeleteExpiredRefreshTokens prunes tokens past their expiry. A revoked token
+// stays until it expires: reuse detection finds a replayed token by its row, so
+// purging it early would let a stolen family survive (#1031).
 func (s *Sessions) DeleteExpiredRefreshTokens(ctx context.Context) error {
 	now := time.Now().UTC()
 	return s.db.WithContext(ctx).
-		Where("expires_at < ? OR revoked = ?", now, true).
+		Where("expires_at < ?", now).
 		Delete(&model.RefreshToken{}).Error
 }
 

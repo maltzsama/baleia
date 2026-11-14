@@ -19,7 +19,7 @@ import (
 // Tokens persists refresh tokens; *repo.Repo implements it.
 type Tokens interface {
 	CreateRefreshToken(ctx context.Context, arg db.CreateRefreshTokenParams) (db.RefreshToken, error)
-	ConsumeRefreshToken(ctx context.Context, tokenHash string) (db.ConsumeRefreshTokenRow, error)
+	RotateRefreshToken(ctx context.Context, arg db.RotateRefreshTokenParams) (db.ConsumeRefreshTokenRow, error)
 	GetRefreshTokenByHashAny(ctx context.Context, tokenHash string) (db.RefreshToken, error)
 	RevokeRefreshFamily(ctx context.Context, familyID db.UUID) error
 	RevokeUserRefreshTokens(ctx context.Context, userID db.UUID) error
@@ -93,7 +93,17 @@ func (s *Service) IssueRefresh(ctx context.Context, user db.User) (string, error
 // Exactly one of two concurrent rotations with the same token succeeds (#51).
 func (s *Service) Rotate(ctx context.Context, refreshToken string) (Pair, db.User, error) {
 	hash := auth.HashRefreshToken(refreshToken)
-	rt, err := s.tokens.ConsumeRefreshToken(ctx, hash)
+	next, nextHash, err := auth.GenerateRefreshToken()
+	if err != nil {
+		return Pair{}, db.User{}, err
+	}
+	// The successor is created with the revocation, in one transaction, so the
+	// family stays live for the access tokens bound to it (#1030).
+	rt, err := s.tokens.RotateRefreshToken(ctx, db.RotateRefreshTokenParams{
+		TokenHash:    hash,
+		NewTokenHash: nextHash,
+		NewExpiresAt: db.Timestamptz{Time: time.Now().Add(s.cfg.RefreshTTL), Valid: true},
+	})
 	if err != nil && !errors.Is(err, db.ErrNoRows) {
 		return Pair{}, db.User{}, err
 	}
@@ -128,11 +138,11 @@ func (s *Service) Rotate(ctx context.Context, refreshToken string) (Pair, db.Use
 		return Pair{}, user, ErrSuspended
 	}
 
-	pair, err := s.issue(ctx, user, rt.FamilyID)
+	access, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, rt.FamilyID.String(), s.cfg.JWTSecret, s.cfg.AccessTTL)
 	if err != nil {
 		return Pair{}, db.User{}, err
 	}
-	return pair, user, nil
+	return Pair{AccessToken: access, RefreshToken: next, ExpiresAt: time.Now().Add(s.cfg.AccessTTL)}, user, nil
 }
 
 // End revokes the whole family of refreshToken. found is false, with no
@@ -153,8 +163,9 @@ func (s *Service) End(ctx context.Context, refreshToken string) (userID db.UUID,
 	return rt.UserID, true, nil
 }
 
-// RevokeAll ends every session of a user after a security-relevant change;
-// access tokens already issued expire within the access TTL. A failure is
+// RevokeAll ends every session of a user after a security-relevant change; the
+// access tokens bound to those sessions are refused on their next request
+// (#1030). A failure is
 // logged, not returned: the triggering change already succeeded.
 func (s *Service) RevokeAll(ctx context.Context, userID db.UUID) {
 	if err := s.tokens.RevokeUserRefreshTokens(ctx, userID); err != nil {
@@ -163,7 +174,7 @@ func (s *Service) RevokeAll(ctx context.Context, userID db.UUID) {
 }
 
 func (s *Service) issue(ctx context.Context, user db.User, family db.UUID) (Pair, error) {
-	access, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, s.cfg.JWTSecret, s.cfg.AccessTTL)
+	access, err := auth.NewAccessTokenWithTTL(user.ID.String(), user.Role, family.String(), s.cfg.JWTSecret, s.cfg.AccessTTL)
 	if err != nil {
 		return Pair{}, err
 	}

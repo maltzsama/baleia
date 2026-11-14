@@ -167,3 +167,39 @@ func TestStreams(t *testing.T) {
 		t.Fatalf("trim: %v", err)
 	}
 }
+
+// TestCounter (#1032): a fixed-window counter shared by every replica.
+func TestCounter(t *testing.T) {
+	t.Parallel()
+	c := openClient(t)
+	ctx := context.Background()
+	for want := int64(1); want <= 3; want++ {
+		if got, err := c.CounterIncr(ctx, "k", time.Minute); err != nil || got != want {
+			t.Fatalf("incr = %d, %v; want %d", got, err, want)
+		}
+	}
+	if got, err := c.CounterGet(ctx, "k"); err != nil || got != 3 {
+		t.Fatalf("get = %d, %v; want 3", got, err)
+	}
+	if err := c.CounterReset(ctx, "k"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := c.CounterGet(ctx, "k"); err != nil || got != 0 {
+		t.Fatalf("after reset = %d, %v; want 0", got, err)
+	}
+	if _, err := c.CounterIncr(ctx, "short", 50*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(120 * time.Millisecond)
+	if got, _ := c.CounterGet(ctx, "short"); got != 0 {
+		t.Errorf("the window did not expire the counter: %d", got)
+	}
+}
+
+func TestCounterDisabled(t *testing.T) {
+	t.Parallel()
+	c, _ := realtime.Open(context.Background(), realtime.Options{})
+	if _, err := c.CounterIncr(context.Background(), "k", time.Minute); !errors.Is(err, realtime.ErrDisabled) {
+		t.Errorf("err = %v, want ErrDisabled", err)
+	}
+}

@@ -83,6 +83,67 @@ describe('api client', () => {
 		expect(onSessionExpired).toHaveBeenCalledOnce();
 	});
 
+	describe('apiFetch (#1034)', () => {
+		it('refreshes on 401 and retries once with the new token', async () => {
+			const seen: (string | null)[] = [];
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+					const url = urlOf(input);
+					if (url.includes('/auth/refresh')) {
+						return json({ token: 'access-2', expires_at: '2030-01-01T00:00:00Z' });
+					}
+					seen.push(new Headers(init?.headers).get('Authorization'));
+					return seen.length === 1 ? json({ code: 'unauthorized' }, 401) : json({ ok: true });
+				})
+			);
+			const onTokenRefreshed = vi.fn();
+			const { apiFetch, configureAuth, setAccessToken } = await import('./client');
+			configureAuth({ onTokenRefreshed });
+			setAccessToken('access-1');
+
+			const response = await apiFetch('/results/1');
+
+			expect(response.status).toBe(200);
+			expect(seen).toEqual(['Bearer access-1', 'Bearer access-2']);
+			expect(onTokenRefreshed).toHaveBeenCalledWith('access-2');
+		});
+
+		it('returns the 401 and signals expiry when the refresh fails', async () => {
+			let calls = 0;
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async (input: RequestInfo | URL) => {
+					if (urlOf(input).includes('/auth/refresh')) return json({}, 401);
+					calls += 1;
+					return json({ code: 'unauthorized' }, 401);
+				})
+			);
+			const onSessionExpired = vi.fn();
+			const { apiFetch, configureAuth, setAccessToken } = await import('./client');
+			configureAuth({ onSessionExpired });
+			setAccessToken('access-1');
+
+			const response = await apiFetch('/results/1');
+
+			expect(response.status).toBe(401);
+			expect(calls).toBe(1);
+			expect(onSessionExpired).toHaveBeenCalledOnce();
+		});
+
+		it('does not refresh when the response is not a 401', async () => {
+			const fetchMock = vi.fn(async () => json({ code: 'unavailable' }, 503));
+			vi.stubGlobal('fetch', fetchMock);
+			const { apiFetch, setAccessToken } = await import('./client');
+			setAccessToken('access-1');
+
+			const response = await apiFetch('/results/1');
+
+			expect(response.status).toBe(503);
+			expect(fetchMock).toHaveBeenCalledOnce();
+		});
+	});
+
 	it('keeps access tokens out of localStorage', async () => {
 		const { setAccessToken, getAccessToken, clearSession } = await import('./client');
 		setAccessToken('access-1');

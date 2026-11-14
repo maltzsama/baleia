@@ -2,10 +2,29 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/galileostudio/baleia/internal/realtime"
 )
+
+// SharedCounter is the cross-replica failure counter; *realtime.Client
+// implements it.
+type SharedCounter interface {
+	Enabled() bool
+	CounterIncr(ctx context.Context, key string, window time.Duration) (int64, error)
+	CounterGet(ctx context.Context, key string) (int64, error)
+	CounterReset(ctx context.Context, key string) error
+}
+
+var _ SharedCounter = (*realtime.Client)(nil)
+
+// defaultMaxTracked bounds how many identifiers one process tracks, so a flood
+// of logins with random e-mails cannot grow the map without limit (#1032).
+const defaultMaxTracked = 10000
 
 // LoginDelayConfig tunes the progressive delay applied after repeated login
 // failures for one account (#51). Zero fields use the defaults.
@@ -16,6 +35,12 @@ type LoginDelayConfig struct {
 	Threshold int
 	// MaxDelay caps the delay (default 60s).
 	MaxDelay time.Duration
+	// Shared keeps the failure counters in Redis when it is enabled, so the
+	// delay holds across replicas and restarts; a Redis error falls back to the
+	// local map (#1032). Nil or disabled keeps them in the process only.
+	Shared SharedCounter
+	// MaxTracked caps the identifiers tracked locally (default 10000).
+	MaxTracked int
 	// Now and Sleep are injectable for tests.
 	Now   func() time.Time
 	Sleep func(context.Context, time.Duration) error
@@ -27,6 +52,8 @@ type LoginDelayConfig struct {
 type LoginDelay struct {
 	mu        sync.Mutex
 	failures  map[string][]time.Time
+	shared    SharedCounter
+	maxKeys   int
 	window    time.Duration
 	threshold int
 	maxDelay  time.Duration
@@ -45,6 +72,9 @@ func NewLoginDelay(cfg LoginDelayConfig) *LoginDelay {
 	if cfg.MaxDelay <= 0 {
 		cfg.MaxDelay = 60 * time.Second
 	}
+	if cfg.MaxTracked <= 0 {
+		cfg.MaxTracked = defaultMaxTracked
+	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
@@ -53,6 +83,8 @@ func NewLoginDelay(cfg LoginDelayConfig) *LoginDelay {
 	}
 	return &LoginDelay{
 		failures:  make(map[string][]time.Time),
+		shared:    cfg.Shared,
+		maxKeys:   cfg.MaxTracked,
 		window:    cfg.Window,
 		threshold: cfg.Threshold,
 		maxDelay:  cfg.MaxDelay,
@@ -66,9 +98,15 @@ func NewLoginDelay(cfg LoginDelayConfig) *LoginDelay {
 // seconds. It returns the context error if the client goes away while waiting.
 func (d *LoginDelay) Wait(ctx context.Context, email string) error {
 	email = normalizeEmail(email)
+	// Failures that reached Redis and failures kept locally while it was
+	// unreachable are disjoint, so both count: a Redis that reads fine but
+	// fails to write must not hide the local history.
 	d.mu.Lock()
 	n := len(d.pruneLocked(email))
 	d.mu.Unlock()
+	if shared, ok := d.sharedCount(ctx, email); ok {
+		n += shared
+	}
 
 	if n < d.threshold {
 		return nil
@@ -83,16 +121,49 @@ func (d *LoginDelay) Wait(ctx context.Context, email string) error {
 }
 
 // Failure records one failed attempt for the account.
-func (d *LoginDelay) Failure(email string) {
+func (d *LoginDelay) Failure(ctx context.Context, email string) {
 	email = normalizeEmail(email)
+	if d.sharedOn() {
+		if _, err := d.shared.CounterIncr(ctx, sharedKey(email), d.window); err == nil {
+			return
+		}
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if _, tracked := d.failures[email]; !tracked && len(d.failures) >= d.maxKeys {
+		d.makeRoomLocked()
+	}
 	d.failures[email] = append(d.pruneLocked(email), d.now())
 }
 
+// makeRoomLocked frees one slot: it drops every identifier whose failures all
+// left the window and, if the map is still full, the one that failed longest
+// ago. The caller holds d.mu.
+func (d *LoginDelay) makeRoomLocked() {
+	var oldest string
+	var oldestAt time.Time
+	for email := range d.failures {
+		recent := d.pruneLocked(email)
+		if len(recent) == 0 {
+			continue
+		}
+		if last := recent[len(recent)-1]; oldest == "" || last.Before(oldestAt) {
+			oldest, oldestAt = email, last
+		}
+	}
+	if len(d.failures) >= d.maxKeys && oldest != "" {
+		delete(d.failures, oldest)
+	}
+}
+
 // Success clears the failure history for the account.
-func (d *LoginDelay) Success(email string) {
+func (d *LoginDelay) Success(ctx context.Context, email string) {
 	email = normalizeEmail(email)
+	if d.sharedOn() {
+		// Best effort: an unreachable Redis must not fail a valid sign-in, and
+		// the counter expires with its window.
+		_ = d.shared.CounterReset(ctx, sharedKey(email))
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	delete(d.failures, email)
@@ -117,6 +188,28 @@ func (d *LoginDelay) pruneLocked(email string) []time.Time {
 	return recent
 }
 
+// sharedCount reads the failures from Redis. ok is false when the shared layer
+// is off or errored, and the local map answers instead.
+func (d *LoginDelay) sharedCount(ctx context.Context, email string) (int, bool) {
+	if !d.sharedOn() {
+		return 0, false
+	}
+	n, err := d.shared.CounterGet(ctx, sharedKey(email))
+	if err != nil {
+		return 0, false
+	}
+	return int(n), true
+}
+
+// sharedOn reports whether failures are kept in the shared layer.
+func (d *LoginDelay) sharedOn() bool { return d.shared != nil && d.shared.Enabled() }
+
+// sharedKey hides the identifier: Redis holds a digest, never an e-mail.
+func sharedKey(email string) string {
+	sum := sha256.Sum256([]byte(email))
+	return "logindelay:" + hex.EncodeToString(sum[:])
+}
+
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
@@ -136,7 +229,7 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 func (h *AuthHandlers) loginDelay() *LoginDelay {
 	h.loginDelayOnce.Do(func() {
 		if h.loginDelayStore == nil {
-			h.loginDelayStore = NewLoginDelay(LoginDelayConfig{})
+			h.loginDelayStore = NewLoginDelay(LoginDelayConfig{Shared: h.rt})
 		}
 	})
 	return h.loginDelayStore

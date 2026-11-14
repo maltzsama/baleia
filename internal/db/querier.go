@@ -48,7 +48,6 @@ type Querier interface {
 	ConsumePasswordResetToken(ctx context.Context, tokenHash string) (PasswordResetToken, error)
 	// Atomic rotation: of two concurrent refreshes with the same token, exactly one
 	// updates a row (#51).
-	ConsumeRefreshToken(ctx context.Context, tokenHash string) (ConsumeRefreshTokenRow, error)
 	CountActiveAgentTokens(ctx context.Context, agentID UUID) (int64, error)
 	// Runs that still hold an agent concurrency slot: running or queued (#589).
 	CountActiveExecutionsByAgent(ctx context.Context, agentID UUID) (int64, error)
@@ -274,7 +273,14 @@ type Querier interface {
 	GetQueryStatementByPosition(ctx context.Context, arg GetQueryStatementByPositionParams) (QueryStatement, error)
 	GetReconcileRun(ctx context.Context, arg GetReconcileRunParams) (CatalogReconcileRun, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
-	// Reuse detection looks up the row ConsumeRefreshToken refused, including a
+	// RotateRefreshToken revokes the live token with tokenHash and creates its
+	// successor in the same family in one transaction, so a family never looks
+	// dead while it rotates. ErrNoRows when no live token has the hash (#1030).
+	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) (ConsumeRefreshTokenRow, error)
+	// LiveRefreshFamily reports whether the family still has a token that is
+	// neither revoked nor expired: the session behind an access token (#1030).
+	LiveRefreshFamily(ctx context.Context, familyID UUID) (bool, error)
+	// Reuse detection looks up the row RotateRefreshToken refused, including a
 	// revoked one (#51).
 	GetRefreshTokenByHashAny(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRetrieverByID(ctx context.Context, arg GetRetrieverByIDParams) (Retriever, error)

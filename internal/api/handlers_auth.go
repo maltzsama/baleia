@@ -118,7 +118,7 @@ func (h *AuthHandlers) Login(ctx context.Context, request LoginRequestObject) (r
 	user, err := h.logins.Password(ctx, string(*request.Body.Email), request.Body.Password)
 	switch {
 	case errors.Is(err, login.ErrInvalidCredentials):
-		h.loginDelay().Failure(identifier)
+		h.loginDelay().Failure(ctx, identifier)
 		failed("invalid_credentials")
 		return invalidCredentialsLogin(), nil
 	case errors.Is(err, login.ErrSuspended):
@@ -130,7 +130,7 @@ func (h *AuthHandlers) Login(ctx context.Context, request LoginRequestObject) (r
 	case err != nil:
 		return nil, err
 	}
-	h.loginDelay().Success(identifier)
+	h.loginDelay().Success(ctx, identifier)
 	return h.issueLogin(ctx, user, ev, audit.AuthPassword)
 }
 
@@ -164,14 +164,14 @@ func (h *AuthHandlers) loginLDAP(ctx context.Context, body *LoginRequest, ev aud
 	}
 	user, err := h.logins.Directory(ctx, db.UUID{Bytes: *body.ProviderId, Valid: true}, username, body.Password)
 	if errors.Is(err, login.ErrInvalidCredentials) {
-		h.loginDelay().Failure(identifier)
+		h.loginDelay().Failure(ctx, identifier)
 		failed("invalid_credentials")
 		return invalidCredentialsLogin(), nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	h.loginDelay().Success(identifier)
+	h.loginDelay().Success(ctx, identifier)
 	return h.issueLogin(ctx, user, ev, audit.AuthLDAP)
 }
 

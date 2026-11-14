@@ -12,8 +12,8 @@ import (
 	"github.com/galileostudio/baleia/internal/testdb"
 )
 
-// TestCleanup_DeletesOnlyExpired: the daily pass removes expired or revoked
-// refresh tokens and expired or used reset tokens, and nothing else (#51).
+// TestCleanup_DeletesOnlyExpired: the daily pass removes expired refresh
+// tokens, keeping revoked ones until they expire and expired or used reset tokens, and nothing else (#51).
 func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 	pool := testdb.New(t)
 	gdb := pool
@@ -111,7 +111,9 @@ func TestCleanup_DeletesOnlyExpired(t *testing.T) {
 	}{
 		{"refresh_tokens", "live", 1},
 		{"refresh_tokens", "expired", 0},
-		{"refresh_tokens", "revoked", 0},
+		// A revoked token is kept until it expires, so a replay is still
+		// detected (#1031).
+		{"refresh_tokens", "revoked", 1},
 		{"password_reset_tokens", "reset-live", 1},
 		{"password_reset_tokens", "reset-expired", 0},
 		{"password_reset_tokens", "reset-used", 0},

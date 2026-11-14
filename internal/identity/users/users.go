@@ -170,7 +170,7 @@ func (s *Service) Invite(ctx context.Context, email, role string) (db.User, erro
 }
 
 // ChangeRole sets the platform role and ends the account's sessions, so the
-// new role applies at the next sign-in (#51). It returns the account before
+// new role applies at once and the account signs in again (#51, #1030). It returns the account before
 // and after.
 func (s *Service) ChangeRole(ctx context.Context, id db.UUID, role string) (before, after db.User, err error) {
 	if before, err = s.get(ctx, id); err != nil {
