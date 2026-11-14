@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchIcon from '@lucide/svelte/icons/search';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
@@ -102,9 +103,7 @@
 			<div
 				class="flex items-center gap-1.5 rounded-md border border-border bg-bg-toolbar px-2 py-1 focus-within:border-primary"
 			>
-				<svg viewBox="0 0 24 24" class="h-3 w-3 shrink-0 text-text-muted"
-					><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg
-				>
+				<SearchIcon class="h-3 w-3 shrink-0 text-text-muted" />
 				<input
 					type="text"
 					placeholder={m.data_search_tables_and_columns_2()}

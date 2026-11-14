@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -98,7 +99,7 @@
 			ariaLabel={m.assistant_panel_delete_conversation()}
 			onclick={() => assistantStore.active && assistantStore.remove(assistantStore.active.id)}
 		>
-			×
+			<Trash2Icon class="h-3.5 w-3.5" />
 		</Button>
 	</div>
 	<p class="border-b border-border px-2.5 py-1 text-[10px] text-text-muted">

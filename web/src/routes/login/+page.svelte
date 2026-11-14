@@ -1,4 +1,9 @@
 <script lang="ts">
+	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
+	import LogInIcon from '@lucide/svelte/icons/log-in';
+	import MoonIcon from '@lucide/svelte/icons/moon';
+	import SunIcon from '@lucide/svelte/icons/sun';
+	import SendIcon from '@lucide/svelte/icons/send';
 	import { m } from '$lib/paraglide/messages';
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
@@ -255,9 +260,7 @@
 		class="w-[420px] shrink-0 flex flex-col items-center justify-center py-10 px-8 overflow-y-auto relative"
 	>
 		<div class="absolute top-4 right-5 flex items-center gap-1.5 text-[11px] text-text-muted">
-			<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
-				><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg
-			>
+			<MoonIcon class="w-[13px] h-[13px]" />
 			<!-- A native switch button (#484): named, Enter and Space both toggle. -->
 			<button
 				type="button"
@@ -273,6 +276,7 @@
 					{dark ? 'translate-x-[14px]' : 'translate-x-0'}"
 				></span>
 			</button>
+			<SunIcon class="w-[13px] h-[13px]" />
 		</div>
 
 		<div class="w-full max-w-[360px]">
@@ -344,11 +348,7 @@
 						class="w-full h-10 border-none rounded-[7px] text-[13px] font-semibold cursor-pointer transition-colors duration-150 flex items-center justify-center gap-[7px] bg-primary text-white mb-2.5
 							hover:enabled:bg-primary-hover disabled:bg-blue-300 disabled:cursor-not-allowed"
 					>
-						<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
-							><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline
-								points="10 17 15 12 10 7"
-							/><line x1="15" y1="12" x2="3" y2="12" /></svg
-						>
+						<LogInIcon class="w-3.5 h-3.5" />
 						{busy
 							? checking
 								? m.login_checking_credentials()
@@ -385,9 +385,7 @@
 						class="flex items-center gap-[5px] text-xs font-semibold text-text-muted cursor-pointer mb-5 w-fit border-none bg-transparent p-0 transition-colors duration-150 hover:text-text-main"
 						onclick={() => go('login')}
 					>
-						<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
-							><polyline points="15 18 9 12 15 6" /></svg
-						>
+						<ChevronLeftIcon class="w-[13px] h-[13px]" />
 						{m.login_back_to_sign_in()}
 					</button>
 					<div class="text-xl font-bold tracking-[-.4px] mb-1">{m.login_forgot_password()}</div>
@@ -418,11 +416,7 @@
 						class="w-full h-10 border-none rounded-[7px] text-[13px] font-semibold cursor-pointer transition-colors duration-150 flex items-center justify-center gap-[7px] bg-primary text-white mb-2.5
 							hover:enabled:bg-primary-hover disabled:bg-blue-300 disabled:cursor-not-allowed"
 					>
-						<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
-							><line x1="22" y1="2" x2="11" y2="13" /><polygon
-								points="22 2 15 22 11 13 2 9 22 2"
-							/></svg
-						>
+						<SendIcon class="w-3.5 h-3.5" />
 						{busy ? m.login_sending() : m.login_send_reset_link()}
 					</button>
 				</div>

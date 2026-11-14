@@ -1,4 +1,8 @@
 <script lang="ts">
+	import PlusIcon from '@lucide/svelte/icons/plus';
+	import XIcon from '@lucide/svelte/icons/x';
+	import CircleQuestionMarkIcon from '@lucide/svelte/icons/circle-question-mark';
+	import PlayIcon from '@lucide/svelte/icons/play';
 	import { m } from '$lib/paraglide/messages';
 	import { formatKeys } from '$lib/util/keys';
 	import { goto } from '$app/navigation';
@@ -1113,14 +1117,15 @@
 						type="button"
 						aria-label={m.components_queryeditor_close_tab()}
 						class="mr-1.5 rounded-[3px] px-1 py-px text-sm text-text-muted hover:bg-border hover:text-text-main"
-						onclick={() => closeTab(i)}>×</button
+						onclick={() => closeTab(i)}><XIcon class="h-3 w-3" /></button
 					>
 				{/if}
 			</div>
 		{/each}
 		<button
 			class="flex items-center justify-center w-8 text-lg text-text-muted cursor-pointer shrink-0 bg-none border-none hover:text-primary"
-			onclick={newTab}>+</button
+			aria-label={m.components_queryeditor_new_tab()}
+			onclick={newTab}><PlusIcon class="h-4 w-4" /></button
 		>
 	</div>
 
@@ -1134,9 +1139,7 @@
 			data-testid="run-current"
 			class="bg-success text-white border-none py-[5px] px-3.5 text-xs font-bold rounded-[5px] cursor-pointer flex items-center gap-1.5 hover:enabled:bg-success-hover disabled:opacity-60 disabled:cursor-not-allowed"
 		>
-			<svg viewBox="0 0 24 24" class="w-2.5 h-2.5 fill-white stroke-none"
-				><polygon points="5 3 19 12 5 21 5 3" /></svg
-			>
+			<PlayIcon class="w-2.5 h-2.5 fill-white stroke-none" />
 			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
 			<span class="text-[10px] font-normal">{formatKeys('Mod-Enter')}</span>
 		</button>
@@ -1155,14 +1158,7 @@
 				: m.components_queryeditor_this_engine_does_not_support_explain_2()}
 			class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
 		>
-			<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
-				><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line
-					x1="12"
-					y1="17"
-					x2="12.01"
-					y2="17"
-				/></svg
-			>
+			<CircleQuestionMarkIcon class="w-3.5 h-3.5" />
 			{m.components_queryeditor_explain()}
 		</button>
 		<div class="w-px h-[18px] bg-border mx-1"></div>

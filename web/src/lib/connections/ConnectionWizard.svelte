@@ -1,4 +1,6 @@
 <script lang="ts">
+	import CheckIcon from '@lucide/svelte/icons/check';
+	import XIcon from '@lucide/svelte/icons/x';
 	import { m } from '$lib/paraglide/messages';
 	import { plural } from '$lib/i18n/plural';
 	import { onMount } from 'svelte';
@@ -684,7 +686,19 @@
 									? 'bg-green-100 text-green-700'
 									: 'bg-red-100 text-red-700'}"
 							>
-								{check.ok ? '✓' : '✕'}
+								{#if check.ok}
+									<CheckIcon
+										class="h-2.5 w-2.5"
+										strokeWidth={3}
+										aria-label={m.connections_connectionwizard_passed()}
+									/>
+								{:else}
+									<XIcon
+										class="h-2.5 w-2.5"
+										strokeWidth={3}
+										aria-label={m.connections_connectionwizard_failed()}
+									/>
+								{/if}
 							</span>
 							<span class="flex-1">
 								{check.name}

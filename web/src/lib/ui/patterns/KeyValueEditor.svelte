@@ -1,4 +1,6 @@
 <script lang="ts">
+	import LockIcon from '@lucide/svelte/icons/lock';
+	import XIcon from '@lucide/svelte/icons/x';
 	import { m } from '$lib/paraglide/messages';
 	let {
 		value = $bindable({}),
@@ -84,7 +86,8 @@
 			{#if locked}
 				<span
 					class="text-[10px] text-text-muted"
-					title={m.keyvalueeditor_set_by_baleia_cannot_be_overridden()}>🔒</span
+					title={m.keyvalueeditor_set_by_baleia_cannot_be_overridden()}
+					><LockIcon class="h-3 w-3" /></span
 				>
 			{:else}
 				<button
@@ -93,7 +96,7 @@
 					aria-label={m.keyvalueeditor_remove({ value: row.key || m.keyvalueeditor_row() })}
 					onclick={() => remove(row.id)}
 				>
-					×
+					<XIcon class="h-3.5 w-3.5" />
 				</button>
 			{/if}
 		</div>

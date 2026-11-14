@@ -1,4 +1,8 @@
 <script lang="ts">
+	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import FolderIcon from '@lucide/svelte/icons/folder';
+	import InfoIcon from '@lucide/svelte/icons/info';
+	import Table2Icon from '@lucide/svelte/icons/table-2';
 	import { resolve } from '$app/paths';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
@@ -637,12 +641,11 @@
 		onclick={() => toggleNode(refKey, catalog, [])}
 		aria-expanded={open}
 	>
-		<svg
-			viewBox="0 0 24 24"
+		<ChevronRightIcon
 			class="h-3.5 w-3.5 shrink-0 text-text-muted transition-transform duration-150 {open
 				? 'rotate-90'
-				: ''}"><path d="M9 18l6-6-6-6" /></svg
-		>
+				: ''}"
+		/>
 		<KindIcon kind={catalog.provider_kind} family="catalog" size={18} />
 		<span class="flex min-w-0 flex-1 flex-col">
 			<span class="overflow-hidden text-ellipsis whitespace-nowrap font-medium"
@@ -695,17 +698,12 @@
 					onclick={() => toggleNode(refKey, catalog, child.path)}
 					aria-expanded={childOpen}
 				>
-					<svg
-						viewBox="0 0 24 24"
+					<ChevronRightIcon
 						class="h-3.5 w-3.5 shrink-0 text-text-muted transition-transform duration-150 {childOpen
 							? 'rotate-90'
-							: ''}"><path d="M9 18l6-6-6-6" /></svg
-					>
-					<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 stroke-slate-400"
-						><path
-							d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-						/></svg
-					>
+							: ''}"
+					/>
+					<FolderIcon class="h-3.5 w-3.5 shrink-0 stroke-slate-400" />
 					<span
 						class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-text-muted"
 						>{child.path[child.path.length - 1]}</span
@@ -724,14 +722,7 @@
 						class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-[13px] text-text-muted opacity-60"
 						data-unsupported-table
 					>
-						<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 stroke-text-muted"
-							><rect x="3" y="3" width="18" height="18" rx="2" /><line
-								x1="3"
-								y1="9"
-								x2="21"
-								y2="9"
-							/><line x1="9" y1="21" x2="9" y2="9" /></svg
-						>
+						<Table2Icon class="h-3.5 w-3.5 shrink-0 stroke-text-muted" />
 						<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
 							>{table.name}</span
 						>
@@ -746,14 +737,7 @@
 								else reasonOpen.add(table.id);
 							}}
 						>
-							<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 stroke-current" aria-hidden="true"
-								><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line
-									x1="12"
-									y1="8"
-									x2="12.01"
-									y2="8"
-								/></svg
-							>
+							<InfoIcon class="h-3.5 w-3.5 stroke-current" aria-hidden="true" />
 						</button>
 					</div>
 					{#if reasonOpen.has(table.id)}
@@ -770,18 +754,11 @@
 						onclick={() => selectTable(catalog, path, table)}
 						aria-current={selectedTableId === table.id}
 					>
-						<svg
-							viewBox="0 0 24 24"
+						<Table2Icon
 							class="h-3.5 w-3.5 shrink-0 {selectedTableId === table.id
 								? 'stroke-primary'
 								: 'stroke-text-muted'}"
-							><rect x="3" y="3" width="18" height="18" rx="2" /><line
-								x1="3"
-								y1="9"
-								x2="21"
-								y2="9"
-							/><line x1="9" y1="21" x2="9" y2="9" /></svg
-						>
+						/>
 						<span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
 							>{table.name}</span
 						>

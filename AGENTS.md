@@ -154,6 +154,11 @@ Workspace/catalog/namespace/table/tab selection is URL-backed through
   `StateTimeline`.
 - `src/lib/util/poll.ts`, `src/lib/util/time.ts`, `src/lib/errors/catalog.ts`.
 - Provider/engine kind literals live only in `ui/patterns/kindIcon.ts` (FD6).
+- Icons: interface glyphs are `@lucide/svelte`, imported one icon at a time
+  (`import XIcon from '@lucide/svelte/icons/x'`) and sized with Tailwind classes.
+  Brand marks come from `simple-icons` or vendored official SVGs, only through
+  `kindIcon.ts`. Fonts, icons and CSS are always bundled, never loaded from a
+  CDN (`src/lib/no-external-assets.spec.ts` enforces it).
 - Content kinds (query, metric, model) get their label and route from
   `src/lib/content/kinds.ts`; a new kind is one more entry.
 - The explore query (`src/lib/semantic/explore.ts`) is the only Explore state:

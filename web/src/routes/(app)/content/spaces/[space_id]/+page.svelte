@@ -1,4 +1,7 @@
 <script lang="ts">
+	import ArrowUpRightIcon from '@lucide/svelte/icons/arrow-up-right';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
+	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
@@ -440,7 +443,7 @@
 									renameFolderOpen = true;
 								}}
 							>
-								✎
+								<PencilIcon class="h-3.5 w-3.5" />
 							</button>
 							<button
 								type="button"
@@ -452,7 +455,7 @@
 									moveFolderOpen = true;
 								}}
 							>
-								↗
+								<ArrowUpRightIcon class="h-3.5 w-3.5" />
 							</button>
 							<button
 								type="button"
@@ -460,7 +463,7 @@
 								title={m.content_spaces_detail_delete_folder()}
 								onclick={() => ask('folder', node.folder.id, node.folder.name)}
 							>
-								×
+								<Trash2Icon class="h-3.5 w-3.5" />
 							</button>
 						{/if}
 					</div>

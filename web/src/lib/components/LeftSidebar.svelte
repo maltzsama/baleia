@@ -1,4 +1,9 @@
 <script lang="ts">
+	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
+	import DatabaseIcon from '@lucide/svelte/icons/database';
+	import DatabasePlusIcon from '@lucide/svelte/icons/database-plus';
+	import FileIcon from '@lucide/svelte/icons/file';
+	import SearchIcon from '@lucide/svelte/icons/search';
 	import { m } from '$lib/paraglide/messages';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import DataSourceTree from './DataSourceTree.svelte';
@@ -43,11 +48,7 @@
 				class="w-[22px] h-[22px] rounded-[5px] cursor-pointer flex items-center justify-center text-text-muted transition-all duration-150 bg-none border-none
 					hover:bg-blue-50 hover:text-primary dark:hover:bg-[#152236]"
 			>
-				<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
-					><ellipse cx="12" cy="5" rx="9" ry="3" /><path
-						d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"
-					/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" /></svg
-				>
+				<DatabaseIcon class="w-3.5 h-3.5" />
 			</button>
 			<span
 				class="[writing-mode:vertical-rl] text-[10px] font-semibold tracking-wide uppercase text-text-muted rotate-180 mt-1"
@@ -76,11 +77,7 @@
 							? 'text-primary border-b-primary bg-bg-panel'
 							: 'text-text-muted border-b-transparent hover:text-text-main'}"
 					>
-						<svg viewBox="0 0 24 24" class="w-3 h-3"
-							><ellipse cx="12" cy="5" rx="9" ry="3" /><path
-								d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"
-							/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" /></svg
-						>
+						<DatabaseIcon class="w-3 h-3" />
 						{m.components_leftsidebar_datasources()}
 					</button>
 					<button
@@ -95,11 +92,7 @@
 							? 'text-primary border-b-primary bg-bg-panel'
 							: 'text-text-muted border-b-transparent hover:text-text-main'}"
 					>
-						<svg viewBox="0 0 24 24" class="w-3 h-3"
-							><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline
-								points="14 2 14 8 20 8"
-							/></svg
-						>
+						<FileIcon class="w-3 h-3" />
 						{m.components_leftsidebar_queries()}
 					</button>
 				</div>
@@ -109,7 +102,7 @@
 					aria-label={m.components_leftsidebar_collapse()}
 					class="flex items-center px-2 border-l border-border text-text-muted cursor-pointer bg-transparent border-t-0 border-b-0 border-r-0 transition-colors duration-150 hover:text-text-main"
 				>
-					<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"><path d="M15 18l-6-6 6-6" /></svg>
+					<ChevronLeftIcon class="w-3.5 h-3.5" />
 				</button>
 			</div>
 
@@ -117,9 +110,7 @@
 				<div
 					class="min-w-0 flex-1 flex items-center gap-1.5 bg-slate-100 dark:bg-[#1c2128] border border-border rounded-md px-2 py-[5px] transition-all duration-150 focus-within:bg-bg-panel focus-within:border-primary"
 				>
-					<svg viewBox="0 0 24 24" class="w-3 h-3 text-text-muted shrink-0"
-						><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg
-					>
+					<SearchIcon class="w-3 h-3 text-text-muted shrink-0" />
 					<input
 						type="text"
 						placeholder={m.components_leftsidebar_search_tables_and_columns()}
@@ -138,20 +129,7 @@
 						aria-label={m.workspace_catalogs_title()}
 						onclick={() => tree?.openCatalogs()}
 					>
-						<svg
-							viewBox="0 0 24 24"
-							class="h-4 w-4"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.7"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							aria-hidden="true"
-						>
-							<ellipse cx="10" cy="5" rx="7" ry="3" />
-							<path d="M3 5v12c0 1.66 3.13 3 7 3M17 5v5M3 11c0 1.66 3.13 3 7 3" />
-							<path d="M17 14v8M13 18h8" />
-						</svg>
+						<DatabasePlusIcon class="h-4 w-4" aria-hidden="true" strokeWidth={1.7} />
 					</button>
 				{/if}
 			</div>

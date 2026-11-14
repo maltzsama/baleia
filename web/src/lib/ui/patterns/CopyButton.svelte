@@ -1,4 +1,6 @@
 <script lang="ts">
+	import CheckIcon from '@lucide/svelte/icons/check';
+	import CopyIcon from '@lucide/svelte/icons/copy';
 	import { m } from '$lib/paraglide/messages';
 	import { toasts } from '../toast.svelte';
 
@@ -26,14 +28,8 @@
 	onclick={copy}
 >
 	{#if copied}
-		<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" aria-hidden="true"
-			><polyline points="20 6 9 17 4 12" /></svg
-		>
+		<CheckIcon class="h-3.5 w-3.5" aria-hidden="true" />
 	{:else}
-		<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" aria-hidden="true"
-			><rect x="9" y="9" width="13" height="13" rx="2" /><path
-				d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-			/></svg
-		>
+		<CopyIcon class="h-3.5 w-3.5" aria-hidden="true" />
 	{/if}
 </button>

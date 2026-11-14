@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+	import ChevronUpIcon from '@lucide/svelte/icons/chevron-up';
 	import { m } from '$lib/paraglide/messages';
 	import { onDestroy, onMount } from 'svelte';
 	import { listEngines, type Engine } from '$lib/engines/admin';
@@ -780,32 +782,14 @@
 													disabled={rulesBusy || index === 0}
 													onclick={() => move(rule, -1)}
 												>
-													<svg
-														viewBox="0 0 16 16"
-														class="h-4 w-4"
-														fill="none"
-														stroke="currentColor"
-														stroke-width="2"
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														aria-hidden="true"><path d="m4 10 4-4 4 4" /></svg
-													>
+													<ChevronUpIcon class="h-4 w-4" aria-hidden="true" />
 												</IconButton>
 												<IconButton
 													label={m.workload_rule_move_down()}
 													disabled={rulesBusy || index === sortedRules.length - 1}
 													onclick={() => move(rule, 1)}
 												>
-													<svg
-														viewBox="0 0 16 16"
-														class="h-4 w-4"
-														fill="none"
-														stroke="currentColor"
-														stroke-width="2"
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg
-													>
+													<ChevronDownIcon class="h-4 w-4" aria-hidden="true" />
 												</IconButton>
 												<Button size="sm" onclick={() => openEdit(rule)}>
 													{m.workload_edit_rule()}

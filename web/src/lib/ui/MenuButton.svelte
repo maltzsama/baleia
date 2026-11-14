@@ -8,6 +8,7 @@
 </script>
 
 <script lang="ts">
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { tick } from 'svelte';
 
 	let {
@@ -114,7 +115,7 @@
 		class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-text-muted border border-border bg-transparent hover:border-border-hover hover:bg-border hover:text-text-main whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
 	>
 		{label}
-		<svg viewBox="0 0 24 24" class="h-3 w-3" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+		<ChevronDownIcon class="h-3 w-3" aria-hidden="true" />
 	</button>
 	{#if open}
 		<div
