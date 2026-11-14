@@ -171,6 +171,12 @@
 		drawerOpen = true;
 	}
 
+	// The actor filter takes an id, so an admin sees the id of every actor whose
+	// name is shown; where only the id is shown there is nothing more to add.
+	function showActorId(event: AuditEvent): boolean {
+		return isAdmin && !!event.actor_id && !!names.users[event.actor_id];
+	}
+
 	function actorLabel(event: AuditEvent): string {
 		if (event.actor_id && names.users[event.actor_id]) return names.users[event.actor_id].name;
 		return event.actor_id ?? event.actor_kind;
@@ -233,60 +239,75 @@
 		{/if}
 	</div>
 
-	<div
-		class="mb-4 grid gap-2 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-2 lg:grid-cols-4"
+	<form
+		class="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-border bg-bg-panel p-3"
+		onsubmit={(event) => {
+			event.preventDefault();
+			void load();
+		}}
 	>
-		<Select
-			label={m.settings_audit_window()}
-			bind:value={range}
-			options={ranges}
-			onchange={() => load()}
-		/>
-		<Select
-			label={m.common_action()}
-			bind:value={action}
-			options={[
-				{ value: '', label: m.monitoring_any() },
-				...actions.map((item) => ({ value: item, label: item }))
-			]}
-		/>
-		<Input
-			label={m.settings_audit_resource_type()}
-			bind:value={resourceType}
-			placeholder={m.common_connection()}
-			class="font-mono"
-		/>
-		<Select
-			label={m.settings_audit_outcome()}
-			bind:value={outcome}
-			options={[
-				{ value: '', label: m.monitoring_any() },
-				{ value: 'allowed', label: m.settings_audit_allowed() },
-				{ value: 'denied', label: m.settings_audit_denied() },
-				{
-					value: 'error',
-					get label() {
-						return m.settings_audit_error();
+		<div class="w-40">
+			<Select
+				label={m.settings_audit_window()}
+				bind:value={range}
+				options={ranges}
+				onchange={() => load()}
+			/>
+		</div>
+		<div class="w-52">
+			<Select
+				label={m.common_action()}
+				bind:value={action}
+				options={[
+					{ value: '', label: m.monitoring_any() },
+					...actions.map((item) => ({ value: item, label: item }))
+				]}
+			/>
+		</div>
+		<div class="w-40">
+			<Select
+				label={m.settings_audit_outcome()}
+				bind:value={outcome}
+				options={[
+					{ value: '', label: m.monitoring_any() },
+					{ value: 'allowed', label: m.settings_audit_allowed() },
+					{ value: 'denied', label: m.settings_audit_denied() },
+					{
+						value: 'error',
+						get label() {
+							return m.settings_audit_error();
+						}
 					}
-				}
-			]}
-		/>
-		{#if isAdmin}
+				]}
+			/>
+		</div>
+		<div class="w-44">
 			<Input
-				label={m.settings_audit_actor_id()}
-				bind:value={actorId}
-				placeholder={m.settings_audit_uuid()}
+				label={m.settings_audit_resource_type()}
+				bind:value={resourceType}
+				placeholder={m.common_connection()}
 				class="font-mono"
 			/>
+		</div>
+		{#if isAdmin}
+			<div class="w-72">
+				<Input
+					label={m.settings_audit_actor_id()}
+					bind:value={actorId}
+					placeholder={m.settings_audit_uuid()}
+					class="font-mono"
+				/>
+			</div>
 		{/if}
-		<Input
-			label={m.settings_audit_request_id()}
-			bind:value={requestId}
-			placeholder={m.common_request_id()}
-			class="font-mono"
-		/>
-		<div class="flex items-end gap-2">
-			<Button variant="primary" {loading} onclick={load}>{m.common_search()}</Button>
+		<div class="w-72">
+			<Input
+				label={m.settings_audit_request_id()}
+				bind:value={requestId}
+				placeholder={m.common_request_id()}
+				class="font-mono"
+			/>
+		</div>
+		<div class="ml-auto flex items-center gap-2">
 			<Button
 				onclick={() => {
 					actorId = '';
@@ -300,8 +321,9 @@
 			>
 				{m.common_clear()}
 			</Button>
+			<Button type="submit" variant="primary" {loading}>{m.common_search()}</Button>
 		</div>
-	</div>
+	</form>
 
 	{#if loading}
 		<div
@@ -349,7 +371,12 @@
 							onclick={() => openEvent(event)}
 						>
 							<td class="whitespace-nowrap px-3 py-1.5"><RelativeTime at={event.occurred_at} /></td>
-							<td class="px-3 py-1.5">{actorLabel(event)}</td>
+							<td class="px-3 py-1.5">
+								{actorLabel(event)}
+								{#if showActorId(event)}
+									<div class="font-mono text-[10px] text-text-muted">{event.actor_id}</div>
+								{/if}
+							</td>
 							<td class="px-3 py-1.5 font-mono">
 								<button
 									type="button"
@@ -399,6 +426,15 @@
 				{actorLabel(selected)}
 				<span class="text-slate-600 dark:text-slate-300">({selected.actor_kind})</span>
 			</dd>
+			{#if showActorId(selected) && selected.actor_id}
+				<dt class="text-slate-600 dark:text-slate-300">{m.settings_audit_actor_id()}</dt>
+				<dd class="flex items-center gap-1 break-all font-mono">
+					{selected.actor_id}<CopyButton
+						value={selected.actor_id}
+						label={m.settings_audit_actor_id()}
+					/>
+				</dd>
+			{/if}
 			<dt class="text-slate-600 dark:text-slate-300">{m.settings_audit_resource()}</dt>
 			<dd>{resourceLabel(selected)}</dd>
 			<dt class="text-slate-600 dark:text-slate-300">{m.common_workspace()}</dt>
