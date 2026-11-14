@@ -59,6 +59,31 @@ describe('system status page', () => {
 		expect(row.closest('li')?.textContent).toContain('missing');
 	});
 
+	// #1021: values read as labeled stats, and a healthy row stays quiet while a
+	// problem is named.
+	it('shows the core values as labeled stats', async () => {
+		renderPage(SystemPage, { me: makeMe(), url: '/settings/system' });
+		await screen.findByText('Baleia');
+
+		expect(screen.getAllByText('Latency').length).toBeGreaterThan(0);
+		expect(screen.getByText('Version')).toBeTruthy();
+		expect(screen.getByText('abc123')).toBeTruthy();
+		expect(screen.getByText('1 ms')).toBeTruthy();
+		expect(screen.getByText('Configured')).toBeTruthy();
+		expect(screen.getByText('yes')).toBeTruthy();
+	});
+
+	it('names a problem and leaves a healthy row to its dot', async () => {
+		renderPage(SystemPage, { me: makeMe(), url: '/settings/system' });
+
+		const healthy = (await screen.findByText('trino')).closest('li');
+		expect(healthy?.querySelector('.sr-only')?.textContent).toBe('ok');
+
+		const problem = screen.getByText('configured').closest('li');
+		expect(problem?.querySelector('.sr-only')).toBeNull();
+		expect(problem?.textContent).toContain('missing');
+	});
+
 	it('offers a manual refresh', async () => {
 		renderPage(SystemPage, { me: makeMe(), url: '/settings/system' });
 		expect(await screen.findByRole('button', { name: 'Refresh' })).toBeTruthy();
