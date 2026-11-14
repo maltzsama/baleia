@@ -14,7 +14,7 @@
 	import Input from '$lib/ui/Input.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Select from '$lib/ui/Select.svelte';
-	import { client } from '$lib/api/client';
+	import { apiErrorMessage, client } from '$lib/api/client';
 	import { canGlobal } from '$lib/authz/can';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -49,6 +49,7 @@
 	let teams = $state<{ id: string; name: string }[]>([]);
 	let creating = $state(false);
 	let createError = $state('');
+	let teamsError = $state('');
 	let search = $state('');
 
 	const canShare = $derived(canGlobal(authStore.user, 'create_shared_workspace'));
@@ -120,13 +121,19 @@
 		createType = 'personal';
 		createTeamId = '';
 		createError = '';
+		teamsError = '';
 		// The menu item goes away: the modal returns focus to the switcher.
 		wsOpen = false;
 		wsTrigger?.focus();
 		showCreate = true;
 		if (canShare && teams.length === 0) {
-			const { data } = await client.GET('/teams');
-			teams = (data ?? []) as { id: string; name: string }[];
+			try {
+				const { data, error } = await client.GET('/teams');
+				if (error) throw new Error(apiErrorMessage(error));
+				teams = (data ?? []) as { id: string; name: string }[];
+			} catch (error) {
+				teamsError = apiErrorMessage(error, m.components_header_could_not_load_teams());
+			}
 		}
 	}
 
@@ -134,6 +141,7 @@
 		showCreate = false;
 		createName = '';
 		createError = '';
+		teamsError = '';
 	}
 
 	async function doCreate() {
@@ -144,17 +152,24 @@
 		}
 		creating = true;
 		createError = '';
-		const ws = await workspaceStore.create({
-			name: createName.trim(),
-			description: createDescription.trim() || undefined,
-			type: createType,
-			ownerTeamId: createTeamId || undefined
-		});
-		creating = false;
-		if (ws) {
+		try {
+			const ws = await workspaceStore.create({
+				name: createName.trim(),
+				description: createDescription.trim() || undefined,
+				type: createType,
+				ownerTeamId: createTeamId || undefined
+			});
+			if (!ws) {
+				createError = m.components_header_could_not_create_the_workspace();
+				return;
+			}
 			await selection.set({ ws: ws.id, catalog: '', ns: [], table: '', column: '' });
 			closeCreate();
-		} else createError = m.components_header_could_not_create_the_workspace();
+		} catch {
+			createError = m.components_header_could_not_create_the_workspace();
+		} finally {
+			creating = false;
+		}
 	}
 
 	function openSettings() {
@@ -373,6 +388,7 @@
 					placeholder={m.components_header_choose_the_owning_team()}
 					options={teams.map((team) => ({ value: team.id, label: team.name }))}
 				/>
+				{#if teamsError}<p class="text-[11px] text-danger" role="alert">{teamsError}</p>{/if}
 			{/if}
 		{/if}
 		{#if createError}<p class="text-[11px] text-danger" role="alert">{createError}</p>{/if}
