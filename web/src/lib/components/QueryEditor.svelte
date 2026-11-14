@@ -989,6 +989,7 @@
 		const tab = activeTab;
 		if (!tab?.executionId || !workspaceId) return;
 		if (executingTabs[tab.id]) return;
+		executingTabs[tab.id] = true;
 		flushSql();
 		try {
 			const { data, error } = await client.POST('/workspaces/{id}/executions', {
@@ -1005,11 +1006,11 @@
 			tab.results = [];
 			tab.errorMsg = '';
 			tab.statusText = m.components_queryeditor_running();
-			executingTabs[tab.id] = true;
 			editor.setExecution(tab.id, data.id);
 			runs[tab.id] = initialRunState(data.id);
 			connectWS(data.id, tab);
 		} catch (e) {
+			executingTabs[tab.id] = false;
 			tab.errorMsg = errorMessage(e);
 		}
 	}
