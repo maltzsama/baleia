@@ -643,7 +643,7 @@
 				? 'rotate-90'
 				: ''}"><path d="M9 18l6-6-6-6" /></svg
 		>
-		<KindIcon kind={catalog.provider_kind} family="catalog" size={14} />
+		<KindIcon kind={catalog.provider_kind} family="catalog" size={18} />
 		<span class="flex min-w-0 flex-1 flex-col">
 			<span class="overflow-hidden text-ellipsis whitespace-nowrap font-medium"
 				>{catalog.name}&nbsp;</span
