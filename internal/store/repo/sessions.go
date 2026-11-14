@@ -40,7 +40,21 @@ func (s *Sessions) CreateRefreshToken(ctx context.Context, arg db.CreateRefreshT
 func (s *Sessions) RotateRefreshToken(ctx context.Context, arg db.RotateRefreshTokenParams) (db.ConsumeRefreshTokenRow, error) {
 	var row model.RefreshToken
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		res := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		// The owner is found first and locked before any token row, the same
+		// order every revocation takes, so a revoke can never run between the
+		// old token's revocation and its successor's insert.
+		var owner model.RefreshToken
+		res := tx.Select("user_id").Where("token_hash = ?", arg.TokenHash).First(&owner)
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return db.ErrNoRows
+		}
+		if res.Error != nil {
+			return res.Error
+		}
+		if _, err := lockUser(tx, string(owner.UserID)); err != nil {
+			return err
+		}
+		res = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("token_hash = ? AND revoked = ? AND expires_at > ?", arg.TokenHash, false, time.Now().UTC()).
 			First(&row)
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
@@ -97,18 +111,51 @@ func (s *Sessions) GetRefreshTokenByHashAny(ctx context.Context, tokenHash strin
 	return toDBRefreshToken(row), nil
 }
 
-// RevokeRefreshFamily revokes every live token in the family.
-func (s *Sessions) RevokeRefreshFamily(ctx context.Context, familyID db.UUID) error {
-	return s.db.WithContext(ctx).Model(&model.RefreshToken{}).
-		Where("family_id = ? AND revoked = ?", UUIDString(familyID), false).
-		Update("revoked", true).Error
+// lockUser takes the account's row lock for the rest of the transaction. It
+// reports false when the account does not exist.
+func lockUser(tx *gorm.DB, userID string) (bool, error) {
+	var user model.User
+	res := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("id = ?", userID).First(&user)
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	return res.Error == nil, res.Error
 }
 
-// RevokeUserRefreshTokens revokes every live token of the account.
+// RevokeRefreshFamily revokes every live token in the family. It serializes
+// with a rotation on the owner's row: without that, under Read Committed a
+// revoke that waits on the rotating token skips it once it commits and never
+// sees the successor, which would stay live.
+func (s *Sessions) RevokeRefreshFamily(ctx context.Context, familyID db.UUID) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var owner model.RefreshToken
+		res := tx.Select("user_id").Where("family_id = ?", UUIDString(familyID)).First(&owner)
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if res.Error != nil {
+			return res.Error
+		}
+		if ok, err := lockUser(tx, string(owner.UserID)); err != nil || !ok {
+			return err
+		}
+		return tx.Model(&model.RefreshToken{}).
+			Where("family_id = ? AND revoked = ?", UUIDString(familyID), false).
+			Update("revoked", true).Error
+	})
+}
+
+// RevokeUserRefreshTokens revokes every live token of the account, serialized
+// with a rotation like RevokeRefreshFamily.
 func (s *Sessions) RevokeUserRefreshTokens(ctx context.Context, userID db.UUID) error {
-	return s.db.WithContext(ctx).Model(&model.RefreshToken{}).
-		Where("user_id = ? AND revoked = ?", UUIDString(userID), false).
-		Update("revoked", true).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if ok, err := lockUser(tx, UUIDString(userID)); err != nil || !ok {
+			return err
+		}
+		return tx.Model(&model.RefreshToken{}).
+			Where("user_id = ? AND revoked = ?", UUIDString(userID), false).
+			Update("revoked", true).Error
+	})
 }
 
 func toDBRefreshToken(t model.RefreshToken) db.RefreshToken {

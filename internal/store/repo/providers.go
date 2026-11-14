@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/identity/providers"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Providers persists OIDC and LDAP identity providers.
@@ -118,11 +119,22 @@ func (s *Providers) UpdateAuthProvider(ctx context.Context, arg db.UpdateAuthPro
 }
 
 // RevokeRefreshTokensByAuthProvider revokes the tokens of every linked account.
+// The accounts are locked first, like every other revocation, so a rotation in
+// flight cannot leave a successor token live.
 func (s *Providers) RevokeRefreshTokensByAuthProvider(ctx context.Context, authProviderID db.UUID) error {
-	users := s.db.Model(&model.User{}).Select("id").Where("auth_provider_id = ?", UUIDString(authProviderID))
-	return s.db.WithContext(ctx).Model(&model.RefreshToken{}).
-		Where("revoked = ? AND user_id IN (?)", false, users).
-		Update("revoked", true).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var ids []string
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Model(&model.User{}).
+			Where("auth_provider_id = ?", UUIDString(authProviderID)).Order("id").Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		return tx.Model(&model.RefreshToken{}).
+			Where("revoked = ? AND user_id IN ?", false, ids).
+			Update("revoked", true).Error
+	})
 }
 
 // DeleteAPIKeysByAuthProvider deletes the API keys of every linked account.
