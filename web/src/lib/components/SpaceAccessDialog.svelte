@@ -58,6 +58,7 @@
 		if (!open || !space) return;
 		const workspaceId = savedQueries.workspaceId;
 		if (!workspaceId) return;
+		const selectedPrincipalType = principalType;
 		const request = ++principalRequest;
 		principalId = '';
 		principalsError = '';
@@ -67,7 +68,7 @@
 		])
 			.then(([users, teams]) => {
 				if (request !== principalRequest) return;
-				principals = principalType === 'user' ? users : teams;
+				principals = selectedPrincipalType === 'user' ? users : teams;
 				const labels: Record<string, string> = {};
 				for (const [type, list] of [
 					['user', users],
