@@ -60,6 +60,22 @@ describe('attention bell', () => {
 		await waitFor(() => expect(calls).toBeGreaterThanOrEqual(2));
 	});
 
+	it('refreshes when opened', async () => {
+		let calls = 0;
+		server.use(
+			http.get('/attention', ({ response }) => {
+				calls += 1;
+				return response(200).json(items);
+			})
+		);
+		render(AttentionBell);
+		const bell = await screen.findByRole('button', { name: 'Attention: 1 item' });
+		const initialCalls = calls;
+
+		await fireEvent.click(bell);
+		await waitFor(() => expect(calls).toBeGreaterThan(initialCalls));
+	});
+
 	// #469: the count is pluralized by the active locale.
 	it('pluralizes the count in en and pt-BR', async () => {
 		const errors = [items[0], { ...items[0], resource: { ...items[0].resource, id: 'b2' } }];

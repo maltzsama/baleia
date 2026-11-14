@@ -69,6 +69,7 @@
 
 	function toggle() {
 		open = !open;
+		if (open) void refresh();
 	}
 
 	function close() {
@@ -76,6 +77,16 @@
 	}
 
 	let bellEl: HTMLButtonElement | undefined = $state();
+	let bellRoot: HTMLDivElement | undefined = $state();
+
+	$effect(() => {
+		if (!open) return;
+		function onDocumentClick(event: MouseEvent) {
+			if (bellRoot && !bellRoot.contains(event.target as Node)) close();
+		}
+		document.addEventListener('click', onDocumentClick);
+		return () => document.removeEventListener('click', onDocumentClick);
+	});
 
 	function onkeydown(event: KeyboardEvent) {
 		if (event.key !== 'Escape' || !open) return;
@@ -84,7 +95,7 @@
 	}
 </script>
 
-<div class="relative">
+<div class="relative" bind:this={bellRoot}>
 	<button
 		bind:this={bellEl}
 		type="button"
@@ -151,7 +162,7 @@
 					{m.components_attentionbell_errors()}
 				</h3>
 				<ul class="mb-2 flex flex-col gap-1">
-					{#each failures as item (item.resource.type + item.resource.id)}
+					{#each failures as item (`${item.kind}:${item.resource.type}:${item.resource.id}`)}
 						<li class="text-[12px]">
 							{#if item.href}
 								<a
@@ -177,7 +188,7 @@
 					{m.components_attentionbell_warnings()}
 				</h3>
 				<ul class="flex flex-col gap-1">
-					{#each warnings as item (item.resource.type + item.resource.id)}
+					{#each warnings as item (`${item.kind}:${item.resource.type}:${item.resource.id}`)}
 						<li class="text-[12px]">
 							{#if item.href}
 								<a
