@@ -1,4 +1,7 @@
 <script lang="ts">
+	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
+	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
+	import XIcon from '@lucide/svelte/icons/x';
 	import { browser } from '$app/environment';
 	import PanelResizer from '$lib/ui/PanelResizer.svelte';
 	import { loadWidth } from '$lib/ui/panelWidth';
@@ -506,14 +509,16 @@
 											class="px-1 disabled:opacity-30"
 											aria-label={m.explore_move_earlier({ field: name })}
 											disabled={index === 0}
-											onclick={() => moveChip(list.key, index, -1)}>←</button
+											onclick={() => moveChip(list.key, index, -1)}
+											><ArrowLeftIcon class="h-3 w-3" /></button
 										>
 										<button
 											type="button"
 											class="px-1 disabled:opacity-30"
 											aria-label={m.explore_move_later({ field: name })}
 											disabled={index === (query[list.key] ?? []).length - 1}
-											onclick={() => moveChip(list.key, index, 1)}>→</button
+											onclick={() => moveChip(list.key, index, 1)}
+											><ArrowRightIcon class="h-3 w-3" /></button
 										>
 										<button
 											type="button"
@@ -522,7 +527,7 @@
 											onclick={() => {
 												const f = fields.get(name);
 												if (f) toggleField(f);
-											}}>×</button
+											}}><XIcon class="h-3 w-3" /></button
 										>
 									</li>
 								{:else}

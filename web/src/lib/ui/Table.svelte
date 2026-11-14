@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
+	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
 	import { m } from '$lib/paraglide/messages';
 	import type { Snippet } from 'svelte';
 
@@ -61,7 +63,11 @@
 							>
 								{column.label}
 								{#if sort?.key === column.key}
-									<span aria-hidden="true">{sort.direction === 'asc' ? '▲' : '▼'}</span>
+									{#if sort.direction === 'asc'}
+										<ArrowUpIcon class="h-3 w-3" aria-hidden="true" />
+									{:else}
+										<ArrowDownIcon class="h-3 w-3" aria-hidden="true" />
+									{/if}
 								{/if}
 							</button>
 						{:else}

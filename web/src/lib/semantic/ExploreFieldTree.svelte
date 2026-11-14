@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import { m } from '$lib/paraglide/messages';
 	import { SvelteSet } from 'svelte/reactivity';
 	import Badge from '$lib/ui/Badge.svelte';
@@ -39,7 +41,11 @@
 					aria-label={m.explore_show_grains({ field: field.label })}
 					onclick={() => toggleExpanded(field.name)}
 				>
-					{expanded.has(field.name) ? '▾' : '▸'}
+					{#if expanded.has(field.name)}
+						<ChevronDownIcon class="h-3 w-3" />
+					{:else}
+						<ChevronRightIcon class="h-3 w-3" />
+					{/if}
 				</button>
 			{/if}
 			<button

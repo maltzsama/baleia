@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XIcon from '@lucide/svelte/icons/x';
 	import { m } from '$lib/paraglide/messages';
 	import type { components } from '$lib/api/schema';
 	import { apiErrorMessage, client } from '$lib/api/client';
@@ -451,7 +452,7 @@
 					<Select label={m.common_role()} bind:value={rule.role} options={roleOptions} />
 					<IconButton
 						label={m.identity_identityproviderform_remove_rule()}
-						onclick={() => removeRole(index)}>×</IconButton
+						onclick={() => removeRole(index)}><XIcon class="h-3.5 w-3.5" /></IconButton
 					>
 				</div>
 			{/each}
@@ -485,7 +486,7 @@
 					/>
 					<IconButton
 						label={m.identity_identityproviderform_remove_rule()}
-						onclick={() => removeTeam(index)}>×</IconButton
+						onclick={() => removeTeam(index)}><XIcon class="h-3.5 w-3.5" /></IconButton
 					>
 				</div>
 			{/each}
@@ -520,7 +521,7 @@
 					/>
 					<IconButton
 						label={m.identity_identityproviderform_remove_rule()}
-						onclick={() => removeWorkspace(index)}>×</IconButton
+						onclick={() => removeWorkspace(index)}><XIcon class="h-3.5 w-3.5" /></IconButton
 					>
 				</div>
 			{/each}

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PlusIcon from '@lucide/svelte/icons/plus';
+	import XIcon from '@lucide/svelte/icons/x';
 	import CircleQuestionMarkIcon from '@lucide/svelte/icons/circle-question-mark';
 	import PlayIcon from '@lucide/svelte/icons/play';
 	import { m } from '$lib/paraglide/messages';
@@ -1115,14 +1117,15 @@
 						type="button"
 						aria-label={m.components_queryeditor_close_tab()}
 						class="mr-1.5 rounded-[3px] px-1 py-px text-sm text-text-muted hover:bg-border hover:text-text-main"
-						onclick={() => closeTab(i)}>×</button
+						onclick={() => closeTab(i)}><XIcon class="h-3 w-3" /></button
 					>
 				{/if}
 			</div>
 		{/each}
 		<button
 			class="flex items-center justify-center w-8 text-lg text-text-muted cursor-pointer shrink-0 bg-none border-none hover:text-primary"
-			onclick={newTab}>+</button
+			aria-label={m.components_queryeditor_new_tab()}
+			onclick={newTab}><PlusIcon class="h-4 w-4" /></button
 		>
 	</div>
 

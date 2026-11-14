@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XIcon from '@lucide/svelte/icons/x';
 	import { m } from '$lib/paraglide/messages';
 	type Tone = 'info' | 'success' | 'error';
 
@@ -32,6 +33,6 @@
 		onclick={ondismiss}
 		aria-label={m.ui_toast_dismiss_notification()}
 	>
-		×
+		<XIcon class="h-3.5 w-3.5" />
 	</button>
 </div>

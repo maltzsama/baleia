@@ -613,7 +613,7 @@ describe('QueryEditor', () => {
 		);
 		expect(screen.getByTestId('results-area')).toBeTruthy();
 
-		await fireEvent.click(screen.getByText('+'));
+		await fireEvent.click(screen.getByRole('button', { name: 'New tab' }));
 		// The new tab can run, and shows no run of the other tab.
 		await waitFor(() =>
 			expect((screen.getByTestId('run-current') as HTMLButtonElement).disabled).toBe(false)

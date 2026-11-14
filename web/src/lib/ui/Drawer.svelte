@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XIcon from '@lucide/svelte/icons/x';
 	import { m } from '$lib/paraglide/messages';
 	import type { Snippet } from 'svelte';
 
@@ -69,7 +70,7 @@
 					onclick={close}
 					aria-label={m.common_close()}
 				>
-					×
+					<XIcon class="h-4 w-4" />
 				</button>
 			</header>
 			<div class="flex-1 overflow-y-auto p-5">{@render children()}</div>

@@ -1345,6 +1345,7 @@
 	"connections_connectionwizard_step_4_of_4_the_connection": "Step 4 of 4 — the connection is saved only after the checks pass.",
 	"connections_connectionwizard_tested": "Tested",
 	"connections_connectionwizard_failed": "Failed",
+	"connections_connectionwizard_passed": "Passed",
 	"connections_connectionwizard_editing_a_field_invalidates_the_test": "Editing a field invalidates the test.",
 	"connections_connectionwizard_skipped": "(skipped)",
 	"connections_connectionwizard_the_connection_was_created_finish_the": "The connection {name} was created. Finish the remaining steps from the connections page.",

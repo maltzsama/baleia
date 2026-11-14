@@ -1343,6 +1343,7 @@
 	"connections_connectionwizard_step_4_of_4_the_connection": "Passo 4 de 4 — a conexão só é salva depois que as verificações passam.",
 	"connections_connectionwizard_tested": "Testado",
 	"connections_connectionwizard_failed": "Falhou",
+	"connections_connectionwizard_passed": "Passou",
 	"connections_connectionwizard_editing_a_field_invalidates_the_test": "Editar um campo invalida o teste.",
 	"connections_connectionwizard_skipped": "(ignorado)",
 	"connections_connectionwizard_the_connection_was_created_finish_the": "A conexão {name} foi criada. Termine os passos restantes na página de conexões.",

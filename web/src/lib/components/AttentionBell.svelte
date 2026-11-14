@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XIcon from '@lucide/svelte/icons/x';
 	import BellIcon from '@lucide/svelte/icons/bell';
 	import { m } from '$lib/paraglide/messages';
 	import { plural } from '$lib/i18n/plural';
@@ -127,7 +128,7 @@
 					aria-label={m.components_attentionbell_close_attention()}
 					class="cursor-pointer border-none bg-transparent text-text-muted hover:text-text-main"
 				>
-					×
+					<XIcon class="h-3.5 w-3.5" />
 				</button>
 			</div>
 
