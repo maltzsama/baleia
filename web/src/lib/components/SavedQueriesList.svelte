@@ -1,4 +1,8 @@
 <script lang="ts">
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+	import EllipsisVerticalIcon from '@lucide/svelte/icons/ellipsis-vertical';
+	import FileIcon from '@lucide/svelte/icons/file';
+	import LockIcon from '@lucide/svelte/icons/lock';
 	import { m } from '$lib/paraglide/messages';
 	import { editor } from '$lib/stores/editor.svelte';
 	import { savedQueries, type SavedQuery, type Space } from '$lib/stores/savedQueries.svelte';
@@ -118,38 +122,25 @@
 							onclick={() => toggle(space.id)}
 							aria-expanded={!collapsed[space.id]}
 						>
-							<svg
-								viewBox="0 0 24 24"
+							<ChevronDownIcon
 								class="h-3 w-3 shrink-0 text-text-muted transition-transform {collapsed[space.id]
 									? '-rotate-90'
 									: ''}"
-							>
-								<path d="M6 9l6 6 6-6" />
-							</svg>
+							/>
 							<span class="truncate text-xs font-semibold">{space.name}</span>
 							{#if space.is_default}<Badge>{m.components_savedquerieslist_default()}</Badge>{/if}
 							{#if space.visibility === 'restricted'}
-								<svg
-									viewBox="0 0 24 24"
+								<LockIcon
 									class="h-3 w-3 shrink-0 text-text-muted"
 									aria-label={m.components_savedquerieslist_restricted()}
-								>
-									<rect x="4" y="11" width="16" height="10" rx="2" /><path
-										d="M8 11V7a4 4 0 0 1 8 0v4"
-									/>
-								</svg>
+								/>
 							{/if}
 							<span class="ml-auto text-[10px] text-text-muted">{spaceQueries.length}</span>
 							{#if !editable}
-								<svg
-									viewBox="0 0 24 24"
+								<LockIcon
 									class="h-3 w-3 text-text-muted"
 									aria-label={m.components_savedquerieslist_read_only()}
-								>
-									<rect x="4" y="11" width="16" height="10" rx="2" /><path
-										d="M8 11V7a4 4 0 0 1 8 0v4"
-									/>
-								</svg>
+								/>
 							{/if}
 						</button>
 						{#if savedQueries.canManage(space.id)}
@@ -161,13 +152,7 @@
 								}}
 								aria-label={m.components_savedquerieslist_manage({ name: space.name })}
 							>
-								<svg viewBox="0 0 24 24" class="h-3 w-3"
-									><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle
-										cx="12"
-										cy="19"
-										r="1.5"
-									/></svg
-								>
+								<EllipsisVerticalIcon class="h-3 w-3" />
 							</button>
 							{#if menuOpen === space.id}
 								<div
@@ -219,11 +204,7 @@
 										class="mb-px flex w-full items-center gap-2 rounded-md border-none bg-none px-2 py-1.5 pl-6 text-left text-inherit hover:bg-slate-100 dark:hover:bg-[#1c2128]"
 										onclick={() => openQuery(q)}
 									>
-										<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 text-text-muted"
-											><path
-												d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-											/><polyline points="14 2 14 8 20 8" /></svg
-										>
+										<FileIcon class="h-3.5 w-3.5 shrink-0 text-text-muted" />
 										<div class="min-w-0 flex-1">
 											{#if renameId === q.id}
 												<input
@@ -247,15 +228,10 @@
 											{/if}
 										</div>
 										{#if !canEdit}
-											<svg
-												viewBox="0 0 24 24"
+											<LockIcon
 												class="h-3 w-3 text-text-muted"
 												aria-label={m.components_savedquerieslist_read_only()}
-											>
-												<rect x="4" y="11" width="16" height="10" rx="2" /><path
-													d="M8 11V7a4 4 0 0 1 8 0v4"
-												/>
-											</svg>
+											/>
 										{/if}
 									</button>
 									{#if canEdit}
@@ -267,13 +243,7 @@
 											}}
 											aria-label={m.components_savedquerieslist_actions_for({ name: q.name })}
 										>
-											<svg viewBox="0 0 24 24" class="h-3 w-3"
-												><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle
-													cx="12"
-													cy="19"
-													r="1.5"
-												/></svg
-											>
+											<EllipsisVerticalIcon class="h-3 w-3" />
 										</button>
 										{#if menuOpen === q.id}
 											<div

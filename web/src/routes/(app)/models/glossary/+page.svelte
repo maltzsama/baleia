@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	// The workspace's search glossary (#943): sets of words that mean the same.
 	// Searching for one also looks for the others in the command palette, the
 	// sidebar and the agents' search tool. Any member reads it; editors change
@@ -106,16 +107,7 @@
 			class="inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
 			href={resolve('/models')}
 		>
-			<svg
-				viewBox="0 0 16 16"
-				class="h-3 w-3"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"><path d="m10 4-4 4 4 4" /></svg
-			>
+			<ChevronLeftIcon class="h-3 w-3" aria-hidden="true" />
 			{m.models_title()}
 		</a>
 		<h1 class="mt-1 text-xl font-semibold tracking-[-0.3px]">{m.search_glossary_title()}</h1>

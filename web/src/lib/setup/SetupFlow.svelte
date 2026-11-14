@@ -1,4 +1,8 @@
 <script lang="ts">
+	import CheckIcon from '@lucide/svelte/icons/check';
+	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import LayersIcon from '@lucide/svelte/icons/layers';
+	import TerminalIcon from '@lucide/svelte/icons/terminal';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
@@ -83,9 +87,7 @@
 				<div
 					class="w-8 h-8 bg-primary/15 border border-primary/30 rounded-lg flex items-center justify-center"
 				>
-					<svg viewBox="0 0 24 24" class="w-4 h-4 stroke-primary"
-						><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
-					>
+					<LayersIcon class="w-4 h-4 stroke-primary" />
 				</div>
 				<span class="text-base font-bold text-slate-100 tracking-[-.3px]">{m.common_baleia()}</span>
 			</div>
@@ -105,9 +107,7 @@
 									: 'border-slate-800 text-slate-600'}"
 						>
 							{#if done}
-								<svg viewBox="0 0 24 24" class="w-[11px] h-[11px] stroke-white" stroke-width="3"
-									><polyline points="20 6 9 17 4 12" /></svg
-								>
+								<CheckIcon class="w-[11px] h-[11px] stroke-white" strokeWidth={3} />
 							{:else}
 								{n}
 							{/if}
@@ -240,9 +240,7 @@
 							class="h-10 px-5 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center gap-[7px] transition-colors duration-150 border-none bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
 						>
 							{busy ? m.setup_creating() : m.setup_continue()}
-							<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
-								><polyline points="9 18 15 12 9 6" /></svg
-							>
+							<ChevronRightIcon class="w-[13px] h-[13px]" />
 						</button>
 					</div>
 				</form>
@@ -278,9 +276,7 @@
 					<div
 						class="w-16 h-16 rounded-full bg-green-50 border border-green-200 flex items-center justify-center"
 					>
-						<svg viewBox="0 0 24 24" class="w-7 h-7 stroke-green-600"
-							><polyline points="20 6 9 17 4 12" /></svg
-						>
+						<CheckIcon class="w-7 h-7 stroke-green-600" />
 					</div>
 					<div class="text-[22px] font-bold tracking-[-.4px]">{m.setup_baleia_is_ready()}</div>
 					<div class="text-[13px] text-slate-600 dark:text-slate-300 max-w-[340px] leading-[1.6]">
@@ -290,9 +286,7 @@
 						onclick={() => (window.location.href = '/sql')}
 						class="w-full h-10 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center justify-center gap-[7px] transition-colors duration-150 border-none bg-primary text-white hover:bg-primary-hover"
 					>
-						<svg viewBox="0 0 24 24" class="w-[13px] h-[13px]"
-							><path d="M4 17l6-6-6-6M12 19h8" /></svg
-						>
+						<TerminalIcon class="w-[13px] h-[13px]" />
 						{m.setup_open_editor()}
 					</button>
 				</div>

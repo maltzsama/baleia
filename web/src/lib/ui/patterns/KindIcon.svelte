@@ -1,5 +1,18 @@
 <script lang="ts">
-	import { appearanceFor } from './kindIcon';
+	import ChartNoAxesColumnIcon from '@lucide/svelte/icons/chart-no-axes-column';
+	import CpuIcon from '@lucide/svelte/icons/cpu';
+	import DatabaseIcon from '@lucide/svelte/icons/database';
+	import FileIcon from '@lucide/svelte/icons/file';
+	import GaugeIcon from '@lucide/svelte/icons/gauge';
+	import Grid3x3Icon from '@lucide/svelte/icons/grid-3x3';
+	import LibraryIcon from '@lucide/svelte/icons/library';
+	import MemoryStickIcon from '@lucide/svelte/icons/memory-stick';
+	import MountainIcon from '@lucide/svelte/icons/mountain';
+	import NetworkIcon from '@lucide/svelte/icons/network';
+	import SlidersHorizontalIcon from '@lucide/svelte/icons/sliders-horizontal';
+	import TargetIcon from '@lucide/svelte/icons/target';
+	import WavesHorizontalIcon from '@lucide/svelte/icons/waves-horizontal';
+	import { appearanceFor, type KindGlyph } from './kindIcon';
 
 	let {
 		kind,
@@ -14,6 +27,23 @@
 	} = $props();
 
 	const appearance = $derived(appearanceFor(kind, family));
+
+	// The line glyph of a kind with no brand mark.
+	const glyphs: Record<KindGlyph, typeof DatabaseIcon> = {
+		catalog: LibraryIcon,
+		metastore: Grid3x3Icon,
+		database: DatabaseIcon,
+		engine: CpuIcon,
+		file: FileIcon,
+		mountain: MountainIcon,
+		nodes: NetworkIcon,
+		waves: WavesHorizontalIcon,
+		memory: MemoryStickIcon,
+		gauge: GaugeIcon,
+		bars: ChartNoAxesColumnIcon,
+		void: TargetIcon,
+		sliders: SlidersHorizontalIcon
+	};
 
 	// A vendored dark mark (an image, so it cannot be recoloured) gets a light chip
 	// in dark mode. A package mark is recoloured per theme instead (see .kind-mark).
@@ -50,61 +80,12 @@
 		{/if}
 	</span>
 {:else}
-	<svg
-		viewBox="0 0 24 24"
+	{@const Glyph = glyphs[appearance.glyph]}
+	<Glyph
 		class="shrink-0 {appearance.color} {className}"
-		style:width={`${size}px`}
-		style:height={`${size}px`}
+		style="width: {size}px; height: {size}px"
 		aria-hidden="true"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-	>
-		{#if appearance.glyph === 'file'}
-			<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-			<path d="M14 2v6h6" />
-		{:else if appearance.glyph === 'metastore'}
-			<path d="M3 7h18M3 12h18M3 17h18" />
-			<path d="M7 3v18M17 3v18" />
-		{:else if appearance.glyph === 'engine'}
-			<circle cx="12" cy="12" r="3" />
-			<path d="M19 9a7 7 0 0 1 0 6M5 15a7 7 0 0 1 0-6M12 2v2M12 20v2" />
-		{:else if appearance.glyph === 'mountain'}
-			<path d="M12 2 2 21h20z" />
-			<path d="M5 15h14" />
-		{:else if appearance.glyph === 'nodes'}
-			<circle cx="12" cy="5" r="2" />
-			<circle cx="5" cy="19" r="2" />
-			<circle cx="19" cy="19" r="2" />
-			<path d="M12 7v5m-4 3 4-4m8 4-4-4" />
-		{:else if appearance.glyph === 'waves'}
-			<path d="M2 13c2.5-3 5-3 7.5 0s5 3 7.5 0 3-2 5-1" />
-			<path d="M2 18c2.5-3 5-3 7.5 0s5 3 7.5 0 3-2 5-1" />
-		{:else if appearance.glyph === 'memory'}
-			<rect x="6" y="6" width="12" height="12" rx="1" />
-			<path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4" />
-		{:else if appearance.glyph === 'gauge'}
-			<path d="M4 18a9 9 0 1 1 16 0" />
-			<path d="m12 14 4-5" />
-			<circle cx="12" cy="15" r="1" />
-		{:else if appearance.glyph === 'bars'}
-			<path d="M4 20V10m6 10V4m6 16v-7m4 7H2" />
-		{:else if appearance.glyph === 'void'}
-			<circle cx="12" cy="12" r="9" />
-			<circle cx="12" cy="12" r="4" />
-			<circle cx="12" cy="12" r="0.5" />
-		{:else if appearance.glyph === 'sliders'}
-			<path d="M4 7h10m4 0h2M4 17h2m4 0h10" />
-			<circle cx="16" cy="7" r="2" />
-			<circle cx="8" cy="17" r="2" />
-		{:else}
-			<ellipse cx="12" cy="5" rx="9" ry="3" />
-			<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-			<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-		{/if}
-	</svg>
+	/>
 {/if}
 
 <style>

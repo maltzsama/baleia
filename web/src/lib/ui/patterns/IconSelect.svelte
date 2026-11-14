@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import KindIcon from './KindIcon.svelte';
 
 	// A select whose button and options show an engine icon beside the name. A
@@ -143,9 +144,7 @@
 		{:else}
 			<span class="flex-1"></span>
 		{/if}
-		<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0 text-text-muted" aria-hidden="true"
-			><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" /></svg
-		>
+		<ChevronDownIcon class="h-3.5 w-3.5 shrink-0 text-text-muted" aria-hidden="true" />
 	</button>
 	{#if open}
 		<ul

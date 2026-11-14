@@ -1,4 +1,14 @@
 <script lang="ts">
+	import ChartNoAxesColumnIcon from '@lucide/svelte/icons/chart-no-axes-column';
+	import DatabaseIcon from '@lucide/svelte/icons/database';
+	import FolderIcon from '@lucide/svelte/icons/folder';
+	import KeyIcon from '@lucide/svelte/icons/key';
+	import LogOutIcon from '@lucide/svelte/icons/log-out';
+	import SettingsIcon from '@lucide/svelte/icons/settings';
+	import Table2Icon from '@lucide/svelte/icons/table-2';
+	import TerminalIcon from '@lucide/svelte/icons/terminal';
+	import UserIcon from '@lucide/svelte/icons/user';
+	import ZoomInIcon from '@lucide/svelte/icons/zoom-in';
 	import { m } from '$lib/paraglide/messages';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
@@ -17,18 +27,16 @@
 	const settingsArea = railAreas.find((area) => area.key === 'settings')!;
 	const showSettings = $derived(visibleSections(authStore.user).length > 0);
 
-	// Icon paths per area (24×24, stroked like the rest of the shell).
-	const icons: Record<AreaKey, string> = {
-		sql: 'M4 17l6-6-6-6M12 19h8',
-		data: 'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 9h18M9 21V9',
-		explore: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.3-4.3M8 11h6M11 8v6',
-		content: 'M4 5h7l2 2h7v12H4zM4 9h16',
-		connections:
-			'M3 5c0-1.66 4-3 9-3s9 1.34 9 3-4 3-9 3-9-1.34-9-3zM21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5',
-		monitoring: 'M18 20V10M12 20V4M6 20v-6',
-		settings:
-			'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93a10 10 0 0 0 14.14 14.14',
-		profile: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'
+	// One Lucide icon per area (24×24, stroked like the rest of the shell).
+	const icons: Record<AreaKey, typeof TerminalIcon> = {
+		sql: TerminalIcon,
+		data: Table2Icon,
+		explore: ZoomInIcon,
+		content: FolderIcon,
+		connections: DatabaseIcon,
+		monitoring: ChartNoAxesColumnIcon,
+		settings: SettingsIcon,
+		profile: UserIcon
 	};
 
 	function toggleMenu() {
@@ -59,6 +67,7 @@
 </script>
 
 {#snippet entry(key: AreaKey, href: string, label: string)}
+	{@const Glyph = icons[key]}
 	<a
 		href={resolve(href as '/')}
 		title={label}
@@ -66,9 +75,7 @@
 		class="flex h-10 w-10 items-center justify-center rounded-[10px] no-underline transition-colors duration-150
 			{current === key ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
 	>
-		<svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" aria-hidden="true"
-			><path d={icons[key]} /></svg
-		>
+		<Glyph class="h-[18px] w-[18px]" aria-hidden="true" />
 		<span class="sr-only">{label}</span>
 	</a>
 {/snippet}
@@ -103,15 +110,14 @@
 				<div
 					class="absolute bottom-full left-0 mb-2 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50"
 				>
-					{#each [{ href: '/profile', label: m.nav_profile(), icon: icons.profile }, { href: '/profile/api-keys', label: m.nav_page_api_keys(), icon: 'M15 7a4 4 0 1 1-3.87 5H9l-2 2-2-2-2 2v-3l6-6h3.13A4 4 0 0 1 15 7zM16 9h.01' }] as item (item.href)}
+					{#each [{ href: '/profile', label: m.nav_profile(), icon: icons.profile }, { href: '/profile/api-keys', label: m.nav_page_api_keys(), icon: KeyIcon }] as item (item.href)}
+						{@const ItemIcon = item.icon}
 						<a
 							href={resolve(item.href as '/profile')}
 							onclick={() => (menuOpen = false)}
 							class="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-slate-200 no-underline transition-colors duration-150 hover:bg-slate-700"
 						>
-							<svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true"
-								><path d={item.icon} /></svg
-							>
+							<ItemIcon class="w-4 h-4" aria-hidden="true" />
 							{item.label}
 						</a>
 					{/each}
@@ -119,9 +125,7 @@
 						onclick={authStore.logout}
 						class="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[13px] text-slate-200 transition-colors duration-150 hover:bg-slate-700 border-none bg-transparent cursor-pointer text-left"
 					>
-						<svg viewBox="0 0 24 24" class="w-4 h-4"
-							><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg
-						>
+						<LogOutIcon class="w-4 h-4" />
 						{m.components_globalnav_logout()}
 					</button>
 				</div>

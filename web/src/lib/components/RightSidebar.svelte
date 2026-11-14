@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import CircleExclamationPointIcon from '@lucide/svelte/icons/circle-exclamation-point';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import TableDetail from './TableDetail.svelte';
@@ -88,14 +90,7 @@
 				class="w-[22px] h-[22px] rounded-[5px] cursor-pointer flex items-center justify-center text-text-muted bg-none border-none
 					hover:bg-blue-50 hover:text-primary dark:hover:bg-[#152236]"
 			>
-				<svg viewBox="0 0 24 24" class="w-3.5 h-3.5"
-					><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line
-						x1="12"
-						y1="16"
-						x2="12.01"
-						y2="16"
-					/></svg
-				>
+				<CircleExclamationPointIcon class="w-3.5 h-3.5" />
 			</button>
 			<span
 				class="[writing-mode:vertical-rl] text-[10px] font-semibold tracking-wide uppercase text-text-muted rotate-180 mt-1"
@@ -131,7 +126,7 @@
 					aria-label={m.components_rightsidebar_collapse_the_inspector()}
 					class="w-5 h-5 rounded flex items-center justify-center text-text-muted bg-none border-none cursor-pointer hover:bg-border hover:text-text-main"
 				>
-					<svg viewBox="0 0 24 24" class="w-3 h-3"><path d="M9 18l6-6-6-6" /></svg>
+					<ChevronRightIcon class="w-3 h-3" />
 				</button>
 			</div>
 			{#if tab === 'assistant' && assistantStore.enabled}
