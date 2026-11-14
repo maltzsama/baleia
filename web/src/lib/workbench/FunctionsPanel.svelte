@@ -105,6 +105,19 @@
 		const stem = query.replace(/(ate|ing|ed|es|s)$/, '');
 		return stem.length >= 3 && n.includes(stem);
 	}
+
+	function kindLabel(value: string): string {
+		switch (value) {
+			case 'aggregate':
+				return m.workbench_completion_kind_aggregate();
+			case 'window':
+				return m.workbench_completion_kind_window();
+			case 'operator':
+				return m.workbench_completion_kind_operator();
+			default:
+				return value;
+		}
+	}
 </script>
 
 <div class="flex h-full flex-col gap-3">
@@ -124,7 +137,7 @@
 			>
 				<option value="all">{m.functions_panel_all()}</option>
 				{#each kinds as k (k)}
-					<option value={k}>{k}</option>
+					<option value={k}>{kindLabel(k)}</option>
 				{/each}
 			</select>
 		</label>
