@@ -17,6 +17,11 @@ describe('transpileSQL', () => {
 		expect(out.split(';').length).toBeGreaterThanOrEqual(2);
 	});
 
+	it('preserves a trailing statement terminator', async () => {
+		const out = await transpileSQL('postgresql', 'trino', 'SELECT 1; SELECT 2;');
+		expect(out.trimEnd().endsWith(';')).toBe(true);
+	});
+
 	it('throws on an incomplete script', async () => {
 		await expect(transpileSQL('postgresql', 'trino', 'SELECT * FROM')).rejects.toThrow();
 	});
