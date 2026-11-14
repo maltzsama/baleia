@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import type { Snippet } from 'svelte';
 	import Button from '../Button.svelte';
 	import Checkbox from '../Checkbox.svelte';
 	import Modal from '../Modal.svelte';
@@ -9,12 +10,15 @@
 		open = $bindable(false),
 		secret,
 		title = m.onetimesecret_copy_this_secret_now(),
-		onacknowledge
+		onacknowledge,
+		details
 	}: {
 		open?: boolean;
 		secret: string;
 		title?: string;
 		onacknowledge?: () => void;
+		/** What to do with the secret, shown below it (for example where to send it). */
+		details?: Snippet;
 	} = $props();
 
 	let acknowledged = $state(false);
@@ -35,6 +39,7 @@
 			<span class="flex-1 break-all">{secret}</span>
 			<CopyButton value={secret} label={m.onetimesecret_secret()} />
 		</div>
+		{@render details?.()}
 		<Checkbox bind:checked={acknowledged} label={m.common_i_have_copied_this_value()} />
 	</div>
 	{#snippet footer()}

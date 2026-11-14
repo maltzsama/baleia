@@ -17,6 +17,7 @@
 	import Select from '$lib/ui/Select.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
+	import ApiKeyUsage from '$lib/ui/patterns/ApiKeyUsage.svelte';
 	import OneTimeSecret from '$lib/ui/patterns/OneTimeSecret.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 
@@ -367,7 +368,11 @@
 	</form>
 </Modal>
 
-<OneTimeSecret bind:open={secretOpen} {secret} onacknowledge={() => (secret = '')} />
+<OneTimeSecret bind:open={secretOpen} {secret} onacknowledge={() => (secret = '')}>
+	{#snippet details()}
+		<ApiKeyUsage {secret} />
+	{/snippet}
+</OneTimeSecret>
 
 <ConfirmDialog
 	bind:open={revokeOpen}

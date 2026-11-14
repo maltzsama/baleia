@@ -5,6 +5,7 @@ import ConfirmDialog from './ConfirmDialog.svelte';
 import DataTable from './DataTable.svelte';
 import KeyValueEditor from './KeyValueEditor.svelte';
 import MarkdownView from './MarkdownView.svelte';
+import ApiKeyUsage from './ApiKeyUsage.svelte';
 import OneTimeSecret from './OneTimeSecret.svelte';
 import StatusBadge from './StatusBadge.svelte';
 
@@ -158,5 +159,24 @@ describe('ConfirmDialog', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 		expect(document.activeElement).toBe(trigger);
 		trigger.remove();
+	});
+});
+
+// #1020: where to send a freshly issued key.
+describe('ApiKeyUsage', () => {
+	it('shows the API address, the header and a ready example', () => {
+		render(ApiKeyUsage, { props: { secret: 'bal_abc' } });
+
+		expect(screen.getByText('http://localhost:3000/api/v1')).toBeTruthy();
+		expect(screen.getByText(/X-Api-Key header/)).toBeTruthy();
+		expect(
+			screen.getByText("curl -H 'X-Api-Key: bal_abc' http://localhost:3000/api/v1/workspaces")
+		).toBeTruthy();
+	});
+
+	it('does not point the example at a route a key cannot call', () => {
+		const { container } = render(ApiKeyUsage, { props: { secret: 'bal_abc' } });
+
+		expect(container.textContent).not.toContain('/auth/');
 	});
 });
