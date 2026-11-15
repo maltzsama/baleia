@@ -521,6 +521,13 @@ func verifySession(ctx context.Context, store sessionStore, claims *auth.Claims)
 	if auth.RequireActive(user.Status) != nil {
 		return db.User{}, false, nil
 	}
+	// A role change must invalidate an access token even if the best-effort
+	// refresh-family revocation could not be written. The role claim is not
+	// authoritative, but a mismatch proves that the token predates the
+	// account's current authorization state.
+	if claims.Role != user.Role {
+		return db.User{}, false, nil
+	}
 	live, err := store.LiveRefreshFamily(ctx, sid)
 	if err != nil {
 		return db.User{}, false, fmt.Errorf("%w: %w", errSessionCheck, err)
