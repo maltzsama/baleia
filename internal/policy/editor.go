@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/sqlglot-go/expressions"
 )
 
 // ErrForbiddenInEditor is the error users see for a rejected script.
@@ -23,7 +24,7 @@ func ForbiddenInEditor(d dialect.Dialect, sql string) bool {
 		stmts = []string{sql}
 	}
 	for _, s := range stmts {
-		if statementForbidden(s) {
+		if statementForbiddenWithDialect(d, s) {
 			return true
 		}
 	}
@@ -38,7 +39,7 @@ func EditorStatements(d dialect.Dialect, sql string) ([]string, error) {
 		return nil, err
 	}
 	for _, s := range stmts {
-		if statementForbidden(s) {
+		if statementForbiddenWithDialect(d, s) {
 			return nil, ErrForbiddenInEditor
 		}
 	}
@@ -55,30 +56,12 @@ func EditorStatements(d dialect.Dialect, sql string) ([]string, error) {
 //     CREATE CATALOG pointed at arbitrary hosts (exfiltration) or DROP
 //     another user's catalog.
 //
-// The check is a normalized prefix match, not a parser. It strips leading
-// whitespace/whitespace-comments (a leading -- comment shouldn't bypass it)
-// but does not try to detect catalog DDL embedded inside a larger statement.
-// Trino DDL for catalog management is always top-level.
-//
-// Robustness against common offensives:
-//   - "  create  catalog " with extra spaces — handled by CollapseWhitespace.
-//   - "CREATE CATALOG" with random case — handled by lowercase.
-//   - "-- hi\nCREATE CATALOG ..."    — handled by TrimLeadingComments.
-//   - "/* */CREATE CATALOG ..."      — handled by TrimLeadingComments.
-//
-// A multi-statement body that smuggles CREATE CATALOG after a SELECT will
-// pass this check on the SELECT — but the splitter separates the statements
-// before validating, and the validator is called per statement. So a
-// smuggled CREATE CATALOG is caught by the validator at its own statement.
+// The normal path parses the statement and inspects the command node. A
+// narrow token fallback is retained only for malformed SQL where no AST can
+// exist; this keeps a rejected prefix from being hidden behind a later parse
+// error while preserving the parser as the source of truth for valid SQL.
 func IsCatalogDDL(sql string) bool {
-	if sql == "" {
-		return false
-	}
-	s := trimLeadingComments(sql)
-	s = collapseWhitespace(s)
-	s = strings.ToLower(s)
-	return strings.HasPrefix(s, "create catalog ") || s == "create catalog" ||
-		strings.HasPrefix(s, "drop catalog ") || s == "drop catalog"
+	return isCatalogDDLWithDialect(genericDialect, sql)
 }
 
 // statementForbidden reports whether one statement must be rejected by the
@@ -91,25 +74,100 @@ func IsCatalogDDL(sql string) bool {
 //
 // The Trino catalog guard is the real control; this is UX and defense in depth.
 func statementForbidden(sql string) bool {
-	if sql == "" {
+	return statementForbiddenWithDialect(genericDialect, sql)
+}
+
+var genericDialect = dialect.NewRegistry().MustGet(dialect.FlightSQL)
+
+func statementForbiddenWithDialect(d dialect.Dialect, sql string) bool {
+	if strings.TrimSpace(sql) == "" {
 		return false
 	}
-	s := trimLeadingComments(sql)
-	lower := strings.ToLower(collapseWhitespace(s))
-
-	if lower == "set session authorization" || strings.HasPrefix(lower, "set session authorization ") {
+	expr, err := dialect.ParseStatement(d, sql)
+	if err != nil || expr == nil {
+		return fallbackForbidden(sql)
+	}
+	if isCatalogDDLExpression(expr) {
 		return true
 	}
-	if IsCatalogDDL(s) {
-		return true
-	}
-	if strings.HasPrefix(lower, "execute immediate") {
-		body := extractExecuteImmediateLiteral(s)
-		if body != "" && IsCatalogDDL(body) {
-			return true
+	switch commandRoot(expr) {
+	case "SET":
+		return strings.HasPrefix(strings.ToUpper(collapseWhitespace(commandBody(expr))), "SESSION AUTHORIZATION")
+	case "EXECUTE":
+		body := commandBody(expr)
+		if !strings.HasPrefix(strings.ToUpper(body), "IMMEDIATE") {
+			return false
 		}
+		literal := extractExecuteImmediateLiteral(body)
+		return isCatalogDDLWithDialect(d, literal) || isCatalogDDLWords(literal)
+	default:
+		return false
+	}
+}
+
+func isCatalogDDLWithDialect(d dialect.Dialect, sql string) bool {
+	if strings.TrimSpace(sql) == "" {
+		return false
+	}
+	expr, err := dialect.ParseStatement(d, sql)
+	return (err == nil && expr != nil && isCatalogDDLExpression(expr)) || isCatalogDDLWords(sql)
+}
+
+func fallbackForbidden(sql string) bool {
+	if isCatalogDDLWords(sql) {
+		return true
+	}
+	clean := strings.ToUpper(collapseWhitespace(trimLeadingComments(sql)))
+	if strings.HasPrefix(clean, "SET SESSION AUTHORIZATION") {
+		return true
+	}
+	if strings.HasPrefix(clean, "EXECUTE IMMEDIATE") {
+		return isCatalogDDLWords(extractExecuteImmediateLiteral(clean))
 	}
 	return false
+}
+
+func isCatalogDDLWords(sql string) bool {
+	fields := strings.Fields(collapseWhitespace(trimLeadingComments(sql)))
+	return len(fields) >= 2 && (strings.EqualFold(fields[0], "CREATE") || strings.EqualFold(fields[0], "DROP")) && strings.EqualFold(fields[1], "CATALOG")
+}
+
+func isCatalogDDLExpression(expr expressions.Expression) bool {
+	root := commandRoot(expr)
+	if root != "CREATE" && root != "DROP" {
+		return false
+	}
+	body := strings.Fields(commandBody(expr))
+	return len(body) > 0 && strings.EqualFold(body[0], "CATALOG")
+}
+
+func commandRoot(expr expressions.Expression) string {
+	if expr == nil || expr.Kind() != expressions.KindCommand {
+		return ""
+	}
+	switch part := expr.Arg("this").(type) {
+	case string:
+		return strings.ToUpper(part)
+	case expressions.Expression:
+		if part != nil {
+			return strings.ToUpper(part.Name())
+		}
+	}
+	return ""
+}
+
+func commandBody(expr expressions.Expression) string {
+	span, ok := expr.SpanText()
+	if !ok {
+		return ""
+	}
+	first := strings.IndexFunc(span, func(r rune) bool {
+		return r == ' ' || r == '\t' || r == '\n' || r == '\r'
+	})
+	if first < 0 {
+		return ""
+	}
+	return strings.TrimSpace(span[first:])
 }
 
 // extractExecuteImmediateLiteral pulls the first single-quoted string literal

@@ -75,6 +75,21 @@ func TestExtractJoins(t *testing.T) {
 	}
 }
 
+func TestExtractColumnsFromAST(t *testing.T) {
+	t.Parallel()
+	got := Extract(`SELECT o.id, c.name FROM orders o JOIN customers c ON o.customer_id = c.id WHERE c.active = true`)
+	want := []Column{
+		{TableAlias: "o", Name: "id"},
+		{TableAlias: "c", Name: "name"},
+		{TableAlias: "o", Name: "customer_id"},
+		{TableAlias: "c", Name: "id"},
+		{TableAlias: "c", Name: "active"},
+	}
+	if !reflect.DeepEqual(got.Columns, want) {
+		t.Fatalf("Columns = %#v, want %#v", got.Columns, want)
+	}
+}
+
 func TestExtractIgnoresLiteralsAndUnknownAliases(t *testing.T) {
 	t.Parallel()
 	sql := "SELECT * FROM orders o JOIN customers c ON o.id = 5 AND x = y AND o.a = missing.b"

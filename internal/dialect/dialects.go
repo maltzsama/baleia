@@ -52,7 +52,6 @@ func newTrino() *spec {
 	return &spec{
 		name:      Trino,
 		identOpen: `"`, identClose: `"`,
-		lex:         lexRules{identQuotes: `"`},
 		catalogs:    true,
 		schemaDepth: 1,
 		placeholder: question, // EXECUTE ... USING
@@ -86,7 +85,6 @@ func newPostgreSQL() *spec {
 		name:      PostgreSQL,
 		identOpen: `"`, identClose: `"`,
 		maxIdent: 63, identBytes: true,
-		lex:         lexRules{identQuotes: `"`, dollarQuotes: true, escapeStrings: true, nestedComments: true},
 		schemaDepth: 1,
 		placeholder: numbered("$"),
 		explain:     explainPrefix("EXPLAIN "),
@@ -163,21 +161,17 @@ func mysqlFamily(name, formatter, codemirror string, json bool, functionQuery st
 		identOpen: "`", identClose: "`",
 		maxIdent:         64,
 		backslashStrings: true,
-		lex: lexRules{
-			identQuotes: "`", doubleStrings: true, backslashStrings: true,
-			hashComments: true, delimiterError: true,
-		},
-		schemaDepth: 1, // a database is a schema; the catalog is always "def"
-		placeholder: question,
-		explain:     explainPrefix("EXPLAIN "),
-		types:       types,
-		decimalTyp:  func(p, s int) string { return fmt.Sprintf("DECIMAL(%d,%d)", p, s) },
-		boolLit:     trueFalse,
-		dateLit:     prefixed("DATE "),
-		tsLit:       prefixed("TIMESTAMP "),
-		binaryLit:   xHex,
-		jsonLit:     jsonLit,
-		timeTrunc:   mysqlTimeTrunc,
+		schemaDepth:      1, // a database is a schema; the catalog is always "def"
+		placeholder:      question,
+		explain:          explainPrefix("EXPLAIN "),
+		types:            types,
+		decimalTyp:       func(p, s int) string { return fmt.Sprintf("DECIMAL(%d,%d)", p, s) },
+		boolLit:          trueFalse,
+		dateLit:          prefixed("DATE "),
+		tsLit:            prefixed("TIMESTAMP "),
+		binaryLit:        xHex,
+		jsonLit:          jsonLit,
+		timeTrunc:        mysqlTimeTrunc,
 		metadata: MetadataQueries{
 			Schemas: `SELECT schema_name FROM information_schema.schemata
 WHERE schema_name NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys') ORDER BY schema_name`,
@@ -210,7 +204,6 @@ func newTSQL() *spec {
 		identOpen: "[", identClose: "]",
 		maxIdent:        128,
 		nationalStrings: true,
-		lex:             lexRules{identQuotes: `"`, brackets: true, goSeparator: true, nestedComments: true},
 		catalogs:        true,
 		schemaDepth:     1,
 		placeholder:     numbered("@p"),
@@ -259,8 +252,7 @@ func newOracle() *spec {
 		identOpen: `"`, identClose: `"`,
 		maxIdent: 128, identBytes: true,
 		identForbidden: `"`, // ORA-25716: no escape exists
-		lex:            lexRules{identQuotes: `"`, qQuotes: true, plsqlBlocks: true},
-		schemaDepth:    1, // the catalog is the service the connection opened
+		schemaDepth:    1,   // the catalog is the service the connection opened
 		placeholder:    numbered(":"),
 		preview: func(obj string, n int) string {
 			return fmt.Sprintf("SELECT * FROM %s FETCH FIRST %d ROWS ONLY", obj, n)
@@ -328,7 +320,6 @@ func newSQLite() *spec {
 	return &spec{
 		name:      SQLite,
 		identOpen: `"`, identClose: `"`,
-		lex:         lexRules{identQuotes: "\"`", brackets: true},
 		schemaDepth: 0,
 		placeholder: numbered("?"), // ?NNN: parameters may repeat out of order
 		explain:     explainPrefix("EXPLAIN QUERY PLAN "),
@@ -370,7 +361,6 @@ func newClickHouse() *spec {
 		name:      ClickHouse,
 		identOpen: "`", identClose: "`",
 		backslashStrings: true,
-		lex:              lexRules{identQuotes: "`\"", backslashStrings: true},
 		schemaDepth:      1, // databases; one server is one catalog
 		placeholder:      func(n int) string { return fmt.Sprintf("{p%d:String}", n) },
 		explain:          explainPrefix("EXPLAIN "),
@@ -407,7 +397,6 @@ func newFlightSQL() *spec {
 	return &spec{
 		name:      FlightSQL,
 		identOpen: `"`, identClose: `"`,
-		lex:         lexRules{identQuotes: `"`},
 		catalogs:    true,
 		schemaDepth: -1,
 		placeholder: question,
