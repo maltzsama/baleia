@@ -107,12 +107,6 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 		}
 	} else {
 		catID := db.UUID{Bytes: *params.CatalogId, Valid: true}
-		if _, err := store.GetCatalogByID(ctx, catID); err != nil {
-			if errors.Is(err, db.ErrNoRows) {
-				return ListCatalogGrantItems404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
-			}
-			return nil, err
-		}
 		if !h.catalogOwner(ctx, p, catID) {
 			return ListCatalogGrantItems404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		}
@@ -237,6 +231,12 @@ func (h *CatalogHandlers) ApproveCatalogGrant(ctx context.Context, request Appro
 	ev := audit.Event{Action: audit.GrantCreate, ResourceType: "grant", ResourceID: idString(catID), WorkspaceID: idString(wsID)}
 	ctx = audit.WithAction(ctx, ev.Action)
 
+	wsAdmin := h.workspaceAdmin(ctx, p, wsID)
+	catOwner := h.catalogOwner(ctx, p, catID)
+	if !wsAdmin && !catOwner {
+		return ApproveCatalogGrant404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace or catalog not found"}}, nil
+	}
+
 	req, err := store.GetCatalogGrantRequest(ctx, db.GetCatalogGrantRequestParams{WorkspaceID: wsID, CatalogID: catID})
 	if err != nil {
 		if errors.Is(err, db.ErrNoRows) {
@@ -245,11 +245,11 @@ func (h *CatalogHandlers) ApproveCatalogGrant(ctx context.Context, request Appro
 		return nil, err
 	}
 	if req.InitiatedBySide == "catalog" {
-		if !h.workspaceAdmin(ctx, p, wsID) {
+		if !wsAdmin {
 			return ApproveCatalogGrant403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace admin may approve this offer"}}, nil
 		}
 	} else {
-		if !h.catalogOwner(ctx, p, catID) {
+		if !catOwner {
 			return ApproveCatalogGrant403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only the catalog owner may approve this request"}}, nil
 		}
 	}

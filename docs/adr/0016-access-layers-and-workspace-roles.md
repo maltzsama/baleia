@@ -75,6 +75,35 @@ service accounts:
   read statements in read-only sessions; an editor's or admin's agent may also write (DDL, DML),
   and the catalog manager decides what. The built-in assistant stays read-only.
 
+## Authorization coverage contract
+
+The backend authorization inventory is maintained in
+`internal/api/authz_coverage_test.go`. Every generated API operation and every
+hand-registered route must have an entry describing its enforcement kind,
+guard calls, actor scope, role plane, resource scope, denial behavior and
+action projection. An explicit `none` projection means that the endpoint is
+guarded but does not return an action list. The test fails when an operation is added without an entry,
+when an entry becomes stale, or when a declared guard disappears from the
+handler.
+
+The inventory is a coverage contract, not a second authorization engine. The
+named guards and the `internal/authz` checker remain authoritative. In
+particular:
+
+- global administration is distinct from workspace data access;
+- admin-plane resources use ownership or global-admin checks;
+- workspace data access starts with membership and may be narrowed by a space
+  role;
+- service accounts and agents are authenticated principals and cannot gain a
+  human owner's global administrator role;
+- invisible resources use the no-existence-oracle behavior, while visible
+  resources rejected for insufficient role use \`403\`;
+- \`allowed_actions\` and \`global_actions\` are projections for clients, never
+  authorization boundaries.
+
+When adding a protected operation, update the coverage entry and add positive
+and negative behavioral tests for its resource family before merging.
+
 ## Alternatives considered
 
 - **Space roles may raise the workspace role** (as before). Rejected: a space entry would bypass the

@@ -25,8 +25,9 @@ type grantsState struct {
 	wss    map[[16]byte]db.Workspace
 	grants []db.WorkspaceCatalogGrant
 	// requests are the pending catalog_grant_requests.
-	requests []db.CatalogGrantRequest
-	writes   int // grant upserts and deletes that reached the store
+	requests     []db.CatalogGrantRequest
+	requestReads int
+	writes       int // grant upserts and deletes that reached the store
 }
 
 func uuidOf(s string) db.UUID {
@@ -176,12 +177,34 @@ func (q *authzFake) CreateCatalogGrantRequest(_ context.Context, p db.CreateCata
 func (q *authzFake) GetCatalogGrantRequest(_ context.Context, p db.GetCatalogGrantRequestParams) (db.CatalogGrantRequest, error) {
 	q.g.mu.Lock()
 	defer q.g.mu.Unlock()
+	q.g.requestReads++
 	for _, e := range q.g.requests {
 		if e.WorkspaceID.Bytes == p.WorkspaceID.Bytes && e.CatalogID.Bytes == p.CatalogID.Bytes {
 			return e, nil
 		}
 	}
 	return db.CatalogGrantRequest{}, db.ErrNoRows
+}
+
+func TestApproveCatalogGrant_AuthorizesBeforeRequestLookup(t *testing.T) {
+	t.Parallel()
+	h, q := newGrantsHandlers(t)
+	q.g.requests = []db.CatalogGrantRequest{{
+		WorkspaceID: wsID, CatalogID: q.cat.ID, InitiatedBySide: "catalog",
+	}}
+
+	resp, err := h.ApproveCatalogGrant(ctxAs(memberID, "member"), ApproveCatalogGrantRequestObject{
+		WorkspaceId: wsID.Bytes, CatalogId: q.cat.ID.Bytes,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(ApproveCatalogGrant404JSONResponse); !ok {
+		t.Fatalf("response = %T, want 404", resp)
+	}
+	if q.g.requestReads != 0 {
+		t.Fatalf("unauthorized approval read %d pending requests", q.g.requestReads)
+	}
 }
 
 func (q *authzFake) DeleteCatalogGrantRequest(_ context.Context, p db.DeleteCatalogGrantRequestParams) (int64, error) {

@@ -50,6 +50,262 @@ type access struct {
 	calls []string // calls the handler body must contain
 	why   string   // required for kindAuthenticated
 	pkg   string   // routes only: directory of the handler, default "."
+	order []string // calls that must occur in this order
+}
+
+// authorizationMatrixRow is the reviewable contract for one protected entry.
+// The named handler guard remains the source of truth for checked operations;
+// this row records what the coverage audit knows about the enforcement plane
+// without introducing a second authorization implementation.
+type authorizationMatrixRow struct {
+	name          string
+	actor         string
+	globalRole    string
+	workspaceRole string
+	scope         string
+	denial        string
+	action        string
+}
+
+func hasCall(a access, names ...string) bool {
+	for _, wanted := range names {
+		for _, call := range a.calls {
+			if call == wanted {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func matrixRow(name string, a access) authorizationMatrixRow {
+	row := authorizationMatrixRow{name: name}
+	switch a.kind {
+	case kindPublic:
+		row.actor = "anonymous"
+		row.globalRole = "none"
+		row.workspaceRole = "none"
+		row.scope = "public"
+		row.denial = "none"
+		row.action = "public"
+	case kindAuthenticated:
+		row.actor = "authenticated user"
+		row.globalRole = "any"
+		row.workspaceRole = "none"
+		row.scope = "caller-independent"
+		row.denial = "401"
+		row.action = "none (no allowed_actions/global_actions projection)"
+	case kindSelf:
+		row.actor = "authenticated user"
+		row.globalRole = "any"
+		row.workspaceRole = "none"
+		row.scope = "caller"
+		row.denial = "401 or resource-specific"
+		row.action = "none (no allowed_actions/global_actions projection)"
+	case kindAdmin:
+		row.actor = "human user"
+		row.globalRole = "admin"
+		row.workspaceRole = "none"
+		row.scope = "global administration"
+		row.denial = "403"
+		row.action = "global_actions (admin plane)"
+	case kindChecked:
+		row.actor = "authenticated principal"
+		row.globalRole = "not required unless the guard says admin"
+		row.workspaceRole = "not required unless the guard says workspace role"
+		row.denial = "guard-defined 403/404"
+		row.action = "none (handler-level guard)"
+		switch {
+		case hasCall(a, "RequireAdmin", "RoleFromContext"):
+			row.scope = "global administration"
+			row.globalRole = "admin"
+			row.workspaceRole = "none"
+			row.denial = "403"
+			row.action = "global_actions (admin plane)"
+		case hasCall(a, "authorizeMemberWrite"):
+			row.scope = "workspace administration"
+			row.globalRole = "none"
+			row.workspaceRole = "workspace admin"
+			row.denial = "404 when workspace is invisible; 403 otherwise"
+		case hasCall(a, "bindingAccess", "managedBinding"):
+			row.scope = "admin plane resource ownership"
+			row.globalRole = "admin or catalog and engine owner"
+			row.workspaceRole = "none"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "maintenanceTable", "catalogForMonitoring"):
+			row.scope = "catalog monitoring resource"
+			row.globalRole = "admin or catalog owner"
+			row.workspaceRole = "none"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "Team"):
+			row.scope = "team visibility"
+			row.globalRole = "admin or team member"
+			row.workspaceRole = "none"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "Handler"):
+			row.actor = "agent token"
+			row.globalRole = "none"
+			row.workspaceRole = "agent-scoped"
+			row.scope = "MCP agent authentication"
+			row.denial = "401 or resource-specific 404"
+		case hasCall(a, "ConstantTimeCompare"):
+			row.actor = "internal event token"
+			row.globalRole = "none"
+			row.workspaceRole = "none"
+			row.scope = "internal event ingestion"
+			row.denial = "401"
+		case hasCall(a, "CheckWorkspaceAccess"):
+			row.actor = "authenticated session"
+			row.globalRole = "none"
+			row.workspaceRole = "workspace member"
+			row.scope = "workspace websocket"
+			row.denial = "401 or 404"
+		case hasCall(a, "Connection", "Catalog", "CatalogOfConnection", "Engine"):
+			row.scope = "admin plane resource ownership"
+			row.globalRole = "admin or resource owner"
+			row.workspaceRole = "none"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "serviceAccountManager", "managedServiceAccount"):
+			row.scope = "service-account management plane"
+			row.globalRole = "admin or workspace manager"
+			row.workspaceRole = "workspace admin where applicable"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "webhookManager"):
+			row.scope = "workspace administration"
+			row.globalRole = "admin where applicable"
+			row.workspaceRole = "workspace admin"
+			row.denial = "404 when invisible; 403 when below admin"
+		case hasCall(a, "contentSpace", "spaceForWrite", "requireSpace"):
+			row.scope = "workspace data plane plus space ceiling"
+			row.workspaceRole = "workspace role capped by space role"
+			row.denial = "404 when invisible; 403 when below required role"
+		case hasCall(a, "metadataWorkspace", "requireWorkspaceAccess", "Workspace", "wsMember"):
+			row.scope = "workspace data plane"
+			row.workspaceRole = "workspace member or stronger"
+			row.denial = "404 when not a member; 403 when visible but insufficient"
+		case hasCall(a, "PrincipalFromContext"):
+			row.scope = "caller or resource guard"
+			row.denial = "guard-defined 403/404"
+		default:
+			row.scope = "named handler guards"
+		}
+	case kindStub:
+		row.actor = "none"
+		row.globalRole = "none"
+		row.workspaceRole = "none"
+		row.scope = "constant response"
+		row.denial = "none"
+		row.action = "none (stub)"
+	}
+	if a.kind == kindChecked {
+		switch {
+		case hasCall(a, "workspaceAdmin", "catalogOwner"):
+			row.action = "allowed_actions:catalog_grant.*"
+		case hasCall(a, "authorizeMemberWrite"):
+			row.action = "allowed_actions:workspace.manage_members"
+		case hasCall(a, "bindingAccess", "managedBinding"):
+			row.action = "allowed_actions:catalog_binding.*"
+		case hasCall(a, "serviceAccountManager", "managedServiceAccount"):
+			row.action = "allowed_actions:service_account.*"
+		case hasCall(a, "asAgentOwner", "agentScope", "agentOwned"):
+			row.action = "allowed_actions:agent.*"
+		case hasCall(a, "Connection"):
+			row.action = "allowed_actions:catalog_connection.*"
+		case hasCall(a, "Catalog", "CatalogOfConnection"):
+			row.action = "allowed_actions:catalog.*"
+		case hasCall(a, "Engine"):
+			row.action = "allowed_actions:engine.*"
+		case hasCall(a, "contentSpace", "spaceForWrite", "requireSpace"):
+			row.action = "allowed_actions:workspace/content.*"
+		case hasCall(a, "Workspace", "metadataWorkspace", "requireWorkspaceAccess", "wsMember"):
+			row.action = "allowed_actions:workspace.*"
+		case hasCall(a, "maintenanceTable", "catalogForMonitoring"):
+			row.action = "allowed_actions:table_maintenance.*"
+		}
+	}
+	return row
+}
+
+func TestAuthorizationMatrix(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		access access
+		want   authorizationMatrixRow
+	}{
+		"global admin": {
+			access: access{kind: kindAdmin, calls: []string{"RoleFromContext"}},
+			want: authorizationMatrixRow{
+				actor: "human user", globalRole: "admin", workspaceRole: "none",
+				scope: "global administration", denial: "403", action: "global_actions (admin plane)",
+			},
+		},
+		"admin plane owner": {
+			access: checked("Catalog"),
+			want: authorizationMatrixRow{
+				actor: "authenticated principal", globalRole: "admin or resource owner",
+				workspaceRole: "none", scope: "admin plane resource ownership",
+				denial: "404 when invisible; 403 when visible but insufficient",
+				action: "allowed_actions:catalog.*",
+			},
+		},
+		"workspace data plane": {
+			access: checked("metadataWorkspace"),
+			want: authorizationMatrixRow{
+				actor:         "authenticated principal",
+				globalRole:    "not required unless the guard says admin",
+				workspaceRole: "workspace member or stronger",
+				scope:         "workspace data plane",
+				denial:        "404 when not a member; 403 when visible but insufficient",
+				action:        "allowed_actions:workspace.*",
+			},
+		},
+		"space ceiling": {
+			access: checked("contentSpace", "spaceForWrite"),
+			want: authorizationMatrixRow{
+				actor:         "authenticated principal",
+				globalRole:    "not required unless the guard says admin",
+				workspaceRole: "workspace role capped by space role",
+				scope:         "workspace data plane plus space ceiling",
+				denial:        "404 when invisible; 403 when below required role",
+				action:        "allowed_actions:workspace/content.*",
+			},
+		},
+		"workspace member set": {
+			access: checked("authorizeMemberWrite", "GetUserByID"),
+			want: authorizationMatrixRow{
+				actor:         "authenticated principal",
+				globalRole:    "none",
+				workspaceRole: "workspace admin",
+				scope:         "workspace administration",
+				denial:        "404 when workspace is invisible; 403 otherwise",
+				action:        "allowed_actions:workspace.manage_members",
+			},
+		},
+		"workspace member add": {
+			access: checked("authorizeMemberWrite", "GetUserByEmail"),
+			want: authorizationMatrixRow{
+				actor:         "authenticated principal",
+				globalRole:    "none",
+				workspaceRole: "workspace admin",
+				scope:         "workspace administration",
+				denial:        "404 when workspace is invisible; 403 otherwise",
+				action:        "allowed_actions:workspace.manage_members",
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := matrixRow(name, tc.access)
+			if got.actor != tc.want.actor || got.globalRole != tc.want.globalRole ||
+				got.workspaceRole != tc.want.workspaceRole || got.scope != tc.want.scope ||
+				got.denial != tc.want.denial || got.action != tc.want.action {
+				t.Fatalf("matrixRow() = %#v, want fields %#v", got, tc.want)
+			}
+		})
+	}
 }
 
 var (
@@ -59,7 +315,13 @@ var (
 	wsMember      = []string{"requireWorkspaceAccess"}
 )
 
-func checked(calls ...string) access { return access{kind: kindChecked, calls: calls} }
+func checked(calls ...string) access {
+	return access{kind: kindChecked, calls: calls, order: calls}
+}
+
+func checkedBefore(calls ...string) access {
+	return access{kind: kindChecked, calls: calls, order: calls}
+}
 
 var operationAccess = map[string]access{
 	// ── public (see publicOps in internal/server/server.go)
@@ -161,7 +423,7 @@ var operationAccess = map[string]access{
 
 	// ── connections and catalogs (internal/authz)
 	"GetCatalogConnection":    checked("Connection"),
-	"UpdateCatalogConnection": checked("Connection", "mayManageConnections"),
+	"UpdateCatalogConnection": checked("mayManageConnections", "Connection"),
 	"DeleteCatalogConnection": checked("Connection"),
 	"TestCatalogConnection":   checked("Connection"),
 	// Any signed-in user tests settings they hold; bind: intents go through the engine check.
@@ -204,7 +466,7 @@ var operationAccess = map[string]access{
 	"RevokeCatalogAccess":        checked("Workspace", "Catalog"),
 	"ListCatalogGrantItems":      checked("PrincipalFromContext", "Workspace", "catalogOwner"),
 	"CreateCatalogGrant":         checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner"),
-	"ApproveCatalogGrant":        checked("PrincipalFromContext", "GetCatalogGrantRequest", "workspaceAdmin", "catalogOwner"),
+	"ApproveCatalogGrant":        checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner", "GetCatalogGrantRequest"),
 	"DeleteCatalogGrant":         checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner"),
 	"ListGrantableWorkspaces":    checked("PrincipalFromContext", "catalogOwner"),
 	"ListRequestableCatalogs":    checked("PrincipalFromContext", "workspaceAdmin"),
@@ -268,17 +530,17 @@ var operationAccess = map[string]access{
 	"ListSemanticMetrics":  checked("metadataWorkspace"),
 	"GetSemanticMetric":    checked("metadataWorkspace", "metricDefs.Get", "contentSpace"),
 	"CreateSemanticMetric": checked("metadataWorkspace", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
-	"UpdateSemanticMetric": checked("metadataWorkspace", "metricDefs.Get", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
+	"UpdateSemanticMetric": checked("metadataWorkspace", "metricDefs.Get", "contentSpace", "semanticCatalog", "validateSemanticMetric"),
 	"DeleteSemanticMetric": checked("metadataWorkspace", "metricDefs.Get", "contentSpace", "metricDefs.Delete"),
-	"GetSemanticMetricSql": checked("metadataWorkspace", "metricDefs.Get", "semanticCatalog", "semanticTarget", "contentSpace"),
+	"GetSemanticMetricSql": checked("metadataWorkspace", "metricDefs.Get", "semanticCatalog", "contentSpace", "semanticTarget"),
 	// Semantic models v2 (#91) are content items; compile resolves visible
 	// models and the base model's binding, then renders through the compiler.
 	"ListSemanticModels":          checked("metadataWorkspace", "modelDefs.List"),
 	"GetSemanticModel":            checked("metadataWorkspace", "modelDefs.Get", "contentSpace"),
 	"CompileExploreQuery":         checked("metadataWorkspace", "modelDefs.List", "semanticTarget"),
 	"CreateSemanticModel":         checked("metadataWorkspace", "semanticCatalog", "modelDefs.PrepareNew", "contentSpace"),
-	"MigrateSemanticMetricsV1":    checked("metadataWorkspace", "metricDefs.List", "semanticCatalog", "modelDefs.Visible", "contentSpace"),
-	"UpdateSemanticModel":         checked("metadataWorkspace", "modelDefs.Get", "semanticCatalog", "modelDefs.PrepareUpdate", "contentSpace"),
+	"MigrateSemanticMetricsV1":    checked("metadataWorkspace", "metricDefs.List", "modelDefs.List", "modelDefs.Visible", "semanticCatalog", "contentSpace"),
+	"UpdateSemanticModel":         checked("metadataWorkspace", "modelDefs.Get", "contentSpace", "semanticCatalog", "modelDefs.PrepareUpdate"),
 	"DeleteSemanticModel":         checked("metadataWorkspace", "modelDefs.Get", "contentSpace", "modelDefs.Delete"),
 	"ListSemanticModelVersions":   checked("history.SpaceOf", "contentSpace", "history.List"),
 	"GetSemanticModelVersion":     checked("history.Get", "contentSpace"),
@@ -347,8 +609,8 @@ var operationAccess = map[string]access{
 	"ListServiceAccountTokens":  checked("managedServiceAccount"),
 	"CreateServiceAccountToken": checked("managedServiceAccount"),
 	"RevokeServiceAccountToken": checked("managedServiceAccount"),
-	"SetWorkspaceMember":        checked("PrincipalFromContext", "setMember"),
-	"AddWorkspaceMember":        checked("PrincipalFromContext", "setMember"),
+	"SetWorkspaceMember":        checkedBefore("authorizeMemberWrite", "GetUserByID", "setMember"),
+	"AddWorkspaceMember":        checkedBefore("authorizeMemberWrite", "GetUserByEmail", "setMember"),
 	"RemoveWorkspaceMember":     checked("PrincipalFromContext", "Workspace"),
 	"GetWorkspaceImpact":        checked("PrincipalFromContext", "Workspace"),
 	"GetCatalogAccessImpact":    checked("PrincipalFromContext", "Workspace"),
@@ -419,6 +681,7 @@ var routeAccess = map[string]access{
 // funcBody is what the audit needs to know about one function.
 type funcBody struct {
 	calls        map[string]bool // names of every function or method called
+	order        []string        // function calls in source traversal order
 	usesReceiver bool
 	file         string
 }
@@ -470,12 +733,16 @@ func bodyOf(n ast.Node, recv string) *funcBody {
 			switch fn := v.Fun.(type) {
 			case *ast.Ident:
 				fb.calls[fn.Name] = true
+				fb.order = append(fb.order, fn.Name)
 			case *ast.SelectorExpr:
 				fb.calls[fn.Sel.Name] = true
+				fb.order = append(fb.order, fn.Sel.Name)
 				// h.svc.Method is also recorded as "svc.Method", so an entry
 				// can name the service a scoped call goes through.
 				if inner, ok := fn.X.(*ast.SelectorExpr); ok {
-					fb.calls[inner.Sel.Name+"."+fn.Sel.Name] = true
+					qualified := inner.Sel.Name + "." + fn.Sel.Name
+					fb.calls[qualified] = true
+					fb.order = append(fb.order, qualified)
 				}
 			}
 		case *ast.Ident:
@@ -599,11 +866,52 @@ func validAccess(name string, a access) []string {
 	return p
 }
 
+func validMatrixRow(row authorizationMatrixRow) []string {
+	fields := map[string]string{
+		"actor":          row.actor,
+		"global role":    row.globalRole,
+		"workspace role": row.workspaceRole,
+		"scope":          row.scope,
+		"denial":         row.denial,
+		"action":         row.action,
+	}
+	var problems []string
+	for field, value := range fields {
+		if value == "" {
+			problems = append(problems, row.name+": authorization matrix is missing "+field)
+		}
+	}
+	if row.scope == "named handler guards" {
+		problems = append(problems, row.name+": authorization matrix has unresolved scope")
+	}
+	return problems
+}
+
 func auditBody(name string, a access, fb *funcBody) []string {
 	var p []string
 	for _, c := range a.calls {
 		if !fb.calls[c] {
 			p = append(p, fmt.Sprintf("%s (%s, %s): body no longer calls %s", name, a.kind, fb.file, c))
+		}
+	}
+	if len(a.order) > 1 {
+		positions := make(map[string]int, len(fb.order))
+		for i, call := range fb.order {
+			if _, ok := positions[call]; !ok {
+				positions[call] = i
+			}
+		}
+		previous := -1
+		for _, call := range a.order {
+			position, ok := positions[call]
+			if !ok {
+				continue
+			}
+			if position <= previous {
+				p = append(p, fmt.Sprintf("%s (%s, %s): authorization call order is %v, want %v", name, a.kind, fb.file, fb.order, a.order))
+				break
+			}
+			previous = position
 		}
 	}
 	if a.kind == kindStub && fb.usesReceiver {
@@ -624,6 +932,7 @@ func auditOperations(ops []string, table map[string]access, funcs map[string]*fu
 			continue
 		}
 		p = append(p, validAccess(op, a)...)
+		p = append(p, validMatrixRow(matrixRow(op, a))...)
 		if (a.kind == kindPublic) != public[op] {
 			p = append(p, op+": kindPublic must match publicOps in internal/server/server.go")
 		}
@@ -658,6 +967,7 @@ func auditRoutes(routes []route, table map[string]access, lookup func(pkg, name 
 			continue
 		}
 		p = append(p, validAccess(r.key, a)...)
+		p = append(p, validMatrixRow(matrixRow(r.key, a))...)
 		fb := r.lit
 		if fb == nil {
 			var found, ambiguous bool
@@ -733,13 +1043,43 @@ func TestAuthzCoverage(t *testing.T) {
 	}
 }
 
+func TestAuthzCoverage_QualifiedCallOrder(t *testing.T) {
+	t.Parallel()
+	funcs, dup := loadFuncs(t, ".")
+	if dup["UpdateSemanticModel"] {
+		t.Fatal("UpdateSemanticModel has more than one declaration")
+	}
+	fb := funcs["UpdateSemanticModel"]
+	if fb == nil {
+		t.Fatal("UpdateSemanticModel was not parsed")
+	}
+	if problems := auditBody("UpdateSemanticModel", operationAccess["UpdateSemanticModel"], fb); len(problems) != 0 {
+		t.Fatalf("qualified authorization order was not enforced: %v", problems)
+	}
+	want := []string{"modelDefs.Get", "contentSpace", "semanticCatalog", "modelDefs.PrepareUpdate"}
+	previous := -1
+	for _, call := range want {
+		found := -1
+		for i := previous + 1; i < len(fb.order); i++ {
+			if fb.order[i] == call {
+				found = i
+				break
+			}
+		}
+		if found < 0 {
+			t.Fatalf("qualified call %q missing from order %v", call, fb.order)
+		}
+		previous = found
+	}
+}
+
 // TestAuthzCoverage_Detects proves the audit fails when it should: an unlisted
 // operation, a stale entry, a guard that left the handler body, and a stub that
 // grew logic.
 func TestAuthzCoverage_Detects(t *testing.T) {
 	t.Parallel()
 	body := func(recv bool, calls ...string) *funcBody {
-		fb := &funcBody{calls: map[string]bool{}, usesReceiver: recv, file: "x.go"}
+		fb := &funcBody{calls: map[string]bool{}, usesReceiver: recv, file: "x.go", order: calls}
 		for _, c := range calls {
 			fb.calls[c] = true
 		}
@@ -770,6 +1110,17 @@ func TestAuthzCoverage_Detects(t *testing.T) {
 	}
 	if strings.Contains(got, "Guarded (") {
 		t.Errorf("a correctly guarded handler was reported:\n%s", got)
+	}
+
+	got = strings.Join(auditOperations(
+		[]string{"Reordered"},
+		map[string]access{"Reordered": checkedBefore("authorizeMemberWrite", "GetUserByID")},
+		map[string]*funcBody{"Reordered": body(false, "GetUserByID", "authorizeMemberWrite")},
+		nil,
+		map[string]bool{},
+	), "\n")
+	if !strings.Contains(got, "authorization call order") {
+		t.Errorf("authorization order regression was not reported:\n%s", got)
 	}
 
 	// A public flag that disagrees with publicOps is reported.

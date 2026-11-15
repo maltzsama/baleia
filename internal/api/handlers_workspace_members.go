@@ -130,6 +130,19 @@ func (h *core) setMember(ctx context.Context, wsID db.UUID, user *db.User, role 
 	return db.ListWorkspaceMembersRow{User: *user, Role: role, Source: source, RoleSet: true}, memberSet, nil
 }
 
+// authorizeMemberWrite performs the workspace-admin check before looking up
+// the target user. The lookup must not reveal whether a user exists to a
+// caller who cannot manage the workspace.
+func (h *core) authorizeMemberWrite(ctx context.Context, wsID db.UUID) error {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	ctx = audit.WithAction(ctx, audit.WorkspaceMemberSet)
+	_, err = h.authz().Workspace(ctx, p, wsID, authz.ActAdmin)
+	return err
+}
+
 // lookupUser returns nil when no user matches.
 func lookupUser(u db.User, err error) (*db.User, error) {
 	if errors.Is(err, db.ErrNoRows) {
@@ -145,6 +158,16 @@ func lookupUser(u db.User, err error) (*db.User, error) {
 func (h *WorkspaceHandlers) SetWorkspaceMember(ctx context.Context, request SetWorkspaceMemberRequestObject) (SetWorkspaceMemberResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
 		return SetWorkspaceMember401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
+	}
+	if err := h.authorizeMemberWrite(ctx, workspaceIDFromRequest(request.Id)); err != nil {
+		switch {
+		case errors.Is(err, authz.ErrNotFound):
+			return SetWorkspaceMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+		case errors.Is(err, authz.ErrForbidden):
+			return SetWorkspaceMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace admin may change members"}}, nil
+		default:
+			return nil, err
+		}
 	}
 	role := ""
 	if request.Body != nil {
@@ -180,6 +203,16 @@ func (h *WorkspaceHandlers) SetWorkspaceMember(ctx context.Context, request SetW
 func (h *WorkspaceHandlers) AddWorkspaceMember(ctx context.Context, request AddWorkspaceMemberRequestObject) (AddWorkspaceMemberResponseObject, error) {
 	if _, err := authz.PrincipalFromContext(ctx); err != nil {
 		return AddWorkspaceMember401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
+	}
+	if err := h.authorizeMemberWrite(ctx, workspaceIDFromRequest(request.Id)); err != nil {
+		switch {
+		case errors.Is(err, authz.ErrNotFound):
+			return AddWorkspaceMember404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "workspace not found"}}, nil
+		case errors.Is(err, authz.ErrForbidden):
+			return AddWorkspaceMember403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only a workspace admin may change members"}}, nil
+		default:
+			return nil, err
+		}
 	}
 	if request.Body == nil {
 		return AddWorkspaceMember422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "email and role are required")}, nil
