@@ -1,6 +1,7 @@
 import { m } from '$lib/paraglide/messages';
 import type { components } from '$lib/api/schema';
 import { apiErrorMessage, client } from '$lib/api/client';
+import { describeError } from '$lib/errors/catalog';
 import { streamEvents, type SseFrame } from './sse';
 
 type Conversation = components['schemas']['AssistantConversation'];
@@ -128,26 +129,35 @@ class AssistantStore {
 	}
 
 	async send(text: string): Promise<boolean> {
+		this.state = 'running';
+		this.streamingText = '';
+		this.error = '';
+		let conversationId: string | null = null;
+		let openRun = this.openRun;
 		try {
 			if (!this.active) await this.create();
-			if (!this.active || !(await this.ensureConnected())) return false;
-			this.state = 'running';
-			this.streamingText = '';
-			this.error = '';
+			conversationId = this.active?.id ?? null;
+			openRun = this.openRun;
+			if (!conversationId || !(await this.ensureConnected())) return false;
+			if (this.active?.id !== conversationId || this.openRun !== openRun) return false;
 			const { error } = await client.POST('/assistant/conversations/{id}/messages', {
-				params: { path: { id: this.active.id } },
+				params: { path: { id: conversationId } },
 				body: { text }
 			});
 			if (error) {
-				this.state = 'idle';
-				this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_send_the_message());
+				if (this.active?.id === conversationId && this.openRun === openRun) {
+					this.state = 'idle';
+					this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_send_the_message());
+				}
 				return false;
 			}
 			return true;
 		} catch (error) {
-			this.state = 'idle';
-			this.streamingText = '';
-			this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_send_the_message());
+			if (this.active?.id === conversationId && this.openRun === openRun) {
+				this.state = 'idle';
+				this.streamingText = '';
+				this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_send_the_message());
+			}
 			return false;
 		}
 	}
@@ -175,6 +185,7 @@ class AssistantStore {
 			this.error = apiErrorMessage(error, m.assistant_storesvelte_could_not_load_conversations());
 			return;
 		}
+		if (removingActive && this.active?.id !== id) return;
 		if (removingActive) this.stop();
 		this.conversations = this.conversations.filter((c) => c.id !== id);
 		if (removingActive) {
@@ -238,10 +249,7 @@ class AssistantStore {
 				if (!controller.signal.aborted) {
 					this.state = 'idle';
 					this.streamingText = '';
-					this.error =
-						error instanceof Error
-							? error.message
-							: m.assistant_storesvelte_the_assistant_stream_disconnected();
+					this.error = describeError(error).title;
 				}
 			}
 		);
