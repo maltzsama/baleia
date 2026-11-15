@@ -18,6 +18,7 @@
 
 	--color-primary: #2563eb;
 	--color-primary-hover: #1d4ed8;
+	--color-focus-ring: rgba(37, 99, 235, 0.12);
 	--color-brand-dark: #0f172a;
 
 	--color-success: #047857;
@@ -66,6 +67,7 @@
 	--color-border-hover: #484f58;
 	--color-text-main: #e6edf3;
 	--color-text-muted: #7d8590;
+	--color-focus-ring: rgba(59, 130, 246, 0.2);
 	/* The light danger is too dark on dark panels; this one is 4.6:1 there. */
 	--color-danger: #ef4444;
 

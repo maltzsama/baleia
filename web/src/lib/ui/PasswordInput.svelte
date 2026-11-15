@@ -39,7 +39,7 @@
 	const errorId = $derived(`${inputId}-error`);
 
 	const base =
-		'w-full rounded-md border bg-bg-toolbar px-2.5 text-xs text-text-main outline-none transition-shadow duration-150 placeholder:text-text-muted focus:border-primary focus:bg-bg-panel focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)] disabled:cursor-not-allowed disabled:opacity-60';
+		'w-full rounded-md border bg-bg-toolbar px-2.5 text-xs text-text-main outline-none transition-shadow duration-150 placeholder:text-text-muted focus:border-primary focus:bg-bg-panel focus:shadow-[0_0_0_3px_var(--color-focus-ring)] disabled:cursor-not-allowed disabled:opacity-60';
 
 	// The toggle is a real button and never submits the form. Focus returns to
 	// the field so typing continues where the user left off (FD11).
