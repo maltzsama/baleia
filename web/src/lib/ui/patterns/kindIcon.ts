@@ -30,6 +30,7 @@ import {
 	siSqlite,
 	siTrino
 } from 'simple-icons';
+import dremioMark from './icons/dremio.svg';
 import exasolMark from './icons/exasol.svg';
 import flightsqlMark from './icons/flightsql.svg';
 import glueMark from './icons/glue.svg';
@@ -40,6 +41,7 @@ import nessieMark from './icons/nessie.svg';
 import oracleMark from './icons/oracle.svg';
 import pinotMark from './icons/pinot.svg';
 import polarisMark from './icons/polaris.svg';
+import prestoMark from './icons/presto.svg';
 import redshiftMark from './icons/redshift.svg';
 import sqlserverMark from './icons/sqlserver.svg';
 import starrocksMark from './icons/starrocks.svg';
@@ -169,6 +171,8 @@ const appearances: Record<string, KindAppearance> = {
 	elasticsearch: simpleMark(siElasticsearch, 'text-teal-700', 'database'),
 	opensearch: simpleMark(siOpensearch, 'text-blue-700', 'database'),
 	druid: simpleMark(siApachedruid, 'text-cyan-500', 'engine'),
+	presto: { color: 'text-blue-600', glyph: 'engine', brand: prestoMark },
+	dremio: { color: 'text-cyan-600', glyph: 'engine', brand: dremioMark },
 	pinot: { color: 'text-purple-700', glyph: 'engine', brand: pinotMark, contrast: true },
 	duckdb: simpleMark(siDuckdb, 'text-yellow-500', 'database'),
 	ignite: { color: 'text-red-600', glyph: 'engine', brand: igniteMark },
