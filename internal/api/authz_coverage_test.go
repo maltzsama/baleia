@@ -380,7 +380,7 @@ var operationAccess = map[string]access{
 	"RevokeCatalogAccess":        checked("Workspace", "Catalog"),
 	"ListCatalogGrantItems":      checked("PrincipalFromContext", "Workspace", "catalogOwner"),
 	"CreateCatalogGrant":         checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner"),
-	"ApproveCatalogGrant":        checked("PrincipalFromContext", "GetCatalogGrantRequest", "workspaceAdmin", "catalogOwner"),
+	"ApproveCatalogGrant":        checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner", "GetCatalogGrantRequest"),
 	"DeleteCatalogGrant":         checked("PrincipalFromContext", "workspaceAdmin", "catalogOwner"),
 	"ListGrantableWorkspaces":    checked("PrincipalFromContext", "catalogOwner"),
 	"ListRequestableCatalogs":    checked("PrincipalFromContext", "workspaceAdmin"),
