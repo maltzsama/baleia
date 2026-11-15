@@ -91,7 +91,7 @@
 					</div>
 					<a
 						href={resolve('/login')}
-						class="w-full h-10 rounded-[7px] text-[13px] font-semibold flex items-center justify-center bg-primary text-white no-underline hover:bg-primary-hover"
+						class="w-full h-10 rounded-[7px] text-[13px] font-semibold flex items-center justify-center bg-primary-solid text-white no-underline hover:bg-primary-solid-hover"
 					>
 						{m.reset_password_request_a_new_link()}
 					</a>
@@ -160,8 +160,8 @@
 					<button
 						onclick={submit}
 						disabled={busy}
-						class="w-full h-10 border-none rounded-[7px] text-[13px] font-semibold cursor-pointer transition-colors duration-150 flex items-center justify-center gap-[7px] bg-primary text-white mb-2.5
-							hover:enabled:bg-primary-hover disabled:bg-blue-300 disabled:cursor-not-allowed"
+						class="w-full h-10 border-none rounded-[7px] text-[13px] font-semibold cursor-pointer transition-colors duration-150 flex items-center justify-center gap-[7px] bg-primary-solid text-white mb-2.5
+							hover:enabled:bg-primary-solid-hover disabled:bg-primary-solid/40 disabled:cursor-not-allowed"
 					>
 						{busy ? m.reset_password_updating() : m.reset_password_update_password()}
 					</button>

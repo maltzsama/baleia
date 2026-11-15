@@ -47,7 +47,7 @@
 <!-- Skips the repeated navigation (#466); visible when focused. -->
 <a
 	href="#main-content"
-	class="sr-only z-[200] rounded-md bg-primary px-3 py-2 text-[13px] font-semibold text-white focus:not-sr-only focus:fixed focus:left-2 focus:top-2"
+	class="sr-only z-[200] rounded-md bg-primary-solid px-3 py-2 text-[13px] font-semibold text-white focus:not-sr-only focus:fixed focus:left-2 focus:top-2"
 >
 	{m.layout_skip_to_content()}
 </a>

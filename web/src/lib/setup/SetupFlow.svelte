@@ -29,7 +29,7 @@
 	];
 
 	const inputBase =
-		'w-full h-10 bg-bg-app border border-border rounded-[7px] px-3 text-[13px] text-text-main outline-none transition-all duration-150 placeholder:text-slate-600 dark:text-slate-300 focus:border-primary focus:shadow-[0_0_0_3px_rgba(59,130,246,.08)] focus:bg-bg-panel';
+		'w-full h-10 bg-bg-app border border-border rounded-[7px] px-3 text-[13px] text-text-main outline-none transition-all duration-150 placeholder:text-slate-600 dark:text-slate-300 focus:border-primary focus:shadow-[0_0_0_3px_var(--color-focus-ring)] focus:bg-bg-panel';
 
 	function checkStrength(val: string) {
 		let s = 0;
@@ -76,18 +76,18 @@
 	<div
 		class="w-[280px] shrink-0 bg-brand-dark flex flex-col p-10 relative overflow-hidden
 		before:content-[''] before:absolute before:inset-0
-		before:[background-image:linear-gradient(rgba(59,130,246,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,.05)_1px,transparent_1px)]
+		before:[background-image:linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)]
 		before:bg-[length:32px_32px]
 		after:content-[''] after:absolute after:w-[280px] after:h-[280px] after:rounded-full
-		after:[background:radial-gradient(circle,rgba(59,130,246,.14)_0%,transparent_70%)]
+		after:[background:radial-gradient(circle,rgba(255,235,135,.14)_0%,transparent_70%)]
 		after:-bottom-20 after:-left-[60px] after:pointer-events-none"
 	>
 		<div class="relative z-[1] flex flex-col h-full">
 			<div class="flex items-center gap-2.5 mb-12">
 				<div
-					class="w-8 h-8 bg-primary/15 border border-primary/30 rounded-lg flex items-center justify-center"
+					class="w-8 h-8 bg-white/10 border border-white/15 rounded-lg flex items-center justify-center"
 				>
-					<LayersIcon class="w-4 h-4 stroke-primary" />
+					<LayersIcon class="w-4 h-4 stroke-[#ffeb87]" />
 				</div>
 				<span class="text-base font-bold text-slate-100 tracking-[-.3px]">{m.common_baleia()}</span>
 			</div>
@@ -103,7 +103,7 @@
 							{done
 								? 'bg-green-500 border-green-500 text-white'
 								: active
-									? 'bg-primary border-primary text-white'
+									? 'bg-primary-solid border-primary-solid text-white'
 									: 'border-slate-800 text-slate-600'}"
 						>
 							{#if done}
@@ -237,7 +237,7 @@
 						<button
 							type="submit"
 							disabled={busy}
-							class="h-10 px-5 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center gap-[7px] transition-colors duration-150 border-none bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
+							class="h-10 px-5 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center gap-[7px] transition-colors duration-150 border-none bg-primary-solid text-white hover:bg-primary-solid-hover disabled:opacity-50"
 						>
 							{busy ? m.setup_creating() : m.setup_continue()}
 							<ChevronRightIcon class="w-[13px] h-[13px]" />
@@ -284,7 +284,7 @@
 					</div>
 					<button
 						onclick={() => (window.location.href = '/sql')}
-						class="w-full h-10 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center justify-center gap-[7px] transition-colors duration-150 border-none bg-primary text-white hover:bg-primary-hover"
+						class="w-full h-10 rounded-[7px] text-[13px] font-semibold cursor-pointer flex items-center justify-center gap-[7px] transition-colors duration-150 border-none bg-primary-solid text-white hover:bg-primary-solid-hover"
 					>
 						<TerminalIcon class="w-[13px] h-[13px]" />
 						{m.setup_open_editor()}

@@ -111,7 +111,7 @@
 							class="rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-colors {listValue(
 								field.key
 							).includes(option.value)
-								? 'border-primary bg-primary text-white'
+								? 'border-primary-solid bg-primary-solid text-white'
 								: 'border-border text-text-muted hover:border-border-hover'}"
 							onclick={() => toggleList(field.key, option.value)}
 						>

@@ -80,7 +80,7 @@
 						<button
 							type="button"
 							class="rounded border px-1.5 py-0.5 text-[10px] {active
-								? 'border-primary bg-primary text-white'
+								? 'border-primary-solid bg-primary-solid text-white'
 								: 'border-border hover:bg-bg-toolbar'}"
 							aria-pressed={active}
 							onclick={() => onpickgrain(field, grain)}

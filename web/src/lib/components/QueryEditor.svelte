@@ -1210,7 +1210,7 @@
 			class="flex items-center gap-[5px] py-1 px-2.5 text-xs font-medium rounded-[5px] cursor-pointer whitespace-nowrap border {saveState ===
 			'saved'
 				? 'border-border bg-transparent text-primary opacity-60 hover:opacity-100 hover:bg-border'
-				: 'border-primary bg-primary text-white hover:bg-primary-hover'}"
+				: 'border-primary-solid bg-primary-solid text-white hover:bg-primary-solid-hover'}"
 		>
 			{#if activeTab.readOnly}
 				{m.components_queryeditor_save_a_copy()}

@@ -350,7 +350,7 @@
 				}
 			}}
 			class="w-8 h-[18px] rounded-full cursor-pointer relative transition-colors duration-200 shrink-0
-				{dark ? 'bg-primary' : 'bg-border'}"
+				{dark ? 'bg-primary-solid' : 'bg-border-hover'}"
 		>
 			<span
 				class="absolute w-[14px] h-[14px] bg-white rounded-full top-[2px] left-[2px] shadow-sm transition-transform duration-200
