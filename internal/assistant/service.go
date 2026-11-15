@@ -215,19 +215,32 @@ func (s *Service) Claim(ctx context.Context, userID, id db.UUID, owner string) (
 
 // Release returns a conversation to idle after a turn. turnOwner is the token
 // the claim returned; a stale runner that lost the conversation cannot release
-// the reclaimed turn.
-func (s *Service) Release(ctx context.Context, id db.UUID, turnOwner string) error {
+// the reclaimed turn. It reports whether the release happened; a pending
+// interrupt keeps the turn out of idle.
+func (s *Service) Release(ctx context.Context, id db.UUID, turnOwner string) (bool, error) {
 	return s.store.ReleaseConversation(ctx, id, turnOwner)
 }
 
-// Interrupt marks a conversation interrupted (cancel, crash recovery).
-func (s *Service) Interrupt(ctx context.Context, id db.UUID) error {
-	return s.store.SetConversationInterrupted(ctx, id)
+// RequestInterrupt persists the cancellation intent for the caller's turn. It
+// reports whether a running turn owned by turnOwner was found.
+func (s *Service) RequestInterrupt(ctx context.Context, id db.UUID, turnOwner string) (bool, error) {
+	return s.store.RequestInterrupt(ctx, id, turnOwner)
 }
 
-// Heartbeat refreshes the turn lease.
-func (s *Service) Heartbeat(ctx context.Context, id db.UUID) error {
-	return s.store.HeartbeatConversation(ctx, id)
+// InterruptRequested reports whether the caller's turn has a pending interrupt.
+func (s *Service) InterruptRequested(ctx context.Context, id db.UUID, turnOwner string) (bool, error) {
+	return s.store.InterruptRequested(ctx, id, turnOwner)
+}
+
+// Interrupt performs the conditional terminal interrupted transition (cancel,
+// crash recovery). It reports whether this caller won it.
+func (s *Service) Interrupt(ctx context.Context, id db.UUID, turnOwner string) (bool, error) {
+	return s.store.InterruptConversation(ctx, id, turnOwner)
+}
+
+// Heartbeat refreshes the turn lease; the token must still own the turn.
+func (s *Service) Heartbeat(ctx context.Context, id db.UUID, turnOwner string) error {
+	return s.store.HeartbeatConversation(ctx, id, turnOwner)
 }
 
 // InterruptStale recovers turns whose replica stopped heartbeating.

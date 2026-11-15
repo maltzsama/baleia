@@ -32,7 +32,8 @@ the user and do not retry the same call. Keep answers short and cite the tools
 you used.`
 
 // Event is one SSE frame. Persisted messages use Type "message"; deltas use
-// Type "delta" and are never persisted.
+// Type "delta" and are never persisted. A "cancel" carries the turn owner it
+// targets, so a stale request cannot stop a newer turn on the same channel.
 type Event struct {
 	Type      string
 	Seq       int32
@@ -40,6 +41,7 @@ type Event struct {
 	Content   []byte
 	CreatedAt time.Time
 	Delta     string
+	TurnOwner string
 }
 
 // Hub fans a turn out to SSE subscribers. Without a shared bus it is in-process
@@ -148,6 +150,17 @@ func channel(id [16]byte) string {
 	return "assistant:" + uuid.UUID(id).String()
 }
 
+// heartbeatEvery is the lease refresh cadence. The same tick also polls the
+// durable interrupt flag, so a replica that missed the realtime cancel event
+// still stops its provider within this interval (#1045).
+const heartbeatEvery = 10 * time.Second
+
+// runningTurn is the in-process handle of a turn this replica owns.
+type runningTurn struct {
+	owner  string
+	cancel context.CancelFunc
+}
+
 // Runner owns one assistant turn at a time per conversation.
 type Runner struct {
 	logger   *slog.Logger
@@ -157,7 +170,7 @@ type Runner struct {
 	hub      *Hub
 	instance string
 	mu       sync.Mutex
-	cancels  map[[16]byte]context.CancelFunc
+	cancels  map[[16]byte]runningTurn
 }
 
 // NewRunner builds the turn engine.
@@ -167,7 +180,7 @@ func NewRunner(logger *slog.Logger, svc *Service, provider llm.Provider, tools T
 		logger: cmp.Or(logger, slog.New(slog.DiscardHandler)),
 		svc:    svc, provider: provider, tools: tools, hub: NewHub(),
 		instance: fmt.Sprintf("%s-%d", host, os.Getpid()),
-		cancels:  make(map[[16]byte]context.CancelFunc),
+		cancels:  make(map[[16]byte]runningTurn),
 	}
 }
 
@@ -212,7 +225,7 @@ func (r *Runner) Start(ctx context.Context, userID, id db.UUID, text string) (in
 	msg, err := r.append(ctx, id, "user", map[string]any{"text": text}, nil, nil)
 	if err != nil {
 		// Best effort: a claim left behind is freed by RunSweeper.
-		_ = r.svc.Release(context.WithoutCancel(ctx), id, turnOwner)
+		_, _ = r.svc.Release(context.WithoutCancel(ctx), id, turnOwner)
 		return 0, err
 	}
 	if claimed.Title == "" {
@@ -226,52 +239,90 @@ func (r *Runner) Start(ctx context.Context, userID, id db.UUID, text string) (in
 		time.Duration(settings.MaxTurnSeconds)*time.Second,
 	)
 	r.mu.Lock()
-	r.cancels[id.Bytes] = cancel
+	r.cancels[id.Bytes] = runningTurn{owner: turnOwner, cancel: cancel}
 	r.mu.Unlock()
 	cancelEvents, unsubscribe, subscriptionReady := r.hub.Subscribe(turnCtx, id.Bytes)
 	go func() {
+		interrupted := false
 		defer func() {
 			unsubscribe()
 			cancel()
 			r.mu.Lock()
 			delete(r.cancels, id.Bytes)
 			r.mu.Unlock()
-			// Best effort: a claim left behind is freed by RunSweeper.
-			_ = r.svc.Release(context.WithoutCancel(turnCtx), id, turnOwner)
+			r.finalize(context.WithoutCancel(turnCtx), id, turnOwner, interrupted)
 		}()
-		go func() {
-			select {
-			case <-subscriptionReady:
-			case <-turnCtx.Done():
-				return
-			}
-			for {
-				select {
-				case ev := <-cancelEvents:
-					if ev.Type == "cancel" {
-						cancel()
-						return
-					}
-				case <-turnCtx.Done():
-					return
-				}
-			}
-		}()
-		r.run(turnCtx, claimed, settings)
+		go r.watch(turnCtx, id, turnOwner, cancel, cancelEvents, subscriptionReady)
+		interrupted = r.run(turnCtx, claimed, settings)
 	}()
 	return msg.Seq, nil
 }
 
-// Cancel stops the running turn, if any.
-func (r *Runner) Cancel(ctx context.Context, id db.UUID) bool {
-	r.hub.Publish(ctx, id.Bytes, Event{Type: "cancel"})
-	r.mu.Lock()
-	cancel, ok := r.cancels[id.Bytes]
-	r.mu.Unlock()
-	if ok {
-		cancel()
+// Cancel requests a durable interrupt for the caller's turn and, as a fast
+// path, broadcasts it and cancels it locally when this replica owns it (#1045).
+// The persisted request survives a missed event, a restart or another replica.
+func (r *Runner) Cancel(ctx context.Context, id db.UUID, turnOwner string) bool {
+	if turnOwner != "" {
+		_, _ = r.svc.RequestInterrupt(ctx, id, turnOwner)
 	}
-	return ok
+	r.hub.Publish(ctx, id.Bytes, Event{Type: "cancel", TurnOwner: turnOwner})
+	r.mu.Lock()
+	turn, ok := r.cancels[id.Bytes]
+	r.mu.Unlock()
+	if ok && turn.owner == turnOwner {
+		turn.cancel()
+		return true
+	}
+	return false
+}
+
+// watch keeps the turn's lease fresh and stops it when an interrupt is
+// requested, either through the realtime cancel event or the durable flag. The
+// lease starts immediately: it must not depend on the bus being acknowledged,
+// or a slow bus would let the sweeper reclaim a live turn.
+func (r *Runner) watch(ctx context.Context, id db.UUID, turnOwner string, cancel context.CancelFunc, events <-chan Event, ready <-chan struct{}) {
+	ticker := time.NewTicker(heartbeatEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ready:
+			// Acknowledge the bus once, then stop selecting on the closed
+			// channel; events also carry sequence-free deltas that must not spin.
+			ready = nil
+		case ev := <-events:
+			// Only the turn the request names may be stopped: a stale cancel
+			// must not kill a newer turn on the same conversation channel.
+			if ev.Type == "cancel" && ev.TurnOwner == turnOwner {
+				cancel()
+				return
+			}
+		case <-ticker.C:
+			// A missed beat is retried on the next tick.
+			_ = r.svc.Heartbeat(ctx, id, turnOwner)
+			if requested, err := r.svc.InterruptRequested(ctx, id, turnOwner); err == nil && requested {
+				cancel()
+				return
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// finalize lands the turn in exactly one terminal state. A pending interrupt
+// owns it; otherwise the release returns the conversation to idle. Only the
+// caller that wins the conditional interrupt transition emits the terminal
+// notice, so cancel, completion and the sweeper never produce two (#1045).
+func (r *Runner) finalize(ctx context.Context, id db.UUID, turnOwner string, interrupted bool) {
+	if !interrupted {
+		if released, err := r.svc.Release(ctx, id, turnOwner); err == nil && released {
+			return
+		}
+	}
+	// Interrupted, or an interrupt was requested while the turn was finishing.
+	if won, err := r.svc.Interrupt(ctx, id, turnOwner); err == nil && won {
+		r.notice(ctx, id, "interrupted", "The turn was interrupted and can be retried.")
+	}
 }
 
 // Sweep marks turns whose replica stopped heartbeating as interrupted.
@@ -299,7 +350,7 @@ func (r *Runner) RunSweeper(ctx context.Context, interval time.Duration) {
 	}
 }
 
-func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation, settings adb.AssistantSetting) {
+func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation, settings adb.AssistantSetting) (interrupted bool) {
 	// One span per turn (#380): the provider calls inside it are HTTP client
 	// spans. Neither the prompt nor the reply is an attribute.
 	var used int
@@ -312,12 +363,12 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 	over, err := r.svc.OverBudget(ctx, conversation.UserID, settings.DailyTokenBudgetPerUser)
 	if err != nil || over {
 		r.notice(ctx, conversation.ID, "budget_exhausted", "The daily token budget is exhausted.")
-		return
+		return false
 	}
 
 	history, err := r.svc.ListMessages(ctx, conversation.ID, 0, 200)
 	if err != nil {
-		return
+		return false
 	}
 	req := llm.Request{
 		System:    systemPrompt,
@@ -330,28 +381,24 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 	r.mu.Unlock()
 	if provider == nil {
 		r.notice(context.Background(), conversation.ID, "provider_error", "The assistant provider is not configured.")
-		return
+		return false
 	}
 	toolCtx := auth.WithAgentPrincipal(ctx, uuidString(conversation.UserID), uuidString(conversation.AgentID))
 	for {
 		if ctx.Err() != nil {
-			r.notice(context.Background(), conversation.ID, "interrupted", "The turn was interrupted and can be retried.")
-			return
+			// The terminal notice is the finalizer's; it owns the single event.
+			return true
 		}
-		heartbeatStop := make(chan struct{})
-		go r.heartbeat(ctx, conversation.ID, heartbeatStop)
 		resp, err := provider.Stream(ctx, req, func(delta string) {
 			r.hub.Publish(ctx, conversation.ID.Bytes, Event{Type: "delta", Delta: delta})
 		})
-		close(heartbeatStop)
 		if err != nil {
 			obs.FailSpan(span, err, "provider request failed")
 			if ctx.Err() != nil {
-				r.notice(context.Background(), conversation.ID, "interrupted", "The turn was interrupted and can be retried.")
-			} else {
-				r.notice(context.Background(), conversation.ID, "provider_error", "The provider request failed.")
+				return true
 			}
-			return
+			r.notice(ctx, conversation.ID, "provider_error", "The provider request failed.")
+			return false
 		}
 		var in, out *int32
 		if resp.InputTokens > 0 {
@@ -368,11 +415,11 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 			}
 		}
 		if len(resp.ToolCalls) == 0 {
-			return
+			return false
 		}
 		if used >= int(settings.MaxToolCallsPerTurn) {
 			r.notice(context.Background(), conversation.ID, "limit_reached", "The turn reached the tool-call limit.")
-			return
+			return false
 		}
 		req.Messages = append(req.Messages, llm.Message{Role: "assistant", Content: resp.Text, ToolCalls: resp.ToolCalls})
 		for _, call := range resp.ToolCalls {
@@ -404,22 +451,6 @@ func (r *Runner) run(ctx context.Context, conversation adb.AssistantConversation
 			req.Messages = append(req.Messages, llm.Message{
 				Role: "tool", ToolCallID: call.ID, Content: mustJSON(view),
 			})
-		}
-	}
-}
-
-func (r *Runner) heartbeat(ctx context.Context, id db.UUID, stop <-chan struct{}) {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-stop:
-			return
-		case <-ticker.C:
-			// A missed beat is retried on the next tick.
-			_ = r.svc.Heartbeat(ctx, id)
 		}
 	}
 }
