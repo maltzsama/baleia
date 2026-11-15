@@ -40,13 +40,30 @@ func (h *core) catalogOwner(ctx context.Context, p authz.Principal, catID db.UUI
 }
 
 // activeItem builds the active-grant item for a (workspace, catalog) pair.
-func (h *core) activeItem(ctx context.Context, wsID, catID db.UUID) CatalogGrantItem {
+func (h *core) activeGrantActions(ctx context.Context, p authz.Principal, wsID, catID db.UUID) []string {
+	if h.workspaceAdmin(ctx, p, wsID) || h.catalogOwner(ctx, p, catID) {
+		return []string{"unlink"}
+	}
+	return nil
+}
+
+func (h *core) pendingGrantActions(ctx context.Context, p authz.Principal, wsID, catID db.UUID, initiatedBySide string) []string {
+	if initiatedBySide == "catalog" && h.workspaceAdmin(ctx, p, wsID) {
+		return []string{"approve", "decline"}
+	}
+	if initiatedBySide != "catalog" && h.catalogOwner(ctx, p, catID) {
+		return []string{"approve", "decline"}
+	}
+	return nil
+}
+
+func (h *core) activeItem(ctx context.Context, p authz.Principal, wsID, catID db.UUID) CatalogGrantItem {
 	store := h.catalogGrants()
 	item := CatalogGrantItem{
 		WorkspaceId:    openapi_types.UUID(wsID.Bytes),
 		CatalogId:      openapi_types.UUID(catID.Bytes),
 		State:          CatalogGrantItemStateActive,
-		AllowedActions: actionsPtr("unlink"),
+		AllowedActions: actionsPtr(h.activeGrantActions(ctx, p, wsID, catID)...),
 	}
 	if cat, err := store.GetCatalogByID(ctx, catID); err == nil {
 		item.CatalogName = grantStr(cat.Name)
@@ -90,7 +107,7 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 				CatalogId:      openapi_types.UUID(g.CatalogID.Bytes),
 				State:          CatalogGrantItemStateActive,
 				CatalogName:    grantStr(g.CatalogName),
-				AllowedActions: actionsPtr("unlink"),
+				AllowedActions: actionsPtr(h.activeGrantActions(ctx, p, wsID, g.CatalogID)...),
 			}
 			if g.GrantedAt.Valid {
 				t := g.GrantedAt.Time
@@ -103,7 +120,8 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 			return nil, err
 		}
 		for _, r := range pending {
-			out = append(out, requestItem(r.CatalogID, r.InitiatedBySide, r.RequestedBy, r.RequestedAt, r.CatalogName, r.EngineCatalogName, r.ConnectionName))
+			actions := h.pendingGrantActions(ctx, p, wsID, r.CatalogID, r.InitiatedBySide)
+			out = append(out, requestItem(r.CatalogID, r.InitiatedBySide, r.RequestedBy, r.RequestedAt, r.CatalogName, r.EngineCatalogName, r.ConnectionName, actions))
 		}
 	} else {
 		catID := db.UUID{Bytes: *params.CatalogId, Valid: true}
@@ -120,7 +138,7 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 				CatalogId:      openapi_types.UUID(catID.Bytes),
 				State:          CatalogGrantItemStateActive,
 				WorkspaceName:  grantStr(g.WorkspaceName),
-				AllowedActions: actionsPtr("unlink"),
+				AllowedActions: actionsPtr(h.activeGrantActions(ctx, p, g.WorkspaceID, catID)...),
 			}
 			if g.GrantedAt.Valid {
 				t := g.GrantedAt.Time
@@ -133,7 +151,8 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 			return nil, err
 		}
 		for _, r := range pending {
-			out = append(out, requestItem(r.CatalogID, r.InitiatedBySide, r.RequestedBy, r.RequestedAt, "", "", ""))
+			actions := h.pendingGrantActions(ctx, p, r.WorkspaceID, catID, r.InitiatedBySide)
+			out = append(out, requestItem(r.CatalogID, r.InitiatedBySide, r.RequestedBy, r.RequestedAt, "", "", "", actions))
 			last := &out[len(out)-1]
 			last.WorkspaceName = grantStr(r.WorkspaceName)
 		}
@@ -143,13 +162,13 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 
 // requestItem builds a pending-request item (the workspace side fills the
 // catalog/connection names).
-func requestItem(catID db.UUID, side string, requestedBy db.UUID, requestedAt db.Timestamptz, catalogName, engineName, connName string) CatalogGrantItem {
+func requestItem(catID db.UUID, side string, requestedBy db.UUID, requestedAt db.Timestamptz, catalogName, engineName, connName string, actions []string) CatalogGrantItem {
 	s := CatalogGrantItemInitiatedBySide(side)
 	item := CatalogGrantItem{
 		CatalogId:         openapi_types.UUID(catID.Bytes),
 		State:             CatalogGrantItemStatePending,
 		InitiatedBySide:   &s,
-		AllowedActions:    actionsPtr("approve", "decline"),
+		AllowedActions:    actionsPtr(actions...),
 		CatalogName:       grantStr(catalogName),
 		EngineCatalogName: nilOrStr(engineName),
 		ConnectionName:    nilOrStr(connName),
@@ -194,7 +213,7 @@ func (h *CatalogHandlers) CreateCatalogGrant(ctx context.Context, request Create
 		}
 		h.catalogCache.Clear()
 		h.audited(ctx, ev.Allowed())
-		return CreateCatalogGrant200JSONResponse(h.activeItem(ctx, wsID, catID)), nil
+		return CreateCatalogGrant200JSONResponse(h.activeItem(ctx, p, wsID, catID)), nil
 	}
 
 	side := "workspace"
@@ -214,7 +233,7 @@ func (h *CatalogHandlers) CreateCatalogGrant(ctx context.Context, request Create
 		return nil, err
 	}
 	h.audited(ctx, ev.Allowed())
-	return CreateCatalogGrant200JSONResponse(requestItem(catID, req.InitiatedBySide, req.RequestedBy, req.RequestedAt, "", "", "")), nil
+	return CreateCatalogGrant200JSONResponse(requestItem(catID, req.InitiatedBySide, req.RequestedBy, req.RequestedAt, "", "", "", h.pendingGrantActions(ctx, p, wsID, catID, req.InitiatedBySide))), nil
 }
 
 // ApproveCatalogGrant — POST /catalog-grants/{workspace_id}/{catalog_id}/approve.
@@ -266,7 +285,7 @@ func (h *CatalogHandlers) ApproveCatalogGrant(ctx context.Context, request Appro
 	}
 	h.catalogCache.Clear()
 	h.audited(ctx, ev.Allowed())
-	return ApproveCatalogGrant200JSONResponse(h.activeItem(ctx, wsID, catID)), nil
+	return ApproveCatalogGrant200JSONResponse(h.activeItem(ctx, p, wsID, catID)), nil
 }
 
 // DeleteCatalogGrant — DELETE /catalog-grants/{workspace_id}/{catalog_id}.
