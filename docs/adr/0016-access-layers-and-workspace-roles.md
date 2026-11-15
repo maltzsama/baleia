@@ -118,6 +118,21 @@ particular:
 When adding a protected operation, update the coverage entry and add positive
 and negative behavioral tests for its resource family before merging.
 
+### Contributor checklist
+
+For every new protected endpoint:
+
+1. Define the minimum global, workspace and space role, plus ownership scope.
+2. Run the backend authorization check before loading or mutating sensitive data.
+3. Add positive and negative direct-request tests, including a foreign-resource case where relevant.
+4. Add an `allowed_actions` or `global_actions` projection only after the backend check exists, and
+   test that stale or forged frontend state cannot authorize the request.
+5. Update the OpenAPI and closed error-code contract when the response changes.
+6. Verify that the frontend gates affordances with action predicates, never role strings.
+
+Run `make test-authz` locally. CI runs the same focused suite as a separate regression gate in
+addition to the full test suite.
+
 ## Alternatives considered
 
 - **Space roles may raise the workspace role** (as before). Rejected: a space entry would bypass the
