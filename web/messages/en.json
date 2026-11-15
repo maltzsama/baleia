@@ -378,6 +378,7 @@
 	"common_password": "Password",
 	"components_header_personal": "Personal",
 	"settings_profile_personal_info": "Personal info",
+	"settings_profile_your_name_email_language_and_password": "Your name, email, language and password.",
 	"identity_identityproviderform_preview": "Preview",
 	"identity_identityproviderform_preview_mapping": "Preview mapping",
 	"components_tabledetail_preview": "Preview ·",
