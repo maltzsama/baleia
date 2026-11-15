@@ -125,30 +125,18 @@
   /* Monoton is wide on its own; the Plex-style negative tracking fought it. */
   letter-spacing: normal;
   text-wrap: balance;
-  font-size: 3.75rem;
+  font-size: clamp(2.6rem, 5.5vw + 1rem, 5rem);
   color: #fff;
-}
-
-@media (min-width: 640px) {
-  :is([data-theme='light'], [data-theme='dark']) .hero__title {
-    font-size: 6rem;
-  }
 }
 
 :is([data-theme='light'], [data-theme='dark']) .hero__subtitle {
   max-width: 48rem;
   margin-inline: auto;
-  margin-top: 1.5rem;
-  font-size: 1.5rem;
+  margin-top: 1rem;
+  font-size: clamp(1.1rem, 1.2vw + 0.8rem, 1.35rem);
   font-weight: 300;
-  line-height: 1.6;
+  line-height: 1.5;
   color: #fff;
-}
-
-@media (min-width: 640px) {
-  :is([data-theme='light'], [data-theme='dark']) .hero__subtitle {
-    font-size: 1.75rem;
-  }
 }
 
 .button {
