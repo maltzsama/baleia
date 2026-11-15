@@ -154,7 +154,7 @@
 			link.remove();
 			URL.revokeObjectURL(href);
 		} catch (e) {
-			toasts.error(m.components_resultspanel_export_failed() + errorMessage(e));
+			toasts.error(`${m.components_resultspanel_export_failed()} ${errorMessage(e)}`);
 		} finally {
 			exporting = false;
 		}

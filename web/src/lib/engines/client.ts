@@ -87,17 +87,21 @@ export function loadEngines(): Promise<Engine[]> {
 export function loadBindingFunctions(
 	workspaceId: string,
 	catalogId: string,
-	bindingId: string
+	bindingId: string,
+	options: { signal?: AbortSignal } = {}
 ): Promise<DialectFunction[] | null> {
 	const key = `${workspaceId}:${catalogId}:${bindingId}`;
-	const hit = bindingFunctionsCache.get(key);
-	if (hit && Date.now() - hit.at < BINDING_FUNCTIONS_TTL) return hit.promise;
+	if (!options.signal) {
+		const hit = bindingFunctionsCache.get(key);
+		if (hit && Date.now() - hit.at < BINDING_FUNCTIONS_TTL) return hit.promise;
+	}
 	const pending = client
 		.GET('/workspaces/{id}/metadata/functions', {
 			params: {
 				path: { id: workspaceId },
 				query: { catalog_id: catalogId, binding_id: bindingId || undefined }
-			}
+			},
+			signal: options.signal
 		})
 		.then(({ data, error }) => {
 			if (error || !data) {
@@ -110,7 +114,7 @@ export function loadBindingFunctions(
 			if (bindingFunctionsCache.get(key)?.promise === pending) bindingFunctionsCache.delete(key);
 			throw error;
 		});
-	bindingFunctionsCache.set(key, { at: Date.now(), promise: pending });
+	if (!options.signal) bindingFunctionsCache.set(key, { at: Date.now(), promise: pending });
 	return pending;
 }
 

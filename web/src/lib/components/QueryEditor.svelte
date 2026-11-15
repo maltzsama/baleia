@@ -92,6 +92,7 @@
 	// its status in another, and each tab keeps its own event stream.
 	let runs = $state<Record<string, RunState>>({});
 	let executingTabs = $state<Record<string, boolean>>({});
+	let rerunStartingTabs = $state<Record<string, boolean>>({});
 	// Not state: the streams never feed the template.
 	const streams: Record<string, ExecutionStream> = {};
 	const executing = $derived(!!executingTabs[activeTab.id]);
@@ -435,6 +436,7 @@
 	}
 
 	function onGlobalKeydown(event: KeyboardEvent) {
+		if (isTextTarget(event.target)) return;
 		const mod = event.metaKey || event.ctrlKey;
 		if (mod && event.key.toLowerCase() === 's') {
 			event.preventDefault();
@@ -459,7 +461,7 @@
 		} else if (event.altKey && event.key.toLowerCase() === 'w') {
 			event.preventDefault();
 			closeTab(activeIdx);
-		} else if (event.key === '?' && !isTextTarget(event.target)) {
+		} else if (event.key === '?') {
 			shortcutsOpen = true;
 		}
 	}
@@ -474,17 +476,23 @@
 
 	/** Inserts the SQL a metric renders to, for the active tab's binding. */
 	async function insertMetricSql(metricId: string) {
-		const tabBinding = editor.activeTab?.bindingId ?? '';
-		const { data: rendered } = await client.GET(
-			'/workspaces/{id}/semantic/metrics/{metric_id}/sql',
-			{
-				params: {
-					path: { id: workspaceId, metric_id: metricId },
-					query: tabBinding ? { binding_id: tabBinding } : {}
+		try {
+			const tabBinding = editor.activeTab?.bindingId ?? '';
+			const { data: rendered, error } = await client.GET(
+				'/workspaces/{id}/semantic/metrics/{metric_id}/sql',
+				{
+					params: {
+						path: { id: workspaceId, metric_id: metricId },
+						query: tabBinding ? { binding_id: tabBinding } : {}
+					}
 				}
-			}
-		);
-		if (rendered?.sql) editor.insert(rendered.sql);
+			);
+			if (error || !rendered?.sql)
+				throw new Error(apiErrorMessage(error, m.metrics_detail_could_not_load_the_metric()));
+			editor.insert(rendered.sql);
+		} catch (e) {
+			activeTab.errorMsg = errorMessage(e);
+		}
 	}
 
 	function registerPalette() {
@@ -815,6 +823,8 @@
 	async function submit(sqlText: string, opts?: { explain?: boolean }) {
 		const text = sqlText.trim();
 		if (!text) return;
+		const runningTab = tabs[activeIdx];
+		if (executingTabs[runningTab.id]) return;
 		// A run is not a completion choice: drop an open suggestion list.
 		if (editorView) closeCompletion(editorView);
 		const idx = activeIdx;
@@ -893,7 +903,7 @@
 
 	async function cancelExecution() {
 		const tab = activeTab;
-		if (!tab?.executionId) return;
+		if (!tab?.executionId || rerunStartingTabs[tab.id]) return;
 		try {
 			tab.statusText = m.components_queryeditor_cancelling();
 			const { error } = await client.POST('/workspaces/{id}/executions/{execution_id}/cancel', {
@@ -979,6 +989,10 @@
 	async function rerun(fromPosition: number) {
 		const tab = activeTab;
 		if (!tab?.executionId || !workspaceId) return;
+		if (executingTabs[tab.id]) return;
+		executingTabs[tab.id] = true;
+		rerunStartingTabs[tab.id] = true;
+		flushSql();
 		try {
 			const { data, error } = await client.POST('/workspaces/{id}/executions', {
 				params: { path: { id: workspaceId } },
@@ -994,12 +1008,14 @@
 			tab.results = [];
 			tab.errorMsg = '';
 			tab.statusText = m.components_queryeditor_running();
-			executingTabs[tab.id] = true;
 			editor.setExecution(tab.id, data.id);
 			runs[tab.id] = initialRunState(data.id);
 			connectWS(data.id, tab);
 		} catch (e) {
+			executingTabs[tab.id] = false;
 			tab.errorMsg = errorMessage(e);
+		} finally {
+			rerunStartingTabs[tab.id] = false;
 		}
 	}
 
@@ -1144,7 +1160,7 @@
 			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
 			<span class="text-[10px] font-normal">{formatKeys('Mod-Enter')}</span>
 		</button>
-		{#if executing && canCancel}
+		{#if executing && canCancel && !rerunStartingTabs[activeTab.id]}
 			<button
 				onclick={cancelExecution}
 				class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-red-600 border border-transparent bg-transparent hover:bg-border whitespace-nowrap"

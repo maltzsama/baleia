@@ -410,7 +410,7 @@ func (h *AgentHandlers) CancelAssistantTurn(ctx context.Context, request CancelA
 		return nil, err
 	}
 	if runner := h.assistantRunner.Load(); runner != nil {
-		runner.Cancel(id)
+		runner.Cancel(ctx, id)
 	}
 	return CancelAssistantTurn202Response{}, nil
 }
@@ -435,12 +435,32 @@ func (h *AgentHandlers) StreamAssistantConversation(ctx context.Context, request
 		}
 		return nil, err
 	}
+	var events <-chan assistant.Event
+	var unsubscribe func()
+	if runner := h.assistantRunner.Load(); runner != nil {
+		var ready <-chan struct{}
+		events, unsubscribe, ready = runner.Hub().Subscribe(ctx, id.Bytes)
+		timer := time.NewTimer(2 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-ready:
+		case <-ctx.Done():
+			unsubscribe()
+			return nil, ctx.Err()
+		case <-timer.C:
+			unsubscribe()
+			return nil, errors.New("assistant event subscription did not become ready")
+		}
+	}
 	after := int32(0)
 	if request.Params.AfterSeq != nil {
 		after = int32(*request.Params.AfterSeq)
 	}
 	rows, err := svc.ListMessages(ctx, id, after, 500)
 	if err != nil {
+		if unsubscribe != nil {
+			unsubscribe()
+		}
 		return nil, err
 	}
 	replay := make([]AssistantMessage, 0, len(rows))
@@ -448,9 +468,7 @@ func (h *AgentHandlers) StreamAssistantConversation(ctx context.Context, request
 		replay = append(replay, assistantMessageToPublic(h.logger, row))
 	}
 	stream := &assistantSSE{ctx: ctx, replay: replay, lastSeq: after, ping: time.NewTicker(15 * time.Second)}
-	if runner := h.assistantRunner.Load(); runner != nil {
-		stream.events, stream.unsubscribe = runner.Hub().Subscribe(id.Bytes)
-	}
+	stream.events, stream.unsubscribe = events, unsubscribe
 	return StreamAssistantConversation200TexteventStreamResponse{Body: stream}, nil
 }
 
@@ -552,6 +570,15 @@ func (h *AgentHandlers) DeleteAssistantConversation(ctx context.Context, request
 		return nil, err
 	}
 	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
+	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
+		if errors.Is(err, assistant.ErrNotFound) {
+			return DeleteAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
+		}
+		return nil, err
+	}
+	if runner := h.assistantRunner.Load(); runner != nil {
+		runner.Cancel(ctx, id)
+	}
 	if err := svc.DeleteConversation(ctx, p.UserID, id); err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
 			return DeleteAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil

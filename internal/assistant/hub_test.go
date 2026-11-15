@@ -16,10 +16,16 @@ func TestHubLocal(t *testing.T) {
 	t.Parallel()
 	h := assistant.NewHub()
 	id := [16]byte{1}
-	ch, unsub := h.Subscribe(id)
+	ctx := context.Background()
+	ch, unsub, ready := h.Subscribe(ctx, id)
 	defer unsub()
+	select {
+	case <-ready:
+	case <-time.After(time.Second):
+		t.Fatal("subscription did not become ready")
+	}
 
-	h.Publish(id, assistant.Event{Type: "delta", Delta: "hi"})
+	h.Publish(ctx, id, assistant.Event{Type: "delta", Delta: "hi"})
 	select {
 	case ev := <-ch:
 		if ev.Type != "delta" || ev.Delta != "hi" {
@@ -51,14 +57,16 @@ func TestHubAcrossReplicas(t *testing.T) {
 	b.SetBus(open())
 
 	id := [16]byte{0xaa}
-	ch, unsub := b.Subscribe(id)
+	ctx := context.Background()
+	ch, unsub, ready := b.Subscribe(ctx, id)
 	defer unsub()
+	_ = ready
 
 	// The bus subscription is acknowledged asynchronously, so retry until the
 	// delta crosses; a delta carries no sequence to dedupe it.
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		a.Publish(id, assistant.Event{Type: "delta", Delta: "from-a"})
+		a.Publish(ctx, id, assistant.Event{Type: "delta", Delta: "from-a"})
 		select {
 		case ev := <-ch:
 			if ev.Type != "delta" || ev.Delta != "from-a" {

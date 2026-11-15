@@ -20,6 +20,10 @@ describe('errorMessage', () => {
 		setAppLocale('en');
 		expect(errorMessage({ errors: [{ message: 'name is required' }] })).toBe('name is required');
 	});
+
+	it('uses the message from a thrown Error', () => {
+		expect(errorMessage(new Error('network failed'))).toBe('network failed');
+	});
 });
 
 describe('fieldErrorMessage', () => {

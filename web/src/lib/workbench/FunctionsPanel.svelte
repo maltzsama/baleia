@@ -47,12 +47,13 @@
 		}
 		let cancelled = false;
 		const id = requestId;
+		const controller = new AbortController();
 		let timeout: ReturnType<typeof setTimeout> | undefined;
 		loading = true;
 		error = '';
 		let load: Promise<DialectFunction[] | null>;
 		try {
-			load = loadBindingFunctions(ws, cat, bind);
+			load = loadBindingFunctions(ws, cat, bind, { signal: controller.signal });
 		} catch (e) {
 			loading = false;
 			error = e instanceof Error ? e.message : m.functions_panel_failed();
@@ -63,7 +64,10 @@
 		void Promise.race([
 			load,
 			new Promise<never>((_, reject) => {
-				timeout = setTimeout(() => reject(new Error(m.functions_panel_failed())), LOAD_TIMEOUT_MS);
+				timeout = setTimeout(() => {
+					controller.abort();
+					reject(new Error(m.functions_panel_failed()));
+				}, LOAD_TIMEOUT_MS);
 			})
 		])
 			.then((data) => {
@@ -79,6 +83,8 @@
 			});
 		return () => {
 			cancelled = true;
+			controller.abort();
+			if (timeout) clearTimeout(timeout);
 		};
 	});
 

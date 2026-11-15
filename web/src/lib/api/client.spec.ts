@@ -142,6 +142,21 @@ describe('api client', () => {
 			expect(response.status).toBe(503);
 			expect(fetchMock).toHaveBeenCalledOnce();
 		});
+
+		it('does not retry a consumed stream body after a 401', async () => {
+			const fetchMock = vi.fn(async () => json({ code: 'unauthorized' }, 401));
+			vi.stubGlobal('fetch', fetchMock);
+			const { apiFetch, setAccessToken } = await import('./client');
+			setAccessToken('access-1');
+
+			const response = await apiFetch('/results/1', {
+				method: 'POST',
+				body: new ReadableStream()
+			});
+
+			expect(response.status).toBe(401);
+			expect(fetchMock).toHaveBeenCalledOnce();
+		});
 	});
 
 	it('keeps access tokens out of localStorage', async () => {

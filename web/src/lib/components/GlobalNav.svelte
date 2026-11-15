@@ -100,8 +100,11 @@
 		{/if}
 		<div data-avatar-menu class="relative">
 			<button
+				type="button"
 				onclick={toggleMenu}
 				title={authStore.user?.name ?? ''}
+				aria-haspopup="menu"
+				aria-expanded={menuOpen}
 				class="w-[30px] h-[30px] rounded-full bg-slate-700 flex items-center justify-center text-[11px] font-bold text-slate-200 no-underline border-none cursor-pointer"
 			>
 				{authStore.initials}

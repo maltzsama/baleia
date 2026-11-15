@@ -2,7 +2,7 @@
 // and `global_actions` from /auth/me; they never compare `role`.
 import type { AuthUser } from '../stores/auth.svelte';
 
-export type Resource = { allowed_actions?: string[] };
+export type Resource = { allowed_actions?: readonly string[] };
 
 export type GlobalAction =
 	| 'create_connection'

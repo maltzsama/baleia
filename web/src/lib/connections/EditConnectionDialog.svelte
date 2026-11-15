@@ -19,16 +19,22 @@
 		open = $bindable(false),
 		connection,
 		providers,
+		engines = [],
+		support = {},
 		onsaved
 	}: {
 		open?: boolean;
 		connection: CatalogConnection;
 		providers: ConnectionProvider[];
+		engines?: { id: string }[];
+		support?: Record<string, Record<string, unknown>>;
 		onsaved: (connection: CatalogConnection) => void;
 	} = $props();
 
 	const provider = $derived(providers.find((item) => item.kind === connection.type) ?? null);
-	const canBind = $derived(provider?.family === 'database' || provider?.family === 'metastore');
+	const canBind = $derived(
+		provider ? engines.some((engine) => Boolean(support[engine.id]?.[provider.kind])) : false
+	);
 
 	let name = $state('');
 	let values = $state<Record<string, string>>({});
@@ -38,11 +44,23 @@
 	let testing = $state(false);
 	let error = $state('');
 	let testResult = $state<TestResult | null>(null);
+	let testRun = 0;
 
 	$effect(() => {
-		if (!open) return;
+		if (!open) {
+			testRun++;
+			testing = false;
+			return;
+		}
+		testRun++;
 		name = connection.name;
-		values = { ...connection.config };
+		const nextValues = { ...connection.config };
+		for (const field of provider?.config_schema ?? []) {
+			if (field.type === 'select' && field.default && nextValues[field.key] === undefined) {
+				nextValues[field.key] = field.default;
+			}
+		}
+		values = nextValues;
 		secrets = {};
 		credentialsReadOnly = connection.credentials_read_only;
 		error = '';
@@ -79,14 +97,18 @@
 	}
 
 	async function test() {
+		const run = testRun;
 		testing = true;
 		testResult = null;
 		try {
-			testResult = await testStored(connection.id);
+			const result = await testStored(connection.id);
+			if (run !== testRun || !open) return;
+			testResult = result;
 		} catch (e) {
+			if (run !== testRun || !open) return;
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
-			testing = false;
+			if (run === testRun) testing = false;
 		}
 	}
 </script>

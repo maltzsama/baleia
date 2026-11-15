@@ -54,11 +54,15 @@
 		}
 	}
 
+	function outcome(content: unknown): string {
+		return String(field(content, 'outcome') ?? 'unknown');
+	}
+
 	async function send() {
 		const value = input.trim();
 		if (!value || assistantStore.state === 'running') return;
 		input = '';
-		await assistantStore.send(value);
+		if (!(await assistantStore.send(value))) input = value;
 	}
 
 	function onKeydown(event: KeyboardEvent) {
@@ -102,12 +106,6 @@
 			<Trash2Icon class="h-3.5 w-3.5" />
 		</Button>
 	</div>
-	<p class="border-b border-border px-2.5 py-1 text-[10px] text-text-muted">
-		{assistantStore.dataSharing === 'metadata_and_samples'
-			? m.assistant_panel_model_sees_metadata_samples()
-			: m.assistant_panel_model_sees_metadata_only()}
-	</p>
-
 	{#if !assistantStore.enabled}
 		<div class="p-3">
 			<EmptyState
@@ -120,15 +118,20 @@
 			<Skeleton height="3rem" />
 			<Skeleton height="3rem" />
 		</div>
-	{:else if assistantStore.error}
+	{:else if assistantStore.loadError}
 		<div class="p-3">
 			<ErrorState
 				title={m.assistant_panel_assistant_unavailable()}
-				message={assistantStore.error}
-				onretry={() => assistantStore.load(workspaceId)}
+				message={assistantStore.loadError}
+				onretry={() => workspaceId && assistantStore.load(workspaceId)}
 			/>
 		</div>
 	{:else}
+		<p class="border-b border-border px-2.5 py-1 text-[10px] text-text-muted">
+			{assistantStore.dataSharing === 'metadata_and_samples'
+				? m.assistant_panel_model_sees_metadata_samples()
+				: m.assistant_panel_model_sees_metadata_only()}
+		</p>
 		<div class="flex-1 overflow-y-auto p-2.5">
 			{#if !assistantStore.active || assistantStore.messages.length === 0}
 				<EmptyState
@@ -171,8 +174,14 @@
 					<details class="mb-2 rounded-md border border-border bg-bg-panel px-2 py-1 text-[11px]">
 						<summary class="cursor-pointer text-text-muted">
 							{m.assistant_panel_result()}
-							<Badge tone={field(message.content, 'outcome') === 'ok' ? 'success' : 'warning'}>
-								{String(field(message.content, 'outcome') ?? 'ok')}
+							<Badge
+								tone={outcome(message.content) === 'ok'
+									? 'success'
+									: outcome(message.content) === 'error'
+										? 'danger'
+										: 'warning'}
+							>
+								{outcome(message.content)}
 							</Badge>
 						</summary>
 						<pre class="mt-1 overflow-auto text-[10px]">{pretty(
@@ -198,6 +207,9 @@
 				{@attach focusComposer}
 				class="w-full resize-none rounded-md border border-border bg-bg-toolbar px-2 py-1.5 text-[12px] text-text-main outline-none focus:border-primary"
 			></textarea>
+			{#if assistantStore.error}
+				<p class="mt-1 text-[11px] text-danger" role="alert">{assistantStore.error}</p>
+			{/if}
 			<div class="mt-1.5 flex justify-end gap-1.5">
 				{#if assistantStore.state === 'running'}
 					<Button size="sm" onclick={() => assistantStore.cancel()}

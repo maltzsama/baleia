@@ -82,8 +82,9 @@
 
 	let testing = $state(false);
 	let testResult = $state<TestResult | null>(null);
-	let testError = $state('');
+	let testError = $state<ConnectionRequestError | null>(null);
 	let testedSnapshot = $state('');
+	let testRun = 0;
 
 	let creating = $state(false);
 	let createError = $state('');
@@ -109,16 +110,17 @@
 
 	onMount(async () => {
 		try {
-			const [providerList, categoryList, engineList] = await Promise.all([
+			const [providerResult, categoryResult, engineResult] = await Promise.allSettled([
 				loadProviders(),
 				loadCategories(),
 				listEngines()
 			]);
-			providers = providerList;
-			categories = categoryList;
-			engines = engineList;
+			if (providerResult.status === 'rejected') throw providerResult.reason;
+			providers = providerResult.value;
+			categories = categoryResult.status === 'fulfilled' ? categoryResult.value : [];
+			engines = engineResult.status === 'fulfilled' ? engineResult.value : [];
 			const loaded = await Promise.all(
-				engineList.map(async (engine) => {
+				engines.map(async (engine) => {
 					try {
 						return [engine.id, await bindingSupport(engine.id)] as const;
 					} catch {
@@ -210,6 +212,10 @@
 	);
 	const tested = $derived(testedSnapshot !== '' && testedSnapshot === snapshot);
 
+	$effect(() => {
+		if (testedSnapshot && testedSnapshot !== snapshot) testResult = null;
+	});
+
 	function choose(next: ConnectionProvider) {
 		if (!isUsable(next)) return;
 		provider = next;
@@ -223,7 +229,7 @@
 		bindEngineIds = [];
 		catalogName = '';
 		testResult = null;
-		testError = '';
+		testError = null;
 		testedSnapshot = '';
 		createError = '';
 		created = null;
@@ -234,7 +240,7 @@
 		if (isDatabase) {
 			const db = databaseName(values);
 			if (db) {
-				catalogName = db;
+				if (!catalogName) catalogName = db;
 				name = name || db;
 			}
 		}
@@ -255,8 +261,9 @@
 
 	async function runTest() {
 		if (!provider) return;
+		const run = ++testRun;
 		testing = true;
-		testError = '';
+		testError = null;
 		testResult = null;
 		const snap = snapshot;
 		try {
@@ -271,12 +278,17 @@
 				// check binds the same one.
 				warehouse: needsCatalogs(usage()) ? catalogName.trim() || name : undefined
 			});
+			if (run !== testRun || snap !== snapshot) return;
 			testResult = result;
 			if (result.success) testedSnapshot = snap;
 		} catch (e) {
-			testError = e instanceof Error ? e.message : String(e);
+			if (run !== testRun || snap !== snapshot) return;
+			testError =
+				e instanceof ConnectionRequestError
+					? e
+					: new ConnectionRequestError(e instanceof Error ? e.message : String(e));
 		} finally {
-			testing = false;
+			if (run === testRun) testing = false;
 		}
 	}
 
@@ -308,10 +320,10 @@
 					return { name: raw, trino_catalog_name: normalizeCatalogName(raw) };
 				});
 				if (outputs.some((o) => !o.trino_catalog_name)) {
-					throw new Error('A catalog name cannot be normalized.');
+					throw new Error(m.connections_connectionwizard_catalog_name_invalid());
 				}
 				if (outputs.some((o) => reservedNames.includes(o.trino_catalog_name))) {
-					throw new Error('A catalog name is reserved by the engine. Choose another name.');
+					throw new Error(m.catalogs_that_name_is_reserved_by_the_engine());
 				}
 				draft.engine_ids = bindEngineIds;
 				draft.catalog_registration = { catalogs: outputs, warehouse: base, description: '' };
@@ -361,11 +373,8 @@
 	}
 
 	function finish() {
-		if (created) {
-			ondone?.(created);
-		} else {
-			void goto(resolve('/connections'));
-		}
+		if (created && ondone) ondone(created);
+		else void goto(resolve('/connections'));
 	}
 
 	function providerBadge(p: ConnectionProvider) {
@@ -473,6 +482,7 @@
 					{provider}
 					bind:values
 					bind:secrets
+					errors={testError?.fields ?? {}}
 					allowReferences={compatibleEngines.length > 0}
 				/>
 			</div>
@@ -673,7 +683,7 @@
 
 			{#if testError}
 				<div class="mt-3">
-					<ErrorPanel error={{ code: 'internal', message: testError }} />
+					<ErrorPanel error={{ code: 'internal', message: testError.message }} />
 				</div>
 			{/if}
 

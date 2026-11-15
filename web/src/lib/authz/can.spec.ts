@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { can, canGlobal } from './can';
 import type { AuthUser } from '../stores/auth.svelte';
+import { makeWorkspace } from '../../test/factories';
 
 describe('can', () => {
 	it('returns true when the resource carries the action', () => {
@@ -13,7 +14,14 @@ describe('can', () => {
 
 	it('returns false for an absent resource or action list', () => {
 		expect(can(null, 'view')).toBe(false);
+		expect(can(undefined, 'view')).toBe(false);
 		expect(can({}, 'view')).toBe(false);
+		expect(can({ allowed_actions: undefined }, 'view')).toBe(false);
+		expect(can({ allowed_actions: [] }, 'view')).toBe(false);
+	});
+
+	it('accepts allowed actions from a schema resource', () => {
+		expect(can(makeWorkspace({ allowed_actions: ['update'] }), 'update')).toBe(true);
 	});
 });
 

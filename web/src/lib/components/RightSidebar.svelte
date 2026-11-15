@@ -35,6 +35,10 @@
 			: [])
 	]);
 
+	$effect(() => {
+		if (!assistantStore.enabled && tab === 'assistant') tab = 'inspector';
+	});
+
 	// The SQL reference reads the target of the active editor tab (#979).
 	const referenceScope = $derived(editor.referenceScope);
 
@@ -62,13 +66,16 @@
 
 	onMount(() => {
 		void assistantStore.loadStatus();
+		const isTextTarget = (target: EventTarget | null) => {
+			const element = target as HTMLElement | null;
+			return !!element?.closest('input, textarea, select, [contenteditable="true"], .cm-editor');
+		};
 		const onKey = (event: KeyboardEvent) => {
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'i') {
+				if (isTextTarget(event.target) || !assistantStore.enabled) return;
 				event.preventDefault();
-				if (assistantStore.enabled) {
-					collapsed = false;
-					tab = 'assistant';
-				}
+				collapsed = false;
+				tab = 'assistant';
 			}
 		};
 		window.addEventListener('keydown', onKey);
