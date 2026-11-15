@@ -66,6 +66,17 @@ type authorizationMatrixRow struct {
 	action        string
 }
 
+func hasCall(a access, names ...string) bool {
+	for _, wanted := range names {
+		for _, call := range a.calls {
+			if call == wanted {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func matrixRow(name string, a access) authorizationMatrixRow {
 	row := authorizationMatrixRow{name: name}
 	switch a.kind {
@@ -99,11 +110,46 @@ func matrixRow(name string, a access) authorizationMatrixRow {
 		row.action = "global administration"
 	case kindChecked:
 		row.actor = "authenticated principal"
-		row.globalRole = "guard-defined"
-		row.workspaceRole = "guard-defined"
-		row.scope = "guard-defined"
+		row.globalRole = "not required unless the guard says admin"
+		row.workspaceRole = "not required unless the guard says workspace role"
 		row.denial = "guard-defined 403/404"
-		row.action = "guard-defined"
+		row.action = "operation-specific"
+		switch {
+		case hasCall(a, "RequireAdmin", "RoleFromContext"):
+			row.scope = "global administration"
+			row.globalRole = "admin"
+			row.workspaceRole = "none"
+			row.denial = "403"
+			row.action = "global administration"
+		case hasCall(a, "Connection", "Catalog", "CatalogOfConnection", "Engine"):
+			row.scope = "admin plane resource ownership"
+			row.globalRole = "admin or resource owner"
+			row.workspaceRole = "none"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "serviceAccountManager", "managedServiceAccount"):
+			row.scope = "service-account management plane"
+			row.globalRole = "admin or workspace manager"
+			row.workspaceRole = "workspace admin where applicable"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "webhookManager"):
+			row.scope = "workspace administration"
+			row.globalRole = "admin where applicable"
+			row.workspaceRole = "workspace admin"
+			row.denial = "404 when invisible; 403 when below admin"
+		case hasCall(a, "contentSpace", "spaceForWrite", "requireSpace"):
+			row.scope = "workspace data plane plus space ceiling"
+			row.workspaceRole = "workspace role capped by space role"
+			row.denial = "404 when invisible; 403 when below required role"
+		case hasCall(a, "metadataWorkspace", "requireWorkspaceAccess", "Workspace", "wsMember"):
+			row.scope = "workspace data plane"
+			row.workspaceRole = "workspace member or stronger"
+			row.denial = "404 when not a member; 403 when visible but insufficient"
+		case hasCall(a, "PrincipalFromContext"):
+			row.scope = "caller or resource guard"
+			row.denial = "guard-defined 403/404"
+		default:
+			row.scope = "named handler guards"
+		}
 	case kindStub:
 		row.actor = "none"
 		row.globalRole = "none"
@@ -113,6 +159,65 @@ func matrixRow(name string, a access) authorizationMatrixRow {
 		row.action = "stub"
 	}
 	return row
+}
+
+func TestAuthorizationMatrix(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		access access
+		want   authorizationMatrixRow
+	}{
+		"global admin": {
+			access: access{kind: kindAdmin, calls: []string{"RoleFromContext"}},
+			want: authorizationMatrixRow{
+				actor: "human user", globalRole: "admin", workspaceRole: "none",
+				scope: "global administration", denial: "403", action: "global administration",
+			},
+		},
+		"admin plane owner": {
+			access: checked("Catalog"),
+			want: authorizationMatrixRow{
+				actor: "authenticated principal", globalRole: "admin or resource owner",
+				workspaceRole: "none", scope: "admin plane resource ownership",
+				denial: "404 when invisible; 403 when visible but insufficient",
+				action: "operation-specific",
+			},
+		},
+		"workspace data plane": {
+			access: checked("metadataWorkspace"),
+			want: authorizationMatrixRow{
+				actor:         "authenticated principal",
+				globalRole:    "not required unless the guard says admin",
+				workspaceRole: "workspace member or stronger",
+				scope:         "workspace data plane",
+				denial:        "404 when not a member; 403 when visible but insufficient",
+				action:        "operation-specific",
+			},
+		},
+		"space ceiling": {
+			access: checked("contentSpace", "spaceForWrite"),
+			want: authorizationMatrixRow{
+				actor:         "authenticated principal",
+				globalRole:    "not required unless the guard says admin",
+				workspaceRole: "workspace role capped by space role",
+				scope:         "workspace data plane plus space ceiling",
+				denial:        "404 when invisible; 403 when below required role",
+				action:        "operation-specific",
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := matrixRow(name, tc.access)
+			if got.actor != tc.want.actor || got.globalRole != tc.want.globalRole ||
+				got.workspaceRole != tc.want.workspaceRole || got.scope != tc.want.scope ||
+				got.denial != tc.want.denial || got.action != tc.want.action {
+				t.Fatalf("matrixRow() = %#v, want fields %#v", got, tc.want)
+			}
+		})
+	}
 }
 
 var (
