@@ -132,6 +132,28 @@ describe('ResultsPanel', () => {
 		expect(await screen.findByText('The resource was not found.')).toBeTruthy();
 	});
 
+	it('retries the statements read from the error state', async () => {
+		let fail = true;
+		// The successful read selects a statement, so the panel may request its
+		// results: keep every request mocked (FD14).
+		mockResult({ value: [] });
+		server.use(
+			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>
+				fail
+					? response(404).json({ code: 'not_found', message: 'boom' })
+					: response(200).json([statement([])])
+			)
+		);
+
+		render(ResultsPanel, { props: { executionId: EXEC, enabled: true } });
+
+		const retry = await screen.findByRole('button', { name: 'Try again' });
+		fail = false;
+		await fireEvent.click(retry);
+
+		expect(await screen.findByText('No rows')).toBeTruthy();
+	});
+
 	it('exports the active result set in the chosen format', async () => {
 		server.use(
 			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>

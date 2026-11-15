@@ -55,6 +55,7 @@
 	import { completionConfig, completionTheme } from '$lib/workbench/completionTheme';
 	import ConvertSqlDialog from '$lib/workbench/ConvertSqlDialog.svelte';
 	import Button from '$lib/ui/Button.svelte';
+	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Drawer from '$lib/ui/Drawer.svelte';
 	import ExecutionDetails from '$lib/run/ExecutionDetails.svelte';
@@ -67,10 +68,6 @@
 		type ExecutionEvent,
 		type ExecutionStream
 	} from '$lib/results/stream';
-
-	function errorMessage(e: unknown): string {
-		return apiErrorMessage(e);
-	}
 
 	let editorView: EditorView;
 	let editorEl: HTMLDivElement;
@@ -116,6 +113,8 @@
 	let dialect = $state<Dialect | null>(null);
 	let namespaces = $state<string[][]>([]);
 	let namespacesError = $state('');
+	// Bumped by the retry button of the namespace error surface.
+	let namespacesRetry = $state(0);
 
 	let saveOpen = $state(false);
 	let detailsOpen = $state(false);
@@ -198,7 +197,7 @@
 			targetsReady = true;
 		} catch (e) {
 			if (request !== targetsRequest) return;
-			targetError = errorMessage(e);
+			targetError = apiErrorMessage(e);
 		}
 	}
 
@@ -320,6 +319,7 @@
 
 	// Namespaces of the selected catalog feed the schema picker.
 	$effect(() => {
+		void namespacesRetry;
 		const catalogId = selectedTarget?.catalog_id;
 		const depth = selectedEngine?.capabilities?.namespace_depth ?? 0;
 		namespaces = [];
@@ -331,7 +331,7 @@
 				if (!cancelled) namespaces = list.items.map((item) => item.path);
 			})
 			.catch((e) => {
-				if (!cancelled) namespacesError = errorMessage(e);
+				if (!cancelled) namespacesError = apiErrorMessage(e);
 			});
 		return () => {
 			cancelled = true;
@@ -491,7 +491,7 @@
 				throw new Error(apiErrorMessage(error, m.metrics_detail_could_not_load_the_metric()));
 			editor.insert(rendered.sql);
 		} catch (e) {
-			activeTab.errorMsg = errorMessage(e);
+			activeTab.errorMsg = apiErrorMessage(e);
 		}
 	}
 
@@ -864,7 +864,7 @@
 			connectWS(data.id, tab);
 		} catch (e) {
 			if (!isOpen(tab.id)) return;
-			tab.errorMsg = errorMessage(e);
+			tab.errorMsg = apiErrorMessage(e);
 			executingTabs[tab.id] = false;
 			tab.statusText = m.components_queryeditor_error();
 		}
@@ -912,7 +912,7 @@
 			if (error)
 				throw new Error(apiErrorMessage(error, m.components_queryeditor_could_not_cancel()));
 		} catch (e) {
-			tab.errorMsg = errorMessage(e);
+			tab.errorMsg = apiErrorMessage(e);
 		}
 	}
 
@@ -1013,7 +1013,7 @@
 			connectWS(data.id, tab);
 		} catch (e) {
 			executingTabs[tab.id] = false;
-			tab.errorMsg = errorMessage(e);
+			tab.errorMsg = apiErrorMessage(e);
 		} finally {
 			rerunStartingTabs[tab.id] = false;
 		}
@@ -1077,7 +1077,7 @@
 			}
 			await submit(data.sql, { explain: true });
 		} catch (e) {
-			activeTab.errorMsg = errorMessage(e);
+			activeTab.errorMsg = apiErrorMessage(e);
 		}
 	}
 
@@ -1289,9 +1289,13 @@
 	</div>
 
 	{#if targetError}
-		<p class="px-3 py-1 text-[11px] text-red-600" role="alert">{targetError}</p>
+		<div class="border-b border-border px-3 py-2">
+			<ErrorState message={targetError} onretry={() => void loadTargets(workspaceId)} />
+		</div>
 	{:else if namespacesError}
-		<p class="px-3 py-1 text-[11px] text-red-600" role="alert">{namespacesError}</p>
+		<div class="border-b border-border px-3 py-2">
+			<ErrorState message={namespacesError} onretry={() => namespacesRetry++} />
+		</div>
 	{/if}
 
 	{#if activeTab.readOnly}

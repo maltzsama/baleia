@@ -43,10 +43,6 @@
 	let exportFormat = $state<'csv' | 'tsv' | 'jsonl' | 'arrow'>('csv');
 	let exporting = $state(false);
 
-	function errorMessage(e: unknown): string {
-		return apiErrorMessage(e);
-	}
-
 	$effect(() => {
 		const id = executionId;
 		const on = enabled;
@@ -82,7 +78,7 @@
 				activeResultIndex = 0;
 			})
 			.catch((e) => {
-				if (!cancelled) loadError = errorMessage(e);
+				if (!cancelled) loadError = apiErrorMessage(e);
 			})
 			.finally(() => {
 				if (!cancelled) loading = false;
@@ -154,7 +150,7 @@
 			link.remove();
 			URL.revokeObjectURL(href);
 		} catch (e) {
-			toasts.error(`${m.components_resultspanel_export_failed()} ${errorMessage(e)}`);
+			toasts.error(`${m.components_resultspanel_export_failed()} ${apiErrorMessage(e)}`);
 		} finally {
 			exporting = false;
 		}

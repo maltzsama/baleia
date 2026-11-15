@@ -142,6 +142,64 @@ describe('QueryEditor', () => {
 		expect(screen.getByText('Ln 1, Col 1')).toBeTruthy();
 	});
 
+	it('retries a failed target load from the error surface', async () => {
+		mockWorkbench();
+		let fail = true;
+		const lake = {
+			binding_id: BINDING,
+			catalog_id: CATALOG,
+			catalog_name: 'lake',
+			engine_id: ENGINE,
+			engine_name: 'trino',
+			engine_kind: 'trino',
+			engine_catalog_name: 'lake_t',
+			mode: 'adopted' as const,
+			is_default: true
+		};
+		server.use(
+			http.get('/workspaces/{id}/targets', ({ response }) =>
+				fail
+					? response(404).json({ code: 'not_found', message: 'boom' })
+					: response(200).json([lake])
+			)
+		);
+
+		render(QueryEditor);
+
+		const retry = await screen.findByRole('button', { name: 'Try again' });
+		fail = false;
+		await fireEvent.click(retry);
+
+		const catalog = screen.getByLabelText('Catalog') as HTMLSelectElement;
+		await waitFor(() => expect(catalog.value).toBe(BINDING));
+	});
+
+	it('retries a failed namespace load from the error surface', async () => {
+		mockWorkbench();
+		let fail = true;
+		server.use(
+			http.get('/workspaces/{id}/metadata/catalogs/{catalog_id}/namespaces', ({ response }) =>
+				fail
+					? response(404).json({ code: 'not_found', message: 'boom' })
+					: response(200).json({
+							freshness: { metadata_synced_at: null },
+							items: [{ path: ['sales'] }]
+						})
+			)
+		);
+
+		render(QueryEditor);
+
+		const retry = await screen.findByRole('button', { name: 'Try again' });
+		fail = false;
+		await fireEvent.click(retry);
+
+		const schema = screen.getByLabelText('Schema') as HTMLSelectElement;
+		await waitFor(() =>
+			expect([...schema.options].some((option) => option.value === 'sales')).toBe(true)
+		);
+	});
+
 	it('publishes its target for the SQL reference in the Inspector (#979)', async () => {
 		mockWorkbench();
 		render(QueryEditor);
