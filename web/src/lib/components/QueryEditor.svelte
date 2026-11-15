@@ -92,6 +92,7 @@
 	// its status in another, and each tab keeps its own event stream.
 	let runs = $state<Record<string, RunState>>({});
 	let executingTabs = $state<Record<string, boolean>>({});
+	let rerunStartingTabs = $state<Record<string, boolean>>({});
 	// Not state: the streams never feed the template.
 	const streams: Record<string, ExecutionStream> = {};
 	const executing = $derived(!!executingTabs[activeTab.id]);
@@ -902,7 +903,7 @@
 
 	async function cancelExecution() {
 		const tab = activeTab;
-		if (!tab?.executionId) return;
+		if (!tab?.executionId || rerunStartingTabs[tab.id]) return;
 		try {
 			tab.statusText = m.components_queryeditor_cancelling();
 			const { error } = await client.POST('/workspaces/{id}/executions/{execution_id}/cancel', {
@@ -990,6 +991,7 @@
 		if (!tab?.executionId || !workspaceId) return;
 		if (executingTabs[tab.id]) return;
 		executingTabs[tab.id] = true;
+		rerunStartingTabs[tab.id] = true;
 		flushSql();
 		try {
 			const { data, error } = await client.POST('/workspaces/{id}/executions', {
@@ -1012,6 +1014,8 @@
 		} catch (e) {
 			executingTabs[tab.id] = false;
 			tab.errorMsg = errorMessage(e);
+		} finally {
+			rerunStartingTabs[tab.id] = false;
 		}
 	}
 
@@ -1156,7 +1160,7 @@
 			{executing ? m.components_queryeditor_running() : m.components_queryeditor_run()}
 			<span class="text-[10px] font-normal">{formatKeys('Mod-Enter')}</span>
 		</button>
-		{#if executing && canCancel}
+		{#if executing && canCancel && !rerunStartingTabs[activeTab.id]}
 			<button
 				onclick={cancelExecution}
 				class="flex items-center gap-[5px] py-1 px-2 text-xs font-medium rounded-[5px] cursor-pointer text-red-600 border border-transparent bg-transparent hover:bg-border whitespace-nowrap"
