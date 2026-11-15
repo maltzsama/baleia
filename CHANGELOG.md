@@ -1,5 +1,67 @@
 # Changelog
 
+## [0.9.2](https://github.com/maltzsama/baleia/compare/v0.9.1...v0.9.2) (2026-11-15)
+
+
+### Bug Fixes
+
+* **assistant:** await event subscription readiness ([9be83ed](https://github.com/maltzsama/baleia/commit/9be83ed48930ae93342a5e6111c3b7912038ac9f))
+* **assistant:** isolate concurrent send failures ([3fa43a3](https://github.com/maltzsama/baleia/commit/3fa43a36a30f4ab559cf9002088b3d129fb6d7c6))
+* **assistant:** persist and scope turn cancellation ([bcd3884](https://github.com/maltzsama/baleia/commit/bcd38849e37c0837c3b95df59c59435c9fa542bd))
+* **assistant:** preserve SSE state across reconnects ([18d039a](https://github.com/maltzsama/baleia/commit/18d039a8899b4f6e02ff584025d245bf7c03a553))
+* **assistant:** scope cancellation events to requests ([d883690](https://github.com/maltzsama/baleia/commit/d88369013bdd39e4b0c2e6797dfcb2e19f5afe22))
+* **docs:** describe durable turn cancellation ([2f3dcba](https://github.com/maltzsama/baleia/commit/2f3dcba9f70831e50503580f000305d3b62b5f77))
+* **mcp:** enforce shared agent burst limits and retry metadata ([e397864](https://github.com/maltzsama/baleia/commit/e3978648620cf3140cc1d072da0d6192259ff710))
+* **realtime:** keep the limiter refill timestamp monotonic ([2ddec21](https://github.com/maltzsama/baleia/commit/2ddec2138c856a49aa285efb9c59f6a2d2185fa2))
+* **store:** add the assistant interrupt request column ([767833c](https://github.com/maltzsama/baleia/commit/767833c6730450544a91efd6cb212efad998d5ca))
+* **web:** add Presto and Dremio icons ([3f43560](https://github.com/maltzsama/baleia/commit/3f435606d65710f53d65892f59f14430c2efa01d))
+* **web:** align connection edit references ([2097cee](https://github.com/maltzsama/baleia/commit/2097ceefc59327e09c3e87886ccad2b4ddef16eb))
+* **web:** apply the brand palette to app actions ([f317f8e](https://github.com/maltzsama/baleia/commit/f317f8ea4f69b4563cf303a4e565fbecffd9a358))
+* **web:** brand the global navigation rail ([713d929](https://github.com/maltzsama/baleia/commit/713d929e027be8184e1e1fb11c4e0b75db359170))
+* **web:** cancel stale SQL reference loads ([07691ee](https://github.com/maltzsama/baleia/commit/07691ee881c6d3464172e51d07f228ef8577a037))
+* **web:** clear stale principal choices ([50c815c](https://github.com/maltzsama/baleia/commit/50c815c187a88635766b175e7f95dd49dfe16790))
+* **web:** discard stale connection test results ([7136465](https://github.com/maltzsama/baleia/commit/713646562921bb1a7307cf9a177bfd262412f79d))
+* **web:** expose avatar menu state ([4f094c0](https://github.com/maltzsama/baleia/commit/4f094c0787661e8a97abd24471c3eacfdbd1a3fd))
+* **web:** guard assistant sidebar shortcuts ([bf6acff](https://github.com/maltzsama/baleia/commit/bf6acff05f81dbd447a4c3450591ffa483ef8266))
+* **web:** guard connection edit tests ([91267be](https://github.com/maltzsama/baleia/commit/91267be8dd1df9e1eb90f32a27e8f243dca38541))
+* **web:** guard query editor execution paths ([83d429c](https://github.com/maltzsama/baleia/commit/83d429c6b52d3d58472c8e71bd8fed7cdd68ea16))
+* **web:** guard rerun startup cancellation ([cc11504](https://github.com/maltzsama/baleia/commit/cc11504c3fe3a37d5a935a6819576815004bfbc5))
+* **web:** harden connection wizard errors ([2292c5e](https://github.com/maltzsama/baleia/commit/2292c5e1a217118757c4751fbd4510d0b5828179))
+* **web:** localize connection provider roles ([8c591c3](https://github.com/maltzsama/baleia/commit/8c591c3de96f2131f7b4a214e0a4151811896241))
+* **web:** localize lineage open errors ([81bdd68](https://github.com/maltzsama/baleia/commit/81bdd682eb480e2b1748cfe73000713a14aff525))
+* **web:** preserve saved query actions ([75f9b78](https://github.com/maltzsama/baleia/commit/75f9b7819f7b79b5f2ff113be806c53257b1a6c8))
+* **web:** preserve search during table reveals ([62031e3](https://github.com/maltzsama/baleia/commit/62031e36aeb8444e98afd9120bfef252e997f6bd))
+* **web:** protect metadata context transitions ([3b5ad66](https://github.com/maltzsama/baleia/commit/3b5ad66b5f800da3244d23bb40dc136de2c7caa2))
+* **web:** raise the dark theme switch contrast ([10defc6](https://github.com/maltzsama/baleia/commit/10defc6265e6b4707857cf11be2a0a2c53d5a0cf))
+* **web:** recover assistant state after SSE reconnect ([bec54d4](https://github.com/maltzsama/baleia/commit/bec54d44a935e194acd610a6368c9758a7738d08))
+* **web:** recover assistant stream state ([c692864](https://github.com/maltzsama/baleia/commit/c6928643dffb5d4b111a47b5ec8baffea55a030c))
+* **web:** recover workspace creation failures ([198fc9d](https://github.com/maltzsama/baleia/commit/198fc9dda985bdca170070f8584197140708e102))
+* **web:** redesign the login screen ([4122b1a](https://github.com/maltzsama/baleia/commit/4122b1aa21363b0ab6d50f8db177a920113a93b3))
+* **web:** refresh attention state on open ([cc54949](https://github.com/maltzsama/baleia/commit/cc549495560d15d7382ad63cad0084b3bf2f2f6e))
+* **web:** reserve reruns before execution ([fae5dfc](https://github.com/maltzsama/baleia/commit/fae5dfc52a100902e98b0423a624b9260b4c51ce))
+* **web:** reset result grid selection on reload ([86f9067](https://github.com/maltzsama/baleia/commit/86f90678a1ebce1c1582dbb1c18ccdb7acea94c0))
+* **web:** satisfy assistant stream formatting ([b57cf54](https://github.com/maltzsama/baleia/commit/b57cf544f16286a8866ef7687016a59e34c1f0a8))
+* **web:** separate export error details ([55d45b0](https://github.com/maltzsama/baleia/commit/55d45b0aed2dd36fa9bca4f287394fd4409bb749))
+* **web:** show the sun on the light side of the theme switch ([6134572](https://github.com/maltzsama/baleia/commit/61345721bacc2a9af4f5bb31662b5da08460eb29))
+* **website:** apply the brand design system to the docs pages ([90aeb57](https://github.com/maltzsama/baleia/commit/90aeb578882a196df5c8a25e6fcda0ef539138ea))
+* **website:** improve the documentation landing page ([5c6ece7](https://github.com/maltzsama/baleia/commit/5c6ece712edd2cc68c54e8cd03e2981af1726608))
+* **web:** stop preview polling on close ([ce07cb8](https://github.com/maltzsama/baleia/commit/ce07cb869bba43566b3272dbcd0a55fbc4ca2018))
+* **web:** sync the login theme switch with the saved theme ([54b7c06](https://github.com/maltzsama/baleia/commit/54b7c06b286cc37ed30fdfaccdc3bb9bf008b6fc))
+* **web:** track selected space principals ([c76d454](https://github.com/maltzsama/baleia/commit/c76d454ce47f75038ab81f2e33d7582a6b9f4e16))
+* **web:** use brand tints for selection states ([ee83554](https://github.com/maltzsama/baleia/commit/ee8355435a50fb2f945baddf1ffa3fb812c64c52))
+
+
+### Miscellaneous
+
+* **agentpolicy:** cover the disabled shared limiter fallback ([400c5a7](https://github.com/maltzsama/baleia/commit/400c5a7a898286c036aed52f8cb3374a4e7e82f5))
+
+
+### Documentation
+
+* **agents:** describe the burst limit as immediate admissions ([fe78108](https://github.com/maltzsama/baleia/commit/fe78108130085b17a3d4e4d558901e250b99d87d))
+* **agents:** describe the tool-call limit as a burst control ([e2e36ac](https://github.com/maltzsama/baleia/commit/e2e36ac1b6300c82bedfd2d66ca9cd12169e83d6))
+* **assistant:** document SSE recovery semantics ([be93419](https://github.com/maltzsama/baleia/commit/be93419477aa6a5f823f3f1f1a7155d46b3cf60b))
+
 ## [0.9.1](https://github.com/maltzsama/baleia/compare/v0.9.0...v0.9.1) (2026-11-14)
 
 
