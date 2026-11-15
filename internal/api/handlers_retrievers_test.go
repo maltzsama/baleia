@@ -2,11 +2,31 @@ package api
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 )
+
+func TestRetrieverActionsFollowWorkspaceRole(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		role string
+		want []string
+	}{
+		{role: "viewer", want: []string{"view"}},
+		{role: "editor", want: []string{"view", "update", "delete", "refresh", "pause"}},
+		{role: "", want: []string{"view", "update", "delete", "refresh", "pause"}},
+	} {
+		q := &fakeRetrieverQuerier{role: tc.role}
+		h := testAPI(handlerFields{dialects: dialect.NewRegistry(), queries: q})
+		got := h.retrieverActions(ctxAs(testUserID, tc.role), db.UUID{Bytes: [16]byte{0xAA}, Valid: true})
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("role %q actions = %v, want %v", tc.role, got, tc.want)
+		}
+	}
+}
 
 // fakeRetrieverQuerier supports CreateRetriever by giving the workspace an
 // enabled Iceberg catalog and capturing creation.

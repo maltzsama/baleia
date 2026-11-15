@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -378,6 +379,56 @@ func TestCatalogGrantTwoParty(t *testing.T) {
 	}
 	if len(q.g.grants) != 0 {
 		t.Fatalf("grants after unlink = %d, want 0", len(q.g.grants))
+	}
+}
+
+func TestCatalogGrantAllowedActionsFollowAuthorization(t *testing.T) {
+	t.Parallel()
+	h, q := newGrantsHandlers(t)
+	member := ctxAs(memberID, "member")
+	owner := ctxAs(ownerID, "member")
+
+	q.g.grants = []db.WorkspaceCatalogGrant{{WorkspaceID: wsID, CatalogID: q.cat.ID}}
+	wsu := openapi_types.UUID(wsID.Bytes)
+	list, err := h.ListCatalogGrantItems(member, ListCatalogGrantItemsRequestObject{
+		Params: ListCatalogGrantItemsParams{WorkspaceId: &wsu},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := list.(ListCatalogGrantItems200JSONResponse)
+	if got := *items[0].AllowedActions; len(got) != 0 {
+		t.Fatalf("member active actions = %v, want none", got)
+	}
+
+	q.g.requests = []db.CatalogGrantRequest{{
+		WorkspaceID:     wsID,
+		CatalogID:       q.cat.ID,
+		InitiatedBySide: "catalog",
+		RequestedBy:     uuidOf(ownerID),
+		RequestedAt:     db.Timestamptz{Time: time.Now(), Valid: true},
+	}}
+	q.g.grants = nil
+	list, err = h.ListCatalogGrantItems(member, ListCatalogGrantItemsRequestObject{
+		Params: ListCatalogGrantItemsParams{WorkspaceId: &wsu},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items = list.(ListCatalogGrantItems200JSONResponse)
+	if got := *items[0].AllowedActions; len(got) != 0 {
+		t.Fatalf("member pending actions = %v, want none", got)
+	}
+
+	list, err = h.ListCatalogGrantItems(owner, ListCatalogGrantItemsRequestObject{
+		Params: ListCatalogGrantItemsParams{WorkspaceId: &wsu},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items = list.(ListCatalogGrantItems200JSONResponse)
+	if got := *items[0].AllowedActions; !slices.Equal(got, []string{"approve", "decline"}) {
+		t.Fatalf("workspace admin pending actions = %v, want approve and decline", got)
 	}
 }
 

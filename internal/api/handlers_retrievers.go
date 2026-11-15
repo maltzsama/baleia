@@ -386,7 +386,7 @@ func (h *QueryHandlers) retrieverToPublic(ctx context.Context, r db.Retriever) R
 			ret.Destination = &dest
 		}
 	}
-	actions := []string{"view", "update", "delete", "refresh", "pause"}
+	actions := h.retrieverActions(ctx, r.WorkspaceID)
 	ret.AllowedActions = &actions
 	if status, ok := h.retrievers.LastRefreshStatus(ctx, r.ID); ok {
 		ret.LastRefreshStatus = &status
@@ -401,6 +401,22 @@ func (h *QueryHandlers) retrieverToPublic(ctx context.Context, r db.Retriever) R
 		ret.UpdatedAt = &r.UpdatedAt.Time
 	}
 	return ret
+}
+
+func (h *QueryHandlers) retrieverActions(ctx context.Context, ws db.UUID) []string {
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return nil
+	}
+	role, err := h.authz().WorkspaceRole(ctx, p, ws)
+	if err != nil || role == authz.WorkspaceNone {
+		return nil
+	}
+	actions := []string{"view"}
+	if role >= authz.WorkspaceEditor {
+		actions = append(actions, "update", "delete", "refresh", "pause")
+	}
+	return actions
 }
 
 func retrieverDestinationToPublic(row db.ListRetrieverDestinationsRow) RetrieverDestination {
