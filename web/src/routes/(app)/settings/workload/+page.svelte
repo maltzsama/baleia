@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import ChevronUpIcon from '@lucide/svelte/icons/chevron-up';
 	import { m } from '$lib/paraglide/messages';
@@ -257,7 +258,7 @@
 				} catch (e) {
 					// poll() swallows errors; record the failure so the view can
 					// show it instead of a permanent skeleton (#589).
-					if (id === engineId) queuesError = e instanceof Error ? e.message : String(e);
+					if (id === engineId) queuesError = apiErrorMessage(e);
 					throw e;
 				}
 			},
@@ -288,7 +289,7 @@
 			rules = await listWorkloadRules();
 			if (!engineId && engines.length > 0) engineId = engines[0].id;
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -376,7 +377,7 @@
 			applyQueues(queues, true);
 			toasts.success(m.workload_saved());
 		} catch (e) {
-			saveError = e instanceof Error ? e.message : String(e);
+			saveError = apiErrorMessage(e);
 		} finally {
 			saving = false;
 			confirmClose = false;
@@ -389,7 +390,7 @@
 			rules = await listWorkloadRules();
 			rulesError = '';
 		} catch (e) {
-			rulesError = e instanceof Error ? e.message : String(e);
+			rulesError = apiErrorMessage(e);
 		}
 	}
 
@@ -481,7 +482,7 @@
 			await reloadRules();
 			toasts.success(m.workload_rule_saved());
 		} catch (e) {
-			formError = e instanceof Error ? e.message : String(e);
+			formError = apiErrorMessage(e);
 		} finally {
 			rulesBusy = false;
 		}
@@ -504,7 +505,7 @@
 			);
 			await reloadRules();
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 			// A failed PATCH can leave duplicate positions; show the stored
 			// order instead of a local one the server does not have (#589).
 			await reloadRules();
@@ -519,7 +520,7 @@
 			await updateWorkloadRule(rule.id, { enabled: !rule.enabled });
 			await reloadRules();
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		} finally {
 			rulesBusy = false;
 		}
@@ -548,7 +549,7 @@
 				origin: testOrigin as NonNullable<WorkloadRuleMatch['origin']>
 			});
 		} catch (e) {
-			testError = e instanceof Error ? e.message : String(e);
+			testError = apiErrorMessage(e);
 		} finally {
 			testing = false;
 		}

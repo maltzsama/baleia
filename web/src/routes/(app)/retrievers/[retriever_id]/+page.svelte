@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -36,7 +37,7 @@
 			retriever = await getRetriever(workspaceId, retrieverId);
 			history = await listHistory(workspaceId, retrieverId);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -61,7 +62,7 @@
 			await controller.done;
 			retriever = await getRetriever(workspaceId, retriever.id);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			refreshing = false;
 		}

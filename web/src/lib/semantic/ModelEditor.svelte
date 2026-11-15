@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -403,9 +404,7 @@
 			else void goto(resolve(`/models/${saved.id}`));
 		} catch (e) {
 			saveError =
-				e instanceof SemanticRequestError
-					? e
-					: new SemanticRequestError(e instanceof Error ? e.message : String(e));
+				e instanceof SemanticRequestError ? e : new SemanticRequestError(apiErrorMessage(e));
 		} finally {
 			saving = false;
 		}
@@ -429,7 +428,7 @@
 			previewSql = out.sql;
 			previewNotes = out.notes ?? [];
 		} catch (e) {
-			previewError = e instanceof Error ? e.message : String(e);
+			previewError = apiErrorMessage(e);
 		} finally {
 			previewing = false;
 		}
@@ -449,7 +448,7 @@
 			const rows = await listCatalogs({ limit: 200 });
 			if (alive) catalogs = rows;
 		} catch (e) {
-			if (alive) catalogsError = e instanceof Error ? e.message : String(e);
+			if (alive) catalogsError = apiErrorMessage(e);
 		}
 	}
 
@@ -459,7 +458,7 @@
 			const rows = await listModels(workspaceId);
 			if (alive) others = rows;
 		} catch (e) {
-			if (alive) othersError = e instanceof Error ? e.message : String(e);
+			if (alive) othersError = apiErrorMessage(e);
 		}
 	}
 

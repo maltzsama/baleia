@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages';
@@ -45,7 +46,7 @@
 				owner_id: ownerId || undefined
 			});
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}

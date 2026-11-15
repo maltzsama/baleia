@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { plural } from '$lib/i18n/plural';
 	import { authStore } from '$lib/stores/auth.svelte';
@@ -138,7 +139,7 @@
 			);
 			support = Object.fromEntries(supports);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -168,7 +169,7 @@
 		} catch (e) {
 			cards = {
 				...cards,
-				[connection.id]: { status: 'error', error: e instanceof Error ? e.message : String(e) }
+				[connection.id]: { status: 'error', error: apiErrorMessage(e) }
 			};
 		}
 	}
@@ -187,7 +188,7 @@
 				);
 			}
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		} finally {
 			testingId = '';
 		}
@@ -219,7 +220,7 @@
 			adding = null;
 			await load();
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		} finally {
 			addingBusy = false;
 		}

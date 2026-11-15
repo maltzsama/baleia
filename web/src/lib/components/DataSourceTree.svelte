@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import FolderIcon from '@lucide/svelte/icons/folder';
 	import InfoIcon from '@lucide/svelte/icons/info';
@@ -128,7 +129,7 @@
 			catalogs = loaded;
 		} catch (e) {
 			if (request !== rootsRequest) return;
-			loadError = e instanceof Error ? e.message : String(e);
+			loadError = apiErrorMessage(e);
 		} finally {
 			if (request === rootsRequest) loading = false;
 		}
@@ -202,7 +203,7 @@
 			node.nextCursor = page.next_cursor ?? null;
 			node.freshness = page.freshness;
 		} catch (e) {
-			node.tablesError = e instanceof Error ? e.message : String(e);
+			node.tablesError = apiErrorMessage(e);
 		} finally {
 			node.tablesLoading = false;
 		}
@@ -220,7 +221,7 @@
 		const pending = loadNode(node, catalog, path)
 			.catch((e) => {
 				node.status = 'error';
-				node.error = e instanceof Error ? e.message : String(e);
+				node.error = apiErrorMessage(e);
 			})
 			.finally(() => inflight.delete(key));
 		inflight.set(key, pending);
@@ -252,7 +253,7 @@
 			node.tables = [...node.tables, ...page.items];
 			node.nextCursor = page.next_cursor ?? null;
 		} catch (e) {
-			node.tablesError = e instanceof Error ? e.message : String(e);
+			node.tablesError = apiErrorMessage(e);
 		} finally {
 			node.tablesLoading = false;
 		}
@@ -343,7 +344,7 @@
 			} catch (e) {
 				if (seq !== searchSeq || controller.signal.aborted) return;
 				searchResults = [];
-				searchError = e instanceof Error ? e.message : String(e);
+				searchError = apiErrorMessage(e);
 			} finally {
 				if (seq === searchSeq) searchLoading = false;
 			}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import XIcon from '@lucide/svelte/icons/x';
 	import { m } from '$lib/paraglide/messages';
@@ -130,7 +131,7 @@
 			);
 			support = Object.fromEntries(loaded);
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : String(e);
+			loadError = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -284,9 +285,7 @@
 		} catch (e) {
 			if (run !== testRun || snap !== snapshot) return;
 			testError =
-				e instanceof ConnectionRequestError
-					? e
-					: new ConnectionRequestError(e instanceof Error ? e.message : String(e));
+				e instanceof ConnectionRequestError ? e : new ConnectionRequestError(apiErrorMessage(e));
 		} finally {
 			if (run === testRun) testing = false;
 		}
@@ -343,7 +342,7 @@
 			grantWorkspace = grantable[0]?.id ?? '';
 			step = 5;
 		} catch (e) {
-			createError = e instanceof Error ? e.message : String(e);
+			createError = apiErrorMessage(e);
 		} finally {
 			creating = false;
 		}

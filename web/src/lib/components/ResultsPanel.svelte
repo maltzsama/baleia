@@ -44,7 +44,7 @@
 	let exporting = $state(false);
 
 	function errorMessage(e: unknown): string {
-		return e instanceof Error ? e.message : String(e);
+		return apiErrorMessage(e);
 	}
 
 	$effect(() => {

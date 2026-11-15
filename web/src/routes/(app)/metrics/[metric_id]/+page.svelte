@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { page } from '$app/state';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -75,7 +76,7 @@
 			grain = (definition.time_grains ?? [])[0] ?? '';
 			await loadSQL();
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -95,7 +96,7 @@
 			portable = out.portable;
 		} catch (e) {
 			sql = '';
-			sqlError = e instanceof Error ? e.message : String(e);
+			sqlError = apiErrorMessage(e);
 		} finally {
 			sqlLoading = false;
 		}

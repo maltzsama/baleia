@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { normalizeTags, tagValid, upsertDoc, type MetadataColumn } from '$lib/semantic/docs';
@@ -82,10 +83,7 @@
 					{ description: row.description, tags }
 				);
 			} catch (e) {
-				failures = [
-					...failures,
-					{ column: row.name, message: e instanceof Error ? e.message : String(e) }
-				];
+				failures = [...failures, { column: row.name, message: apiErrorMessage(e) }];
 			}
 		}
 		progress = '';

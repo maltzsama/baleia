@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import ArrowUpRightIcon from '@lucide/svelte/icons/arrow-up-right';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import Trash2Icon from '@lucide/svelte/icons/trash-2';
@@ -135,7 +136,7 @@
 	}
 
 	function errorText(e: unknown): string {
-		return e instanceof Error ? e.message : String(e);
+		return apiErrorMessage(e);
 	}
 
 	function openQuery(query: SavedQuery) {
@@ -165,7 +166,7 @@
 			folderOpen = false;
 			await savedQueries.reload(workspaceId);
 		} catch (e) {
-			folderError = e instanceof Error ? e.message : String(e);
+			folderError = apiErrorMessage(e);
 		} finally {
 			folderSaving = false;
 		}
@@ -180,7 +181,7 @@
 			renameFolderOpen = false;
 			await savedQueries.reload(workspaceId);
 		} catch (e) {
-			folderError = e instanceof Error ? e.message : String(e);
+			folderError = apiErrorMessage(e);
 		} finally {
 			folderBusy = false;
 		}
@@ -198,7 +199,7 @@
 			moveFolderOpen = false;
 			await savedQueries.reload(workspaceId);
 		} catch (e) {
-			folderError = e instanceof Error ? e.message : String(e);
+			folderError = apiErrorMessage(e);
 		} finally {
 			folderBusy = false;
 		}
@@ -262,7 +263,7 @@
 			anchor.click();
 			URL.revokeObjectURL(url);
 		} catch (e) {
-			folderError = e instanceof Error ? e.message : String(e);
+			folderError = apiErrorMessage(e);
 		} finally {
 			exportBusy = false;
 		}
@@ -297,7 +298,7 @@
 			importBundle = parsed;
 			await dryRun();
 		} catch (e) {
-			importError = e instanceof Error ? e.message : String(e);
+			importError = apiErrorMessage(e);
 		}
 	}
 
@@ -309,7 +310,7 @@
 			const { report } = await importSpace(workspaceId, spaceId, 'dry_run', importBundle);
 			importReport = report ?? null;
 		} catch (e) {
-			importError = e instanceof Error ? e.message : String(e);
+			importError = apiErrorMessage(e);
 		} finally {
 			importBusy = false;
 		}
@@ -327,7 +328,7 @@
 				await savedQueries.reload(workspaceId);
 			}
 		} catch (e) {
-			importError = e instanceof Error ? e.message : String(e);
+			importError = apiErrorMessage(e);
 		} finally {
 			importApplying = false;
 		}

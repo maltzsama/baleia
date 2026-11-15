@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -39,7 +40,7 @@
 		try {
 			retrievers = await listRetrievers(workspaceId);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -52,7 +53,7 @@
 			toasts.success(m.retrievers_refreshing({ name: retriever.name }));
 			await load();
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		} finally {
 			busyId = '';
 		}
@@ -66,7 +67,7 @@
 			});
 			await load();
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		} finally {
 			busyId = '';
 		}

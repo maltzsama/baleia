@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import Button from '$lib/ui/Button.svelte';
 	import Drawer from '$lib/ui/Drawer.svelte';
@@ -55,7 +56,7 @@
 			const first = versions[0];
 			if (first) await select(first);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -71,7 +72,7 @@
 					? await getVersion(workspaceId, kind, entityId, version.version - 1)
 					: null;
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		}
 	}
 
@@ -102,7 +103,7 @@
 			) {
 				conflict = true;
 			}
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			restoring = false;
 		}

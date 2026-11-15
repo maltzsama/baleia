@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -131,7 +132,7 @@
 			syncUrl();
 			await resolveNames(page.items);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -146,7 +147,7 @@
 			nextCursor = page.next_cursor ?? null;
 			await resolveNames(page.items);
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		} finally {
 			loadingMore = false;
 		}
@@ -162,7 +163,7 @@
 			link.click();
 			URL.revokeObjectURL(url);
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		}
 	}
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
@@ -90,7 +91,7 @@
 		try {
 			[engines, providers] = await Promise.all([listEngines(), loadProviders()]);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -132,7 +133,7 @@
 			registerOpen = false;
 			void goto(resolve(`/engines/${engine.id}`));
 		} catch (e) {
-			registerError = e instanceof Error ? e.message : String(e);
+			registerError = apiErrorMessage(e);
 		} finally {
 			registering = false;
 		}

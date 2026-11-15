@@ -7,6 +7,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import {
 		addGlossaryEntry,
 		loadGlossary,
@@ -46,7 +47,7 @@
 		try {
 			glossary = await loadGlossary(id);
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : m.search_glossary_load_failed();
+			loadError = apiErrorMessage(e, m.search_glossary_load_failed());
 		} finally {
 			loading = false;
 		}
@@ -75,9 +76,7 @@
 			formError =
 				e instanceof SearchRequestError && e.status === 409
 					? m.search_glossary_duplicate()
-					: e instanceof Error
-						? e.message
-						: m.search_glossary_add_failed();
+					: apiErrorMessage(e, m.search_glossary_add_failed());
 		} finally {
 			saving = false;
 		}

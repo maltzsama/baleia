@@ -93,7 +93,7 @@
 			items = cursor ? [...items, ...data.data] : data.data;
 			nextCursor = data.next_cursor ?? null;
 		} catch (e) {
-			if (seq === requestSeq) error = e instanceof Error ? e.message : String(e);
+			if (seq === requestSeq) error = apiErrorMessage(e);
 		} finally {
 			if (seq === requestSeq) {
 				loading = false;
@@ -153,7 +153,7 @@
 			}
 			statements = data;
 		} catch (e) {
-			statementsError = e instanceof Error ? e.message : String(e);
+			statementsError = apiErrorMessage(e);
 		} finally {
 			statementsLoading = false;
 		}

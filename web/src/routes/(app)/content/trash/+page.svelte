@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { restorableKinds, restorableKindsText } from '$lib/content/kinds';
 	import { onMount } from 'svelte';
@@ -32,7 +33,7 @@
 		try {
 			items = await listTrash(workspaceId, kind || undefined);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -45,7 +46,7 @@
 			await restoreVersion(workspaceId, item.entity_type, item.entity_id, item.restore_version);
 			items = items.filter((row) => row.entity_id !== item.entity_id);
 		} catch (e) {
-			actionError = e instanceof Error ? e.message : String(e);
+			actionError = apiErrorMessage(e);
 		} finally {
 			busy = '';
 		}

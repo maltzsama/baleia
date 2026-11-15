@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
 	import Badge from '$lib/ui/Badge.svelte';
@@ -40,7 +41,7 @@
 		try {
 			items = await getCatalogMaintenancePlan(catalogId);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -57,7 +58,7 @@
 			await analyzeCatalogTableHealth(catalogId);
 			toasts.success(m.maintenance_analysis_started());
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		} finally {
 			analyzing = false;
 		}

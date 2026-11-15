@@ -39,7 +39,7 @@
 				details = data;
 			})
 			.catch((e) => {
-				if (!cancelled) error = e instanceof Error ? e.message : String(e);
+				if (!cancelled) error = apiErrorMessage(e);
 			})
 			.finally(() => {
 				if (!cancelled) loading = false;
