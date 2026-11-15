@@ -138,6 +138,7 @@ func (h *core) authorizeMemberWrite(ctx context.Context, wsID db.UUID) error {
 	if err != nil {
 		return err
 	}
+	ctx = audit.WithAction(ctx, audit.WorkspaceMemberSet)
 	_, err = h.authz().Workspace(ctx, p, wsID, authz.ActAdmin)
 	return err
 }

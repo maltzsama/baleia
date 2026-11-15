@@ -122,6 +122,44 @@ func matrixRow(name string, a access) authorizationMatrixRow {
 			row.workspaceRole = "none"
 			row.denial = "403"
 			row.action = "global_actions (admin plane)"
+		case hasCall(a, "authorizeMemberWrite"):
+			row.scope = "workspace administration"
+			row.globalRole = "none"
+			row.workspaceRole = "workspace admin"
+			row.denial = "404 when workspace is invisible; 403 otherwise"
+		case hasCall(a, "bindingAccess", "managedBinding"):
+			row.scope = "admin plane resource ownership"
+			row.globalRole = "admin or catalog and engine owner"
+			row.workspaceRole = "none"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "maintenanceTable", "catalogForMonitoring"):
+			row.scope = "catalog monitoring resource"
+			row.globalRole = "admin or catalog owner"
+			row.workspaceRole = "none"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "Team"):
+			row.scope = "team visibility"
+			row.globalRole = "admin or team member"
+			row.workspaceRole = "none"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "Handler"):
+			row.actor = "agent token"
+			row.globalRole = "none"
+			row.workspaceRole = "agent-scoped"
+			row.scope = "MCP agent authentication"
+			row.denial = "401 or resource-specific 404"
+		case hasCall(a, "ConstantTimeCompare"):
+			row.actor = "internal event token"
+			row.globalRole = "none"
+			row.workspaceRole = "none"
+			row.scope = "internal event ingestion"
+			row.denial = "401"
+		case hasCall(a, "CheckWorkspaceAccess"):
+			row.actor = "authenticated session"
+			row.globalRole = "none"
+			row.workspaceRole = "workspace member"
+			row.scope = "workspace websocket"
+			row.denial = "401 or 404"
 		case hasCall(a, "Connection", "Catalog", "CatalogOfConnection", "Engine"):
 			row.scope = "admin plane resource ownership"
 			row.globalRole = "admin or resource owner"
@@ -163,6 +201,10 @@ func matrixRow(name string, a access) authorizationMatrixRow {
 		switch {
 		case hasCall(a, "workspaceAdmin", "catalogOwner"):
 			row.action = "allowed_actions:catalog_grant.*"
+		case hasCall(a, "authorizeMemberWrite"):
+			row.action = "allowed_actions:workspace.manage_members"
+		case hasCall(a, "bindingAccess", "managedBinding"):
+			row.action = "allowed_actions:catalog_binding.*"
 		case hasCall(a, "serviceAccountManager", "managedServiceAccount"):
 			row.action = "allowed_actions:service_account.*"
 		case hasCall(a, "asAgentOwner", "agentScope", "agentOwned"):
@@ -227,6 +269,28 @@ func TestAuthorizationMatrix(t *testing.T) {
 				scope:         "workspace data plane plus space ceiling",
 				denial:        "404 when invisible; 403 when below required role",
 				action:        "allowed_actions:workspace/content.*",
+			},
+		},
+		"workspace member set": {
+			access: checked("authorizeMemberWrite", "GetUserByID"),
+			want: authorizationMatrixRow{
+				actor:         "authenticated principal",
+				globalRole:    "none",
+				workspaceRole: "workspace admin",
+				scope:         "workspace administration",
+				denial:        "404 when workspace is invisible; 403 otherwise",
+				action:        "allowed_actions:workspace.manage_members",
+			},
+		},
+		"workspace member add": {
+			access: checked("authorizeMemberWrite", "GetUserByEmail"),
+			want: authorizationMatrixRow{
+				actor:         "authenticated principal",
+				globalRole:    "none",
+				workspaceRole: "workspace admin",
+				scope:         "workspace administration",
+				denial:        "404 when workspace is invisible; 403 otherwise",
+				action:        "allowed_actions:workspace.manage_members",
 			},
 		},
 	}
@@ -475,7 +539,7 @@ var operationAccess = map[string]access{
 	"GetSemanticModel":            checked("metadataWorkspace", "modelDefs.Get", "contentSpace"),
 	"CompileExploreQuery":         checked("metadataWorkspace", "modelDefs.List", "semanticTarget"),
 	"CreateSemanticModel":         checked("metadataWorkspace", "semanticCatalog", "modelDefs.PrepareNew", "contentSpace"),
-	"MigrateSemanticMetricsV1":    checked("metadataWorkspace", "metricDefs.List", "semanticCatalog", "modelDefs.Visible", "contentSpace"),
+	"MigrateSemanticMetricsV1":    checked("metadataWorkspace", "metricDefs.List", "modelDefs.List", "modelDefs.Visible", "semanticCatalog", "contentSpace"),
 	"UpdateSemanticModel":         checked("metadataWorkspace", "modelDefs.Get", "contentSpace", "semanticCatalog", "modelDefs.PrepareUpdate"),
 	"DeleteSemanticModel":         checked("metadataWorkspace", "modelDefs.Get", "contentSpace", "modelDefs.Delete"),
 	"ListSemanticModelVersions":   checked("history.SpaceOf", "contentSpace", "history.List"),
@@ -676,7 +740,9 @@ func bodyOf(n ast.Node, recv string) *funcBody {
 				// h.svc.Method is also recorded as "svc.Method", so an entry
 				// can name the service a scoped call goes through.
 				if inner, ok := fn.X.(*ast.SelectorExpr); ok {
-					fb.calls[inner.Sel.Name+"."+fn.Sel.Name] = true
+					qualified := inner.Sel.Name + "." + fn.Sel.Name
+					fb.calls[qualified] = true
+					fb.order = append(fb.order, qualified)
 				}
 			}
 		case *ast.Ident:
@@ -814,6 +880,9 @@ func validMatrixRow(row authorizationMatrixRow) []string {
 		if value == "" {
 			problems = append(problems, row.name+": authorization matrix is missing "+field)
 		}
+	}
+	if row.scope == "named handler guards" {
+		problems = append(problems, row.name+": authorization matrix has unresolved scope")
 	}
 	return problems
 }
@@ -971,6 +1040,36 @@ func TestAuthzCoverage(t *testing.T) {
 	sort.Strings(problems)
 	for _, pr := range problems {
 		t.Error(pr)
+	}
+}
+
+func TestAuthzCoverage_QualifiedCallOrder(t *testing.T) {
+	t.Parallel()
+	funcs, dup := loadFuncs(t, ".")
+	if dup["UpdateSemanticModel"] {
+		t.Fatal("UpdateSemanticModel has more than one declaration")
+	}
+	fb := funcs["UpdateSemanticModel"]
+	if fb == nil {
+		t.Fatal("UpdateSemanticModel was not parsed")
+	}
+	if problems := auditBody("UpdateSemanticModel", operationAccess["UpdateSemanticModel"], fb); len(problems) != 0 {
+		t.Fatalf("qualified authorization order was not enforced: %v", problems)
+	}
+	want := []string{"modelDefs.Get", "contentSpace", "semanticCatalog", "modelDefs.PrepareUpdate"}
+	previous := -1
+	for _, call := range want {
+		found := -1
+		for i := previous + 1; i < len(fb.order); i++ {
+			if fb.order[i] == call {
+				found = i
+				break
+			}
+		}
+		if found < 0 {
+			t.Fatalf("qualified call %q missing from order %v", call, fb.order)
+		}
+		previous = found
 	}
 }
 
