@@ -50,6 +50,7 @@ type access struct {
 	calls []string // calls the handler body must contain
 	why   string   // required for kindAuthenticated
 	pkg   string   // routes only: directory of the handler, default "."
+	order []string // calls that must occur in this order
 }
 
 // authorizationMatrixRow is the reviewable contract for one protected entry.
@@ -228,6 +229,10 @@ var (
 )
 
 func checked(calls ...string) access { return access{kind: kindChecked, calls: calls} }
+
+func checkedBefore(calls ...string) access {
+	return access{kind: kindChecked, calls: calls, order: calls}
+}
 
 var operationAccess = map[string]access{
 	// ── public (see publicOps in internal/server/server.go)
@@ -515,8 +520,8 @@ var operationAccess = map[string]access{
 	"ListServiceAccountTokens":  checked("managedServiceAccount"),
 	"CreateServiceAccountToken": checked("managedServiceAccount"),
 	"RevokeServiceAccountToken": checked("managedServiceAccount"),
-	"SetWorkspaceMember":        checked("PrincipalFromContext", "setMember"),
-	"AddWorkspaceMember":        checked("PrincipalFromContext", "setMember"),
+	"SetWorkspaceMember":        checkedBefore("authorizeMemberWrite", "GetUserByID", "setMember"),
+	"AddWorkspaceMember":        checkedBefore("authorizeMemberWrite", "GetUserByEmail", "setMember"),
 	"RemoveWorkspaceMember":     checked("PrincipalFromContext", "Workspace"),
 	"GetWorkspaceImpact":        checked("PrincipalFromContext", "Workspace"),
 	"GetCatalogAccessImpact":    checked("PrincipalFromContext", "Workspace"),
@@ -587,6 +592,7 @@ var routeAccess = map[string]access{
 // funcBody is what the audit needs to know about one function.
 type funcBody struct {
 	calls        map[string]bool // names of every function or method called
+	order        []string        // function calls in source traversal order
 	usesReceiver bool
 	file         string
 }
@@ -638,8 +644,10 @@ func bodyOf(n ast.Node, recv string) *funcBody {
 			switch fn := v.Fun.(type) {
 			case *ast.Ident:
 				fb.calls[fn.Name] = true
+				fb.order = append(fb.order, fn.Name)
 			case *ast.SelectorExpr:
 				fb.calls[fn.Sel.Name] = true
+				fb.order = append(fb.order, fn.Sel.Name)
 				// h.svc.Method is also recorded as "svc.Method", so an entry
 				// can name the service a scoped call goes through.
 				if inner, ok := fn.X.(*ast.SelectorExpr); ok {
@@ -792,6 +800,26 @@ func auditBody(name string, a access, fb *funcBody) []string {
 			p = append(p, fmt.Sprintf("%s (%s, %s): body no longer calls %s", name, a.kind, fb.file, c))
 		}
 	}
+	if len(a.order) > 1 {
+		positions := make(map[string]int, len(fb.order))
+		for i, call := range fb.order {
+			if _, ok := positions[call]; !ok {
+				positions[call] = i
+			}
+		}
+		previous := -1
+		for _, call := range a.order {
+			position, ok := positions[call]
+			if !ok {
+				continue
+			}
+			if position <= previous {
+				p = append(p, fmt.Sprintf("%s (%s, %s): authorization call order is %v, want %v", name, a.kind, fb.file, fb.order, a.order))
+				break
+			}
+			previous = position
+		}
+	}
 	if a.kind == kindStub && fb.usesReceiver {
 		p = append(p, fmt.Sprintf("%s: a stub must not use its receiver (%s); give it a real access entry", name, fb.file))
 	}
@@ -927,7 +955,7 @@ func TestAuthzCoverage(t *testing.T) {
 func TestAuthzCoverage_Detects(t *testing.T) {
 	t.Parallel()
 	body := func(recv bool, calls ...string) *funcBody {
-		fb := &funcBody{calls: map[string]bool{}, usesReceiver: recv, file: "x.go"}
+		fb := &funcBody{calls: map[string]bool{}, usesReceiver: recv, file: "x.go", order: calls}
 		for _, c := range calls {
 			fb.calls[c] = true
 		}
@@ -958,6 +986,17 @@ func TestAuthzCoverage_Detects(t *testing.T) {
 	}
 	if strings.Contains(got, "Guarded (") {
 		t.Errorf("a correctly guarded handler was reported:\n%s", got)
+	}
+
+	got = strings.Join(auditOperations(
+		[]string{"Reordered"},
+		map[string]access{"Reordered": checkedBefore("authorizeMemberWrite", "GetUserByID")},
+		map[string]*funcBody{"Reordered": body(false, "GetUserByID", "authorizeMemberWrite")},
+		nil,
+		map[string]bool{},
+	), "\n")
+	if !strings.Contains(got, "authorization call order") {
+		t.Errorf("authorization order regression was not reported:\n%s", got)
 	}
 
 	// A public flag that disagrees with publicOps is reported.
