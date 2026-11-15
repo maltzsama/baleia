@@ -146,7 +146,7 @@ BALEIA_TEST_LDAP_URL=ldap://localhost:1389 \
 the seed file, so the directory always matches the tracked LDIF. The profile
 starts OpenLDAP with the seed LDIF in `deploy/dev/ldap/50-baleia.ldif`:
 
-| | |
+| Item | Value |
 |---|---|
 | Admin / service bind | `cn=admin,dc=example,dc=org` / `admin` |
 | User | `alice` / `ldap-password` |

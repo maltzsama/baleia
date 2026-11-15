@@ -1,9 +1,16 @@
+/* The landing page keeps the site's house style: the Monoton wordmark, the
+   logo's purple, yellow and pink, square controls and serif headings. The
+   global tokens live in src/css/custom.css; this file only lays out the page. */
+
+/* ---------- Hero ---------- */
+
 .heroBanner {
-  padding: 5rem 0;
+  padding: clamp(2rem, 5vh, 4.5rem) 1rem;
   text-align: center;
   position: relative;
   overflow: hidden;
   background: var(--baleia-purple);
+  color: #fff;
 }
 
 /* A glow of the star's yellow and the pet's pink behind the logo, and a
@@ -27,31 +34,30 @@
   pointer-events: none;
 }
 
-.heroBanner > :global(.container) {
+.heroInner {
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .heroLogo {
+  width: clamp(84px, 11vh, 116px);
+  height: auto;
   margin-bottom: 0.5rem;
   filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.35));
 }
 
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 3rem 1rem;
-  }
-}
-
 .lede {
-  max-width: 38rem;
+  max-width: 42rem;
   margin-inline: auto;
-  margin-top: 1rem;
-  margin-bottom: 2rem;
-  font-size: 1.05rem;
+  margin-top: 0.9rem;
+  margin-bottom: 1.4rem;
+  font-size: clamp(0.98rem, 0.3vw + 0.9rem, 1.05rem);
   font-weight: 300;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.86);
 }
 
 /* The released version and the beta badge, under the tagline. */
@@ -60,10 +66,9 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  margin-top: 0.85rem;
+  margin-top: 0.6rem;
 }
 
-/* The version links to its release; the beta badge states the stage. */
 .version {
   display: inline-block;
   padding: 0.15rem 0.7rem;
@@ -93,15 +98,469 @@
   color: #fff;
 }
 
+/* ---------- Buttons ---------- */
+
 .buttons {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.55rem 0.8rem;
 }
 
-/* Heading kept for the outline (h1 -> h2 -> h3) and for assistive tech. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.25rem;
+  border: 2px solid transparent;
+  border-radius: 0;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.primaryButton {
+  background: var(--baleia-yellow);
+  border-color: var(--baleia-yellow);
+  color: var(--baleia-purple);
+}
+
+.primaryButton:hover {
+  background: #fff3b8;
+  border-color: #fff3b8;
+  color: var(--baleia-purple);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.outlineButton {
+  border-color: #fff;
+  background: transparent;
+  color: #fff;
+}
+
+.outlineButton:hover {
+  background: var(--baleia-yellow);
+  border-color: var(--baleia-yellow);
+  color: var(--baleia-purple);
+  text-decoration: none;
+}
+
+.ghostButton {
+  border-color: transparent;
+  background: transparent;
+  color: #fff;
+  padding-inline: 0.4rem;
+}
+
+.ghostButton:hover {
+  color: var(--baleia-yellow);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.secondaryButton {
+  border-color: var(--ifm-color-primary);
+  background: transparent;
+  color: var(--ifm-color-primary);
+}
+
+.secondaryButton:hover {
+  background: var(--ifm-color-primary);
+  color: var(--ifm-background-color);
+  text-decoration: none;
+}
+
+/* On the light closing card, the ghost link is the page's own ink. */
+.ghostDark {
+  color: var(--ifm-color-primary);
+}
+
+.ghostDark:hover {
+  color: var(--ifm-color-primary-dark);
+}
+
+.button:focus-visible,
+.version:focus-visible,
+.featureLink:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 3px;
+}
+
+/* On the purple bands, the brand yellow is the ring that contrasts. */
+.heroBanner .button:focus-visible,
+.heroBanner .version:focus-visible {
+  outline-color: var(--baleia-yellow);
+}
+
+.heroFacts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem 0.8rem;
+  margin: 1.1rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.heroFacts li + li::before {
+  content: '·';
+  margin-right: 1rem;
+  opacity: 0.6;
+}
+
+/* ---------- Engines ---------- */
+
+.engines {
+  padding: 2.5rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 12%, transparent);
+  background: color-mix(in srgb, var(--ifm-color-primary) 4%, var(--ifm-background-color));
+}
+
+.enginesLabel {
+  margin: 0 0 1rem;
+  text-align: center;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ifm-font-color-base) 58%, transparent);
+}
+
+.engineList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.engineChip {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 16%, transparent);
+  background: var(--ifm-background-color);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.76rem;
+  color: color-mix(in srgb, var(--ifm-font-color-base) 78%, transparent);
+}
+
+/* ---------- Shared section pieces ---------- */
+
+.section {
+  padding: 5rem 0;
+}
+
+.sectionTint {
+  background: color-mix(in srgb, var(--ifm-color-primary) 5%, var(--ifm-background-color));
+  border-top: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 8%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 8%, transparent);
+}
+
+.sectionHead {
+  max-width: 44rem;
+  margin-bottom: 2.75rem;
+}
+
+.kicker {
+  display: block;
+  margin-bottom: 0.7rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+  font-weight: 500;
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.sectionLede {
+  margin: 1rem 0 0;
+  font-size: 1.02rem;
+  line-height: 1.65;
+  color: color-mix(in srgb, var(--ifm-font-color-base) 72%, transparent);
+}
+
+/* ---------- How it works ---------- */
+
+.step {
+  height: 100%;
+  padding-top: 1.4rem;
+  border-top: 2px solid color-mix(in srgb, var(--ifm-font-color-base) 14%, transparent);
+}
+
+.stepNum {
+  display: block;
+  margin-bottom: 0.6rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  color: var(--ifm-color-primary);
+}
+
+.stepTitle {
+  margin: 0 0 0.55rem;
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+  font-size: 1.32rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.stepBody {
+  margin: 0;
+  line-height: 1.62;
+  color: color-mix(in srgb, var(--ifm-font-color-base) 72%, transparent);
+}
+
+/* ---------- Features ---------- */
+
+.feature {
+  margin-bottom: 1.5rem;
+}
+
+.featureLink {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1.6rem;
+  border: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 14%, transparent);
+  background: var(--ifm-background-color);
+  color: inherit;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.featureLink:hover {
+  border-color: var(--ifm-color-primary);
+  color: inherit;
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(58, 16, 97, 0.08);
+}
+
+.featureTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.1rem;
+}
+
+.featureIndex {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  color: var(--ifm-color-primary);
+}
+
+.featureArrow {
+  font-size: 1rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--ifm-font-color-base) 40%, transparent);
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.featureLink:hover .featureArrow {
+  color: var(--ifm-color-primary);
+  transform: translate(2px, -2px);
+}
+
+.featureTitle {
+  margin: 0 0 0.6rem;
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+  font-size: 1.3rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.featureBody {
+  margin: 0;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--ifm-font-color-base) 74%, transparent);
+}
+
+/* ---------- Control plane ---------- */
+
+.controlPlane {
+  position: relative;
+  overflow: hidden;
+  padding: 5rem 0;
+  background: var(--baleia-purple);
+  color: #fff;
+}
+
+.controlPlane::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 45% 50% at 85% 10%, rgba(255, 235, 135, 0.14), transparent 70%),
+    radial-gradient(ellipse 50% 50% at 10% 95%, rgba(255, 143, 148, 0.12), transparent 70%);
+  pointer-events: none;
+}
+
+.controlPlane > :global(.container) {
+  position: relative;
+  z-index: 1;
+}
+
+.controlPlane .kicker {
+  color: var(--baleia-yellow);
+}
+
+.cpText {
+  max-width: 34rem;
+}
+
+.cpTitle {
+  margin: 0;
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+  font-weight: 500;
+  line-height: 1.14;
+}
+
+.cpLede {
+  margin: 1rem 0 0;
+  font-size: 1.02rem;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.cpList {
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cpList li {
+  position: relative;
+  margin: 0.55rem 0;
+  padding-left: 1.4rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.cpList li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--baleia-yellow);
+}
+
+.flow {
+  margin: 0;
+  padding: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  list-style: none;
+}
+
+.flowItem {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 0;
+}
+
+.flowItem + .flowItem {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.flowLabel {
+  font-weight: 600;
+  color: #fff;
+}
+
+.flowNote {
+  margin-top: 0.2rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.flowArrow {
+  margin-top: 0.55rem;
+  font-size: 1.05rem;
+  color: var(--baleia-yellow);
+}
+
+/* ---------- Closing call to action ---------- */
+
+.ctaSection {
+  padding: 5rem 0;
+}
+
+.ctaCard {
+  padding: clamp(2rem, 5vw, 3.5rem);
+  border: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 14%, transparent);
+  background: color-mix(in srgb, var(--ifm-color-primary) 5%, var(--ifm-background-color));
+  text-align: center;
+}
+
+.ctaTitle {
+  margin: 0;
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+  font-weight: 500;
+  line-height: 1.14;
+}
+
+.ctaLede {
+  max-width: 40rem;
+  margin: 1rem auto 0;
+  line-height: 1.65;
+  color: color-mix(in srgb, var(--ifm-font-color-base) 74%, transparent);
+}
+
+.ctaCode {
+  display: block;
+  max-width: 34rem;
+  margin: 1.75rem auto 0;
+  padding: 1.15rem 1.4rem;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: #170d25;
+  color: #efe7fb;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.ctaButtons {
+  margin-top: 1.75rem;
+}
+
+/* ---------- Assistive text ---------- */
+
 .srOnly {
   position: absolute;
   width: 1px;
@@ -114,53 +573,61 @@
   border: 0;
 }
 
-.outlineButton {
-  border: 2px solid #fff;
-  background: transparent;
-  color: #fff;
+/* ---------- Responsive ---------- */
+
+@media screen and (max-width: 996px) {
+  .section,
+  .controlPlane,
+  .ctaSection {
+    padding: 3.5rem 0;
+  }
+
+  .step {
+    margin-bottom: 1.75rem;
+  }
+
+  .cpText {
+    max-width: none;
+  }
+
+  .flow {
+    margin-top: 2rem;
+  }
 }
 
-.outlineButton:hover {
-  background: var(--baleia-yellow);
-  border-color: var(--baleia-yellow);
-  color: var(--baleia-purple);
+@media screen and (max-width: 640px) {
+  .buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .button {
+    width: 100%;
+  }
+
+  .heroFacts li + li::before {
+    content: none;
+  }
+
+  .ctaCode {
+    font-size: 0.78rem;
+    padding: 1rem 1.1rem;
+  }
+
+  .ctaCard {
+    padding: 1.5rem 1.25rem;
+  }
 }
 
-.features {
-  padding: 4rem 0;
-  width: 100%;
-}
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .featureLink,
+  .featureArrow {
+    transition: none;
+  }
 
-.feature {
-  margin-bottom: 1.5rem;
-}
-
-.featureLink {
-  display: block;
-  height: 100%;
-  padding: 1.5rem;
-  border: 1px solid var(--ifm-color-emphasis-200);
-  color: inherit;
-  transition:
-    border-color 0.15s ease,
-    transform 0.15s ease;
-}
-
-.featureLink:hover {
-  border-color: var(--ifm-color-primary);
-  color: inherit;
-  text-decoration: none;
-  transform: translateY(-2px);
-}
-
-.featureLink h3 {
-  margin-top: 0;
-  font-family: 'Fraunces', ui-serif, Georgia, serif;
-  font-weight: 500;
-  font-size: 1.35rem;
-}
-
-.featureLink p {
-  margin: 0;
-  color: var(--ifm-color-emphasis-700);
+  .primaryButton:hover,
+  .featureLink:hover {
+    transform: none;
+  }
 }
