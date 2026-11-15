@@ -1072,7 +1072,15 @@ components:
         max_query_runtime_seconds: { type: integer, minimum: 0 }
         max_concurrent_queries: { type: integer, minimum: 0 }
         max_queries_per_hour: { type: integer, minimum: 0 }
-        max_tool_calls_per_minute: { type: integer, minimum: 0 }
+        max_tool_calls_per_minute:
+          type: integer
+          minimum: 0
+          description: >-
+            Token-bucket burst limit for MCP tool calls: up to this many calls
+            may be admitted immediately and the bucket refills at this rate per
+            minute. It is not a strict rolling-minute quota and does not cap how
+            many calls run concurrently. With the shared Redis limiter it is
+            enforced per agent across API replicas.
     AgentPolicy:
       type: object
       required: [version]
@@ -1094,7 +1102,15 @@ components:
         max_query_runtime_seconds: { type: integer, minimum: 0 }
         max_concurrent_queries: { type: integer, minimum: 0 }
         max_queries_per_hour: { type: integer, minimum: 0 }
-        max_tool_calls_per_minute: { type: integer, minimum: 0 }
+        max_tool_calls_per_minute:
+          type: integer
+          minimum: 0
+          description: >-
+            Token-bucket burst limit for MCP tool calls: up to this many calls
+            may be admitted immediately and the bucket refills at this rate per
+            minute. It is not a strict rolling-minute quota and does not cap how
+            many calls run concurrently. With the shared Redis limiter it is
+            enforced per agent across API replicas.
     AgentPolicyResponse:
       type: object
       required: [policy, stored, ceilings]

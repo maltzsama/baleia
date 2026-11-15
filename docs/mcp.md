@@ -82,6 +82,12 @@ concurrency/hourly quotas. A refusal is returned as:
 ```
 
 `reason` is one of `policy`, `scope`, `rate`, `quota`, `budget`, `statement`.
+The rate limit is a token-bucket burst control, not a strict rolling 60-second
+quota. When Redis is configured, the bucket is shared by every API replica;
+without Redis or when a Redis operation fails, the fallback is one local bucket
+per replica. During an outage the deployment-wide limit is not guaranteed. Policy
+and server-ceiling changes are applied on the next call, and rate refusals
+include a bounded `retry_after_seconds` value.
 
 With [workload management](guides/workload.md) on, a run over the agent's
 concurrency limit is not refused: it waits in its engine's queue for its

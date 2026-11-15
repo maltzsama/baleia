@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -199,7 +200,7 @@ func summarize(out any) (int64, bool) {
 func refused(dec agentpolicy.Decision) (*mcpsdk.CallToolResult, any, error) {
 	errObj := map[string]any{"code": "refused", "reason": string(dec.Reason), "detail": dec.Detail}
 	if dec.RetryAfter > 0 {
-		errObj["retry_after_seconds"] = int(dec.RetryAfter.Seconds())
+		errObj["retry_after_seconds"] = max(1, int(math.Ceil(dec.RetryAfter.Seconds())))
 	}
 	return &mcpsdk.CallToolResult{IsError: true}, map[string]any{"error": errObj}, nil
 }

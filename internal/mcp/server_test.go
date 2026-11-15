@@ -210,6 +210,22 @@ func TestRefusalBeforeHandler(t *testing.T) {
 	}
 }
 
+func TestRefusalRoundsRetryUpToSeconds(t *testing.T) {
+	t.Parallel()
+	_, out, err := refused(agentpolicy.Decision{
+		Reason:     agentpolicy.ReasonRate,
+		Detail:     "tool-call rate exceeded",
+		RetryAfter: 100 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	errObj := out.(map[string]any)["error"].(map[string]any)
+	if got := errObj["retry_after_seconds"]; got != 1 {
+		t.Fatalf("retry_after_seconds = %v, want 1", got)
+	}
+}
+
 // TestImportBoundary keeps the MCP package on the in-process API surface: it
 // must never reach the database, engines or object storage directly (#58).
 func TestImportBoundary(t *testing.T) {

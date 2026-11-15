@@ -611,6 +611,9 @@
 								/>
 							{/each}
 						</div>
+						<p class="mt-2 text-[11px] text-text-muted">
+							{m.settings_agents_detail_tool_calls_are_a_burst_limit()}
+						</p>
 					</div>
 
 					<div class="flex items-center gap-2">

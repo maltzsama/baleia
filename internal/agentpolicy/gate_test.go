@@ -2,6 +2,8 @@ package agentpolicy
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -80,6 +82,37 @@ type fixture struct {
 	cat    db.UUID
 	engine db.UUID
 	now    time.Time
+}
+
+type fakeSharedLimiter struct {
+	mu      sync.Mutex
+	counts  map[string]int
+	bursts  map[string]int
+	enabled bool
+	err     error
+}
+
+func newFakeSharedLimiter() *fakeSharedLimiter {
+	return &fakeSharedLimiter{counts: map[string]int{}, bursts: map[string]int{}, enabled: true}
+}
+
+func (l *fakeSharedLimiter) Enabled() bool { return l.enabled }
+
+func (l *fakeSharedLimiter) Allow(_ context.Context, key string, _ float64, burst int) (bool, time.Duration, error) {
+	if l.err != nil {
+		return false, 0, l.err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.bursts[key] != burst {
+		l.bursts[key] = burst
+		l.counts[key] = 0
+	}
+	if l.counts[key] >= burst {
+		return false, time.Second, nil
+	}
+	l.counts[key]++
+	return true, 0, nil
 }
 
 func newFixture() *fixture {
@@ -283,6 +316,113 @@ func TestBurstLimiter(t *testing.T) {
 	}
 	if dec := f.check(t, f.call(ToolListCatalogs, nil)); dec.Allowed || dec.Reason != ReasonRate {
 		t.Fatalf("third call = %+v, want rate refusal", dec)
+	}
+}
+
+func TestBurstLimiterPolicyAndCeilingChangesTakeEffect(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	f.store.agent.Policy = []byte(`{"max_tool_calls_per_minute":2}`)
+	for i := 0; i < 2; i++ {
+		if dec := f.check(t, f.call(ToolListCatalogs, nil)); !dec.Allowed {
+			t.Fatalf("initial call %d = %+v, want allowed", i+1, dec)
+		}
+	}
+
+	// Increasing the policy replaces the exhausted bucket immediately.
+	f.store.agent.Policy = []byte(`{"max_tool_calls_per_minute":60}`)
+	if dec := f.check(t, f.call(ToolListCatalogs, nil)); !dec.Allowed {
+		t.Fatalf("increased policy = %+v, want allowed", dec)
+	}
+
+	// A lower server ceiling also replaces the bucket before the next call.
+	f.store.agent.Policy = []byte(`{"max_tool_calls_per_minute":60}`)
+	f.gate.ceilings.MaxToolCallsPerMinute = 2
+	for i := 0; i < 2; i++ {
+		if dec := f.check(t, f.call(ToolListCatalogs, nil)); !dec.Allowed {
+			t.Fatalf("ceiling call %d = %+v, want allowed", i+1, dec)
+		}
+	}
+	if dec := f.check(t, f.call(ToolListCatalogs, nil)); dec.Allowed || dec.Reason != ReasonRate {
+		t.Fatalf("ceiling third call = %+v, want rate refusal", dec)
+	}
+}
+
+func TestBurstLimiterRetryAfter(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	f.store.agent.Policy = []byte(`{"max_tool_calls_per_minute":1}`)
+	if dec := f.check(t, f.call(ToolListCatalogs, nil)); !dec.Allowed {
+		t.Fatalf("initial call = %+v, want allowed", dec)
+	}
+	dec := f.check(t, f.call(ToolListCatalogs, nil))
+	if dec.Allowed || dec.Reason != ReasonRate {
+		t.Fatalf("second call = %+v, want rate refusal", dec)
+	}
+	if dec.RetryAfter < 59*time.Second || dec.RetryAfter > time.Minute {
+		t.Fatalf("retry after = %v, want about 60s", dec.RetryAfter)
+	}
+}
+
+func TestBurstLimiterConcurrentCalls(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	f.store.agent.Policy = []byte(`{"max_tool_calls_per_minute":10}`)
+	results := make(chan Decision, 100)
+	var wg sync.WaitGroup
+	for i := 0; i < cap(results); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			dec, err := f.gate.Check(context.Background(), f.p, f.call(ToolListCatalogs, nil))
+			if err != nil {
+				results <- Decision{Reason: ReasonPolicy, Detail: err.Error()}
+				return
+			}
+			results <- dec
+		}()
+	}
+	wg.Wait()
+	close(results)
+	allowed := 0
+	for dec := range results {
+		if dec.Allowed {
+			allowed++
+		}
+	}
+	if allowed != 10 {
+		t.Fatalf("allowed calls = %d, want 10", allowed)
+	}
+}
+
+func TestSharedBurstLimiterAcrossGatesAndFallback(t *testing.T) {
+	t.Parallel()
+	shared := newFakeSharedLimiter()
+	a, b := newFixture(), newFixture()
+	a.store.agent.Policy = []byte(`{"max_tool_calls_per_minute":2}`)
+	b.store.agent.Policy = a.store.agent.Policy
+	a.gate.SetSharedLimiter(shared)
+	b.gate.SetSharedLimiter(shared)
+	for i := 0; i < 2; i++ {
+		if dec := a.check(t, a.call(ToolListCatalogs, nil)); !dec.Allowed {
+			t.Fatalf("shared call %d = %+v, want allowed", i+1, dec)
+		}
+	}
+	if dec := b.check(t, b.call(ToolListCatalogs, nil)); dec.Allowed || dec.Reason != ReasonRate {
+		t.Fatalf("second gate call = %+v, want shared rate refusal", dec)
+	}
+
+	shared.err = errors.New("redis unavailable")
+	f := newFixture()
+	f.store.agent.Policy = []byte(`{"max_tool_calls_per_minute":2}`)
+	f.gate.SetSharedLimiter(shared)
+	for i := 0; i < 2; i++ {
+		if dec := f.check(t, f.call(ToolListCatalogs, nil)); !dec.Allowed {
+			t.Fatalf("fallback call %d = %+v, want allowed", i+1, dec)
+		}
+	}
+	if dec := f.check(t, f.call(ToolListCatalogs, nil)); dec.Allowed || dec.Reason != ReasonRate {
+		t.Fatalf("fallback third call = %+v, want local rate refusal", dec)
 	}
 }
 
