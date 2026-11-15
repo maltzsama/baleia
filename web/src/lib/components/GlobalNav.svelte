@@ -73,7 +73,9 @@
 		title={label}
 		aria-current={current === key ? 'page' : undefined}
 		class="flex h-10 w-10 items-center justify-center rounded-[10px] no-underline transition-colors duration-150
-			{current === key ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}"
+			{current === key
+			? 'bg-[#ffeb87] text-[#3a1061]'
+			: 'text-[#c9b8e0] hover:bg-white/10 hover:text-white'}"
 	>
 		<Glyph class="h-[18px] w-[18px]" aria-hidden="true" />
 		<span class="sr-only">{label}</span>
@@ -105,20 +107,20 @@
 				title={authStore.user?.name ?? ''}
 				aria-haspopup="menu"
 				aria-expanded={menuOpen}
-				class="w-[30px] h-[30px] rounded-full bg-slate-700 flex items-center justify-center text-[11px] font-bold text-slate-200 no-underline border-none cursor-pointer"
+				class="w-[30px] h-[30px] rounded-full bg-white/10 flex items-center justify-center text-[11px] font-bold text-white no-underline border-none cursor-pointer transition-colors hover:bg-white/15"
 			>
 				{authStore.initials}
 			</button>
 			{#if menuOpen}
 				<div
-					class="absolute bottom-full left-0 mb-2 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50"
+					class="absolute bottom-full left-0 mb-2 w-40 bg-[#2a0c4a] border border-white/10 rounded-lg shadow-xl overflow-hidden z-50"
 				>
 					{#each [{ href: '/profile', label: m.nav_profile(), icon: icons.profile }, { href: '/profile/api-keys', label: m.nav_page_api_keys(), icon: KeyIcon }] as item (item.href)}
 						{@const ItemIcon = item.icon}
 						<a
 							href={resolve(item.href as '/profile')}
 							onclick={() => (menuOpen = false)}
-							class="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-slate-200 no-underline transition-colors duration-150 hover:bg-slate-700"
+							class="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-[#e7ddf5] no-underline transition-colors duration-150 hover:bg-white/10"
 						>
 							<ItemIcon class="w-4 h-4" aria-hidden="true" />
 							{item.label}
@@ -126,7 +128,7 @@
 					{/each}
 					<button
 						onclick={authStore.logout}
-						class="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[13px] text-slate-200 transition-colors duration-150 hover:bg-slate-700 border-none bg-transparent cursor-pointer text-left"
+						class="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[13px] text-[#e7ddf5] transition-colors duration-150 hover:bg-white/10 border-none bg-transparent cursor-pointer text-left"
 					>
 						<LogOutIcon class="w-4 h-4" />
 						{m.components_globalnav_logout()}
