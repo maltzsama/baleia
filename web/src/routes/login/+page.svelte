@@ -260,7 +260,7 @@
 				aria-label={m.login_dark_theme()}
 				onclick={toggleDark}
 				class="w-8 h-[18px] rounded-full cursor-pointer relative border-none p-0 transition-colors duration-200
-					{dark ? 'bg-[#6b2fa3]' : 'bg-border-hover'}"
+					{dark ? 'bg-[#9f6cef]' : 'bg-border-hover'}"
 			>
 				<span
 					class="absolute w-[14px] h-[14px] bg-white rounded-full top-[2px] left-[2px] shadow-sm transition-transform duration-200
