@@ -340,6 +340,7 @@
 	"settings_users_name_e_mail_or_status": "Nome, e-mail ou status",
 	"metrics_named_aggregations_over_one_table_rendered": "Agregações nomeadas sobre uma tabela, renderizadas para o motor em que você executar.",
 	"errorpanel_native": "nativo",
+	"errorpanel_message": "mensagem",
 	"components_attentionbell_needs_attention": "Precisa de atenção",
 	"catalogs_needs_attention_only": "Somente o que precisa de atenção",
 	"settings_agents_new_agent": "Novo agente",

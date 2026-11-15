@@ -340,6 +340,7 @@
 	"settings_users_name_e_mail_or_status": "Name, e-mail or status",
 	"metrics_named_aggregations_over_one_table_rendered": "Named aggregations over one table, rendered for whichever engine you run on.",
 	"errorpanel_native": "native",
+	"errorpanel_message": "message",
 	"components_attentionbell_needs_attention": "Needs attention",
 	"catalogs_needs_attention_only": "Needs attention only",
 	"settings_agents_new_agent": "New agent",
