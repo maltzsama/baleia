@@ -40,7 +40,7 @@
 	let grain = $state('');
 	let sql = $state('');
 	let portable = $state(true);
-	let sqlError = $state('');
+	let sqlError = $state<unknown>(null);
 	let sqlLoading = $state(false);
 	let historyOpen = $state(false);
 	let deleteOpen = $state(false);
@@ -85,7 +85,7 @@
 	async function loadSQL() {
 		if (!workspaceId || !metricId) return;
 		sqlLoading = true;
-		sqlError = '';
+		sqlError = null;
 		try {
 			const out = await metricSQL(workspaceId, metricId, {
 				binding_id: bindingId || undefined,
@@ -96,7 +96,9 @@
 			portable = out.portable;
 		} catch (e) {
 			sql = '';
-			sqlError = apiErrorMessage(e);
+			// Keep the thrown error so ErrorPanel can use its stable code and
+			// request id instead of a generic render error.
+			sqlError = e;
 		} finally {
 			sqlLoading = false;
 		}
@@ -234,7 +236,7 @@
 					<Skeleton class="mt-2 h-20 w-full" />
 				{:else if sqlError}
 					<div class="mt-2">
-						<ErrorPanel error={{ code: 'render_error', message: sqlError }} />
+						<ErrorPanel error={sqlError} />
 					</div>
 				{:else}
 					<pre
