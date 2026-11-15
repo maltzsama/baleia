@@ -78,15 +78,16 @@ service accounts:
 ## Authorization coverage contract
 
 The backend authorization inventory is maintained in
-\`internal/api/authz_coverage_test.go\`. Every generated API operation and every
+`internal/api/authz_coverage_test.go`. Every generated API operation and every
 hand-registered route must have an entry describing its enforcement kind,
 guard calls, actor scope, role plane, resource scope, denial behavior and
-action projection. The test fails when an operation is added without an entry,
+action projection. An explicit `none` projection means that the endpoint is
+guarded but does not return an action list. The test fails when an operation is added without an entry,
 when an entry becomes stale, or when a declared guard disappears from the
 handler.
 
 The inventory is a coverage contract, not a second authorization engine. The
-named guards and the \`internal/authz\` checker remain authoritative. In
+named guards and the `internal/authz` checker remain authoritative. In
 particular:
 
 - global administration is distinct from workspace data access;

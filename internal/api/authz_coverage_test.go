@@ -94,34 +94,34 @@ func matrixRow(name string, a access) authorizationMatrixRow {
 		row.workspaceRole = "none"
 		row.scope = "caller-independent"
 		row.denial = "401"
-		row.action = "authenticated"
+		row.action = "none (no allowed_actions/global_actions projection)"
 	case kindSelf:
 		row.actor = "authenticated user"
 		row.globalRole = "any"
 		row.workspaceRole = "none"
 		row.scope = "caller"
 		row.denial = "401 or resource-specific"
-		row.action = "self"
+		row.action = "none (no allowed_actions/global_actions projection)"
 	case kindAdmin:
 		row.actor = "human user"
 		row.globalRole = "admin"
 		row.workspaceRole = "none"
 		row.scope = "global administration"
 		row.denial = "403"
-		row.action = "global administration"
+		row.action = "global_actions (admin plane)"
 	case kindChecked:
 		row.actor = "authenticated principal"
 		row.globalRole = "not required unless the guard says admin"
 		row.workspaceRole = "not required unless the guard says workspace role"
 		row.denial = "guard-defined 403/404"
-		row.action = "operation-specific"
+		row.action = "none (handler-level guard)"
 		switch {
 		case hasCall(a, "RequireAdmin", "RoleFromContext"):
 			row.scope = "global administration"
 			row.globalRole = "admin"
 			row.workspaceRole = "none"
 			row.denial = "403"
-			row.action = "global administration"
+			row.action = "global_actions (admin plane)"
 		case hasCall(a, "Connection", "Catalog", "CatalogOfConnection", "Engine"):
 			row.scope = "admin plane resource ownership"
 			row.globalRole = "admin or resource owner"
@@ -157,7 +157,29 @@ func matrixRow(name string, a access) authorizationMatrixRow {
 		row.workspaceRole = "none"
 		row.scope = "constant response"
 		row.denial = "none"
-		row.action = "stub"
+		row.action = "none (stub)"
+	}
+	if a.kind == kindChecked {
+		switch {
+		case hasCall(a, "workspaceAdmin", "catalogOwner"):
+			row.action = "allowed_actions:catalog_grant.*"
+		case hasCall(a, "serviceAccountManager", "managedServiceAccount"):
+			row.action = "allowed_actions:service_account.*"
+		case hasCall(a, "asAgentOwner", "agentScope", "agentOwned"):
+			row.action = "allowed_actions:agent.*"
+		case hasCall(a, "Connection"):
+			row.action = "allowed_actions:catalog_connection.*"
+		case hasCall(a, "Catalog", "CatalogOfConnection"):
+			row.action = "allowed_actions:catalog.*"
+		case hasCall(a, "Engine"):
+			row.action = "allowed_actions:engine.*"
+		case hasCall(a, "contentSpace", "spaceForWrite", "requireSpace"):
+			row.action = "allowed_actions:workspace/content.*"
+		case hasCall(a, "Workspace", "metadataWorkspace", "requireWorkspaceAccess", "wsMember"):
+			row.action = "allowed_actions:workspace.*"
+		case hasCall(a, "maintenanceTable", "catalogForMonitoring"):
+			row.action = "allowed_actions:table_maintenance.*"
+		}
 	}
 	return row
 }
@@ -173,7 +195,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 			access: access{kind: kindAdmin, calls: []string{"RoleFromContext"}},
 			want: authorizationMatrixRow{
 				actor: "human user", globalRole: "admin", workspaceRole: "none",
-				scope: "global administration", denial: "403", action: "global administration",
+				scope: "global administration", denial: "403", action: "global_actions (admin plane)",
 			},
 		},
 		"admin plane owner": {
@@ -182,7 +204,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 				actor: "authenticated principal", globalRole: "admin or resource owner",
 				workspaceRole: "none", scope: "admin plane resource ownership",
 				denial: "404 when invisible; 403 when visible but insufficient",
-				action: "operation-specific",
+				action: "allowed_actions:catalog.*",
 			},
 		},
 		"workspace data plane": {
@@ -193,7 +215,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 				workspaceRole: "workspace member or stronger",
 				scope:         "workspace data plane",
 				denial:        "404 when not a member; 403 when visible but insufficient",
-				action:        "operation-specific",
+				action:        "allowed_actions:workspace.*",
 			},
 		},
 		"space ceiling": {
@@ -204,7 +226,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 				workspaceRole: "workspace role capped by space role",
 				scope:         "workspace data plane plus space ceiling",
 				denial:        "404 when invisible; 403 when below required role",
-				action:        "operation-specific",
+				action:        "allowed_actions:workspace/content.*",
 			},
 		},
 	}
