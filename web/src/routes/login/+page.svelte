@@ -251,7 +251,7 @@
 	<!-- Right form -->
 	<main class="w-full lg:w-[460px] shrink-0 flex flex-col py-10 px-8 overflow-y-auto relative">
 		<div class="absolute top-5 right-6 flex items-center gap-1.5 text-[11px] text-text-muted">
-			<MoonIcon class="w-[13px] h-[13px]" />
+			<SunIcon class="w-[13px] h-[13px]" />
 			<!-- A native switch button (#484): named, Enter and Space both toggle. -->
 			<button
 				type="button"
@@ -267,7 +267,7 @@
 					{dark ? 'translate-x-[14px]' : 'translate-x-0'}"
 				></span>
 			</button>
-			<SunIcon class="w-[13px] h-[13px]" />
+			<MoonIcon class="w-[13px] h-[13px]" />
 		</div>
 
 		<div class="m-auto w-full max-w-[360px]">
