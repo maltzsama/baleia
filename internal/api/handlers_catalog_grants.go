@@ -107,12 +107,6 @@ func (h *CatalogHandlers) ListCatalogGrantItems(ctx context.Context, request Lis
 		}
 	} else {
 		catID := db.UUID{Bytes: *params.CatalogId, Valid: true}
-		if _, err := store.GetCatalogByID(ctx, catID); err != nil {
-			if errors.Is(err, db.ErrNoRows) {
-				return ListCatalogGrantItems404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
-			}
-			return nil, err
-		}
 		if !h.catalogOwner(ctx, p, catID) {
 			return ListCatalogGrantItems404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "catalog not found"}}, nil
 		}
