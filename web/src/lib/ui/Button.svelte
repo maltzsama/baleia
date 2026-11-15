@@ -34,7 +34,7 @@
 		md: 'h-9 px-4 text-[13px]'
 	};
 	const variants: Record<Variant, string> = {
-		primary: 'bg-primary text-white border-transparent hover:enabled:bg-primary-hover',
+		primary: 'bg-primary-solid text-white border-transparent hover:enabled:bg-primary-solid-hover',
 		secondary:
 			'bg-transparent text-text-muted border-border hover:enabled:border-border-hover hover:enabled:text-text-main',
 		danger: 'bg-danger text-white border-transparent hover:enabled:bg-red-700',

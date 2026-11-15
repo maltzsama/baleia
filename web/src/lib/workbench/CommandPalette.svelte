@@ -136,7 +136,7 @@
 						aria-selected={active === index}
 						class="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[12px] {active ===
 						index
-							? 'bg-blue-50 text-primary dark:bg-[#152236]'
+							? 'bg-primary/10 text-primary'
 							: 'hover:bg-slate-100 dark:hover:bg-[#1c2128]'}"
 						onmousemove={() => (active = index)}
 						onclick={() => run(item)}

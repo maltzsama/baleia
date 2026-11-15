@@ -134,7 +134,7 @@
 					{#if onselecttable && item.kind === 'table'}
 						<button
 							type="button"
-							class="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-blue-50 hover:text-primary disabled:opacity-50 dark:hover:bg-[#152236]"
+							class="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-primary/10 hover:text-primary disabled:opacity-50"
 							disabled={opening === item.id}
 							aria-busy={opening === item.id}
 							onclick={() => void selectTable(item)}
@@ -149,7 +149,7 @@
 					{:else if item.href}
 						<a
 							href={resolve(item.href as '/')}
-							class="flex items-center gap-2 rounded px-1.5 py-1 hover:bg-blue-50 hover:text-primary dark:hover:bg-[#152236]"
+							class="flex items-center gap-2 rounded px-1.5 py-1 hover:bg-primary/10 hover:text-primary"
 						>
 							<span
 								class="inline-flex h-1.5 w-1.5 shrink-0 rounded-full bg-primary"

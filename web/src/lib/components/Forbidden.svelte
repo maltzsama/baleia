@@ -21,7 +21,7 @@
 		</p>
 		<a
 			href={resolve('/sql')}
-			class="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-[13px] font-semibold text-white no-underline hover:bg-primary-hover"
+			class="mt-4 inline-block rounded-md bg-primary-solid px-4 py-2 text-[13px] font-semibold text-white no-underline hover:bg-primary-solid-hover"
 		>
 			{m.components_forbidden_back_to_the_workbench()}
 		</a>

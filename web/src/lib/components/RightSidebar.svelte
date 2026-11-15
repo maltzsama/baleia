@@ -95,7 +95,7 @@
 				title={m.common_expand()}
 				aria-label={m.components_rightsidebar_expand_the_inspector()}
 				class="w-[22px] h-[22px] rounded-[5px] cursor-pointer flex items-center justify-center text-text-muted bg-none border-none
-					hover:bg-blue-50 hover:text-primary dark:hover:bg-[#152236]"
+					hover:bg-primary/10 hover:text-primary"
 			>
 				<CircleExclamationPointIcon class="w-3.5 h-3.5" />
 			</button>

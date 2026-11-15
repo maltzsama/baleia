@@ -46,7 +46,7 @@
 				onclick={() => (collapsed = false)}
 				title={m.common_expand()}
 				class="w-[22px] h-[22px] rounded-[5px] cursor-pointer flex items-center justify-center text-text-muted transition-all duration-150 bg-none border-none
-					hover:bg-blue-50 hover:text-primary dark:hover:bg-[#152236]"
+					hover:bg-primary/10 hover:text-primary"
 			>
 				<DatabaseIcon class="w-3.5 h-3.5" />
 			</button>

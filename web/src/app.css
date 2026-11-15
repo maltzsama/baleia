@@ -16,9 +16,12 @@
 	--color-text-main: #1e293b;
 	--color-text-muted: #5b6b82; /* 4.8:1 on bg-app (WCAG AA) */
 
-	--color-primary: #2563eb;
-	--color-primary-hover: #1d4ed8;
-	--color-brand-dark: #0f172a;
+	--color-primary: #6b2fa3;
+	--color-primary-hover: #5b288b;
+	--color-primary-solid: #6b2fa3;
+	--color-primary-solid-hover: #5b288b;
+	--color-focus-ring: rgba(107, 47, 163, 0.18);
+	--color-brand-dark: #3a1061;
 
 	--color-success: #047857;
 	--color-success-hover: #065f46;
@@ -66,6 +69,9 @@
 	--color-border-hover: #484f58;
 	--color-text-main: #e6edf3;
 	--color-text-muted: #7d8590;
+	--color-primary: #c3a3f5;
+	--color-primary-hover: #ab7ef1;
+	--color-focus-ring: rgba(195, 163, 245, 0.22);
 	/* The light danger is too dark on dark panels; this one is 4.6:1 there. */
 	--color-danger: #ef4444;
 
