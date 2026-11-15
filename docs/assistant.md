@@ -66,3 +66,9 @@ Conversations and messages are stored in `assistant_conversations` and
 `assistant_messages`. History survives a restart. A turn that was running when a
 replica stopped is marked `interrupted` by the sweeper (60 s heartbeat) and the
 user can retry it; the in-flight provider call is not resumed.
+
+The conversation SSE stream sends a `state` snapshot before replaying persisted
+messages. Message frames carry their persisted sequence in the SSE `id` field;
+clients reconnect with `after_seq` and deduplicate by sequence. Provider `delta`
+frames are deliberately best-effort and are not resumable: the persisted
+`message` frame is the authoritative result after a disconnect.

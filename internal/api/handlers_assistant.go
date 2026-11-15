@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -429,7 +430,8 @@ func (h *AgentHandlers) StreamAssistantConversation(ctx context.Context, request
 		return nil, err
 	}
 	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
-	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
+	conversation, err := svc.GetConversation(ctx, p.UserID, id)
+	if err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
 			return StreamAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
 		}
@@ -467,7 +469,7 @@ func (h *AgentHandlers) StreamAssistantConversation(ctx context.Context, request
 	for _, row := range rows {
 		replay = append(replay, assistantMessageToPublic(h.logger, row))
 	}
-	stream := &assistantSSE{ctx: ctx, replay: replay, lastSeq: after, ping: time.NewTicker(15 * time.Second)}
+	stream := &assistantSSE{ctx: ctx, replay: replay, state: string(conversation.State), conversationSeq: conversation.LastSeq, lastSeq: after, ping: time.NewTicker(15 * time.Second)}
 	stream.events, stream.unsubscribe = events, unsubscribe
 	return StreamAssistantConversation200TexteventStreamResponse{Body: stream}, nil
 }
@@ -475,12 +477,14 @@ func (h *AgentHandlers) StreamAssistantConversation(ctx context.Context, request
 // assistantSSE is the SSE body. WriteTo is what io.Copy uses, which lets each
 // frame flush immediately instead of waiting for the HTTP buffer.
 type assistantSSE struct {
-	ctx         context.Context
-	replay      []AssistantMessage
-	events      <-chan assistant.Event
-	unsubscribe func()
-	ping        *time.Ticker
-	lastSeq     int32
+	ctx             context.Context
+	replay          []AssistantMessage
+	state           string
+	conversationSeq int32
+	events          <-chan assistant.Event
+	unsubscribe     func()
+	ping            *time.Ticker
+	lastSeq         int32
 }
 
 func (s *assistantSSE) Read([]byte) (int, error) { return 0, io.EOF }
@@ -506,12 +510,19 @@ func (s *assistantSSE) WriteTo(w io.Writer) (int64, error) {
 		}
 		return err
 	}
+	state, err := json.Marshal(map[string]any{"state": s.state, "last_seq": s.conversationSeq})
+	if err != nil {
+		return written, err
+	}
+	if err := write("event: state\ndata: " + string(state) + "\n\n"); err != nil {
+		return written, err
+	}
 	for _, msg := range s.replay {
 		raw, err := json.Marshal(msg)
 		if err != nil {
 			return written, err
 		}
-		if err := write("event: message\ndata: " + string(raw) + "\n\n"); err != nil {
+		if err := write("id: " + strconv.Itoa(msg.Seq) + "\nevent: message\ndata: " + string(raw) + "\n\n"); err != nil {
 			return written, err
 		}
 		if msg.Seq > int(s.lastSeq) {
@@ -543,7 +554,7 @@ func (s *assistantSSE) WriteTo(w io.Writer) (int64, error) {
 				if err != nil {
 					return written, err
 				}
-				if err := write("event: message\ndata: " + string(raw) + "\n\n"); err != nil {
+				if err := write("id: " + strconv.Itoa(int(ev.Seq)) + "\nevent: message\ndata: " + string(raw) + "\n\n"); err != nil {
 					return written, err
 				}
 			case "delta":

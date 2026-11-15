@@ -20,4 +20,10 @@ describe('assistant SSE parser', () => {
 		expect(frame).toEqual({ event: 'delta', data: '{"text":"hi"}', id: '7' });
 		expect(parseFrame(': ping')).toBeNull();
 	});
+
+	it('parses the reconnect state snapshot', () => {
+		expect(parseSse('event: state\ndata: {"state":"running","last_seq":4}\n\n')).toEqual([
+			{ event: 'state', data: '{"state":"running","last_seq":4}', id: undefined }
+		]);
+	});
 });

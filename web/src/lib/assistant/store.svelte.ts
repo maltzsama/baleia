@@ -7,7 +7,7 @@ import { streamEvents, type SseFrame } from './sse';
 type Conversation = components['schemas']['AssistantConversation'];
 type Message = components['schemas']['AssistantMessage'];
 
-class AssistantStore {
+export class AssistantStore {
 	enabled = $state(false);
 	dataSharing = $state<'metadata_only' | 'metadata_and_samples'>('metadata_only');
 	conversations = $state<Conversation[]>([]);
@@ -266,6 +266,21 @@ class AssistantStore {
 	}
 
 	private onFrame(frame: SseFrame) {
+		if (frame.event === 'state') {
+			try {
+				const payload = JSON.parse(frame.data) as { state?: Conversation['state'] };
+				if (
+					payload.state === 'idle' ||
+					payload.state === 'running' ||
+					payload.state === 'interrupted'
+				) {
+					this.state = payload.state;
+				}
+			} catch {
+				// Persisted messages remain authoritative when a snapshot is malformed.
+			}
+			return;
+		}
 		if (frame.event === 'delta') {
 			try {
 				const payload = JSON.parse(frame.data) as { text?: string };
