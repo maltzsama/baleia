@@ -29,7 +29,7 @@ else
 end
 local allowed = 0
 if tokens >= 1 then tokens = tokens - 1; allowed = 1 end
-redis.call('HSET', key, 'tokens', tokens, 'ts', now, 'rate', ARGV[1], 'burst', ARGV[2])
+redis.call('HSET', key, 'tokens', tokens, 'ts', math.max(ts, now), 'rate', ARGV[1], 'burst', ARGV[2])
 redis.call('PEXPIRE', key, math.ceil(burst / rate * 1000) + 1000)
 local retry = 0
 if allowed == 0 then retry = math.ceil((1 - tokens) / rate * 1000) end
@@ -41,12 +41,19 @@ return {allowed, retry}
 // refused, how long until the next token. A disabled client always allows:
 // there is no shared limit to enforce, so the caller's local limiter applies.
 func (c *Client) Allow(ctx context.Context, key string, rate float64, burst int) (bool, time.Duration, error) {
+	return c.allowAt(ctx, key, rate, burst, time.Now())
+}
+
+// allowAt is Allow with an explicit clock. Tests use it to model replicas whose
+// clocks disagree: a lagging replica must never rewind the stored refill
+// timestamp and make the next fast replica refill tokens it did not earn.
+func (c *Client) allowAt(ctx context.Context, key string, rate float64, burst int, now time.Time) (bool, time.Duration, error) {
 	if !c.Enabled() || rate <= 0 || burst <= 0 {
 		return true, 0, nil
 	}
 	opCtx, cancel := c.operation(ctx)
 	defer cancel()
-	res, err := tokenBucket.Run(opCtx, c.rdb, []string{c.key("limit", key)}, rate, burst, time.Now().UnixMilli()).Slice()
+	res, err := tokenBucket.Run(opCtx, c.rdb, []string{c.key("limit", key)}, rate, burst, now.UnixMilli()).Slice()
 	if err != nil {
 		return false, 0, err
 	}
