@@ -211,6 +211,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			got := matrixRow(name, tc.access)
 			if got.actor != tc.want.actor || got.globalRole != tc.want.globalRole ||
 				got.workspaceRole != tc.want.workspaceRole || got.scope != tc.want.scope ||
