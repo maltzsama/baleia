@@ -404,14 +404,15 @@ func (h *AgentHandlers) CancelAssistantTurn(ctx context.Context, request CancelA
 		return nil, err
 	}
 	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
-	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
+	conv, err := svc.GetConversation(ctx, p.UserID, id)
+	if err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
 			return CancelAssistantTurn404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
 		}
 		return nil, err
 	}
 	if runner := h.assistantRunner.Load(); runner != nil {
-		runner.Cancel(ctx, id)
+		runner.Cancel(ctx, id, deref(conv.TurnOwner))
 	}
 	return CancelAssistantTurn202Response{}, nil
 }
@@ -581,14 +582,15 @@ func (h *AgentHandlers) DeleteAssistantConversation(ctx context.Context, request
 		return nil, err
 	}
 	id := db.UUID{Bytes: [16]byte(request.Id), Valid: true}
-	if _, err := svc.GetConversation(ctx, p.UserID, id); err != nil {
+	conv, err := svc.GetConversation(ctx, p.UserID, id)
+	if err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {
 			return DeleteAssistantConversation404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "conversation not found"}}, nil
 		}
 		return nil, err
 	}
 	if runner := h.assistantRunner.Load(); runner != nil {
-		runner.Cancel(ctx, id)
+		runner.Cancel(ctx, id, deref(conv.TurnOwner))
 	}
 	if err := svc.DeleteConversation(ctx, p.UserID, id); err != nil {
 		if errors.Is(err, assistant.ErrNotFound) {

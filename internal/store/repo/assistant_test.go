@@ -363,7 +363,7 @@ func TestAssistantTurnLifecycle(t *testing.T) {
 	}
 
 	time.Sleep(5 * time.Millisecond)
-	if err := f.r.HeartbeatConversation(ctx, conv.ID); err != nil {
+	if err := f.r.HeartbeatConversation(ctx, conv.ID, owner); err != nil {
 		t.Fatalf("HeartbeatConversation: %v", err)
 	}
 	beaten, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user})
@@ -373,17 +373,24 @@ func TestAssistantTurnLifecycle(t *testing.T) {
 	if !beaten.UpdatedAt.Time.Equal(before.UpdatedAt.Time) {
 		t.Fatalf("heartbeat moved updated_at: %v -> %v", before.UpdatedAt.Time, beaten.UpdatedAt.Time)
 	}
+	// A heartbeat from a runner that lost the turn leaves the newer lease alone.
+	if err := f.r.HeartbeatConversation(ctx, conv.ID, "replica-2"); err != nil {
+		t.Fatalf("HeartbeatConversation(stale token): %v", err)
+	}
+	if stale, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user}); err != nil || !stale.TurnHeartbeatAt.Time.Equal(beaten.TurnHeartbeatAt.Time) {
+		t.Fatalf("stale heartbeat moved the lease = %+v, %v", stale.TurnHeartbeatAt, err)
+	}
 
 	// A stale runner must not release a turn it no longer owns.
-	if err := f.r.ReleaseConversation(ctx, conv.ID, "replica-2"); err != nil {
-		t.Fatalf("ReleaseConversation(stale token): %v", err)
+	if released, err := f.r.ReleaseConversation(ctx, conv.ID, "replica-2"); err != nil || released {
+		t.Fatalf("ReleaseConversation(stale token) = %v, %v, want no release", released, err)
 	}
 	held, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user})
 	if err != nil || held.State != "running" || held.TurnOwner == nil || *held.TurnOwner != owner {
 		t.Fatalf("stale release changed the turn = %+v, %v", held, err)
 	}
-	if err := f.r.ReleaseConversation(ctx, conv.ID, owner); err != nil {
-		t.Fatalf("ReleaseConversation: %v", err)
+	if released, err := f.r.ReleaseConversation(ctx, conv.ID, owner); err != nil || !released {
+		t.Fatalf("ReleaseConversation = %v, %v, want a release", released, err)
 	}
 	released, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user})
 	if err != nil || released.State != "idle" || released.TurnOwner != nil || released.TurnHeartbeatAt.Valid {
@@ -394,15 +401,15 @@ func TestAssistantTurnLifecycle(t *testing.T) {
 	if _, err := f.r.ClaimConversation(ctx, adb.ClaimConversationParams{ID: conv.ID, UserID: f.user, TurnOwner: &owner}); err != nil {
 		t.Fatalf("claim after release: %v", err)
 	}
-	if err := f.r.SetConversationInterrupted(ctx, conv.ID); err != nil {
-		t.Fatalf("SetConversationInterrupted: %v", err)
+	if won, err := f.r.InterruptConversation(ctx, conv.ID, owner); err != nil || !won {
+		t.Fatalf("InterruptConversation = %v, %v, want the transition", won, err)
 	}
 	interrupted, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user})
-	if err != nil || interrupted.State != "interrupted" || interrupted.TurnOwner != nil || interrupted.TurnHeartbeatAt.Valid {
+	if err != nil || interrupted.State != "interrupted" || interrupted.TurnOwner != nil || interrupted.TurnHeartbeatAt.Valid || interrupted.InterruptRequestedAt.Valid {
 		t.Fatalf("interrupted = %+v, %v", interrupted, err)
 	}
 	// A heartbeat outside a running turn leaves the lease alone.
-	if err := f.r.HeartbeatConversation(ctx, conv.ID); err != nil {
+	if err := f.r.HeartbeatConversation(ctx, conv.ID, owner); err != nil {
 		t.Fatalf("HeartbeatConversation while interrupted: %v", err)
 	}
 	still, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user})
@@ -448,6 +455,85 @@ func TestAssistantInterruptStale(t *testing.T) {
 	gotFresh, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: fresh.ID, UserID: f.user})
 	if err != nil || gotFresh.State != "running" {
 		t.Fatalf("fresh conversation = %+v, %v", gotFresh, err)
+	}
+}
+
+// TestAssistantDurableInterrupt covers the persisted cancellation intent
+// (#1045): the request binds to the owning turn, blocks the idle release, and
+// the terminal transition happens exactly once.
+func TestAssistantDurableInterrupt(t *testing.T) {
+	t.Parallel()
+	f := newAssistantFixture(t)
+	ctx := context.Background()
+	conv := f.conversation(t)
+	owner := "replica-1"
+
+	if _, err := f.r.ClaimConversation(ctx, adb.ClaimConversationParams{ID: conv.ID, UserID: f.user, TurnOwner: &owner}); err != nil {
+		t.Fatalf("ClaimConversation: %v", err)
+	}
+	// A request from a runner that does not own the turn is a no-op.
+	if won, err := f.r.RequestInterrupt(ctx, conv.ID, "replica-2"); err != nil || won {
+		t.Fatalf("RequestInterrupt(stale token) = %v, %v, want no-op", won, err)
+	}
+	if requested, err := f.r.InterruptRequested(ctx, conv.ID, owner); err != nil || requested {
+		t.Fatalf("InterruptRequested before request = %v, %v", requested, err)
+	}
+	if won, err := f.r.RequestInterrupt(ctx, conv.ID, owner); err != nil || !won {
+		t.Fatalf("RequestInterrupt = %v, %v, want the request", won, err)
+	}
+	if requested, err := f.r.InterruptRequested(ctx, conv.ID, owner); err != nil || !requested {
+		t.Fatalf("InterruptRequested after request = %v, %v", requested, err)
+	}
+	// A pending interrupt keeps the turn out of idle: the interrupt owns it.
+	if released, err := f.r.ReleaseConversation(ctx, conv.ID, owner); err != nil || released {
+		t.Fatalf("ReleaseConversation with pending interrupt = %v, %v, want no release", released, err)
+	}
+	if state, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user}); err != nil || state.State != "running" {
+		t.Fatalf("turn after blocked release = %+v, %v", state, err)
+	}
+	if won, err := f.r.InterruptConversation(ctx, conv.ID, owner); err != nil || !won {
+		t.Fatalf("InterruptConversation = %v, %v, want the transition", won, err)
+	}
+	// A second interrupt (sweeper racing cancel) wins nothing, so no second event.
+	if won, err := f.r.InterruptConversation(ctx, conv.ID, owner); err != nil || won {
+		t.Fatalf("second InterruptConversation = %v, %v, want a no-op", won, err)
+	}
+	done, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user})
+	if err != nil || done.State != "interrupted" || done.InterruptRequestedAt.Valid || done.TurnOwner != nil {
+		t.Fatalf("interrupted = %+v, %v", done, err)
+	}
+}
+
+// TestAssistantInterruptCannotClobberNewerTurn: a runner that lost the turn to
+// a reclaim cannot interrupt the newer turn that replaced it.
+func TestAssistantInterruptCannotClobberNewerTurn(t *testing.T) {
+	t.Parallel()
+	f := newAssistantFixture(t)
+	ctx := context.Background()
+	conv := f.conversation(t)
+	old, next := "replica-1", "replica-2"
+
+	if _, err := f.r.ClaimConversation(ctx, adb.ClaimConversationParams{ID: conv.ID, UserID: f.user, TurnOwner: &old}); err != nil {
+		t.Fatalf("claim old: %v", err)
+	}
+	if released, err := f.r.ReleaseConversation(ctx, conv.ID, old); err != nil || !released {
+		t.Fatalf("release old = %v, %v", released, err)
+	}
+	if _, err := f.r.ClaimConversation(ctx, adb.ClaimConversationParams{ID: conv.ID, UserID: f.user, TurnOwner: &next}); err != nil {
+		t.Fatalf("claim next: %v", err)
+	}
+	if won, err := f.r.InterruptConversation(ctx, conv.ID, old); err != nil || won {
+		t.Fatalf("InterruptConversation(old) = %v, %v, want no-op", won, err)
+	}
+	if won, err := f.r.RequestInterrupt(ctx, conv.ID, old); err != nil || won {
+		t.Fatalf("RequestInterrupt(old) = %v, %v, want no-op", won, err)
+	}
+	held, err := f.r.GetConversation(ctx, adb.GetConversationParams{ID: conv.ID, UserID: f.user})
+	if err != nil || held.State != "running" || held.TurnOwner == nil || *held.TurnOwner != next {
+		t.Fatalf("newer turn = %+v, %v", held, err)
+	}
+	if won, err := f.r.InterruptConversation(ctx, conv.ID, next); err != nil || !won {
+		t.Fatalf("InterruptConversation(next) = %v, %v", won, err)
 	}
 }
 

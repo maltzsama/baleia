@@ -199,3 +199,175 @@ func TestRunnerSlot(t *testing.T) {
 		t.Fatal("the stored runner must load back")
 	}
 }
+
+// blockingProvider holds the turn open until its context is cancelled.
+type blockingProvider struct {
+	started chan struct{}
+}
+
+func (p *blockingProvider) Stream(ctx context.Context, _ llm.Request, _ func(string)) (llm.Response, error) {
+	select {
+	case p.started <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	return llm.Response{}, ctx.Err()
+}
+
+// gatedProvider holds the turn open until the test releases it, then completes.
+type gatedProvider struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *gatedProvider) Stream(_ context.Context, _ llm.Request, _ func(string)) (llm.Response, error) {
+	close(p.started)
+	<-p.release
+	return llm.Response{Text: "done"}, nil
+}
+
+func waitState(t *testing.T, svc *assistant.Service, userID, id db.UUID, want string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		conv, err := svc.GetConversation(context.Background(), userID, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if conv.State == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("state did not become %q", want)
+}
+
+func currentOwner(t *testing.T, svc *assistant.Service, userID, id db.UUID) string {
+	t.Helper()
+	conv, err := svc.GetConversation(context.Background(), userID, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conv.TurnOwner == nil {
+		t.Fatal("conversation has no turn owner")
+	}
+	return *conv.TurnOwner
+}
+
+func countNotices(t *testing.T, svc *assistant.Service, id db.UUID, kind string) int {
+	t.Helper()
+	msgs, err := svc.ListMessages(context.Background(), id, 0, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, m := range msgs {
+		if m.Role != "notice" {
+			continue
+		}
+		var content map[string]any
+		if json.Unmarshal(m.Content, &content) != nil {
+			continue
+		}
+		if content["kind"] == kind {
+			n++
+		}
+	}
+	return n
+}
+
+// waitNotice waits for the terminal notice, which lands just after the state
+// transition the finalizer wins.
+func waitNotice(t *testing.T, svc *assistant.Service, id db.UUID, kind string, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if countNotices(t, svc, id, kind) == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("notices %q = %d, want %d", kind, countNotices(t, svc, id, kind), want)
+}
+
+// TestCancelStopsTheTurnDurably: cancel persists the intent, the running turn
+// stops, and it lands interrupted with exactly one terminal notice (#1045).
+func TestCancelStopsTheTurnDurably(t *testing.T) {
+	t.Parallel()
+	svc, userID, workspaceID := newTurnFixture(t)
+	conv, err := svc.CreateConversation(context.Background(), userID, workspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &blockingProvider{started: make(chan struct{}, 1)}
+	runner := assistant.NewRunner(slog.New(slog.DiscardHandler), svc, provider, &fakeTools{})
+	if _, err := runner.Start(context.Background(), userID, conv.ID, "hello"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-provider.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the provider never started")
+	}
+	owner := currentOwner(t, svc, userID, conv.ID)
+	runner.Cancel(context.Background(), conv.ID, owner)
+	waitState(t, svc, userID, conv.ID, "interrupted")
+	waitNotice(t, svc, conv.ID, "interrupted", 1)
+}
+
+// TestCancelIsIdempotent: a repeated cancel wins the terminal transition once.
+func TestCancelIsIdempotent(t *testing.T) {
+	t.Parallel()
+	svc, userID, workspaceID := newTurnFixture(t)
+	conv, err := svc.CreateConversation(context.Background(), userID, workspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &blockingProvider{started: make(chan struct{}, 1)}
+	runner := assistant.NewRunner(slog.New(slog.DiscardHandler), svc, provider, &fakeTools{})
+	if _, err := runner.Start(context.Background(), userID, conv.ID, "hello"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-provider.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the provider never started")
+	}
+	owner := currentOwner(t, svc, userID, conv.ID)
+	runner.Cancel(context.Background(), conv.ID, owner)
+	runner.Cancel(context.Background(), conv.ID, owner)
+	waitState(t, svc, userID, conv.ID, "interrupted")
+	waitNotice(t, svc, conv.ID, "interrupted", 1)
+}
+
+// TestLateCancelAfterCompletionIsNoop: a cancel that arrives after the turn
+// completed leaves it idle and emits no terminal notice.
+func TestLateCancelAfterCompletionIsNoop(t *testing.T) {
+	t.Parallel()
+	svc, userID, workspaceID := newTurnFixture(t)
+	conv, err := svc.CreateConversation(context.Background(), userID, workspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &gatedProvider{started: make(chan struct{}), release: make(chan struct{})}
+	runner := assistant.NewRunner(slog.New(slog.DiscardHandler), svc, provider, &fakeTools{})
+	if _, err := runner.Start(context.Background(), userID, conv.ID, "hello"); err != nil {
+		t.Fatal(err)
+	}
+	<-provider.started
+	owner := currentOwner(t, svc, userID, conv.ID)
+	close(provider.release)
+	waitState(t, svc, userID, conv.ID, "idle")
+	runner.Cancel(context.Background(), conv.ID, owner)
+	time.Sleep(50 * time.Millisecond)
+	final, err := svc.GetConversation(context.Background(), userID, conv.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.State != "idle" {
+		t.Fatalf("state after late cancel = %q, want idle", final.State)
+	}
+	if n := countNotices(t, svc, conv.ID, "interrupted"); n != 0 {
+		t.Fatalf("interrupted notices = %d, want 0", n)
+	}
+}

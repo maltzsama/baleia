@@ -27,9 +27,17 @@ type Store interface {
 
 	// Turn lifecycle
 	ClaimConversation(ctx context.Context, arg adb.ClaimConversationParams) (adb.AssistantConversation, error)
-	ReleaseConversation(ctx context.Context, id db.UUID, turnOwner string) error
-	SetConversationInterrupted(ctx context.Context, id db.UUID) error
-	HeartbeatConversation(ctx context.Context, id db.UUID) error
+	// ReleaseConversation returns to idle only when the token still owns a
+	// running turn and no interrupt is pending; it reports whether it did.
+	ReleaseConversation(ctx context.Context, id db.UUID, turnOwner string) (bool, error)
+	// RequestInterrupt persists the cancellation intent for the caller's turn.
+	RequestInterrupt(ctx context.Context, id db.UUID, turnOwner string) (bool, error)
+	// InterruptRequested reports a pending interrupt for the caller's turn.
+	InterruptRequested(ctx context.Context, id db.UUID, turnOwner string) (bool, error)
+	// InterruptConversation performs the conditional terminal transition; it
+	// reports whether this caller won it, so the terminal notice is emitted once.
+	InterruptConversation(ctx context.Context, id db.UUID, turnOwner string) (bool, error)
+	HeartbeatConversation(ctx context.Context, id db.UUID, turnOwner string) error
 	InterruptStaleConversations(ctx context.Context) ([]db.UUID, error)
 	SetConversationTitle(ctx context.Context, arg adb.SetConversationTitleParams) error
 

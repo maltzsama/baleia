@@ -272,16 +272,18 @@ func (r *Repo) ClaimConversation(ctx context.Context, arg adb.ClaimConversationP
 		if err := tx.Model(&model.AssistantConversation{}).
 			Where("id = ?", string(row.ID)).
 			Updates(map[string]any{
-				"state":             "running",
-				"turn_owner":        arg.TurnOwner,
-				"turn_heartbeat_at": now,
-				"updated_at":        now,
+				"state":                  "running",
+				"turn_owner":             arg.TurnOwner,
+				"turn_heartbeat_at":      now,
+				"interrupt_requested_at": nil,
+				"updated_at":             now,
 			}).Error; err != nil {
 			return err
 		}
 		row.State = "running"
 		row.TurnOwner = arg.TurnOwner
 		row.TurnHeartbeatAt = &now
+		row.InterruptRequestedAt = nil
 		row.UpdatedAt = now
 		out = toAssistantConversation(row)
 		return nil
@@ -294,81 +296,135 @@ func (r *Repo) ClaimConversation(ctx context.Context, arg adb.ClaimConversationP
 
 // ReleaseConversation returns a conversation to idle after a turn. The turn
 // token must still be the owner, so a runner that lost the conversation to a
-// reclaim cannot release the new turn.
-func (r *Repo) ReleaseConversation(ctx context.Context, id db.UUID, turnOwner string) error {
+// reclaim cannot release the new turn. A pending interrupt request keeps the
+// turn out of idle: the interrupt transition owns it instead.
+func (r *Repo) ReleaseConversation(ctx context.Context, id db.UUID, turnOwner string) (bool, error) {
 	if !id.Valid {
-		return nil
+		return false, nil
 	}
-	return r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
-		Where("id = ? AND turn_owner = ?", UUIDString(id), turnOwner).
+	res := r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
+		Where("id = ? AND state = ? AND turn_owner = ? AND interrupt_requested_at IS NULL",
+			UUIDString(id), "running", turnOwner).
 		Updates(map[string]any{
 			"state":             "idle",
 			"turn_owner":        nil,
 			"turn_heartbeat_at": nil,
 			"updated_at":        time.Now().UTC(),
-		}).Error
+		})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
 }
 
-// SetConversationInterrupted marks a conversation interrupted (cancel, crash
-// recovery).
-func (r *Repo) SetConversationInterrupted(ctx context.Context, id db.UUID) error {
-	if !id.Valid {
-		return nil
+// RequestInterrupt persists the cancellation intent for the turn the caller
+// owns (#1045). It reports whether a running turn owned by turnOwner was found;
+// a request for a finished or reclaimed turn is a no-op, so a late cancel never
+// touches a newer turn.
+func (r *Repo) RequestInterrupt(ctx context.Context, id db.UUID, turnOwner string) (bool, error) {
+	if !id.Valid || turnOwner == "" {
+		return false, nil
 	}
-	return r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
-		Where("id = ?", UUIDString(id)).
+	res := r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
+		Where("id = ? AND state = ? AND turn_owner = ?", UUIDString(id), "running", turnOwner).
+		UpdateColumn("interrupt_requested_at", time.Now().UTC())
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// InterruptRequested reports whether the caller's turn has a pending interrupt
+// request. The heartbeat loop polls it so a replica that missed the realtime
+// cancel event still stops the provider.
+func (r *Repo) InterruptRequested(ctx context.Context, id db.UUID, turnOwner string) (bool, error) {
+	if !id.Valid || turnOwner == "" {
+		return false, nil
+	}
+	var row model.AssistantConversation
+	err := r.Users.db.WithContext(ctx).
+		Select("interrupt_requested_at").
+		Where("id = ? AND state = ? AND turn_owner = ?", UUIDString(id), "running", turnOwner).
+		First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return row.InterruptRequestedAt != nil, nil
+}
+
+// InterruptConversation performs the terminal interrupted transition for the
+// turn the caller owns. It is conditional, so exactly one caller wins it even
+// when cancel races normal completion or the sweeper: a runner that lost the
+// turn to a reclaim, or a turn the sweeper already interrupted, updates no row.
+func (r *Repo) InterruptConversation(ctx context.Context, id db.UUID, turnOwner string) (bool, error) {
+	if !id.Valid || turnOwner == "" {
+		return false, nil
+	}
+	res := r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
+		Where("id = ? AND state = ? AND turn_owner = ?", UUIDString(id), "running", turnOwner).
 		Updates(map[string]any{
-			"state":             "interrupted",
-			"turn_owner":        nil,
-			"turn_heartbeat_at": nil,
-			"updated_at":        time.Now().UTC(),
-		}).Error
+			"state":                  "interrupted",
+			"turn_owner":             nil,
+			"turn_heartbeat_at":      nil,
+			"interrupt_requested_at": nil,
+			"updated_at":             time.Now().UTC(),
+		})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
 }
 
-// HeartbeatConversation refreshes the turn lease while the turn is running. It
-// deliberately does not touch updated_at: listing order follows the last real
-// activity, not the beat.
-func (r *Repo) HeartbeatConversation(ctx context.Context, id db.UUID) error {
-	if !id.Valid {
+// HeartbeatConversation refreshes the turn lease while the turn is running. The
+// token must still be the owner, so a runner that lost the conversation cannot
+// keep a newer turn alive. It deliberately does not touch updated_at: listing
+// order follows the last real activity, not the beat.
+func (r *Repo) HeartbeatConversation(ctx context.Context, id db.UUID, turnOwner string) error {
+	if !id.Valid || turnOwner == "" {
 		return nil
 	}
 	return r.Users.db.WithContext(ctx).Model(&model.AssistantConversation{}).
-		Where("id = ? AND state = ?", UUIDString(id), "running").
+		Where("id = ? AND state = ? AND turn_owner = ?", UUIDString(id), "running", turnOwner).
 		UpdateColumn("turn_heartbeat_at", time.Now().UTC()).Error
 }
 
 // InterruptStaleConversations marks turns whose replica stopped heartbeating as
-// interrupted and returns their ids.
+// interrupted and returns their ids. Each row is transitioned conditionally on
+// the owner read under the lock, so a turn reclaimed in between is left alone.
 func (r *Repo) InterruptStaleConversations(ctx context.Context) ([]db.UUID, error) {
 	var ids []db.UUID
 	err := r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var stale []model.AssistantConversation
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Select("id", "state", "turn_heartbeat_at").
+			Select("id", "state", "turn_owner", "turn_heartbeat_at").
 			Where("state = ? AND turn_heartbeat_at < ?", "running", time.Now().UTC().Add(-staleTurnAge)).
 			Find(&stale).Error; err != nil {
 			return err
 		}
-		if len(stale) == 0 {
-			return nil
-		}
-		keys := make([]string, len(stale))
-		for i, row := range stale {
-			keys[i] = string(row.ID)
-		}
-		if err := tx.Model(&model.AssistantConversation{}).
-			Where("id IN ?", keys).
-			Updates(map[string]any{
-				"state":             "interrupted",
-				"turn_owner":        nil,
-				"turn_heartbeat_at": nil,
-				"updated_at":        time.Now().UTC(),
-			}).Error; err != nil {
-			return err
-		}
-		ids = make([]db.UUID, len(stale))
-		for i, row := range stale {
-			ids[i] = PGUUID(string(row.ID))
+		now := time.Now().UTC()
+		for _, row := range stale {
+			var owner string
+			if row.TurnOwner != nil {
+				owner = *row.TurnOwner
+			}
+			res := tx.Model(&model.AssistantConversation{}).
+				Where("id = ? AND state = ? AND turn_owner = ?", string(row.ID), "running", owner).
+				Updates(map[string]any{
+					"state":                  "interrupted",
+					"turn_owner":             nil,
+					"turn_heartbeat_at":      nil,
+					"interrupt_requested_at": nil,
+					"updated_at":             now,
+				})
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected > 0 {
+				ids = append(ids, PGUUID(string(row.ID)))
+			}
 		}
 		return nil
 	})
@@ -544,17 +600,18 @@ func toAssistantAgent(a model.Agent) adb.Agent {
 
 func toAssistantConversation(c model.AssistantConversation) adb.AssistantConversation {
 	return adb.AssistantConversation{
-		ID:              PGUUID(string(c.ID)),
-		UserID:          PGUUID(string(c.UserID)),
-		WorkspaceID:     PGUUID(string(c.WorkspaceID)),
-		AgentID:         PGUUID(string(c.AgentID)),
-		Title:           string(c.Title),
-		State:           string(c.State),
-		TurnOwner:       c.TurnOwner,
-		TurnHeartbeatAt: PGTimePtr(c.TurnHeartbeatAt),
-		LastSeq:         c.LastSeq,
-		CreatedAt:       PGTime(c.CreatedAt),
-		UpdatedAt:       PGTime(c.UpdatedAt),
+		ID:                   PGUUID(string(c.ID)),
+		UserID:               PGUUID(string(c.UserID)),
+		WorkspaceID:          PGUUID(string(c.WorkspaceID)),
+		AgentID:              PGUUID(string(c.AgentID)),
+		Title:                string(c.Title),
+		State:                string(c.State),
+		TurnOwner:            c.TurnOwner,
+		TurnHeartbeatAt:      PGTimePtr(c.TurnHeartbeatAt),
+		InterruptRequestedAt: PGTimePtr(c.InterruptRequestedAt),
+		LastSeq:              c.LastSeq,
+		CreatedAt:            PGTime(c.CreatedAt),
+		UpdatedAt:            PGTime(c.UpdatedAt),
 	}
 }
 
