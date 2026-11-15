@@ -630,7 +630,7 @@
 		aria-selected={activeResult === flatIndex}
 		class="flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-[#1c2128] {activeResult ===
 		flatIndex
-			? 'bg-blue-50 text-primary dark:bg-[#152236]'
+			? 'bg-primary/10 text-primary'
 			: ''}"
 		onclick={() => reveal(result)}
 	>
@@ -760,7 +760,7 @@
 					<button
 						class="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[5px] text-left text-[13px] text-inherit hover:bg-slate-100 dark:hover:bg-[#1c2128] {selectedTableId ===
 						table.id
-							? 'bg-blue-50 font-medium text-primary dark:bg-[#152236]'
+							? 'bg-primary/10 font-medium text-primary'
 							: ''}"
 						onclick={() => selectTable(catalog, path, table)}
 						aria-current={selectedTableId === table.id}

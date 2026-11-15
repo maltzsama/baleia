@@ -42,7 +42,7 @@
 						aria-current={isActive(section.href) ? 'page' : undefined}
 						class="block rounded-md px-2 py-1.5 text-[13px] no-underline transition-colors
 							{isActive(section.href)
-							? 'bg-primary/10 font-semibold text-primary-hover dark:text-blue-300'
+							? 'bg-primary/10 font-semibold text-primary-hover dark:text-primary'
 							: 'text-text-main hover:bg-slate-100 dark:hover:bg-slate-800'}"
 					>
 						{section.label}

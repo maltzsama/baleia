@@ -456,7 +456,7 @@
 					{#each filteredColumns as column (column.ordinal)}
 						<div
 							class="border-b border-border last:border-b-0 {focusColumn === column.name
-								? 'bg-blue-50/60 dark:bg-[#152236]/60'
+								? 'bg-primary/10'
 								: ''}"
 							data-column={column.name}
 						>

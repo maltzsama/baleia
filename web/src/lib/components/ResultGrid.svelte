@@ -352,7 +352,7 @@
 							class="font-data text-xs {display.null
 								? 'italic text-text-muted'
 								: ''} {selected?.row === row && selected?.col === layout.index
-								? 'bg-blue-50 dark:bg-[#152236]'
+								? 'bg-primary/10'
 								: 'hover:bg-bg-toolbar'}"
 							title={display.text}
 							onclick={() => {
