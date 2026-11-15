@@ -22,8 +22,17 @@
 	} = $props();
 
 	function goBack() {
-		if (typeof window !== 'undefined' && window.history.length > 1) window.history.back();
-		else void goto(resolve('/sql'));
+		if (typeof window === 'undefined') return;
+		// `history.length` also counts forward entries, so it cannot say whether
+		// there is a previous entry. Try back and, if the URL does not change,
+		// fall back to the Workbench instead of leaving the button inert (#1082).
+		const target = `${window.location.pathname}${window.location.search}`;
+		window.history.back();
+		window.setTimeout(() => {
+			if (`${window.location.pathname}${window.location.search}` === target) {
+				void goto(resolve('/sql'));
+			}
+		}, 250);
 	}
 </script>
 
