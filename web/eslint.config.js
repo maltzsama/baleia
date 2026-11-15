@@ -84,6 +84,13 @@ export default ts.config(
 					selector:
 						'Literal[value=/^(polaris|nessie|iceberg|lakekeeper|unity|hive|glue|postgresql|mysql|mariadb|sqlserver|oracle|sqlite|clickhouse|flightsql|trino|doris|starrocks)$/]',
 					message: 'Provider/engine kinds belong in kindIcon.ts (FD6).'
+				},
+				{
+					// A thrown API body is an object, not an Error: `String(e)` would
+					// render `[object Object]` and `e.message` bypasses the catalog.
+					selector:
+						"ConditionalExpression[test.type='BinaryExpression'][test.operator='instanceof'][consequent.type='MemberExpression'][consequent.property.name='message']",
+					message: 'Use apiErrorMessage(error) so the catalog decides the copy (#1082).'
 				}
 			]
 		}
