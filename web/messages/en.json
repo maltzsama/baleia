@@ -2786,5 +2786,9 @@
 	"workspace_catalogs_no_permission": "Catalog access is managed by a workspace administrator",
 	"workspace_catalogs_ask_admin": "Ask a workspace administrator to add a catalog or request access.",
 	"workspace_catalogs_empty_explorer": "Add a catalog to this workspace to browse its data.",
-	"workspace_catalogs_manage": "Manage access in workspace settings"
+	"workspace_catalogs_manage": "Manage access in workspace settings",
+	"not_found_title": "Page not found",
+	"not_found_description": "We could not find the page you were looking for. It may have moved, been removed, or the link may be out of date.",
+	"not_found_go_to_workbench": "Go to Workbench",
+	"not_found_go_back": "Go back"
 }
