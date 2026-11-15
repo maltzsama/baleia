@@ -67,6 +67,14 @@ Conversations and messages are stored in `assistant_conversations` and
 replica stopped is marked `interrupted` by the sweeper (60 s heartbeat) and the
 user can retry it; the in-flight provider call is not resumed.
 
+Cancelling a turn persists the interrupt intent on the conversation before
+stopping the provider, so the request survives a missed realtime event, a
+restart or another replica. The replica that owns the turn observes the request
+on its next lease beat (10 s) as well as through the realtime cancel event, and
+the terminal `interrupted` transition and its notice are claimed exactly once: a
+stale runner cannot release or overwrite a newer turn, and a cancel that arrives
+after the turn completed is a no-op.
+
 The conversation SSE stream sends a `state` snapshot before replaying persisted
 messages. Message frames carry their persisted sequence in the SSE `id` field;
 clients reconnect with `after_seq` and deduplicate by sequence. Provider `delta`
