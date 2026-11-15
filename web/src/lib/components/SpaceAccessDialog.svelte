@@ -61,6 +61,7 @@
 		const selectedPrincipalType = principalType;
 		const request = ++principalRequest;
 		principalId = '';
+		principals = [];
 		principalsError = '';
 		void Promise.all([
 			listPrincipals(workspaceId, '', 'user'),
@@ -83,8 +84,10 @@
 				principalLabels = labels;
 			})
 			.catch((e) => {
-				if (request === principalRequest)
+				if (request === principalRequest) {
+					principals = [];
 					principalsError = e instanceof Error ? e.message : String(e);
+				}
 			});
 	});
 
