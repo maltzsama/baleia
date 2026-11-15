@@ -4,20 +4,21 @@ import "time"
 
 // AssistantConversation is the assistant_conversations table.
 type AssistantConversation struct {
-	ID              UUID       `gorm:"column:id;primaryKey;not null;check:assistant_conversations_state_check,((state IN ('idle', 'running', 'interrupted')))"`
-	UserID          UUID       `gorm:"column:user_id;not null;index:assistant_conversations_user,priority:1"`
-	WorkspaceID     UUID       `gorm:"column:workspace_id;not null"`
-	AgentID         UUID       `gorm:"column:agent_id;not null"`
-	Title           Text       `gorm:"column:title;not null;size:255;default:''"`
-	State           Text       `gorm:"column:state;not null;size:255;default:'idle'"`
-	TurnOwner       *string    `gorm:"column:turn_owner"`
-	TurnHeartbeatAt *time.Time `gorm:"column:turn_heartbeat_at"`
-	LastSeq         int32      `gorm:"column:last_seq;not null;default:0"`
-	CreatedAt       time.Time  `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt       time.Time  `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3);index:assistant_conversations_user,priority:2"`
-	User            *User      `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:CASCADE"`
-	Workspace       *Workspace `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnDelete:CASCADE"`
-	Agent           *Agent     `gorm:"foreignKey:AgentID;references:ID;constraint:OnDelete:CASCADE"`
+	ID                   UUID       `gorm:"column:id;primaryKey;not null;check:assistant_conversations_state_check,((state IN ('idle', 'running', 'interrupted')))"`
+	UserID               UUID       `gorm:"column:user_id;not null;index:assistant_conversations_user,priority:1"`
+	WorkspaceID          UUID       `gorm:"column:workspace_id;not null"`
+	AgentID              UUID       `gorm:"column:agent_id;not null"`
+	Title                Text       `gorm:"column:title;not null;size:255;default:''"`
+	State                Text       `gorm:"column:state;not null;size:255;default:'idle'"`
+	TurnOwner            *string    `gorm:"column:turn_owner"`
+	TurnHeartbeatAt      *time.Time `gorm:"column:turn_heartbeat_at"`
+	InterruptRequestedAt *time.Time `gorm:"column:interrupt_requested_at"`
+	LastSeq              int32      `gorm:"column:last_seq;not null;default:0"`
+	CreatedAt            time.Time  `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
+	UpdatedAt            time.Time  `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3);index:assistant_conversations_user,priority:2"`
+	User                 *User      `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:CASCADE"`
+	Workspace            *Workspace `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnDelete:CASCADE"`
+	Agent                *Agent     `gorm:"foreignKey:AgentID;references:ID;constraint:OnDelete:CASCADE"`
 }
 
 func (AssistantConversation) TableName() string { return "assistant_conversations" }

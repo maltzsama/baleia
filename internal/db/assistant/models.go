@@ -55,17 +55,18 @@ type ApiKey struct {
 }
 
 type AssistantConversation struct {
-	ID              db.UUID        `json:"id"`
-	UserID          db.UUID        `json:"user_id"`
-	WorkspaceID     db.UUID        `json:"workspace_id"`
-	AgentID         db.UUID        `json:"agent_id"`
-	Title           string         `json:"title"`
-	State           string         `json:"state"`
-	TurnOwner       *string        `json:"turn_owner"`
-	TurnHeartbeatAt db.Timestamptz `json:"turn_heartbeat_at"`
-	LastSeq         int32          `json:"last_seq"`
-	CreatedAt       db.Timestamptz `json:"created_at"`
-	UpdatedAt       db.Timestamptz `json:"updated_at"`
+	ID                   db.UUID        `json:"id"`
+	UserID               db.UUID        `json:"user_id"`
+	WorkspaceID          db.UUID        `json:"workspace_id"`
+	AgentID              db.UUID        `json:"agent_id"`
+	Title                string         `json:"title"`
+	State                string         `json:"state"`
+	TurnOwner            *string        `json:"turn_owner"`
+	TurnHeartbeatAt      db.Timestamptz `json:"turn_heartbeat_at"`
+	InterruptRequestedAt db.Timestamptz `json:"interrupt_requested_at"`
+	LastSeq              int32          `json:"last_seq"`
+	CreatedAt            db.Timestamptz `json:"created_at"`
+	UpdatedAt            db.Timestamptz `json:"updated_at"`
 }
 
 type AssistantMessage struct {

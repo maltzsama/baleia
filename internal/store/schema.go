@@ -235,6 +235,16 @@ func AllMigrations() (*Registry, error) {
 			Name:    "rename the trino access mode to federated",
 			Up:      renameTrinoAccessMode,
 		},
+		Migration{
+			// Durable cancellation intent for assistant turns (#1045): the
+			// runner that owns a turn observes this flag and the terminal
+			// transition is conditional on it.
+			Version: 20,
+			Name:    "add assistant interrupt requests",
+			Up: func(db *gorm.DB) error {
+				return AutoMigrate(db, &model.AssistantConversation{})
+			},
+		},
 	)
 }
 
