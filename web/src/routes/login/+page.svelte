@@ -48,7 +48,7 @@
 	}
 
 	onMount(() => {
-		dark = document.body.classList.contains('dark');
+		dark = localStorage.getItem('theme') === 'dark';
 
 		// Shown once after /reset-password or an SSO failure, then dropped from
 		// the address bar (the `next` parameter is preserved).
