@@ -4660,6 +4660,7 @@ export interface components {
             max_query_runtime_seconds?: number;
             max_concurrent_queries?: number;
             max_queries_per_hour?: number;
+            /** @description Token-bucket burst limit for MCP tool calls: up to this many calls may run at once and the bucket refills at this rate per minute. It is not a strict rolling-minute quota. With the shared Redis limiter it is enforced per agent across API replicas. */
             max_tool_calls_per_minute?: number;
         };
         AgentPolicy: {
@@ -4673,6 +4674,7 @@ export interface components {
             max_query_runtime_seconds?: number;
             max_concurrent_queries?: number;
             max_queries_per_hour?: number;
+            /** @description Token-bucket burst limit for MCP tool calls: up to this many calls may run at once and the bucket refills at this rate per minute. It is not a strict rolling-minute quota. With the shared Redis limiter it is enforced per agent across API replicas. */
             max_tool_calls_per_minute?: number;
         };
         AgentPolicyResponse: {

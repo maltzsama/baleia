@@ -2398,6 +2398,7 @@
 	"settings_agents_detail_limit_concurrent_queries": "Concurrent queries",
 	"settings_agents_detail_limit_queries_per_hour": "Queries per hour",
 	"settings_agents_detail_limit_tool_calls_per_minute": "Tool calls per minute",
+	"settings_agents_detail_tool_calls_are_a_burst_limit": "Tool calls are a burst limit: up to the configured count can run at once and the bucket refills at that rate per minute. This is not a strict rolling-minute quota.",
 	"connections_its_engine_must_be_deleted_first": "Its engine {value} must be deleted first.",
 	"connections_catalog_s_and_their_bindings_will": "{length} catalog(s) and their bindings will be removed: {value}.",
 	"connections_saved_queries_and_metrics_that_target": "Saved queries and metrics that target these catalogs will stop resolving.",

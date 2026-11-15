@@ -1489,9 +1489,11 @@ type AgentPolicy struct {
 	MaxQueryRuntimeSeconds *int                  `json:"max_query_runtime_seconds,omitempty"`
 	MaxResultBytes         *int                  `json:"max_result_bytes,omitempty"`
 	MaxRowsReturned        *int                  `json:"max_rows_returned,omitempty"`
-	MaxToolCallsPerMinute  *int                  `json:"max_tool_calls_per_minute,omitempty"`
-	Tools                  *[]string             `json:"tools,omitempty"`
-	Version                AgentPolicyVersion    `json:"version"`
+
+	// MaxToolCallsPerMinute Token-bucket burst limit for MCP tool calls: up to this many calls may run at once and the bucket refills at this rate per minute. It is not a strict rolling-minute quota. With the shared Redis limiter it is enforced per agent across API replicas.
+	MaxToolCallsPerMinute *int               `json:"max_tool_calls_per_minute,omitempty"`
+	Tools                 *[]string          `json:"tools,omitempty"`
+	Version               AgentPolicyVersion `json:"version"`
 }
 
 // AgentPolicyVersion defines model for AgentPolicy.Version.
@@ -1504,7 +1506,9 @@ type AgentPolicyLimits struct {
 	MaxQueryRuntimeSeconds *int `json:"max_query_runtime_seconds,omitempty"`
 	MaxResultBytes         *int `json:"max_result_bytes,omitempty"`
 	MaxRowsReturned        *int `json:"max_rows_returned,omitempty"`
-	MaxToolCallsPerMinute  *int `json:"max_tool_calls_per_minute,omitempty"`
+
+	// MaxToolCallsPerMinute Token-bucket burst limit for MCP tool calls: up to this many calls may run at once and the bucket refills at this rate per minute. It is not a strict rolling-minute quota. With the shared Redis limiter it is enforced per agent across API replicas.
+	MaxToolCallsPerMinute *int `json:"max_tool_calls_per_minute,omitempty"`
 }
 
 // AgentPolicyResponse defines model for AgentPolicyResponse.

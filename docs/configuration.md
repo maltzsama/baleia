@@ -101,7 +101,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_AGENT_MAX_QUERY_RUNTIME_SECONDS` | `900` | Ceiling for `max_query_runtime_seconds` |
 | `BALEIA_AGENT_MAX_CONCURRENT_QUERIES` | `10` | Ceiling for `max_concurrent_queries` |
 | `BALEIA_AGENT_MAX_QUERIES_PER_HOUR` | `2000` | Ceiling for `max_queries_per_hour` |
-| `BALEIA_AGENT_MAX_TOOL_CALLS_PER_MINUTE` | `600` | Ceiling for `max_tool_calls_per_minute` |
+| `BALEIA_AGENT_MAX_TOOL_CALLS_PER_MINUTE` | `600` | Ceiling for `max_tool_calls_per_minute`, a token-bucket burst limit (not a strict rolling-minute quota) |
 | `BALEIA_MCP_ALLOWED_ORIGINS` | _(unset)_ | Comma-separated `Origin` allow-list for `/mcp`; empty rejects any request that carries one |
 
 ## Store backend
