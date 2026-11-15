@@ -134,6 +134,9 @@ describe('ResultsPanel', () => {
 
 	it('retries the statements read from the error state', async () => {
 		let fail = true;
+		// The successful read selects a statement, so the panel may request its
+		// results: keep every request mocked (FD14).
+		mockResult({ value: [] });
 		server.use(
 			http.get('/workspaces/{id}/executions/{execution_id}/statements', ({ response }) =>
 				fail
