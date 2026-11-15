@@ -269,7 +269,11 @@ export class AssistantStore {
 		if (frame.event === 'state') {
 			try {
 				const payload = JSON.parse(frame.data) as { state?: Conversation['state'] };
-				if (payload.state === 'idle' || payload.state === 'running' || payload.state === 'interrupted') {
+				if (
+					payload.state === 'idle' ||
+					payload.state === 'running' ||
+					payload.state === 'interrupted'
+				) {
 					this.state = payload.state;
 				}
 			} catch {
