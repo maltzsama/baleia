@@ -20,7 +20,12 @@ description: "Administer Baleia: workspaces, teams and roles, OIDC or LDAP sign-
 
 - **Identity:** OIDC and [LDAP](../ldap.md) providers. Users sign in locally until a provider is added. Provider secrets are written once and never shown again. Removing a provider suspends and detaches its users; it never deletes them. Each provider maps directory groups, at every sign-in, to the platform role, to teams and to **workspace roles** (`workspace_mapping`: group → workspace and admin/editor/viewer). A workspace role from a group needs team membership for a team's workspace, and a role a workspace admin set wins over it.
 - **Users:** invite people, change their [role](../concepts.md#roles), and suspend or reinstate accounts.
-  - A role change takes effect at the next sign-in; existing sessions are revoked.
+  - A global role change revokes every existing session. Access tokens are checked against their
+    session on every request, so the change takes effect on the next request on every API replica.
+    Workspace membership and workspace-role changes are read from the database on each protected
+    operation and therefore have the same immediate boundary.
+  - Revoking a personal API key, BI key or agent token takes effect on its next request. A BI
+    request is authenticated independently, including every follow and cancel request.
   - Suspension signs the user out everywhere and revokes their API keys. It is reversible: users are never deleted here.
 - **Teams:** a team owns shared workspaces. Its owners are admins of those workspaces by default and its members editors. Removing someone from a team removes their access to its workspaces.
 - **Workspaces** (workspace menu in the header → **Workspace settings**): each workspace's members, its catalog grants and its default target.

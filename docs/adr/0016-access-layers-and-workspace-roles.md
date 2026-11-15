@@ -75,6 +75,20 @@ service accounts:
   read statements in read-only sessions; an editor's or admin's agent may also write (DDL, DML),
   and the catalog manager decides what. The built-in assistant stays read-only.
 
+## Revocation boundary
+
+Authorization changes are immediate at the next protected request. Baleia access tokens carry a
+refresh-token family id and the API checks that family against the database on every request; a
+global role change, account suspension, password change or logout revokes the relevant family (or
+families). The current account role is loaded from the database, so a stale role claim is never
+trusted. Workspace membership and workspace-role checks also read current state for each operation.
+
+Personal API keys, BI keys and agent tokens are looked up or checked on every request, so deleting
+or revoking one takes effect on the next request, including BI follow and cancel requests. A failed
+database check for a session is an unavailable-service error and fails closed; it is not treated as
+an authorization success. This is database-backed and therefore applies consistently across API
+replicas without session affinity.
+
 ## Authorization coverage contract
 
 The backend authorization inventory is maintained in
