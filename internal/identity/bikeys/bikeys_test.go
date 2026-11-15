@@ -247,6 +247,17 @@ func TestAuthenticate(t *testing.T) {
 	if _, err := s.Authenticate(ctx, "member@example.test", "bal_wrong"); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("wrong secret = %v, want ErrInvalid", err)
 	}
+
+	key, err := st.GetAPIKeyByHash(ctx, auth.HashAPIKey(secret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Revoke(ctx, wsID, key.ID, actorID, false); err != nil {
+		t.Fatalf("revoke key: %v", err)
+	}
+	if _, err := s.Authenticate(ctx, "member@example.test", secret); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("revoked key = %v, want ErrInvalid", err)
+	}
 }
 
 func TestAuthenticateRechecksMembershipAndTarget(t *testing.T) {

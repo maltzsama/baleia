@@ -15,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-forward e2e-bi e2e-down
+.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-forward e2e-bi e2e-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_AGENTS_ENABLED=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -206,6 +206,11 @@ DEADCODE_TAGS ?= contract e2e integration
 deadcode:
 	@out="$$(go run golang.org/x/tools/cmd/deadcode@$(DEADCODE_VERSION) -test -tags '$(DEADCODE_TAGS)' $(GO_PACKAGES))" || exit 1; \
 	if [ -n "$$out" ]; then echo "$$out"; echo "unreachable functions: remove them or call them" >&2; exit 1; fi
+
+# Focused authorization regression suite: structural coverage plus the
+# representative direct-request and revocation tests for every authorization plane.
+test-authz:
+	go test -race -shuffle=on -count=1 -timeout 30m ./internal/authz ./internal/api ./internal/server ./internal/identity/bikeys
 
 build:
 	go build -o bin/api ./cmd/api

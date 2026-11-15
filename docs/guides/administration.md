@@ -20,7 +20,12 @@ description: "Administer Baleia: workspaces, teams and roles, OIDC or LDAP sign-
 
 - **Identity:** OIDC and [LDAP](../ldap.md) providers. Users sign in locally until a provider is added. Provider secrets are written once and never shown again. Removing a provider suspends and detaches its users; it never deletes them. Each provider maps directory groups, at every sign-in, to the platform role, to teams and to **workspace roles** (`workspace_mapping`: group → workspace and admin/editor/viewer). A workspace role from a group needs team membership for a team's workspace, and a role a workspace admin set wins over it.
 - **Users:** invite people, change their [role](../concepts.md#roles), and suspend or reinstate accounts.
-  - A role change takes effect at the next sign-in; existing sessions are revoked.
+  - A global role change revokes every existing session. Access tokens are checked against their
+    session on every request, so the change takes effect on the next request on every API replica.
+    Workspace membership and workspace-role changes are read from the database on each protected
+    operation and therefore have the same immediate boundary.
+  - Revoking a personal API key, BI key or agent token takes effect on its next request. A BI
+    request is authenticated independently, including every follow and cancel request.
   - Suspension signs the user out everywhere and revokes their API keys. It is reversible: users are never deleted here.
 - **Teams:** a team owns shared workspaces. Its owners are admins of those workspaces by default and its members editors. Removing someone from a team removes their access to its workspaces.
 - **Workspaces** (workspace menu in the header → **Workspace settings**): each workspace's members, its catalog grants and its default target.
@@ -30,6 +35,18 @@ description: "Administer Baleia: workspaces, teams and roles, OIDC or LDAP sign-
   - **Deletion:** deleting a shared workspace removes its spaces, content and grants. Personal workspaces cannot be deleted.
 - **Service accounts** (**Settings → Service accounts**): non-human principals for agents and integrations ([ADR 0016](../adr/0016-access-layers-and-workspace-roles.md)). A global admin creates them anywhere; a workspace admin creates them in their workspace, with a role. They have workspace roles like people (add one to more workspaces from **Members** with its e-mail) and never the global admin role. They sign in with a Baleia token (header `X-Api-Key`, shown once) or, linked to an identity provider client, with that provider's client-credentials access token as `Authorization: Bearer`; that token also reaches catalogs set to per-user identity.
 - **Agents:** clients of the [MCP server](../mcp.md), bound to workspaces and following their owner's role in each: a viewer's agent only reads, an editor's or admin's may also write; the built-in assistant only reads. Each agent has tokens, shown once and stored only as a hash. Revoking a token takes effect at once.
+
+Authorization is enforced by the backend. `allowed_actions` on resources and `global_actions` on
+`/auth/me` are staleable UI hints, not security boundaries: a direct request is authorized again
+using the current account, workspace membership, role, ownership and scope. A resource outside the
+caller's visibility returns the same 404-style result as a missing resource; a visible resource
+whose action needs a stronger role returns 403. Denied operations are recorded in the audit trail
+with their action and reason, without recording credentials or raw authorization internals.
+
+When contributing an endpoint, use this order: define the minimum role and scope; authorize before
+sensitive work; add positive, negative and foreign-resource tests; add action projections only
+after enforcement; update OpenAPI/error contracts if needed; and use action predicates in the web
+client rather than comparing role strings.
 
 ## Attention
 

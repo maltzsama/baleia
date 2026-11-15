@@ -75,6 +75,20 @@ service accounts:
   read statements in read-only sessions; an editor's or admin's agent may also write (DDL, DML),
   and the catalog manager decides what. The built-in assistant stays read-only.
 
+## Revocation boundary
+
+Authorization changes are immediate at the next protected request. Baleia access tokens carry a
+refresh-token family id and the API checks that family against the database on every request; a
+global role change, account suspension, password change or logout revokes the relevant family (or
+families). The current account role is loaded from the database, so a stale role claim is never
+trusted. Workspace membership and workspace-role checks also read current state for each operation.
+
+Personal API keys, BI keys and agent tokens are looked up or checked on every request, so deleting
+or revoking one takes effect on the next request, including BI follow and cancel requests. A failed
+database check for a session is an unavailable-service error and fails closed; it is not treated as
+an authorization success. This is database-backed and therefore applies consistently across API
+replicas without session affinity.
+
 ## Authorization coverage contract
 
 The backend authorization inventory is maintained in
@@ -103,6 +117,21 @@ particular:
 
 When adding a protected operation, update the coverage entry and add positive
 and negative behavioral tests for its resource family before merging.
+
+### Contributor checklist
+
+For every new protected endpoint:
+
+1. Define the minimum global, workspace and space role, plus ownership scope.
+2. Run the backend authorization check before loading or mutating sensitive data.
+3. Add positive and negative direct-request tests, including a foreign-resource case where relevant.
+4. Add an `allowed_actions` or `global_actions` projection only after the backend check exists, and
+   test that stale or forged frontend state cannot authorize the request.
+5. Update the OpenAPI and closed error-code contract when the response changes.
+6. Verify that the frontend gates affordances with action predicates, never role strings.
+
+Run `make test-authz` locally. CI runs the same focused suite as a separate regression gate in
+addition to the full test suite.
 
 ## Alternatives considered
 

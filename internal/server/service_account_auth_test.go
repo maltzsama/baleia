@@ -116,9 +116,9 @@ func TestBearerContext_SessionEnds(t *testing.T) {
 	}
 }
 
-// TestBearerContext_RoleIsTheAccounts (#1030): a demoted admin is a member at
-// once, whatever the token claims.
-func TestBearerContext_RoleIsTheAccounts(t *testing.T) {
+// TestBearerContext_StaleRoleIsRefused (#1030): a token minted before a role
+// change is refused even if refresh-family revocation could not complete.
+func TestBearerContext_StaleRoleIsRefused(t *testing.T) {
 	t.Parallel()
 	f := newFakeSessions()
 	u, sid, _ := newSession(t, f)
@@ -127,8 +127,8 @@ func TestBearerContext_RoleIsTheAccounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, ok, _ := bearerContext(context.Background(), token, bearerSecret, f, nil)
-	if !ok || auth.RoleFromContext(ctx) != "member" {
-		t.Errorf("ok=%t role=%q, want the account's member role", ok, auth.RoleFromContext(ctx))
+	if ok || ctx == nil {
+		t.Errorf("ok=%t, want a refused stale-role token", ok)
 	}
 }
 
