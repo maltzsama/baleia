@@ -18,10 +18,22 @@
 	let error = $state('');
 	let successMsg = $state('');
 
-	// The settings layout renders this page once the user is loaded.
+	// On a cold load the page mounts before /auth/me resolves, so the fields
+	// start from the user already present (a client-side navigation) and
+	// follow the user once it arrives, without clobbering later edits (#1078).
+	let syncedUserId = authStore.user?.id ?? null;
 	let name = $state(authStore.user?.name ?? '');
 	let email = $state(authStore.user?.email ?? '');
 	let locale = $state(authStore.user?.locale ?? localeStore.current);
+
+	$effect(() => {
+		const user = authStore.user;
+		if (!user || user.id === syncedUserId) return;
+		syncedUserId = user.id;
+		name = user.name;
+		email = user.email;
+		locale = user.locale ?? localeStore.current;
+	});
 
 	let currentPassword = $state('');
 	let newPassword = $state('');
