@@ -60,3 +60,33 @@ func TestRedisGatesShareAgentBurst(t *testing.T) {
 		t.Fatal("lowered limit was not shared")
 	}
 }
+
+// TestDisabledSharedClientFallsBackToLocal covers the deployment with no
+// Redis: the shared limiter is disabled, so the gate enforces the per-agent
+// burst with its in-process bucket instead of failing or allowing everything.
+func TestDisabledSharedClientFallsBackToLocal(t *testing.T) {
+	t.Parallel()
+	client, err := realtime.Open(t.Context(), realtime.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	if client.Enabled() {
+		t.Fatal("a client without a URL must be disabled")
+	}
+	f := newFixture()
+	f.store.agent.Policy = []byte(`{"max_tool_calls_per_minute":2}`)
+	f.gate.SetSharedLimiter(client)
+	for i := 0; i < 2; i++ {
+		if dec := f.check(t, f.call(ToolListCatalogs, nil)); !dec.Allowed {
+			t.Fatalf("call %d = %+v, want allowed", i+1, dec)
+		}
+	}
+	dec := f.check(t, f.call(ToolListCatalogs, nil))
+	if dec.Allowed || dec.Reason != ReasonRate {
+		t.Fatalf("third call = %+v, want local rate refusal", dec)
+	}
+	if dec.RetryAfter <= 0 || dec.RetryAfter > time.Minute {
+		t.Fatalf("retry after = %v, want positive and bounded", dec.RetryAfter)
+	}
+}
