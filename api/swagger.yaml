@@ -1077,8 +1077,9 @@ components:
           minimum: 0
           description: >-
             Token-bucket burst limit for MCP tool calls: up to this many calls
-            may run at once and the bucket refills at this rate per minute. It is
-            not a strict rolling-minute quota. With the shared Redis limiter it is
+            may be admitted immediately and the bucket refills at this rate per
+            minute. It is not a strict rolling-minute quota and does not cap how
+            many calls run concurrently. With the shared Redis limiter it is
             enforced per agent across API replicas.
     AgentPolicy:
       type: object
@@ -1106,8 +1107,9 @@ components:
           minimum: 0
           description: >-
             Token-bucket burst limit for MCP tool calls: up to this many calls
-            may run at once and the bucket refills at this rate per minute. It is
-            not a strict rolling-minute quota. With the shared Redis limiter it is
+            may be admitted immediately and the bucket refills at this rate per
+            minute. It is not a strict rolling-minute quota and does not cap how
+            many calls run concurrently. With the shared Redis limiter it is
             enforced per agent across API replicas.
     AgentPolicyResponse:
       type: object
