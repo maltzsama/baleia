@@ -229,7 +229,9 @@ var (
 	wsMember      = []string{"requireWorkspaceAccess"}
 )
 
-func checked(calls ...string) access { return access{kind: kindChecked, calls: calls} }
+func checked(calls ...string) access {
+	return access{kind: kindChecked, calls: calls, order: calls}
+}
 
 func checkedBefore(calls ...string) access {
 	return access{kind: kindChecked, calls: calls, order: calls}
@@ -335,7 +337,7 @@ var operationAccess = map[string]access{
 
 	// ── connections and catalogs (internal/authz)
 	"GetCatalogConnection":    checked("Connection"),
-	"UpdateCatalogConnection": checked("Connection", "mayManageConnections"),
+	"UpdateCatalogConnection": checked("mayManageConnections", "Connection"),
 	"DeleteCatalogConnection": checked("Connection"),
 	"TestCatalogConnection":   checked("Connection"),
 	// Any signed-in user tests settings they hold; bind: intents go through the engine check.
@@ -442,9 +444,9 @@ var operationAccess = map[string]access{
 	"ListSemanticMetrics":  checked("metadataWorkspace"),
 	"GetSemanticMetric":    checked("metadataWorkspace", "metricDefs.Get", "contentSpace"),
 	"CreateSemanticMetric": checked("metadataWorkspace", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
-	"UpdateSemanticMetric": checked("metadataWorkspace", "metricDefs.Get", "semanticCatalog", "validateSemanticMetric", "contentSpace"),
+	"UpdateSemanticMetric": checked("metadataWorkspace", "metricDefs.Get", "contentSpace", "semanticCatalog", "validateSemanticMetric"),
 	"DeleteSemanticMetric": checked("metadataWorkspace", "metricDefs.Get", "contentSpace", "metricDefs.Delete"),
-	"GetSemanticMetricSql": checked("metadataWorkspace", "metricDefs.Get", "semanticCatalog", "semanticTarget", "contentSpace"),
+	"GetSemanticMetricSql": checked("metadataWorkspace", "metricDefs.Get", "semanticCatalog", "contentSpace", "semanticTarget"),
 	// Semantic models v2 (#91) are content items; compile resolves visible
 	// models and the base model's binding, then renders through the compiler.
 	"ListSemanticModels":          checked("metadataWorkspace", "modelDefs.List"),
@@ -452,7 +454,7 @@ var operationAccess = map[string]access{
 	"CompileExploreQuery":         checked("metadataWorkspace", "modelDefs.List", "semanticTarget"),
 	"CreateSemanticModel":         checked("metadataWorkspace", "semanticCatalog", "modelDefs.PrepareNew", "contentSpace"),
 	"MigrateSemanticMetricsV1":    checked("metadataWorkspace", "metricDefs.List", "semanticCatalog", "modelDefs.Visible", "contentSpace"),
-	"UpdateSemanticModel":         checked("metadataWorkspace", "modelDefs.Get", "semanticCatalog", "modelDefs.PrepareUpdate", "contentSpace"),
+	"UpdateSemanticModel":         checked("metadataWorkspace", "modelDefs.Get", "contentSpace", "semanticCatalog", "modelDefs.PrepareUpdate"),
 	"DeleteSemanticModel":         checked("metadataWorkspace", "modelDefs.Get", "contentSpace", "modelDefs.Delete"),
 	"ListSemanticModelVersions":   checked("history.SpaceOf", "contentSpace", "history.List"),
 	"GetSemanticModelVersion":     checked("history.Get", "contentSpace"),
