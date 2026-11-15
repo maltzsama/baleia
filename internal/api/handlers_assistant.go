@@ -438,7 +438,19 @@ func (h *AgentHandlers) StreamAssistantConversation(ctx context.Context, request
 	var events <-chan assistant.Event
 	var unsubscribe func()
 	if runner := h.assistantRunner.Load(); runner != nil {
-		events, unsubscribe = runner.Hub().Subscribe(ctx, id.Bytes)
+		var ready <-chan struct{}
+		events, unsubscribe, ready = runner.Hub().Subscribe(ctx, id.Bytes)
+		timer := time.NewTimer(2 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-ready:
+		case <-ctx.Done():
+			unsubscribe()
+			return nil, ctx.Err()
+		case <-timer.C:
+			unsubscribe()
+			return nil, errors.New("assistant event subscription did not become ready")
+		}
 	}
 	after := int32(0)
 	if request.Params.AfterSeq != nil {

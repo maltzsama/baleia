@@ -17,8 +17,13 @@ func TestHubLocal(t *testing.T) {
 	h := assistant.NewHub()
 	id := [16]byte{1}
 	ctx := context.Background()
-	ch, unsub := h.Subscribe(ctx, id)
+	ch, unsub, ready := h.Subscribe(ctx, id)
 	defer unsub()
+	select {
+	case <-ready:
+	case <-time.After(time.Second):
+		t.Fatal("subscription did not become ready")
+	}
 
 	h.Publish(ctx, id, assistant.Event{Type: "delta", Delta: "hi"})
 	select {
@@ -53,8 +58,9 @@ func TestHubAcrossReplicas(t *testing.T) {
 
 	id := [16]byte{0xaa}
 	ctx := context.Background()
-	ch, unsub := b.Subscribe(ctx, id)
+	ch, unsub, ready := b.Subscribe(ctx, id)
 	defer unsub()
+	_ = ready
 
 	// The bus subscription is acknowledged asynchronously, so retry until the
 	// delta crosses; a delta carries no sequence to dedupe it.

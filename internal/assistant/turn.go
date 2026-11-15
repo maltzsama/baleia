@@ -67,11 +67,13 @@ func (h *Hub) SetBus(bus *realtime.Client) {
 // Subscribe returns a channel and an unsubscribe function. With the bus on,
 // the subscriber receives every replica's events through it; without it, only
 // this process's.
-func (h *Hub) Subscribe(ctx context.Context, id [16]byte) (<-chan Event, func()) {
+func (h *Hub) Subscribe(ctx context.Context, id [16]byte) (<-chan Event, func(), <-chan struct{}) {
 	ch := make(chan Event, 32)
+	ready := make(chan struct{})
 	h.mu.Lock()
 	bus := h.bus
 	if bus == nil || !bus.Enabled() {
+		close(ready)
 		if h.subs[id] == nil {
 			h.subs[id] = make(map[chan Event]struct{})
 		}
@@ -86,14 +88,17 @@ func (h *Hub) Subscribe(ctx context.Context, id [16]byte) (<-chan Event, func())
 				}
 			}
 			h.mu.Unlock()
-		}
+		}, ready
 	}
 	h.mu.Unlock()
 
 	ctx, cancel := context.WithCancel(ctx)
+	var readyOnce sync.Once
 	go func() {
 		for ctx.Err() == nil {
-			err := bus.SubscribeError(ctx, channel(id), nil, func(payload []byte) {
+			err := bus.SubscribeError(ctx, channel(id), func() {
+				readyOnce.Do(func() { close(ready) })
+			}, func(payload []byte) {
 				var ev Event
 				if json.Unmarshal(payload, &ev) != nil {
 					return
@@ -111,7 +116,7 @@ func (h *Hub) Subscribe(ctx context.Context, id [16]byte) (<-chan Event, func())
 			}
 		}
 	}()
-	return ch, cancel
+	return ch, cancel, ready
 }
 
 // Publish sends an event without blocking a turn. With the bus on it goes to
@@ -223,7 +228,7 @@ func (r *Runner) Start(ctx context.Context, userID, id db.UUID, text string) (in
 	r.mu.Lock()
 	r.cancels[id.Bytes] = cancel
 	r.mu.Unlock()
-	cancelEvents, unsubscribe := r.hub.Subscribe(turnCtx, id.Bytes)
+	cancelEvents, unsubscribe, subscriptionReady := r.hub.Subscribe(turnCtx, id.Bytes)
 	go func() {
 		defer func() {
 			unsubscribe()
@@ -235,6 +240,11 @@ func (r *Runner) Start(ctx context.Context, userID, id db.UUID, text string) (in
 			_ = r.svc.Release(context.WithoutCancel(turnCtx), id, turnOwner)
 		}()
 		go func() {
+			select {
+			case <-subscriptionReady:
+			case <-turnCtx.Done():
+				return
+			}
 			for {
 				select {
 				case ev := <-cancelEvents:
