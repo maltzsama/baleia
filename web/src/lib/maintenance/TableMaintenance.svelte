@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { onDestroy } from 'svelte';
 	import Badge from '$lib/ui/Badge.svelte';
@@ -93,7 +94,7 @@
 			saveError = '';
 			onruns?.(next.runs);
 		} catch (e) {
-			if (loadedFor === key) loadError = e instanceof Error ? e.message : String(e);
+			if (loadedFor === key) loadError = apiErrorMessage(e);
 		} finally {
 			if (loadedFor === key) loading = false;
 		}
@@ -131,7 +132,7 @@
 				);
 				saveError = m.maintenance_fix_fields();
 			} else {
-				saveError = e instanceof Error ? e.message : String(e);
+				saveError = apiErrorMessage(e);
 			}
 		} finally {
 			saving = false;
@@ -149,7 +150,7 @@
 		try {
 			await run();
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		} finally {
 			busy = '';
 		}

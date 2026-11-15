@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import Button from '$lib/ui/Button.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
@@ -86,7 +87,7 @@
 			.catch((e) => {
 				if (request === principalRequest) {
 					principals = [];
-					principalsError = e instanceof Error ? e.message : String(e);
+					principalsError = apiErrorMessage(e);
 				}
 			});
 	});

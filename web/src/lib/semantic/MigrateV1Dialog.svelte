@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
@@ -63,7 +64,7 @@
 		} catch (e) {
 			error = {
 				code: e instanceof SemanticRequestError ? (e.code ?? 'internal') : 'internal',
-				error_native: e instanceof Error ? e.message : String(e)
+				error_native: apiErrorMessage(e)
 			};
 		}
 	}

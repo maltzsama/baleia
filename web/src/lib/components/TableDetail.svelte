@@ -84,7 +84,7 @@
 				if (!cancelled) loaded = { detail: result, tableId: ref.tableId, bindingId: binding };
 			})
 			.catch((e) => {
-				if (!cancelled) error = e instanceof Error ? e.message : String(e);
+				if (!cancelled) error = apiErrorMessage(e);
 			})
 			.finally(() => {
 				if (!cancelled) loading = false;
@@ -171,7 +171,7 @@
 			link.remove();
 			URL.revokeObjectURL(href);
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		}
 	}
 
@@ -257,7 +257,7 @@
 				.slice(0, 100)
 				.map((row) => previewColumns.map((name) => (row as Record<string, unknown>)[name]));
 		} catch (e) {
-			previewError = e instanceof Error ? e.message : String(e);
+			previewError = apiErrorMessage(e);
 		} finally {
 			if (runId === previewRun) {
 				stopPreviewPoll = undefined;

@@ -17,6 +17,7 @@
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
+	import ErrorPanel from '$lib/ui/patterns/ErrorPanel.svelte';
 	import CodeBlock from '$lib/ui/patterns/CodeBlock.svelte';
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
 	import CopyButton from '$lib/ui/patterns/CopyButton.svelte';
@@ -93,7 +94,7 @@
 			items = cursor ? [...items, ...data.data] : data.data;
 			nextCursor = data.next_cursor ?? null;
 		} catch (e) {
-			if (seq === requestSeq) error = e instanceof Error ? e.message : String(e);
+			if (seq === requestSeq) error = apiErrorMessage(e);
 		} finally {
 			if (seq === requestSeq) {
 				loading = false;
@@ -153,7 +154,7 @@
 			}
 			statements = data;
 		} catch (e) {
-			statementsError = e instanceof Error ? e.message : String(e);
+			statementsError = apiErrorMessage(e);
 		} finally {
 			statementsLoading = false;
 		}
@@ -624,8 +625,17 @@
 										</button>
 									{/if}
 								</div>
-								{#if statement.error_message}
-									<p class="mt-1 text-[11px] text-red-600">{statement.error_message}</p>
+								{#if statement.error_code || statement.error_message}
+									<div class="mt-1">
+										<ErrorPanel
+											error={{
+												code: statement.error_code ?? 'internal',
+												message: statement.error_message ?? undefined,
+												error_native: statement.error_native ?? undefined
+											}}
+											scope="statement"
+										/>
+									</div>
 								{/if}
 								{#if profile}
 									<dl class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-text-muted">

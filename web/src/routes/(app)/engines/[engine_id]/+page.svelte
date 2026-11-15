@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
@@ -102,7 +103,7 @@
 				runs = await listReconcileRuns(engineId);
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -130,7 +131,7 @@
 			testOpen = true;
 			await refresh();
 		} catch (e) {
-			testError = e instanceof Error ? e.message : String(e);
+			testError = apiErrorMessage(e);
 			testOpen = true;
 		} finally {
 			testing = false;
@@ -162,7 +163,7 @@
 			discoverResult = await discoverEngineCatalogs(engineId);
 			await refresh();
 		} catch (e) {
-			discoverError = e instanceof Error ? e.message : String(e);
+			discoverError = apiErrorMessage(e);
 		} finally {
 			discovering = false;
 		}
@@ -176,7 +177,7 @@
 			report = await reconcileEngine(engineId, true);
 			runs = await listReconcileRuns(engineId);
 		} catch (e) {
-			driftError = e instanceof Error ? e.message : String(e);
+			driftError = apiErrorMessage(e);
 		} finally {
 			driftLoading = false;
 		}
@@ -189,7 +190,7 @@
 			runs = await listReconcileRuns(engineId);
 			applyOpen = false;
 		} catch (e) {
-			driftError = e instanceof Error ? e.message : String(e);
+			driftError = apiErrorMessage(e);
 			applyOpen = false;
 		}
 	}

@@ -19,7 +19,8 @@ const sidebars: SidebarsConfig = {
         'guides/content',
         'guides/monitoring',
         'guides/workload',
-        'guides/administration'
+        'guides/administration',
+        'guides/error-surfaces'
       ]
     },
     {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import {
 		invalidateBindingFunctions,
 		loadBindingFunctions,
@@ -56,7 +57,7 @@
 			load = loadBindingFunctions(ws, cat, bind, { signal: controller.signal });
 		} catch (e) {
 			loading = false;
-			error = e instanceof Error ? e.message : m.functions_panel_failed();
+			error = apiErrorMessage(e, m.functions_panel_failed());
 			return () => {
 				cancelled = true;
 			};
@@ -74,8 +75,7 @@
 				if (!cancelled && id === requestId) functions = data ?? [];
 			})
 			.catch((e) => {
-				if (!cancelled && id === requestId)
-					error = e instanceof Error ? e.message : m.functions_panel_failed();
+				if (!cancelled && id === requestId) error = apiErrorMessage(e, m.functions_panel_failed());
 			})
 			.finally(() => {
 				if (timeout) clearTimeout(timeout);

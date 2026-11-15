@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
@@ -54,7 +55,7 @@
 		} catch (e) {
 			results = [];
 			searchedFor = '';
-			searchError = e instanceof Error ? e.message : String(e);
+			searchError = apiErrorMessage(e);
 		} finally {
 			searching = false;
 		}

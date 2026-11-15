@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import TimeSeriesChart from '$lib/monitoring/TimeSeriesChart.svelte';
 	import Sparkline from '$lib/monitoring/Sparkline.svelte';
@@ -302,7 +303,7 @@
 			engines = await listMonitoringEngines();
 			engineId = engines[0]?.id ?? '';
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -315,7 +316,7 @@
 		try {
 			cluster = await getCluster(engineId, clusterWindow);
 		} catch (e) {
-			clusterError = e instanceof Error ? e.message : String(e);
+			clusterError = apiErrorMessage(e);
 		} finally {
 			clusterLoading = false;
 		}
@@ -333,7 +334,7 @@
 				limit: 50
 			});
 		} catch (e) {
-			queriesError = e instanceof Error ? e.message : String(e);
+			queriesError = apiErrorMessage(e);
 		} finally {
 			queriesLoading = false;
 		}
@@ -377,7 +378,7 @@
 			health = rows;
 			runs = list;
 		} catch (e) {
-			if (catalogId === target) healthError = e instanceof Error ? e.message : String(e);
+			if (catalogId === target) healthError = apiErrorMessage(e);
 		} finally {
 			if (catalogId === target) healthLoading = false;
 		}
@@ -574,7 +575,7 @@
 			const detail = await getQuery(engineId, query.trino_query_id);
 			if (queryOpening === query) selectedQuery = detail;
 		} catch (e) {
-			if (queryOpening === query) queryError = e instanceof Error ? e.message : String(e);
+			if (queryOpening === query) queryError = apiErrorMessage(e);
 		} finally {
 			if (queryOpening === query) queryLoading = false;
 		}
@@ -654,7 +655,7 @@
 			await controller.done;
 			await loadHealth();
 		} catch (e) {
-			if (maintainTarget === target) maintainError = e instanceof Error ? e.message : String(e);
+			if (maintainTarget === target) maintainError = apiErrorMessage(e);
 		} finally {
 			maintaining = false;
 		}
@@ -696,7 +697,7 @@
 				toasts.error(m.maintenance_analysis_timeout());
 			}
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		} finally {
 			analyzing = false;
 		}
@@ -712,7 +713,7 @@
 			toasts.success(m.maintenance_run_started({ operation: m.maintenance_run_next_due() }));
 			await loadHealth();
 		} catch (e) {
-			toasts.error(e instanceof Error ? e.message : String(e));
+			toasts.error(apiErrorMessage(e));
 		}
 	}
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { listPrincipals } from '$lib/content/client';
@@ -98,7 +99,7 @@
 			if (e instanceof DocRequestError && e.code === 'version_conflict') {
 				conflict = true;
 			}
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			saving = false;
 		}

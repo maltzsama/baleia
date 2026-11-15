@@ -113,8 +113,7 @@
 			toasts.success(m.settings_users_invitation_sent());
 			await load();
 		} catch (err) {
-			inviteError =
-				err instanceof Error ? err.message : m.settings_users_could_not_send_the_invitation();
+			inviteError = apiErrorMessage(err, m.settings_users_could_not_send_the_invitation());
 		} finally {
 			inviteBusy = false;
 		}
@@ -165,9 +164,7 @@
 			toasts.success(m.settings_users_user_reinstated());
 			await load();
 		} catch (err) {
-			toasts.error(
-				err instanceof Error ? err.message : m.settings_users_could_not_reinstate_the_user()
-			);
+			toasts.error(apiErrorMessage(err, m.settings_users_could_not_reinstate_the_user()));
 		}
 	}
 </script>

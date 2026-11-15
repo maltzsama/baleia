@@ -19,11 +19,18 @@
 	// weight, so only 400 exists.
 	import '@fontsource/monoton/400.css';
 	import { onMount } from 'svelte';
+	import { afterNavigate } from '$app/navigation';
 	import { configureSession } from '$lib/auth/session';
 	import { initLocale } from '$lib/i18n/locale.svelte';
+	import { recordNavigation } from '$lib/navigation/history';
 	import { authStore } from '$lib/stores/auth.svelte';
 
 	let { children } = $props();
+
+	// Feeds the "Go back" affordance of the error surfaces (#1082).
+	afterNavigate(({ from }) => {
+		if (from) recordNavigation();
+	});
 
 	onMount(() => {
 		// Keep <html lang> in sync with the resolved locale (#67).

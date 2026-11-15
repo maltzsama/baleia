@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { plural } from '$lib/i18n/plural';
 	import { popularTables, type PopularTable } from '$lib/metadata/client';
@@ -29,7 +30,7 @@
 				if (!cancelled) rows = data;
 			})
 			.catch((e) => {
-				if (!cancelled) error = e instanceof Error ? e.message : String(e);
+				if (!cancelled) error = apiErrorMessage(e);
 			})
 			.finally(() => {
 				if (!cancelled) loading = false;

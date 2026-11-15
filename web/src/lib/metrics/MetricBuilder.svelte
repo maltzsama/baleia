@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages';
@@ -214,7 +215,7 @@
 			});
 		} catch (e) {
 			preview = '';
-			previewError = e instanceof Error ? e.message : String(e);
+			previewError = apiErrorMessage(e);
 		} finally {
 			rendering = false;
 		}
@@ -236,7 +237,7 @@
 			});
 			validateOk = 'Valid on this engine.';
 		} catch (e) {
-			validateError = e instanceof Error ? e.message : String(e);
+			validateError = apiErrorMessage(e);
 		} finally {
 			validating = false;
 		}
@@ -278,7 +279,7 @@
 				void goto(resolve(`/metrics/${created.id}`));
 			}
 		} catch (e) {
-			saveError = e instanceof Error ? e.message : String(e);
+			saveError = apiErrorMessage(e);
 		} finally {
 			saving = false;
 		}

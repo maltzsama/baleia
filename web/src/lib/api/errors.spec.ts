@@ -24,6 +24,20 @@ describe('errorMessage', () => {
 	it('uses the message from a thrown Error', () => {
 		expect(errorMessage(new Error('network failed'))).toBe('network failed');
 	});
+
+	it('never returns an empty message', () => {
+		setAppLocale('en');
+		expect(errorMessage('')).toBe('Something went wrong.');
+		expect(errorMessage({ message: '   ' })).toBe('Something went wrong.');
+		expect(errorMessage({ code: 'brand_new_code' })).toBe('Something went wrong.');
+		expect(errorMessage(undefined)).toBe('Something went wrong.');
+	});
+
+	it('uses the caller fallback for a thrown value with nothing to show', () => {
+		setAppLocale('pt-BR');
+		expect(errorMessage({}, 'Falha ao carregar')).toBe('Falha ao carregar');
+		expect(errorMessage(new Error('   '), 'Falha ao carregar')).toBe('Falha ao carregar');
+	});
 });
 
 describe('fieldErrorMessage', () => {

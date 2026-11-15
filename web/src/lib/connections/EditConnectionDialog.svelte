@@ -1,17 +1,12 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import Button from '$lib/ui/Button.svelte';
 	import Checkbox from '$lib/ui/Checkbox.svelte';
 	import Input from '$lib/ui/Input.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import ErrorPanel from '$lib/ui/patterns/ErrorPanel.svelte';
-	import {
-		ConnectionRequestError,
-		testStored,
-		updateConnection,
-		type CatalogConnection,
-		type TestResult
-	} from './api';
+	import { testStored, updateConnection, type CatalogConnection, type TestResult } from './api';
 	import ProviderForm from './ProviderForm.svelte';
 	import { missingFields, type ConnectionProvider } from './providers';
 
@@ -85,12 +80,7 @@
 			open = false;
 			onsaved(updated);
 		} catch (e) {
-			error =
-				e instanceof ConnectionRequestError
-					? e.message
-					: e instanceof Error
-						? e.message
-						: String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			saving = false;
 		}
@@ -106,7 +96,7 @@
 			testResult = result;
 		} catch (e) {
 			if (run !== testRun || !open) return;
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			if (run === testRun) testing = false;
 		}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	// Per-table Iceberg maintenance (#500) in its own page. Monitoring links
 	// here with the same ?catalog=&ns=&table= selection the data explorer uses,
 	// so the page is linkable, refreshable and shareable.
@@ -74,7 +75,7 @@
 			const readOnly = catalogs.find((c) => c.id === detail.catalog_id)?.read_only ?? false;
 			return { kind: 'found', detail, readOnly };
 		} catch (e) {
-			return { kind: 'error', message: e instanceof Error ? e.message : String(e) };
+			return { kind: 'error', message: apiErrorMessage(e) };
 		}
 	}
 
@@ -165,7 +166,7 @@
 	{:catch e}
 		<ErrorState
 			title={m.maintenance_could_not_load()}
-			message={e instanceof Error ? e.message : String(e)}
+			message={apiErrorMessage(e)}
 			onretry={retry}
 		/>
 	{/await}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages';
@@ -102,7 +103,7 @@
 			} catch (e) {
 				if (!cancelled) {
 					preview = null;
-					previewError = e instanceof Error ? e.message : String(e);
+					previewError = apiErrorMessage(e);
 				}
 			}
 		}, 400);

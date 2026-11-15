@@ -6,7 +6,7 @@
 import createClient, { type Middleware } from 'openapi-fetch';
 import type { paths } from './schema';
 import { API_BASE, API_ROOT } from './base';
-import { errorMessage, type ApiErrorBody } from './errors';
+import type { ApiErrorBody } from './errors';
 import { clear, getAccessToken, refresh, setAccessToken } from '$lib/auth/session';
 
 export { API_BASE, API_ROOT };
@@ -103,7 +103,6 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
 /** Error body shared by the API (`Error` / `ValidationError`). */
 export type ApiError = ApiErrorBody;
 
-/** Normalizes an unknown thrown value or API error body into a localized message. */
-export function apiErrorMessage(error: unknown, fallback?: string): string {
-	return errorMessage(error, fallback);
-}
+// Single definition in ./errors; re-exported so existing call sites keep using
+// `$lib/api/client` (#1082).
+export { apiErrorMessage } from './errors';

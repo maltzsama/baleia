@@ -161,7 +161,7 @@
 				name: workspace.name
 			}));
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -241,7 +241,7 @@
 			addOpen = false;
 			void pollBinding(created.id);
 		} catch (e) {
-			addError = e instanceof Error ? e.message : String(e);
+			addError = apiErrorMessage(e);
 		} finally {
 			adding = false;
 		}
@@ -292,7 +292,7 @@
 			editBindingOpen = false;
 			void pollBinding(updated.id);
 		} catch (e) {
-			bindingError = e instanceof Error ? e.message : String(e);
+			bindingError = apiErrorMessage(e);
 		} finally {
 			bindingSaving = false;
 		}
@@ -304,7 +304,7 @@
 			bindings = bindings.map((item) => (item.id === updated.id ? updated : item));
 			void pollBinding(updated.id);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		}
 	}
 
@@ -314,7 +314,7 @@
 			bindings = bindings.map((item) => (item.id === updated.id ? updated : item));
 			void pollBinding(updated.id);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		}
 	}
 
@@ -323,7 +323,7 @@
 			await deleteBinding(binding.id);
 			bindings = bindings.filter((item) => item.id !== binding.id);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		}
 	}
 
@@ -334,7 +334,7 @@
 		try {
 			projection = await bindingProjection(binding.id);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 			projectionOpen = false;
 		} finally {
 			projectionLoading = false;
@@ -359,7 +359,7 @@
 			await controller.done;
 			catalog = await getCatalog(catalogId);
 		} catch (e) {
-			syncError = e instanceof Error ? e.message : String(e);
+			syncError = apiErrorMessage(e);
 		} finally {
 			syncing = false;
 		}
@@ -385,7 +385,7 @@
 			catalog = await getCatalog(catalogId);
 			editOpen = false;
 		} catch (e) {
-			editError = e instanceof Error ? e.message : String(e);
+			editError = apiErrorMessage(e);
 		} finally {
 			saving = false;
 		}
@@ -411,7 +411,7 @@
 			grants = await catalogGrants(catalogId);
 			grantOpen = false;
 		} catch (e) {
-			grantError = e instanceof Error ? e.message : String(e);
+			grantError = apiErrorMessage(e);
 		} finally {
 			granting = false;
 		}

@@ -94,7 +94,7 @@
 			targetBindingId = currentTarget?.binding_id ?? '';
 			targetSchema = currentTarget ? '' : (ws.default_schema ?? '');
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -141,7 +141,7 @@
 			if (data) ws = data;
 			await workspaceStore.load();
 		} catch (e) {
-			editError = e instanceof Error ? e.message : String(e);
+			editError = apiErrorMessage(e);
 		} finally {
 			saving = false;
 		}
@@ -165,7 +165,7 @@
 			if (data) ws = data;
 			await load();
 		} catch (e) {
-			targetError = e instanceof Error ? e.message : String(e);
+			targetError = apiErrorMessage(e);
 		} finally {
 			targetSaving = false;
 		}

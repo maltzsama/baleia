@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import { m } from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
@@ -66,7 +67,7 @@
 			await tree.revealTable(catalog.id, ns, { id: tableId, name: table });
 			linkState = 'idle';
 		} catch (e) {
-			linkError = e instanceof Error ? e.message : String(e);
+			linkError = apiErrorMessage(e);
 			linkState = 'error';
 		}
 	}

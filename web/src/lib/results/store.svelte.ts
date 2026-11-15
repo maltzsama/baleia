@@ -1,3 +1,4 @@
+import { apiErrorMessage } from '$lib/api/errors';
 // Paged Arrow results (#26, #238). Batches are decoded columnar as they arrive,
 // but only the pages the viewer actually reaches are fetched, so a large result
 // never materializes fully in the browser.
@@ -105,7 +106,7 @@ export class ResultsStore {
 			await this.ensurePage(0, true);
 			this.done = true;
 		} catch (error) {
-			if (!isAbort(error)) this.error = error instanceof Error ? error.message : String(error);
+			if (!isAbort(error)) this.error = apiErrorMessage(error);
 		} finally {
 			this.loading = false;
 		}
@@ -126,7 +127,7 @@ export class ResultsStore {
 			})
 			.catch((err) => {
 				if (!isAbort(err)) {
-					this.pageError = err instanceof Error ? err.message : String(err);
+					this.pageError = apiErrorMessage(err);
 				}
 				// Re-throw so the initial load can surface it; callers that only
 				// want the retry banner pass `.catch(() => {})`.

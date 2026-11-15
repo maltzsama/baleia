@@ -14,6 +14,8 @@ export type DescribedError = ErrorEntry & {
 	code: string;
 	requestId?: string;
 	native?: string;
+	/** Raw API/engine detail, shown collapsed; never the headline. */
+	detail?: string;
 };
 
 export const errorCatalog: Record<string, ErrorEntry> = {
@@ -747,6 +749,7 @@ export function describeError(error: unknown, scope?: 'statement'): DescribedErr
 	let code = 'internal';
 	let requestId: string | undefined;
 	let native: string | undefined;
+	let detail: string | undefined;
 
 	if (typeof error === 'string') {
 		code = error;
@@ -755,6 +758,7 @@ export function describeError(error: unknown, scope?: 'statement'): DescribedErr
 		if (typeof value.code === 'string') code = value.code;
 		if (typeof value.request_id === 'string') requestId = value.request_id;
 		if (typeof value.error_native === 'string') native = value.error_native;
+		if (typeof value.message === 'string' && value.message.trim()) detail = value.message;
 	}
 
 	const entry = (scope && errorCatalog[`${scope}.${code}`]) ||
@@ -764,5 +768,5 @@ export function describeError(error: unknown, scope?: 'statement'): DescribedErr
 			remediation: m.errors_catalog_retry_if_it_persists_contact_an()
 		};
 
-	return { code, ...entry, requestId, native };
+	return { code, ...entry, requestId, native, detail };
 }

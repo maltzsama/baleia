@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { m } from '$lib/paraglide/messages';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -74,7 +75,7 @@
 				support = supports[conn.type] ?? null;
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			error = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}
@@ -89,7 +90,7 @@
 			testResult = await testStored(connectionId);
 			testOpen = true;
 		} catch (e) {
-			testError = e instanceof Error ? e.message : String(e);
+			testError = apiErrorMessage(e);
 			testOpen = true;
 		} finally {
 			testing = false;
@@ -123,7 +124,7 @@
 			catalogs = await listConnectionCatalogs(connectionId);
 			catalogOpen = false;
 		} catch (e) {
-			catalogError = e instanceof Error ? e.message : String(e);
+			catalogError = apiErrorMessage(e);
 		} finally {
 			catalogSaving = false;
 		}

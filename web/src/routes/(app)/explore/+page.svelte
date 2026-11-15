@@ -271,9 +271,7 @@
 			if (seq !== compileSeq) return;
 			compiled = null;
 			compileError =
-				e instanceof SemanticRequestError
-					? e
-					: new SemanticRequestError(e instanceof Error ? e.message : String(e));
+				e instanceof SemanticRequestError ? e : new SemanticRequestError(apiErrorMessage(e));
 		} finally {
 			if (seq === compileSeq) compiling = false;
 		}
@@ -391,7 +389,7 @@
 				loadError = m.explore_unknown_model({ model: shared.model });
 			}
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : String(e);
+			loadError = apiErrorMessage(e);
 		} finally {
 			loading = false;
 		}

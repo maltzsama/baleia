@@ -25,7 +25,8 @@ export class MetricRequestError extends Error {
 		message: string,
 		readonly status?: number,
 		readonly code?: string,
-		readonly params?: Record<string, unknown>
+		readonly params?: Record<string, unknown>,
+		readonly request_id?: string
 	) {
 		super(message);
 		this.name = 'MetricRequestError';
@@ -34,12 +35,19 @@ export class MetricRequestError extends Error {
 
 function fail(error: unknown, status: number | undefined, fallback: string): never {
 	const body = error as
-		{ code?: string; message?: string; params?: Record<string, unknown> } | undefined;
+		| {
+				code?: string;
+				message?: string;
+				params?: Record<string, unknown>;
+				request_id?: string;
+		  }
+		| undefined;
 	throw new MetricRequestError(
 		body?.message ?? apiErrorMessage(error, fallback),
 		status,
 		body?.code,
-		body?.params
+		body?.params,
+		body?.request_id
 	);
 }
 

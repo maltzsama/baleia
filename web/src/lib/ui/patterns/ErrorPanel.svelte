@@ -42,6 +42,10 @@
 				<dt class="opacity-70">{m.errorpanel_native()}</dt>
 				<dd class="break-all">{described.native}</dd>
 			{/if}
+			{#if described.detail}
+				<dt class="opacity-70">{m.errorpanel_message()}</dt>
+				<dd class="break-all">{described.detail}</dd>
+			{/if}
 			{#if described.requestId}
 				<dt class="opacity-70">{m.errorpanel_request()}</dt>
 				<dd class="flex items-center gap-1 break-all">

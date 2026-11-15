@@ -108,8 +108,7 @@
 			members = { ...members, [team.id]: list };
 			memberState = { ...memberState, [team.id]: { status: 'ready', error: '' } };
 		} catch (e) {
-			const message =
-				e instanceof Error ? e.message : m.settings_teams_could_not_load_team_members();
+			const message = apiErrorMessage(e, m.settings_teams_could_not_load_team_members());
 			memberState = { ...memberState, [team.id]: { status: 'error', error: message } };
 		}
 	}
