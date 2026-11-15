@@ -336,7 +336,7 @@
 	</span>
 
 	<div class="flex items-center gap-1.5 text-[11px] text-text-muted">
-		<MoonIcon class="w-[13px] h-[13px]" />
+		<SunIcon class="w-[13px] h-[13px]" />
 		<div
 			role="switch"
 			aria-label={m.components_header_dark_mode()}
@@ -358,7 +358,7 @@
 			>
 			</span>
 		</div>
-		<SunIcon class="w-[13px] h-[13px]" />
+		<MoonIcon class="w-[13px] h-[13px]" />
 	</div>
 </header>
 
