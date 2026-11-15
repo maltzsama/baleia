@@ -52,6 +52,69 @@ type access struct {
 	pkg   string   // routes only: directory of the handler, default "."
 }
 
+// authorizationMatrixRow is the reviewable contract for one protected entry.
+// The named handler guard remains the source of truth for checked operations;
+// this row records what the coverage audit knows about the enforcement plane
+// without introducing a second authorization implementation.
+type authorizationMatrixRow struct {
+	name          string
+	actor         string
+	globalRole    string
+	workspaceRole string
+	scope         string
+	denial        string
+	action        string
+}
+
+func matrixRow(name string, a access) authorizationMatrixRow {
+	row := authorizationMatrixRow{name: name}
+	switch a.kind {
+	case kindPublic:
+		row.actor = "anonymous"
+		row.globalRole = "none"
+		row.workspaceRole = "none"
+		row.scope = "public"
+		row.denial = "none"
+		row.action = "public"
+	case kindAuthenticated:
+		row.actor = "authenticated user"
+		row.globalRole = "any"
+		row.workspaceRole = "none"
+		row.scope = "caller-independent"
+		row.denial = "401"
+		row.action = "authenticated"
+	case kindSelf:
+		row.actor = "authenticated user"
+		row.globalRole = "any"
+		row.workspaceRole = "none"
+		row.scope = "caller"
+		row.denial = "401 or resource-specific"
+		row.action = "self"
+	case kindAdmin:
+		row.actor = "human user"
+		row.globalRole = "admin"
+		row.workspaceRole = "none"
+		row.scope = "global administration"
+		row.denial = "403"
+		row.action = "global administration"
+	case kindChecked:
+		row.actor = "authenticated principal"
+		row.globalRole = "guard-defined"
+		row.workspaceRole = "guard-defined"
+		row.scope = "guard-defined"
+		row.denial = "guard-defined 403/404"
+		row.action = "guard-defined"
+	case kindStub:
+		row.actor = "none"
+		row.globalRole = "none"
+		row.workspaceRole = "none"
+		row.scope = "constant response"
+		row.denial = "none"
+		row.action = "stub"
+	}
+	return row
+}
+
 var (
 	selfID        = []string{"UserIDFromContext"}
 	selfPrincipal = []string{"PrincipalFromContext"}
@@ -599,6 +662,24 @@ func validAccess(name string, a access) []string {
 	return p
 }
 
+func validMatrixRow(row authorizationMatrixRow) []string {
+	fields := map[string]string{
+		"actor":          row.actor,
+		"global role":    row.globalRole,
+		"workspace role": row.workspaceRole,
+		"scope":          row.scope,
+		"denial":         row.denial,
+		"action":         row.action,
+	}
+	var problems []string
+	for field, value := range fields {
+		if value == "" {
+			problems = append(problems, row.name+": authorization matrix is missing "+field)
+		}
+	}
+	return problems
+}
+
 func auditBody(name string, a access, fb *funcBody) []string {
 	var p []string
 	for _, c := range a.calls {
@@ -624,6 +705,7 @@ func auditOperations(ops []string, table map[string]access, funcs map[string]*fu
 			continue
 		}
 		p = append(p, validAccess(op, a)...)
+		p = append(p, validMatrixRow(matrixRow(op, a))...)
 		if (a.kind == kindPublic) != public[op] {
 			p = append(p, op+": kindPublic must match publicOps in internal/server/server.go")
 		}
@@ -658,6 +740,7 @@ func auditRoutes(routes []route, table map[string]access, lookup func(pkg, name 
 			continue
 		}
 		p = append(p, validAccess(r.key, a)...)
+		p = append(p, validMatrixRow(matrixRow(r.key, a))...)
 		fb := r.lit
 		if fb == nil {
 			var found, ambiguous bool
