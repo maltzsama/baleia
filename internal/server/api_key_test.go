@@ -96,6 +96,14 @@ func TestAPIKey_Authenticates(t *testing.T) {
 	if !updated.LastUsedAt.Valid {
 		t.Error("last_used_at was not updated")
 	}
+
+	if err := q.DeleteAPIKey(context.Background(), db.DeleteAPIKeyParams{ID: key.ID, UserID: user.ID}); err != nil {
+		t.Fatal(err)
+	}
+	rec, _, called = runAuth(t, q, http.MethodGet, "/api/v1/workspaces", "ListWorkspaces", secret)
+	if rec.Code != http.StatusUnauthorized || called {
+		t.Fatalf("revoked key: status=%d called=%v, want 401", rec.Code, called)
+	}
 }
 
 func TestAPIKey_CannotMintKeys(t *testing.T) {
