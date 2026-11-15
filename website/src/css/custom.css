@@ -189,7 +189,212 @@
   z-index: 1;
 }
 
-/* Tables read better with a little air */
+/* ---------------------------------------------------------------------------
+   The docs reading surface
+   Docs are a Read surface: structure for comprehension first, then make the
+   reading experience worth staying in. These rules carry the brand system
+   (purple, yellow and pink; square controls; Fraunces; terminal code) into
+   the components Docusaurus renders around the Markdown, in both themes.
+   --------------------------------------------------------------------------- */
+
+/* A comfortable measure for prose. Tables and code keep the full column so
+   wide references stay usable. */
+.theme-doc-markdown > p,
+.theme-doc-markdown > ul,
+.theme-doc-markdown > ol,
+.theme-doc-markdown > blockquote {
+  max-width: 46rem;
+}
+
+/* Inline links keep a real underline, so they read as links without relying
+   on colour. The heading anchors (hash-link) stay out. */
+.markdown a:not(.hash-link) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.markdown a:not(.hash-link):hover {
+  text-decoration-thickness: 2px;
+  text-decoration-color: currentColor;
+}
+
+/* Inline code: a crisp, brand-tinted chip instead of a 16px pill. */
+.markdown :not(pre) > code {
+  border: 1px solid color-mix(in srgb, var(--ifm-color-primary) 20%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ifm-color-primary) 7%, transparent);
+  padding: 0.1em 0.35em;
+}
+
+/* A quiet rule under h2 makes long guides scannable. */
+.markdown h2 {
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 10%, transparent);
+}
+
+/* Sidebar: the current page is marked in the brand colour, not grey. */
+.menu__link {
+  border-radius: 0;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.menu__link:hover {
+  background: color-mix(in srgb, var(--ifm-color-primary) 7%, transparent);
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  background: color-mix(in srgb, var(--ifm-color-primary) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+}
+
+/* Table of contents: a small label, a quieter resting colour and a brand
+   marker on the section you are reading. */
+.theme-doc-toc-desktop .table-of-contents {
+  font-size: 0.84rem;
+}
+
+.theme-doc-toc-desktop .table-of-contents::before {
+  content: 'On this page';
+  display: block;
+  margin-bottom: 0.6rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ifm-font-color-base) 55%, transparent);
+}
+
+.table-of-contents__link {
+  color: color-mix(in srgb, var(--ifm-font-color-base) 72%, transparent);
+}
+
+.table-of-contents__link:hover,
+.table-of-contents__link--active {
+  color: var(--ifm-color-primary);
+}
+
+.table-of-contents__link--active {
+  font-weight: 600;
+}
+
+.table-of-contents li:has(> .table-of-contents__link--active) {
+  padding-left: 0.55rem;
+  box-shadow: inset 2px 0 0 var(--ifm-color-primary);
+}
+
+/* The mobile collapsible TOC, squared off to match the controls. */
+.theme-doc-toc-mobile {
+  border: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 14%, transparent);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--ifm-color-primary) 5%, transparent);
+}
+
+.theme-doc-toc-mobile button {
+  border-radius: 0;
+}
+
+/* Tables: a brand header, zebra rows and wrapping values. The table scrolls
+   horizontally on narrow screens; its cells wrap instead of clipping. */
 .markdown table {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
+  border: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 14%, transparent);
+}
+
+.markdown thead tr {
+  background: color-mix(in srgb, var(--ifm-color-primary) 9%, transparent);
+}
+
+.markdown th {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 2px solid color-mix(in srgb, var(--ifm-color-primary) 32%, transparent);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ifm-font-color-base) 82%, transparent);
+  text-align: left;
+}
+
+.markdown td {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 9%, transparent);
+  vertical-align: top;
+}
+
+.markdown tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--ifm-color-primary) 3%, transparent);
+}
+
+.markdown tbody tr:hover {
+  background: color-mix(in srgb, var(--ifm-color-primary) 6%, transparent);
+}
+
+.markdown table code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Admonitions: square, with a coloured edge per kind. */
+.alert {
+  border-radius: 0;
+  box-shadow: none;
+  border-left-width: 4px;
+}
+
+/* Breadcrumbs and pagination carry the same mono/rules language. */
+.breadcrumbs__link {
+  border-radius: 0;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.breadcrumbs__item--active .breadcrumbs__link {
+  background: color-mix(in srgb, var(--ifm-color-primary) 10%, transparent);
+  color: var(--ifm-color-primary);
+}
+
+.pagination-nav__link {
+  border: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 14%, transparent);
+  border-radius: 0;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--ifm-color-primary);
+  transform: translateY(-1px);
+}
+
+.pagination-nav__sublabel {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ifm-font-color-base) 55%, transparent);
+}
+
+.pagination-nav__label {
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+  font-size: 1.05rem;
+}
+
+/* The doc footer and its meta links, squared and quiet. */
+.theme-doc-footer {
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--ifm-font-color-base) 12%, transparent);
+}
+
+.theme-edit-this-page,
+.theme-last-updated {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
 }

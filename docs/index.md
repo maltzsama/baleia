@@ -28,7 +28,7 @@ The interface is available in English and Brazilian Portuguese.
 
 ## Where to start
 
-| | |
+| Guide | What it covers |
 |---|---|
 | [Quick start](quick-start.md) | Run Baleia on your machine with Docker |
 | [Install on Kubernetes](install.md) | Deploy a release with Helm |
