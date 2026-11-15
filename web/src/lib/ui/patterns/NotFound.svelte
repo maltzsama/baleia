@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import MapPinOffIcon from '@lucide/svelte/icons/map-pin-off';
 	import type { Snippet } from 'svelte';
+	import { canGoBack } from '$lib/navigation/history';
 	import Button from '../Button.svelte';
 
 	// Shared not-found surface (#1062): route-level errors mount it through
@@ -22,17 +23,11 @@
 	} = $props();
 
 	function goBack() {
-		if (typeof window === 'undefined') return;
-		// `history.length` also counts forward entries, so it cannot say whether
-		// there is a previous entry. Try back and, if the URL does not change,
-		// fall back to the Workbench instead of leaving the button inert (#1082).
-		const target = `${window.location.pathname}${window.location.search}`;
-		window.history.back();
-		window.setTimeout(() => {
-			if (`${window.location.pathname}${window.location.search}` === target) {
-				void goto(resolve('/sql'));
-			}
-		}, 250);
+		// Navigate back only when the app recorded a previous in-app entry;
+		// otherwise go to the Workbench instead of leaving the button inert
+		// (#1082).
+		if (typeof window !== 'undefined' && canGoBack()) window.history.back();
+		else void goto(resolve('/sql'));
 	}
 </script>
 
