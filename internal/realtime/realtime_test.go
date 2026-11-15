@@ -95,6 +95,17 @@ func TestLimiter(t *testing.T) {
 	if allowed, _, err := c.Allow(ctx, "bucket", 1, 2); err != nil || !allowed {
 		t.Fatalf("after refill allowed=%v err=%v, want allowed", allowed, err)
 	}
+
+	// A changed rate/burst starts a fresh bucket immediately; it must not keep
+	// the exhausted state or capacity of the previous configuration.
+	for i := 0; i < 2; i++ {
+		if allowed, _, err := c.Allow(ctx, "config-change", 1, 2); err != nil || !allowed {
+			t.Fatalf("config call %d allowed=%v err=%v, want allowed", i, allowed, err)
+		}
+	}
+	if allowed, _, err := c.Allow(ctx, "config-change", 1, 60); err != nil || !allowed {
+		t.Fatalf("changed config allowed=%v err=%v, want allowed", allowed, err)
+	}
 }
 
 func TestBus(t *testing.T) {

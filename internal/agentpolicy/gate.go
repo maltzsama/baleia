@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -80,6 +81,13 @@ type Observer interface {
 	Decision(tool string, allowed bool, reason string)
 }
 
+// SharedLimiter is the cross-replica limiter surface supplied by the
+// realtime backbone. Implementations must make Allow atomic for key.
+type SharedLimiter interface {
+	Enabled() bool
+	Allow(ctx context.Context, key string, rate float64, burst int) (bool, time.Duration, error)
+}
+
 // Gate is the single enforcement point for agent tool calls.
 type Gate struct {
 	dialects *dialect.Registry
@@ -87,6 +95,7 @@ type Gate struct {
 	engines  EngineCapabilities
 	ceilings Ceilings
 	limiter  *BurstLimiter
+	shared   SharedLimiter
 	observer Observer
 	now      func() time.Time
 	// queueing turns MaxConcurrentQueries from a refusal into a wait: the run
@@ -115,6 +124,11 @@ func (g *Gate) SetClock(now func() time.Time) { g.now = now }
 
 // SetObserver records gate decisions (metrics, #87).
 func (g *Gate) SetObserver(o Observer) { g.observer = o }
+
+// SetSharedLimiter enables the deployment-wide limiter when the shared
+// realtime backbone is configured. A failed shared operation falls back to
+// the local limiter so Redis outages do not make the MCP surface unavailable.
+func (g *Gate) SetSharedLimiter(l SharedLimiter) { g.shared = l }
 
 // SetQueueing says whether a run over MaxConcurrentQueries waits in the
 // background admission queue instead of being refused (#548). It is on when
@@ -195,13 +209,26 @@ func (g *Gate) Check(ctx context.Context, p authz.Principal, c Call) (dec Decisi
 			return refuse(ReasonPolicy, "catalog is not allowed by the policy"), nil
 		}
 	}
-	if !g.limiter.Allow(p.AgentID, eff.MaxToolCallsPerMinute, g.now()) {
-		return refuse(ReasonRate, "tool-call rate exceeded"), nil
+	allowed, retry := g.allowRate(ctx, p.AgentID, eff.MaxToolCallsPerMinute, g.now())
+	if !allowed {
+		dec := refuse(ReasonRate, "tool-call rate exceeded")
+		dec.RetryAfter = retry
+		return dec, nil
 	}
 	if c.Tool == ToolRunQuery {
 		return g.checkRunQuery(ctx, p, c, eff, agent)
 	}
 	return allow(eff), nil
+}
+
+func (g *Gate) allowRate(ctx context.Context, agentID db.UUID, perMinute int, now time.Time) (bool, time.Duration) {
+	if g.shared != nil && g.shared.Enabled() {
+		allowed, retry, err := g.shared.Allow(ctx, "agent:"+agentID.String(), float64(perMinute)/60.0, perMinute)
+		if err == nil {
+			return allowed, boundedRateRetry(retry)
+		}
+	}
+	return g.limiter.AllowWithRetry(agentID, perMinute, now)
 }
 
 func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff Effective, agent db.Agent) (Decision, error) {
@@ -299,24 +326,29 @@ func (g *Gate) checkRunQuery(ctx context.Context, p authz.Principal, c Call, eff
 	return allow(eff), nil
 }
 
-// BurstLimiter is the per-agent, in-process token bucket (#60). Quotas that
-// must hold across replicas are computed from query_executions instead.
+// BurstLimiter is the per-agent, in-process fallback token bucket (#60).
 type BurstLimiter struct {
 	mu       sync.Mutex
 	limiters map[[16]byte]*rate.Limiter
+	limits   map[[16]byte]int
 	seen     map[[16]byte]time.Time
 }
 
 // NewBurstLimiter returns an empty limiter.
 func NewBurstLimiter() *BurstLimiter {
-	return &BurstLimiter{limiters: map[[16]byte]*rate.Limiter{}, seen: map[[16]byte]time.Time{}}
+	return &BurstLimiter{
+		limiters: map[[16]byte]*rate.Limiter{},
+		limits:   map[[16]byte]int{},
+		seen:     map[[16]byte]time.Time{},
+	}
 }
 
-// Allow consumes one token for agentID at now. It evicts agents idle for more
-// than ten minutes so the map does not grow forever.
-func (b *BurstLimiter) Allow(agentID db.UUID, perMinute int, now time.Time) bool {
+// AllowWithRetry consumes one token and reports the bounded delay until the
+// next token when the bucket is empty. A changed policy creates a bucket with
+// the new effective configuration before the next call is evaluated.
+func (b *BurstLimiter) AllowWithRetry(agentID db.UUID, perMinute int, now time.Time) (bool, time.Duration) {
 	if perMinute <= 0 {
-		return true
+		return true, 0
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -324,16 +356,32 @@ func (b *BurstLimiter) Allow(agentID db.UUID, perMinute int, now time.Time) bool
 		if now.Sub(at) > 10*time.Minute {
 			delete(b.seen, id)
 			delete(b.limiters, id)
+			delete(b.limits, id)
 		}
 	}
 	id := agentID.Bytes
 	l, ok := b.limiters[id]
-	if !ok {
+	if !ok || b.limits[id] != perMinute {
 		l = rate.NewLimiter(rate.Limit(float64(perMinute)/60.0), perMinute)
 		b.limiters[id] = l
+		b.limits[id] = perMinute
 	}
 	b.seen[id] = now
-	return l.AllowN(now, 1)
+	if l.AllowN(now, 1) {
+		return true, 0
+	}
+	retry := time.Duration(math.Ceil((1 - l.TokensAt(now)) / (float64(perMinute) / 60.0) * float64(time.Second)))
+	return false, boundedRateRetry(retry)
+}
+
+func boundedRateRetry(retry time.Duration) time.Duration {
+	if retry <= 0 {
+		return time.Nanosecond
+	}
+	if retry > time.Minute {
+		return time.Minute
+	}
+	return retry
 }
 
 // readOnlyKeyword reports whether the leading keyword is one agents may use.

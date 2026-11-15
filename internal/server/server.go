@@ -197,6 +197,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 	// here (#58), and the streamable handler authenticates every request.
 	if cfg.AgentsEnabled {
 		gate := agentpolicy.NewGate(core.Queries, engineCapabilities{h: h}, h.AgentCeilings(), core.Dialects)
+		gate.SetSharedLimiter(core.Realtime)
 		gate.SetObserver(core.Metrics.Agent())
 		gate.SetQueueing(cfg.WorkloadEnabled)
 		s.mcp = mcp.New(s.logger, h, gate, core.AgentTokens(), mcp.NewAuditHooks(core.Audit), cfg.MCPAllowedOrigins)
