@@ -104,6 +104,26 @@ defaults to `admins` (it was `everyone`), and `BALEIA_CONNECTIONS_ALLOW_CIDRS`
 now also opens the internal ranges. See [configuration.md](configuration.md).
 
 
+## Bundled Trino security configuration
+
+The files that make the in-chart Trino safe (#992) — `config.properties`, the
+base access-control file, `baleia-catalog-guard.properties`, `baleia-rules.json`
+and `password-authenticator.properties` — live in one **immutable** ConfigMap
+whose name carries a hash of its content (`<release>-trino-config-<hash>`).
+Editing it in place is impossible:
+
+- To change any of them, change the chart values or the files and run
+  `helm upgrade`. Different content renders a new ConfigMap name and rolls the
+  coordinator with it; the previous ConfigMap is not reused.
+- Do not patch the ConfigMap, the Secrets, the Deployments or the pods in the
+  Trino namespace by hand. Only the deployment pipeline and operators may write
+  them; the Baleia and Trino service accounts never do. A manual edit either
+  fails (`immutable: true`) or is reverted on the next `helm upgrade`.
+
+Editing a security file in place and restarting the coordinator could drop the
+catalog guard or allow impersonation, which is why the chart ties the content to
+a release instead.
+
 ## Rotating the bundled Trino password or certificate
 
 The in-chart Trino (#647) builds its password file and its keystore when its

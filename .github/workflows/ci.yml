@@ -408,3 +408,5 @@ jobs:
           kubectl kustomize deploy/dev | kubeconform -strict -summary -ignore-missing-schemas
       - name: Verify tracked dev files are in sync
         run: ./scripts/verify-dev-sync.sh
+      - name: Trino security ConfigMaps are immutable and mounted
+        run: ./scripts/verify-trino-security-config.sh

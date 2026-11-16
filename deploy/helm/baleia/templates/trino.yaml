@@ -1,11 +1,8 @@
-{{- if .Values.trino.enabled }}
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ include "baleia.fullname" . }}-trino-config
-  labels:
-    {{- include "baleia.labels" . | nindent 4 }}
-data:
+{{- /* Everything that makes the bundled Trino safe (#992) lives in one
+immutable ConfigMap whose name carries a hash of its content, so editing it in
+place is impossible: a change in values renders a new ConfigMap and rolls the
+coordinator instead. */}}
+{{- define "baleia.trinoConfigData" }}
   config.properties: |
 {{- $config := .Files.Get "files/trino/config.properties" }}
 {{- if not (include "baleia.trinoAuth" .) }}
@@ -53,6 +50,17 @@ data:
   {{- end }}
   baleia-catalog-guard.properties: |
 {{ .Files.Get "files/trino/baleia-catalog-guard.properties" | replace "baleia.admin-users=baleia_admin" (printf "baleia.admin-users=%s" .Values.config.BALEIA_TRINO_ADMIN_USER) | replace "baleia.allow-unauthenticated-admin=false" (printf "baleia.allow-unauthenticated-admin=%t" (and (not (include "baleia.trinoAuth" .)) .Values.trino.catalogGuard.allowUnauthenticatedAdmin)) | indent 4 }}
+{{- end }}
+{{- if .Values.trino.enabled }}
+{{- $trinoConfigHash := include "baleia.trinoConfigData" . | sha256sum | trunc 10 }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "baleia.fullname" . }}-trino-config-{{ $trinoConfigHash }}
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+immutable: true
+data:{{ include "baleia.trinoConfigData" . }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -72,12 +80,15 @@ spec:
       labels:
         {{- include "baleia.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: trino
-      {{- if and (include "baleia.trinoAuth" .) .Values.secrets.create }}
       annotations:
+        # The security ConfigMap's content hash (#992): a value that changes it
+        # renders a new ConfigMap and rolls the coordinator with it.
+        checksum/trino-config: {{ $trinoConfigHash }}
+        {{- if and (include "baleia.trinoAuth" .) .Values.secrets.create }}
         # The password file is written at start: a new password restarts
         # Trino. With existingSecret, restart it yourself (docs/operations.md).
         checksum/trino-password: {{ .Values.secrets.values.BALEIA_TRINO_PASSWORD | default "" | sha256sum }}
-      {{- end }}
+        {{- end }}
     spec:
       initContainers:
         # The plugin is either bundled (trino.plugin.image: a small image with
@@ -258,7 +269,7 @@ spec:
           emptyDir: {}
         - name: trino-config
           configMap:
-            name: {{ include "baleia.fullname" . }}-trino-config
+            name: {{ include "baleia.fullname" . }}-trino-config-{{ $trinoConfigHash }}
         {{- if include "baleia.trinoAuth" . }}
         - name: trino-auth
           emptyDir: { medium: Memory }
