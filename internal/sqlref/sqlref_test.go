@@ -119,6 +119,18 @@ func TestExtractResolvedColumnsThroughCTE(t *testing.T) {
 	}
 }
 
+// TestExtractResolvedSkipsOutputAlias: a reference to a projection alias is not
+// a physical column.
+func TestExtractResolvedSkipsOutputAlias(t *testing.T) {
+	t.Parallel()
+	d := dialect.NewRegistry().MustGet(dialect.Trino)
+	got := ExtractResolved(d, "sales", "SELECT o.id AS display_id FROM orders o ORDER BY display_id")
+	want := []Column{{Namespace: "sales", Table: "orders", Name: "id"}}
+	if !reflect.DeepEqual(got.Columns, want) {
+		t.Fatalf("Columns = %#v, want %#v", got.Columns, want)
+	}
+}
+
 func TestExtractResolvedQualifiesSources(t *testing.T) {
 	t.Parallel()
 	d := dialect.NewRegistry().MustGet(dialect.Trino)

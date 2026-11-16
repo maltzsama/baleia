@@ -106,12 +106,24 @@ func ExtractResolved(d dialect.Dialect, defaultSchema, sql string) Reference {
 	// through a CTE or derived table resolves to the physical table it reads.
 	byAlias := physicalTablesByAlias(qualified)
 
+	// A projection alias (AS x) referenced elsewhere (ORDER BY x) is not a
+	// physical column; skip it rather than infer a phantom.
+	outputAliases := make(map[string]bool)
+	for _, alias := range qualified.FindAll(expressions.KindAlias) {
+		if name := alias.Alias(); name != "" {
+			outputAliases[strings.ToLower(name)] = true
+		}
+	}
+
 	columns := make([]Column, 0, 8)
 	seenColumns := make(map[Column]bool, 8)
 	for _, columnExpr := range qualified.FindAll(expressions.KindColumn) {
 		name := columnExpr.Name()
 		if name == "" {
 			continue
+		}
+		if columnExpr.TableName() == "" && outputAliases[strings.ToLower(name)] {
+			continue // a reference to a projection alias, not a physical column
 		}
 		namespace, table := resolveColumn(columnExpr.TableName(), byAlias, tables)
 		column := Column{Namespace: namespace, Table: table, Name: name}
