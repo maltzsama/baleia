@@ -278,7 +278,7 @@
 								<th class="px-3 py-2">{m.workspace_bi_created()}</th>
 								<th class="px-3 py-2">{m.workspace_bi_expires()}</th>
 								<th class="px-3 py-2">{m.workspace_bi_last_used()}</th>
-								<th class="px-3 py-2"></th>
+								<th class="px-3 py-2"><span class="sr-only">{m.workspace_bi_actions()}</span></th>
 							</tr>
 						</thead>
 						<tbody>

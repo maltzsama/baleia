@@ -51,7 +51,9 @@ public final class BiGatewayE2E {
     private static final HttpClient HTTP = trustAllClient();
 
     private static String base;
+    private static String api;
     private static String user;
+    private static String password;
     private static String secret;
     private static String catalog;
     private static String schema;
@@ -61,7 +63,9 @@ public final class BiGatewayE2E {
 
     public static void main(String[] args) throws Exception {
         base = env("BI_E2E_URL", "https://localhost:8444");
+        api = env("BI_E2E_API_URL", "http://localhost:8080");
         user = env("BI_E2E_USER", "admin@e2e.test");
+        password = env("BI_E2E_PASSWORD", env("E2E_PASSWORD", "e2e-password"));
         catalog = env("BI_E2E_CATALOG", "e2e_tpch");
         schema = env("BI_E2E_SCHEMA", "tiny");
         pods = env("BI_E2E_PODS", "").isBlank() ? new String[0] : env("BI_E2E_PODS", "").split(",");
@@ -130,6 +134,24 @@ public final class BiGatewayE2E {
                         throw new AssertionError(
                                 "the scope denial is not a permission or hidden-catalog error: "
                                         + expected.getMessage());
+                    }
+                }
+            });
+
+            check("a write is refused by the read-only gateway", () -> {
+                try (Statement st = conn.createStatement()) {
+                    st.execute("CREATE TABLE e2e_write_probe (x integer)");
+                    throw new AssertionError("a write reached the engine");
+                } catch (SQLException expected) {
+                    String msg = String.valueOf(expected.getMessage()).toLowerCase();
+                    boolean refused = msg.contains("read-only")
+                            || msg.contains("read only")
+                            || msg.contains("permission")
+                            || msg.contains("access denied")
+                            || msg.contains("not allowed");
+                    if (!refused) {
+                        throw new AssertionError(
+                                "the write was not refused as read-only: " + expected.getMessage());
                     }
                 }
             });
@@ -241,6 +263,54 @@ public final class BiGatewayE2E {
             }
         });
 
+        check("a revoked key stops working on the next request", () -> {
+            String token = loginToken();
+            String workspace = personalWorkspace(token);
+
+            // A disposable key, so a standalone rerun never revokes the seeded
+            // key the first checks above depend on.
+            HttpResponse<String> targets = send(
+                    apiRequest("/api/v1/workspaces/" + workspace + "/targets", token).GET());
+            if (targets.statusCode() != 200) {
+                throw new AssertionError("targets = " + targets.statusCode() + " " + targets.body());
+            }
+            Matcher engine = Pattern.compile(
+                            "\"engine_id\"\\s*:\\s*\"([^\"]+)\"[^}]*\"engine_kind\"\\s*:\\s*\"trino\"")
+                    .matcher(targets.body());
+            if (!engine.find()) {
+                throw new AssertionError("no Trino target to create the revocation probe key");
+            }
+            HttpRequest create = apiRequest("/api/v1/workspaces/" + workspace + "/bi-keys", token)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            "{\"name\":\"e2e revocation probe\",\"engine_id\":\"" + engine.group(1) + "\"}"))
+                    .build();
+            HttpResponse<String> created = HTTP.send(create, HttpResponse.BodyHandlers.ofString());
+            if (created.statusCode() != 201) {
+                throw new AssertionError(
+                        "create probe key = " + created.statusCode() + " " + created.body());
+            }
+            String keyId = field(created.body(), "id");
+            String probe = field(created.body(), "secret");
+            if (keyId == null || probe == null) {
+                throw new AssertionError("the probe key has no id or secret: " + created.body());
+            }
+
+            HttpResponse<String> before = send(requestWithSecret(probe, base + "/v1/info").GET());
+            if (before.statusCode() != 200) {
+                throw new AssertionError("the probe key = " + before.statusCode() + " before revocation");
+            }
+            HttpResponse<String> revoked = send(apiRequest(
+                    "/api/v1/workspaces/" + workspace + "/bi-keys/" + keyId, token).DELETE());
+            if (revoked.statusCode() != 204) {
+                throw new AssertionError("revoke = " + revoked.statusCode() + " " + revoked.body());
+            }
+            HttpResponse<String> after = send(requestWithSecret(probe, base + "/v1/info").GET());
+            if (after.statusCode() != 401) {
+                throw new AssertionError("a revoked key = " + after.statusCode() + ", want 401");
+            }
+        });
+
         System.out.println("BI GATEWAY E2E PASS (" + base + ", " + user + ", " + catalog + "." + schema + ", "
                 + pods.length + " replicas)");
     }
@@ -255,8 +325,12 @@ public final class BiGatewayE2E {
     }
 
     private static HttpRequest.Builder request(String uri) {
+        return requestWithSecret(secret, uri);
+    }
+
+    private static HttpRequest.Builder requestWithSecret(String credential, String uri) {
         String auth = "Basic " + Base64.getEncoder()
-                .encodeToString((user + ":" + secret).getBytes(StandardCharsets.UTF_8));
+                .encodeToString((user + ":" + credential).getBytes(StandardCharsets.UTF_8));
         return HttpRequest.newBuilder(URI.create(uri))
                 .timeout(Duration.ofSeconds(60))
                 .header("Authorization", auth);
@@ -275,6 +349,39 @@ public final class BiGatewayE2E {
         Matcher m = STATE.matcher(body);
         return m.find() && ("FINISHED".equals(m.group(1)) || "FAILED".equals(m.group(1))
                 || "CANCELED".equals(m.group(1)));
+    }
+
+    private static String loginToken() throws IOException, InterruptedException {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(api + "/api/v1/auth/login"))
+                .timeout(Duration.ofSeconds(30))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "{\"email\":\"" + user + "\",\"password\":\"" + password + "\"}"))
+                .build();
+        HttpResponse<String> r = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
+        if (r.statusCode() != 200) {
+            throw new AssertionError("login = " + r.statusCode() + " " + r.body());
+        }
+        return field(r.body(), "token");
+    }
+
+    private static String personalWorkspace(String token) throws IOException, InterruptedException {
+        HttpResponse<String> r = send(apiRequest("/api/v1/auth/me", token).GET());
+        if (r.statusCode() != 200) {
+            throw new AssertionError("/auth/me = " + r.statusCode() + " " + r.body());
+        }
+        return field(r.body(), "personal_workspace_id");
+    }
+
+    private static HttpRequest.Builder apiRequest(String path, String token) {
+        return HttpRequest.newBuilder(URI.create(api + path))
+                .timeout(Duration.ofSeconds(30))
+                .header("Authorization", "Bearer " + token);
+    }
+
+    private static String field(String json, String name) {
+        Matcher m = Pattern.compile("\"" + name + "\"\\s*:\\s*\"([^\"]+)\"").matcher(json);
+        return m.find() ? m.group(1) : null;
     }
 
     private static HttpClient trustAllClient() {

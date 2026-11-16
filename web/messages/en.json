@@ -2885,6 +2885,7 @@
 	"workspace_bi_last_used": "Last used",
 	"workspace_bi_never": "Never",
 	"workspace_bi_expired": "Expired",
+	"workspace_bi_actions": "Actions",
 	"workspace_bi_revoke": "Revoke",
 	"workspace_bi_revoke_title": "Revoke the BI key",
 	"workspace_bi_revoke_consequence_1": "The BI tool using this key stops working on its next request.",

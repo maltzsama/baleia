@@ -208,7 +208,7 @@ server.use(http.get('/workspaces', ({ response }) => response(200).json([makeWor
   `npm run e2e -- --grep @issue-118`.
 - `make e2e-bi` drives the BI gateway (`scripts/bi-e2e/BiGatewayE2E.java`) with
   the Trino JDBC driver: Basic auth, a query, follows on every API replica,
-  cancellation and a scope-denied catalog.
+  cancellation, read-only enforcement, a scope-denied catalog and key revocation.
 - `loginAs('admin' | 'member' | 'viewer')` and
   `expectNoA11yViolations(page)` come from `e2e/fixtures.ts`.
 - Seeded accounts: `admin@e2e.test`, `member@e2e.test`, `viewer@e2e.test`

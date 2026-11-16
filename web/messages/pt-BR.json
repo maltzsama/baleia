@@ -2885,6 +2885,7 @@
 	"workspace_bi_last_used": "Último uso",
 	"workspace_bi_never": "Nunca",
 	"workspace_bi_expired": "Expirada",
+	"workspace_bi_actions": "Ações",
 	"workspace_bi_revoke": "Revogar",
 	"workspace_bi_revoke_title": "Revogar a chave de BI",
 	"workspace_bi_revoke_consequence_1": "A ferramenta de BI que usa esta chave para de funcionar na próxima requisição.",
