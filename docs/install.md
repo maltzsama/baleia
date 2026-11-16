@@ -74,7 +74,7 @@ The in-chart Trino requires authentication (#647): it serves clients over HTTPS 
 
 ## BI gateway
 
-The BI gateway (ADR 0017) serves Trino's HTTP client protocol from the API pods, so Tableau, Power BI and other Trino clients reach the engines only through Baleia, with the key's workspace scope and read-only access. It is **on by default** (`biGateway.enabled: false` turns it off). It renders a dedicated `baleia-bi-gateway` Service (the protocol lives at the server root, so the Ingress cannot share the API's `/api/v1` one) and, optionally, an Ingress:
+The BI gateway (ADR 0017) serves Trino's **HTTP client protocol** from the API pods, so Tableau, Power BI and other Trino clients reach the engines only through Baleia, with the key's workspace scope and read-only access. It adds no second protocol server: there is no JDBC/ODBC/Flight SQL translation layer on this path. It is **on by default** (`biGateway.enabled: false` turns it off). It renders a dedicated `baleia-bi-gateway` Service (the protocol lives at the server root, so the Ingress cannot share the API's `/api/v1` one) and, optionally, an Ingress:
 
 ```yaml title="values.yaml"
 biGateway:
@@ -89,13 +89,37 @@ biGateway:
         hosts: ["bi.example.com"]
 ```
 
-Without `biGateway.publicURL` the gateway rewrites URIs to its in-cluster Service address, which only BI tools inside the cluster reach; set it for tools outside.
+### Bring the gateway up
 
-`BALEIA_BI_GATEWAY_SECRET` is at least 32 characters, the same on every API replica. It signs the Trino URIs the gateway hands back, so any replica can serve the next page of a query. With `secrets.create` the chart generates it on the first install and keeps it across upgrades; set `secrets.values.BALEIA_BI_GATEWAY_SECRET` to choose your own. With `existingSecret`, add the key to that Secret yourself: the chart cannot check an external Secret, and the API pod does not start until the key exists.
+Enable it in this order; each step relies on the one before it.
+
+1. **Listener.** `biGateway.enabled: true` renders `BALEIA_BI_GATEWAY_ADDR=:<port>`, the `bi-gateway` container port and the dedicated Service. `false` leaves the listener off.
+2. **Public URL and TLS.** Set `biGateway.publicURL` to the address the BI tools reach. With `ingress.enabled` it must be `https://`: the key travels as the HTTP Basic password. Without it the gateway rewrites Trino URIs to its in-cluster Service address, which only clients inside the cluster reach.
+3. **HMAC secret.** Every replica must share one `BALEIA_BI_GATEWAY_SECRET` of at least 32 characters. With `secrets.create` the chart generates it on first install and keeps it across upgrades; with `existingSecret`, add the key yourself (the API pod does not start until it exists).
+4. **Global switch.** A global administrator turns the gateway on with `PUT /admin/bi-gateway` (the in-product **Settings → BI Gateway** page exposes the same switch). `GET /admin/bi-gateway` reports `configured`, `public_url_ready`, `state` and the `blocked_by` codes, so readiness is never inferred from a failed download.
+5. **Per-workspace switch.** A workspace administrator turns BI on for the workspace (`bi_enabled`) and issues a workspace-bound BI key for a Trino target.
+6. **Client.** The BI tool signs in with the key owner's e-mail as the user and the key as the password.
+
+`GET /workspaces/{id}/bi-status` reports whether the gateway, the workspace switch and a Trino target are all ready, and whether the caller may create keys, so the workspace screen can show the same facts.
+
+### Failure modes and diagnostics
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `helm template` fails on `biGateway.publicURL` | The URL is not an http(s) origin, or carries a path or credentials | Use `https://bi.example.com` (no path, no userinfo) |
+| `helm template` fails with the Ingress enabled | `publicURL` is `http://` while the Ingress is on | Terminate TLS and use `https://` |
+| The API pod does not start | `BALEIA_BI_GATEWAY_SECRET` is missing from `existingSecret`, or shorter than 32 characters | Add the key, or let `secrets.create` generate it |
+| `GET /workspaces/{id}/bi/{tool}` returns 422 "the BI gateway is not enabled" | The listener or public URL is unset | Steps 1–2 |
+| The gateway returns 403 "the BI gateway is disabled" | The global switch is off | Step 4 |
+| The gateway returns 403 "BI is disabled for this workspace" | The workspace switch is off | Step 5 |
+| A BI tool cannot follow a query | `publicURL` is the in-cluster address but the tool runs outside the cluster | Step 2 |
+| A Trino target returns 422 for the file | The target is not Trino, or the catalog is outside the workspace scope | Only Trino targets are served |
+
+The API pod's `/healthz` and `/readyz` probes cover the process and therefore the in-process gateway listener. The gateway has no separate unauthenticated health endpoint because it serves only the Trino protocol; a `POST /v1/statement` with a workspace key is the end-to-end check.
 
 BI tools sign in with HTTP Basic: the key owner's e-mail as the user and a workspace-bound BI key as the password (`POST /workspaces/{id}/bi-keys`), never a Trino credential. One key names one workspace and one engine; its statements are read-only and recorded in the history with origin `bi`. Only Trino engines are served: a direct engine (PostgreSQL, MySQL, …) has no gateway path.
 
-`biGateway.publicURL` must be the URL the BI tools use, because the gateway rewrites every `nextUri` to it. With the Ingress enabled it must be `https://`: the key travels as the Basic-auth password, and the chart refuses a cleartext public URL. Capacity and scaling are covered in [Operations](operations.md#bi-gateway-capacity).
+`biGateway.publicURL` must be the URL the BI tools use, because the gateway rewrites every `nextUri` to it. Capacity and scaling are covered in [Operations](operations.md#bi-gateway-capacity).
 
 With the gateway configured, a Trino table's detail offers **Open in Tableau** and **Open in Power BI** when BI is on for the workspace; the download comes from `GET /workspaces/{id}/bi/{tool}` and points at `biGateway.publicURL` with the target's catalog and schema. It carries no credentials.
 

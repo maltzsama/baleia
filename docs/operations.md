@@ -792,6 +792,12 @@ rewritten URI carries a signature any replica can verify with the shared
 - **Visibility.** Every BI statement is an execution with origin `bi` in the
   history (and in audit), so the usual history and monitoring views cover it;
   the per-key and per-workspace running counts come from the same table.
+- **Readiness.** `GET /admin/bi-gateway` (admins) reports whether the listener,
+  the HMAC secret and the public URL are configured, whether the global switch is
+  on, and the health and concurrency state. `GET /workspaces/{id}/bi-status`
+  (workspace members) adds the workspace switch, the available Trino targets and
+  the caller's key permissions. Both return stable `blocked_by` codes, so a
+  broken path is diagnosed without a BI tool.
 - **Revocation.** Turning the gateway off globally (admin, `PUT
   /admin/bi-gateway`), turning BI off for a workspace (`bi_enabled`), or
   revoking the key takes effect at the next request on any replica.
