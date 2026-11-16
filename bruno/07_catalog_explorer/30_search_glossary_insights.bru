@@ -1,0 +1,40 @@
+meta {
+  name: Search Glossary Insights
+  type: http
+  seq: 30
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/search/glossary/insights
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("the entry has one insight per member, each with matches and suggestions", function () {
+    const entryId = bru.getVar("search_glossary_entry_id");
+    expect(Array.isArray(res.body.entries)).to.equal(true);
+    const insight = res.body.entries.find((e) => e.entry_id === entryId);
+    expect(insight).to.not.equal(undefined);
+    expect(insight.term).to.equal("receita");
+    expect(insight.members.map((m) => m.value)).to.eql(["receita", "faturamento", "revenue"]);
+    insight.members.forEach((member) => {
+      expect(Array.isArray(member.matches)).to.equal(true);
+      expect(Array.isArray(member.suggestions)).to.equal(true);
+    });
+  });
+}
+
+docs {
+  Shows which visible models, fields and metrics each term and synonym match,
+  plus vocabulary already present in their labels and descriptions as
+  suggestions that are never saved automatically (#1027).
+}

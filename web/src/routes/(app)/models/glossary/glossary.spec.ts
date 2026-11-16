@@ -15,6 +15,50 @@ function mockWorkspace() {
 describe('Models · Search glossary (#943, #1019)', () => {
 	beforeEach(() => {
 		workspaceStore.select(makeWorkspace());
+		server.use(
+			http.get('/workspaces/{id}/search/glossary/insights', ({ response }) =>
+				response(200).json({ entries: [] })
+			)
+		);
+	});
+
+	it('shows visible matches, unused words and model-label suggestions', async () => {
+		mockWorkspace();
+		server.use(
+			http.get('/workspaces/{id}/search/glossary', ({ response }) =>
+				response(200).json({ entries: [ENTRY], allowed_actions: ['view'] })
+			),
+			http.get('/workspaces/{id}/search/glossary/insights', ({ response }) =>
+				response(200).json({
+					entries: [
+						{
+							entry_id: ENTRY.id,
+							term: ENTRY.term,
+							members: [
+								{
+									value: 'receita',
+									matches: [{ kind: 'semantic_model', id: 'model-1', label: 'Receita líquida' }],
+									suggestions: ['liquida']
+								},
+								{ value: 'faturamento', matches: [], suggestions: ['receita'] },
+								{ value: 'revenue', matches: [], suggestions: ['orders'] }
+							]
+						}
+					]
+				})
+			)
+		);
+		renderPage(SearchGlossaryPage, { me: makeMe() });
+		expect(await screen.findByText('receita: 1')).toBeTruthy();
+		expect(await screen.findByText('faturamento: 0')).toBeTruthy();
+		expect(
+			(await screen.findAllByText('No visible model or metric matches this word.')).length
+		).toBe(2);
+		expect(
+			await screen.findByText(
+				/Related words from visible models and metrics: liquida, receita, orders/
+			)
+		).toBeTruthy();
 	});
 
 	it('lets an editor add a set of synonyms and shows it', async () => {

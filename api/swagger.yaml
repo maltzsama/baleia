@@ -2497,6 +2497,45 @@ components:
           description: "`view` for every member; `edit` for editors and above"
           items: { type: string }
 
+    SearchGlossaryResourceMatch:
+      type: object
+      required: [kind, id, label]
+      properties:
+        kind: { type: string, enum: [semantic_model, semantic_metric, semantic_field] }
+        id: { type: string, format: uuid }
+        label: { type: string }
+
+    SearchGlossaryMemberInsight:
+      type: object
+      required: [value, matches, suggestions]
+      properties:
+        value: { type: string }
+        matches:
+          type: array
+          items: { $ref: "#/components/schemas/SearchGlossaryResourceMatch" }
+        suggestions:
+          type: array
+          description: "Vocabulary tokens from visible model and metric labels/descriptions; suggestions are not saved automatically"
+          items: { type: string }
+
+    SearchGlossaryInsight:
+      type: object
+      required: [entry_id, term, members]
+      properties:
+        entry_id: { type: string, format: uuid }
+        term: { type: string }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/SearchGlossaryMemberInsight" }
+
+    SearchGlossaryInsights:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/SearchGlossaryInsight" }
+
     WorkspaceSearchKind:
       type: string
       enum: [table, column, doc, saved_query, semantic_metric, semantic_model, folder]
@@ -6290,6 +6329,23 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/search/glossary/insights:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Metadata]
+      operationId: searchGlossaryInsights
+      summary: "Visible model and metric matches for glossary terms"
+      description: "Returns matches and vocabulary suggestions derived only from semantic models and metrics visible to the caller. Suggestions are advisory and are never saved automatically."
+      responses:
+        "200":
+          description: "Glossary insights"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchGlossaryInsights" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /workspaces/{id}/search/glossary/{entry_id}:
     parameters:

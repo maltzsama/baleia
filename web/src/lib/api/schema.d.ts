@@ -1393,6 +1393,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/search/glossary/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Visible model and metric matches for glossary terms
+         * @description Returns matches and vocabulary suggestions derived only from semantic models and metrics visible to the caller. Suggestions are advisory and are never saved automatically.
+         */
+        get: operations["searchGlossaryInsights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/search/glossary/{entry_id}": {
         parameters: {
             query?: never;
@@ -5757,6 +5779,28 @@ export interface components {
             /** @description `view` for every member; `edit` for editors and above */
             allowed_actions: string[];
         };
+        SearchGlossaryResourceMatch: {
+            /** @enum {string} */
+            kind: "semantic_model" | "semantic_metric" | "semantic_field";
+            /** Format: uuid */
+            id: string;
+            label: string;
+        };
+        SearchGlossaryMemberInsight: {
+            value: string;
+            matches: components["schemas"]["SearchGlossaryResourceMatch"][];
+            /** @description Vocabulary tokens from visible model and metric labels/descriptions; suggestions are not saved automatically */
+            suggestions: string[];
+        };
+        SearchGlossaryInsight: {
+            /** Format: uuid */
+            entry_id: string;
+            term: string;
+            members: components["schemas"]["SearchGlossaryMemberInsight"][];
+        };
+        SearchGlossaryInsights: {
+            entries: components["schemas"]["SearchGlossaryInsight"][];
+        };
         /** @enum {string} */
         WorkspaceSearchKind: "table" | "column" | "doc" | "saved_query" | "semantic_metric" | "semantic_model" | "folder";
         WorkspaceSearchItem: {
@@ -10108,6 +10152,30 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    searchGlossaryInsights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Glossary insights */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchGlossaryInsights"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     deleteSearchGlossaryEntry: {

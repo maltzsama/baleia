@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	textsearch "github.com/galileostudio/baleia/internal/search"
+	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -66,6 +69,115 @@ func (h *SemanticHandlers) ListSearchGlossary(ctx context.Context, request ListS
 		out.Entries = append(out.Entries, glossaryEntry(row))
 	}
 	return ListSearchGlossary200JSONResponse(out), nil
+}
+
+// SearchGlossaryInsights reports visible semantic resources matching glossary
+// members and proposes vocabulary already present in model labels/descriptions.
+func (h *SemanticHandlers) SearchGlossaryInsights(ctx context.Context, request SearchGlossaryInsightsRequestObject) (SearchGlossaryInsightsResponseObject, error) {
+	ws, notFound, err := h.metadataWorkspace(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	if notFound {
+		return SearchGlossaryInsights404JSONResponse{NotFoundJSONResponse: metadataNotFound("workspace not found")}, nil
+	}
+	if h.glossary == nil {
+		return nil, errors.New("search glossary is not configured")
+	}
+	p, err := authz.PrincipalFromContext(ctx)
+	if err != nil {
+		return SearchGlossaryInsights401JSONResponse{UnauthorizedJSONResponse: UnauthorizedJSONResponse{Code: ErrorCodeUnauthorized, Message: "invalid user"}}, nil
+	}
+	entries, err := h.glossary.List(ctx, repo.UUIDString(ws))
+	if err != nil {
+		return nil, err
+	}
+	models, err := h.queries.ListVisibleSemanticModels(ctx, db.ListVisibleSemanticModelsParams{WorkspaceID: ws, UserID: p.UserID})
+	if err != nil {
+		return nil, err
+	}
+	metrics, err := h.queries.ListVisibleSemanticMetrics(ctx, db.ListVisibleSemanticMetricsParams{WorkspaceID: ws, UserID: p.UserID})
+	if err != nil {
+		return nil, err
+	}
+	resources := make([]glossaryResource, 0, len(models)+len(metrics))
+	for _, model := range models {
+		resources = append(resources, glossaryResource{Kind: "semantic_model", ID: repo.UUIDString(model.ID), Label: model.Label, Description: model.Description})
+		var definition semantic.Model
+		if json.Unmarshal(model.Definition, &definition) == nil {
+			for _, field := range definition.Dimensions {
+				if !field.Hidden {
+					resources = append(resources, glossaryResource{Kind: "semantic_field", ID: repo.UUIDString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, Description: field.Description, SearchText: field.Name + " " + field.Label + " " + field.Description})
+				}
+			}
+			for _, field := range definition.Metrics {
+				resources = append(resources, glossaryResource{Kind: "semantic_field", ID: repo.UUIDString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, SearchText: field.Name + " " + field.Label})
+			}
+			for _, field := range definition.CalculatedFields {
+				resources = append(resources, glossaryResource{Kind: "semantic_field", ID: repo.UUIDString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, SearchText: field.Name + " " + field.Label})
+			}
+		}
+	}
+	for _, metric := range metrics {
+		resources = append(resources, glossaryResource{Kind: "semantic_metric", ID: repo.UUIDString(metric.ID), Label: metric.Label, Description: metric.Description})
+	}
+	out := SearchGlossaryInsights{Entries: make([]SearchGlossaryInsight, 0, len(entries))}
+	for _, entry := range entries {
+		insight := SearchGlossaryInsight{EntryId: openapi_types.UUID(repo.PGUUID(string(entry.ID)).Bytes), Term: string(entry.Term), Members: make([]SearchGlossaryMemberInsight, 0, len(entry.Synonyms)+1)}
+		members := append([]string{string(entry.Term)}, []string(entry.Synonyms)...)
+		for _, member := range members {
+			mi := SearchGlossaryMemberInsight{Value: member, Matches: []SearchGlossaryResourceMatch{}, Suggestions: []string{}}
+			seenSuggestions := map[string]bool{}
+			for _, resource := range resources {
+				searchText := resource.SearchText
+				if searchText == "" {
+					searchText = resource.Label + " " + resource.Description
+				}
+				if glossaryTextMatches(member, searchText) {
+					kind := SearchGlossaryResourceMatchKind(resource.Kind)
+					mi.Matches = append(mi.Matches, SearchGlossaryResourceMatch{Kind: kind, Id: openapi_types.UUID(repo.PGUUID(resource.ID).Bytes), Label: resource.Label})
+					for _, token := range textsearch.Tokens(searchText) {
+						if len(token) >= 3 && !slices.Contains(members, token) && !glossaryMemberContains(member, token) && !seenSuggestions[token] {
+							mi.Suggestions = append(mi.Suggestions, token)
+							seenSuggestions[token] = true
+						}
+					}
+				}
+			}
+			if len(mi.Suggestions) > 5 {
+				mi.Suggestions = mi.Suggestions[:5]
+			}
+			insight.Members = append(insight.Members, mi)
+		}
+		out.Entries = append(out.Entries, insight)
+	}
+	return SearchGlossaryInsights200JSONResponse(out), nil
+}
+
+type glossaryResource struct{ Kind, ID, Label, Description, SearchText string }
+
+func glossaryMemberContains(member, token string) bool {
+	return strings.Contains(textsearch.Fold(member), textsearch.Fold(token))
+}
+func glossaryTextMatches(member, text string) bool {
+	needle := textsearch.Tokens(member)
+	haystack := textsearch.Tokens(text)
+	if len(needle) == 0 {
+		return false
+	}
+	for _, n := range needle {
+		found := false
+		for _, h := range haystack {
+			if h == n || strings.HasPrefix(h, n) || strings.HasPrefix(n, h) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // CreateSearchGlossaryEntry — POST /workspaces/{id}/search/glossary (#943).
