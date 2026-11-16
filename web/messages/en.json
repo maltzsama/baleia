@@ -2900,5 +2900,22 @@
 	"workspace_bi_blocker_public_url_invalid": "The BI gateway public URL is not a valid http(s) origin.",
 	"workspace_bi_blocker_gateway_disabled": "The global BI gateway is off. A global administrator must enable it.",
 	"workspace_bi_blocker_workspace_bi_disabled": "The workspace BI switch is off; its keys do not work.",
-	"workspace_bi_blocker_no_trino_targets": "This workspace has no Trino target to point a key at."
+	"workspace_bi_blocker_no_trino_targets": "This workspace has no Trino target to point a key at.",
+	"bi_setup_title": "Setup guide",
+	"bi_setup_description": "Five steps take a deployment from a private engine to a working Tableau or Power BI connection.",
+	"bi_setup_current": "Current step",
+	"bi_setup_open": "Open",
+	"bi_setup_protocol": "The gateway speaks Trino's HTTP client protocol; it is not an Arrow Flight SQL endpoint.",
+	"bi_setup_step_operator": "Configure the gateway",
+	"bi_setup_step_operator_detail": "An operator sets the listener, public URL, HMAC secret, ingress and TLS.",
+	"bi_setup_step_operator_blocked": "Still missing:",
+	"bi_setup_step_global": "Enable the gateway",
+	"bi_setup_step_global_detail": "A global administrator turns the gateway on.",
+	"bi_setup_step_workspace": "Enable BI for the workspace",
+	"bi_setup_step_workspace_detail": "A workspace administrator turns BI on for the workspace.",
+	"bi_setup_step_workspace_ask": "Ask a workspace administrator to enable BI for this workspace.",
+	"bi_setup_step_key": "Create a key",
+	"bi_setup_step_key_detail": "An authorized user creates a workspace-bound key for a Trino engine. The secret is shown once; save it before dismissing the dialog.",
+	"bi_setup_step_connect": "Connect Tableau or Power BI",
+	"bi_setup_step_connect_detail": "Download the connection file and sign in with the key owner's e-mail and the key as the password. The file carries no credentials and the session is read-only."
 }

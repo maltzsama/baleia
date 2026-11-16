@@ -10,10 +10,14 @@
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 	import { toasts } from '$lib/ui/toast.svelte';
+	import { authStore } from '$lib/stores/auth.svelte';
+	import { workspaceStore } from '$lib/stores/workspace.svelte';
+	import SetupGuide from '$lib/bi/SetupGuide.svelte';
 
 	type GatewayStatus = components['schemas']['BIGatewayStatus'];
 	type GatewayState = GatewayStatus['state'];
 	type Blocker = components['schemas']['BIGatewayBlocker'];
+	type WorkspaceBIStatus = components['schemas']['WorkspaceBIStatus'];
 
 	// The deployment guide explains the listener, public URL, TLS and secret a
 	// BI gateway needs before this switch matters (docs/install.md#bi-gateway).
@@ -27,8 +31,45 @@
 	// readSeq orders the reads: a refresh that resolves after a confirmed switch
 	// must not overwrite the switch result with its older snapshot.
 	let readSeq = 0;
+	// The guide's workspace/key steps read the selected workspace's real
+	// readiness, when the caller can see it, instead of assuming it is off.
+	let guideWorkspace = $state<WorkspaceBIStatus | null>(null);
+	let guideHasKeys = $state(false);
 
 	const statLabel = 'text-[10px] uppercase tracking-wide text-text-muted';
+
+	// The setup guide links the workspace steps at the caller's current (or
+	// personal) workspace, so a global admin reaches the BI access tab.
+	const guideWorkspaceId = $derived(
+		workspaceStore.current?.id ?? authStore.user?.personal_workspace_id ?? ''
+	);
+	const workspaceHref = $derived(
+		guideWorkspaceId ? `/settings/workspaces/${guideWorkspaceId}?tab=bi` : '/settings'
+	);
+
+	$effect(() => {
+		const id = guideWorkspaceId;
+		if (!id) {
+			guideWorkspace = null;
+			guideHasKeys = false;
+			return;
+		}
+		let cancelled = false;
+		void (async () => {
+			const [statusRes, keysRes] = await Promise.all([
+				client.GET('/workspaces/{id}/bi-status', { params: { path: { id } } }),
+				client.GET('/workspaces/{id}/bi-keys', { params: { path: { id } } })
+			]);
+			if (cancelled) return;
+			guideWorkspace = statusRes.data ?? null;
+			guideHasKeys = (keysRes.data ?? []).some(
+				(key) => !key.expires_at || new Date(key.expires_at).getTime() >= Date.now()
+			);
+		})();
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	const stateTone: Record<GatewayState, 'success' | 'warning' | 'danger'> = {
 		ready: 'success',
@@ -241,6 +282,15 @@
 					</p>
 				</div>
 			</section>
+
+			<div class="mt-6">
+				<SetupGuide
+					gateway={status}
+					workspace={guideWorkspace}
+					hasKeys={guideHasKeys}
+					{workspaceHref}
+				/>
+			</div>
 
 			<ConfirmDialog
 				bind:open={confirmOpen}
