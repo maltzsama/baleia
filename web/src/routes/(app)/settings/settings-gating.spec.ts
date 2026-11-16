@@ -7,6 +7,7 @@ import {
 	canAccessSection,
 	filterSections,
 	sectionForPath,
+	settingsSections,
 	type SettingsSection
 } from '$lib/settings/sections';
 import { authStore } from '$lib/stores/auth.svelte';
@@ -49,6 +50,16 @@ describe('settings gating', () => {
 		const admin = makeMe();
 		expect(filterSections([system, audit], admin)).toEqual([system, audit]);
 		expect(canAccessSection(system, admin)).toBe(true);
+	});
+
+	// #1099: the global BI gateway switch is platform administration, so it
+	// follows the same backend-provided action as the system status page.
+	it('gates the BI gateway section by the system permission', () => {
+		const biGateway = settingsSections.find((section) => section.href === '/settings/bi-gateway');
+		expect(biGateway?.action).toBe('view_system');
+		const member = makeMe({ role: 'member', global_actions: [] });
+		expect(canAccessSection(biGateway, member)).toBe(false);
+		expect(canAccessSection(biGateway, makeMe())).toBe(true);
 	});
 
 	it('resolves the deepest matching section', () => {

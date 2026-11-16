@@ -610,3 +610,21 @@ export function makeWorkspaceMember(overrides: Partial<WorkspaceMember> = {}): W
 		...overrides
 	} as WorkspaceMember;
 }
+
+type BIGatewayStatus = components['schemas']['BIGatewayStatus'];
+
+export function makeBIGatewayStatus(overrides: Partial<BIGatewayStatus> = {}): BIGatewayStatus {
+	return {
+		configured: true,
+		listener_configured: true,
+		secret_configured: true,
+		public_url_ready: true,
+		public_url: 'https://bi.example.com',
+		enabled: true,
+		state: 'ready',
+		blocked_by: [],
+		health: { status: 'ok', checked_at: '2026-01-01T00:00:00Z' },
+		concurrency: { max_per_key: 5, max_per_workspace: 20, running: 0 },
+		...overrides
+	};
+}
