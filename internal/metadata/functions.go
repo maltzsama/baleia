@@ -76,5 +76,25 @@ func Functions(ctx context.Context, eng queryengine.Engine, catalog string) ([]F
 	if err != nil {
 		return nil, fmt.Errorf("list functions: %w", err)
 	}
-	return out, nil
+	// The engine can report the same function once per catalog or schema where
+	// it is registered (Trino's SHOW FUNCTIONS does); the reference is per
+	// signature, so identical rows collapse.
+	return dedupeFunctions(out), nil
+}
+
+// dedupeFunctions drops exact duplicates while preserving first-seen order.
+func dedupeFunctions(refs []FunctionReference) []FunctionReference {
+	if len(refs) < 2 {
+		return refs
+	}
+	seen := make(map[FunctionReference]struct{}, len(refs))
+	kept := refs[:0]
+	for _, ref := range refs {
+		if _, ok := seen[ref]; ok {
+			continue
+		}
+		seen[ref] = struct{}{}
+		kept = append(kept, ref)
+	}
+	return kept
 }
