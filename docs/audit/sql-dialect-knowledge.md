@@ -132,7 +132,7 @@ fallback is to drop them and keep only names (sqlingo already offers static
 signatures), which is a product decision — but the default should be
 introspection, since Baleia already does this for every other metadata kind.
 
-### 4. Backend Go logic → `sqlglot-go` (#625, in progress)
+### 4. Backend Go logic → `sqlglot-go` (#625)
 
 The statement splitter and AST consumers now use `github.com/maltzsama/sqlglot-go`
 v0.42.0. The hand-written `lexer.go` has been removed; Baleia keeps its
