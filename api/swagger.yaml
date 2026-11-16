@@ -2501,7 +2501,7 @@ components:
       type: object
       required: [kind, id, label]
       properties:
-        kind: { type: string, enum: [semantic_model, semantic_metric] }
+        kind: { type: string, enum: [semantic_model, semantic_metric, semantic_field] }
         id: { type: string, format: uuid }
         label: { type: string }
 

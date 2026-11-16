@@ -2768,6 +2768,8 @@
 	"search_glossary_no_matches": "No matching models or metrics",
 	"search_glossary_model": "Model",
 	"search_glossary_metric": "Metric",
+	"search_glossary_field": "Field",
+	"search_glossary_insights_failed": "Could not load glossary matches.",
 	"metadata_unsupported_table": "Unsupported table",
 	"metadata_unsupported_table_kind": "type: {kind}\nUnsupported type: the source does not give external engines access to this kind of table.",
 	"metadata_unsupported_table_refused": "The source refused to serve this table, so it cannot be read.",

@@ -2768,6 +2768,8 @@
 	"search_glossary_no_matches": "Nenhum modelo ou métrica correspondente",
 	"search_glossary_model": "Modelo",
 	"search_glossary_metric": "Métrica",
+	"search_glossary_field": "Campo",
+	"search_glossary_insights_failed": "Não foi possível carregar as correspondências do glossário.",
 	"metadata_unsupported_table": "Tabela não suportada",
 	"metadata_unsupported_table_kind": "tipo: {kind}\nTipo não suportado: a origem não dá acesso a este tipo de tabela para motores externos.",
 	"metadata_unsupported_table_refused": "A origem recusou servir esta tabela, então ela não pode ser lida.",

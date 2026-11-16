@@ -5781,7 +5781,7 @@ export interface components {
         };
         SearchGlossaryResourceMatch: {
             /** @enum {string} */
-            kind: "semantic_model" | "semantic_metric";
+            kind: "semantic_model" | "semantic_metric" | "semantic_field";
             /** Format: uuid */
             id: string;
             label: string;

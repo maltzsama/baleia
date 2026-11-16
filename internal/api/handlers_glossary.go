@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
 	textsearch "github.com/galileostudio/baleia/internal/search"
+	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -101,6 +103,20 @@ func (h *SemanticHandlers) SearchGlossaryInsights(ctx context.Context, request S
 	resources := make([]glossaryResource, 0, len(models)+len(metrics))
 	for _, model := range models {
 		resources = append(resources, glossaryResource{Kind: "semantic_model", ID: uuidString(model.ID), Label: model.Label, Description: model.Description})
+		var definition semantic.Model
+		if json.Unmarshal(model.Definition, &definition) == nil {
+			for _, field := range definition.Dimensions {
+				if !field.Hidden {
+					resources = append(resources, glossaryResource{Kind: "semantic_field", ID: uuidString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, Description: field.Description, SearchText: field.Name + " " + field.Label + " " + field.Description})
+				}
+			}
+			for _, field := range definition.Metrics {
+				resources = append(resources, glossaryResource{Kind: "semantic_field", ID: uuidString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, SearchText: field.Name + " " + field.Label})
+			}
+			for _, field := range definition.CalculatedFields {
+				resources = append(resources, glossaryResource{Kind: "semantic_field", ID: uuidString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, SearchText: field.Name + " " + field.Label})
+			}
+		}
 	}
 	for _, metric := range metrics {
 		resources = append(resources, glossaryResource{Kind: "semantic_metric", ID: uuidString(metric.ID), Label: metric.Label, Description: metric.Description})
@@ -113,12 +129,15 @@ func (h *SemanticHandlers) SearchGlossaryInsights(ctx context.Context, request S
 			mi := SearchGlossaryMemberInsight{Value: member, Matches: []SearchGlossaryResourceMatch{}, Suggestions: []string{}}
 			seenSuggestions := map[string]bool{}
 			for _, resource := range resources {
-				if glossaryTextMatches(member, resource.Label+" "+resource.Description) {
+				searchText := resource.SearchText
+				if searchText == "" {
+					searchText = resource.Label + " " + resource.Description
+				}
+				if glossaryTextMatches(member, searchText) {
 					kind := SearchGlossaryResourceMatchKind(resource.Kind)
 					mi.Matches = append(mi.Matches, SearchGlossaryResourceMatch{Kind: kind, Id: openapi_types.UUID(repo.PGUUID(resource.ID).Bytes), Label: resource.Label})
-				} else {
-					for _, token := range textsearch.Tokens(resource.Label) {
-						if len(token) >= 3 && !glossaryMemberContains(member, token) && !seenSuggestions[token] {
+					for _, token := range textsearch.Tokens(searchText) {
+						if len(token) >= 3 && !slices.Contains(members, token) && !glossaryMemberContains(member, token) && !seenSuggestions[token] {
 							mi.Suggestions = append(mi.Suggestions, token)
 							seenSuggestions[token] = true
 						}
@@ -135,7 +154,7 @@ func (h *SemanticHandlers) SearchGlossaryInsights(ctx context.Context, request S
 	return SearchGlossaryInsights200JSONResponse(out), nil
 }
 
-type glossaryResource struct{ Kind, ID, Label, Description string }
+type glossaryResource struct{ Kind, ID, Label, Description, SearchText string }
 
 func glossaryMemberContains(member, token string) bool {
 	return strings.Contains(textsearch.Fold(member), textsearch.Fold(token))

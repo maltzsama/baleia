@@ -204,8 +204,8 @@ func TestSearchGlossaryInsights_VisibleMatchesAndSuggestions(t *testing.T) {
 	if len(out.Entries[0].Members[1].Matches) != 0 {
 		t.Fatalf("unexpected synonym match: %+v", out.Entries[0].Members[1])
 	}
-	if !slices.Contains(out.Entries[0].Members[1].Suggestions, "receita") {
-		t.Fatalf("suggestions = %+v", out.Entries[0].Members[1].Suggestions)
+	if !slices.Contains(out.Entries[0].Members[0].Suggestions, "vendas") || len(out.Entries[0].Members[1].Suggestions) != 0 {
+		t.Fatalf("suggestions = %+v", out.Entries[0].Members)
 	}
 }
 

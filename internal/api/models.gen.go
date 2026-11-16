@@ -993,6 +993,7 @@ const (
 
 // Defines values for SearchGlossaryResourceMatchKind.
 const (
+	SearchGlossaryResourceMatchKindSemanticField  SearchGlossaryResourceMatchKind = "semantic_field"
 	SearchGlossaryResourceMatchKindSemanticMetric SearchGlossaryResourceMatchKind = "semantic_metric"
 	SearchGlossaryResourceMatchKindSemanticModel  SearchGlossaryResourceMatchKind = "semantic_model"
 )

@@ -131,6 +131,9 @@
 	{:else if loadError}
 		<ErrorState message={loadError} onretry={() => load(workspaceId)} />
 	{:else if glossary}
+		{#if insightsError}
+			<ErrorState message={m.search_glossary_insights_failed()} onretry={() => load(workspaceId)} />
+		{/if}
 		{#if canEdit}
 			<form
 				class="mb-4 grid items-end gap-x-2 gap-y-1 rounded-lg border border-border bg-bg-panel p-3 sm:grid-cols-[14rem_1fr_auto]"
@@ -191,7 +194,9 @@
 																{#each member.matches as match (`${match.kind}:${match.id}`)}<li>
 																		{match.kind === 'semantic_model'
 																			? m.search_glossary_model()
-																			: m.search_glossary_metric()}: {match.label}
+																			: match.kind === 'semantic_field'
+																				? m.search_glossary_field()
+																				: m.search_glossary_metric()}: {match.label}
 																	</li>{/each}
 															</ul>
 														{:else}<p class="mt-1 max-w-52 whitespace-normal">
