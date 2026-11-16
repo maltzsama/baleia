@@ -2,6 +2,7 @@
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import CirclePlusIcon from '@lucide/svelte/icons/circle-plus';
 	import MoonIcon from '@lucide/svelte/icons/moon';
+	import SearchIcon from '@lucide/svelte/icons/search';
 	import SunIcon from '@lucide/svelte/icons/sun';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import { goto } from '$app/navigation';
@@ -34,10 +35,13 @@
 	);
 	let {
 		onToggleDark,
-		dark
+		dark,
+		onsearch
 	}: {
 		onToggleDark: () => void;
 		dark: boolean;
+		/** Opens the global search surface (#1061). */
+		onsearch: () => void;
 	} = $props();
 
 	let wsOpen = $state(false);
@@ -325,6 +329,20 @@
 	</div>
 
 	<div class="flex-1"></div>
+
+	<!-- The global search trigger (#1061): visible on every app route, an icon
+	     with a tooltip on narrow screens. The workspace switcher's own search
+	     stays separate. -->
+	<button
+		type="button"
+		onclick={onsearch}
+		class="flex shrink-0 items-center gap-2 rounded-md border border-border bg-bg-toolbar px-2.5 py-1 text-[11px] text-text-muted transition-colors hover:border-border-hover hover:text-text-main"
+		aria-label={m.search_global_title()}
+		title={m.components_header_search_everything()}
+	>
+		<SearchIcon class="h-3.5 w-3.5" />
+		<span class="hidden sm:inline">{m.search_global_title()}</span>
+	</button>
 
 	<AttentionBell />
 
