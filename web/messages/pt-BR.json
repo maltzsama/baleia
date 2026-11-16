@@ -1273,6 +1273,7 @@
 	"components_rightsidebar_assistant": "Assistente",
 	"components_rightsidebar_collapse": "Recolher",
 	"components_rightsidebar_collapse_the_inspector": "Recolher o inspetor",
+	"components_savedquerieslist_could_not_load": "Não foi possível carregar as consultas salvas.",
 	"components_savedquerieslist_no_spaces_yet": "Nenhum espaço ainda.",
 	"components_savedquerieslist_default": "Padrão",
 	"components_savedquerieslist_restricted": "Restrito",

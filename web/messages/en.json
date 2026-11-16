@@ -1275,6 +1275,7 @@
 	"components_rightsidebar_assistant": "Assistant",
 	"components_rightsidebar_collapse": "Collapse",
 	"components_rightsidebar_collapse_the_inspector": "Collapse the inspector",
+	"components_savedquerieslist_could_not_load": "Could not load saved queries.",
 	"components_savedquerieslist_no_spaces_yet": "No spaces yet.",
 	"components_savedquerieslist_default": "Default",
 	"components_savedquerieslist_restricted": "Restricted",

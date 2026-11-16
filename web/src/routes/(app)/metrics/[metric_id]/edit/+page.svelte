@@ -50,7 +50,11 @@
 	{#if loading}
 		<Skeleton class="h-32 w-full" />
 	{:else if error}
-		<ErrorState title={m.metrics_detail_edit_could_not_load_the_metric()} message={error} />
+		<ErrorState
+			title={m.metrics_detail_edit_could_not_load_the_metric()}
+			message={error}
+			onretry={load}
+		/>
 	{:else if metric}
 		<MetricBuilder {metric} />
 	{/if}
