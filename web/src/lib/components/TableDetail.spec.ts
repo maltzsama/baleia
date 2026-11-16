@@ -1,15 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { authStore } from '$lib/stores/auth.svelte';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { http, server } from '../../test/server';
 import {
-	makeLineageGraph,
-	makeMe,
+	makeBiKey,
 	makeMetadataBinding,
 	makeTableDetail,
-	makeWorkspace
+	makeWorkspace,
+	makeWorkspaceBIStatus
 } from '../../test/factories';
 import TableDetail from './TableDetail.svelte';
 import type { TableRef } from '$lib/metadata/client';
@@ -186,36 +185,30 @@ describe('TableDetail', () => {
 	});
 });
 
-// #713: the BI data-source file points at the gateway and is offered only
-// when the gateway is configured, BI is on for the workspace and the target
-// is Trino.
-describe('BI data-source file', () => {
-	const features = (bi_gateway: boolean) => ({
-		agents: false,
-		assistant: false,
-		bi_gateway,
-		retrievers: true
-	});
-
+// #1067: the actions download a connection file through the guided BI dialog.
+// They appear for a Trino target; the dialog explains any missing gateway,
+// workspace or key prerequisite instead of silently hiding the actions.
+describe('BI connection file', () => {
 	beforeEach(() => {
-		Object.defineProperty(URL, 'createObjectURL', {
-			value: vi.fn(() => 'blob:test'),
-			configurable: true
-		});
-		Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true });
-		vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 		workspaceStore.select(makeWorkspace({ bi_enabled: true }));
 	});
 
-	it('appears only when the gateway feature and the workspace allow BI', async () => {
+	it('offers both downloads for a Trino target and opens the guided dialog', async () => {
 		mockDetail();
-		authStore.set(makeMe({ features: features(false) }));
+		server.use(
+			http.get('/workspaces/{id}/bi-status', ({ response }) =>
+				response(200).json(makeWorkspaceBIStatus())
+			),
+			http.get('/workspaces/{id}/bi-keys', ({ response }) => response(200).json([makeBiKey()]))
+		);
 		render(TableDetail, { props: { table: tableRef() } });
 		await screen.findByText('orders');
-		expect(screen.queryByRole('button', { name: 'Open in Tableau' })).toBeNull();
 
-		authStore.set(makeMe({ features: features(true) }));
-		expect(await screen.findByRole('button', { name: 'Open in Tableau' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Download Tableau connection' })).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Download Power BI connection' }));
+		expect(
+			await screen.findByRole('dialog', { name: 'Download the Power BI connection' })
+		).toBeTruthy();
 	});
 
 	it('is not offered for a table the source cannot read (#977)', async () => {
@@ -229,80 +222,25 @@ describe('BI data-source file', () => {
 						unsupported: { code: 'refused' }
 					})
 				)
-			),
-			http.get('/workspaces/{id}/lineage', ({ response }) =>
-				response(200).json(makeLineageGraph({ nodes: [], edges: [] }))
 			)
 		);
-		authStore.set(makeMe({ features: features(true) }));
 		// Its own table id: the detail of the shared one is cached by the tests around it.
 		render(TableDetail, {
 			props: { table: { ...tableRef(), tableId: '00000000-0000-0000-0000-0000000000d9' } }
 		});
 		await screen.findByRole('note');
-		expect(screen.queryByRole('button', { name: 'Open in Tableau' })).toBeNull();
-		expect(screen.queryByRole('button', { name: 'Open in Power BI' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Download Tableau connection' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Download Power BI connection' })).toBeNull();
 	});
 
-	it('hides the file when the workspace has BI off', async () => {
+	it('is not offered for a non-Trino target', async () => {
 		mockDetail();
-		authStore.set(makeMe({ features: features(true) }));
-		workspaceStore.select(makeWorkspace({ bi_enabled: false }));
-		render(TableDetail, { props: { table: tableRef() } });
-		await screen.findByText('orders');
-		expect(screen.queryByRole('button', { name: 'Open in Power BI' })).toBeNull();
-	});
-
-	it('downloads the file for the selected target', async () => {
-		mockDetail();
-		authStore.set(makeMe({ features: features(true) }));
-		let requested = '';
-		const saved: Blob[] = [];
-		Object.defineProperty(URL, 'createObjectURL', {
-			value: vi.fn((blob: Blob) => {
-				saved.push(blob);
-				return 'blob:test';
-			}),
-			configurable: true
-		});
-		server.use(
-			http.get('/workspaces/{id}/bi/{tool}', ({ params, request, response }) => {
-				requested = request.url;
-				return response(200).text(
-					params.tool === 'tableau' ? '<datasource />' : '{"version":"0.1"}'
-				);
-			})
-		);
-		render(TableDetail, { props: { table: tableRef() } });
-		await screen.findByText('orders');
-
-		await fireEvent.click(screen.getByRole('button', { name: 'Open in Tableau' }));
-		await waitFor(() => expect(requested).toContain('/bi/tableau'));
-		const params = new URL(requested).searchParams;
-		expect(params.get('engine_id')).toBe('00000000-0000-0000-0000-000000000004');
-		expect(params.get('catalog')).toBe('lake_t');
-		expect(params.get('schema')).toBe('sales');
-		expect(params.get('table')).toBe('orders');
-		await waitFor(() => expect(saved.length).toBe(1));
-		expect(await saved[0].text()).toBe('<datasource />');
-
-		// The Power BI body is JSON, but the response is text/plain: it must be
-		// saved verbatim, not parsed into an object.
-		await fireEvent.click(screen.getByRole('button', { name: 'Open in Power BI' }));
-		await waitFor(() => expect(requested).toContain('/bi/powerbi'));
-		await waitFor(() => expect(saved.length).toBe(2));
-		expect(await saved[1].text()).toBe('{"version":"0.1"}');
-	});
-
-	it('hides the file for a non-Trino target', async () => {
-		mockDetail();
-		authStore.set(makeMe({ features: features(true) }));
 		const postgres = makeMetadataBinding({
 			engine_kind: 'postgresql',
 			engine_catalog_name: 'app_db'
 		});
 		render(TableDetail, { props: { table: tableRef([postgres]) } });
 		await screen.findByText('orders');
-		expect(screen.queryByRole('button', { name: 'Open in Tableau' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Download Tableau connection' })).toBeNull();
 	});
 });

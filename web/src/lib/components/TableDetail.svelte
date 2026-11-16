@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
 	import { apiErrorMessage, apiFetch, client } from '$lib/api/client';
-	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import { editor } from '$lib/stores/editor.svelte';
 	import { toasts } from '$lib/ui/toast.svelte';
@@ -22,6 +21,7 @@
 	import DocumentColumns from '$lib/semantic/DocumentColumns.svelte';
 	import LineageGraph from './LineageGraph.svelte';
 	import type { SemanticDoc } from '$lib/semantic/docs';
+	import BIConnectionDialog from '$lib/bi/BIConnectionDialog.svelte';
 
 	let { table, focusColumn = '' }: { table: TableRef | null; focusColumn?: string } = $props();
 
@@ -126,53 +126,17 @@
 	const selectedBinding = $derived(
 		table?.bindings.find((binding) => binding.binding_id === bindingId) ?? table?.bindings[0]
 	);
-	// The BI file points at the gateway (ADR 0017), so it needs the selected
-	// target to be Trino, the gateway configured and BI on for the workspace.
-	const biFileAvailable = $derived(
-		!!selectedBinding &&
-			canOpenInBI(selectedBinding.engine_kind) &&
-			(authStore.user?.features?.bi_gateway ?? false) &&
-			(workspaceStore.current?.bi_enabled ?? false)
-	);
+	// The BI file points at the gateway (ADR 0017). Only a Trino target can be
+	// served; the guided dialog explains any missing gateway or workspace
+	// prerequisite instead of hiding the action.
+	const biAvailable = $derived(!!selectedBinding && canOpenInBI(selectedBinding.engine_kind));
 
-	// openInBI downloads a Tableau (.tds) or Power BI (.pbids) data source
-	// pointing at the gateway. The file has no credentials: the tool signs in
-	// with a workspace-bound BI key.
-	async function openInBI(tool: 'tableau' | 'powerbi') {
-		const ref = table;
-		const binding = selectedBinding;
-		if (!ref || !binding) return;
-		const schema = ref.namespace.join('.');
-		try {
-			const { data, error, response } = await client.GET('/workspaces/{id}/bi/{tool}', {
-				// The file is text/plain even when its body is Power BI's JSON;
-				// the default JSON parser would fail or stringify an object.
-				parseAs: 'text',
-				params: {
-					path: { id: workspaceId, tool },
-					query: {
-						engine_id: binding.engine_id,
-						catalog: binding.engine_catalog_name,
-						table: ref.tableName,
-						...(schema ? { schema } : {})
-					}
-				}
-			});
-			if (!response.ok) {
-				throw new Error(apiErrorMessage(error, m.components_tabledetail_bi_file_failed()));
-			}
-			const blob = new Blob([data ?? ''], { type: 'text/plain' });
-			const href = URL.createObjectURL(blob);
-			const link = document.createElement('a');
-			link.href = href;
-			link.download = `${ref.tableName}.${tool === 'tableau' ? 'tds' : 'pbids'}`;
-			document.body.appendChild(link);
-			link.click();
-			link.remove();
-			URL.revokeObjectURL(href);
-		} catch (e) {
-			toasts.error(apiErrorMessage(e));
-		}
+	let biOpen = $state(false);
+	let biTool = $state<'tableau' | 'powerbi'>('tableau');
+
+	function openBI(tool: 'tableau' | 'powerbi') {
+		biTool = tool;
+		biOpen = true;
 	}
 
 	function insertName() {
@@ -362,11 +326,11 @@
 					disabled={!detailCurrent || !detail.qualified_name}
 					onclick={insertName}>{m.components_tabledetail_insert_name()}</Button
 				>
-				{#if biFileAvailable && detailCurrent && !detail.unsupported}
-					<Button variant="secondary" size="sm" onclick={() => openInBI('tableau')}
+				{#if biAvailable && detailCurrent && !detail.unsupported}
+					<Button variant="secondary" size="sm" onclick={() => openBI('tableau')}
 						>{m.components_tabledetail_open_in_tableau()}</Button
 					>
-					<Button variant="secondary" size="sm" onclick={() => openInBI('powerbi')}
+					<Button variant="secondary" size="sm" onclick={() => openBI('powerbi')}
 						>{m.components_tabledetail_open_in_powerbi()}</Button
 					>
 				{/if}
@@ -607,6 +571,20 @@
 		</table>
 	{/if}
 </Modal>
+
+{#if biOpen && table && selectedBinding && detail}
+	<BIConnectionDialog
+		bind:open={biOpen}
+		tool={biTool}
+		{workspaceId}
+		workspaceName={workspaceStore.current?.name ?? ''}
+		engineId={selectedBinding.engine_id}
+		engineName={selectedBinding.engine_name}
+		catalog={selectedBinding.engine_catalog_name}
+		schema={table.namespace.join('.')}
+		table={table.tableName}
+	/>
+{/if}
 
 <style>
 	.type-string {

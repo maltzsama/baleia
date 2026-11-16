@@ -50,9 +50,9 @@ Lineage comes from the statements themselves, so it stays current as content cha
 
 ## Open in a BI tool
 
-On a Trino target, a table's detail offers **Open in Tableau** and **Open in Power BI**. Each downloads a data-source file (`.tds` or `.pbids`) that opens the table in that tool. The file points at the deployment's BI gateway ([ADR 0017](../adr/0017-bi-gateway.md)) with the target's catalog and schema, and carries no credentials.
+On a Trino target, a table's detail offers **Download Tableau connection** and **Download Power BI connection**. The action opens a guided dialog: it checks the gateway and workspace readiness, lets you pick or create a workspace-bound BI key, and downloads a credential-free data-source file (`.tds` or `.pbids`) that points at the deployment's BI gateway ([ADR 0017](../adr/0017-bi-gateway.md)) with the target's catalog and schema. A missing prerequisite is named in the dialog with a link to the screen that fixes it, instead of hiding the action.
 
-The entry appears when the operator has enabled the BI gateway ([Install](../install.md#bi-gateway)) and BI is on for the workspace. Sign in from the BI tool with your e-mail as the user and a workspace-bound BI key as the password; issue one for the workspace (`POST /workspaces/{id}/bi-keys`, the secret is shown once) and revoke it when it is no longer needed. The gateway keeps the session read-only and applies the workspace's catalog scope; only Trino targets are served, so a table on a direct engine has no entry.
+The gateway must be enabled by the operator ([Install](../install.md#bi-gateway)) and BI must be on for the workspace. In the BI tool, sign in with the key owner's e-mail as the user and the key as the password; the secret is shown once when the key is created, and the key is revoked from the workspace BI access. The gateway keeps the session read-only and applies the workspace's catalog scope; only Trino targets are served, so a table on a direct engine has no entry.
 
 ## Document
 
