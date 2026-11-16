@@ -27,8 +27,6 @@ type spec struct {
 	backslashStrings bool
 	nationalStrings  bool
 
-	lex lexRules
-
 	// Namespaces: catalogs is false where one connection sees one catalog;
 	// schemaDepth is the schema path depth (0: no schemas, SQLite; -1: any).
 	catalogs    bool
@@ -256,20 +254,6 @@ func (d *spec) Literal(v any, t LogicalType) (string, error) {
 		return d.QuoteString(s), nil
 	}
 	return "", fmt.Errorf("%w: unknown type %q", ErrInvalid, t)
-}
-
-func (d *spec) Statements(sql string) ([]Span, error) { return d.lex.split(sql) }
-
-func (d *spec) SplitStatements(sql string) ([]string, error) {
-	spans, err := d.lex.split(sql)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, len(spans))
-	for i, s := range spans {
-		out[i] = s.Text
-	}
-	return out, nil
 }
 
 func (d *spec) PreviewSQL(object string, n int) string {

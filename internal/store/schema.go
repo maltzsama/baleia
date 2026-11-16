@@ -245,6 +245,16 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.AssistantConversation{})
 			},
 		},
+		Migration{
+			// Statement column references (#625): the physical columns a
+			// statement reads, resolved through the fork's qualify pass, for
+			// column-level authorization (#614).
+			Version: 21,
+			Name:    "add statement columns",
+			Up: func(db *gorm.DB) error {
+				return AutoMigrate(db, &model.StatementColumn{})
+			},
+		},
 	)
 }
 

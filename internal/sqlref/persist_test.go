@@ -2,6 +2,7 @@ package sqlref
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
@@ -94,5 +95,30 @@ func TestPersistUnparsableWritesNothing(t *testing.T) {
 	}
 	if refs != 0 {
 		t.Fatalf("refs=%d, want 0", refs)
+	}
+}
+
+// TestPersistColumns: the physical columns a statement reads are stored,
+// resolved to their table and default schema (#625).
+func TestPersistColumns(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	const statement = `SELECT o.id, o.name FROM orders o WHERE o.id > 1`
+	q, gdb, wsID, stmtID := seedStatement(t, statement)
+
+	if err := Persist(ctx, q, stmtID, wsID, db.UUID{}, "sales", statement); err != nil {
+		t.Fatal(err)
+	}
+	var columns []model.StatementColumn
+	if err := gdb.Where("statement_id = ?", stmtID).Order("column_name").Find(&columns).Error; err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, 0, len(columns))
+	for _, c := range columns {
+		got = append(got, string(c.Namespace)+"."+string(c.TableNameValue)+"."+string(c.ColumnName))
+	}
+	want := []string{"sales.orders.id", "sales.orders.name"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("columns = %v, want %v", got, want)
 	}
 }

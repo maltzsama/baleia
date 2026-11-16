@@ -4,26 +4,39 @@ import (
 	"context"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 )
 
-// Store is the persistence of a statement's references and joins; *repo.Repo
-// and *repo.Repo implement it.
+// Store is the persistence of a statement's references, columns and joins;
+// *repo.Repo implements it.
 type Store interface {
 	DeleteStatementReferences(ctx context.Context, statementID db.UUID) error
 	DeleteStatementJoins(ctx context.Context, statementID db.UUID) error
+	DeleteStatementColumns(ctx context.Context, statementID db.UUID) error
 	InsertStatementReference(ctx context.Context, arg db.InsertStatementReferenceParams) error
 	InsertStatementJoin(ctx context.Context, arg db.InsertStatementJoinParams) error
+	InsertStatementColumn(ctx context.Context, arg db.InsertStatementColumnParams) error
 }
 
-// Persist replaces the stored references and joins of one statement with the
-// extractor's result (#538). It is idempotent: the old rows are deleted first.
-// The caller owns the transaction.
+// Persist replaces the stored references, columns and joins of one statement
+// with the extractor's result (#538, #625). It is idempotent: the old rows are
+// deleted first. The caller owns the transaction.
 func Persist(ctx context.Context, q Store, statementID, workspaceID, catalogID db.UUID, namespace, sql string) error {
-	ref := Extract(sql)
+	return PersistWithDialect(ctx, q, statementID, workspaceID, catalogID, dialect.NewRegistry().MustGet(dialect.FlightSQL), namespace, sql)
+}
+
+// PersistWithDialect is Persist with the connection's dialect: table names are
+// resolved against the target's default schema (namespace) and through CTEs,
+// subqueries and derived tables by the fork's qualify pass.
+func PersistWithDialect(ctx context.Context, q Store, statementID, workspaceID, catalogID db.UUID, d dialect.Dialect, namespace, sql string) error {
+	ref := ExtractResolved(d, namespace, sql)
 	if err := q.DeleteStatementReferences(ctx, statementID); err != nil {
 		return err
 	}
 	if err := q.DeleteStatementJoins(ctx, statementID); err != nil {
+		return err
+	}
+	if err := q.DeleteStatementColumns(ctx, statementID); err != nil {
 		return err
 	}
 	for _, table := range ref.Tables {
@@ -42,6 +55,21 @@ func Persist(ctx context.Context, q Store, statementID, workspaceID, catalogID d
 			TableName:   table.Path[len(table.Path)-1],
 			Alias:       table.Alias,
 			Kind:        table.Kind,
+		}); err != nil {
+			return err
+		}
+	}
+	for _, column := range ref.Columns {
+		if column.Table == "" || column.Name == "" {
+			continue
+		}
+		if err := q.InsertStatementColumn(ctx, db.InsertStatementColumnParams{
+			StatementID: statementID,
+			WorkspaceID: workspaceID,
+			CatalogID:   catalogID,
+			Namespace:   column.Namespace,
+			TableName:   column.Table,
+			ColumnName:  column.Name,
 		}); err != nil {
 			return err
 		}

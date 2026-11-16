@@ -134,9 +134,11 @@ introspection, since Baleia already does this for every other metadata kind.
 
 ### 4. Backend Go logic → `sqlglot-go` (#625)
 
-`dialects.go` + `base.go` + `lexer.go` hand-encode quoting, literals, and
-statement splitting. `sqlglot-go` replaces those; the `information_schema`
-metadata queries are Baleia-specific and stay. Already deferred (#625).
+The statement splitter and AST consumers now use `github.com/maltzsama/sqlglot-go`
+v0.42.0. The hand-written `lexer.go` has been removed; Baleia keeps its
+engine-specific quoting, literals, SQL generation and `information_schema`
+metadata queries. The remaining `dialects.go`/`base.go` code is generation and
+connection capability, not a second parser.
 
 ## What is removed vs. what is lost
 
@@ -145,7 +147,7 @@ metadata queries are Baleia-specific and stay. Already deferred (#625).
 | keywords | `@codemirror/lang-sql` | `*.keywords.txt` + API field | nothing |
 | function names + kind | `sqlingo` / `sqlglot-go` | `*.functions.txt` + name-only JSONs | nothing |
 | PostgreSQL signature/description | runtime introspection | the committed `*.functions.json` | nothing (if introspected) |
-| Go logic | `sqlglot-go` (#625) | `dialects.go`/`base.go`/`lexer.go` | deferred; metadata queries stay |
+| Go logic | `sqlglot-go` (#625) | `lexer.go` and AST/reference parsing | metadata queries and SQL generation stay |
 
 Net: Baleia stops owning any committed per-dialect catalog. SQL knowledge is
 delegated to the SQL libraries; engine capabilities are introspected at runtime.

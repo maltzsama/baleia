@@ -80,6 +80,14 @@ func (r *Repo) DeleteStatementJoinsByPeriod(ctx context.Context, from, until tim
 		Delete(&model.StatementJoin{}).Error
 }
 
+// DeleteStatementColumnsByPeriod removes a period's statement column references
+// so the period's query_statements partition can be detached (ADR 0024).
+func (r *Repo) DeleteStatementColumnsByPeriod(ctx context.Context, from, until time.Time) error {
+	return r.Users.db.WithContext(ctx).
+		Where("execution_started_at >= ? AND execution_started_at < ?", from, until).
+		Delete(&model.StatementColumn{}).Error
+}
+
 // UnlinkTrinoQuerySnapshotsByPeriod detaches a period's Trino query snapshots from
 // their executions (NULLing the link) so the period's query_executions partition
 // can be detached without discarding the snapshots' metrics. The snapshots are

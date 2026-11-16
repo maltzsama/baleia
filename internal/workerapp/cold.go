@@ -114,7 +114,10 @@ func wireColdRetention(act *activities.Activities, core *app.Core, cfg *config.C
 					if err := storeRepo.DeleteStatementReferencesByPeriod(ctx, from, until); err != nil {
 						return err
 					}
-					return storeRepo.DeleteStatementJoinsByPeriod(ctx, from, until)
+					if err := storeRepo.DeleteStatementJoinsByPeriod(ctx, from, until); err != nil {
+						return err
+					}
+					return storeRepo.DeleteStatementColumnsByPeriod(ctx, from, until)
 				}
 			}
 			r := &retention.Retain{

@@ -457,7 +457,7 @@ func (s *script) persistReferences(st StatementRef) {
 		return
 	}
 	if err := r.TxWorkbench(s.bk, func(tx *repo.Repo) error {
-		return sqlref.Persist(s.bk, tx, row.StatementID, row.WorkspaceID, s.p.Target.CatalogID, s.p.Target.Schema, st.SQL)
+		return sqlref.PersistWithDialect(s.bk, tx, row.StatementID, row.WorkspaceID, s.p.Target.CatalogID, s.eng.Dialect(), s.p.Target.Schema, st.SQL)
 	}); err != nil {
 		activity.GetLogger(s.ctx).Warn("could not persist statement references",
 			"execution_id", s.p.ExecutionID, "position", st.Position, "err", err)

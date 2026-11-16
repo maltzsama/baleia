@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/sqlglot-go/expressions"
 )
 
 // ErrForbiddenInEditor is the error users see for a rejected script.
-var ErrForbiddenInEditor = errors.New("catalog management and session authorization are not allowed in the SQL editor")
+var ErrForbiddenInEditor = errors.New("catalog management, session authorization and dynamic SQL are not allowed in the SQL editor")
 
 // ForbiddenInEditor reports whether a script holds a statement the SQL editor
 // must reject. The script is split with the target's dialect, so a statement
@@ -23,7 +24,7 @@ func ForbiddenInEditor(d dialect.Dialect, sql string) bool {
 		stmts = []string{sql}
 	}
 	for _, s := range stmts {
-		if statementForbidden(s) {
+		if statementForbiddenWithDialect(d, s) {
 			return true
 		}
 	}
@@ -38,7 +39,7 @@ func EditorStatements(d dialect.Dialect, sql string) ([]string, error) {
 		return nil, err
 	}
 	for _, s := range stmts {
-		if statementForbidden(s) {
+		if statementForbiddenWithDialect(d, s) {
 			return nil, ErrForbiddenInEditor
 		}
 	}
@@ -54,131 +55,211 @@ func EditorStatements(d dialect.Dialect, sql string) ([]string, error) {
 //     is global — without this check, any user with query access could
 //     CREATE CATALOG pointed at arbitrary hosts (exfiltration) or DROP
 //     another user's catalog.
-//
-// The check is a normalized prefix match, not a parser. It strips leading
-// whitespace/whitespace-comments (a leading -- comment shouldn't bypass it)
-// but does not try to detect catalog DDL embedded inside a larger statement.
-// Trino DDL for catalog management is always top-level.
-//
-// Robustness against common offensives:
-//   - "  create  catalog " with extra spaces — handled by CollapseWhitespace.
-//   - "CREATE CATALOG" with random case — handled by lowercase.
-//   - "-- hi\nCREATE CATALOG ..."    — handled by TrimLeadingComments.
-//   - "/* */CREATE CATALOG ..."      — handled by TrimLeadingComments.
-//
-// A multi-statement body that smuggles CREATE CATALOG after a SELECT will
-// pass this check on the SELECT — but the splitter separates the statements
-// before validating, and the validator is called per statement. So a
-// smuggled CREATE CATALOG is caught by the validator at its own statement.
 func IsCatalogDDL(sql string) bool {
-	if sql == "" {
-		return false
-	}
-	s := trimLeadingComments(sql)
-	s = collapseWhitespace(s)
-	s = strings.ToLower(s)
-	return strings.HasPrefix(s, "create catalog ") || s == "create catalog" ||
-		strings.HasPrefix(s, "drop catalog ") || s == "drop catalog"
+	expr, err := dialect.ParseStatement(genericDialect, sql)
+	return err == nil && expr != nil && isCatalogDDLExpression(expr)
 }
 
-// statementForbidden reports whether one statement must be rejected by the
-// SQL editor:
-//   - catalog DDL (CREATE/DROP CATALOG, handled by IsCatalogDDL);
-//   - EXECUTE IMMEDIATE whose string literal body is catalog DDL (the parser
-//     would otherwise execute the mismatched grammar without us touching it);
-//   - SET SESSION AUTHORIZATION, which would let a user impersonate an admin
-//     target (e.g. baleia_admin) the guard grants to.
-//
-// The Trino catalog guard is the real control; this is UX and defense in depth.
-func statementForbidden(sql string) bool {
-	if sql == "" {
+var genericDialect = dialect.NewRegistry().MustGet(dialect.FlightSQL)
+
+// allowedStatementKinds are the AST node kinds the SQL editor permits. A
+// statement whose root kind is not listed — an opaque Command, dynamic SQL
+// (Execute) or a kind the fork does not structure — is rejected fail-closed.
+var allowedStatementKinds = map[expressions.Kind]bool{
+	expressions.KindSelect:        true,
+	expressions.KindInsert:        true,
+	expressions.KindUpdate:        true,
+	expressions.KindDelete:        true,
+	expressions.KindMerge:         true,
+	expressions.KindCreate:        true,
+	expressions.KindDrop:          true,
+	expressions.KindAlter:         true,
+	expressions.KindTruncateTable: true,
+	expressions.KindDescribe:      true,
+	expressions.KindShow:          true,
+	expressions.KindUse:           true,
+	expressions.KindCommit:        true,
+	expressions.KindRollback:      true,
+	expressions.KindTransaction:   true,
+	expressions.KindSavepoint:     true,
+	expressions.KindSet:           true,
+	expressions.KindGrant:         true,
+	expressions.KindRevoke:        true,
+	expressions.KindReset:         true,
+	expressions.KindValues:        true,
+	expressions.KindUnion:         true,
+	expressions.KindIntersect:     true,
+	expressions.KindExcept:        true,
+	expressions.KindWith:          true,
+}
+
+// allowedCommands are the opaque Command keywords the editor still permits:
+// read-only introspection the fork does not structure under some dialects. A
+// bare BEGIN and SET are judged by the case in statementForbiddenWithDialect,
+// and everything else a Command can hide is rejected.
+var allowedCommands = map[string]bool{
+	"SHOW":     true,
+	"EXPLAIN":  true,
+	"DESCRIBE": true,
+	"DESC":     true,
+	"USE":      true,
+}
+
+// statementForbiddenWithDialect reports whether one statement must be rejected
+// by the SQL editor. Classification is an allow-list over AST node kinds,
+// fail-closed: a statement the parser cannot read, or whose kind is not
+// allowed, is rejected rather than assumed safe.
+func statementForbiddenWithDialect(d dialect.Dialect, sql string) bool {
+	if strings.TrimSpace(sql) == "" {
 		return false
 	}
-	s := trimLeadingComments(sql)
-	lower := strings.ToLower(collapseWhitespace(s))
+	expr, err := dialect.ParseStatement(d, sql)
+	if err != nil || expr == nil {
+		return true // fail-closed: an unreadable statement cannot be judged safe
+	}
+	switch expr.Kind() {
+	case expressions.KindCommand:
+		// SET ROLE is a session switch; SET SESSION AUTHORIZATION is not. The
+		// two are both opaque Commands outside PostgreSQL, so the SET command is
+		// judged by its body rather than denied whole.
+		if commandRoot(expr) == "SET" {
+			return setSessionAuthorization(expr)
+		}
+		// A bare BEGIN is a T-SQL transaction; an anonymous block (Oracle PL/SQL)
+		// keeps its body unparsed, so dynamic SQL inside it must be rejected.
+		if commandRoot(expr) == "BEGIN" {
+			return anonymousBlockForbidden(expr)
+		}
+		return !allowedCommands[commandRoot(expr)]
+	case expressions.KindSet:
+		// PostgreSQL parses SET SESSION AUTHORIZATION as a structured Set,
+		// unlike the other engines where it is an opaque Command.
+		return setSessionAuthorization(expr)
+	case expressions.KindExecute:
+		// T-SQL parses EXECUTE IMMEDIATE (dynamic SQL) as an Execute; a plain
+		// EXECUTE <proc> call is a stored-procedure invocation and is allowed.
+		return executeImmediate(expr)
+	default:
+		return !allowedStatementKinds[expr.Kind()]
+	}
+}
 
-	if lower == "set session authorization" || strings.HasPrefix(lower, "set session authorization ") {
-		return true
+// setSessionAuthorization reports whether a statement is
+// SET SESSION AUTHORIZATION, which lets a user impersonate an admin target the
+// guard grants to. PostgreSQL's structured Set carries the kind on its
+// SetItem; the opaque Command on the other engines is judged by keywords.
+func setSessionAuthorization(expr expressions.Expression) bool {
+	if expr.Kind() == expressions.KindSet {
+		for _, item := range expr.FindAll(expressions.KindSetItem) {
+			if strings.EqualFold(item.Text("kind"), "SESSION AUTHORIZATION") {
+				return true
+			}
+		}
+		return false
 	}
-	if IsCatalogDDL(s) {
-		return true
-	}
-	if strings.HasPrefix(lower, "execute immediate") {
-		body := extractExecuteImmediateLiteral(s)
-		if body != "" && IsCatalogDDL(body) {
+	fields := strings.Fields(strings.ToUpper(stripComments(spanText(expr))))
+	for i := 0; i+1 < len(fields); i++ {
+		if fields[i] == "SESSION" && fields[i+1] == "AUTHORIZATION" {
 			return true
 		}
 	}
 	return false
 }
 
-// extractExecuteImmediateLiteral pulls the first single-quoted string literal
-// out of an EXECUTE IMMEDIATE statement, honoring ” as an escaped quote. The
-// closing quote is consumed; the returned body has no surrounding quotes.
-func extractExecuteImmediateLiteral(s string) string {
-	i := strings.IndexByte(s, '\'')
-	if i < 0 {
+// anonymousBlockForbidden reports whether an anonymous block hides dynamic SQL in
+// its unparsed body, which would otherwise slip past the EXECUTE IMMEDIATE rule.
+func anonymousBlockForbidden(expr expressions.Expression) bool {
+	return strings.Contains(strings.ToUpper(stripComments(spanText(expr))), "EXECUTE IMMEDIATE")
+}
+
+// executeImmediate reports whether an Execute node is T-SQL's dynamic
+// EXECUTE IMMEDIATE, which can run arbitrary SQL.
+func executeImmediate(expr expressions.Expression) bool {
+	return expr.This() != nil && strings.EqualFold(expr.This().Name(), "IMMEDIATE")
+}
+
+// isCatalogDDLExpression reports whether a parsed statement is CREATE/DROP
+// CATALOG. The command's object is the first word of its body.
+func isCatalogDDLExpression(expr expressions.Expression) bool {
+	root := commandRoot(expr)
+	if root != "CREATE" && root != "DROP" {
+		return false
+	}
+	fields := strings.Fields(commandBody(expr))
+	return len(fields) > 0 && strings.EqualFold(fields[0], "CATALOG")
+}
+
+// commandRoot is the leading keyword of a Command node: CREATE, DROP, SET,
+// EXECUTE, SHOW, ...
+func commandRoot(expr expressions.Expression) string {
+	if expr == nil || expr.Kind() != expressions.KindCommand {
 		return ""
 	}
+	switch part := expr.Arg("this").(type) {
+	case string:
+		return strings.ToUpper(part)
+	case expressions.Expression:
+		if part != nil {
+			return strings.ToUpper(part.Name())
+		}
+	}
+	return ""
+}
+
+// commandBody is the Command's body after its leading keyword. The command's
+// `expression` arg is the body without any leading comment, which the v0.42
+// spans otherwise include.
+func commandBody(expr expressions.Expression) string {
+	if body, ok := expr.Arg("expression").(string); ok {
+		return strings.TrimSpace(body)
+	}
+	return stripComments(spanText(expr))
+}
+
+// stripComments removes comments (line and block) from a statement's source text
+// so keyword inspection reads the statement, not a comment the span now covers.
+// String literals are copied verbatim.
+func stripComments(s string) string {
 	var b strings.Builder
-	i++ // skip the opening quote
-	for i < len(s) {
-		switch s[i] {
-		case '\'':
-			if i+1 < len(s) && s[i+1] == '\'' {
-				b.WriteByte('\'')
-				i += 2
-				continue
+	for i := 0; i < len(s); {
+		switch {
+		case strings.HasPrefix(s[i:], "--"):
+			if j := strings.IndexByte(s[i:], '\n'); j >= 0 {
+				i += j + 1
+			} else {
+				i = len(s)
 			}
-			return strings.TrimSpace(b.String())
+		case strings.HasPrefix(s[i:], "/*"):
+			if j := strings.Index(s[i:], "*/"); j >= 0 {
+				i += j + 2
+			} else {
+				i = len(s)
+			}
+		case s[i] == '\'':
+			b.WriteByte(s[i])
+			i++
+			for i < len(s) {
+				b.WriteByte(s[i])
+				if s[i] == '\'' {
+					i++
+					break
+				}
+				i++
+			}
 		default:
 			b.WriteByte(s[i])
 			i++
 		}
 	}
-	return strings.TrimSpace(b.String())
+	return b.String()
 }
 
-// collapseWhitespace replaces every run of whitespace with a single space
-// and strips leading/trailing whitespace.
-func collapseWhitespace(s string) string {
-	var b strings.Builder
-	prevSpace := false
-	for _, r := range s {
-		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
-			if !prevSpace {
-				b.WriteByte(' ')
-				prevSpace = true
-			}
-			continue
-		}
-		b.WriteRune(r)
-		prevSpace = false
+// spanText is the verbatim source the parser recorded for the node, or "" when
+// the node has none.
+func spanText(expr expressions.Expression) string {
+	if expr == nil {
+		return ""
 	}
-	return strings.TrimSpace(b.String())
-}
-
-// trimLeadingComments strips leading line comments (--) and block comments
-// (/* ... */) before the first token. This handles the case where a user
-// tries to smuggle a DDL past the prefix check by prepending a comment.
-func trimLeadingComments(sql string) string {
-	for {
-		s := strings.TrimLeft(sql, " \t\n\r")
-		switch {
-		case strings.HasPrefix(s, "--"):
-			if idx := strings.Index(s, "\n"); idx >= 0 {
-				sql = s[idx+1:]
-				continue
-			}
-			return ""
-		case strings.HasPrefix(s, "/*"):
-			if idx := strings.Index(s, "*/"); idx >= 0 {
-				sql = s[idx+2:]
-				continue
-			}
-			return ""
-		default:
-			return s
-		}
-	}
+	span, _ := expr.SpanText()
+	return span
 }

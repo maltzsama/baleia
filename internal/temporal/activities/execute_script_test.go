@@ -309,10 +309,10 @@ func TestExecuteScript_SessionStatePersists(t *testing.T) {
 // TestExecuteScript_StopsOnFailure: statement 2 fails with its engine code,
 // 3 and 4 never run and are skipped.
 func TestExecuteScript_StopsOnFailure(t *testing.T) {
-	fake := &fakeEngine{Engine: testTrino, failOn: "BROKEN"}
+	fake := &fakeEngine{Engine: testTrino, failOn: "SELECT 2"}
 	store := newStatementStore(4)
 	r, err := runScript(t, &Activities{dialects: dialect.NewRegistry(), store: store, engines: fake, s3: &fakeS3{}, cfg: testActivitiesConfig()},
-		scriptParams("SELECT 1", "BROKEN", "SELECT 3", "SELECT 4"))
+		scriptParams("SELECT 1", "SELECT 2", "SELECT 3", "SELECT 4"))
 	if err != nil {
 		t.Fatal(err)
 	}

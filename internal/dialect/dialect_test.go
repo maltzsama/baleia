@@ -261,6 +261,56 @@ func TestStatementsOffsets(t *testing.T) {
 	}
 }
 
+// TestSplitStatementsOracleStringSlash: a "/" inside a string literal is not a
+// batch separator.
+func TestSplitStatementsOracleStringSlash(t *testing.T) {
+	t.Parallel()
+	got := split(t, Oracle, "SELECT 'before\n/\nafter' FROM dual")
+	if len(got) != 1 || got[0] != "SELECT 'before\n/\nafter' FROM dual" {
+		t.Errorf("%q", got)
+	}
+}
+
+// TestSplitStatementsOracleDirectBlock: a directly submitted block (no "/")
+// keeps its trailing ";".
+func TestSplitStatementsOracleDirectBlock(t *testing.T) {
+	t.Parallel()
+	got := split(t, Oracle, "BEGIN NULL; END;")
+	if len(got) != 1 || got[0] != "BEGIN NULL; END;" {
+		t.Errorf("%q", got)
+	}
+}
+
+// TestSplitStatementsMysqlDelimiterInString: a DELIMITER word inside a string
+// literal is not a client command.
+func TestSplitStatementsMysqlDelimiterInString(t *testing.T) {
+	t.Parallel()
+	got := split(t, MySQL, "SELECT 'before\nDELIMITER $$\nafter'")
+	if len(got) != 1 {
+		t.Errorf("%q", got)
+	}
+}
+
+// TestSplitStatementsOracleCommentSlash: a "/" inside a block comment is not a
+// batch separator.
+func TestSplitStatementsOracleCommentSlash(t *testing.T) {
+	t.Parallel()
+	got := split(t, Oracle, "SELECT 1 /*\n/\n*/ FROM dual")
+	if len(got) != 1 || got[0] != "SELECT 1 /*\n/\n*/ FROM dual" {
+		t.Errorf("%q", got)
+	}
+}
+
+// TestSplitStatementsOracleCreateTable: a CREATE TABLE is not a PL/SQL unit, so
+// its ";" is a terminator, not part of the statement.
+func TestSplitStatementsOracleCreateTable(t *testing.T) {
+	t.Parallel()
+	got := split(t, Oracle, "CREATE TABLE t (x int); SELECT 1 FROM dual")
+	if len(got) != 2 || got[0] != "CREATE TABLE t (x int)" || got[1] != "SELECT 1 FROM dual" {
+		t.Errorf("%q", got)
+	}
+}
+
 func TestPreviewAndLimit(t *testing.T) {
 	t.Parallel()
 	want := map[string][2]string{

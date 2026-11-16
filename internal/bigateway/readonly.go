@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/sqlglot-go/expressions"
 )
 
 // ErrReadOnly is a statement the BI gateway refuses before it reaches Trino.
@@ -22,48 +23,46 @@ func ReadOnly(d dialect.Dialect, sql string) error {
 		return ErrReadOnly
 	}
 	for _, statement := range statements {
-		if !readOnlyStatement(statement) {
+		if !readOnlyStatement(d, statement) {
 			return ErrReadOnly
 		}
 	}
 	return nil
 }
 
-// readOnlyStatement allows query-shaped statements only. EXPLAIN is refused
-// because EXPLAIN ANALYZE executes the statement it explains.
-func readOnlyStatement(sql string) bool {
-	fields := strings.Fields(trimLeadingComments(strings.TrimSpace(sql)))
-	if len(fields) == 0 {
+// readOnlyStatement allows query-shaped statements only, classified by AST node
+// kind. EXPLAIN is refused because EXPLAIN ANALYZE executes the statement it
+// explains; a statement the parser cannot read is not read-only.
+func readOnlyStatement(d dialect.Dialect, sql string) bool {
+	expr, err := dialect.ParseStatement(d, sql)
+	if err != nil || expr == nil {
 		return false
 	}
-	switch strings.ToUpper(fields[0]) {
-	case "SELECT", "WITH", "SHOW", "DESCRIBE", "DESC", "TABLE", "VALUES":
+	switch expr.Kind() {
+	case expressions.KindSelect, expressions.KindValues, expressions.KindShow,
+		expressions.KindUnion, expressions.KindIntersect, expressions.KindExcept:
 		return true
+	case expressions.KindDescribe:
+		// EXPLAIN (and EXPLAIN ANALYZE) can execute the explained statement;
+		// only a plain DESCRIBE is read-only. Under PostgreSQL both parse to a
+		// Describe node, distinguished by its kind.
+		return expr.Text("kind") != "EXPLAIN"
+	case expressions.KindCommand:
+		// SHOW is read-only under dialects that parse it as an opaque Command
+		// (Trino, T-SQL, Oracle); EXPLAIN, CALL, PREPARE and EXECUTE are not.
+		return commandKeyword(expr) == "SHOW"
 	default:
 		return false
 	}
 }
 
-// trimLeadingComments removes whitespace, line comments and block comments
-// before the first keyword. A statement that is only comments is empty.
-func trimLeadingComments(s string) string {
-	for {
-		s = strings.TrimLeft(s, " \t\r\n")
-		switch {
-		case strings.HasPrefix(s, "--"):
-			i := strings.IndexByte(s, '\n')
-			if i < 0 {
-				return ""
-			}
-			s = s[i+1:]
-		case strings.HasPrefix(s, "/*"):
-			i := strings.Index(s, "*/")
-			if i < 0 {
-				return ""
-			}
-			s = s[i+2:]
-		default:
-			return s
-		}
+// commandKeyword is the leading keyword of a Command node.
+func commandKeyword(expr expressions.Expression) string {
+	if expr == nil || expr.Kind() != expressions.KindCommand {
+		return ""
 	}
+	if v, ok := expr.Arg("this").(string); ok {
+		return strings.ToUpper(v)
+	}
+	return ""
 }
