@@ -133,8 +133,9 @@ e2e-forward:
 
 # Drives the Trino protocol through the gateway with the Trino JDBC driver:
 # Basic auth, a query, multi-page follows, every replica validating a nextUri,
-# cancellation, a scope-denied catalog, and inline pages despite the spooling
-# header. cmd/e2e-seed (called by e2e) wrote the BI key secret.
+# cancellation, a scope-denied catalog, read-only enforcement, inline pages
+# despite the spooling header, and key revocation. cmd/e2e-seed (called by e2e)
+# wrote the BI key secret.
 e2e-bi:
 	@command -v java >/dev/null || { echo "e2e-bi: java (17+) is required" >&2; exit 1; }
 	@test -f $(BI_E2E_JDBC_JAR) || curl -fsSL -o $(BI_E2E_JDBC_JAR) \
