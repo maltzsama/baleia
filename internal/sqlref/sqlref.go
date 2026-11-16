@@ -224,7 +224,13 @@ func extractJoins(root expressions.Expression, tables []Table) []Join {
 func isWriteTarget(root, table expressions.Expression) bool {
 	switch root.Kind() {
 	case expressions.KindInsert, expressions.KindUpdate, expressions.KindDelete, expressions.KindMerge:
-		return root.This() == table
+		target := root.This()
+		// INSERT INTO t (a, b) wraps the target in a Schema node; unwrap it so
+		// the comparison reaches the physical table.
+		if target != nil && target.Kind() == expressions.KindSchema {
+			target = target.This()
+		}
+		return target == table
 	default:
 		return false
 	}

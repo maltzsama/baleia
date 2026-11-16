@@ -173,6 +173,17 @@ func TestExtractResolvedWriteTarget(t *testing.T) {
 	}
 }
 
+// TestExtractResolvedWriteTargetColumnList: an INSERT with a column list still
+// classifies its target as a write (the target is wrapped in a Schema node).
+func TestExtractResolvedWriteTargetColumnList(t *testing.T) {
+	t.Parallel()
+	d := dialect.NewRegistry().MustGet(dialect.Trino)
+	got := ExtractResolved(d, "sales", "INSERT INTO target(id) SELECT id FROM source")
+	if len(got.Tables) != 2 || got.Tables[0].Kind != "write" || got.Tables[0].Path[len(got.Tables[0].Path)-1] != "target" {
+		t.Fatalf("Tables = %#v", got.Tables)
+	}
+}
+
 func TestExtractIgnoresLiteralsAndUnknownAliases(t *testing.T) {
 	t.Parallel()
 	sql := "SELECT * FROM orders o JOIN customers c ON o.id = 5 AND x = y AND o.a = missing.b"
