@@ -45,22 +45,34 @@
 	const workspaceId = $derived(workspaceStore.current?.id ?? '');
 	const canEdit = $derived(glossary?.allowed_actions.includes('edit') ?? false);
 
+	// A load for a workspace the person already left must not overwrite the
+	// current one: only the latest call writes state.
+	let loadGeneration = 0;
+
 	async function load(id: string) {
+		const generation = ++loadGeneration;
+		const isCurrent = () => generation === loadGeneration;
 		loading = true;
 		loadError = '';
 		try {
-			glossary = await loadGlossary(id);
+			const nextGlossary = await loadGlossary(id);
+			if (!isCurrent()) return;
+			glossary = nextGlossary;
 			try {
-				insights = await loadGlossaryInsights(id);
+				const nextInsights = await loadGlossaryInsights(id);
+				if (!isCurrent()) return;
+				insights = nextInsights;
 				insightsError = false;
 			} catch {
+				if (!isCurrent()) return;
 				insights = null;
 				insightsError = true;
 			}
 		} catch (e) {
+			if (!isCurrent()) return;
 			loadError = apiErrorMessage(e, m.search_glossary_load_failed());
 		} finally {
-			loading = false;
+			if (isCurrent()) loading = false;
 		}
 	}
 
