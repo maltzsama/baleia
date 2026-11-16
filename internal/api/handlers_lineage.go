@@ -9,6 +9,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/semantic"
 	"github.com/galileostudio/baleia/internal/sqlref"
 	"github.com/google/uuid"
@@ -36,6 +37,9 @@ type lineageReads interface {
 	ListLineageSavedQueries(ctx context.Context, arg db.ListLineageSavedQueriesParams) ([]db.ListLineageSavedQueriesRow, error)
 	ListLineageBrokenModels(ctx context.Context) ([]db.ListLineageBrokenModelsRow, error)
 	ListLineageBrokenMetrics(ctx context.Context) ([]db.ListLineageBrokenMetricsRow, error)
+	// GetCatalogBindingForDisplay resolves a catalog's engine kind, so content
+	// SQL is parsed with the dialect that will run it (#1091).
+	GetCatalogBindingForDisplay(ctx context.Context, arg db.GetCatalogBindingForDisplayParams) (db.GetCatalogBindingForDisplayRow, error)
 }
 
 // popularTablesReads reads the workspace's popular tables.
@@ -140,6 +144,9 @@ type lineageItem struct {
 func (h *CatalogHandlers) lineageContent(ctx context.Context, ws, userID db.UUID) (map[string]lineageItem, map[string][]string, error) {
 	content := map[string]lineageItem{}
 	dependents := map[string][]string{}
+	// One dialect per target for the whole request: a content item's SQL is
+	// parsed with the dialect of the engine it runs on (#1091).
+	dialects := map[lineageDialectKey]dialect.Dialect{}
 
 	models, err := h.lineage.ListLineageModels(ctx, db.ListLineageModelsParams{WorkspaceID: ws, UserID: userID})
 	if err != nil {
@@ -154,7 +161,7 @@ func (h *CatalogHandlers) lineageContent(ctx context.Context, ws, userID db.UUID
 				Detail: ptrString(m.Slug),
 				Href:   ptrString("/models/" + idString(m.ID)),
 			},
-			refs: modelRefs(m.Definition, m.CatalogID),
+			refs: modelRefs(m.Definition, m.CatalogID, h.lineageDialect(ctx, m.CatalogID, m.BindingID, dialects)),
 		}
 		content[item.node.Id] = item
 		for _, r := range item.refs {
@@ -196,7 +203,7 @@ func (h *CatalogHandlers) lineageContent(ctx context.Context, ws, userID db.UUID
 				Detail: ptrString(q.Slug),
 				Href:   ptrString("/sql/q/" + idString(q.ID)),
 			},
-			refs: savedQueryRefs(q.Sql, q.TargetCatalogID, q.TargetSchema),
+			refs: savedQueryRefs(q.Sql, q.TargetCatalogID, q.TargetSchema, h.lineageDialect(ctx, q.TargetCatalogID, q.TargetBindingID, dialects)),
 		}
 		content[item.node.Id] = item
 		for _, r := range item.refs {
@@ -314,8 +321,41 @@ func (g *lineageGraph) resolveTable(ref lineageTableRef) (string, bool) {
 	return id, true
 }
 
-// modelRefs extracts the tables a model reads from its definition.
-func modelRefs(definition []byte, catalogID db.UUID) []lineageTableRef {
+// lineageDialectKey identifies a content target in the per-request dialect
+// cache: its binding when it has one, else its catalog.
+type lineageDialectKey struct {
+	binding db.UUID
+	catalog db.UUID
+}
+
+// lineageDialect resolves the dialect to parse a content item's SQL with: the
+// engine of its target binding (#1091), cached per target for one request. A
+// content item with no binding falls back to the catalog's enabled binding,
+// and the generic dialect is the last resort, so the graph stays best-effort.
+func (h *CatalogHandlers) lineageDialect(ctx context.Context, catalogID, bindingID db.UUID, cache map[lineageDialectKey]dialect.Dialect) dialect.Dialect {
+	if h.dialects == nil {
+		return nil
+	}
+	key := lineageDialectKey{binding: bindingID, catalog: catalogID}
+	if d, ok := cache[key]; ok {
+		return d
+	}
+	d := h.dialects.MustGet(dialect.FlightSQL)
+	if h.lineage != nil {
+		arg := db.GetCatalogBindingForDisplayParams{CatalogID: catalogID, BindingID: bindingID}
+		if row, err := h.lineage.GetCatalogBindingForDisplay(ctx, arg); err == nil {
+			if resolved, ok := h.dialects.ForEngineKind(row.EngineKind); ok {
+				d = resolved
+			}
+		}
+	}
+	cache[key] = d
+	return d
+}
+
+// modelRefs extracts the tables a model reads from its definition, parsed with
+// the target's dialect.
+func modelRefs(definition []byte, catalogID db.UUID, d dialect.Dialect) []lineageTableRef {
 	var m semantic.Model
 	if err := json.Unmarshal(definition, &m); err != nil {
 		return nil
@@ -324,25 +364,35 @@ func modelRefs(definition []byte, catalogID db.UUID) []lineageTableRef {
 	case semantic.SourceTable:
 		return []lineageTableRef{{catalogID: catalogID, namespace: m.Source.Namespace, name: m.Source.Table}}
 	case semantic.SourceSQL:
-		return sqlRefs(m.Source.SQL, catalogID, m.Source.Namespace)
+		return sqlRefs(m.Source.SQL, catalogID, m.Source.Namespace, d)
 	}
 	return nil
 }
 
-// savedQueryRefs extracts the tables a saved query reads from its SQL.
-func savedQueryRefs(sql string, catalogID db.UUID, schema *string) []lineageTableRef {
+// savedQueryRefs extracts the tables a saved query reads from its SQL, parsed
+// with the target's dialect.
+func savedQueryRefs(sql string, catalogID db.UUID, schema *string, d dialect.Dialect) []lineageTableRef {
 	var fallback []string
 	if schema != nil && *schema != "" {
 		fallback = []string{*schema}
 	}
-	return sqlRefs(sql, catalogID, fallback)
+	return sqlRefs(sql, catalogID, fallback, d)
 }
 
 // sqlRefs runs the reference extractor over a statement and resolves each read
 // table to a natural key, using fallback as the default namespace for
-// unqualified names.
-func sqlRefs(sql string, catalogID db.UUID, fallback []string) []lineageTableRef {
-	ref := sqlref.Extract(sql)
+// unqualified names. A nil dialect keeps the generic extractor.
+func sqlRefs(sql string, catalogID db.UUID, fallback []string, d dialect.Dialect) []lineageTableRef {
+	var ref sqlref.Reference
+	if d == nil {
+		ref = sqlref.Extract(sql)
+	} else {
+		defaultSchema := ""
+		if len(fallback) == 1 {
+			defaultSchema = fallback[0]
+		}
+		ref = sqlref.ExtractResolved(d, defaultSchema, sql)
+	}
 	var out []lineageTableRef
 	for _, t := range ref.Tables {
 		if len(t.Path) == 0 || t.Kind != "read" {
