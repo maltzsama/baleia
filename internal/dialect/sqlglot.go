@@ -66,19 +66,20 @@ func (d *spec) Statements(sql string) ([]Span, error) {
 		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 
-	// Parse each batch separately. The fork's tokenizer already turns a T-SQL
-	// "GO" line and an Oracle "/" line into SEMICOLON tokens (BatchSeparatorGo /
-	// BatchSeparatorSlash), so sqlglot.Parse alone splits the common cases.
-	// It does not yet end a single-statement procedure body at "GO"
-	// (CREATE PROCEDURE p AS SELECT 1\nGO\nSELECT 2 parses the whole thing as
-	// one Create) — maltzsama/sqlglot-go, DEVIATIONS §1.22 gap. Until that is
-	// fixed in the fork, findBatchSeparators pre-splits those lines so the
-	// procedure body cannot swallow the next batch.
-	batchSeparators := findBatchSeparators(sql, d.name)
+	// Parse each batch separately. T-SQL GO is handled by the fork's tokenizer,
+	// which emits the GO line as a SEMICOLON token the alignment below already
+	// splits on. Oracle's "/" line also ends a batch, but the fork's tokenizer
+	// does not emit it as a token and the statement span it records drops the
+	// ";" that a PL/SQL unit (BEGIN...END, CREATE PROCEDURE) needs before the
+	// "/". Pre-splitting on "/" keeps that ";" with its unit.
+	var separators []oracleTerminator
+	if d.name == Oracle {
+		separators = findOracleTerminators(sql)
+	}
 
 	out := make([]Span, 0)
 	segmentStart := 0
-	for _, separator := range append(batchSeparators, batchSeparator{start: len([]rune(source)), end: len([]rune(source))}) {
+	for _, separator := range append(separators, oracleTerminator{start: len([]rune(source)), end: len([]rune(source))}) {
 		segmentEnd := separator.start
 		segment, err := parseSQLSegment(source, sql, segmentStart, segmentEnd, lexemes, dialectName, d.name == Oracle && segmentEnd < len([]rune(source)))
 		if err != nil {
@@ -92,21 +93,19 @@ func (d *spec) Statements(sql string) ([]Span, error) {
 	return out, nil
 }
 
-type batchSeparator struct{ start, end int }
+// oracleTerminator is an Oracle "/" line that ends a PL/SQL unit.
+type oracleTerminator struct{ start, end int }
 
-func findBatchSeparators(sql, dialectName string) []batchSeparator {
-	if dialectName != TSQL && dialectName != Oracle {
-		return nil
-	}
-	separators := make([]batchSeparator, 0)
+// findOracleTerminators returns the "/" lines of a script. The fork's tokenizer
+// does not emit them as tokens, so the splitter locates them itself to keep a
+// unit's trailing ";" with the unit instead of dropping it as a terminator.
+func findOracleTerminators(sql string) []oracleTerminator {
+	separators := make([]oracleTerminator, 0)
 	runeOffset := 0
 	for _, line := range strings.SplitAfter(sql, "\n") {
-		trimmed := strings.TrimRight(line, "\r\n")
-		trimmed = strings.Trim(trimmed, " \t")
-		isSeparator := (dialectName == TSQL && strings.EqualFold(trimmed, "GO")) || (dialectName == Oracle && trimmed == "/")
-		if isSeparator {
+		if strings.Trim(strings.TrimRight(line, "\r\n"), " \t") == "/" {
 			leading := len([]rune(line)) - len([]rune(strings.TrimLeft(line, " \t")))
-			separators = append(separators, batchSeparator{start: runeOffset + leading, end: runeOffset + len([]rune(line))})
+			separators = append(separators, oracleTerminator{start: runeOffset + leading, end: runeOffset + len([]rune(line))})
 		}
 		runeOffset += len([]rune(line))
 	}
