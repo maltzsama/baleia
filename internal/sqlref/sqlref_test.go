@@ -102,6 +102,23 @@ func TestExtractResolvedColumns(t *testing.T) {
 	}
 }
 
+// TestExtractResolvedColumnsThroughCTE: a column qualified by a CTE or derived
+// table resolves to the physical table the source reads, not the alias.
+func TestExtractResolvedColumnsThroughCTE(t *testing.T) {
+	t.Parallel()
+	d := dialect.NewRegistry().MustGet(dialect.Trino)
+	for _, sql := range []string{
+		"WITH x AS (SELECT id FROM orders) SELECT x.id FROM x",
+		"SELECT q.id FROM (SELECT id FROM orders) q",
+	} {
+		got := ExtractResolved(d, "sales", sql)
+		want := []Column{{Namespace: "sales", Table: "orders", Name: "id"}}
+		if !reflect.DeepEqual(got.Columns, want) {
+			t.Fatalf("%s: Columns = %#v, want %#v", sql, got.Columns, want)
+		}
+	}
+}
+
 func TestExtractResolvedQualifiesSources(t *testing.T) {
 	t.Parallel()
 	d := dialect.NewRegistry().MustGet(dialect.Trino)

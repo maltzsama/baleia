@@ -82,7 +82,6 @@ func ExtractResolved(d dialect.Dialect, defaultSchema, sql string) Reference {
 	}
 
 	tables := make([]Table, 0, 4)
-	byAlias := make(map[string]Table, 4)
 	for _, tableExpr := range qualified.FindAll(expressions.KindTable) {
 		src, ok := report[tableExpr]
 		if !ok || src.Kind != optimizer.Physical {
@@ -100,10 +99,12 @@ func ExtractResolved(d dialect.Dialect, defaultSchema, sql string) Reference {
 		if isWriteTarget(qualified, tableExpr) {
 			kind = "write"
 		}
-		table := Table{Path: path, Alias: alias, Kind: kind}
-		tables = append(tables, table)
-		byAlias[strings.ToLower(alias)] = table
+		tables = append(tables, Table{Path: path, Alias: alias, Kind: kind})
 	}
+
+	// Resolve column qualifiers against every scope's sources, so a column
+	// through a CTE or derived table resolves to the physical table it reads.
+	byAlias := physicalTablesByAlias(qualified)
 
 	columns := make([]Column, 0, 8)
 	seenColumns := make(map[Column]bool, 8)
@@ -167,15 +168,69 @@ func physicalPath(src optimizer.ResolvedSource) []string {
 	return path
 }
 
+// physicalTablesByAlias maps an alias to the physical table it names, following
+// CTE and derived-table scopes: for `WITH x AS (SELECT id FROM orders)`, the
+// alias `x` maps to `orders`. An alias that resolves to no table, or to more
+// than one, is omitted (best-effort, never a phantom).
+func physicalTablesByAlias(root expressions.Expression) (out map[string]Table) {
+	out = map[string]Table{}
+	defer func() {
+		if recover() != nil {
+			out = map[string]Table{}
+		}
+	}()
+	var resolve func(any) ([]string, bool)
+	resolve = func(src any) ([]string, bool) {
+		switch s := src.(type) {
+		case expressions.Expression:
+			if s != nil && s.Kind() == expressions.KindTable {
+				return tableNodePath(s), true
+			}
+		case *optimizer.Scope:
+			var paths [][]string
+			for _, inner := range s.Sources {
+				if path, ok := resolve(inner); ok {
+					paths = append(paths, path)
+				}
+			}
+			if len(paths) == 1 {
+				return paths[0], true
+			}
+		}
+		return nil, false
+	}
+	for _, scope := range optimizer.TraverseScope(root) {
+		for alias, src := range scope.Sources {
+			if path, ok := resolve(src); ok {
+				out[strings.ToLower(alias)] = Table{Path: path}
+			}
+		}
+	}
+	return out
+}
+
+// tableNodePath reads a resolved table's catalog/schema/name parts.
+func tableNodePath(t expressions.Expression) []string {
+	path := make([]string, 0, 3)
+	for _, part := range []string{t.CatalogName(), t.SchemaName(), t.Name()} {
+		if part != "" {
+			path = append(path, part)
+		}
+	}
+	return path
+}
+
 // resolveColumn resolves a column's qualifier (the alias as written) to the
 // physical table's namespace and name; an empty qualifier resolves to the only
-// table when the statement reads exactly one, and stays empty otherwise.
+// table when the statement reads exactly one. A qualifier that names no single
+// physical table resolves to nothing, so the column is dropped rather than
+// persisted as a phantom.
 func resolveColumn(qualifier string, byAlias map[string]Table, tables []Table) (namespace, table string) {
 	if qualifier != "" {
 		if t, ok := byAlias[strings.ToLower(qualifier)]; ok {
 			return tableNamespace(t), tableName(t)
 		}
-		return "", qualifier // an unresolved qualifier: keep the spelling
+		return "", ""
 	}
 	if len(tables) == 1 {
 		return tableNamespace(tables[0]), tableName(tables[0])
