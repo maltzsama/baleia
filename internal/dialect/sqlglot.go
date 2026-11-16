@@ -3,7 +3,6 @@ package dialect
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"unicode"
 
@@ -73,10 +72,10 @@ func (d *spec) Statements(sql string) ([]Span, error) {
 
 	runes := []rune(sql)
 
-	// Statement boundaries are the SEMICOLON tokens (";" and T-SQL GO) plus the
-	// Oracle "/" lines. A "/" separator sits between two consecutive statement
-	// spans, because the parser split there string- and comment-aware — so a "/"
-	// inside a string or a block comment is never one.
+	// Statement boundaries are the SEMICOLON tokens: a real ";", a T-SQL GO
+	// line, and the Oracle "/" line (the fork tokenizes all three). The parser
+	// splits on them string- and comment-aware, and each statement's span already
+	// covers its attached comments and an Oracle unit's trailing ";".
 	type boundary struct{ start, end int }
 	boundaries := make([]boundary, 0, len(lexemes))
 	for _, token := range lexemes {
@@ -84,22 +83,6 @@ func (d *spec) Statements(sql string) ([]Span, error) {
 			boundaries = append(boundaries, boundary{token.Start, token.End + 1})
 		}
 	}
-	if d.name == Oracle {
-		for i := 1; i < len(exprs); i++ {
-			if exprs[i-1] == nil || exprs[i] == nil {
-				continue
-			}
-			_, prevEnd, ok1 := exprs[i-1].Span()
-			nextStart, _, ok2 := exprs[i].Span()
-			if !ok1 || !ok2 {
-				continue
-			}
-			if slash, ok := oracleSlash(runes, prevEnd, nextStart); ok {
-				boundaries = append(boundaries, boundary{slash, slash + 1})
-			}
-		}
-	}
-	sort.Slice(boundaries, func(i, j int) bool { return boundaries[i].start < boundaries[j].start })
 
 	out := make([]Span, 0, len(exprs))
 	for _, expr := range exprs {
@@ -121,11 +104,6 @@ func (d *spec) Statements(sql string) ([]Span, error) {
 				break
 			}
 		}
-		// Oracle: a PL/SQL unit keeps its trailing ";" — the ";" is part of the
-		// unit, not its terminator, and the parser's span ends before it.
-		if d.name == Oracle && end < len(runes) && runes[end] == ';' && oracleKeepsTerminator(expr) {
-			end++
-		}
 		start, end = trimRuneSpan(sql, start, end)
 		if start >= end {
 			continue
@@ -135,45 +113,6 @@ func (d *spec) Statements(sql string) ([]Span, error) {
 		out = append(out, Span{Text: sql[startByte:endByte], Start: startByte, End: endByte})
 	}
 	return out, nil
-}
-
-// oracleKeepsTerminator reports whether an Oracle statement's trailing ";" is
-// part of the statement rather than its terminator: an anonymous block (a
-// Command) or a CREATE that declares a PL/SQL unit.
-func oracleKeepsTerminator(expr expressions.Expression) bool {
-	if expr.Kind() == expressions.KindCommand {
-		return true
-	}
-	if expr.Kind() != expressions.KindCreate {
-		return false
-	}
-	switch expr.Text("kind") {
-	case "PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "TYPE":
-		return true
-	}
-	return false
-}
-
-// oracleSlash returns the rune offset of a "/" alone on its line within
-// [from, to), or false when there is none.
-func oracleSlash(runes []rune, from, to int) (int, bool) {
-	for i := from; i < to; i++ {
-		if runes[i] != '/' {
-			continue
-		}
-		lineStart := i
-		for lineStart > from && runes[lineStart-1] != '\n' {
-			lineStart--
-		}
-		lineEnd := i + 1
-		for lineEnd < to && runes[lineEnd] != '\n' {
-			lineEnd++
-		}
-		if strings.TrimSpace(string(runes[lineStart:lineEnd])) == "/" {
-			return i, true
-		}
-	}
-	return 0, false
 }
 
 // ParseStatement parses one already-split statement and is the shared AST

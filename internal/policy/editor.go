@@ -145,7 +145,7 @@ func statementForbiddenWithDialect(d dialect.Dialect, sql string) bool {
 // SET SESSION AUTHORIZATION, which lets a user impersonate an admin target the
 // guard grants to.
 func setSessionAuthorization(expr expressions.Expression) bool {
-	fields := strings.Fields(strings.ToUpper(spanText(expr)))
+	fields := strings.Fields(strings.ToUpper(stripLeadingComments(spanText(expr))))
 	return len(fields) >= 3 && fields[0] == "SET" && fields[1] == "SESSION" && fields[2] == "AUTHORIZATION"
 }
 
@@ -183,16 +183,39 @@ func commandRoot(expr expressions.Expression) string {
 	return ""
 }
 
-// commandBody is the Command's source after its leading keyword.
+// commandBody is the Command's body after its leading keyword. The command's
+// `expression` arg is the body without any leading comment, which the v0.42
+// spans otherwise include.
 func commandBody(expr expressions.Expression) string {
-	span := spanText(expr)
-	first := strings.IndexFunc(span, func(r rune) bool {
-		return r == ' ' || r == '\t' || r == '\n' || r == '\r'
-	})
-	if first < 0 {
-		return ""
+	if body, ok := expr.Arg("expression").(string); ok {
+		return strings.TrimSpace(body)
 	}
-	return strings.TrimSpace(span[first:])
+	return stripLeadingComments(spanText(expr))
+}
+
+// stripLeadingComments removes leading whitespace and comments from a
+// statement's source text, so keyword inspection reads the statement, not a
+// leading comment the span now covers.
+func stripLeadingComments(s string) string {
+	for {
+		s = strings.TrimLeft(s, " \t\r\n")
+		switch {
+		case strings.HasPrefix(s, "--"):
+			if i := strings.IndexByte(s, '\n'); i >= 0 {
+				s = s[i+1:]
+				continue
+			}
+			return ""
+		case strings.HasPrefix(s, "/*"):
+			if i := strings.Index(s, "*/"); i >= 0 {
+				s = s[i+2:]
+				continue
+			}
+			return ""
+		default:
+			return s
+		}
+	}
 }
 
 // spanText is the verbatim source the parser recorded for the node, or "" when

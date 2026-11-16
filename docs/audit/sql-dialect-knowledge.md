@@ -135,7 +135,7 @@ introspection, since Baleia already does this for every other metadata kind.
 ### 4. Backend Go logic → `sqlglot-go` (#625, in progress)
 
 The statement splitter and AST consumers now use `github.com/maltzsama/sqlglot-go`
-v0.41.1. The hand-written `lexer.go` has been removed; Baleia keeps its
+v0.42.0. The hand-written `lexer.go` has been removed; Baleia keeps its
 engine-specific quoting, literals, SQL generation and `information_schema`
 metadata queries. The remaining `dialects.go`/`base.go` code is generation and
 connection capability, not a second parser.
