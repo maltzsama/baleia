@@ -168,4 +168,21 @@ describe('Toaster', () => {
 		expect(screen.queryByText('Saved')).toBeNull();
 		toasts.dismiss(id);
 	});
+
+	// #1063: successes are transient; a failure stays until dismissed.
+	it('keeps an error toast until it is dismissed', async () => {
+		vi.useFakeTimers();
+		try {
+			const id = toasts.error('Could not save');
+			render(Toaster);
+			expect(screen.getByText('Could not save')).toBeTruthy();
+
+			await vi.advanceTimersByTimeAsync(10_000);
+
+			expect(screen.getByText('Could not save')).toBeTruthy();
+			toasts.dismiss(id);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });

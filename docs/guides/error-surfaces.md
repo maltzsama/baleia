@@ -26,7 +26,8 @@ headline (FD7).
 - Use `describeError(error)` and `ErrorPanel` when the headline matters.
 - Show the stable `code` and `request_id` when the API provides them.
 - Recoverable failures offer retry; durable failures stay visible instead of a
-  transient toast.
+  transient toast. Success and info toasts dismiss themselves; an error toast
+  stays until the user dismisses it.
 - Empty `catch` blocks are a lint error.
 
 ## Surface inventory
