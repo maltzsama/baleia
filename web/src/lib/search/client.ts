@@ -13,6 +13,7 @@ export type WorkspaceSearchResponse = components['schemas']['WorkspaceSearchResp
 export type MetadataSearchResult = components['schemas']['MetadataSearchResult'];
 export type SearchGlossary = components['schemas']['SearchGlossary'];
 export type SearchGlossaryEntry = components['schemas']['SearchGlossaryEntry'];
+export type SearchGlossaryInsights = components['schemas']['SearchGlossaryInsights'];
 
 export class SearchRequestError extends Error {
 	constructor(
@@ -67,6 +68,16 @@ export function searchWorkspace(
 export function loadGlossary(workspaceId: string): Promise<SearchGlossary> {
 	return client
 		.GET('/workspaces/{id}/search/glossary', { params: { path: { id: workspaceId } } })
+		.then(({ data, error, response }) => {
+			if (error || !data) fail(error, response?.status, m.search_glossary_load_failed());
+			return data;
+		});
+}
+
+/** Visible model/metric matches and vocabulary suggestions for glossary members. */
+export function loadGlossaryInsights(workspaceId: string): Promise<SearchGlossaryInsights> {
+	return client
+		.GET('/workspaces/{id}/search/glossary/insights', { params: { path: { id: workspaceId } } })
 		.then(({ data, error, response }) => {
 			if (error || !data) fail(error, response?.status, m.search_glossary_load_failed());
 			return data;

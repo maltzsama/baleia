@@ -11,11 +11,13 @@
 	import {
 		addGlossaryEntry,
 		loadGlossary,
+		loadGlossaryInsights,
 		removeGlossaryEntry,
 		SearchRequestError,
 		type SearchGlossary,
 		type SearchGlossaryEntry
 	} from '$lib/search/client';
+	import type { SearchGlossaryInsights } from '$lib/search/client';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -29,6 +31,8 @@
 	let glossary = $state.raw<SearchGlossary | null>(null);
 	let loading = $state(true);
 	let loadError = $state('');
+	let insights = $state<SearchGlossaryInsights | null>(null);
+	let insightsError = $state(false);
 
 	let term = $state('');
 	let synonyms = $state('');
@@ -46,6 +50,13 @@
 		loadError = '';
 		try {
 			glossary = await loadGlossary(id);
+			try {
+				insights = await loadGlossaryInsights(id);
+				insightsError = false;
+			} catch {
+				insights = null;
+				insightsError = true;
+			}
 		} catch (e) {
 			loadError = apiErrorMessage(e, m.search_glossary_load_failed());
 		} finally {
@@ -150,6 +161,7 @@
 						<tr>
 							<th class="px-3 py-2">{m.search_glossary_term()}</th>
 							<th class="px-3 py-2">{m.search_glossary_synonyms()}</th>
+							<th class="px-3 py-2">{m.search_glossary_matches()}</th>
 							<th class="px-3 py-2">{m.search_glossary_created()}</th>
 							<th class="px-3 py-2"><span class="sr-only">{m.common_action()}</span></th>
 						</tr>
@@ -159,6 +171,47 @@
 							<tr class="border-b border-border/60 last:border-b-0">
 								<td class="px-3 py-1.5 font-medium">{entry.term}</td>
 								<td class="px-3 py-1.5">{entry.synonyms.join(', ')}</td>
+								<td class="px-3 py-1.5">
+									{#if insights}
+										{@const entryInsight = insights.entries.find(
+											(item) => item.entry_id === entry.id
+										)}
+										{#if entryInsight}
+											<div class="flex flex-wrap gap-1">
+												{#each entryInsight.members as member (member.value)}
+													<details
+														class="rounded border border-border px-1.5 py-0.5"
+														class:border-amber-500={member.matches.length === 0}
+													>
+														<summary class="cursor-pointer"
+															>{member.value}: {member.matches.length}</summary
+														>
+														{#if member.matches.length}
+															<ul class="mt-1 list-inside list-disc">
+																{#each member.matches as match (`${match.kind}:${match.id}`)}<li>
+																		{match.kind === 'semantic_model'
+																			? m.search_glossary_model()
+																			: m.search_glossary_metric()}: {match.label}
+																	</li>{/each}
+															</ul>
+														{:else}<p class="mt-1 max-w-52 whitespace-normal">
+																{m.search_glossary_unused()}
+															</p>{/if}
+													</details>
+												{/each}
+											</div>
+											{#if entryInsight.members.some((member) => member.suggestions.length)}
+												<p class="mt-1 text-[10px] text-text-muted">
+													{m.search_glossary_suggestions()}: {entryInsight.members
+														.flatMap((member) => member.suggestions)
+														.filter((value, index, all) => all.indexOf(value) === index)
+														.slice(0, 5)
+														.join(', ')}
+												</p>
+											{/if}
+										{/if}
+									{/if}
+								</td>
 								<td class="px-3 py-1.5"><RelativeTime at={entry.created_at} /></td>
 								<td class="px-3 py-1.5 text-right">
 									{#if canEdit}
