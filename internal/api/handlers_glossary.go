@@ -102,24 +102,24 @@ func (h *SemanticHandlers) SearchGlossaryInsights(ctx context.Context, request S
 	}
 	resources := make([]glossaryResource, 0, len(models)+len(metrics))
 	for _, model := range models {
-		resources = append(resources, glossaryResource{Kind: "semantic_model", ID: uuidString(model.ID), Label: model.Label, Description: model.Description})
+		resources = append(resources, glossaryResource{Kind: "semantic_model", ID: repo.UUIDString(model.ID), Label: model.Label, Description: model.Description})
 		var definition semantic.Model
 		if json.Unmarshal(model.Definition, &definition) == nil {
 			for _, field := range definition.Dimensions {
 				if !field.Hidden {
-					resources = append(resources, glossaryResource{Kind: "semantic_field", ID: uuidString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, Description: field.Description, SearchText: field.Name + " " + field.Label + " " + field.Description})
+					resources = append(resources, glossaryResource{Kind: "semantic_field", ID: repo.UUIDString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, Description: field.Description, SearchText: field.Name + " " + field.Label + " " + field.Description})
 				}
 			}
 			for _, field := range definition.Metrics {
-				resources = append(resources, glossaryResource{Kind: "semantic_field", ID: uuidString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, SearchText: field.Name + " " + field.Label})
+				resources = append(resources, glossaryResource{Kind: "semantic_field", ID: repo.UUIDString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, SearchText: field.Name + " " + field.Label})
 			}
 			for _, field := range definition.CalculatedFields {
-				resources = append(resources, glossaryResource{Kind: "semantic_field", ID: uuidString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, SearchText: field.Name + " " + field.Label})
+				resources = append(resources, glossaryResource{Kind: "semantic_field", ID: repo.UUIDString(model.ID), Label: model.Label + " · " + field.Name + " " + field.Label, SearchText: field.Name + " " + field.Label})
 			}
 		}
 	}
 	for _, metric := range metrics {
-		resources = append(resources, glossaryResource{Kind: "semantic_metric", ID: uuidString(metric.ID), Label: metric.Label, Description: metric.Description})
+		resources = append(resources, glossaryResource{Kind: "semantic_metric", ID: repo.UUIDString(metric.ID), Label: metric.Label, Description: metric.Description})
 	}
 	out := SearchGlossaryInsights{Entries: make([]SearchGlossaryInsight, 0, len(entries))}
 	for _, entry := range entries {
