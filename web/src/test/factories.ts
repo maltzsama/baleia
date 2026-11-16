@@ -628,3 +628,63 @@ export function makeBIGatewayStatus(overrides: Partial<BIGatewayStatus> = {}): B
 		...overrides
 	};
 }
+
+type BiKey = components['schemas']['BiKey'];
+type WorkspaceBIStatus = components['schemas']['WorkspaceBIStatus'];
+
+export function makeBiKey(overrides: Partial<BiKey> = {}): BiKey {
+	return {
+		id: '00000000-0000-0000-0000-0000000000e1',
+		name: 'Tableau',
+		key_prefix: 'bal_abc...',
+		workspace_id: '00000000-0000-0000-0000-000000000001',
+		engine_id: '00000000-0000-0000-0000-000000000004',
+		owner_id: '00000000-0000-0000-0000-000000000003',
+		owner_email: 'ada@example.com',
+		expires_at: null,
+		created_at: '2026-01-01T00:00:00Z',
+		last_used_at: null,
+		...overrides
+	};
+}
+
+export function makeWorkspaceBIStatus(
+	overrides: Partial<WorkspaceBIStatus> = {}
+): WorkspaceBIStatus {
+	return {
+		workspace_bi_enabled: true,
+		gateway: {
+			configured: true,
+			listener_configured: true,
+			secret_configured: true,
+			public_url_ready: true,
+			public_url: 'https://bi.example.com',
+			enabled: true,
+			state: 'ready',
+			blocked_by: []
+		},
+		trino_targets: { available: true, count: 1 },
+		can_create_keys: true,
+		can_manage_keys: true,
+		state: 'ready',
+		blocked_by: [],
+		...overrides
+	};
+}
+
+type WorkspaceTarget = components['schemas']['WorkspaceTarget'];
+
+export function makeWorkspaceTarget(overrides: Partial<WorkspaceTarget> = {}): WorkspaceTarget {
+	return {
+		binding_id: '00000000-0000-0000-0000-0000000000b1',
+		catalog_id: '00000000-0000-0000-0000-0000000000c1',
+		catalog_name: 'analytics',
+		engine_id: '00000000-0000-0000-0000-000000000004',
+		engine_name: 'trino',
+		engine_kind: 'trino',
+		engine_catalog_name: 'lake',
+		mode: 'native',
+		is_default: true,
+		...overrides
+	};
+}
