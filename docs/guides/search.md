@@ -67,6 +67,11 @@ Everyone in the workspace reads the glossary; editors and admins change it. An
 entry has one term and up to 20 synonyms, compared without case or accents, and
 a term has one entry per workspace.
 
+Each term and synonym also shows what it reaches: the models, fields and
+metrics visible to you whose label, name or description it matches, with a flag
+when it matches nothing. Words found next to those matches appear as suggested
+synonyms; they are advice only, and the screen never saves them on its own.
+
 ## Operating it
 
 Search keeps a term index in the Baleia database (tables `search_scopes` and
