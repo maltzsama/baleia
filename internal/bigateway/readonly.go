@@ -39,8 +39,14 @@ func readOnlyStatement(d dialect.Dialect, sql string) bool {
 		return false
 	}
 	switch expr.Kind() {
-	case expressions.KindSelect, expressions.KindDescribe, expressions.KindValues, expressions.KindShow:
+	case expressions.KindSelect, expressions.KindValues, expressions.KindShow,
+		expressions.KindUnion, expressions.KindIntersect, expressions.KindExcept:
 		return true
+	case expressions.KindDescribe:
+		// EXPLAIN (and EXPLAIN ANALYZE) can execute the explained statement;
+		// only a plain DESCRIBE is read-only. Under PostgreSQL both parse to a
+		// Describe node, distinguished by its kind.
+		return expr.Text("kind") != "EXPLAIN"
 	case expressions.KindCommand:
 		// SHOW is read-only under dialects that parse it as an opaque Command
 		// (Trino, T-SQL, Oracle); EXPLAIN, CALL, PREPARE and EXECUTE are not.
