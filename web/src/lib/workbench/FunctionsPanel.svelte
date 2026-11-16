@@ -161,7 +161,9 @@
 		<EmptyState title={m.functions_panel_empty()} description={m.functions_panel_search()} />
 	{:else}
 		<ul class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-			{#each shown as fn (fn.name)}
+			<!-- A name is not unique: an engine returns overloads (abs(bigint),
+			     abs(double), ...), so key by the function itself. -->
+			{#each shown as fn (fn)}
 				<li>
 					<button
 						type="button"
