@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
@@ -192,6 +194,121 @@ func TestLineage_ForeignWorkspace404(t *testing.T) {
 	}
 	if _, ok := resp.(ListLineage404JSONResponse); !ok {
 		t.Fatalf("response = %T, want 404", resp)
+	}
+}
+
+// TestLineage_SavedQueryUsesTargetDialect: a saved query whose target runs on
+// a T-SQL engine is parsed with T-SQL, so a bracket-quoted table still
+// resolves to an edge (#1091). The catalog also carries an older Trino binding
+// (the generic and Trino dialects read no table from `[sales].[orders]`), so a
+// lookup by catalog alone would pick the wrong dialect.
+func TestLineage_SavedQueryUsesTargetDialect(t *testing.T) {
+	t.Parallel()
+	f := newLineageFixture(t)
+	ctx := f.as(f.owner)
+
+	connection := func(name, kind, url string) model.UUID {
+		t.Helper()
+		row := model.CatalogConnection{ID: model.UUID(repo.NewUUID()), Name: model.Text(name), Type: kind, URL: url}
+		if err := f.gdb.Create(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+		return row.ID
+	}
+	engine := func(name, kind string, conn model.UUID) model.UUID {
+		t.Helper()
+		eng, err := f.h.queries.CreateEngine(ctx, db.CreateEngineParams{
+			Name: name, Kind: kind, Class: "direct", ConnectionID: repo.PGUUID(string(conn)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return model.UUID(eng.ID.String())
+	}
+
+	mssqlConn := connection("mssql", "sqlserver", "sqlserver://x")
+	catalog := model.Catalog{
+		ID: model.UUID(repo.NewUUID()), ConnectionID: mssqlConn,
+		Name: "mssql_catalog", Origin: "native", Enabled: true,
+	}
+	if err := f.gdb.Create(&catalog).Error; err != nil {
+		t.Fatal(err)
+	}
+	// Two enabled bindings on one catalog: an older Trino one and the saved
+	// query's T-SQL target.
+	trino := model.CatalogBinding{
+		ID: model.UUID(repo.NewUUID()), CatalogID: catalog.ID,
+		EngineID:          engine("lineage_trino", "trino", connection("trino", "trino", "http://t")),
+		EngineCatalogName: "mssql_catalog_t", Mode: "managed", Enabled: true,
+		CreatedAt: time.Now().Add(-time.Hour),
+	}
+	if err := f.gdb.Create(&trino).Error; err != nil {
+		t.Fatal(err)
+	}
+	mssql := model.CatalogBinding{
+		ID: model.UUID(repo.NewUUID()), CatalogID: catalog.ID,
+		EngineID:          engine("lineage_mssql", "sqlserver", mssqlConn),
+		EngineCatalogName: "mssql_catalog_m", Mode: "managed", Enabled: true,
+	}
+	if err := f.gdb.Create(&mssql).Error; err != nil {
+		t.Fatal(err)
+	}
+	table := model.MetadataTable{
+		ID: model.UUID(repo.NewUUID()), CatalogID: catalog.ID,
+		Namespace: model.StringArray{"sales"}, Name: "orders", Kind: "table", Fingerprint: "f",
+		LastSeenAt: time.Now(), LastChangedAt: time.Now(),
+	}
+	if err := f.gdb.Create(&table).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	bindingID := mssql.ID
+	savedQuery := model.SavedQuery{
+		ID: model.UUID(repo.NewUUID()), WorkspaceID: model.UUID(repo.UUIDString(db.UUID{Bytes: f.ws, Valid: true})),
+		SpaceID: model.UUID(repo.UUIDString(f.space)), CreatedBy: model.UUID(f.owner),
+		Name: "MSSQL orders", SQL: "select * from [sales].[orders]", Slug: "lineage_mssql_orders",
+		TargetBindingID: &bindingID, TargetSchema: ptrTo("sales"),
+	}
+	if err := f.gdb.Create(&savedQuery).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := f.h.ListLineage(ctx, ListLineageRequestObject{
+		Id: f.ws,
+		Params: ListLineageParams{
+			Node: "saved_query:" + idString(repo.PGUUID(string(savedQuery.ID))),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := resp.(ListLineage200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T", resp)
+	}
+	if len(got.Nodes) != 2 || len(got.Edges) != 1 {
+		t.Fatalf("nodes=%+v edges=%+v, want the query and its table", got.Nodes, got.Edges)
+	}
+	want := "table:" + idString(repo.PGUUID(string(table.ID)))
+	if got.Edges[0].To != want {
+		t.Errorf("edge = %+v, want to %s", got.Edges[0], want)
+	}
+}
+
+// TestSQLRefsDialect: the extractor uses the dialect it is given, and a nil
+// dialect keeps the generic one. T-SQL reads a bracket-quoted table the
+// generic dialect cannot.
+func TestSQLRefsDialect(t *testing.T) {
+	t.Parallel()
+	catalog := db.UUID{Bytes: [16]byte{1}, Valid: true}
+	tsql := dialect.NewRegistry().MustGet(dialect.TSQL)
+
+	got := sqlRefs("select * from [sales].[orders]", catalog, []string{"sales"}, tsql)
+	if len(got) != 1 || got[0].name != "orders" || len(got[0].namespace) != 1 || got[0].namespace[0] != "sales" {
+		t.Errorf("T-SQL refs = %+v, want sales.orders", got)
+	}
+	if got := sqlRefs("select * from [sales].[orders]", catalog, []string{"sales"}, nil); len(got) != 0 {
+		t.Errorf("generic refs = %+v, want none", got)
 	}
 }
 

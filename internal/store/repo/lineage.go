@@ -53,6 +53,10 @@ func (r *Repo) ListLineageModels(ctx context.Context, arg db.ListLineageModelsPa
 		}
 		out = make([]db.ListLineageModelsRow, len(rows))
 		for i, row := range rows {
+			var binding db.UUID
+			if row.BindingID != nil {
+				binding = PGUUID(string(*row.BindingID))
+			}
 			out[i] = db.ListLineageModelsRow{
 				ID:          PGUUID(string(row.ID)),
 				WorkspaceID: PGUUID(string(row.WorkspaceID)),
@@ -60,6 +64,7 @@ func (r *Repo) ListLineageModels(ctx context.Context, arg db.ListLineageModelsPa
 				Slug:        string(row.Slug),
 				Label:       row.Label,
 				CatalogID:   PGUUID(string(row.CatalogID)),
+				BindingID:   binding,
 				Definition:  []byte(row.Definition),
 				UpdatedAt:   PGTime(row.UpdatedAt),
 			}
@@ -133,8 +138,9 @@ func (r *Repo) ListLineageSavedQueries(ctx context.Context, arg db.ListLineageSa
 		}
 		out = make([]db.ListLineageSavedQueriesRow, len(rows))
 		for i, row := range rows {
-			var target db.UUID
+			var target, binding db.UUID
 			if row.TargetBindingID != nil {
+				binding = PGUUID(string(*row.TargetBindingID))
 				target = PGUUID(catalogByBinding[string(*row.TargetBindingID)])
 			}
 			out[i] = db.ListLineageSavedQueriesRow{
@@ -146,6 +152,7 @@ func (r *Repo) ListLineageSavedQueries(ctx context.Context, arg db.ListLineageSa
 				Sql:             row.SQL,
 				TargetSchema:    row.TargetSchema,
 				TargetCatalogID: target,
+				TargetBindingID: binding,
 			}
 		}
 		return nil

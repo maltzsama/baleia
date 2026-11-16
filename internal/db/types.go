@@ -1559,6 +1559,7 @@ type ListLineageModelsRow struct {
 	Slug        string      `json:"slug"`
 	Label       string      `json:"label"`
 	CatalogID   UUID        `json:"catalog_id"`
+	BindingID   UUID        `json:"binding_id"`
 	Definition  []byte      `json:"definition"`
 	UpdatedAt   Timestamptz `json:"updated_at"`
 }
@@ -1577,6 +1578,7 @@ type ListLineageSavedQueriesRow struct {
 	Sql             string  `json:"sql"`
 	TargetSchema    *string `json:"target_schema"`
 	TargetCatalogID UUID    `json:"target_catalog_id"`
+	TargetBindingID UUID    `json:"target_binding_id"`
 }
 
 type ListMaintenanceRunsParams struct {
