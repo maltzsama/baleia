@@ -17,4 +17,10 @@ auth:bearer {
 assert {
   res.status: eq 200
   res.body.enabled: isBoolean
+  res.body.configured: isBoolean
+  res.body.state: isString
+  res.body.blocked_by: isArray
+  res.body.health.status: isString
+  res.body.concurrency.max_per_key: isNumber
+  res.body.concurrency.max_per_workspace: isNumber
 }

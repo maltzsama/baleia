@@ -23,24 +23,20 @@ const systemStatusSectionTimeout = 2 * time.Second
 // section. Initialisation time is close enough to process start.
 var processStartedAt = time.Now().UTC()
 
-// GetBIGateway — GET /admin/bi-gateway (#711). Admins read the global switch;
-// a missing singleton means enabled.
+// GetBIGateway — GET /admin/bi-gateway (#711). Admins read the global switch
+// and the gateway readiness (#1102); a missing singleton means enabled.
 func (h *OpsHandlers) GetBIGateway(ctx context.Context, _ GetBIGatewayRequestObject) (GetBIGatewayResponseObject, error) {
 	if auth.RoleFromContext(ctx) != "admin" {
 		return GetBIGateway403JSONResponse{ForbiddenJSONResponse: ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "administrator role required"}}, nil
 	}
-	store := h.biSettings()
-	if store == nil {
+	if h.biSettings() == nil {
 		return nil, errors.New("bi gateway settings are unavailable without the store")
 	}
-	setting, err := store.GetBIGatewaySetting(ctx)
-	if errors.Is(err, db.ErrNoRows) {
-		return GetBIGateway200JSONResponse{Enabled: true}, nil
-	}
+	status, err := h.biGatewayStatus(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return GetBIGateway200JSONResponse{Enabled: setting.Enabled}, nil
+	return GetBIGateway200JSONResponse(status), nil
 }
 
 // PutBIGateway — PUT /admin/bi-gateway (#711). Admins turn the global gateway
@@ -76,7 +72,11 @@ func (h *OpsHandlers) PutBIGateway(ctx context.Context, request PutBIGatewayRequ
 		Action: audit.BIGatewayUpdate, ResourceType: "bi_gateway",
 		Changes: map[string]audit.Change{"enabled": {From: old, To: setting.Enabled}},
 	}.Allowed())
-	return PutBIGateway200JSONResponse{Enabled: setting.Enabled}, nil
+	status, err := h.biGatewayStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return PutBIGateway200JSONResponse(status), nil
 }
 
 // GetSystemStatus — GET /admin/system/status (#260). Admins only. Each

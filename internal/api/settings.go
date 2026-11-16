@@ -22,9 +22,21 @@ type Settings struct {
 
 // BIGatewaySettings describe what the BI data-source file points at (ADR
 // 0017): the listener must be on and have a public URL the BI tool can reach.
+// The readiness fields report configuration without exposing the values
+// themselves: the HMAC secret and the internal listener address stay hidden.
 type BIGatewaySettings struct {
 	Enabled bool
 	URL     string
+	// ListenerConfigured reports whether BALEIA_BI_GATEWAY_ADDR is set.
+	ListenerConfigured bool
+	// SecretConfigured reports whether BALEIA_BI_GATEWAY_SECRET is set.
+	SecretConfigured bool
+	// URLReady reports whether URL is an http(s) origin with no path.
+	URLReady bool
+	// MaxPerKey and MaxPerWorkspace are the running BI statement limits; 0
+	// disables one.
+	MaxPerKey       int
+	MaxPerWorkspace int
 }
 
 // AuthSettings are the token and password settings.
@@ -143,6 +155,14 @@ func SettingsFromConfig(c *config.Config) Settings {
 			TemporalNamespace:   c.TemporalNamespace,
 		},
 		Connections: ConnectionSettings{AdminsOnly: c.ConnectionsCreate == "admins"},
-		BIGateway:   BIGatewaySettings{Enabled: c.BIGatewayAddr != "" && c.BIGatewayURL != "", URL: c.BIGatewayURL},
+		BIGateway: BIGatewaySettings{
+			Enabled:            c.BIGatewayAddr != "" && c.BIGatewayURL != "",
+			URL:                c.BIGatewayURL,
+			ListenerConfigured: c.BIGatewayAddr != "",
+			SecretConfigured:   c.BIGatewaySecret != "",
+			URLReady:           biGatewayPublicURLReady(c.BIGatewayURL),
+			MaxPerKey:          c.BIMaxConcurrentPerKey,
+			MaxPerWorkspace:    c.BIMaxConcurrentPerWorkspace,
+		},
 	}
 }

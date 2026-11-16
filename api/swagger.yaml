@@ -1418,11 +1418,97 @@ components:
         role: { type: string, enum: [owner, member] }
 
     # ── Workspaces ─────────────────────────────────────────────
-    BIGatewaySetting:
+    BIGatewayBlocker:
+      type: string
+      enum: [listener_not_configured, secret_not_configured, public_url_not_configured,
+             public_url_invalid, gateway_disabled]
+
+    BIGatewayHealth:
       type: object
-      required: [enabled]
+      required: [status, checked_at]
       properties:
-        enabled: { type: boolean }
+        status: { type: string, enum: [ok, unknown] }
+        checked_at: { type: string, format: date-time }
+
+    BIGatewayConcurrency:
+      type: object
+      required: [max_per_key, max_per_workspace]
+      properties:
+        max_per_key: { type: integer }
+        max_per_workspace: { type: integer }
+        running:
+          type: integer
+          nullable: true
+          description: "Running BI statements across the deployment; null when no store is available"
+
+    BIGatewayReadiness:
+      type: object
+      required: [configured, listener_configured, secret_configured, public_url_ready, enabled, state, blocked_by]
+      description: >
+        Readiness of the BI gateway shared by the global and workspace UIs
+        (ADR 0017). It exposes stable booleans and blocker codes, never the HMAC
+        secret or the internal listener address.
+      properties:
+        configured:
+          type: boolean
+          description: "Listener, HMAC secret and public URL are all usable"
+        listener_configured: { type: boolean }
+        secret_configured: { type: boolean }
+        public_url_ready:
+          type: boolean
+          description: "The public URL is an http(s) origin with no path"
+        public_url:
+          type: string
+          nullable: true
+          description: "The externally reachable base URL; never a secret"
+        enabled: { type: boolean, description: "The global switch" }
+        state: { type: string, enum: [ready, disabled, blocked] }
+        blocked_by:
+          type: array
+          items: { $ref: "#/components/schemas/BIGatewayBlocker" }
+
+    BIGatewayStatus:
+      allOf:
+        - $ref: "#/components/schemas/BIGatewayReadiness"
+        - type: object
+          required: [health, concurrency]
+          properties:
+            health: { $ref: "#/components/schemas/BIGatewayHealth" }
+            concurrency: { $ref: "#/components/schemas/BIGatewayConcurrency" }
+
+    WorkspaceBITrinoTargets:
+      type: object
+      required: [available, count]
+      properties:
+        available: { type: boolean }
+        count: { type: integer }
+
+    WorkspaceBIGatewayBlocker:
+      type: string
+      enum: [listener_not_configured, secret_not_configured, public_url_not_configured,
+             public_url_invalid, gateway_disabled, workspace_bi_disabled, no_trino_targets]
+
+    WorkspaceBIStatus:
+      type: object
+      required: [workspace_bi_enabled, gateway, trino_targets, can_create_keys, can_manage_keys, state, blocked_by]
+      description: >
+        BI readiness for one workspace and the caller, combining the global
+        gateway facts with the workspace switch, the available Trino targets and
+        the caller's key permissions (ADR 0017).
+      properties:
+        workspace_bi_enabled: { type: boolean }
+        gateway: { $ref: "#/components/schemas/BIGatewayReadiness" }
+        trino_targets: { $ref: "#/components/schemas/WorkspaceBITrinoTargets" }
+        can_create_keys:
+          type: boolean
+          description: "The caller may issue a key in this workspace"
+        can_manage_keys:
+          type: boolean
+          description: "The caller may list and revoke every key in this workspace"
+        state: { type: string, enum: [ready, blocked], x-enum-varnames: [WorkspaceBIStatusStateReady, WorkspaceBIStatusStateBlocked] }
+        blocked_by:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceBIGatewayBlocker" }
 
     UpdateBIGatewayRequest:
       type: object
@@ -4504,13 +4590,13 @@ paths:
     get:
       tags: [Admin]
       operationId: getBIGateway
-      summary: "Global BI gateway switch — admin only"
+      summary: "Global BI gateway readiness and switch — admin only"
       responses:
         "200":
-          description: "The global BI gateway switch"
+          description: "The global BI gateway readiness and switch"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/BIGatewaySetting" }
+              schema: { $ref: "#/components/schemas/BIGatewayStatus" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
     put:
@@ -4524,10 +4610,10 @@ paths:
             schema: { $ref: "#/components/schemas/UpdateBIGatewayRequest" }
       responses:
         "200":
-          description: "The updated global BI gateway switch"
+          description: "The updated global BI gateway readiness and switch"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/BIGatewaySetting" }
+              schema: { $ref: "#/components/schemas/BIGatewayStatus" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
@@ -7312,6 +7398,26 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/WorkspacePrincipal" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/bi-status:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [BI]
+      operationId: getWorkspaceBIStatus
+      summary: "BI readiness for a workspace and the caller"
+      description: >
+        The global gateway readiness plus this workspace's BI switch, the
+        available Trino targets and the caller's key permissions (ADR 0017).
+        Any workspace member may read it; it exposes no secret or host internals.
+      responses:
+        "200":
+          description: "BI readiness"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceBIStatus" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
