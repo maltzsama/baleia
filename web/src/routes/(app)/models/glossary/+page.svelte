@@ -191,7 +191,8 @@
 														>
 														{#if member.matches.length}
 															<ul class="mt-1 list-inside list-disc">
-																{#each member.matches as match (`${match.kind}:${match.id}`)}<li>
+																{#each member.matches as match (`${match.kind}:${match.id}:${match.label}`)}<li
+																	>
 																		{match.kind === 'semantic_model'
 																			? m.search_glossary_model()
 																			: match.kind === 'semantic_field'
