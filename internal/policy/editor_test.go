@@ -161,6 +161,8 @@ func TestSetSessionAuthorizationAcrossDialects(t *testing.T) {
 			"SET SESSION AUTHORIZATION",
 			"set  session   authorization   foo",
 			"/* c */ SET SESSION AUTHORIZATION a",
+			"SET SESSION SESSION AUTHORIZATION 'baleia_admin'",
+			"SET /* c */ SESSION AUTHORIZATION 'baleia_admin'",
 		} {
 			if !ForbiddenInEditor(d, sql) {
 				t.Errorf("%s: %q allowed", name, sql)
@@ -204,6 +206,23 @@ func TestFailClosedOnParseError(t *testing.T) {
 		if !ForbiddenInEditor(d, sql) {
 			t.Errorf("unparseable %q allowed", sql)
 		}
+	}
+}
+
+// TestOracleAnonymousBlock: dynamic SQL hidden in an anonymous block body is
+// rejected, while a bare BEGIN (a T-SQL transaction) and a block without
+// dynamic SQL are allowed.
+func TestOracleAnonymousBlock(t *testing.T) {
+	t.Parallel()
+	oracle := dialect.NewRegistry().MustGet(dialect.Oracle)
+	if !ForbiddenInEditor(oracle, "BEGIN EXECUTE IMMEDIATE 'DROP TABLE t'; END;") {
+		t.Error("oracle: anonymous block hiding EXECUTE IMMEDIATE allowed")
+	}
+	if ForbiddenInEditor(oracle, "BEGIN NULL; END;") {
+		t.Error("oracle: a plain anonymous block was forbidden")
+	}
+	if ForbiddenInEditor(dialect.NewRegistry().MustGet(dialect.TSQL), "BEGIN") {
+		t.Error("tsql: a bare BEGIN (transaction) was forbidden")
 	}
 }
 

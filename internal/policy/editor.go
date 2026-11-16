@@ -94,17 +94,15 @@ var allowedStatementKinds = map[expressions.Kind]bool{
 }
 
 // allowedCommands are the opaque Command keywords the editor still permits:
-// read-only introspection the fork does not structure under some dialects
-// (SHOW, EXPLAIN, DESCRIBE) and a bare BEGIN (a transaction) under T-SQL.
-// Everything else a Command can hide — catalog management, session
-// authorization, dynamic SQL, maintenance — is rejected.
+// read-only introspection the fork does not structure under some dialects. A
+// bare BEGIN and SET are judged by the case in statementForbiddenWithDialect,
+// and everything else a Command can hide is rejected.
 var allowedCommands = map[string]bool{
 	"SHOW":     true,
 	"EXPLAIN":  true,
 	"DESCRIBE": true,
 	"DESC":     true,
 	"USE":      true,
-	"BEGIN":    true,
 }
 
 // statementForbiddenWithDialect reports whether one statement must be rejected
@@ -127,6 +125,11 @@ func statementForbiddenWithDialect(d dialect.Dialect, sql string) bool {
 		if commandRoot(expr) == "SET" {
 			return setSessionAuthorization(expr)
 		}
+		// A bare BEGIN is a T-SQL transaction; an anonymous block (Oracle PL/SQL)
+		// keeps its body unparsed, so dynamic SQL inside it must be rejected.
+		if commandRoot(expr) == "BEGIN" {
+			return anonymousBlockForbidden(expr)
+		}
 		return !allowedCommands[commandRoot(expr)]
 	case expressions.KindSet:
 		// PostgreSQL parses SET SESSION AUTHORIZATION as a structured Set,
@@ -141,12 +144,32 @@ func statementForbiddenWithDialect(d dialect.Dialect, sql string) bool {
 	}
 }
 
-// setSessionAuthorization reports whether a Set node spells
+// setSessionAuthorization reports whether a statement is
 // SET SESSION AUTHORIZATION, which lets a user impersonate an admin target the
-// guard grants to.
+// guard grants to. PostgreSQL's structured Set carries the kind on its
+// SetItem; the opaque Command on the other engines is judged by keywords.
 func setSessionAuthorization(expr expressions.Expression) bool {
-	fields := strings.Fields(strings.ToUpper(stripLeadingComments(spanText(expr))))
-	return len(fields) >= 3 && fields[0] == "SET" && fields[1] == "SESSION" && fields[2] == "AUTHORIZATION"
+	if expr.Kind() == expressions.KindSet {
+		for _, item := range expr.FindAll(expressions.KindSetItem) {
+			if strings.EqualFold(item.Text("kind"), "SESSION AUTHORIZATION") {
+				return true
+			}
+		}
+		return false
+	}
+	fields := strings.Fields(strings.ToUpper(stripComments(spanText(expr))))
+	for i := 0; i+1 < len(fields); i++ {
+		if fields[i] == "SESSION" && fields[i+1] == "AUTHORIZATION" {
+			return true
+		}
+	}
+	return false
+}
+
+// anonymousBlockForbidden reports whether an anonymous block hides dynamic SQL in
+// its unparsed body, which would otherwise slip past the EXECUTE IMMEDIATE rule.
+func anonymousBlockForbidden(expr expressions.Expression) bool {
+	return strings.Contains(strings.ToUpper(stripComments(spanText(expr))), "EXECUTE IMMEDIATE")
 }
 
 // executeImmediate reports whether an Execute node is T-SQL's dynamic
@@ -190,32 +213,45 @@ func commandBody(expr expressions.Expression) string {
 	if body, ok := expr.Arg("expression").(string); ok {
 		return strings.TrimSpace(body)
 	}
-	return stripLeadingComments(spanText(expr))
+	return stripComments(spanText(expr))
 }
 
-// stripLeadingComments removes leading whitespace and comments from a
-// statement's source text, so keyword inspection reads the statement, not a
-// leading comment the span now covers.
-func stripLeadingComments(s string) string {
-	for {
-		s = strings.TrimLeft(s, " \t\r\n")
+// stripComments removes comments (line and block) from a statement's source text
+// so keyword inspection reads the statement, not a comment the span now covers.
+// String literals are copied verbatim.
+func stripComments(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); {
 		switch {
-		case strings.HasPrefix(s, "--"):
-			if i := strings.IndexByte(s, '\n'); i >= 0 {
-				s = s[i+1:]
-				continue
+		case strings.HasPrefix(s[i:], "--"):
+			if j := strings.IndexByte(s[i:], '\n'); j >= 0 {
+				i += j + 1
+			} else {
+				i = len(s)
 			}
-			return ""
-		case strings.HasPrefix(s, "/*"):
-			if i := strings.Index(s, "*/"); i >= 0 {
-				s = s[i+2:]
-				continue
+		case strings.HasPrefix(s[i:], "/*"):
+			if j := strings.Index(s[i:], "*/"); j >= 0 {
+				i += j + 2
+			} else {
+				i = len(s)
 			}
-			return ""
+		case s[i] == '\'':
+			b.WriteByte(s[i])
+			i++
+			for i < len(s) {
+				b.WriteByte(s[i])
+				if s[i] == '\'' {
+					i++
+					break
+				}
+				i++
+			}
 		default:
-			return s
+			b.WriteByte(s[i])
+			i++
 		}
 	}
+	return b.String()
 }
 
 // spanText is the verbatim source the parser recorded for the node, or "" when
