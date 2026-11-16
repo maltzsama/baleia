@@ -20,8 +20,12 @@ describe('BI gateway administration page', () => {
 		expect(await screen.findByText('Ready')).toBeTruthy();
 		expect(screen.getByText('https://bi.example.com')).toBeTruthy();
 		expect(screen.getByText('Operational')).toBeTruthy();
-		expect(screen.getByText('5')).toBeTruthy();
-		expect(screen.getByText('20')).toBeTruthy();
+		const perKey = screen.getByText('Maximum concurrent statements per key').closest('div');
+		expect(perKey?.querySelector('dd')?.textContent).toBe('5');
+		const perWorkspace = screen
+			.getByText('Maximum concurrent statements per workspace')
+			.closest('div');
+		expect(perWorkspace?.querySelector('dd')?.textContent).toBe('20');
 		expect(screen.getByText('Nothing is blocking the gateway.')).toBeTruthy();
 		expect(screen.getByRole('button', { name: 'Disable gateway' })).toBeTruthy();
 	});

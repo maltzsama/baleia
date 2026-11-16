@@ -2900,5 +2900,22 @@
 	"workspace_bi_blocker_public_url_invalid": "A URL pública do gateway de BI não é uma origem http(s) válida.",
 	"workspace_bi_blocker_gateway_disabled": "O gateway de BI global está desligado. Um administrador global precisa ativá-lo.",
 	"workspace_bi_blocker_workspace_bi_disabled": "O interruptor de BI do espaço está desligado; as chaves não funcionam.",
-	"workspace_bi_blocker_no_trino_targets": "Este espaço não tem um destino Trino para apontar uma chave."
+	"workspace_bi_blocker_no_trino_targets": "Este espaço não tem um destino Trino para apontar uma chave.",
+	"bi_setup_title": "Guia de configuração",
+	"bi_setup_description": "Cinco passos levam uma implantação de um motor privado a uma conexão funcional no Tableau ou no Power BI.",
+	"bi_setup_current": "Passo atual",
+	"bi_setup_open": "Abrir",
+	"bi_setup_protocol": "O gateway fala o protocolo de cliente HTTP do Trino; não é um endpoint Arrow Flight SQL.",
+	"bi_setup_step_operator": "Configurar o gateway",
+	"bi_setup_step_operator_detail": "Um operador define o listener, a URL pública, o segredo HMAC, o ingress e o TLS.",
+	"bi_setup_step_operator_blocked": "Ainda falta:",
+	"bi_setup_step_global": "Ativar o gateway",
+	"bi_setup_step_global_detail": "Um administrador global ativa o gateway.",
+	"bi_setup_step_workspace": "Ativar o BI no espaço",
+	"bi_setup_step_workspace_detail": "Um administrador do espaço ativa o BI no espaço.",
+	"bi_setup_step_workspace_ask": "Peça a um administrador do espaço para ativar o BI neste espaço.",
+	"bi_setup_step_key": "Criar uma chave",
+	"bi_setup_step_key_detail": "Um usuário autorizado cria uma chave vinculada ao espaço para um motor Trino. O segredo é mostrado uma vez; salve-o antes de fechar a caixa de diálogo.",
+	"bi_setup_step_connect": "Conectar o Tableau ou o Power BI",
+	"bi_setup_step_connect_detail": "Baixe o arquivo de conexão e entre com o e-mail do proprietário da chave e a chave como senha. O arquivo não carrega credenciais e a sessão é somente leitura."
 }

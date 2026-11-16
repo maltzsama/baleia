@@ -17,6 +17,7 @@
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 	import { toasts } from '$lib/ui/toast.svelte';
 	import { canOpenInBI } from '$lib/ui/patterns/kindIcon';
+	import SetupGuide from '$lib/bi/SetupGuide.svelte';
 
 	type BiStatus = components['schemas']['WorkspaceBIStatus'];
 	type BiKey = components['schemas']['BiKey'];
@@ -56,6 +57,7 @@
 	let switchOpen = $state(false);
 
 	const currentUserId = $derived(authStore.user?.id ?? '');
+	const workspaceHref = $derived(`/settings/workspaces/${workspaceId}?tab=bi`);
 	const enabled = $derived(status?.workspace_bi_enabled ?? false);
 	const engines = $derived.by(() => {
 		const list: { value: string; label: string }[] = [];
@@ -321,6 +323,14 @@
 					</table>
 				</div>
 			{/if}
+
+			<SetupGuide
+				gateway={status.gateway}
+				workspace={status}
+				hasKeys={keys.some((key) => !isExpired(key))}
+				{workspaceHref}
+				canManageWorkspace={canEdit}
+			/>
 		</div>
 	{/if}
 </div>
