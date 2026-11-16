@@ -45,4 +45,23 @@ describe('RightSidebar', () => {
 		await fireEvent.click(await screen.findByRole('button', { name: /date_trunc/ }));
 		expect(editor.pendingInsert).toMatchObject({ text: 'date_trunc()', caret: 11 });
 	});
+
+	it('lists overloads that share a name in the SQL reference', async () => {
+		// An engine returns several overloads under one name (abs(bigint),
+		// abs(double), ...). Keying the list by name crashed the panel with
+		// Svelte's each_key_duplicate and rendered nothing.
+		server.use(
+			http.get('/workspaces/{id}/metadata/functions', ({ response }) =>
+				response(200).json([
+					{ name: 'abs', kind: 'scalar', call: true, signature: 'abs(bigint) → bigint' },
+					{ name: 'abs', kind: 'scalar', call: true, signature: 'abs(double) → double' }
+				])
+			)
+		);
+		editor.setReferenceScope({ workspaceId: 'w', catalogId: 'c', bindingId: 'b' });
+		render(RightSidebar, { props: { collapsed: false } });
+		await fireEvent.click(screen.getByRole('tab', { name: 'SQL reference' }));
+		expect(await screen.findByText('abs(bigint) → bigint')).toBeTruthy();
+		expect(screen.getByText('abs(double) → double')).toBeTruthy();
+	});
 });

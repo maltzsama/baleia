@@ -52,6 +52,27 @@ func TestFunctions(t *testing.T) {
 	}
 }
 
+func TestFunctions_DeduplicatesIdenticalRows(t *testing.T) {
+	t.Parallel()
+	// An engine can report one function per catalog or schema where it is
+	// registered; exact duplicates collapse, overloads stay.
+	eng := &fakeFunctionEngine{name: dialect.PostgreSQL, rows: [][]string{
+		{"abs", "abs(int) → int", "absolute value", "function"},
+		{"abs", "abs(int) → int", "absolute value", "function"},
+		{"abs", "abs(bigint) → bigint", "absolute value", "function"},
+	}}
+	refs, err := Functions(context.Background(), eng, "catalog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 2 {
+		t.Fatalf("got %d functions, want 2 (the exact duplicate collapses)", len(refs))
+	}
+	if refs[0].Signature == refs[1].Signature {
+		t.Errorf("overloads with different signatures collapsed: %+v", refs)
+	}
+}
+
 func TestFunctions_NoQuery(t *testing.T) {
 	t.Parallel()
 	// T-SQL has no function catalog (FunctionQuery is empty).
