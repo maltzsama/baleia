@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/svelte';
+import { HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearMetadataCache } from '$lib/metadata/client';
 import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -72,6 +73,27 @@ describe('maintenance page', () => {
 		expect(await screen.findByRole('heading', { level: 1, name: 'Maintenance' })).toBeTruthy();
 		expect(await screen.findByText('"lake_t"."sales"."orders"')).toBeTruthy();
 		expect(await screen.findByText(/has no maintenance parameters/)).toBeTruthy();
+	});
+
+	// #1084: a failing lookup renders the catalog copy with a retry, never the
+	// raw engine message.
+	it('shows the localized load failure with retry', async () => {
+		useBackend();
+		server.use(
+			http.get('/workspaces/{id}/metadata/search', () =>
+				HttpResponse.json(
+					{ code: 'service_unavailable', message: 'trino coordinator unreachable' },
+					{ status: 503 }
+				)
+			)
+		);
+		setTestUrl(URL);
+		render(MaintenancePage);
+
+		expect(await screen.findByText('Could not load maintenance')).toBeTruthy();
+		expect(screen.getByText('The service is unavailable.')).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+		expect(screen.queryByText(/trino coordinator unreachable/)).toBeNull();
 	});
 
 	it('says so when the catalog is read-only (#996)', async () => {

@@ -9,6 +9,7 @@
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
+	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
 	import MoveToSpaceDialog from './MoveToSpaceDialog.svelte';
 	import SpaceAccessDialog from './SpaceAccessDialog.svelte';
@@ -140,7 +141,13 @@
 		{#if loading}
 			<p class="px-2 py-4 text-xs text-text-muted">{m.common_loading()}</p>
 		{:else if loadError}
-			<p class="px-2 py-4 text-xs text-red-500" role="alert">{loadError}</p>
+			<div class="p-2">
+				<ErrorState
+					title={m.components_savedquerieslist_could_not_load()}
+					message={loadError}
+					onretry={() => savedQueries.reload(workspaceId)}
+				/>
+			</div>
 		{:else if spaces.length === 0}
 			<p class="px-2 py-6 text-center text-xs text-text-muted">
 				{m.components_savedquerieslist_no_spaces_yet()}
