@@ -85,6 +85,26 @@ describe('models list', () => {
 
 		expect(await screen.findByText('Could not load models')).toBeTruthy();
 	});
+
+	// #1084: a known code renders the catalog copy; the raw engine message is
+	// never the visible text.
+	it('renders the catalog copy, not the raw message, for a permission failure', async () => {
+		baseHandlers();
+		server.use(
+			http.get('/workspaces/{id}/semantic/models', () =>
+				HttpResponse.json(
+					{ code: 'forbidden', message: 'iceberg: permission denied on sales.orders' },
+					{ status: 403 }
+				)
+			)
+		);
+
+		render(ModelsPage);
+
+		expect(await screen.findByText('Could not load models')).toBeTruthy();
+		expect(screen.getByText('You do not have permission to do this.')).toBeTruthy();
+		expect(screen.queryByText(/permission denied on sales\.orders/)).toBeNull();
+	});
 });
 
 describe('model editor', () => {

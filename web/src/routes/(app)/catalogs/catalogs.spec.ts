@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import { HttpResponse } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
 import { authStore } from '$lib/stores/auth.svelte';
 import { http, server } from '../../../test/server';
@@ -36,6 +37,26 @@ describe('catalogs page', () => {
 		expect(await screen.findByText('Never synced')).toBeTruthy();
 		expect(screen.getByText('Synced')).toBeTruthy();
 		expect(screen.queryByText('never')).toBeNull();
+	});
+
+	// #1084: the page headline and the catalog copy are localized; a raw engine
+	// message is never shown, and the load is retryable.
+	it('shows a retryable, catalog-backed error when the list fails', async () => {
+		server.use(
+			http.get('/catalogs', () =>
+				HttpResponse.json(
+					{ code: 'service_unavailable', message: 'trino coordinator unreachable' },
+					{ status: 503 }
+				)
+			),
+			http.get('/engines', ({ response }) => response(200).json([]))
+		);
+		render(CatalogsPage);
+
+		expect(await screen.findByText('Could not load catalogs')).toBeTruthy();
+		expect(screen.getByText('The service is unavailable.')).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+		expect(screen.queryByText(/trino coordinator unreachable/)).toBeNull();
 	});
 });
 

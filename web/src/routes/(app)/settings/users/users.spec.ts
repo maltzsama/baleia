@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
+import { HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { http, server } from '../../../../test/server';
 import { makeMe } from '../../../../test/factories';
@@ -50,6 +51,25 @@ describe('users settings', () => {
 		expect(screen.getByText('active')).toBeTruthy();
 		expect(screen.getByText('suspended')).toBeTruthy();
 		expect(screen.getByText('oidc')).toBeTruthy();
+	});
+
+	// #1084: a failing list renders the catalog copy with a retry, never the
+	// raw server message.
+	it('shows the localized load failure with retry', async () => {
+		server.use(
+			http.get('/users', () =>
+				HttpResponse.json(
+					{ code: 'service_unavailable', message: 'database is down' },
+					{ status: 503 }
+				)
+			)
+		);
+		renderPage(UsersPage, { me: makeMe(), url: '/settings/users' });
+
+		expect(await screen.findByText('Could not load users')).toBeTruthy();
+		expect(screen.getByText('The service is unavailable.')).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+		expect(screen.queryByText(/database is down/)).toBeNull();
 	});
 
 	it('filters by search', async () => {
