@@ -3,9 +3,11 @@
 	import GlobalNav from '$lib/components/GlobalNav.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import SessionExpired from '$lib/components/SessionExpired.svelte';
+	import GlobalSearch from '$lib/search/GlobalSearch.svelte';
 	import Toaster from '$lib/ui/Toaster.svelte';
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import { configureAuth } from '$lib/api/client';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { workspaceStore } from '$lib/stores/workspace.svelte';
@@ -14,6 +16,7 @@
 	let { children } = $props();
 	let dark = $state(browser && localStorage.getItem('theme') === 'dark');
 	let expired = $state(false);
+	let searchOpen = $state(false);
 
 	function signInAgain() {
 		const next = `${window.location.pathname}${window.location.search}`;
@@ -32,6 +35,21 @@
 		configureAuth({ onSessionExpired: () => (expired = true) });
 		authStore.load();
 		await workspaceStore.load();
+	});
+
+	// The global search shortcut (#1061): Mod-K outside the Workbench, which
+	// keeps Mod-K for its command palette. A focused text field keeps the key.
+	onMount(() => {
+		function onKey(event: KeyboardEvent) {
+			if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
+			if (page.url.pathname.startsWith('/sql')) return;
+			const target = event.target as HTMLElement | null;
+			if (target?.closest('input, textarea, select, [contenteditable="true"], .cm-editor')) return;
+			event.preventDefault();
+			searchOpen = true;
+		}
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
 	});
 </script>
 
@@ -54,7 +72,7 @@
 <div class="h-screen flex overflow-hidden">
 	<GlobalNav />
 	<div class="flex-1 flex flex-col overflow-hidden">
-		<Header onToggleDark={() => (dark = !dark)} {dark} />
+		<Header onToggleDark={() => (dark = !dark)} {dark} onsearch={() => (searchOpen = true)} />
 		<!-- The one main landmark of every app page. -->
 		<main
 			id="main-content"
@@ -66,5 +84,10 @@
 	</div>
 </div>
 
+<GlobalSearch
+	bind:open={searchOpen}
+	workspaceId={workspaceStore.current?.id ?? ''}
+	workspaceName={workspaceStore.current?.name}
+/>
 <SessionExpired bind:open={expired} onsignin={signInAgain} />
 <Toaster />

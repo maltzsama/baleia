@@ -19,13 +19,16 @@ vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 
 import Header from './Header.svelte';
 
-function renderAt(path: string, retrievers = true) {
+function renderAt(path: string, retrievers = true, onsearch = vi.fn()) {
 	nav.url = new URL(`http://localhost${path}`);
 	authStore.set(
 		makeMe({ features: { agents: false, assistant: false, bi_gateway: false, retrievers } })
 	);
 	workspaceStore.select(makeWorkspace());
-	return render(Header, { props: { onToggleDark: vi.fn(), dark: false } });
+	return {
+		...render(Header, { props: { onToggleDark: vi.fn(), dark: false, onsearch } }),
+		onsearch
+	};
 }
 
 describe('Header', () => {
@@ -50,6 +53,15 @@ describe('Header', () => {
 		// A long title truncates instead of pushing the controls out.
 		expect(heading.className).toContain('truncate');
 		expect(screen.queryByText('SQL Editor')).toBeNull();
+	});
+
+	// #1061: the global search is reachable from every authenticated route.
+	it('opens the global search from the header', async () => {
+		const { onsearch } = renderAt('/connections');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+
+		expect(onsearch).toHaveBeenCalledOnce();
 	});
 
 	// The released version sits beside the attention bell and the theme switch.
@@ -106,7 +118,7 @@ describe('Header', () => {
 			authStore.set(makeMe());
 			await workspaceStore.load();
 			workspaceStore.select(analytics);
-			render(Header, { props: { onToggleDark: vi.fn(), dark: false } });
+			render(Header, { props: { onToggleDark: vi.fn(), dark: false, onsearch: vi.fn() } });
 			const trigger = screen.getByRole('button', { name: /Switch workspace/ });
 			expect(trigger.getAttribute('aria-expanded')).toBe('false');
 			await fireEvent.click(trigger);
