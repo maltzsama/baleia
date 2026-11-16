@@ -1,0 +1,39 @@
+meta {
+  name: Get Workspace BI Status
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/workspaces/{{workspace_id}}/bi-status
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.workspace_bi_enabled: isBoolean
+  res.body.can_create_keys: isBoolean
+  res.body.can_manage_keys: isBoolean
+  res.body.state: isString
+  res.body.blocked_by: isArray
+  res.body.gateway: isObject
+  res.body.gateway.state: isString
+  res.body.gateway.configured: isBoolean
+  res.body.trino_targets.available: isBoolean
+  res.body.trino_targets.count: isNumber
+}
+
+tests {
+  test("the readiness carries no secret and no internal listener address", function () {
+    const body = res.getBody();
+    expect(JSON.stringify(body)).to.not.match(/bal_|BALEIA_BI_GATEWAY_(ADDR|SECRET)/);
+  });
+  test("a seeded Trino target is available", function () {
+    expect(res.getBody().trino_targets.count).to.be.at.least(1);
+  });
+}

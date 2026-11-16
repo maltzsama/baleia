@@ -56,6 +56,9 @@ func TestBIGatewayStore(t *testing.T) {
 	if n, err := r.CountRunningBIExecutionsByWorkspace(ctx, ws.ID); err != nil || n != 1 {
 		t.Fatalf("workspace count = %d, %v", n, err)
 	}
+	if n, err := r.CountRunningBIExecutions(ctx); err != nil || n != 1 {
+		t.Fatalf("deployment count = %d, %v", n, err)
+	}
 	if _, err := r.UpdateQueryExecution(ctx, db.UpdateQueryExecutionParams{
 		ID: exec.ID, Status: "finished", FinishedAt: db.Timestamptz{Time: time.Now().UTC(), Valid: true},
 	}); err != nil {
@@ -63,6 +66,9 @@ func TestBIGatewayStore(t *testing.T) {
 	}
 	if n, _ := r.CountRunningBIExecutionsByKey(ctx, key.ID); n != 0 {
 		t.Fatalf("key count after finish = %d", n)
+	}
+	if n, _ := r.CountRunningBIExecutions(ctx); n != 0 {
+		t.Fatalf("deployment count after finish = %d", n)
 	}
 
 	setting, err := r.GetBIGatewaySetting(ctx)

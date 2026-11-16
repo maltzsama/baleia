@@ -27,7 +27,7 @@ type ServerInterface interface {
 	// Send a one-token prompt to the configured provider (G-admin)
 	// (POST /admin/assistant/test)
 	TestAssistant(w http.ResponseWriter, r *http.Request)
-	// Global BI gateway switch — admin only
+	// Global BI gateway readiness and switch — admin only
 	// (GET /admin/bi-gateway)
 	GetBIGateway(w http.ResponseWriter, r *http.Request)
 	// Turn the BI gateway on or off globally — admin only
@@ -540,6 +540,9 @@ type ServerInterface interface {
 	// Revoke a workspace-bound BI key
 	// (DELETE /workspaces/{id}/bi-keys/{key_id})
 	DeleteBiKey(w http.ResponseWriter, r *http.Request, id PathId, keyId PathKeyId)
+	// BI readiness for a workspace and the caller
+	// (GET /workspaces/{id}/bi-status)
+	GetWorkspaceBIStatus(w http.ResponseWriter, r *http.Request, id PathId)
 	// Download a Tableau (.tds) or Power BI (.pbids) data source for the gateway
 	// (GET /workspaces/{id}/bi/{tool})
 	GetWorkspaceBIFile(w http.ResponseWriter, r *http.Request, id PathId, tool string, params GetWorkspaceBIFileParams)
@@ -861,7 +864,7 @@ func (_ Unimplemented) TestAssistant(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Global BI gateway switch — admin only
+// Global BI gateway readiness and switch — admin only
 // (GET /admin/bi-gateway)
 func (_ Unimplemented) GetBIGateway(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -1884,6 +1887,12 @@ func (_ Unimplemented) CreateBiKey(w http.ResponseWriter, r *http.Request, id Pa
 // Revoke a workspace-bound BI key
 // (DELETE /workspaces/{id}/bi-keys/{key_id})
 func (_ Unimplemented) DeleteBiKey(w http.ResponseWriter, r *http.Request, id PathId, keyId PathKeyId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// BI readiness for a workspace and the caller
+// (GET /workspaces/{id}/bi-status)
+func (_ Unimplemented) GetWorkspaceBIStatus(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8373,6 +8382,39 @@ func (siw *ServerInterfaceWrapper) DeleteBiKey(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetWorkspaceBIStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkspaceBIStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkspaceBIStatus(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetWorkspaceBIFile operation middleware
 func (siw *ServerInterfaceWrapper) GetWorkspaceBIFile(w http.ResponseWriter, r *http.Request) {
 
@@ -13875,6 +13917,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/workspaces/{id}/bi-keys/{key_id}", wrapper.DeleteBiKey)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/bi-status", wrapper.GetWorkspaceBIStatus)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/bi/{tool}", wrapper.GetWorkspaceBIFile)
 	})
 	r.Group(func(r chi.Router) {
@@ -14342,7 +14387,7 @@ type GetBIGatewayResponseObject interface {
 	VisitGetBIGatewayResponse(w http.ResponseWriter) error
 }
 
-type GetBIGateway200JSONResponse BIGatewaySetting
+type GetBIGateway200JSONResponse BIGatewayStatus
 
 func (response GetBIGateway200JSONResponse) VisitGetBIGatewayResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -14377,7 +14422,7 @@ type PutBIGatewayResponseObject interface {
 	VisitPutBIGatewayResponse(w http.ResponseWriter) error
 }
 
-type PutBIGateway200JSONResponse BIGatewaySetting
+type PutBIGateway200JSONResponse BIGatewayStatus
 
 func (response PutBIGateway200JSONResponse) VisitPutBIGatewayResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -21607,6 +21652,41 @@ func (response DeleteBiKey404JSONResponse) VisitDeleteBiKeyResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetWorkspaceBIStatusRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetWorkspaceBIStatusResponseObject interface {
+	VisitGetWorkspaceBIStatusResponse(w http.ResponseWriter) error
+}
+
+type GetWorkspaceBIStatus200JSONResponse WorkspaceBIStatus
+
+func (response GetWorkspaceBIStatus200JSONResponse) VisitGetWorkspaceBIStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWorkspaceBIStatus401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetWorkspaceBIStatus401JSONResponse) VisitGetWorkspaceBIStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWorkspaceBIStatus404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetWorkspaceBIStatus404JSONResponse) VisitGetWorkspaceBIStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetWorkspaceBIFileRequestObject struct {
 	Id     PathId `json:"id"`
 	Tool   string `json:"tool"`
@@ -26271,7 +26351,7 @@ type StrictServerInterface interface {
 	// Send a one-token prompt to the configured provider (G-admin)
 	// (POST /admin/assistant/test)
 	TestAssistant(ctx context.Context, request TestAssistantRequestObject) (TestAssistantResponseObject, error)
-	// Global BI gateway switch — admin only
+	// Global BI gateway readiness and switch — admin only
 	// (GET /admin/bi-gateway)
 	GetBIGateway(ctx context.Context, request GetBIGatewayRequestObject) (GetBIGatewayResponseObject, error)
 	// Turn the BI gateway on or off globally — admin only
@@ -26784,6 +26864,9 @@ type StrictServerInterface interface {
 	// Revoke a workspace-bound BI key
 	// (DELETE /workspaces/{id}/bi-keys/{key_id})
 	DeleteBiKey(ctx context.Context, request DeleteBiKeyRequestObject) (DeleteBiKeyResponseObject, error)
+	// BI readiness for a workspace and the caller
+	// (GET /workspaces/{id}/bi-status)
+	GetWorkspaceBIStatus(ctx context.Context, request GetWorkspaceBIStatusRequestObject) (GetWorkspaceBIStatusResponseObject, error)
 	// Download a Tableau (.tds) or Power BI (.pbids) data source for the gateway
 	// (GET /workspaces/{id}/bi/{tool})
 	GetWorkspaceBIFile(ctx context.Context, request GetWorkspaceBIFileRequestObject) (GetWorkspaceBIFileResponseObject, error)
@@ -31960,6 +32043,32 @@ func (sh *strictHandler) DeleteBiKey(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteBiKeyResponseObject); ok {
 		if err := validResponse.VisitDeleteBiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWorkspaceBIStatus operation middleware
+func (sh *strictHandler) GetWorkspaceBIStatus(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetWorkspaceBIStatusRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWorkspaceBIStatus(ctx, request.(GetWorkspaceBIStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWorkspaceBIStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWorkspaceBIStatusResponseObject); ok {
+		if err := validResponse.VisitGetWorkspaceBIStatusResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

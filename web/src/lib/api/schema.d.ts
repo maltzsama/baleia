@@ -68,7 +68,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Global BI gateway switch — admin only */
+        /** Global BI gateway readiness and switch — admin only */
         get: operations["getBIGateway"];
         /** Turn the BI gateway on or off globally — admin only */
         put: operations["putBIGateway"];
@@ -2016,6 +2016,28 @@ export interface paths {
         };
         /** Users and teams a non-admin manager may add to a space */
         get: operations["listWorkspacePrincipals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/bi-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * BI readiness for a workspace and the caller
+         * @description The global gateway readiness plus this workspace's BI switch, the available Trino targets and the caller's key permissions (ADR 0017). Any workspace member may read it; it exposes no secret or host internals.
+         */
+        get: operations["getWorkspaceBIStatus"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4940,8 +4962,58 @@ export interface components {
             /** @enum {string} */
             role: "owner" | "member";
         };
-        BIGatewaySetting: {
+        /** @enum {string} */
+        BIGatewayBlocker: "listener_not_configured" | "secret_not_configured" | "public_url_not_configured" | "public_url_invalid" | "gateway_disabled";
+        BIGatewayHealth: {
+            /** @enum {string} */
+            status: "ok" | "unknown";
+            /** Format: date-time */
+            checked_at: string;
+        };
+        BIGatewayConcurrency: {
+            max_per_key: number;
+            max_per_workspace: number;
+            /** @description Running BI statements across the deployment; null when no store is available */
+            running?: number | null;
+        };
+        /** @description Readiness of the BI gateway shared by the global and workspace UIs (ADR 0017). It exposes stable booleans and blocker codes, never the HMAC secret or the internal listener address. */
+        BIGatewayReadiness: {
+            /** @description Listener, HMAC secret and public URL are all usable */
+            configured: boolean;
+            listener_configured: boolean;
+            secret_configured: boolean;
+            /** @description The public URL is an http(s) origin with no path */
+            public_url_ready: boolean;
+            /** @description The externally reachable base URL; never a secret */
+            public_url?: string | null;
+            /** @description The global switch */
             enabled: boolean;
+            /** @enum {string} */
+            state: "ready" | "disabled" | "blocked";
+            blocked_by: components["schemas"]["BIGatewayBlocker"][];
+        };
+        BIGatewayStatus: components["schemas"]["BIGatewayReadiness"] & {
+            health: components["schemas"]["BIGatewayHealth"];
+            concurrency: components["schemas"]["BIGatewayConcurrency"];
+        };
+        WorkspaceBITrinoTargets: {
+            available: boolean;
+            count: number;
+        };
+        /** @enum {string} */
+        WorkspaceBIGatewayBlocker: "listener_not_configured" | "secret_not_configured" | "public_url_not_configured" | "public_url_invalid" | "gateway_disabled" | "workspace_bi_disabled" | "no_trino_targets";
+        /** @description BI readiness for one workspace and the caller, combining the global gateway facts with the workspace switch, the available Trino targets and the caller's key permissions (ADR 0017). */
+        WorkspaceBIStatus: {
+            workspace_bi_enabled: boolean;
+            gateway: components["schemas"]["BIGatewayReadiness"];
+            trino_targets: components["schemas"]["WorkspaceBITrinoTargets"];
+            /** @description The caller may issue a key in this workspace */
+            can_create_keys: boolean;
+            /** @description The caller may list and revoke every key in this workspace */
+            can_manage_keys: boolean;
+            /** @enum {string} */
+            state: "ready" | "blocked";
+            blocked_by: components["schemas"]["WorkspaceBIGatewayBlocker"][];
         };
         UpdateBIGatewayRequest: {
             enabled: boolean;
@@ -7792,13 +7864,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The global BI gateway switch */
+            /** @description The global BI gateway readiness and switch */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BIGatewaySetting"];
+                    "application/json": components["schemas"]["BIGatewayStatus"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -7818,13 +7890,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The updated global BI gateway switch */
+            /** @description The updated global BI gateway readiness and switch */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BIGatewaySetting"];
+                    "application/json": components["schemas"]["BIGatewayStatus"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -11235,6 +11307,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspacePrincipal"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getWorkspaceBIStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description BI readiness */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceBIStatus"];
                 };
             };
             401: components["responses"]["Unauthorized"];

@@ -47,6 +47,16 @@ func (r *Repo) SetBIGatewayEnabled(ctx context.Context, arg db.SetBIGatewayEnabl
 	return r.GetBIGatewaySetting(ctx)
 }
 
+// CountRunningBIExecutions counts the running BI executions of the whole
+// deployment, for the readiness/status endpoint (#1102).
+func (r *Repo) CountRunningBIExecutions(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.Users.db.WithContext(ctx).Model(&model.QueryExecution{}).
+		Where("origin = ? AND status = ?", "bi", "running").
+		Count(&count).Error
+	return count, err
+}
+
 // CountRunningBIExecutionsByKey counts the running BI executions of one key.
 func (r *Repo) CountRunningBIExecutionsByKey(ctx context.Context, keyID db.UUID) (int64, error) {
 	if !keyID.Valid {

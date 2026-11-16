@@ -143,6 +143,35 @@ const (
 	AuthProviderTypeOidc AuthProviderType = "oidc"
 )
 
+// Defines values for BIGatewayBlocker.
+const (
+	BIGatewayBlockerGatewayDisabled        BIGatewayBlocker = "gateway_disabled"
+	BIGatewayBlockerListenerNotConfigured  BIGatewayBlocker = "listener_not_configured"
+	BIGatewayBlockerPublicUrlInvalid       BIGatewayBlocker = "public_url_invalid"
+	BIGatewayBlockerPublicUrlNotConfigured BIGatewayBlocker = "public_url_not_configured"
+	BIGatewayBlockerSecretNotConfigured    BIGatewayBlocker = "secret_not_configured"
+)
+
+// Defines values for BIGatewayHealthStatus.
+const (
+	BIGatewayHealthStatusOk      BIGatewayHealthStatus = "ok"
+	BIGatewayHealthStatusUnknown BIGatewayHealthStatus = "unknown"
+)
+
+// Defines values for BIGatewayReadinessState.
+const (
+	BIGatewayReadinessStateBlocked  BIGatewayReadinessState = "blocked"
+	BIGatewayReadinessStateDisabled BIGatewayReadinessState = "disabled"
+	BIGatewayReadinessStateReady    BIGatewayReadinessState = "ready"
+)
+
+// Defines values for BIGatewayStatusState.
+const (
+	BIGatewayStatusStateBlocked  BIGatewayStatusState = "blocked"
+	BIGatewayStatusStateDisabled BIGatewayStatusState = "disabled"
+	BIGatewayStatusStateReady    BIGatewayStatusState = "ready"
+)
+
 // Defines values for BundleItemKind.
 const (
 	BundleItemKindFolder         BundleItemKind = "folder"
@@ -1293,6 +1322,23 @@ const (
 	WorkspaceAllowedActionView          WorkspaceAllowedAction = "view"
 )
 
+// Defines values for WorkspaceBIGatewayBlocker.
+const (
+	WorkspaceBIGatewayBlockerGatewayDisabled        WorkspaceBIGatewayBlocker = "gateway_disabled"
+	WorkspaceBIGatewayBlockerListenerNotConfigured  WorkspaceBIGatewayBlocker = "listener_not_configured"
+	WorkspaceBIGatewayBlockerNoTrinoTargets         WorkspaceBIGatewayBlocker = "no_trino_targets"
+	WorkspaceBIGatewayBlockerPublicUrlInvalid       WorkspaceBIGatewayBlocker = "public_url_invalid"
+	WorkspaceBIGatewayBlockerPublicUrlNotConfigured WorkspaceBIGatewayBlocker = "public_url_not_configured"
+	WorkspaceBIGatewayBlockerSecretNotConfigured    WorkspaceBIGatewayBlocker = "secret_not_configured"
+	WorkspaceBIGatewayBlockerWorkspaceBiDisabled    WorkspaceBIGatewayBlocker = "workspace_bi_disabled"
+)
+
+// Defines values for WorkspaceBIStatusState.
+const (
+	WorkspaceBIStatusStateBlocked WorkspaceBIStatusState = "blocked"
+	WorkspaceBIStatusStateReady   WorkspaceBIStatusState = "ready"
+)
+
 // Defines values for WorkspaceMemberSource.
 const (
 	WorkspaceMemberSourceOwner  WorkspaceMemberSource = "owner"
@@ -1419,8 +1465,8 @@ const (
 
 // Defines values for ImportSpaceBundleParamsMode.
 const (
-	Apply  ImportSpaceBundleParamsMode = "apply"
-	DryRun ImportSpaceBundleParamsMode = "dry_run"
+	ImportSpaceBundleParamsModeApply  ImportSpaceBundleParamsMode = "apply"
+	ImportSpaceBundleParamsModeDryRun ImportSpaceBundleParamsMode = "dry_run"
 )
 
 // Defines values for ListTrashParamsEntityType.
@@ -1780,10 +1826,74 @@ type AuthProvider struct {
 // AuthProviderType defines model for AuthProvider.Type.
 type AuthProviderType string
 
-// BIGatewaySetting defines model for BIGatewaySetting.
-type BIGatewaySetting struct {
-	Enabled bool `json:"enabled"`
+// BIGatewayBlocker defines model for BIGatewayBlocker.
+type BIGatewayBlocker string
+
+// BIGatewayConcurrency defines model for BIGatewayConcurrency.
+type BIGatewayConcurrency struct {
+	MaxPerKey       int `json:"max_per_key"`
+	MaxPerWorkspace int `json:"max_per_workspace"`
+
+	// Running Running BI statements across the deployment; null when no store is available
+	Running *int `json:"running"`
 }
+
+// BIGatewayHealth defines model for BIGatewayHealth.
+type BIGatewayHealth struct {
+	CheckedAt time.Time             `json:"checked_at"`
+	Status    BIGatewayHealthStatus `json:"status"`
+}
+
+// BIGatewayHealthStatus defines model for BIGatewayHealth.Status.
+type BIGatewayHealthStatus string
+
+// BIGatewayReadiness Readiness of the BI gateway shared by the global and workspace UIs (ADR 0017). It exposes stable booleans and blocker codes, never the HMAC secret or the internal listener address.
+type BIGatewayReadiness struct {
+	BlockedBy []BIGatewayBlocker `json:"blocked_by"`
+
+	// Configured Listener, HMAC secret and public URL are all usable
+	Configured bool `json:"configured"`
+
+	// Enabled The global switch
+	Enabled            bool `json:"enabled"`
+	ListenerConfigured bool `json:"listener_configured"`
+
+	// PublicUrl The externally reachable base URL; never a secret
+	PublicUrl *string `json:"public_url"`
+
+	// PublicUrlReady The public URL is an http(s) origin with no path
+	PublicUrlReady   bool                    `json:"public_url_ready"`
+	SecretConfigured bool                    `json:"secret_configured"`
+	State            BIGatewayReadinessState `json:"state"`
+}
+
+// BIGatewayReadinessState defines model for BIGatewayReadiness.State.
+type BIGatewayReadinessState string
+
+// BIGatewayStatus defines model for BIGatewayStatus.
+type BIGatewayStatus struct {
+	BlockedBy   []BIGatewayBlocker   `json:"blocked_by"`
+	Concurrency BIGatewayConcurrency `json:"concurrency"`
+
+	// Configured Listener, HMAC secret and public URL are all usable
+	Configured bool `json:"configured"`
+
+	// Enabled The global switch
+	Enabled            bool            `json:"enabled"`
+	Health             BIGatewayHealth `json:"health"`
+	ListenerConfigured bool            `json:"listener_configured"`
+
+	// PublicUrl The externally reachable base URL; never a secret
+	PublicUrl *string `json:"public_url"`
+
+	// PublicUrlReady The public URL is an http(s) origin with no path
+	PublicUrlReady   bool                 `json:"public_url_ready"`
+	SecretConfigured bool                 `json:"secret_configured"`
+	State            BIGatewayStatusState `json:"state"`
+}
+
+// BIGatewayStatusState defines model for BIGatewayStatus.State.
+type BIGatewayStatusState string
 
 // BiKey A workspace-bound BI key (ADR 0017). One key names one workspace and one engine; the BI tool authenticates with HTTP Basic using the owner's e-mail and the key secret.
 type BiKey struct {
@@ -5481,6 +5591,35 @@ type WorkspaceType string
 
 // WorkspaceAllowedAction From the caller's workspace role (#653): view and run for every member; edit_content (saved queries, scripts, metrics, semantic models and docs, retrievers) from editor up; update, delete, manage_grants, set_defaults, create_space and manage_members for workspace admins.
 type WorkspaceAllowedAction string
+
+// WorkspaceBIGatewayBlocker defines model for WorkspaceBIGatewayBlocker.
+type WorkspaceBIGatewayBlocker string
+
+// WorkspaceBIStatus BI readiness for one workspace and the caller, combining the global gateway facts with the workspace switch, the available Trino targets and the caller's key permissions (ADR 0017).
+type WorkspaceBIStatus struct {
+	BlockedBy []WorkspaceBIGatewayBlocker `json:"blocked_by"`
+
+	// CanCreateKeys The caller may issue a key in this workspace
+	CanCreateKeys bool `json:"can_create_keys"`
+
+	// CanManageKeys The caller may list and revoke every key in this workspace
+	CanManageKeys bool `json:"can_manage_keys"`
+
+	// Gateway Readiness of the BI gateway shared by the global and workspace UIs (ADR 0017). It exposes stable booleans and blocker codes, never the HMAC secret or the internal listener address.
+	Gateway            BIGatewayReadiness      `json:"gateway"`
+	State              WorkspaceBIStatusState  `json:"state"`
+	TrinoTargets       WorkspaceBITrinoTargets `json:"trino_targets"`
+	WorkspaceBiEnabled bool                    `json:"workspace_bi_enabled"`
+}
+
+// WorkspaceBIStatusState defines model for WorkspaceBIStatus.State.
+type WorkspaceBIStatusState string
+
+// WorkspaceBITrinoTargets defines model for WorkspaceBITrinoTargets.
+type WorkspaceBITrinoTargets struct {
+	Available bool `json:"available"`
+	Count     int  `json:"count"`
+}
 
 // WorkspaceCatalogAccess defines model for WorkspaceCatalogAccess.
 type WorkspaceCatalogAccess struct {
