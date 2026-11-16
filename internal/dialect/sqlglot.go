@@ -3,6 +3,7 @@ package dialect
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -48,7 +49,8 @@ func SqlglotDialect(d Dialect) (dialects.DialectType, error) {
 
 // Statements parses sql with sqlglot and converts its rune spans to Baleia's
 // byte-offset spans. The parser owns lexical details such as strings,
-// comments, dialect-specific batch separators and PL/SQL blocks.
+// comments, dialect-specific batch separators (T-SQL GO, Oracle "/") and
+// PL/SQL blocks.
 func (d *spec) Statements(sql string) ([]Span, error) {
 	if strings.TrimSpace(sql) == "" {
 		return nil, nil
@@ -57,76 +59,121 @@ func (d *spec) Statements(sql string) ([]Span, error) {
 	if err != nil {
 		return nil, err
 	}
-	source := sql
-	lexemes, err := sqlglot.Tokenize(source, dialectName)
+	lexemes, err := sqlglot.Tokenize(sql, dialectName)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 	if err := rejectDelimiter(d.name, sql, lexemes); err != nil {
 		return nil, err
 	}
-
-	// Parse each batch separately. T-SQL GO is handled by the fork's tokenizer,
-	// which emits the GO line as a SEMICOLON token the alignment below already
-	// splits on. Oracle's "/" line also ends a batch, but the fork's tokenizer
-	// does not emit it as a token and the statement span it records drops the
-	// ";" that a PL/SQL unit (BEGIN...END, CREATE PROCEDURE) needs before the
-	// "/". Pre-splitting on "/" keeps that ";" with its unit.
-	var separators []oracleTerminator
-	if d.name == Oracle {
-		separators = findOracleTerminators(sql, lexemes)
+	exprs, err := sqlglot.Parse(sql, dialectName)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 
-	out := make([]Span, 0)
-	segmentStart := 0
-	for _, separator := range append(separators, oracleTerminator{start: len([]rune(source)), end: len([]rune(source))}) {
-		segmentEnd := separator.start
-		segment, err := parseSQLSegment(source, sql, segmentStart, segmentEnd, lexemes, dialectName, d.name == Oracle)
-		if err != nil {
-			return nil, err
+	runes := []rune(sql)
+
+	// Statement boundaries are the SEMICOLON tokens (";" and T-SQL GO) plus the
+	// Oracle "/" lines. A "/" separator sits between two consecutive statement
+	// spans, because the parser split there string- and comment-aware — so a "/"
+	// inside a string or a block comment is never one.
+	type boundary struct{ start, end int }
+	boundaries := make([]boundary, 0, len(lexemes))
+	for _, token := range lexemes {
+		if token.TokenType == tokens.SEMICOLON {
+			boundaries = append(boundaries, boundary{token.Start, token.End + 1})
 		}
-		out = append(out, segment...)
-		if segmentEnd < len([]rune(source)) {
-			segmentStart = separator.end
+	}
+	if d.name == Oracle {
+		for i := 1; i < len(exprs); i++ {
+			if exprs[i-1] == nil || exprs[i] == nil {
+				continue
+			}
+			_, prevEnd, ok1 := exprs[i-1].Span()
+			nextStart, _, ok2 := exprs[i].Span()
+			if !ok1 || !ok2 {
+				continue
+			}
+			if slash, ok := oracleSlash(runes, prevEnd, nextStart); ok {
+				boundaries = append(boundaries, boundary{slash, slash + 1})
+			}
 		}
+	}
+	sort.Slice(boundaries, func(i, j int) bool { return boundaries[i].start < boundaries[j].start })
+
+	out := make([]Span, 0, len(exprs))
+	for _, expr := range exprs {
+		if expr == nil || expr.Kind() == expressions.KindSemicolon {
+			continue
+		}
+		exprStart, exprEnd, ok := expr.Span()
+		if !ok {
+			return nil, fmt.Errorf("parse SQL: statement %s has no source span", expressions.ClassName(expr.Kind()))
+		}
+		start, end := 0, len(runes)
+		for _, b := range boundaries {
+			if b.end <= exprStart {
+				start = b.end
+				continue
+			}
+			if b.start >= exprEnd {
+				end = b.start
+				break
+			}
+		}
+		// Oracle: a PL/SQL unit keeps its trailing ";" — the ";" is part of the
+		// unit, not its terminator, and the parser's span ends before it.
+		if d.name == Oracle && end < len(runes) && runes[end] == ';' && oracleKeepsTerminator(expr) {
+			end++
+		}
+		start, end = trimRuneSpan(sql, start, end)
+		if start >= end {
+			continue
+		}
+		startByte := runeOffsetToByteOffset(sql, start)
+		endByte := runeOffsetToByteOffset(sql, end)
+		out = append(out, Span{Text: sql[startByte:endByte], Start: startByte, End: endByte})
 	}
 	return out, nil
 }
 
-// oracleTerminator is an Oracle "/" line that ends a PL/SQL unit.
-type oracleTerminator struct{ start, end int }
-
-// findOracleTerminators returns the "/" lines of a script. The fork's tokenizer
-// does not emit them as tokens, so the splitter locates them itself to keep a
-// unit's trailing ";" with the unit instead of dropping it as a terminator. A
-// "/" inside a string literal is a STRING token, not a separator, and is
-// skipped.
-func findOracleTerminators(sql string, lexemes []tokens.Token) []oracleTerminator {
-	separators := make([]oracleTerminator, 0)
-	runeOffset := 0
-	for _, line := range strings.SplitAfter(sql, "\n") {
-		if strings.Trim(strings.TrimRight(line, "\r\n"), " \t") != "/" {
-			runeOffset += len([]rune(line))
-			continue
-		}
-		leading := len([]rune(line)) - len([]rune(strings.TrimLeft(line, " \t")))
-		slash := runeOffset + leading
-		if !insideString(slash, lexemes) {
-			separators = append(separators, oracleTerminator{start: slash, end: runeOffset + len([]rune(line))})
-		}
-		runeOffset += len([]rune(line))
+// oracleKeepsTerminator reports whether an Oracle statement's trailing ";" is
+// part of the statement rather than its terminator: an anonymous block (a
+// Command) or a CREATE that declares a PL/SQL unit.
+func oracleKeepsTerminator(expr expressions.Expression) bool {
+	if expr.Kind() == expressions.KindCommand {
+		return true
 	}
-	return separators
-}
-
-// insideString reports whether a rune offset falls inside a string literal.
-func insideString(pos int, lexemes []tokens.Token) bool {
-	for _, token := range lexemes {
-		if token.TokenType == tokens.STRING && pos >= token.Start && pos <= token.End {
-			return true
-		}
+	if expr.Kind() != expressions.KindCreate {
+		return false
+	}
+	switch expr.Text("kind") {
+	case "PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "TYPE":
+		return true
 	}
 	return false
+}
+
+// oracleSlash returns the rune offset of a "/" alone on its line within
+// [from, to), or false when there is none.
+func oracleSlash(runes []rune, from, to int) (int, bool) {
+	for i := from; i < to; i++ {
+		if runes[i] != '/' {
+			continue
+		}
+		lineStart := i
+		for lineStart > from && runes[lineStart-1] != '\n' {
+			lineStart--
+		}
+		lineEnd := i + 1
+		for lineEnd < to && runes[lineEnd] != '\n' {
+			lineEnd++
+		}
+		if strings.TrimSpace(string(runes[lineStart:lineEnd])) == "/" {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 // ParseStatement parses one already-split statement and is the shared AST
@@ -220,62 +267,4 @@ func runeOffsetToByteOffset(s string, offset int) int {
 		runeOffset++
 	}
 	return len(s)
-}
-
-func parseSQLSegment(parseSource, originalSource string, segmentStart, segmentEnd int, lexemes []tokens.Token, dialectName dialects.DialectType, oracle bool) ([]Span, error) {
-	runes := []rune(parseSource)
-	if segmentStart >= segmentEnd {
-		return nil, nil
-	}
-	segment := string(runes[segmentStart:segmentEnd])
-	if strings.TrimSpace(segment) == "" {
-		return nil, nil
-	}
-	exprs, err := sqlglot.Parse(segment, dialectName)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
-	}
-	semicolons := make([][2]int, 0)
-	for _, token := range lexemes {
-		if token.TokenType == tokens.SEMICOLON && token.Start >= segmentStart && token.End+1 <= segmentEnd {
-			semicolons = append(semicolons, [2]int{token.Start - segmentStart, token.End + 1 - segmentStart})
-		}
-	}
-
-	out := make([]Span, 0, len(exprs))
-	for _, expr := range exprs {
-		if expr == nil || expr.Kind() == expressions.KindSemicolon {
-			continue
-		}
-		exprStart, exprEnd, ok := expr.Span()
-		if !ok {
-			return nil, fmt.Errorf("parse SQL: statement %s has no source span", expressions.ClassName(expr.Kind()))
-		}
-		start, end := 0, len([]rune(segment))
-		for index, semicolon := range semicolons {
-			if semicolon[1] <= exprStart {
-				start = semicolon[1]
-				continue
-			}
-			if semicolon[0] >= exprEnd {
-				end = semicolon[0]
-				// Oracle: a PL/SQL unit (an anonymous block or a CREATE
-				// PROCEDURE / FUNCTION / PACKAGE) keeps its trailing ";" — the
-				// ";" is part of the unit, not its terminator. The parser's
-				// span ends before it, so re-attach it here.
-				if oracle && index == len(semicolons)-1 && (expr.Kind() == expressions.KindCommand || expr.Kind() == expressions.KindCreate) {
-					end = semicolon[1]
-				}
-				break
-			}
-		}
-		start, end = trimRuneSpan(segment, start, end)
-		if start >= end {
-			continue
-		}
-		startByte := runeOffsetToByteOffset(originalSource, segmentStart+start)
-		endByte := runeOffsetToByteOffset(originalSource, segmentStart+end)
-		out = append(out, Span{Text: originalSource[startByte:endByte], Start: startByte, End: endByte})
-	}
-	return out, nil
 }

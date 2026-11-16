@@ -291,6 +291,26 @@ func TestSplitStatementsMysqlDelimiterInString(t *testing.T) {
 	}
 }
 
+// TestSplitStatementsOracleCommentSlash: a "/" inside a block comment is not a
+// batch separator.
+func TestSplitStatementsOracleCommentSlash(t *testing.T) {
+	t.Parallel()
+	got := split(t, Oracle, "SELECT 1 /*\n/\n*/ FROM dual")
+	if len(got) != 1 || got[0] != "SELECT 1 /*\n/\n*/ FROM dual" {
+		t.Errorf("%q", got)
+	}
+}
+
+// TestSplitStatementsOracleCreateTable: a CREATE TABLE is not a PL/SQL unit, so
+// its ";" is a terminator, not part of the statement.
+func TestSplitStatementsOracleCreateTable(t *testing.T) {
+	t.Parallel()
+	got := split(t, Oracle, "CREATE TABLE t (x int); SELECT 1 FROM dual")
+	if len(got) != 2 || got[0] != "CREATE TABLE t (x int)" || got[1] != "SELECT 1 FROM dual" {
+		t.Errorf("%q", got)
+	}
+}
+
 func TestPreviewAndLimit(t *testing.T) {
 	t.Parallel()
 	want := map[string][2]string{
