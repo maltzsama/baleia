@@ -50,9 +50,6 @@ func SqlglotDialect(d Dialect) (dialects.DialectType, error) {
 // byte-offset spans. The parser owns lexical details such as strings,
 // comments, dialect-specific batch separators and PL/SQL blocks.
 func (d *spec) Statements(sql string) ([]Span, error) {
-	if err := rejectDelimiter(sql, d.name == MySQL || d.name == MariaDB); err != nil {
-		return nil, err
-	}
 	if strings.TrimSpace(sql) == "" {
 		return nil, nil
 	}
@@ -65,6 +62,9 @@ func (d *spec) Statements(sql string) ([]Span, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
+	if err := rejectDelimiter(d.name, sql, lexemes); err != nil {
+		return nil, err
+	}
 
 	// Parse each batch separately. T-SQL GO is handled by the fork's tokenizer,
 	// which emits the GO line as a SEMICOLON token the alignment below already
@@ -74,14 +74,14 @@ func (d *spec) Statements(sql string) ([]Span, error) {
 	// "/". Pre-splitting on "/" keeps that ";" with its unit.
 	var separators []oracleTerminator
 	if d.name == Oracle {
-		separators = findOracleTerminators(sql)
+		separators = findOracleTerminators(sql, lexemes)
 	}
 
 	out := make([]Span, 0)
 	segmentStart := 0
 	for _, separator := range append(separators, oracleTerminator{start: len([]rune(source)), end: len([]rune(source))}) {
 		segmentEnd := separator.start
-		segment, err := parseSQLSegment(source, sql, segmentStart, segmentEnd, lexemes, dialectName, d.name == Oracle && segmentEnd < len([]rune(source)))
+		segment, err := parseSQLSegment(source, sql, segmentStart, segmentEnd, lexemes, dialectName, d.name == Oracle)
 		if err != nil {
 			return nil, err
 		}
@@ -98,18 +98,35 @@ type oracleTerminator struct{ start, end int }
 
 // findOracleTerminators returns the "/" lines of a script. The fork's tokenizer
 // does not emit them as tokens, so the splitter locates them itself to keep a
-// unit's trailing ";" with the unit instead of dropping it as a terminator.
-func findOracleTerminators(sql string) []oracleTerminator {
+// unit's trailing ";" with the unit instead of dropping it as a terminator. A
+// "/" inside a string literal is a STRING token, not a separator, and is
+// skipped.
+func findOracleTerminators(sql string, lexemes []tokens.Token) []oracleTerminator {
 	separators := make([]oracleTerminator, 0)
 	runeOffset := 0
 	for _, line := range strings.SplitAfter(sql, "\n") {
-		if strings.Trim(strings.TrimRight(line, "\r\n"), " \t") == "/" {
-			leading := len([]rune(line)) - len([]rune(strings.TrimLeft(line, " \t")))
-			separators = append(separators, oracleTerminator{start: runeOffset + leading, end: runeOffset + len([]rune(line))})
+		if strings.Trim(strings.TrimRight(line, "\r\n"), " \t") != "/" {
+			runeOffset += len([]rune(line))
+			continue
+		}
+		leading := len([]rune(line)) - len([]rune(strings.TrimLeft(line, " \t")))
+		slash := runeOffset + leading
+		if !insideString(slash, lexemes) {
+			separators = append(separators, oracleTerminator{start: slash, end: runeOffset + len([]rune(line))})
 		}
 		runeOffset += len([]rune(line))
 	}
 	return separators
+}
+
+// insideString reports whether a rune offset falls inside a string literal.
+func insideString(pos int, lexemes []tokens.Token) bool {
+	for _, token := range lexemes {
+		if token.TokenType == tokens.STRING && pos >= token.Start && pos <= token.End {
+			return true
+		}
+	}
+	return false
 }
 
 // ParseStatement parses one already-split statement and is the shared AST
@@ -153,13 +170,21 @@ func (d *spec) SplitStatements(sql string) ([]string, error) {
 	return out, nil
 }
 
-func rejectDelimiter(sql string, mysqlFamily bool) error {
-	if !mysqlFamily {
+// rejectDelimiter returns ErrDelimiter for a MySQL/MariaDB client DELIMITER
+// command — the DELIMITER keyword at the start of a line, outside any string
+// or comment. A DELIMITER word inside a string is a STRING token, not a
+// DELIMITER token, so it is not a command.
+func rejectDelimiter(name, sql string, lexemes []tokens.Token) error {
+	if name != MySQL && name != MariaDB {
 		return nil
 	}
-	for _, line := range strings.Split(sql, "\n") {
-		fields := strings.FieldsFunc(line, unicode.IsSpace)
-		if len(fields) > 0 && strings.EqualFold(fields[0], "DELIMITER") {
+	for _, token := range lexemes {
+		if !strings.EqualFold(token.Text, "DELIMITER") {
+			continue
+		}
+		start := runeOffsetToByteOffset(sql, token.Start)
+		lineStart := strings.LastIndexByte(sql[:start], '\n') + 1
+		if strings.TrimSpace(sql[lineStart:start]) == "" {
 			return ErrDelimiter
 		}
 	}
@@ -197,7 +222,7 @@ func runeOffsetToByteOffset(s string, offset int) int {
 	return len(s)
 }
 
-func parseSQLSegment(parseSource, originalSource string, segmentStart, segmentEnd int, lexemes []tokens.Token, dialectName dialects.DialectType, includeFinalTerminator bool) ([]Span, error) {
+func parseSQLSegment(parseSource, originalSource string, segmentStart, segmentEnd int, lexemes []tokens.Token, dialectName dialects.DialectType, oracle bool) ([]Span, error) {
 	runes := []rune(parseSource)
 	if segmentStart >= segmentEnd {
 		return nil, nil
@@ -234,7 +259,11 @@ func parseSQLSegment(parseSource, originalSource string, segmentStart, segmentEn
 			}
 			if semicolon[0] >= exprEnd {
 				end = semicolon[0]
-				if includeFinalTerminator && index == len(semicolons)-1 {
+				// Oracle: a PL/SQL unit (an anonymous block or a CREATE
+				// PROCEDURE / FUNCTION / PACKAGE) keeps its trailing ";" — the
+				// ";" is part of the unit, not its terminator. The parser's
+				// span ends before it, so re-attach it here.
+				if oracle && index == len(semicolons)-1 && (expr.Kind() == expressions.KindCommand || expr.Kind() == expressions.KindCreate) {
 					end = semicolon[1]
 				}
 				break
