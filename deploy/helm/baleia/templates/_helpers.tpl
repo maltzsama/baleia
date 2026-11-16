@@ -172,3 +172,22 @@ Service's in-cluster address. */}}
 {{- define "baleia.biGatewayURL" -}}
 {{- if .Values.biGateway.enabled }}{{ .Values.biGateway.publicURL | default (printf "http://%s-bi-gateway.%s.svc.cluster.local:%d" (include "baleia.fullname" .) .Release.Namespace (.Values.biGateway.port | int)) }}{{ end }}
 {{- end }}
+
+{{/* Reject a public URL the application cannot serve (ADR 0017): it must be an
+http(s) origin with no path and no embedded credentials. The BI data-source
+files carry only host and port, so the backend derives them from this origin. */}}
+{{- define "baleia.validateBIGatewayURL" -}}
+{{- $url := .Values.biGateway.publicURL -}}
+{{- if and .Values.biGateway.enabled $url -}}
+{{- if not (or (hasPrefix "http://" $url) (hasPrefix "https://" $url)) -}}
+{{- fail "biGateway.publicURL must start with http:// or https://" -}}
+{{- end -}}
+{{- $rest := trimPrefix "https://" (trimPrefix "http://" $url) -}}
+{{- if contains "@" $rest -}}
+{{- fail "biGateway.publicURL must not carry credentials: BI tools sign in with a BI key, never a URL userinfo" -}}
+{{- end -}}
+{{- if contains "/" (trimSuffix "/" $rest) -}}
+{{- fail "biGateway.publicURL must be an origin with no path (e.g. https://bi.example.com)" -}}
+{{- end -}}
+{{- end -}}
+{{- end }}

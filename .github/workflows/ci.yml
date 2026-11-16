@@ -406,6 +406,8 @@ jobs:
             --set 'biGateway.ingress.hosts[0]=bi.example.com' \
             | kubeconform -strict -summary -ignore-missing-schemas
           kubectl kustomize deploy/dev | kubeconform -strict -summary -ignore-missing-schemas
+      - name: BI gateway chart wiring
+        run: ./scripts/verify-bi-gateway-chart.sh
       - name: Verify tracked dev files are in sync
         run: ./scripts/verify-dev-sync.sh
       - name: Trino security ConfigMaps are immutable and mounted

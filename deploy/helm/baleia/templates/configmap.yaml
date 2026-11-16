@@ -5,6 +5,7 @@ metadata:
   labels:
     {{- include "baleia.labels" . | nindent 4 }}
 {{- include "baleia.requireSecret" . }}
+{{- include "baleia.validateBIGatewayURL" . }}
 {{- if hasKey .Values.config "BALEIA_METRICS_TOKEN" }}
 {{- fail "BALEIA_METRICS_TOKEN is a credential: set secrets.values.BALEIA_METRICS_TOKEN, or the key in existingSecret, not config" }}
 {{- end }}
