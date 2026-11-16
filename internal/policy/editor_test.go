@@ -86,11 +86,16 @@ func TestStatementForbidden(t *testing.T) {
 		{"plain select", "SELECT * FROM t", false},
 		{"select string containing create catalog", "SELECT 'create catalog' FROM t", false},
 		{"select containing set session string", "SELECT 'SET SESSION AUTHORIZATION'", false},
-		{"execute immediate plain select", "EXECUTE IMMEDIATE 'SELECT 1'", false},
-		{"execute immediate no literal", "EXECUTE IMMEDIATE", false},
+		{"execute immediate plain select", "EXECUTE IMMEDIATE 'SELECT 1'", true},
+		{"execute immediate no literal", "EXECUTE IMMEDIATE", true},
 		{"create schema", "CREATE SCHEMA s", false},
 		{"create table", "CREATE TABLE t (a int)", false},
 		{"set session property", "SET SESSION query_max_execution_time = '30m'", false},
+		{"show tables", "SHOW TABLES", false},
+		{"explain", "EXPLAIN SELECT 1", false},
+		{"call", "CALL foo()", true},
+		{"vacuum", "VACUUM t", true},
+		{"optimize", "OPTIMIZE TABLE t", true},
 		{"empty", "", false},
 	}
 
@@ -198,6 +203,37 @@ func TestFailClosedOnParseError(t *testing.T) {
 	for _, sql := range []string{"SELECT FROM (((", "'''", "SELECT 'open"} {
 		if !ForbiddenInEditor(d, sql) {
 			t.Errorf("unparseable %q allowed", sql)
+		}
+	}
+}
+
+// TestEditorAllowList: the gate is an allow-list, not a deny-list. Read-only
+// introspection is allowed even where the fork leaves it an opaque Command;
+// unrecognized and maintenance commands are rejected on every engine.
+func TestEditorAllowList(t *testing.T) {
+	t.Parallel()
+	for _, name := range dialect.NewRegistry().Names() {
+		d := dialect.NewRegistry().MustGet(name)
+		for _, sql := range []string{
+			"SHOW TABLES",
+			"EXPLAIN SELECT 1",
+			"SELECT 1",
+			"INSERT INTO t VALUES (1)",
+			"CREATE TABLE t (a int)",
+		} {
+			if ForbiddenInEditor(d, sql) {
+				t.Errorf("%s: %q forbidden", name, sql)
+			}
+		}
+		for _, sql := range []string{
+			"CALL foo()",
+			"VACUUM t",
+			"OPTIMIZE TABLE t",
+			"CREATE CATALOG x USING tpch",
+		} {
+			if !ForbiddenInEditor(d, sql) {
+				t.Errorf("%s: %q allowed", name, sql)
+			}
 		}
 	}
 }

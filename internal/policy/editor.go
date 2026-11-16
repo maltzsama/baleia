@@ -12,7 +12,7 @@ import (
 )
 
 // ErrForbiddenInEditor is the error users see for a rejected script.
-var ErrForbiddenInEditor = errors.New("catalog management and session authorization are not allowed in the SQL editor")
+var ErrForbiddenInEditor = errors.New("catalog management, session authorization and dynamic SQL are not allowed in the SQL editor")
 
 // ForbiddenInEditor reports whether a script holds a statement the SQL editor
 // must reject. The script is split with the target's dialect, so a statement
@@ -62,9 +62,55 @@ func IsCatalogDDL(sql string) bool {
 
 var genericDialect = dialect.NewRegistry().MustGet(dialect.FlightSQL)
 
+// allowedStatementKinds are the AST node kinds the SQL editor permits. A
+// statement whose root kind is not listed — an opaque Command, dynamic SQL
+// (Execute) or a kind the fork does not structure — is rejected fail-closed.
+var allowedStatementKinds = map[expressions.Kind]bool{
+	expressions.KindSelect:        true,
+	expressions.KindInsert:        true,
+	expressions.KindUpdate:        true,
+	expressions.KindDelete:        true,
+	expressions.KindMerge:         true,
+	expressions.KindCreate:        true,
+	expressions.KindDrop:          true,
+	expressions.KindAlter:         true,
+	expressions.KindTruncateTable: true,
+	expressions.KindDescribe:      true,
+	expressions.KindShow:          true,
+	expressions.KindUse:           true,
+	expressions.KindCommit:        true,
+	expressions.KindRollback:      true,
+	expressions.KindTransaction:   true,
+	expressions.KindSavepoint:     true,
+	expressions.KindSet:           true,
+	expressions.KindGrant:         true,
+	expressions.KindRevoke:        true,
+	expressions.KindReset:         true,
+	expressions.KindValues:        true,
+	expressions.KindUnion:         true,
+	expressions.KindIntersect:     true,
+	expressions.KindExcept:        true,
+	expressions.KindWith:          true,
+}
+
+// allowedCommands are the opaque Command keywords the editor still permits:
+// read-only introspection the fork does not structure under some dialects
+// (SHOW, EXPLAIN, DESCRIBE) and a bare BEGIN (a transaction) under T-SQL.
+// Everything else a Command can hide — catalog management, session
+// authorization, dynamic SQL, maintenance — is rejected.
+var allowedCommands = map[string]bool{
+	"SHOW":     true,
+	"EXPLAIN":  true,
+	"DESCRIBE": true,
+	"DESC":     true,
+	"USE":      true,
+	"BEGIN":    true,
+}
+
 // statementForbiddenWithDialect reports whether one statement must be rejected
-// by the SQL editor. Classification is by AST node kind, fail-closed: a
-// statement the parser cannot read is rejected rather than assumed safe.
+// by the SQL editor. Classification is an allow-list over AST node kinds,
+// fail-closed: a statement the parser cannot read, or whose kind is not
+// allowed, is rejected rather than assumed safe.
 func statementForbiddenWithDialect(d dialect.Dialect, sql string) bool {
 	if strings.TrimSpace(sql) == "" {
 		return false
@@ -75,69 +121,38 @@ func statementForbiddenWithDialect(d dialect.Dialect, sql string) bool {
 	}
 	switch expr.Kind() {
 	case expressions.KindCommand:
-		return commandForbidden(d, expr)
+		// SET ROLE is a session switch; SET SESSION AUTHORIZATION is not. The
+		// two are both opaque Commands outside PostgreSQL, so the SET command is
+		// judged by its body rather than denied whole.
+		if commandRoot(expr) == "SET" {
+			return setSessionAuthorization(expr)
+		}
+		return !allowedCommands[commandRoot(expr)]
 	case expressions.KindSet:
 		// PostgreSQL parses SET SESSION AUTHORIZATION as a structured Set,
 		// unlike the other engines where it is an opaque Command.
 		return setSessionAuthorization(expr)
 	case expressions.KindExecute:
 		// T-SQL parses EXECUTE IMMEDIATE (dynamic SQL) as an Execute; a plain
-		// EXECUTE <proc> call is not dynamic SQL and is allowed.
-		return executeImmediateForbidden(d, expr)
+		// EXECUTE <proc> call is a stored-procedure invocation and is allowed.
+		return executeImmediate(expr)
 	default:
-		return false
+		return !allowedStatementKinds[expr.Kind()]
 	}
 }
 
-// commandForbidden classifies an opaque Command node by its leading keyword.
-// The deny list is what a Command can hide that the structured grammar does
-// not: catalog management, session-authorization escalation and dynamic SQL
-// that smuggles catalog DDL.
-func commandForbidden(d dialect.Dialect, expr expressions.Expression) bool {
-	switch commandRoot(expr) {
-	case "CREATE", "DROP":
-		return isCatalogDDLExpression(expr)
-	case "SET":
-		return setSessionAuthorization(expr)
-	case "EXECUTE":
-		body := commandBody(expr)
-		if !strings.HasPrefix(strings.ToUpper(body), "IMMEDIATE") {
-			return false
-		}
-		return isCatalogDDLWithDialect(d, extractExecuteImmediateLiteral(body))
-	default:
-		return false
-	}
-}
-
-// setSessionAuthorization reports whether a Set or Command node spells
+// setSessionAuthorization reports whether a Set node spells
 // SET SESSION AUTHORIZATION, which lets a user impersonate an admin target the
-// guard grants to. PostgreSQL parses it as a structured Set; the other engines
-// leave it an opaque Command.
+// guard grants to.
 func setSessionAuthorization(expr expressions.Expression) bool {
 	fields := strings.Fields(strings.ToUpper(spanText(expr)))
 	return len(fields) >= 3 && fields[0] == "SET" && fields[1] == "SESSION" && fields[2] == "AUTHORIZATION"
 }
 
-// executeImmediateForbidden reports whether an Execute node is T-SQL's
-// EXECUTE IMMEDIATE whose string literal is catalog DDL.
-func executeImmediateForbidden(d dialect.Dialect, expr expressions.Expression) bool {
-	if expr.This() == nil || !strings.EqualFold(expr.This().Name(), "IMMEDIATE") {
-		return false
-	}
-	return isCatalogDDLWithDialect(d, extractExecuteImmediateLiteral(spanText(expr)))
-}
-
-// isCatalogDDLWithDialect parses one already-split statement and reports
-// whether it is catalog DDL. A statement the grammar rejects (a fragment with
-// an escaped quote) still counts when its leading words spell CREATE/DROP
-// CATALOG.
-func isCatalogDDLWithDialect(d dialect.Dialect, sql string) bool {
-	if strings.TrimSpace(sql) == "" {
-		return false
-	}
-	expr, err := dialect.ParseStatement(d, sql)
-	return (err == nil && expr != nil && isCatalogDDLExpression(expr)) || isCatalogDDLWords(sql)
+// executeImmediate reports whether an Execute node is T-SQL's dynamic
+// EXECUTE IMMEDIATE, which can run arbitrary SQL.
+func executeImmediate(expr expressions.Expression) bool {
+	return expr.This() != nil && strings.EqualFold(expr.This().Name(), "IMMEDIATE")
 }
 
 // isCatalogDDLExpression reports whether a parsed statement is CREATE/DROP
@@ -152,7 +167,7 @@ func isCatalogDDLExpression(expr expressions.Expression) bool {
 }
 
 // commandRoot is the leading keyword of a Command node: CREATE, DROP, SET,
-// EXECUTE, ...
+// EXECUTE, SHOW, ...
 func commandRoot(expr expressions.Expression) string {
 	if expr == nil || expr.Kind() != expressions.KindCommand {
 		return ""
@@ -188,85 +203,4 @@ func spanText(expr expressions.Expression) string {
 	}
 	span, _ := expr.SpanText()
 	return span
-}
-
-// extractExecuteImmediateLiteral pulls the first single-quoted string literal
-// out of an EXECUTE IMMEDIATE statement, honoring ” as an escaped quote. The
-// closing quote is consumed; the returned body has no surrounding quotes.
-func extractExecuteImmediateLiteral(s string) string {
-	i := strings.IndexByte(s, '\'')
-	if i < 0 {
-		return ""
-	}
-	var b strings.Builder
-	i++ // skip the opening quote
-	for i < len(s) {
-		switch s[i] {
-		case '\'':
-			if i+1 < len(s) && s[i+1] == '\'' {
-				b.WriteByte('\'')
-				i += 2
-				continue
-			}
-			return strings.TrimSpace(b.String())
-		default:
-			b.WriteByte(s[i])
-			i++
-		}
-	}
-	return strings.TrimSpace(b.String())
-}
-
-// isCatalogDDLWords reports whether a dynamic-SQL string is catalog DDL by its
-// leading words, past any leading comments. It backs the EXECUTE IMMEDIATE
-// check: the literal is data the outer parser does not see, and it may be a
-// fragment the grammar rejects, so it is inspected as text, not re-parsed.
-func isCatalogDDLWords(sql string) bool {
-	fields := strings.Fields(collapseWhitespace(trimLeadingComments(sql)))
-	return len(fields) >= 2 &&
-		(strings.EqualFold(fields[0], "CREATE") || strings.EqualFold(fields[0], "DROP")) &&
-		strings.EqualFold(fields[1], "CATALOG")
-}
-
-// collapseWhitespace replaces every run of whitespace with a single space and
-// strips leading/trailing whitespace.
-func collapseWhitespace(s string) string {
-	var b strings.Builder
-	prevSpace := false
-	for _, r := range s {
-		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
-			if !prevSpace {
-				b.WriteByte(' ')
-				prevSpace = true
-			}
-			continue
-		}
-		b.WriteRune(r)
-		prevSpace = false
-	}
-	return strings.TrimSpace(b.String())
-}
-
-// trimLeadingComments strips leading line comments (--) and block comments
-// (/* ... */) before the first token of a dynamic-SQL string.
-func trimLeadingComments(sql string) string {
-	for {
-		s := strings.TrimLeft(sql, " \t\n\r")
-		switch {
-		case strings.HasPrefix(s, "--"):
-			if idx := strings.Index(s, "\n"); idx >= 0 {
-				sql = s[idx+1:]
-				continue
-			}
-			return ""
-		case strings.HasPrefix(s, "/*"):
-			if idx := strings.Index(s, "*/"); idx >= 0 {
-				sql = s[idx+2:]
-				continue
-			}
-			return ""
-		default:
-			return s
-		}
-	}
 }
