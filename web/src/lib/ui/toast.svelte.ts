@@ -25,7 +25,9 @@ function createToastStore() {
 		},
 		show,
 		success: (message: string) => show(message, 'success'),
-		error: (message: string) => show(message, 'error'),
+		// An error stays until it is dismissed: a durable failure must not
+		// disappear before the user reads it (docs/guides/error-surfaces.md).
+		error: (message: string) => show(message, 'error', 0),
 		dismiss
 	};
 }
