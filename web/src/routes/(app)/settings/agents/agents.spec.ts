@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/svelte';
+import { HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { components } from '$lib/api/schema';
 import { http, server } from '../../../../test/server';
@@ -53,5 +54,33 @@ describe('agents settings', () => {
 				workspace_ids: [makeWorkspace().id]
 			})
 		);
+	});
+
+	// #1063: the agent area's list failure is catalog-backed, and retry
+	// recovers instead of leaving the error state behind.
+	it('shows the localized load failure and recovers on retry', async () => {
+		let fail = true;
+		server.use(
+			http.get('/agents', () =>
+				fail
+					? HttpResponse.json(
+							{ code: 'service_unavailable', message: 'agent store down' },
+							{ status: 503 }
+						)
+					: HttpResponse.json([agent], { status: 200 })
+			),
+			http.get('/workspaces', ({ response }) => response(200).json([makeWorkspace()]))
+		);
+		renderPage(AgentsPage, { me: makeMe(), url: '/settings/agents' });
+
+		expect(await screen.findByText('Could not load agents')).toBeTruthy();
+		expect(screen.getByText('The service is unavailable.')).toBeTruthy();
+		expect(screen.queryByText(/agent store down/)).toBeNull();
+
+		fail = false;
+		await fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+		expect(await screen.findByText('etl-pipeline')).toBeTruthy();
+		expect(screen.queryByText('Could not load agents')).toBeNull();
 	});
 });
