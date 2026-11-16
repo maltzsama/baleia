@@ -65,6 +65,16 @@ func (r *Repo) DeleteStatementJoins(ctx context.Context, statementID db.UUID) er
 		Delete(&model.StatementJoin{}).Error
 }
 
+// DeleteStatementColumns removes a statement's column references.
+func (r *Repo) DeleteStatementColumns(ctx context.Context, statementID db.UUID) error {
+	if !statementID.Valid {
+		return nil
+	}
+	return r.Users.db.WithContext(ctx).
+		Where("statement_id = ?", UUIDString(statementID)).
+		Delete(&model.StatementColumn{}).Error
+}
+
 // InsertStatementReference inserts one table reference.
 func (r *Repo) InsertStatementReference(ctx context.Context, arg db.InsertStatementReferenceParams) error {
 	executionStartedAt, err := statementExecutionStartedAt(ctx, r.Users.db, UUIDString(arg.StatementID))
@@ -98,6 +108,24 @@ func (r *Repo) InsertStatementJoin(ctx context.Context, arg db.InsertStatementJo
 		LeftColumn:         model.Text(arg.LeftColumn),
 		RightAlias:         model.Text(arg.RightAlias),
 		RightColumn:        model.Text(arg.RightColumn),
+	}
+	return r.Users.db.WithContext(ctx).Create(&row).Error
+}
+
+// InsertStatementColumn inserts one column reference.
+func (r *Repo) InsertStatementColumn(ctx context.Context, arg db.InsertStatementColumnParams) error {
+	executionStartedAt, err := statementExecutionStartedAt(ctx, r.Users.db, UUIDString(arg.StatementID))
+	if err != nil {
+		return err
+	}
+	row := model.StatementColumn{
+		StatementID:        model.UUID(UUIDString(arg.StatementID)),
+		ExecutionStartedAt: executionStartedAt,
+		WorkspaceID:        model.UUID(UUIDString(arg.WorkspaceID)),
+		CatalogID:          modelUUIDPtr(arg.CatalogID),
+		Namespace:          model.Text(arg.Namespace),
+		TableNameValue:     model.Text(arg.TableName),
+		ColumnName:         model.Text(arg.ColumnName),
 	}
 	return r.Users.db.WithContext(ctx).Create(&row).Error
 }

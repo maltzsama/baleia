@@ -28,11 +28,13 @@ type Table struct {
 	Kind string
 }
 
-// Column is one column reference. Table is the resolved physical table name,
-// or empty when the reference is unqualified and ambiguous or unresolved.
+// Column is one column reference, resolved to its physical table. Namespace
+// and Table are both empty when the reference is unqualified and ambiguous or
+// unresolved.
 type Column struct {
-	Table string
-	Name  string
+	Namespace string
+	Table     string
+	Name      string
 }
 
 // Join is an equi-join predicate between two aliases: left = right.
@@ -110,7 +112,8 @@ func ExtractResolved(d dialect.Dialect, defaultSchema, sql string) Reference {
 		if name == "" {
 			continue
 		}
-		column := Column{Name: name, Table: resolveColumnTable(columnExpr.TableName(), byAlias, tables)}
+		namespace, table := resolveColumn(columnExpr.TableName(), byAlias, tables)
+		column := Column{Namespace: namespace, Table: table, Name: name}
 		if seenColumns[column] {
 			continue
 		}
@@ -164,20 +167,31 @@ func physicalPath(src optimizer.ResolvedSource) []string {
 	return path
 }
 
-// resolveColumnTable resolves a column's qualifier (the alias as written) to
-// the physical table name; an empty qualifier resolves to the only table when
-// the statement reads exactly one, and stays empty otherwise.
-func resolveColumnTable(qualifier string, byAlias map[string]Table, tables []Table) string {
+// resolveColumn resolves a column's qualifier (the alias as written) to the
+// physical table's namespace and name; an empty qualifier resolves to the only
+// table when the statement reads exactly one, and stays empty otherwise.
+func resolveColumn(qualifier string, byAlias map[string]Table, tables []Table) (namespace, table string) {
 	if qualifier != "" {
-		if table, ok := byAlias[strings.ToLower(qualifier)]; ok {
-			return table.Path[len(table.Path)-1]
+		if t, ok := byAlias[strings.ToLower(qualifier)]; ok {
+			return tableNamespace(t), tableName(t)
 		}
-		return qualifier // an unresolved qualifier: keep the spelling
+		return "", qualifier // an unresolved qualifier: keep the spelling
 	}
 	if len(tables) == 1 {
-		return tables[0].Path[len(tables[0].Path)-1]
+		return tableNamespace(tables[0]), tableName(tables[0])
+	}
+	return "", ""
+}
+
+func tableNamespace(t Table) string {
+	if len(t.Path) >= 2 {
+		return t.Path[len(t.Path)-2]
 	}
 	return ""
+}
+
+func tableName(t Table) string {
+	return t.Path[len(t.Path)-1]
 }
 
 func extractJoins(root expressions.Expression, tables []Table) []Join {

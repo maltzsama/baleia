@@ -1046,6 +1046,15 @@ type InsertStatementReferenceParams struct {
 	Kind        string `json:"kind"`
 }
 
+type InsertStatementColumnParams struct {
+	StatementID UUID   `json:"statement_id"`
+	WorkspaceID UUID   `json:"workspace_id"`
+	CatalogID   UUID   `json:"catalog_id"`
+	Namespace   string `json:"namespace"`
+	TableName   string `json:"table_name"`
+	ColumnName  string `json:"column_name"`
+}
+
 type InsertTrinoResourceGroupParams struct {
 	Name                      string  `json:"name"`
 	SoftMemoryLimit           string  `json:"soft_memory_limit"`

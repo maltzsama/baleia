@@ -92,6 +92,16 @@ func TestExtractColumnsFromAST(t *testing.T) {
 	}
 }
 
+func TestExtractResolvedColumns(t *testing.T) {
+	t.Parallel()
+	d := dialect.NewRegistry().MustGet(dialect.Trino)
+	got := ExtractResolved(d, "sales", "SELECT o.id FROM orders o WHERE o.id = 1")
+	want := []Column{{Namespace: "sales", Table: "orders", Name: "id"}}
+	if !reflect.DeepEqual(got.Columns, want) {
+		t.Fatalf("Columns = %#v, want %#v", got.Columns, want)
+	}
+}
+
 func TestExtractResolvedQualifiesSources(t *testing.T) {
 	t.Parallel()
 	d := dialect.NewRegistry().MustGet(dialect.Trino)

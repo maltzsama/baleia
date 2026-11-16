@@ -214,3 +214,21 @@ type StatementJoin struct {
 }
 
 func (StatementJoin) TableName() string { return "statement_joins" }
+
+// StatementColumn is the statement_columns table: the physical columns a
+// statement reads, resolved through the fork's qualify pass (#625).
+type StatementColumn struct {
+	StatementID UUID `gorm:"column:statement_id;primaryKey;not null;index:statement_columns_statement,priority:1"`
+	// ExecutionStartedAt is the statement's execution_started_at (ADR 0024).
+	ExecutionStartedAt time.Time       `gorm:"column:execution_started_at;not null"`
+	WorkspaceID        UUID            `gorm:"column:workspace_id;not null;index:statement_columns_workspace_table,priority:1"`
+	CatalogID          *UUID           `gorm:"column:catalog_id"`
+	Namespace          Text            `gorm:"column:namespace;primaryKey;not null;size:128;default:'';index:statement_columns_workspace_table,priority:2"`
+	TableNameValue     Text            `gorm:"column:table_name;primaryKey;not null;size:128;index:statement_columns_workspace_table,priority:3"`
+	ColumnName         Text            `gorm:"column:column_name;primaryKey;not null;size:128"`
+	Statement          *QueryStatement `gorm:"foreignKey:StatementID,ExecutionStartedAt;references:ID,ExecutionStartedAt;constraint:OnDelete:CASCADE"`
+	Workspace          *Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnDelete:CASCADE"`
+	Catalog            *Catalog        `gorm:"foreignKey:CatalogID;references:ID;constraint:OnDelete:SET NULL"`
+}
+
+func (StatementColumn) TableName() string { return "statement_columns" }

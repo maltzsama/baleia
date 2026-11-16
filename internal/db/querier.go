@@ -156,6 +156,7 @@ type Querier interface {
 	DeleteSpace(ctx context.Context, arg DeleteSpaceParams) (int64, error)
 	DeleteSpaceMember(ctx context.Context, arg DeleteSpaceMemberParams) (int64, error)
 	DeleteStatementJoins(ctx context.Context, statementID UUID) error
+	DeleteStatementColumns(ctx context.Context, statementID UUID) error
 	// Statement references and equi-joins (B0, #530, #538).
 	DeleteStatementReferences(ctx context.Context, statementID UUID) error
 	DeleteTableMaintenancePolicy(ctx context.Context, arg DeleteTableMaintenancePolicyParams) (TableMaintenancePolicy, error)
@@ -349,6 +350,7 @@ type Querier interface {
 	InsertMetadataForeignKeys(ctx context.Context, arg InsertMetadataForeignKeysParams) error
 	InsertReconcileRun(ctx context.Context, arg InsertReconcileRunParams) (InsertReconcileRunRow, error)
 	InsertStatementJoin(ctx context.Context, arg InsertStatementJoinParams) error
+	InsertStatementColumn(ctx context.Context, arg InsertStatementColumnParams) error
 	InsertStatementReference(ctx context.Context, arg InsertStatementReferenceParams) error
 	// Counts the reads of the last 30 days with a 7-day half-life decay. Only
 	// finished statements and references with a catalog (a target) count.

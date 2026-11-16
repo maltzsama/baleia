@@ -56,6 +56,7 @@ func All() []any {
 		&SetupLock{},
 		&SpaceMember{},
 		&Space{},
+		&StatementColumn{},
 		&StatementJoin{},
 		&StatementReference{},
 		&TableHealthSnapshot{},
