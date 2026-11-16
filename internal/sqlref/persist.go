@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/dialect"
 )
 
 // Store is the persistence of a statement's references and joins; *repo.Repo
@@ -19,7 +20,14 @@ type Store interface {
 // extractor's result (#538). It is idempotent: the old rows are deleted first.
 // The caller owns the transaction.
 func Persist(ctx context.Context, q Store, statementID, workspaceID, catalogID db.UUID, namespace, sql string) error {
-	ref := Extract(sql)
+	return PersistWithDialect(ctx, q, statementID, workspaceID, catalogID, dialect.NewRegistry().MustGet(dialect.FlightSQL), namespace, sql)
+}
+
+// PersistWithDialect is Persist with the connection's dialect: table names are
+// resolved against the target's default schema (namespace) and through CTEs,
+// subqueries and derived tables by the fork's qualify pass.
+func PersistWithDialect(ctx context.Context, q Store, statementID, workspaceID, catalogID db.UUID, d dialect.Dialect, namespace, sql string) error {
+	ref := ExtractResolved(d, namespace, sql)
 	if err := q.DeleteStatementReferences(ctx, statementID); err != nil {
 		return err
 	}
