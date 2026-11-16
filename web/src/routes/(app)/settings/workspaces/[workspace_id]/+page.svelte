@@ -7,6 +7,7 @@
 	import { apiErrorMessage, client } from '$lib/api/client';
 	import { toasts } from '$lib/ui/toast.svelte';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
+	import WorkspaceBIAccess from '$lib/workspaces/WorkspaceBIAccess.svelte';
 	import WorkspaceCatalogs from '$lib/workspaces/WorkspaceCatalogs.svelte';
 	import WorkspaceMembers from '$lib/workspaces/WorkspaceMembers.svelte';
 	import { workspaceStore, type Workspace } from '$lib/stores/workspace.svelte';
@@ -22,7 +23,7 @@
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
 
-	type Tab = 'general' | 'target' | 'catalogs' | 'members' | 'activity';
+	type Tab = 'general' | 'target' | 'catalogs' | 'members' | 'bi' | 'activity';
 	type Target = components['schemas']['WorkspaceTarget'];
 	type Access = components['schemas']['WorkspaceCatalogAccess'];
 	type Impact = components['schemas']['WorkspaceImpact'];
@@ -226,7 +227,10 @@
 
 	onMount(() => {
 		const requested = page.url.searchParams.get('tab');
-		if (requested && ['general', 'target', 'catalogs', 'members', 'activity'].includes(requested)) {
+		if (
+			requested &&
+			['general', 'target', 'catalogs', 'members', 'bi', 'activity'].includes(requested)
+		) {
 			tab = requested as Tab;
 		}
 	});
@@ -270,7 +274,7 @@
 			role="tablist"
 			aria-label={m.settings_workspaces_detail_workspace_tabs()}
 		>
-			{#each [['general', m.settings_workspaces_detail_general()], ['target', m.settings_workspaces_default_target()], ['catalogs', m.settings_workspaces_detail_catalogs()], ['members', m.settings_workspaces_detail_members()], ['activity', m.settings_workspaces_detail_activity()]] as [value, label] (value)}
+			{#each [['general', m.settings_workspaces_detail_general()], ['target', m.settings_workspaces_default_target()], ['catalogs', m.settings_workspaces_detail_catalogs()], ['members', m.settings_workspaces_detail_members()], ['bi', m.settings_workspaces_detail_bi()], ['activity', m.settings_workspaces_detail_activity()]] as [value, label] (value)}
 				<button
 					type="button"
 					role="tab"
@@ -479,6 +483,8 @@
 				canManage={!!ws.allowed_actions?.includes('manage_members')}
 				onchange={refreshWorkspace}
 			/>
+		{:else if tab === 'bi'}
+			<WorkspaceBIAccess workspaceId={ws.id} {canEdit} onchange={refreshWorkspace} />
 		{:else if tab === 'activity'}
 			<ActivityPanel
 				resourceType="workspace"
