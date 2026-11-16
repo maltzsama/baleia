@@ -522,6 +522,7 @@ var operationAccess = map[string]access{
 	"SearchSemanticDocs":        checked("metadataWorkspace", "docs.Search"),
 	"SearchWorkspace":           checked("metadataWorkspace", "PrincipalFromContext", "federatedHitsFor"),
 	"ListSearchGlossary":        checked("metadataWorkspace"),
+	"SearchGlossaryInsights":    checked("metadataWorkspace"),
 	"CreateSearchGlossaryEntry": checked("metadataWorkspace", "requireWorkspaceRole"),
 	"DeleteSearchGlossaryEntry": checked("metadataWorkspace", "requireWorkspaceRole"),
 	// Metrics are validated against a real engine in a read-only session

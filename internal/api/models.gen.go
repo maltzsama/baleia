@@ -991,6 +991,12 @@ const (
 	RetrieverRefreshHistoryStatusRunning  RetrieverRefreshHistoryStatus = "running"
 )
 
+// Defines values for SearchGlossaryResourceMatchKind.
+const (
+	SearchGlossaryResourceMatchKindSemanticMetric SearchGlossaryResourceMatchKind = "semantic_metric"
+	SearchGlossaryResourceMatchKindSemanticModel  SearchGlossaryResourceMatchKind = "semantic_model"
+)
+
 // Defines values for ServiceAccountAllowedActions.
 const (
 	Delete       ServiceAccountAllowedActions = "delete"
@@ -1381,9 +1387,9 @@ const (
 
 // Defines values for SearchMetadataParamsKind.
 const (
-	All    SearchMetadataParamsKind = "all"
-	Column SearchMetadataParamsKind = "column"
-	Table  SearchMetadataParamsKind = "table"
+	SearchMetadataParamsKindAll    SearchMetadataParamsKind = "all"
+	SearchMetadataParamsKindColumn SearchMetadataParamsKind = "column"
+	SearchMetadataParamsKindTable  SearchMetadataParamsKind = "table"
 )
 
 // Defines values for SearchMetadataParamsMatch.
@@ -4377,6 +4383,37 @@ type SearchGlossaryEntryCreate struct {
 	// Term At most 64 characters as typed, and at least one letter or digit: the search ignores punctuation, so a word of punctuation could never match
 	Term string `json:"term"`
 }
+
+// SearchGlossaryInsight defines model for SearchGlossaryInsight.
+type SearchGlossaryInsight struct {
+	EntryId openapi_types.UUID            `json:"entry_id"`
+	Members []SearchGlossaryMemberInsight `json:"members"`
+	Term    string                        `json:"term"`
+}
+
+// SearchGlossaryInsights defines model for SearchGlossaryInsights.
+type SearchGlossaryInsights struct {
+	Entries []SearchGlossaryInsight `json:"entries"`
+}
+
+// SearchGlossaryMemberInsight defines model for SearchGlossaryMemberInsight.
+type SearchGlossaryMemberInsight struct {
+	Matches []SearchGlossaryResourceMatch `json:"matches"`
+
+	// Suggestions Vocabulary tokens from visible model and metric labels/descriptions; suggestions are not saved automatically
+	Suggestions []string `json:"suggestions"`
+	Value       string   `json:"value"`
+}
+
+// SearchGlossaryResourceMatch defines model for SearchGlossaryResourceMatch.
+type SearchGlossaryResourceMatch struct {
+	Id    openapi_types.UUID              `json:"id"`
+	Kind  SearchGlossaryResourceMatchKind `json:"kind"`
+	Label string                          `json:"label"`
+}
+
+// SearchGlossaryResourceMatchKind defines model for SearchGlossaryResourceMatch.Kind.
+type SearchGlossaryResourceMatchKind string
 
 // SemanticDoc defines model for SemanticDoc.
 type SemanticDoc struct {

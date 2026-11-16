@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
 	"slices"
 	"testing"
 
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -169,6 +172,40 @@ func TestSearchGlossary_IsPerWorkspace(t *testing.T) {
 	}
 	if res := searchAll(t, f, f.owner, SearchWorkspaceParams{Q: "ltv"}); len(res.ExpandedWith) != 0 {
 		t.Fatalf("another workspace's glossary applied: %v", res.ExpandedWith)
+	}
+}
+
+func TestSearchGlossaryInsights_VisibleMatchesAndSuggestions(t *testing.T) {
+	t.Parallel()
+	f := newMetaFixture(t)
+	if _, ok := f.addSynonyms(t, f.owner, "receita", "faturamento").(CreateSearchGlossaryEntry201JSONResponse); !ok {
+		t.Fatal("could not add glossary entry")
+	}
+	space, err := repo.New(f.gdb).GetDefaultSpace(context.Background(), db.UUID{Bytes: f.ws, Valid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := db.UUID{Bytes: uuid.MustParse(f.owner), Valid: true}
+	_, err = repo.New(f.gdb).CreateSemanticModel(context.Background(), db.CreateSemanticModelParams{WorkspaceID: db.UUID{Bytes: f.ws, Valid: true}, SpaceID: space.ID, Slug: "revenue", Label: "Receita líquida", Description: "Vendas por região", CatalogID: db.UUID{Bytes: f.lake, Valid: true}, Definition: []byte(`{}`), FormatVersion: 1, OwnerUserID: owner, UpdatedBy: owner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.h.SearchGlossaryInsights(f.as(f.owner), SearchGlossaryInsightsRequestObject{Id: f.ws})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, ok := res.(SearchGlossaryInsights200JSONResponse)
+	if !ok || len(out.Entries) != 1 || len(out.Entries[0].Members) != 2 {
+		t.Fatalf("insights = %#v", res)
+	}
+	if len(out.Entries[0].Members[0].Matches) != 1 || out.Entries[0].Members[0].Matches[0].Label != "Receita líquida" {
+		t.Fatalf("term matches = %+v", out.Entries[0].Members[0])
+	}
+	if len(out.Entries[0].Members[1].Matches) != 0 {
+		t.Fatalf("unexpected synonym match: %+v", out.Entries[0].Members[1])
+	}
+	if !slices.Contains(out.Entries[0].Members[1].Suggestions, "receita") {
+		t.Fatalf("suggestions = %+v", out.Entries[0].Members[1].Suggestions)
 	}
 }
 
