@@ -33,6 +33,17 @@ export const settingsSections: SettingsSection[] = [
 		action: 'view_system'
 	},
 	{
+		href: '/settings/bi-gateway',
+		get label() {
+			return m.settings_sections_bi_gateway();
+		},
+		group: 'platform',
+		// The BI gateway switch is global administration: the same callers that
+		// may view the platform status may manage it, and the backend still
+		// requires an administrator.
+		action: 'view_system'
+	},
+	{
 		href: '/settings/assistant',
 		get label() {
 			return m.settings_sections_assistant();
