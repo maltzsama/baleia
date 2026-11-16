@@ -35,6 +35,17 @@ func (d *spec) sqlglotDialect() (dialects.DialectType, error) {
 	return name, nil
 }
 
+// SqlglotDialect returns the sqlglot dialect name for d so external packages
+// (reference extraction, classification) can drive the fork's optimizer and
+// scope passes without depending on the unexported spec type.
+func SqlglotDialect(d Dialect) (dialects.DialectType, error) {
+	specDialect, ok := d.(*spec)
+	if !ok {
+		return nil, fmt.Errorf("%w: parser is unavailable for dialect %q", ErrUnsupported, d.Name())
+	}
+	return specDialect.sqlglotDialect()
+}
+
 // Statements parses sql with sqlglot and converts its rune spans to Baleia's
 // byte-offset spans. The parser owns lexical details such as strings,
 // comments, dialect-specific batch separators and PL/SQL blocks.
@@ -55,9 +66,14 @@ func (d *spec) Statements(sql string) ([]Span, error) {
 		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 
-	// Parse each batch separately because a procedural statement can contain a
-	// client batch separator that the SQL grammar intentionally does not treat
-	// as a normal statement terminator.
+	// Parse each batch separately. The fork's tokenizer already turns a T-SQL
+	// "GO" line and an Oracle "/" line into SEMICOLON tokens (BatchSeparatorGo /
+	// BatchSeparatorSlash), so sqlglot.Parse alone splits the common cases.
+	// It does not yet end a single-statement procedure body at "GO"
+	// (CREATE PROCEDURE p AS SELECT 1\nGO\nSELECT 2 parses the whole thing as
+	// one Create) — maltzsama/sqlglot-go, DEVIATIONS §1.22 gap. Until that is
+	// fixed in the fork, findBatchSeparators pre-splits those lines so the
+	// procedure body cannot swallow the next batch.
 	batchSeparators := findBatchSeparators(sql, d.name)
 
 	out := make([]Span, 0)

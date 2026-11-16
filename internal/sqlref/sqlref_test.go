@@ -3,6 +3,8 @@ package sqlref
 import (
 	"reflect"
 	"testing"
+
+	"github.com/galileostudio/baleia/internal/dialect"
 )
 
 func TestExtractTables(t *testing.T) {
@@ -79,14 +81,85 @@ func TestExtractColumnsFromAST(t *testing.T) {
 	t.Parallel()
 	got := Extract(`SELECT o.id, c.name FROM orders o JOIN customers c ON o.customer_id = c.id WHERE c.active = true`)
 	want := []Column{
-		{TableAlias: "o", Name: "id"},
-		{TableAlias: "c", Name: "name"},
-		{TableAlias: "o", Name: "customer_id"},
-		{TableAlias: "c", Name: "id"},
-		{TableAlias: "c", Name: "active"},
+		{Table: "orders", Name: "id"},
+		{Table: "customers", Name: "name"},
+		{Table: "orders", Name: "customer_id"},
+		{Table: "customers", Name: "id"},
+		{Table: "customers", Name: "active"},
 	}
 	if !reflect.DeepEqual(got.Columns, want) {
 		t.Fatalf("Columns = %#v, want %#v", got.Columns, want)
+	}
+}
+
+func TestExtractResolvedQualifiesSources(t *testing.T) {
+	t.Parallel()
+	d := dialect.NewRegistry().MustGet(dialect.Trino)
+	cases := []struct {
+		name string
+		sql  string
+		want []Table
+	}{
+		{
+			"default schema stamps an unqualified table",
+			"SELECT * FROM orders",
+			[]Table{{Path: []string{"sales", "orders"}, Alias: "orders", Kind: "read"}},
+		},
+		{
+			"explicit schema wins over the default",
+			"SELECT * FROM other.orders",
+			[]Table{{Path: []string{"other", "orders"}, Alias: "orders", Kind: "read"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ExtractResolved(d, "sales", tc.sql).Tables; !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Tables = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractResolvedFollowsNestedSources(t *testing.T) {
+	t.Parallel()
+	d := dialect.NewRegistry().MustGet(dialect.Trino)
+	cases := []struct {
+		name string
+		sql  string
+		want []Table
+	}{
+		{
+			"cte resolves to its physical source",
+			"WITH x AS (SELECT * FROM orders) SELECT * FROM x",
+			[]Table{{Path: []string{"orders"}, Alias: "orders", Kind: "read"}},
+		},
+		{
+			"derived table resolves to its base table",
+			"SELECT * FROM (SELECT * FROM orders) q",
+			[]Table{{Path: []string{"orders"}, Alias: "orders", Kind: "read"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ExtractWithDialect(d, tc.sql).Tables; !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Tables = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractResolvedWriteTarget(t *testing.T) {
+	t.Parallel()
+	d := dialect.NewRegistry().MustGet(dialect.Trino)
+	got := ExtractResolved(d, "sales", "INSERT INTO target SELECT * FROM source")
+	want := []Table{
+		{Path: []string{"sales", "target"}, Alias: "target", Kind: "write"},
+		{Path: []string{"sales", "source"}, Alias: "source", Kind: "read"},
+	}
+	if !reflect.DeepEqual(got.Tables, want) {
+		t.Fatalf("Tables = %#v, want %#v", got.Tables, want)
 	}
 }
 
