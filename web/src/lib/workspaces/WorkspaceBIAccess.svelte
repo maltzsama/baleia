@@ -59,6 +59,7 @@
 	const currentUserId = $derived(authStore.user?.id ?? '');
 	const workspaceHref = $derived(`/settings/workspaces/${workspaceId}?tab=bi`);
 	const enabled = $derived(status?.workspace_bi_enabled ?? false);
+	const anyRevocable = $derived(keys.some((key) => canRevoke(key)));
 	const engines = $derived.by(() => {
 		const list: { value: string; label: string }[] = [];
 		for (const target of targets) {
@@ -223,11 +224,11 @@
 		{/if}
 
 		<div class="rounded-lg border border-border bg-bg-panel p-4">
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<div>
+			<div class="flex flex-wrap items-center justify-between gap-4">
+				<div class="min-w-0">
 					<h3 class="text-[13px] font-semibold">{m.workspace_bi_switch()}</h3>
 					<p class="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
-						{enabled ? m.workspace_bi_enabled() : m.workspace_bi_disabled()}
+						{m.workspace_bi_gateway_explain()}
 					</p>
 				</div>
 				{#if canEdit}
@@ -240,9 +241,6 @@
 					</p>
 				{/if}
 			</div>
-			<p class="mt-3 text-[11px] text-slate-600 dark:text-slate-300">
-				{m.workspace_bi_gateway_explain()}
-			</p>
 		</div>
 
 		<div>
@@ -274,11 +272,15 @@
 							<tr>
 								<th class="px-3 py-2">{m.workspace_bi_name()}</th>
 								<th class="px-3 py-2">{m.workspace_bi_owner()}</th>
-								<th class="px-3 py-2">{m.workspace_bi_engine()}</th>
-								<th class="px-3 py-2">{m.workspace_bi_created()}</th>
-								<th class="px-3 py-2">{m.workspace_bi_expires()}</th>
-								<th class="px-3 py-2">{m.workspace_bi_last_used()}</th>
-								<th class="px-3 py-2"><span class="sr-only">{m.workspace_bi_actions()}</span></th>
+								<th class="whitespace-nowrap px-3 py-2">{m.workspace_bi_engine()}</th>
+								<th class="whitespace-nowrap px-3 py-2">{m.workspace_bi_created()}</th>
+								<th class="whitespace-nowrap px-3 py-2">{m.workspace_bi_expires()}</th>
+								<th class="whitespace-nowrap px-3 py-2">{m.workspace_bi_last_used()}</th>
+								{#if anyRevocable}
+									<th class="w-px px-3 py-2"
+										><span class="sr-only">{m.workspace_bi_actions()}</span></th
+									>
+								{/if}
 							</tr>
 						</thead>
 						<tbody>
@@ -288,10 +290,10 @@
 										<div class="font-medium">{key.name}</div>
 										<code class="text-[10px] text-text-muted">{key.key_prefix}</code>
 									</td>
-									<td class="px-3 py-2">{key.owner_email}</td>
-									<td class="px-3 py-2">{engineName(key.engine_id)}</td>
-									<td class="px-3 py-2"><RelativeTime at={key.created_at} /></td>
-									<td class="px-3 py-2">
+									<td class="whitespace-nowrap px-3 py-2">{key.owner_email}</td>
+									<td class="whitespace-nowrap px-3 py-2">{engineName(key.engine_id)}</td>
+									<td class="whitespace-nowrap px-3 py-2"><RelativeTime at={key.created_at} /></td>
+									<td class="whitespace-nowrap px-3 py-2">
 										{#if key.expires_at}
 											<span class="inline-flex items-center gap-1.5">
 												<RelativeTime at={key.expires_at} />
@@ -303,35 +305,37 @@
 											{m.settings_bi_gateway_none()}
 										{/if}
 									</td>
-									<td class="px-3 py-2">
+									<td class="whitespace-nowrap px-3 py-2">
 										{#if key.last_used_at}
 											<RelativeTime at={key.last_used_at} />
 										{:else}
 											{m.workspace_bi_never()}
 										{/if}
 									</td>
-									<td class="px-3 py-2 text-right">
-										{#if canRevoke(key)}
-											<Button size="sm" variant="danger" onclick={() => askRevoke(key)}>
-												{m.workspace_bi_revoke()}
-											</Button>
-										{/if}
-									</td>
+									{#if anyRevocable}
+										<td class="w-px whitespace-nowrap px-3 py-2 text-right">
+											{#if canRevoke(key)}
+												<Button size="sm" variant="danger" onclick={() => askRevoke(key)}>
+													{m.workspace_bi_revoke()}
+												</Button>
+											{/if}
+										</td>
+									{/if}
 								</tr>
 							{/each}
 						</tbody>
 					</table>
 				</div>
 			{/if}
-
-			<SetupGuide
-				gateway={status.gateway}
-				workspace={status}
-				hasKeys={keys.some((key) => !isExpired(key))}
-				{workspaceHref}
-				canManageWorkspace={canEdit}
-			/>
 		</div>
+
+		<SetupGuide
+			gateway={status.gateway}
+			workspace={status}
+			hasKeys={keys.some((key) => !isExpired(key))}
+			{workspaceHref}
+			canManageWorkspace={canEdit}
+		/>
 	{/if}
 </div>
 

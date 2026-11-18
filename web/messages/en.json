@@ -2816,6 +2816,8 @@
 	"settings_bi_gateway_state_disabled": "Disabled",
 	"settings_bi_gateway_state_blocked": "Blocked",
 	"settings_bi_gateway_configured": "Configured",
+	"settings_bi_gateway_configuration": "Configuration",
+	"settings_bi_gateway_runtime": "Runtime",
 	"settings_bi_gateway_listener": "Listener",
 	"settings_bi_gateway_secret": "Signing secret",
 	"settings_bi_gateway_public_url": "Public URL",

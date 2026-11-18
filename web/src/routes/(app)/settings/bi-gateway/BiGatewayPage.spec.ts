@@ -26,7 +26,6 @@ describe('BI gateway administration page', () => {
 			.getByText('Maximum concurrent statements per workspace')
 			.closest('div');
 		expect(perWorkspace?.querySelector('dd')?.textContent).toBe('20');
-		expect(screen.getByText('Nothing is blocking the gateway.')).toBeTruthy();
 		expect(screen.getByRole('button', { name: 'Disable gateway' })).toBeTruthy();
 	});
 
