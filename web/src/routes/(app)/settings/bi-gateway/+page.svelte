@@ -36,8 +36,6 @@
 	let guideWorkspace = $state<WorkspaceBIStatus | null>(null);
 	let guideHasKeys = $state(false);
 
-	const statLabel = 'text-[10px] uppercase tracking-wide text-text-muted';
-
 	// The setup guide links the workspace steps at the caller's current (or
 	// personal) workspace, so a global admin reaches the BI access tab.
 	const guideWorkspaceId = $derived(
@@ -168,122 +166,114 @@
 		</div>
 
 		{#if loading && !status}
-			<div class="mt-6 grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-3">
-				<Skeleton height="7rem" />
-				<Skeleton height="7rem" />
-				<Skeleton height="7rem" />
+			<div class="mt-5 grid gap-3 md:grid-cols-2">
+				<Skeleton height="9rem" />
+				<Skeleton height="9rem" />
 			</div>
 		{:else if error}
 			<div class="mt-6">
 				<ErrorState title={m.settings_bi_gateway_load_failed()} message={error} onretry={load} />
 			</div>
 		{:else if status}
-			<section class="mt-6">
+			{#if status.blocked_by.length > 0}
 				<div
-					class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] items-start gap-3"
+					class="mt-5 rounded-xl border border-amber-300 bg-bg-panel px-4 py-3 dark:border-amber-700"
 				>
-					<article class="rounded-xl border bg-bg-panel p-4 shadow-sm">
-						<h2 class="text-[13px] font-semibold">{m.settings_bi_gateway_configured()}</h2>
-						<p class="mt-2 text-[13px]">{yesNo(status.configured)}</p>
-						<dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5">
-							<div>
-								<dt class={statLabel}>{m.settings_bi_gateway_listener()}</dt>
-								<dd class="text-[13px]">{yesNo(status.listener_configured)}</dd>
-							</div>
-							<div>
-								<dt class={statLabel}>{m.settings_bi_gateway_secret()}</dt>
-								<dd class="text-[13px]">{yesNo(status.secret_configured)}</dd>
-							</div>
-						</dl>
-					</article>
-
-					<article class="rounded-xl border bg-bg-panel p-4 shadow-sm">
-						<h2 class="text-[13px] font-semibold">{m.settings_bi_gateway_public_url()}</h2>
-						<p class="mt-2 text-[13px]">
-							{yesNo(status.public_url_ready)}
-						</p>
-						{#if status.public_url}
-							<code class="mt-3 block truncate rounded-md bg-bg-toolbar px-2 py-1 text-[12px]"
-								>{status.public_url}</code
-							>
-						{:else}
-							<p class="mt-3 text-[12px] text-text-muted">{m.settings_bi_gateway_none()}</p>
-						{/if}
-					</article>
-
-					<article class="rounded-xl border bg-bg-panel p-4 shadow-sm">
-						<h2 class="text-[13px] font-semibold">{m.settings_bi_gateway_health()}</h2>
-						<p class="mt-2 text-[13px]">{healthLabel(status.health.status)}</p>
-						<p class="mt-1 text-[11px] text-text-muted">
-							{m.settings_bi_gateway_checked()}
-							<RelativeTime at={status.health.checked_at} />
-						</p>
-					</article>
-
-					<article class="rounded-xl border bg-bg-panel p-4 shadow-sm">
-						<h2 class="text-[13px] font-semibold">{m.settings_bi_gateway_concurrency()}</h2>
-						<dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5">
-							<div>
-								<dt class={statLabel}>{m.settings_bi_gateway_max_per_key()}</dt>
-								<dd class="font-mono text-[13px]">{status.concurrency.max_per_key}</dd>
-							</div>
-							<div>
-								<dt class={statLabel}>{m.settings_bi_gateway_max_per_workspace()}</dt>
-								<dd class="font-mono text-[13px]">{status.concurrency.max_per_workspace}</dd>
-							</div>
-							<div>
-								<dt class={statLabel}>{m.settings_bi_gateway_running()}</dt>
-								<dd class="font-mono text-[13px]">
-									{status.concurrency.running ?? m.settings_bi_gateway_none()}
-								</dd>
-							</div>
-						</dl>
-					</article>
-				</div>
-			</section>
-
-			<section class="mt-6">
-				<h2 class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-					{m.settings_bi_gateway_blockers()}
-				</h2>
-				{#if status.blocked_by.length > 0}
-					<ul
-						class="list-disc rounded-xl border border-amber-300 bg-bg-panel py-3 pl-8 pr-4 text-[13px] leading-[1.55] text-text-main dark:border-amber-700"
-					>
+					<p class="text-[12px] font-semibold">{m.settings_bi_gateway_blockers()}</p>
+					<ul class="mt-1.5 list-disc pl-5 text-[12px] leading-[1.55] text-text-muted">
 						{#each status.blocked_by as blocker (blocker)}
 							<li>{blockerLabel(blocker)}</li>
 						{/each}
 					</ul>
-				{:else}
-					<p class="text-[13px] text-text-muted">{m.settings_bi_gateway_no_blockers()}</p>
-				{/if}
-			</section>
+				</div>
+			{/if}
 
-			<section class="mt-6 rounded-xl border bg-bg-panel p-4 shadow-sm">
-				<h2 class="text-[13px] font-semibold">{m.settings_bi_gateway_switch()}</h2>
-				<p class="mt-1 text-[13px] text-text-muted">
-					{m.settings_bi_gateway_switch_description()}
-				</p>
-				<div class="mt-4 flex flex-wrap items-center gap-3">
+			<div class="mt-5 grid items-stretch gap-3 md:grid-cols-2">
+				<article class="flex flex-col rounded-xl border bg-bg-panel p-4 shadow-sm">
+					<h2 class="text-[13px] font-semibold">{m.settings_bi_gateway_configuration()}</h2>
+					<dl class="mt-2 flex flex-1 flex-col divide-y divide-border/60 text-[12px]">
+						<div class="flex flex-1 items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+							<dt class="text-text-muted">{m.settings_bi_gateway_listener()}</dt>
+							<dd class="font-medium">{yesNo(status.listener_configured)}</dd>
+						</div>
+						<div class="flex flex-1 items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+							<dt class="text-text-muted">{m.settings_bi_gateway_secret()}</dt>
+							<dd class="font-medium">{yesNo(status.secret_configured)}</dd>
+						</div>
+						<div class="flex flex-1 items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+							<dt class="shrink-0 text-text-muted">{m.settings_bi_gateway_public_url()}</dt>
+							<dd class="min-w-0 text-right">
+								{#if status.public_url}
+									<code
+										class="inline-block max-w-full break-all rounded bg-bg-toolbar px-1.5 py-0.5 font-mono text-[11px]"
+										>{status.public_url}</code
+									>
+								{:else}
+									<span class="text-text-muted">{m.settings_bi_gateway_none()}</span>
+								{/if}
+							</dd>
+						</div>
+					</dl>
+				</article>
+
+				<article class="flex flex-col rounded-xl border bg-bg-panel p-4 shadow-sm">
+					<h2 class="text-[13px] font-semibold">{m.settings_bi_gateway_runtime()}</h2>
+					<dl class="mt-2 flex flex-1 flex-col divide-y divide-border/60 text-[12px]">
+						<div class="flex flex-1 items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+							<dt class="shrink-0 text-text-muted">{m.settings_bi_gateway_health()}</dt>
+							<dd class="text-right font-medium">
+								{healthLabel(status.health.status)}
+								<span class="ml-1 font-normal text-text-muted">
+									· {m.settings_bi_gateway_checked()}
+									<RelativeTime at={status.health.checked_at} />
+								</span>
+							</dd>
+						</div>
+						<div class="flex flex-1 items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+							<dt class="text-text-muted">{m.settings_bi_gateway_max_per_key()}</dt>
+							<dd class="font-mono font-medium">{status.concurrency.max_per_key}</dd>
+						</div>
+						<div class="flex flex-1 items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+							<dt class="text-text-muted">{m.settings_bi_gateway_max_per_workspace()}</dt>
+							<dd class="font-mono font-medium">{status.concurrency.max_per_workspace}</dd>
+						</div>
+						<div class="flex flex-1 items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+							<dt class="text-text-muted">{m.settings_bi_gateway_running()}</dt>
+							<dd class="font-mono font-medium">
+								{status.concurrency.running ?? m.settings_bi_gateway_none()}
+							</dd>
+						</div>
+					</dl>
+				</article>
+			</div>
+
+			<section class="mt-5 rounded-xl border bg-bg-panel p-4 shadow-sm">
+				<div class="flex flex-wrap items-center justify-between gap-4">
+					<div class="min-w-0">
+						<h2 class="text-[13px] font-semibold">{m.settings_bi_gateway_switch()}</h2>
+						<p class="mt-1 text-[12px] text-text-muted">
+							{m.settings_bi_gateway_switch_description()}
+						</p>
+						<p class="mt-1 text-[11px] text-text-muted">
+							{m.settings_bi_gateway_operator_hint()}
+							<a
+								class="text-primary hover:underline"
+								href={deploymentGuide}
+								target="_blank"
+								rel="noreferrer">{m.settings_bi_gateway_deployment_guide()}</a
+							>
+						</p>
+					</div>
 					<Button
 						variant={status.enabled ? 'danger' : 'primary'}
 						onclick={() => (confirmOpen = true)}
 					>
 						{status.enabled ? m.settings_bi_gateway_disable() : m.settings_bi_gateway_enable()}
 					</Button>
-					<p class="text-[12px] text-text-muted">
-						{m.settings_bi_gateway_operator_hint()}
-						<a
-							class="text-primary hover:underline"
-							href={deploymentGuide}
-							target="_blank"
-							rel="noreferrer">{m.settings_bi_gateway_deployment_guide()}</a
-						>
-					</p>
 				</div>
 			</section>
 
-			<div class="mt-6">
+			<div class="mt-5">
 				<SetupGuide
 					gateway={status}
 					workspace={guideWorkspace}
