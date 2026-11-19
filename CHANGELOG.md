@@ -1,5 +1,101 @@
 # Changelog
 
+## [0.10.0](https://github.com/maltzsama/baleia/compare/v0.9.2...v0.10.0) (2026-11-18)
+
+
+### Features
+
+* **api:** expose a safe BI gateway readiness contract ([5520241](https://github.com/maltzsama/baleia/commit/55202415db4a9521cda90890c3bee8a2911b6846))
+* **helm:** validate the BI gateway URL and document deployment onboarding ([4abff40](https://github.com/maltzsama/baleia/commit/4abff40d57679fda49df288eadd797209cdff741))
+* **search:** add glossary insights endpoint ([0836bac](https://github.com/maltzsama/baleia/commit/0836bac5c5706ebd3721d89068dae610751ec921))
+* **search:** include model fields in glossary insights ([30dd310](https://github.com/maltzsama/baleia/commit/30dd31075100b2560f46a8329537da42118b63a1))
+* **sqlref:** persist statement column references ([ca6a8ad](https://github.com/maltzsama/baleia/commit/ca6a8addbfded42aa250a418f81ed6057ad06b0c))
+* **web:** add a first-class not-found surface ([ade9ebc](https://github.com/maltzsama/baleia/commit/ade9ebc2ae39bec04611f5e94b55a6e3bb6cc325))
+* **web:** add a global search surface to the app header ([3bb65cb](https://github.com/maltzsama/baleia/commit/3bb65cb203daafa849479375aae654e61d94f796))
+* **web:** add an in-product BI gateway setup guide ([57bfaab](https://github.com/maltzsama/baleia/commit/57bfaab9d596c3dd8a9f9d0791dd0fc3511b8377))
+* **web:** add the global BI gateway administration page ([07a921b](https://github.com/maltzsama/baleia/commit/07a921b92f730aa122c1850db36d329ca40b5d9f))
+* **web:** guide the Tableau and Power BI connection downloads ([bb871c4](https://github.com/maltzsama/baleia/commit/bb871c4640a91fadfdc0cf17bfea73dea237d9c3))
+* **web:** manage workspace BI access and keys ([6c73f3d](https://github.com/maltzsama/baleia/commit/6c73f3de75927e4be86d7e8d4771cc0cea268d2a))
+* **web:** show glossary matches and suggestions ([33f15ab](https://github.com/maltzsama/baleia/commit/33f15abee47c9b3ebd1dc1b695530b1112b67b47))
+* **web:** surface workbench target and namespace failures with retry ([bdd309f](https://github.com/maltzsama/baleia/commit/bdd309f9db58c4b3fed6f1647b6b4725831771ab))
+
+
+### Bug Fixes
+
+* **api:** address authorization review findings ([2e7e50d](https://github.com/maltzsama/baleia/commit/2e7e50d6e6aeaa086ff0c5340967dd62558a0df7))
+* **api:** align catalog grant action projections ([6d6cfa0](https://github.com/maltzsama/baleia/commit/6d6cfa05f7dea4b1dafbd6171c4b18a916d8a903))
+* **api:** align retriever action projections ([ad601ac](https://github.com/maltzsama/baleia/commit/ad601acb7ebc1513e3a51fd9e1c6f4ee44994fe5))
+* **api:** authorize grant approval before request lookup ([6256d72](https://github.com/maltzsama/baleia/commit/6256d727a0f2ebc43e5b1beeb9a560be7d03ca23))
+* **api:** authorize member mutations before lookup ([da0bcef](https://github.com/maltzsama/baleia/commit/da0bcefc871cd2a45396483a5f0b3e690a04ff7b))
+* **api:** dedupe the introspected function catalog ([7fb4487](https://github.com/maltzsama/baleia/commit/7fb4487dd07bdaf1ca4b9e052e18fc2895da8bf1))
+* **api:** guard catalog grant listings before lookup ([e62f493](https://github.com/maltzsama/baleia/commit/e62f4934010e3d0517bebcc85b783398349a2916))
+* **api:** parse lineage content with the target engine's dialect ([1a8ce68](https://github.com/maltzsama/baleia/commit/1a8ce68bd7c51f9a05826e38ce84428e3df66439))
+* **auth:** refuse access tokens with stale roles ([5776b4a](https://github.com/maltzsama/baleia/commit/5776b4a1dd07f88c8cb1d13e6d1de582492a2b15))
+* **bigateway:** allow set operations and reject EXPLAIN in the read-only gate ([f99cdf4](https://github.com/maltzsama/baleia/commit/f99cdf4eb9305a7c1843b137ab1a2ab82d3bda30))
+* **chart:** hash-name and freeze the Trino security ConfigMap ([517726d](https://github.com/maltzsama/baleia/commit/517726d69123233583518a9861c254f620a7ab67))
+* **dialect:** derive Oracle separators from spans, narrow the unit terminator ([477811f](https://github.com/maltzsama/baleia/commit/477811f895cee10d5a9259803e374a6371f222d7))
+* **dialect:** keep Oracle unit terminators, ignore separators in strings ([d2baf54](https://github.com/maltzsama/baleia/commit/d2baf5418958a0fecd86584daf3d33b29aa664ef))
+* **policy:** close anonymous-block and SET keyword evasions in the editor gate ([5872d6c](https://github.com/maltzsama/baleia/commit/5872d6cf78e8dafdb9049e0d09b8a00708653a30))
+* **search:** resolve glossary insight resource ids ([b88a907](https://github.com/maltzsama/baleia/commit/b88a907be7e86b4466f754cf6ce189876635cefc))
+* **sqlref:** classify INSERT column-list targets as writes ([0240ec8](https://github.com/maltzsama/baleia/commit/0240ec853fc085bd51f0424bd22aba945fa1f721))
+* **sqlref:** resolve columns through CTEs and derived tables ([e13e21f](https://github.com/maltzsama/baleia/commit/e13e21f56c086dfe274ddd28eddfdf451bd0807e))
+* **sqlref:** skip output-alias references as physical columns ([5156b81](https://github.com/maltzsama/baleia/commit/5156b8152627f5c753f1434f25453394e083656a))
+* **web:** align the profile page with the design system ([c107f64](https://github.com/maltzsama/baleia/commit/c107f64abf330541f3ebea38db53cc5e5a1e517e))
+* **web:** fall back when there is no previous history entry ([99dae80](https://github.com/maltzsama/baleia/commit/99dae802e0ba471c60174e7aa22473901ffce8bc))
+* **web:** fill the profile form when the user loads ([073473b](https://github.com/maltzsama/baleia/commit/073473b6723ed53e26981d56a156bdfff221cdda))
+* **web:** ignore superseded glossary loads ([6eafb9f](https://github.com/maltzsama/baleia/commit/6eafb9fb4d332416d53e93cb6b7b00947b65bd51))
+* **web:** keep error toasts until the user dismisses them ([8398dea](https://github.com/maltzsama/baleia/commit/8398dea5131f8e2e0eb0f3dfa4dfff334321e978))
+* **web:** keep glossary match keys unique ([41b6180](https://github.com/maltzsama/baleia/commit/41b618027e035741c159f42390ab9e0f1ef224de))
+* **web:** keep the API code on a metric SQL render error ([bf940a9](https://github.com/maltzsama/baleia/commit/bf940a902be2db288bca9c0ec77de5f85cd3d1b2))
+* **web:** key the SQL reference list by function identity ([b17c230](https://github.com/maltzsama/baleia/commit/b17c2308e723571fa5d70a1d7cd7ec95cc40a7ca))
+* **web:** make failed saved-query and metric-edit loads retryable ([92dcc9f](https://github.com/maltzsama/baleia/commit/92dcc9fb22245bc617cec06c8dfa50e101c77d76))
+* **web:** show failed statements through the error catalog ([a5c8881](https://github.com/maltzsama/baleia/commit/a5c88819c6fbb334f18764893c4db62772e0e23b))
+* **web:** tighten the BI gateway settings layout ([728287f](https://github.com/maltzsama/baleia/commit/728287f51c900fbfeb6297f33795e6c01659694f))
+* **web:** track in-app navigation for the error back action ([615322f](https://github.com/maltzsama/baleia/commit/615322f19fa1c18476346a8d42a79b9800fa7f38))
+
+
+### Miscellaneous
+
+* **api:** add explicit authorization matrix metadata ([18a1bad](https://github.com/maltzsama/baleia/commit/18a1bad93cea9a8afcd43e66b9f7637bb453901d))
+* **api:** classify authorization matrix scopes ([a6c92f0](https://github.com/maltzsama/baleia/commit/a6c92f0b2a3362fb726ffcf1286558d4c5a91850))
+* **api:** cover lineage with a non-Trino target dialect ([a065d6c](https://github.com/maltzsama/baleia/commit/a065d6c2fcce1bdfe7ba8dc43f6e2d0de9b443f7))
+* **api:** enforce authorization guard order ([ab1f928](https://github.com/maltzsama/baleia/commit/ab1f9289ea56a87908703dd3464b84a7636114e7))
+* **api:** record action projections in authz matrix ([1e68907](https://github.com/maltzsama/baleia/commit/1e689072bc190b9722d297604f8fcfccc51782bd))
+* **api:** satisfy parallel matrix checks ([b394efb](https://github.com/maltzsama/baleia/commit/b394efbae5099d9b3a2446234c19e23dc86d8081))
+* **auth:** cover immediate key revocation ([ea14777](https://github.com/maltzsama/baleia/commit/ea147772fe04d7db7bc19dcd459a7d75e7cc2957))
+* **authz:** add focused CI regression gate ([99adadb](https://github.com/maltzsama/baleia/commit/99adadb6d018b4078231e3eef0329fc7b8dc1760))
+* **bigateway:** gate read-only statements by AST node kind ([d28423f](https://github.com/maltzsama/baleia/commit/d28423fdc8a8062b3a031248e4bf52aa543abe62))
+* **bruno:** cover the glossary insights endpoint ([b8b017c](https://github.com/maltzsama/baleia/commit/b8b017cd0099a0cfd6665bde6fe6a3ebaab0019d))
+* **chart:** assert the Trino ConfigMap is immutable and mounted ([e1d7450](https://github.com/maltzsama/baleia/commit/e1d745000506af839ab50c3d8fc9fd841b382db8))
+* **dialect:** adopt sqlglot parsing ([a652630](https://github.com/maltzsama/baleia/commit/a65263044d75fc333f359ccd563d2779bb9fdb19)), closes [#625](https://github.com/maltzsama/baleia/issues/625)
+* **dialect:** adopt sqlglot-go v0.41.1 and drop the GO pre-split ([73323ed](https://github.com/maltzsama/baleia/commit/73323ed9f38958ea612430d84163e9aa0ebe8348))
+* **dialect:** adopt sqlglot-go v0.42.0 span fidelity ([33041f1](https://github.com/maltzsama/baleia/commit/33041f15da1dc29ed74e73f00d1beb11aa736656))
+* **e2e:** cover BI gateway onboarding, read-only and revocation ([b2d9c0c](https://github.com/maltzsama/baleia/commit/b2d9c0c3de80b9162d5ae1eb883e1165ca385779))
+* **policy:** classify editor statements by an AST allow-list ([4136c76](https://github.com/maltzsama/baleia/commit/4136c764c8fa60044a1b098bf78552eca1f6e81f))
+* **policy:** gate editor statements by AST node kind ([0baf86b](https://github.com/maltzsama/baleia/commit/0baf86baa8f033b96920dfec8e9e40095ffc563b))
+* **sqlref:** persist references with the connection dialect ([31ca339](https://github.com/maltzsama/baleia/commit/31ca339ff645347242b4035a0bdc724342157977))
+* **sqlref:** resolve references through the sqlglot qualify pass ([0bcff37](https://github.com/maltzsama/baleia/commit/0bcff37a193223de72a2bd971ef529baa36e2e4b))
+* **web:** cover representative load failures across the error surfaces ([b1601c3](https://github.com/maltzsama/baleia/commit/b1601c36d9e37ae93119c85b16e768ddff70ca22))
+* **web:** cover the 404 and error boundaries ([b47f038](https://github.com/maltzsama/baleia/commit/b47f03802b9f20a08b07b49d4c6c1e99a346301e))
+* **web:** cover the agent list failure surface ([ff62bf5](https://github.com/maltzsama/baleia/commit/ff62bf5644a60a81e863dc6d21ff9fbd5b7a08fa))
+* **web:** cover the global search and its header trigger ([b28a897](https://github.com/maltzsama/baleia/commit/b28a89791ca23c050e2491dd3f61df194afc1280))
+* **web:** cover the hardened error catalog ([20e3d1c](https://github.com/maltzsama/baleia/commit/20e3d1c07206f83563a9c2a84fe72961b15158c4))
+* **web:** cover the workbench and results error retries ([5c9f5a9](https://github.com/maltzsama/baleia/commit/5c9f5a980231958384329c881523456bfe08ef55))
+* **web:** drop the trivial results error wrapper ([543bdcf](https://github.com/maltzsama/baleia/commit/543bdcfff0f803939179605339d1b1231a1ac42e))
+* **web:** mock the results read in the retry test ([7e3e6af](https://github.com/maltzsama/baleia/commit/7e3e6af63c166cb11cef685b57d3132c48217ec8))
+* **web:** route error messages through apiErrorMessage ([b22847b](https://github.com/maltzsama/baleia/commit/b22847b10dddee3f8df3f99d94ef1f20c6bc4802))
+
+
+### Documentation
+
+* **auth:** state immediate revocation boundary ([7c32c55](https://github.com/maltzsama/baleia/commit/7c32c554715c6d0bafe5516f616cc5c5001b5bcd))
+* **authz:** document authorization contract ([03e62fe](https://github.com/maltzsama/baleia/commit/03e62fe031b1f224d566336a3ecfcf7336d81b19))
+* **authz:** document coverage matrix contract ([d557130](https://github.com/maltzsama/baleia/commit/d55713056f5e1d02c61104b879768e719616e848))
+* mark the sqlglot adoption as done, not in progress ([0b0df5e](https://github.com/maltzsama/baleia/commit/0b0df5e8b842c1c368ba1e55f60e14bafc4ccc07))
+* **operations:** document the immutable Trino security config ([d252835](https://github.com/maltzsama/baleia/commit/d252835106ba2c9098c326cd67d635ccf83e75ba))
+* **search:** document glossary matches and suggestions ([92e1a6b](https://github.com/maltzsama/baleia/commit/92e1a6bd07be108af93d08d7acf82c11cc5ec60a))
+* **web:** document the error surfaces ([985488c](https://github.com/maltzsama/baleia/commit/985488c7ede5af0de4ec77c527b9a96af714191c))
+
 ## [0.9.2](https://github.com/maltzsama/baleia/compare/v0.9.1...v0.9.2) (2026-11-15)
 
 
