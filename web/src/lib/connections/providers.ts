@@ -118,6 +118,26 @@ export function initialValues(provider: ConnectionProvider): Record<string, stri
 	return defaultValues(provider.config_schema);
 }
 
+/**
+ * The starting values of a catalog_schema: its defaults, and false for a
+ * checkbox without one, which is what the unchecked box shows.
+ */
+export function catalogDefaults(fields: ConnectionProviderField[]): Record<string, string> {
+	const out: Record<string, string> = {};
+	for (const field of fields) {
+		if (field.type === 'bool') out[field.key] = 'false';
+	}
+	return { ...out, ...defaultValues(fields) };
+}
+
+/** Whether a required catalog value is still empty. */
+export function catalogValuesMissing(
+	fields: ConnectionProviderField[],
+	values: Record<string, string>
+): boolean {
+	return fields.some((f) => f.required && !(values[f.key] ?? '').trim());
+}
+
 /** A record of the non-secret defaults of some schema fields. */
 export function defaultValues(fields: ConnectionProviderField[]): Record<string, string> {
 	const out: Record<string, string> = {};

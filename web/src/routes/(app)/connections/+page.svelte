@@ -41,7 +41,13 @@
 	} from '$lib/connections/api';
 	import EditConnectionDialog from '$lib/connections/EditConnectionDialog.svelte';
 	import ActivityPanel from '$lib/audit/ActivityPanel.svelte';
-	import { catalogIdentity, normalizeCatalogName } from '$lib/connections/providers';
+	import ProviderForm from '$lib/connections/ProviderForm.svelte';
+	import {
+		catalogDefaults,
+		catalogIdentity,
+		catalogValuesMissing,
+		normalizeCatalogName
+	} from '$lib/connections/providers';
 
 	// Cards whose catalogs load at once; the rest wait their turn.
 	const CATALOG_LOOKUPS = 4;
@@ -69,6 +75,7 @@
 	let addOpen = $state(false);
 	let addName = $state('');
 	let addConnector = $state('');
+	let addConfig = $state<Record<string, string>>({});
 	let addingBusy = $state(false);
 	let testingId = $state('');
 	let activity = $state<CatalogConnection | null>(null);
@@ -198,6 +205,7 @@
 		adding = connection;
 		addName = '';
 		addConnector = connectorsFor(connection)[0] ?? '';
+		addConfig = catalogDefaults(providerOf(connection.type)?.catalog_schema ?? []);
 		addOpen = true;
 	}
 
@@ -214,7 +222,13 @@
 			if (outputs.some((o) => !o.trino_catalog_name)) {
 				throw new Error('Choose a name that can be used as a SQL identifier.');
 			}
-			await createCatalog(target.id, { catalogs: outputs, warehouse: base, description: '' });
+			const schema = providerOf(target.type)?.catalog_schema ?? [];
+			await createCatalog(target.id, {
+				catalogs: outputs,
+				warehouse: base,
+				description: '',
+				config: schema.length > 0 ? addConfig : undefined
+			});
 			toasts.success(m.connections_catalog_created({ addName }));
 			addOpen = false;
 			adding = null;
@@ -495,6 +509,8 @@
 
 {#if adding}
 	{@const connectors = connectorsFor(adding)}
+	{@const addProvider = providerOf(adding.type)}
+	{@const addSchema = addProvider?.catalog_schema ?? []}
 	<Modal
 		bind:open={addOpen}
 		title={m.connections_add_catalog_to({ name: adding.name })}
@@ -518,6 +534,9 @@
 					options={connectors.map((item) => ({ value: item, label: item }))}
 				/>
 			{/if}
+			{#if addProvider && addSchema.length > 0}
+				<ProviderForm provider={addProvider} schema={addSchema} bind:values={addConfig} />
+			{/if}
 		</div>
 		{#snippet footer()}
 			<div class="flex justify-end gap-2">
@@ -525,7 +544,7 @@
 				<Button
 					variant="primary"
 					loading={addingBusy}
-					disabled={addingBusy || !addName.trim()}
+					disabled={addingBusy || !addName.trim() || catalogValuesMissing(addSchema, addConfig)}
 					onclick={addCatalog}
 				>
 					{m.common_add_catalog()}
