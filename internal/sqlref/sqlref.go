@@ -401,6 +401,9 @@ func (r *resolver) joins(root expressions.Expression, ambiguous map[string]bool)
 			continue
 		}
 		scope := r.scopeOf(equality)
+		if isOutputAliasRef(scope, left) || isOutputAliasRef(scope, right) {
+			continue // a projection alias is not a join endpoint
+		}
 		leftColumn, ok := r.column(scope, left)
 		if !ok || ambiguous[strings.ToLower(leftColumn.table.Alias)] {
 			continue

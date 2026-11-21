@@ -316,6 +316,12 @@ func TestExtractResolvedJoinsPerScope(t *testing.T) {
 			[]Join{},
 		},
 		{
+			"projection alias in having is not a join endpoint",
+			trino,
+			"SELECT o.id, count(*) AS n FROM orders o GROUP BY o.id HAVING n = o.id",
+			[]Join{},
+		},
+		{
 			"computed endpoint is skipped",
 			trino,
 			"WITH x AS (SELECT max(customer_id) AS cid FROM orders) SELECT * FROM x JOIN customers c ON x.cid = c.id",
