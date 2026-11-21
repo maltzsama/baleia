@@ -37,6 +37,8 @@ import java.util.regex.Pattern;
  *       only the one that served the first page (BI_E2E_PODS);
  *   <li>cancel of a running statement, and the connection still works after;
  *   <li>a catalog outside the workspace scope is denied;
+ *   <li>disabling the workspace refuses the next request and re-enabling it
+ *       restores access;
  *   <li>/v1/info answers, an unauthenticated request is 401, any other path is
  *       404, and a spooling-capable request still gets inline pages because
  *       the gateway drops the encoding header.
@@ -230,6 +232,25 @@ public final class BiGatewayE2E {
             throw new AssertionError("the statement did not finish");
         });
 
+        check("a disabled workspace refuses BI requests", () -> {
+            String token = loginToken();
+            String workspace = personalWorkspace(token);
+            setWorkspaceBI(token, workspace, false);
+            try {
+                HttpResponse<String> disabled = send(request(base + "/v1/info").GET());
+                if (disabled.statusCode() != 403) {
+                    throw new AssertionError(
+                            "a disabled workspace = " + disabled.statusCode() + ", want 403");
+                }
+            } finally {
+                setWorkspaceBI(token, workspace, true);
+            }
+            HttpResponse<String> restored = send(request(base + "/v1/info").GET());
+            if (restored.statusCode() != 200) {
+                throw new AssertionError("a re-enabled workspace = " + restored.statusCode() + ", want 200");
+            }
+        });
+
         check("a nextUri validates on every API replica", () -> {
             if (pods.length < 2) {
                 throw new AssertionError("BI_E2E_PODS needs both API replicas, got " + pods.length);
@@ -371,6 +392,20 @@ public final class BiGatewayE2E {
             throw new AssertionError("/auth/me = " + r.statusCode() + " " + r.body());
         }
         return field(r.body(), "personal_workspace_id");
+    }
+
+    private static void setWorkspaceBI(String token, String workspace, boolean enabled)
+            throws IOException, InterruptedException {
+        HttpRequest request = apiRequest("/api/v1/workspaces/" + workspace, token)
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(
+                        "{\"bi_enabled\":" + enabled + "}"))
+                .build();
+        HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            throw new AssertionError(
+                    "set workspace bi_enabled=" + enabled + " = " + response.statusCode() + " " + response.body());
+        }
     }
 
     private static HttpRequest.Builder apiRequest(String path, String token) {

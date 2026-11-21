@@ -48,9 +48,24 @@ test endpoints without Docker bridge-specific routing.
 
 The workflow is scoped to the seeded `e2e_tpch.tiny.orders` and
 `e2e_tpch.tiny.customer` tables. It proves that OpenMetadata can reach the
-gateway with the workspace BI key and ingest physical metadata through the
-Trino protocol. The gateway still enforces the workspace catalog scope and
-read-only policy on every request.
+gateway with the workspace BI key and ingest physical metadata, including
+columns, through the Trino protocol. The gateway still enforces the workspace
+catalog scope and read-only policy on every request.
+
+To verify a view against a source connector that exposes view definitions, set
+the catalog/schema to that fixture and provide its view name:
+
+```sh
+OPENMETADATA_CATALOG=source_catalog \
+OPENMETADATA_SCHEMA=analytics \
+OPENMETADATA_VIEW_NAME=orders_view \
+make e2e-openmetadata
+```
+
+The harness then requires the OpenMetadata entity to be a view and to contain a
+non-empty view definition. This is intentionally opt-in: the seeded TPCH
+connector does not provide a mutable view fixture, and a connector that does
+not expose view definitions cannot satisfy view-lineage discovery.
 
 The preceding `make e2e` run also covers the negative gateway contract: an
 out-of-scope catalog is denied and a disposable BI key is revoked and rejected
@@ -62,10 +77,9 @@ those statements are visible in query history. This is intentional and is the
 behavior that #1122 documents; changing history classification belongs in a
 follow-up implementation decision, not in this test harness.
 
-Views are enabled in the OpenMetadata workflow. The seeded TPCH catalog does
-not provide a mutable view fixture, so view-lineage support must be validated
-against a Trino catalog that exposes view definitions before #1123 claims it
-as supported.
+Views are enabled in the OpenMetadata workflow. View-lineage support is
+validated by the opt-in `OPENMETADATA_VIEW_NAME` assertion above when the
+source exposes a supported definition.
 
 The harness never prints or persists the BI key or OpenMetadata JWT outside
 temporary files, which are removed on exit. The quickstart admin password is
