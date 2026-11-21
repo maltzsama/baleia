@@ -145,6 +145,10 @@ type connectionTest struct {
 	// catalogs, what the list_catalogs check listed (nil if it did not run).
 	warehouse string
 	catalogs  []connections.CatalogRef
+	// catalogConfig is the catalog configuration a bind check binds with,
+	// for types that declare a catalog schema; nil, their bind check is
+	// skipped.
+	catalogConfig map[string]string
 }
 
 func ptr[T any](v T) *T { return &v }
@@ -285,6 +289,10 @@ func (t connectionTest) directEngine(ctx context.Context) (ConnectionCheck, erro
 // catalog it bound, when it bound one.
 func (t connectionTest) bind(ctx context.Context, b testBind) (ConnectionCheck, error) {
 	c := ConnectionCheck{Name: "bind:" + b.engine.Name}
+	if t.catalogConfig == nil && len(connections.CatalogSchemaOf(t.provider)) > 0 {
+		c.Skipped, c.Detail = ptr(true), ptr("no catalog configuration to bind with")
+		return c, nil
+	}
 	source, err := t.bindSource(ctx)
 	if err != nil {
 		return c, err
@@ -299,7 +307,7 @@ func (t connectionTest) bindInto(ctx context.Context, b testBind, source string)
 	suffix := make([]byte, 8)
 	_, _ = rand.Read(suffix)
 	name := bindtrino.EphemeralPrefix + hex.EncodeToString(suffix)
-	proj, err := t.h.binder.Project(bindings.BindingSpec{EngineCatalog: name, SourceRef: source}, t.cfg)
+	proj, err := t.h.binder.Project(bindings.BindingSpec{EngineCatalog: name, SourceRef: source, Config: t.catalogConfig}, t.cfg)
 	if err != nil {
 		return err
 	}
@@ -461,6 +469,16 @@ func (h *CatalogHandlers) TestConnectionDraft(ctx context.Context, request TestC
 	}
 	if w := request.Body.Warehouse; w != nil {
 		t.warehouse = strings.TrimSpace(*w)
+	}
+	if request.Body.CatalogConfig != nil {
+		values, err := catalogConfig(provider, request.Body.CatalogConfig)
+		if errors.As(err, &ce) {
+			return TestConnectionDraft422JSONResponse{UnprocessableEntityJSONResponse: ce.response()}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		t.catalogConfig = values
 	}
 	if refused != nil {
 		if strings.HasPrefix(*refused, "unknown intent") {

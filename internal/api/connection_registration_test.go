@@ -607,3 +607,41 @@ func TestRegisterFederated_CatalogConfig(t *testing.T) {
 		}
 	})
 }
+
+// TestRegisterFederated_Kafka: a Kafka connection registers its topic set as
+// a catalog's configuration, normalized by the provider, and the engine is
+// asked to create a kafka catalog over those topics.
+func TestRegisterFederated_Kafka(t *testing.T) {
+	t.Parallel()
+	h, q, ft := newAuthzHandlers(t)
+	ids := []openapi_types.UUID{openapi_types.UUID(engineOne)}
+	topics := map[string]string{"topics": "payments, orders"}
+	reg := catalogRequest("events", "events")
+	reg.Config = &topics
+	body := &CreateCatalogConnectionRequest{
+		Name: "stream", Type: "kafka", Config: strMap("nodes", "kafka:9092"),
+		EngineIds: &ids, CatalogRegistration: reg,
+	}
+	resp, err := registerConnection(t, h, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(CreateCatalogConnection201JSONResponse); !ok {
+		t.Fatalf("response = %d %s", visitCreate(t, resp).Code, visitCreate(t, resp).Body)
+	}
+	if len(q.createdCatalogs) != 1 {
+		t.Fatalf("catalogs = %d, want 1", len(q.createdCatalogs))
+	}
+	if got := string(q.createdCatalogs[0].Config); got != `{"schema":"default","topics":"orders,payments"}` {
+		t.Fatalf("stored config = %s", got)
+	}
+	created := false
+	for _, s := range ft.statements() {
+		if strings.HasPrefix(s, "CREATE CATALOG") && strings.Contains(s, "USING kafka") && strings.Contains(s, "'orders,payments'") {
+			created = true
+		}
+	}
+	if !created {
+		t.Fatalf("the engine was not asked for a kafka catalog: %v", ft.statements())
+	}
+}

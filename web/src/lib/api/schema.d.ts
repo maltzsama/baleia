@@ -6426,6 +6426,10 @@ export interface components {
             intents?: string[];
             /** @description Warehouse a catalog manager's bind check binds: the one the catalog will be created with. Without it, the check binds the first catalog the connection lists. Ignored for databases. */
             warehouse?: string;
+            /** @description The catalog configuration a bind check binds with, for types that declare a catalog_schema (the topic set of a Kafka catalog), validated like a catalog's config. Without it, their bind check is skipped. */
+            catalog_config?: {
+                [key: string]: string;
+            };
         };
         WorkspaceCatalogAccess: {
             /** Format: uuid */

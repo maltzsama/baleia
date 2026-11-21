@@ -399,6 +399,71 @@ func TestTransient_BindCatalogManager(t *testing.T) {
 	}
 }
 
+// TestTransient_BindKafka: a Kafka bind check binds the catalog
+// configuration it is given, so the engine sees the topics; without one it is
+// skipped rather than failing on a catalog with no topic.
+func TestTransient_BindKafka(t *testing.T) {
+	t.Parallel()
+	reg, _ := loopbackRegistry(t)
+	p, _ := reg.Get(connections.KindKafka)
+	cfg, err := p.Validate(connections.Config{Kind: connections.KindKafka, Values: map[string]string{"nodes": "kafka:9092"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := testBind{
+		engine:  db.Engine{ID: db.UUID{Bytes: [16]byte{0xE1}, Valid: true}, Name: "trino"},
+		cluster: db.TrinoCluster{ID: db.UUID{Bytes: [16]byte{0xCC}, Valid: true}},
+	}
+
+	t.Run("binds the topics it is given", func(t *testing.T) {
+		t.Parallel()
+		h, q, ft := newAuthzHandlers(t)
+		h.queries = &ephemeralFake{authzFake: q}
+		h.topology = topology.New(h.queries)
+		c, err := connectionTest{h: h.CatalogHandlers, provider: p, cfg: cfg, catalogConfig: map[string]string{"topics": "orders", "schema": "default"}}.bind(context.Background(), target)
+		if err != nil || (c.Skipped != nil && *c.Skipped) {
+			t.Fatalf("check = %+v, err = %v", c, err)
+		}
+		created := false
+		for _, s := range ft.statements() {
+			if strings.HasPrefix(s, "CREATE CATALOG") && strings.Contains(s, "USING kafka") && strings.Contains(s, "'orders'") {
+				created = true
+			}
+		}
+		if !created {
+			t.Fatalf("no kafka catalog created with the topics: %v", ft.statements())
+		}
+	})
+
+	t.Run("skipped without a catalog configuration", func(t *testing.T) {
+		t.Parallel()
+		h, _, ft := newAuthzHandlers(t)
+		c, err := connectionTest{h: h.CatalogHandlers, provider: p, cfg: cfg}.bind(context.Background(), target)
+		if err != nil || c.Skipped == nil || !*c.Skipped {
+			t.Fatalf("check = %+v, err = %v; want it skipped", c, err)
+		}
+		if len(ft.statements()) != 0 {
+			t.Fatalf("a skipped check reached the engine: %v", ft.statements())
+		}
+	})
+}
+
+func TestTestConnectionDraft_RefusesAnInvalidCatalogConfig(t *testing.T) {
+	t.Parallel()
+	reg, _ := loopbackRegistry(t)
+	h := draftHandlers(t, reg)
+	bad := map[string]string{"topics": "Not.Valid"}
+	body := &TestConnectionRequest{Name: "k", Type: "kafka", Config: strMap("nodes", "127.0.0.1:9"), CatalogConfig: &bad}
+	resp := runDraftAs(t, h, adminID, "admin", body)
+	got, ok := resp.(TestConnectionDraft422JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T, want 422", resp)
+	}
+	if len(got.Errors) != 1 || got.Errors[0].Field == nil || *got.Errors[0].Field != "config.topics" {
+		t.Fatalf("errors = %+v, want config.topics", got.Errors)
+	}
+}
+
 // TestSweeper_DropsExpired: only expired ephemeral rows are listed, dropped
 // and hard-deleted; permanent rows and live test rows stay.
 func TestSweeper_DropsExpired(t *testing.T) {
@@ -443,5 +508,30 @@ func TestSweeper_DropsExpired(t *testing.T) {
 	}
 	if got := ft.statements(); len(got) != 1 || got[0] != "DROP CATALOG IF EXISTS baleia_test_old" {
 		t.Fatalf("statements = %v", got)
+	}
+}
+
+// TestFirstCatalogConfig: a stored connection's bind check binds the
+// configuration of its first enabled catalog, only for types that declare a
+// catalog schema.
+func TestFirstCatalogConfig(t *testing.T) {
+	t.Parallel()
+	reg, _ := loopbackRegistry(t)
+	kafkaP, _ := reg.Get(connections.KindKafka)
+	polarisP, _ := reg.Get(connections.KindPolaris)
+
+	h, q, _ := newAuthzHandlers(t)
+	q.cat.Enabled = true
+	q.cat.Config = []byte(`{"topics":"orders","schema":"default"}`)
+	got, err := h.firstCatalogConfig(context.Background(), kafkaP, q.conn.ID)
+	if err != nil || got["topics"] != "orders" {
+		t.Fatalf("kafka: %v, %v", got, err)
+	}
+	if got, err := h.firstCatalogConfig(context.Background(), polarisP, q.conn.ID); err != nil || got != nil {
+		t.Fatalf("polaris: %v, %v; want nil", got, err)
+	}
+	q.cat.Enabled = false
+	if got, err := h.firstCatalogConfig(context.Background(), kafkaP, q.conn.ID); err != nil || got != nil {
+		t.Fatalf("no enabled catalog: %v, %v; want nil", got, err)
 	}
 }

@@ -5080,6 +5080,9 @@ type TestConnectionRequest struct {
 	// AccessMode Data access mode (ADR 0029). `direct` runs SQL through a native query-engine adapter owned by this connection; `federated` runs it through the registered federated engines in `engine_ids`. Required when the type declares both, auto-selected when it declares one, and omitted for engine-family types. Immutable after creation.
 	AccessMode *TestConnectionRequestAccessMode `json:"access_mode,omitempty"`
 
+	// CatalogConfig The catalog configuration a bind check binds with, for types that declare a catalog_schema (the topic set of a Kafka catalog), validated like a catalog's config. Without it, their bind check is skipped.
+	CatalogConfig *map[string]string `json:"catalog_config,omitempty"`
+
 	// CatalogRegistration Registers the connection's logical catalog outputs. Each entry names one of the connection type's Trino catalog types, in the order GET /connection-providers lists them; the backend derives the connector.
 	CatalogRegistration *CreateCatalogRequest `json:"catalog_registration,omitempty"`
 
