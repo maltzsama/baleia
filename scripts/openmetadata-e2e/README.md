@@ -37,7 +37,8 @@ the stock `metadata ingest` command, asserts the service and both tables through
 the OpenMetadata API, and removes all OpenMetadata containers and volumes on
 exit. The local gateway hop is HTTP only inside the test; a deployed
 integration must use TLS because the BI key is a password credential. The
-OpenMetadata server uses host ports `18585`/`18586` by default so an existing
+OpenMetadata server binds its host ports `18585`/`18586` to loopback by default
+so an existing
 local quickstart on `8585` or Baleia's API on `8080` does not collide. The
 temporary ingestion container has no published port and uses host networking
 only for this local one-shot process, so it can reach the two host-published

@@ -81,14 +81,27 @@ fi
 # instance that may already own the default ports.
 cat >"$compose_override" <<EOF
 services:
+  mysql:
+    container_name: !reset null
+    ports: !override []
+  elasticsearch:
+    container_name: !reset null
+    ports: !override []
+  execute-migrate-all:
+    container_name: !reset null
   openmetadata-server:
+    container_name: !reset null
     ports: !override
-      - "$OPENMETADATA_SERVER_PORT:8585"
-      - "$OPENMETADATA_ADMIN_PORT:8586"
+      - "127.0.0.1:$OPENMETADATA_SERVER_PORT:8585"
+      - "127.0.0.1:$OPENMETADATA_ADMIN_PORT:8586"
   ingestion:
+    container_name: !reset null
     network_mode: host
     networks: !reset []
     ports: !override []
+networks:
+  app_net:
+    ipam: !reset {}
 EOF
 
 # The gateway port-forward is plain HTTP behind the local TLS proxy. Production
