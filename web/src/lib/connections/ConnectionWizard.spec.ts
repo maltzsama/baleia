@@ -299,6 +299,70 @@ describe('ConnectionWizard', () => {
 		expect(screen.getByLabelText('Host *')).toBeTruthy();
 	});
 
+	it('counts an unchecked required catalog checkbox as false', async () => {
+		const bodies: Record<string, unknown>[] = [];
+		server.use(
+			http.get('/connection-providers', ({ response }) =>
+				response(200).json([
+					makeProvider({
+						catalog_schema: [
+							{ key: 'compact', label: 'Compact', type: 'bool', required: true, secret: false }
+						]
+					})
+				])
+			),
+			http.post('/catalog-connections', async ({ request, response }) => {
+				bodies.push((await request.json()) as Record<string, unknown>);
+				return response(201).json(
+					makeCreatedConnection({ access_mode: 'federated', catalogs: [makeCatalog()] })
+				);
+			})
+		);
+		render(ConnectionWizard);
+		await fillConfiguration();
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('radio', { name: /Through a query engine/ }));
+		await fireEvent.click(await screen.findByRole('checkbox', { name: /warehouse/ }));
+		const next = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement;
+		expect(next.disabled).toBe(false);
+		await fireEvent.click(next);
+		await fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+		expect(await screen.findByText('Tested')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+		expect(await screen.findByText('Created')).toBeTruthy();
+		expect(bodies[0].catalog_registration).toMatchObject({ config: { compact: 'false' } });
+	});
+
+	it('asks for a new test when a catalog value changes after one', async () => {
+		server.use(
+			http.get('/connection-providers', ({ response }) =>
+				response(200).json([
+					makeProvider({
+						catalog_schema: [
+							{ key: 'topics', label: 'Topics', type: 'text', required: true, secret: false }
+						]
+					})
+				])
+			)
+		);
+		render(ConnectionWizard);
+		await fillConfiguration();
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('radio', { name: /Through a query engine/ }));
+		await fireEvent.click(await screen.findByRole('checkbox', { name: /warehouse/ }));
+		await fireEvent.input(screen.getByLabelText('Topics *'), { target: { value: 'orders' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+		expect(await screen.findByText('Tested')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+		await fireEvent.input(screen.getByLabelText('Topics *'), { target: { value: 'payments' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		expect(screen.queryByText('Tested')).toBeNull();
+		expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
+	});
+
 	it('does not continue a federated connection without an engine', async () => {
 		render(ConnectionWizard);
 		await fillConfiguration();

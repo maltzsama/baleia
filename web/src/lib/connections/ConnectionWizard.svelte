@@ -52,6 +52,7 @@
 		roleLabel,
 		statusLabel,
 		type ConnectionProvider,
+		type ConnectionProviderField,
 		type Usage
 	} from './providers';
 
@@ -215,7 +216,8 @@
 			credentialsReadOnly,
 			accessMode,
 			bindEngineIds,
-			catalogName
+			catalogName,
+			catalogValues
 		})
 	);
 	const tested = $derived(testedSnapshot !== '' && testedSnapshot === snapshot);
@@ -237,7 +239,7 @@
 		bindEngineIds = [];
 		catalogName = '';
 		// An API older than catalog_schema omits it (a rolling upgrade).
-		catalogValues = defaultValues(next.catalog_schema ?? []);
+		catalogValues = catalogDefaults(next.catalog_schema ?? []);
 		testResult = null;
 		testError = null;
 		testedSnapshot = '';
@@ -263,6 +265,18 @@
 		} else {
 			bindEngineIds = bindEngineIds.filter((id) => id !== engineId);
 		}
+	}
+
+	/**
+	 * The starting catalog values: the schema's defaults, and false for a
+	 * checkbox without one, which is what the unchecked box shows.
+	 */
+	function catalogDefaults(fields: ConnectionProviderField[]): Record<string, string> {
+		const out: Record<string, string> = {};
+		for (const field of fields) {
+			if (field.type === 'bool') out[field.key] = 'false';
+		}
+		return { ...out, ...defaultValues(fields) };
 	}
 
 	function usage(): Usage {
