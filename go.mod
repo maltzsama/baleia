@@ -37,7 +37,7 @@ require (
 	github.com/exaring/otelpgx v0.13.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/godoes/gorm-oracle v1.6.20
-	github.com/maltzsama/sqlglot-go v0.42.1
+	github.com/maltzsama/sqlglot-go v0.42.2
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/redis/go-redis/v9 v9.23.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
