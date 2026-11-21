@@ -89,7 +89,10 @@ spec:
               bin=/opt/kafka/bin
               until $bin/kafka-topics.sh --bootstrap-server "$broker" --list >/dev/null 2>&1; do sleep 2; done
               topics() { $bin/kafka-topics.sh --bootstrap-server "$broker" "$@"; }
-              count() { $bin/kafka-get-offsets.sh --bootstrap-server "$broker" --topic e2e_orders | awk -F: '{n += $3} END {print n + 0}'; }
+              # Retained messages: latest minus earliest offset, so messages the
+              # retention removed are not counted.
+              offsets() { $bin/kafka-get-offsets.sh --bootstrap-server "$broker" --topic e2e_orders --time "$1" | awk -F: '{n += $3} END {print n + 0}'; }
+              count() { echo $(( $(offsets -1) - $(offsets -2) )); }
               topics --create --if-not-exists --topic e2e_orders --partitions 1 --replication-factor 1
               end=$(count)
               if [ "$end" -eq 3 ]; then
