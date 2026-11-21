@@ -334,6 +334,7 @@ func TestEveryDriverUsesDialer(t *testing.T) {
 		connections.KindClickHouse:    {Values: map[string]string{"host": "localhost"}},
 		connections.KindFlightSQL:     {Values: map[string]string{"host": "localhost", "port": "32010", "tls": "false"}},
 		connections.KindTrino:         {Values: map[string]string{"url": "http://localhost:8080"}},
+		connections.KindKafka:         {Values: map[string]string{"nodes": "localhost:9092"}},
 	}
 	// SQLite opens no network connection (TestSQLiteRootConfinement guards
 	// it); planned, unsupported and not-applicable kinds never connect.

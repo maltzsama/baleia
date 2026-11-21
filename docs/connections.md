@@ -37,7 +37,7 @@ user-facing connector selection.
 | `iceberg` | Iceberg REST catalog | catalog_manager | federated | metadata | — | iceberg | supported |
 | `ignite` | Apache Ignite | relational | federated | — | — | ignite | planned |
 | `jmx` | JMX | internal_catalog | federated | — | — | jmx | experimental |
-| `kafka` | Apache Kafka | streaming | federated | — | — | kafka | planned |
+| `kafka` | Apache Kafka | streaming | federated | — | — | kafka | supported |
 | `lakekeeper` | Lakekeeper | catalog_manager | federated | metadata | — | iceberg | supported |
 | `loki` | Grafana Loki | observability | federated | — | — | loki | planned |
 | `mariadb` | MariaDB | relational | direct, federated | metadata, direct_engine | mariadb | mariadb | supported |
@@ -245,10 +245,21 @@ Trino JMX monitoring catalog.
 
 ## `kafka` — Apache Kafka
 
-Apache Kafka streaming store, exposed through Trino.
+Apache Kafka topics, read as tables through Trino.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
+| `nodes` | text | yes |  | Comma-separated host:port list, e.g. kafka-0:9092,kafka-1:9092. Every Trino node must reach every broker. |
+| `security_protocol` | select |  | `PLAINTEXT` | one of `PLAINTEXT`, `SSL`. SSL checks the brokers against the Trino JVM's default trust store. |
+
+### Catalog fields
+
+Each catalog of the connection takes these values.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `topics` | text | yes |  | Comma-separated topics to read as tables. Each topic is a table of the connector's internal columns (_key, _message, _timestamp, …). |
+| `schema` | text |  | `default` | Schema the topics are listed under. |
 
 ## `lakekeeper` — Lakekeeper
 

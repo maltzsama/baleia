@@ -124,7 +124,6 @@ func All() []connections.Provider {
 		trino(connections.KindDuckDB, "DuckDB", "DuckDB analytical database, exposed through Trino.", connections.CategoryAnalytical, ""),
 		trino(connections.KindIgnite, "Apache Ignite", "Apache Ignite distributed database, exposed through Trino.", connections.CategoryRelational, ""),
 		// Streaming, observability and external services.
-		trino(connections.KindKafka, "Apache Kafka", "Apache Kafka streaming store, exposed through Trino.", connections.CategoryStreaming, ""),
 		trino(connections.KindLoki, "Grafana Loki", "Grafana Loki logs, exposed through Trino.", connections.CategoryObservability, ""),
 		trino(connections.KindPrometheus, "Prometheus", "Prometheus metrics, exposed through Trino.", connections.CategoryObservability, ""),
 		trino(connections.KindGSheets, "Google Sheets", "Google Sheets spreadsheets, exposed through Trino.", connections.CategoryExternal, ""),
