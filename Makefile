@@ -15,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-forward e2e-bi e2e-down
+.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-forward e2e-bi e2e-openmetadata e2e-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_AGENTS_ENABLED=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -162,6 +162,14 @@ e2e-bi:
 		BI_E2E_KEY_FILE=$(BI_E2E_KEY_FILE) BI_E2E_CATALOG=e2e_tpch BI_E2E_SCHEMA=tiny \
 		BI_E2E_PODS="$${pods#,}" \
 		java -cp $(BI_E2E_JDBC_JAR) scripts/bi-e2e/BiGatewayE2E.java
+
+# Runs the pinned OpenMetadata Trino connector against the already seeded BI
+# gateway. The target is separate from e2e because OpenMetadata starts a
+# multi-container quickstart and is intentionally opt-in for local/nightly
+# validation.
+e2e-openmetadata:
+	@test -r $(BI_E2E_KEY_FILE) || { echo "e2e-openmetadata: run the e2e seed first; missing $(BI_E2E_KEY_FILE)" >&2; exit 1; }
+	BI_E2E_KEY_FILE=$(BI_E2E_KEY_FILE) scripts/openmetadata-e2e/run.sh
 
 e2e-down:
 	K8S_PURGE=1 $(MAKE) k8s-down
