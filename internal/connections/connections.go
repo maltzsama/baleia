@@ -440,12 +440,16 @@ type Registry struct {
 	secrets   *SecretResolver
 }
 
-// NewRegistry registers the providers; a kind registered twice is an error.
+// NewRegistry registers the providers; a kind registered twice, or a catalog
+// schema with a secret field, is an error.
 func NewRegistry(providers ...Provider) (*Registry, error) {
 	r := &Registry{providers: make(map[Kind]Provider, len(providers))}
 	for _, p := range providers {
 		if _, dup := r.providers[p.Kind()]; dup {
 			return nil, fmt.Errorf("connections: provider %q registered twice", p.Kind())
+		}
+		if err := checkCatalogSchema(p); err != nil {
+			return nil, err
 		}
 		r.providers[p.Kind()] = p
 	}

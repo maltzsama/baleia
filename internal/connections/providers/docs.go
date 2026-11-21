@@ -59,8 +59,20 @@ func Markdown(reg *connections.Registry) string {
 			b.WriteString(d + "\n\n")
 		}
 		writeFieldTable(&b, p.ConfigSchema())
+		writeCatalogFields(&b, p, "###")
 	}
 	return b.String()
+}
+
+// writeCatalogFields renders the values each catalog of the type takes, when
+// it declares any (connections.CatalogConfigurer).
+func writeCatalogFields(b *strings.Builder, p connections.Provider, heading string) {
+	fields := connections.CatalogSchemaOf(p)
+	if len(fields) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n%s Catalog fields\n\nEach catalog of the connection takes these values.\n\n", heading)
+	writeFieldTable(b, fields)
 }
 
 // writeFieldTable renders a provider's configuration schema.
@@ -154,6 +166,7 @@ func page(p connections.Provider) string {
 	}
 	b.WriteString("Credentials are sealed with `BALEIA_ENCRYPTION_KEY` before they are stored, and every outbound connection goes through the same [network policy](../adr/0011-direct-connections-security.md).\n\n")
 	writeFieldTable(&b, p.ConfigSchema())
+	writeCatalogFields(&b, p, "###")
 
 	b.WriteString("\n## Next steps\n\n")
 	b.WriteString("- [Quick start](../quick-start.md)\n")
