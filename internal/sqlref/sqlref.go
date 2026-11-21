@@ -11,6 +11,7 @@ package sqlref
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/maltzsama/sqlglot-go/expressions"
@@ -123,7 +124,7 @@ func ExtractResolved(d dialect.Dialect, defaultSchema, sql string) Reference {
 		columns = append(columns, column)
 	}
 
-	return Reference{Tables: tables, Columns: columns, Joins: res.joins(qualified)}
+	return Reference{Tables: tables, Columns: columns, Joins: res.joins(qualified, ambiguousAliases(tables))}
 }
 
 // parseAndQualify parses sql and runs the fork's qualify pass, returning the
@@ -146,10 +147,13 @@ func parseAndQualify(d dialect.Dialect, defaultSchema, sql string, columns bool)
 		Dialect:          name,
 		ResolutionReport: report,
 		// No column metadata and no identifier quoting: the returned tree keeps
-		// the source spelling, normalized per dialect.
+		// the source spelling, normalized per dialect. Alias references are not
+		// expanded: without column metadata the pass cannot tell a WHERE name
+		// that reads a source column from a projection alias, so a name that
+		// matches an alias is left to isOutputAliasRef instead of rewritten.
 		QualifyColumns:            columns,
 		ExpandStars:               columns,
-		ExpandAliasRefs:           columns,
+		ExpandAliasRefs:           false,
 		InferSchema:               &infer,
 		AllowPartialQualification: true,
 		ValidateQualifyColumns:    false,
@@ -245,8 +249,10 @@ func (r *resolver) column(scope *optimizer.Scope, columnExpr expressions.Express
 }
 
 // sourceOf finds the source a qualifier names, from scope outward: a correlated
-// reference names a source of an enclosing query. An unqualified reference
-// resolves only when scope selects exactly one source, so it is never guessed.
+// reference names a source of an enclosing query. Only a source the scope binds
+// as a row source (selected, or the table of a SEMI or ANTI JOIN) matches; a
+// CTE the scope merely inherits does not. An unqualified reference resolves only
+// when scope selects exactly one source, so it is never guessed.
 func sourceOf(scope *optimizer.Scope, qualifier string) (any, bool) {
 	if qualifier == "" {
 		names := scope.SelectedSourceNames()
@@ -257,6 +263,10 @@ func sourceOf(scope *optimizer.Scope, qualifier string) (any, bool) {
 		return source, ok
 	}
 	for cur := scope; cur != nil; cur = enclosing(cur) {
+		bound := slices.Contains(cur.SelectedSourceNames(), qualifier) || cur.SemiOrAntiJoinTables()[qualifier]
+		if !bound {
+			continue
+		}
 		if source, ok := cur.Sources[qualifier]; ok {
 			return source, true
 		}
@@ -379,8 +389,10 @@ func isOutputAliasRef(scope *optimizer.Scope, columnExpr expressions.Expression)
 // joins resolves each equi-join predicate in the scope that contains it. An
 // endpoint read through a CTE or derived table is named after the physical
 // table and column behind it, so it matches the statement's table references;
-// an endpoint that does not resolve to one physical column is skipped.
-func (r *resolver) joins(root expressions.Expression) []Join {
+// an endpoint that does not resolve to one physical column is skipped. A join is
+// stored by alias, so an endpoint whose alias names more than one table of the
+// statement is skipped too: its reader could not tell which table it means.
+func (r *resolver) joins(root expressions.Expression, ambiguous map[string]bool) []Join {
 	joins := make([]Join, 0, 2)
 	seenJoins := make(map[Join]bool, 2)
 	for _, equality := range root.FindAll(expressions.KindEQ) {
@@ -390,11 +402,11 @@ func (r *resolver) joins(root expressions.Expression) []Join {
 		}
 		scope := r.scopeOf(equality)
 		leftColumn, ok := r.column(scope, left)
-		if !ok {
+		if !ok || ambiguous[strings.ToLower(leftColumn.table.Alias)] {
 			continue
 		}
 		rightColumn, ok := r.column(scope, right)
-		if !ok {
+		if !ok || ambiguous[strings.ToLower(rightColumn.table.Alias)] {
 			continue
 		}
 		join := Join{
@@ -408,6 +420,22 @@ func (r *resolver) joins(root expressions.Expression) []Join {
 		joins = append(joins, join)
 	}
 	return joins
+}
+
+// ambiguousAliases reports the aliases that name more than one physical table in
+// the statement, compared without case as the join reader matches them.
+func ambiguousAliases(tables []Table) map[string]bool {
+	pathOf := make(map[string]string, len(tables))
+	ambiguous := map[string]bool{}
+	for _, table := range tables {
+		alias := strings.ToLower(table.Alias)
+		path := strings.Join(table.Path, ".")
+		if seen, ok := pathOf[alias]; ok && seen != path {
+			ambiguous[alias] = true
+		}
+		pathOf[alias] = path
+	}
+	return ambiguous
 }
 
 func tableNamespace(t Table) string {

@@ -199,6 +199,25 @@ func TestExtractResolvedColumnsPerScope(t *testing.T) {
 			[]Column{{Namespace: "sales", Table: "orders", Name: "id"}},
 		},
 		{
+			"an inherited cte does not shadow an outer alias",
+			"WITH o AS (SELECT id AS customer_id FROM shipments) SELECT 1 FROM orders o WHERE EXISTS (SELECT 1 FROM customers c WHERE c.id = o.customer_id)",
+			[]Column{
+				{Namespace: "sales", Table: "shipments", Name: "id"},
+				{Namespace: "sales", Table: "customers", Name: "id"},
+				{Namespace: "sales", Table: "orders", Name: "customer_id"},
+			},
+		},
+		{
+			"projection aliases in group by, having and order by are not columns",
+			"SELECT o.customer_id AS cid, count(*) AS n FROM orders o GROUP BY cid HAVING n > 1 ORDER BY cid",
+			[]Column{{Namespace: "sales", Table: "orders", Name: "customer_id"}},
+		},
+		{
+			"a where name matching a projection alias is not rewritten to the aliased column",
+			"SELECT o.customer_id AS id FROM orders o CROSS JOIN customers c WHERE id = c.customer_key",
+			[]Column{{Namespace: "sales", Table: "orders", Name: "customer_id"}, {Namespace: "sales", Table: "customers", Name: "customer_key"}},
+		},
+		{
 			"union branches resolve to their own tables",
 			"SELECT id FROM a UNION ALL SELECT id FROM b",
 			[]Column{{Namespace: "sales", Table: "a", Name: "id"}, {Namespace: "sales", Table: "b", Name: "id"}},
@@ -277,6 +296,24 @@ func TestExtractResolvedJoinsPerScope(t *testing.T) {
 			trino,
 			"SELECT * FROM orders o LEFT SEMI JOIN customers c ON o.customer_id = c.id",
 			[]Join{{LeftAlias: "o", LeftColumn: "customer_id", RightAlias: "c", RightColumn: "id"}},
+		},
+		{
+			"correlated endpoint skips an inherited cte",
+			trino,
+			"WITH o AS (SELECT id AS customer_id FROM shipments) SELECT 1 FROM orders o WHERE EXISTS (SELECT 1 FROM customers c WHERE c.id = o.customer_id)",
+			[]Join{{LeftAlias: "c", LeftColumn: "id", RightAlias: "o", RightColumn: "customer_id"}},
+		},
+		{
+			"where name matching a projection alias is not a join",
+			trino,
+			"SELECT o.customer_id AS id FROM orders o CROSS JOIN customers c WHERE id = c.customer_key",
+			[]Join{},
+		},
+		{
+			"alias naming two tables is skipped",
+			trino,
+			"WITH x AS (SELECT o.id FROM orders o), y AS (SELECT o.id FROM customers o) SELECT * FROM x JOIN y ON x.id = y.id",
+			[]Join{},
 		},
 		{
 			"computed endpoint is skipped",
