@@ -727,6 +727,17 @@ export const errorCatalog: Record<string, ErrorEntry> = {
 			return m.errors_catalog_check_the_data_then_re_run();
 		}
 	},
+	'statement.storage_error': {
+		get title() {
+			return m.errors_catalog_storage_error();
+		},
+		get explanation() {
+			return m.errors_catalog_the_engine_could_not_read_the();
+		},
+		get remediation() {
+			return m.errors_catalog_check_the_connection_storage();
+		}
+	},
 	'statement.internal': {
 		get title() {
 			return m.errors_catalog_statement_failed();

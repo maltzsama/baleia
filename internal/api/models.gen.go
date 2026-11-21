@@ -4259,7 +4259,7 @@ type QueryStatement struct {
 	// EngineQueryId The statement's id on its engine. Was trino_query_id
 	EngineQueryId *string `json:"engine_query_id"`
 
-	// ErrorCode Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, read_only_unsupported, conflict, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown).
+	// ErrorCode Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, read_only_unsupported, conflict, storage_error, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown).
 	ErrorCode    *string `json:"error_code"`
 	ErrorMessage *string `json:"error_message"`
 

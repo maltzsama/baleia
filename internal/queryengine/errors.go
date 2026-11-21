@@ -23,6 +23,7 @@ const (
 	CodeConflict     ErrorCode = "conflict" // serialization/deadlock — never retried automatically
 	CodeScopeMissing ErrorCode = "catalog_scope_missing"
 	CodeInternal     ErrorCode = "internal"
+	CodeStorage      ErrorCode = "storage_error"
 )
 
 // Error is a typed engine failure. Message is safe to log; Native is the

@@ -28,6 +28,9 @@ var errorNames = map[string]queryengine.ErrorCode{
 	"QUERY_QUEUE_FULL":        queryengine.CodeResource,
 	"SERVER_STARTING_UP":      queryengine.CodeUnavailable,
 	"SERVER_SHUTTING_DOWN":    queryengine.CodeUnavailable,
+	// ICEBERG_INVALID_METADATA: the catalog could not read a table's metadata
+	// from its backing object storage (region, endpoint or credentials) (#1118).
+	"ICEBERG_INVALID_METADATA": queryengine.CodeStorage,
 }
 
 // mapError turns a client error into a queryengine error. The raw errorName

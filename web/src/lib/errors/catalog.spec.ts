@@ -44,6 +44,7 @@ describe('error catalog', () => {
 			'resource_exhausted',
 			'engine_unavailable',
 			'conflict',
+			'storage_error',
 			'interrupted',
 			'internal'
 		]) {
