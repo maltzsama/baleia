@@ -212,26 +212,30 @@ func (r *Repo) ListJoinSuggestions(ctx context.Context, arg db.ListJoinSuggestio
 		if aliases == nil {
 			continue
 		}
-		for _, left := range aliases[strings.ToLower(string(join.LeftAlias))] {
-			for _, right := range aliases[strings.ToLower(string(join.RightAlias))] {
-				leftColumn, rightColumn, ok := orientJoin(join, left, right, arg)
-				if !ok {
-					continue
-				}
-				key := pair{leftColumn, rightColumn}
-				row := agg[key]
-				if row == nil {
-					row = &db.ListJoinSuggestionsRow{LeftColumn: leftColumn, RightColumn: rightColumn}
-					agg[key] = row
-				}
-				row.UseCount++
-				if !row.LastUsedAt.Valid || at.After(row.LastUsedAt.Time) {
-					row.LastUsedAt = PGTime(at)
-				}
-				age := now.Sub(at).Seconds()
-				row.Score += math.Exp(-math.Ln2 * age / (30 * 86400))
-			}
+		left, ok := aliasReference(aliases, string(join.LeftAlias))
+		if !ok {
+			continue
 		}
+		right, ok := aliasReference(aliases, string(join.RightAlias))
+		if !ok {
+			continue
+		}
+		leftColumn, rightColumn, ok := orientJoin(join, left, right, arg)
+		if !ok {
+			continue
+		}
+		key := pair{leftColumn, rightColumn}
+		row := agg[key]
+		if row == nil {
+			row = &db.ListJoinSuggestionsRow{LeftColumn: leftColumn, RightColumn: rightColumn}
+			agg[key] = row
+		}
+		row.UseCount++
+		if !row.LastUsedAt.Valid || at.After(row.LastUsedAt.Time) {
+			row.LastUsedAt = PGTime(at)
+		}
+		age := now.Sub(at).Seconds()
+		row.Score += math.Exp(-math.Ln2 * age / (30 * 86400))
 	}
 	out := make([]db.ListJoinSuggestionsRow, 0, len(agg))
 	for _, row := range agg {
@@ -253,6 +257,18 @@ func (r *Repo) ListJoinSuggestions(ctx context.Context, arg db.ListJoinSuggestio
 		out = out[:arg.Lim]
 	}
 	return out, nil
+}
+
+// aliasReference returns the reference an alias names. When several references
+// of one statement share the alias, the alias alone cannot identify a table, so
+// it matches none and the stored join is skipped rather than paired with the
+// wrong reference (#1089).
+func aliasReference(aliases map[string][]model.StatementReference, alias string) (model.StatementReference, bool) {
+	refs := aliases[strings.ToLower(alias)]
+	if len(refs) != 1 {
+		return model.StatementReference{}, false
+	}
+	return refs[0], true
 }
 
 // orientJoin normalizes a join so the left column belongs to the requested
