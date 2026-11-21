@@ -98,6 +98,32 @@ func TestPersistUnparsableWritesNothing(t *testing.T) {
 	}
 }
 
+// TestPersistJoinThroughCTE: a join between a CTE and a physical table is
+// stored against the physical aliases, so join suggestions can match the
+// statement's references (#1089).
+func TestPersistJoinThroughCTE(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	const statement = `WITH x AS (SELECT customer_id, id FROM orders) SELECT * FROM x JOIN customers c ON x.customer_id = c.id`
+	q, gdb, wsID, stmtID := seedStatement(t, statement)
+
+	if err := Persist(ctx, q, stmtID, wsID, db.UUID{}, "sales", statement); err != nil {
+		t.Fatal(err)
+	}
+	var joins []model.StatementJoin
+	if err := gdb.Where("statement_id = ?", stmtID).Find(&joins).Error; err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, 0, len(joins))
+	for _, j := range joins {
+		got = append(got, string(j.LeftAlias)+"."+string(j.LeftColumn)+" = "+string(j.RightAlias)+"."+string(j.RightColumn))
+	}
+	want := []string{"orders.customer_id = c.id"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("joins = %v, want %v", got, want)
+	}
+}
+
 // TestPersistColumns: the physical columns a statement reads are stored,
 // resolved to their table and default schema (#625).
 func TestPersistColumns(t *testing.T) {
