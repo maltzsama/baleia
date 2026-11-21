@@ -109,6 +109,54 @@ func TestProject_Synthetic(t *testing.T) {
 	}
 }
 
+// TestProject_Kafka: the brokers and protocol come from the connection, the
+// topic set from the catalog, and a catalog without topics is refused.
+func TestProject_Kafka(t *testing.T) {
+	t.Parallel()
+	b := newTestBinder()
+	src := cfg(connections.KindKafka, map[string]string{"nodes": "kafka-0:9092,kafka-1:9092", "security_protocol": "SSL"}, nil)
+	p, err := b.Project(bindings.BindingSpec{
+		EngineCatalog: "events", Config: map[string]string{"topics": "orders,payments", "schema": "shop"},
+	}, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"kafka.nodes": "kafka-0:9092,kafka-1:9092", "kafka.security-protocol": "SSL",
+		"kafka.table-names": "orders,payments", "kafka.default-schema": "shop", "kafka.hide-internal-columns": "false",
+	}
+	if p.Connector != "kafka" || !maps.Equal(p.Properties, want) || len(p.SecretKeys) != 0 {
+		t.Fatalf("projection = %s %v %v, want kafka %v and no secrets", p.Connector, p.Properties, p.SecretKeys, want)
+	}
+
+	plain := cfg(connections.KindKafka, map[string]string{"nodes": "kafka-0:9092"}, nil)
+	p, err = b.Project(bindings.BindingSpec{EngineCatalog: "events", Config: map[string]string{"topics": "orders"}}, plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Properties["kafka.security-protocol"] != "PLAINTEXT" || p.Properties["kafka.default-schema"] != "default" {
+		t.Errorf("defaults = %v", p.Properties)
+	}
+
+	if _, err := b.Project(bindings.BindingSpec{EngineCatalog: "events"}, plain); !errors.Is(err, bindings.ErrInvalid) {
+		t.Errorf("a catalog without topics: err = %v, want ErrInvalid", err)
+	}
+	for _, key := range []string{
+		"kafka.nodes", "kafka.security-protocol", "kafka.config.resources", "kafka.table-description-dir",
+		"kafka.table-description-supplier", "kafka.ssl.truststore.location", "kafka.confluent-schema-registry-url",
+		"kafka.table-names", "kafka.default-schema",
+	} {
+		spec := bindings.BindingSpec{EngineCatalog: "events", Config: map[string]string{"topics": "orders"}, ExtraProps: map[string]string{key: "x"}}
+		if _, err := b.Project(spec, plain); !errors.Is(err, bindings.ErrPropertyNotOverridable) {
+			t.Errorf("%s: err = %v, want property_not_overridable", key, err)
+		}
+	}
+	spec := bindings.BindingSpec{EngineCatalog: "events", Config: map[string]string{"topics": "orders"}, ExtraProps: map[string]string{"kafka.messages-per-split": "5000"}}
+	if p, err := b.Project(spec, plain); err != nil || p.Properties["kafka.messages-per-split"] != "5000" {
+		t.Errorf("an ordinary Kafka property must merge: %v, %v", p.Properties, err)
+	}
+}
+
 // TestProject_Kinds fixes the projection of every bindable kind.
 func TestProject_Kinds(t *testing.T) {
 	t.Parallel()
@@ -633,6 +681,7 @@ func TestSupports(t *testing.T) {
 		connections.KindFaker: {"faker"}, connections.KindMemory: {"memory"},
 		connections.KindBlackhole: {"blackhole"}, connections.KindJMX: {"jmx"},
 		connections.KindTPCH: {"tpch"}, connections.KindTPCDS: {"tpcds"},
+		connections.KindKafka: {"kafka"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("supports = %v", got)

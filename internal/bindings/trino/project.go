@@ -10,6 +10,7 @@ package trino
 //   - MariaDB connector:    https://trino.io/docs/484/connector/mariadb.html
 //   - SQL Server connector: https://trino.io/docs/484/connector/sqlserver.html
 //   - Oracle connector:     https://trino.io/docs/484/connector/oracle.html
+//   - Kafka connector:      https://trino.io/docs/484/connector/kafka.html
 
 import (
 	"fmt"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/connections/kafka"
 	"github.com/galileostudio/baleia/internal/connections/lakekeeper"
 	"github.com/galileostudio/baleia/internal/connections/nessie"
 	"github.com/galileostudio/baleia/internal/connections/polaris"
@@ -39,9 +41,14 @@ var reservedNames = []string{"system", "jmx", "tpch", "tpcds", "memory", "env", 
 
 // protectedPatterns are extra-property keys that cannot be overridden:
 // endpoints, credentials and security modes come only from the connection.
+// The Kafka keys also cover what reads files on the Trino nodes (client
+// configuration, table descriptions, key stores) and the topic set, which
+// comes validated from the catalog.
 var protectedPatterns = []string{
 	"connection-url", "connection-user", "*.uri", "*uri", "*password*", "*credential*", "*secret*",
 	"*token*", "*.security", "*access-key*", "*.catalog.type", "connector.name",
+	"kafka.nodes", "kafka.security-protocol", "kafka.ssl.*", "kafka.config.resources",
+	"kafka.table-description-*", "kafka.confluent-*", "kafka.table-names", "kafka.default-schema",
 }
 
 // projection is one source family's properties and secret keys.
@@ -98,6 +105,8 @@ func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, conn
 		return sqlserverProjection(spec, src)
 	case connections.KindOracle:
 		return oracleProjection(spec, src)
+	case connections.KindKafka:
+		return kafkaProjection(spec, src)
 	case connections.KindFaker, connections.KindMemory, connections.KindBlackhole,
 		connections.KindJMX, connections.KindTPCH, connections.KindTPCDS:
 		// Endpointless synthetic catalogs need no properties: the connector
@@ -105,6 +114,33 @@ func (b *Binder) project(spec bindings.BindingSpec, src connections.Config, conn
 		return projection{props: map[string]string{}}, nil
 	}
 	return projection{}, fmt.Errorf("%w: %s", bindings.ErrUnsupportedSource, src.Kind)
+}
+
+// kafkaProjection binds a Kafka cluster's topic set (#1064): the brokers and
+// the security protocol come from the connection, the topics and their schema
+// from the catalog. Without table description files the internal columns
+// (_key, _message, _timestamp, …) are a topic's only columns, so they stay
+// visible.
+func kafkaProjection(spec bindings.BindingSpec, src connections.Config) (projection, error) {
+	topics := spec.Config[kafka.KeyTopics]
+	if topics == "" {
+		return projection{}, fmt.Errorf("%w: the catalog names no topic", bindings.ErrInvalid)
+	}
+	schema := spec.Config[kafka.KeySchema]
+	if schema == "" {
+		schema = kafka.DefaultSchema
+	}
+	protocol := src.Value(kafka.KeySecurityProtocol)
+	if protocol == "" {
+		protocol = kafka.ProtocolPlaintext
+	}
+	return projection{props: map[string]string{
+		"kafka.nodes":                 src.Value(kafka.KeyNodes),
+		"kafka.security-protocol":     protocol,
+		"kafka.table-names":           topics,
+		"kafka.default-schema":        schema,
+		"kafka.hide-internal-columns": "false",
+	}}, nil
 }
 
 // polarisProjection is byte-identical to the projection before #80 (golden
