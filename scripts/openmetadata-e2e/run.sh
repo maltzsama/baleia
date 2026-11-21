@@ -12,6 +12,7 @@ OPENMETADATA_PROJECT="${OPENMETADATA_PROJECT:-baleia-om-e2e}"
 OPENMETADATA_SERVICE="${OPENMETADATA_SERVICE:-baleia-bi-gateway}"
 OPENMETADATA_CATALOG="${OPENMETADATA_CATALOG:-e2e_tpch}"
 OPENMETADATA_SCHEMA="${OPENMETADATA_SCHEMA:-tiny}"
+OPENMETADATA_VIEW_NAME="${OPENMETADATA_VIEW_NAME:-}"
 OPENMETADATA_USER="${OPENMETADATA_USER:-admin@e2e.test}"
 OPENMETADATA_ADMIN_EMAIL="${OPENMETADATA_ADMIN_EMAIL:-admin@open-metadata.org}"
 OPENMETADATA_ADMIN_PASSWORD="${OPENMETADATA_ADMIN_PASSWORD:-admin}"
@@ -21,6 +22,15 @@ OPENMETADATA_GATEWAY_PORT="${OPENMETADATA_GATEWAY_PORT:-18443}"
 OPENMETADATA_GATEWAY_URL="${OPENMETADATA_GATEWAY_URL:-https://127.0.0.1:8444}"
 OPENMETADATA_K8S_NAMESPACE="${OPENMETADATA_K8S_NAMESPACE:-baleia-dev}"
 OPENMETADATA_KEY_FILE="${OPENMETADATA_KEY_FILE:-${BI_E2E_KEY_FILE:-/tmp/baleia-e2e-bi-key.secret}}"
+
+view_filter_yaml=""
+if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
+  # OpenMetadata treats tableFilterPattern as a regular expression. Quote the
+  # configured name as a literal and then encode the complete YAML scalar so
+  # names containing regex or YAML punctuation remain unambiguous.
+  view_regex="$(printf '%s' "$OPENMETADATA_VIEW_NAME" | sed 's/[][\\.^$|(){}*+?]/\\&/g')"
+  view_filter_yaml="$(printf '^%s$' "$view_regex" | jq -Rr @json)"
+fi
 
 if [[ ! -r "$OPENMETADATA_KEY_FILE" ]]; then
   echo "openmetadata-e2e: BI key file is not readable: $OPENMETADATA_KEY_FILE" >&2
@@ -205,6 +215,7 @@ source:
         includes:
           - "^orders$"
           - "^customer$"
+$(if [[ -n "$view_filter_yaml" ]]; then printf '          - %s\n' "$view_filter_yaml"; fi)
 sink:
   type: metadata-rest
   config: {}
@@ -229,9 +240,33 @@ api_base="http://127.0.0.1:${OPENMETADATA_SERVER_PORT}/api/v1"
 curl -fsS -H "Authorization: Bearer $openmetadata_token" \
   "$api_base/services/databaseServices/name/$OPENMETADATA_SERVICE" >/dev/null
 for table in orders customer; do
+  table_response="$workdir/$table.json"
   curl -fsS -H "Authorization: Bearer $openmetadata_token" \
-    "$api_base/tables/name/$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.$table" >/dev/null
+    -o "$table_response" \
+    "$api_base/tables/name/$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.$table"
+  jq -e '(.columns | length) > 0' "$table_response" >/dev/null || {
+    echo "openmetadata-e2e: $table was ingested without columns" >&2
+    exit 1
+  }
 done
 
+if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
+  view_response="$workdir/$OPENMETADATA_VIEW_NAME.json"
+  view_fqn="$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.$OPENMETADATA_VIEW_NAME"
+  view_fqn_encoded="$(printf '%s' "$view_fqn" | jq -sRr @uri)"
+  curl -fsS -H "Authorization: Bearer $openmetadata_token" \
+    -o "$view_response" \
+    "$api_base/tables/name/$view_fqn_encoded?fields=schemaDefinition"
+  jq -e '(.tableType | ascii_downcase) == "view" and (.schemaDefinition // "") != ""' \
+    "$view_response" >/dev/null || {
+    echo "openmetadata-e2e: $OPENMETADATA_VIEW_NAME was not ingested as a view with a definition" >&2
+    exit 1
+  }
+fi
+
 echo "openmetadata-e2e: OpenMetadata $OPENMETADATA_VERSION ingested $OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA through the Baleia BI gateway"
+echo "openmetadata-e2e: physical table columns were present in OpenMetadata"
+if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
+  echo "openmetadata-e2e: view $OPENMETADATA_VIEW_NAME and its definition were present in OpenMetadata"
+fi
 echo "openmetadata-e2e: metadata scans are recorded by Baleia as origin=bi; inspect query history separately when validating noise policy"
