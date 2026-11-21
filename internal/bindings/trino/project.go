@@ -42,13 +42,14 @@ var reservedNames = []string{"system", "jmx", "tpch", "tpcds", "memory", "env", 
 // protectedPatterns are extra-property keys that cannot be overridden:
 // endpoints, credentials and security modes come only from the connection.
 // The Kafka keys also cover what reads files on the Trino nodes (client
-// configuration, table descriptions, key stores) and the topic set, which
-// comes validated from the catalog.
+// configuration, table descriptions, key stores), the topic set, which comes
+// validated from the catalog, and the internal columns, a topic's only ones.
 var protectedPatterns = []string{
 	"connection-url", "connection-user", "*.uri", "*uri", "*password*", "*credential*", "*secret*",
 	"*token*", "*.security", "*access-key*", "*.catalog.type", "connector.name",
 	"kafka.nodes", "kafka.security-protocol", "kafka.ssl.*", "kafka.config.resources",
 	"kafka.table-description-*", "kafka.confluent-*", "kafka.table-names", "kafka.default-schema",
+	"kafka.hide-internal-columns",
 }
 
 // projection is one source family's properties and secret keys.

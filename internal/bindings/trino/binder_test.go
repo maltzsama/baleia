@@ -144,7 +144,7 @@ func TestProject_Kafka(t *testing.T) {
 	for _, key := range []string{
 		"kafka.nodes", "kafka.security-protocol", "kafka.config.resources", "kafka.table-description-dir",
 		"kafka.table-description-supplier", "kafka.ssl.truststore.location", "kafka.confluent-schema-registry-url",
-		"kafka.table-names", "kafka.default-schema",
+		"kafka.table-names", "kafka.default-schema", "kafka.hide-internal-columns",
 	} {
 		spec := bindings.BindingSpec{EngineCatalog: "events", Config: map[string]string{"topics": "orders"}, ExtraProps: map[string]string{key: "x"}}
 		if _, err := b.Project(spec, plain); !errors.Is(err, bindings.ErrPropertyNotOverridable) {
