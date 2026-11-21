@@ -18,6 +18,7 @@ import (
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/catalogs/topology"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/db"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/google/uuid"
@@ -109,7 +110,7 @@ func (q *authzFake) CreateCatalog(_ context.Context, p db.CreateCatalogParams) (
 	c := db.Catalog{
 		ID: db.UUID{Bytes: uuid.New(), Valid: true}, ConnectionID: p.ConnectionID, Name: p.Name,
 		TrinoCatalogName: p.TrinoCatalogName, ClusterID: p.ClusterID, Warehouse: p.Warehouse,
-		Connector: p.Connector, ExtraProps: p.ExtraProps, Origin: "source", Enabled: true,
+		Connector: p.Connector, ExtraProps: p.ExtraProps, Config: p.Config, Origin: "source", Enabled: true,
 	}
 	q.createdCatalogs = append(q.createdCatalogs, c)
 	return c, nil
@@ -185,6 +186,9 @@ func (q *authzFake) UpdateCatalog(_ context.Context, p db.UpdateCatalogParams) (
 	q.updated = append(q.updated, p)
 	c := q.cat
 	c.Name, c.Warehouse, c.Connector, c.ExtraProps, c.TrinoCatalogName = p.Name, p.Warehouse, p.Connector, p.ExtraProps, p.TrinoCatalogName
+	if p.Config != nil {
+		c.Config = p.Config
+	}
 	return c, nil
 }
 
@@ -846,5 +850,120 @@ func TestCreateCatalog_MultipleOutputsDrivenByType(t *testing.T) {
 	}
 	if !slices.Equal(order, []string{"iceberg", "delta_lake", "hive"}) {
 		t.Fatalf("connector order = %v, want [iceberg delta_lake hive]", order)
+	}
+}
+
+func TestCreateCatalog_CatalogConfig(t *testing.T) {
+	t.Parallel()
+	create := func(t *testing.T, h *API, q *authzFake, values *map[string]string) CreateCatalogResponseObject {
+		t.Helper()
+		body := catalogRequest("wh2", "wh2")
+		body.Warehouse = strp("wh2")
+		body.Config = values
+		resp, err := h.CreateCatalog(ctxAs(ownerID, "member"), CreateCatalogRequestObject{ConnectionId: q.conn.ID.Bytes, Body: body})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	t.Run("refused for a type whose catalogs take none", func(t *testing.T) {
+		t.Parallel()
+		h, q, ft := newAuthzHandlers(t)
+		resp := create(t, h, q, &map[string]string{"topics": "orders"})
+		if code := visitCode(t, resp); code != 422 {
+			t.Fatalf("code = %d, want 422", code)
+		}
+		if len(q.createdCatalogs) != 0 || len(ft.statements()) != 0 {
+			t.Fatal("a refused catalog changed state")
+		}
+	})
+
+	t.Run("stored and returned", func(t *testing.T) {
+		t.Parallel()
+		h, q, _ := newAuthzHandlers(t)
+		h.connections = withTopicCatalogs(t, connections.KindPolaris)
+		resp := create(t, h, q, &map[string]string{"topics": "orders"})
+		created, ok := resp.(CreateCatalog201JSONResponse)
+		if !ok {
+			t.Fatalf("code = %d, want 201", visitCode(t, resp))
+		}
+		if got := string(q.createdCatalogs[0].Config); got != `{"schema":"default","topics":"orders"}` {
+			t.Fatalf("stored config = %s", got)
+		}
+		if c := created[0].Config; c == nil || (*c)["schema"] != "default" {
+			t.Fatalf("response config = %v", c)
+		}
+	})
+}
+
+func TestUpdateCatalog_CatalogConfig(t *testing.T) {
+	t.Parallel()
+	update := func(t *testing.T, h *API, q *authzFake, body *UpdateCatalogRequest) UpdateCatalogResponseObject {
+		t.Helper()
+		conn, cat := reqIDs(q)
+		resp, err := h.UpdateCatalog(ctxAs(ownerID, "member"), UpdateCatalogRequestObject{ConnectionId: conn, CatalogId: cat, Body: body})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	t.Run("omitted keeps the stored configuration", func(t *testing.T) {
+		t.Parallel()
+		h, q, _ := newAuthzHandlers(t)
+		h.connections = withTopicCatalogs(t, connections.KindPolaris)
+		if code := visitCode(t, update(t, h, q, &UpdateCatalogRequest{Description: strp("d")})); code != 200 {
+			t.Fatalf("code = %d", code)
+		}
+		if len(q.updated) != 1 || q.updated[0].Config != nil {
+			t.Fatalf("updates = %+v, want the config left alone", q.updated)
+		}
+	})
+
+	t.Run("replaced after validation", func(t *testing.T) {
+		t.Parallel()
+		h, q, _ := newAuthzHandlers(t)
+		h.connections = withTopicCatalogs(t, connections.KindPolaris)
+		resp := update(t, h, q, &UpdateCatalogRequest{Config: &map[string]string{"topics": "payments", "schema": "events"}})
+		ok, isOK := resp.(UpdateCatalog200JSONResponse)
+		if !isOK {
+			t.Fatalf("code = %d", visitCode(t, resp))
+		}
+		if got := string(q.updated[0].Config); got != `{"schema":"events","topics":"payments"}` {
+			t.Fatalf("stored config = %s", got)
+		}
+		if c := ok.Config; c == nil || (*c)["topics"] != "payments" {
+			t.Fatalf("response config = %v", c)
+		}
+	})
+
+	t.Run("an invalid configuration changes nothing", func(t *testing.T) {
+		t.Parallel()
+		h, q, ft := newAuthzHandlers(t)
+		h.connections = withTopicCatalogs(t, connections.KindPolaris)
+		resp := update(t, h, q, &UpdateCatalogRequest{Config: &map[string]string{"schema": "events"}})
+		if code := visitCode(t, resp); code != 422 {
+			t.Fatalf("code = %d, want 422", code)
+		}
+		if len(q.updated) != 0 || len(ft.statements()) != 0 {
+			t.Fatal("a refused update changed state")
+		}
+	})
+}
+
+func TestCatalogSpec_Config(t *testing.T) {
+	t.Parallel()
+	cat := db.Catalog{TrinoCatalogName: strp("events"), Config: []byte(`{"topics":"orders"}`)}
+	spec, err := catalogSpec(cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Config["topics"] != "orders" {
+		t.Fatalf("spec config = %v", spec.Config)
+	}
+	cat.Config = []byte(`{"topics":["orders"]}`)
+	if _, err := catalogSpec(cat); !errors.Is(err, bindings.ErrInvalid) {
+		t.Fatalf("a malformed stored config: err = %v, want bindings.ErrInvalid", err)
 	}
 }

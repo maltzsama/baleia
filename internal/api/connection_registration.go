@@ -365,6 +365,18 @@ func (h *CatalogHandlers) registerFederated(ctx context.Context, r registration)
 		extra = *reg.ExtraProps
 	}
 	rawExtra, _ := json.Marshal(extra)
+	catalogValues, err := catalogConfig(r.provider, reg.Config)
+	var invalidConfig *configError
+	if errors.As(err, &invalidConfig) {
+		return fail(audit.ReasonValidation, CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: invalidConfig.response()})
+	}
+	if err != nil {
+		return nil, err
+	}
+	rawConfig, err := json.Marshal(catalogValues)
+	if err != nil {
+		return nil, fmt.Errorf("encode catalog config: %w", err)
+	}
 
 	var shareWith db.UUID
 	if reg.ShareWithWorkspaceId != nil {
@@ -382,7 +394,10 @@ func (h *CatalogHandlers) registerFederated(ctx context.Context, r registration)
 	// output is projected again once its siblings are active.
 	plans := make([]federatedPlan, 0, len(ordered))
 	for _, out := range ordered {
-		spec := bindings.BindingSpec{EngineCatalog: out.engineName, Connector: out.connector, SourceRef: warehouse, ExtraProps: copyProps(extra)}
+		spec := bindings.BindingSpec{
+			EngineCatalog: out.engineName, Connector: out.connector, SourceRef: warehouse,
+			Config: copyProps(catalogValues), ExtraProps: copyProps(extra),
+		}
 		proj, err := h.binder.Project(spec, r.config)
 		if bindingInvalid(err) {
 			return fail(audit.ReasonValidation, CreateCatalogConnection422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)})
@@ -424,6 +439,7 @@ func (h *CatalogHandlers) registerFederated(ctx context.Context, r registration)
 				Warehouse:        &warehouse,
 				Connector:        &proj.Connector,
 				ExtraProps:       rawExtra,
+				Config:           rawConfig,
 			})
 			if err != nil {
 				return err
@@ -472,7 +488,7 @@ func (h *CatalogHandlers) registerFederated(ctx context.Context, r registration)
 	for i, t := range targets {
 		l := h.lifecycleOn(t.cluster, t.engine)
 		for j := range made {
-			made[j].bindings[i] = h.provisionRegistered(ctx, l, t, conn, made[j].cat, made[j].bindings[i], made[j].proj, warehouse, extra)
+			made[j].bindings[i] = h.provisionRegistered(ctx, l, t, conn, made[j].cat, made[j].bindings[i], made[j].proj)
 		}
 		h.observe(ctx, l)
 	}
@@ -491,12 +507,17 @@ func (h *CatalogHandlers) registerFederated(ctx context.Context, r registration)
 }
 
 // provisionRegistered applies one committed binding on its engine and returns
-// it as the lifecycle left it. A hive binding is projected again first: its
-// table redirection names the siblings that are active by now.
-func (h *CatalogHandlers) provisionRegistered(ctx context.Context, l bindings.Lifecycle, t federatedTarget, conn db.CatalogConnection, cat db.Catalog, b db.CatalogBinding, proj bindings.Projection, warehouse string, extra map[string]string) db.CatalogBinding {
+// it as the lifecycle left it. A hive binding is projected again first, from
+// the stored catalog: its table redirection names the siblings that are active
+// by now.
+func (h *CatalogHandlers) provisionRegistered(ctx context.Context, l bindings.Lifecycle, t federatedTarget, conn db.CatalogConnection, cat db.Catalog, b db.CatalogBinding, proj bindings.Projection) db.CatalogBinding {
 	if proj.Connector == "hive" {
-		spec := bindings.BindingSpec{EngineCatalog: proj.EngineCatalog, Connector: proj.Connector, SourceRef: warehouse, ExtraProps: copyProps(extra)}
-		redone, err := h.projectBinding(ctx, conn, t.engine.ID, cat.ID, spec)
+		spec, err := catalogSpec(cat)
+		var redone bindings.Projection
+		if err == nil {
+			spec.EngineCatalog = proj.EngineCatalog
+			redone, err = h.projectBinding(ctx, conn, t.engine.ID, cat.ID, spec)
+		}
 		if err != nil {
 			h.logger.WarnContext(ctx, "project a hive binding with its siblings", "binding", b.ID, "err", err)
 		} else if redone.Version != proj.Version {

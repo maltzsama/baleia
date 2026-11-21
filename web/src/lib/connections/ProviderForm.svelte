@@ -4,10 +4,11 @@
 	import Input from '$lib/ui/Input.svelte';
 	import Select from '$lib/ui/Select.svelte';
 	import Textarea from '$lib/ui/Textarea.svelte';
-	import type { ConnectionProvider } from './providers';
+	import type { ConnectionProvider, ConnectionProviderField } from './providers';
 
 	let {
 		provider,
+		schema = undefined,
 		values = $bindable<Record<string, string>>({}),
 		secrets = $bindable<Record<string, string>>({}),
 		editing = false,
@@ -17,6 +18,8 @@
 		errors = {}
 	}: {
 		provider: ConnectionProvider;
+		/** The fields to render; the connection's config schema when omitted. */
+		schema?: ConnectionProviderField[];
 		values?: Record<string, string>;
 		secrets?: Record<string, string>;
 		editing?: boolean;
@@ -25,6 +28,8 @@
 		disabled?: boolean;
 		errors?: Record<string, string>;
 	} = $props();
+
+	const fields = $derived(schema ?? provider.config_schema);
 
 	let references = $state<Record<string, boolean>>({});
 
@@ -48,7 +53,7 @@
 </script>
 
 <div class="flex flex-col gap-3" data-testid="provider-form">
-	{#each provider.config_schema as field (field.key)}
+	{#each fields as field (field.key)}
 		{@const value = values[field.key] ?? ''}
 		<div>
 			{#if field.type === 'bool'}

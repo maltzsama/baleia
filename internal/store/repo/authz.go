@@ -52,23 +52,7 @@ func (r *Repo) GetCatalogByID(ctx context.Context, id db.UUID) (db.Catalog, erro
 	if err != nil {
 		return db.Catalog{}, err
 	}
-	return db.Catalog{
-		ID:               PGUUID(string(row.ID)),
-		ConnectionID:     PGUUID(string(row.ConnectionID)),
-		Name:             string(row.Name),
-		Description:      row.Description,
-		TrinoCatalogName: textPtr(row.TrinoCatalogName),
-		ClusterID:        uuidPtr(row.ClusterID),
-		Warehouse:        row.Warehouse,
-		Connector:        textPtr(row.Connector),
-		ExtraProps:       []byte(row.ExtraProps),
-		Enabled:          row.Enabled,
-		CreatedAt:        PGTime(row.CreatedAt),
-		UpdatedAt:        PGTime(row.UpdatedAt),
-		Origin:           string(row.Origin),
-		SourceRef:        row.SourceRef,
-		Discoverable:     row.Discoverable,
-	}, nil
+	return toDBCatalog(row), nil
 }
 
 // GetEngineByID returns one engine or db.ErrNoRows.

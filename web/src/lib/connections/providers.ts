@@ -10,6 +10,7 @@ import { DIRECT, FEDERATED, type AccessMode } from './accessModes';
 
 export type ConnectionProvider = components['schemas']['ConnectionProvider'];
 export type ConnectionCategory = components['schemas']['ConnectionCategory'];
+export type ConnectionProviderField = components['schemas']['ConnectionProviderField'];
 export type ProviderRole = ConnectionProvider['roles'][number];
 export type { AccessMode };
 
@@ -114,8 +115,13 @@ export function catalogIdentity(
 
 /** A record of the provider's non-secret defaults, ready for the form. */
 export function initialValues(provider: ConnectionProvider): Record<string, string> {
+	return defaultValues(provider.config_schema);
+}
+
+/** A record of the non-secret defaults of some schema fields. */
+export function defaultValues(fields: ConnectionProviderField[]): Record<string, string> {
 	const out: Record<string, string> = {};
-	for (const field of provider.config_schema) {
+	for (const field of fields) {
 		if (!field.secret && field.default) out[field.key] = field.default;
 	}
 	return out;

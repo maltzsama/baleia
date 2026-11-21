@@ -508,3 +508,102 @@ func (q *authzFake) CreateManagedBinding(_ context.Context, p db.CreateManagedBi
 		Connector: p.Connector, Mode: "managed", Enabled: true, LifecycleState: "provisioning", DesiredVersion: p.DesiredVersion,
 	}), nil
 }
+
+// ── catalog configuration (#1064) ──────────────────────────────────────────
+
+// topicCatalogs wraps a provider so its catalogs take a configuration, the way
+// a Kafka catalog takes its topic set. Only the API's validation sees it; the
+// binder keeps projecting the wrapped kind.
+type topicCatalogs struct{ connections.Provider }
+
+var topicCatalogSchema = []connections.Field{
+	{Key: "topics", Label: "Topics", Type: connections.FieldText, Required: true},
+	{Key: "schema", Label: "Schema", Type: connections.FieldText, Default: "default"},
+}
+
+func (topicCatalogs) CatalogSchema() []connections.Field { return topicCatalogSchema }
+
+func (topicCatalogs) ValidateCatalog(values map[string]string) (map[string]string, error) {
+	return connections.ValidateCatalogSchema(topicCatalogSchema, values)
+}
+
+// withTopicCatalogs returns the test registry with kind's catalogs taking the
+// topic schema.
+func withTopicCatalogs(t *testing.T, kind connections.Kind) *connections.Registry {
+	t.Helper()
+	all := testRegistry(t).All()
+	for i, p := range all {
+		if p.Kind() == kind {
+			all[i] = topicCatalogs{p}
+		}
+	}
+	reg, err := connections.NewRegistry(all...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return reg
+}
+
+func TestRegisterFederated_CatalogConfig(t *testing.T) {
+	t.Parallel()
+	withConfig := func(values map[string]string) *CreateCatalogConnectionRequest {
+		body := federatedBody(engineOne)
+		body.CatalogRegistration.Config = &values
+		return body
+	}
+
+	t.Run("refused for a type whose catalogs take none", func(t *testing.T) {
+		t.Parallel()
+		h, q, _ := newAuthzHandlers(t)
+		resp, err := registerConnection(t, h, withConfig(map[string]string{"topics": "orders"}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rec := visitCreate(t, resp); rec.Code != 422 || !strings.Contains(rec.Body.String(), `"config.topics"`) {
+			t.Fatalf("response = %d %s, want 422 on config.topics", rec.Code, rec.Body)
+		}
+		if len(q.createdConns) != 0 || len(q.createdCatalogs) != 0 {
+			t.Fatal("a refused registration wrote rows")
+		}
+	})
+
+	t.Run("refused when a required value is missing", func(t *testing.T) {
+		t.Parallel()
+		h, q, _ := newAuthzHandlers(t)
+		h.connections = withTopicCatalogs(t, connections.KindPolaris)
+		resp, err := registerConnection(t, h, federatedBody(engineOne))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rec := visitCreate(t, resp); rec.Code != 422 || !strings.Contains(rec.Body.String(), `"config.topics"`) {
+			t.Fatalf("response = %d %s, want 422 on config.topics", rec.Code, rec.Body)
+		}
+		if len(q.createdConns) != 0 {
+			t.Fatal("a refused registration wrote rows")
+		}
+	})
+
+	t.Run("validated values are stored with the catalog", func(t *testing.T) {
+		t.Parallel()
+		h, q, _ := newAuthzHandlers(t)
+		h.connections = withTopicCatalogs(t, connections.KindPolaris)
+		resp, err := registerConnection(t, h, withConfig(map[string]string{"topics": " orders,payments "}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		created, ok := resp.(CreateCatalogConnection201JSONResponse)
+		if !ok {
+			t.Fatalf("response = %d %s", visitCreate(t, resp).Code, visitCreate(t, resp).Body)
+		}
+		if len(q.createdCatalogs) != 1 {
+			t.Fatalf("catalogs = %d, want 1", len(q.createdCatalogs))
+		}
+		want := `{"schema":"default","topics":"orders,payments"}`
+		if got := string(q.createdCatalogs[0].Config); got != want {
+			t.Fatalf("stored config = %s, want %s", got, want)
+		}
+		if c := created.Catalogs[0].Config; c == nil || (*c)["topics"] != "orders,payments" {
+			t.Fatalf("response config = %v", c)
+		}
+	})
+}

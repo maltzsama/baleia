@@ -32,7 +32,8 @@ test('@issue-674 setup step 2 scrolls to the last field of a tall form', async (
 					family: 'database',
 					roles: ['metadata', 'direct_engine'],
 					status: { state: 'supported' },
-					config_schema: fields
+					config_schema: fields,
+					catalog_schema: []
 				}
 			]
 		})

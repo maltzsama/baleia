@@ -122,6 +122,14 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	if body.ExtraProps != nil {
 		extra = *body.ExtraProps
 	}
+	catalogValues, rawConfig, invalid422, err := h.requestCatalogConfig(conn, body.Config)
+	if err != nil {
+		return nil, err
+	}
+	if invalid422 != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return CreateCatalog422JSONResponse{UnprocessableEntityJSONResponse: *invalid422}, nil
+	}
 
 	cluster, err := h.topology.DefaultCluster(ctx)
 	if err != nil {
@@ -164,7 +172,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	}
 	plans := make([]plan, 0, len(ordered))
 	for _, out := range ordered {
-		spec := bindings.BindingSpec{EngineCatalog: out.engineName, Connector: out.connector, SourceRef: warehouse, ExtraProps: extra}
+		spec := bindings.BindingSpec{EngineCatalog: out.engineName, Connector: out.connector, SourceRef: warehouse, Config: catalogValues, ExtraProps: extra}
 		proj, err := h.projectBinding(ctx, conn, cluster.EngineID, db.UUID{}, spec)
 		if bindingInvalid(err) {
 			h.audited(ctx, ev.Failed(audit.ReasonValidation))
@@ -180,7 +188,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 	for _, pl := range plans {
 		proj := pl.proj
 		if pl.out.connector == "hive" {
-			spec := bindings.BindingSpec{EngineCatalog: pl.out.engineName, Connector: pl.out.connector, SourceRef: warehouse, ExtraProps: extra}
+			spec := bindings.BindingSpec{EngineCatalog: pl.out.engineName, Connector: pl.out.connector, SourceRef: warehouse, Config: catalogValues, ExtraProps: extra}
 			proj, err = h.projectBinding(ctx, conn, cluster.EngineID, db.UUID{}, spec)
 			if bindingInvalid(err) {
 				h.audited(ctx, ev.Failed(audit.ReasonValidation))
@@ -204,6 +212,7 @@ func (h *CatalogHandlers) CreateCatalog(ctx context.Context, request CreateCatal
 				Warehouse:        &warehouse,
 				Connector:        &proj.Connector,
 				ExtraProps:       extraProps,
+				Config:           rawConfig,
 			})
 			if err != nil {
 				return err
@@ -280,7 +289,37 @@ func catalogSpec(cat db.Catalog) (bindings.BindingSpec, error) {
 			return bindings.BindingSpec{}, fmt.Errorf("%w: extra_props must be a flat string map", bindings.ErrInvalid)
 		}
 	}
-	return bindings.BindingSpec{EngineCatalog: cat.TrinoName(), Connector: cat.ConnectorName(), SourceRef: cat.WarehouseName(), ExtraProps: extra}, nil
+	config, err := cat.ConfigValues()
+	if err != nil {
+		return bindings.BindingSpec{}, fmt.Errorf("%w: %w", bindings.ErrInvalid, err)
+	}
+	return bindings.BindingSpec{
+		EngineCatalog: cat.TrinoName(), Connector: cat.ConnectorName(), SourceRef: cat.WarehouseName(),
+		Config: config, ExtraProps: extra,
+	}, nil
+}
+
+// requestCatalogConfig validates a request's catalog configuration against the
+// catalog schema of conn's type. invalid is the 422 to send when it is refused.
+func (h *core) requestCatalogConfig(conn db.CatalogConnection, values *map[string]string) (config map[string]string, raw []byte, invalid *UnprocessableEntityJSONResponse, err error) {
+	p, err := h.connections.Get(connections.Kind(conn.Type))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("provider of connection %s: %w", conn.Type, err)
+	}
+	config, err = catalogConfig(p, values)
+	var ce *configError
+	if errors.As(err, &ce) {
+		resp := ce.response()
+		return nil, nil, &resp, nil
+	}
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	raw, err = json.Marshal(config)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("encode catalog config: %w", err)
+	}
+	return config, raw, nil, nil
 }
 
 // projectCatalog projects a stored catalog.
@@ -418,10 +457,26 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 	if body.ExtraProps != nil && len(*body.ExtraProps) > 0 {
 		extraProps, _ = json.Marshal(*body.ExtraProps)
 	}
+	// A new catalog configuration replaces the stored one; nil keeps it.
+	var newConfig []byte
+	if body.Config != nil {
+		_, raw, invalid422, err := h.requestCatalogConfig(conn, body.Config)
+		if err != nil {
+			return nil, err
+		}
+		if invalid422 != nil {
+			h.audited(ctx, ev.Failed(audit.ReasonValidation))
+			return UpdateCatalog422JSONResponse{UnprocessableEntityJSONResponse: *invalid422}, nil
+		}
+		newConfig = raw
+	}
 	if newTrinoName != existing.TrinoName() {
 		ev.Action = audit.CatalogRename
 	}
-	ev.Changes = catalogChanges(h.logger, existing, newName, newTrinoName, newWarehouse, newConnector, extraProps)
+	ev.Changes = catalogChanges(h.logger, existing, catalogEdit{
+		name: newName, trinoName: newTrinoName, warehouse: newWarehouse, connector: newConnector,
+		extraProps: extraProps, config: newConfig,
+	})
 
 	// The new binding must project before anything changes.
 	cluster, eng, err := h.catalogEngine(ctx, existing)
@@ -430,6 +485,9 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 	}
 	next := existing
 	next.TrinoCatalogName, next.Warehouse, next.Connector, next.ExtraProps = &newTrinoName, &newWarehouse, &newConnector, extraProps
+	if newConfig != nil {
+		next.Config = newConfig
+	}
 	proj, err := h.projectCatalog(ctx, conn, eng.ID, existing.ID, next)
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
@@ -454,6 +512,7 @@ func (h *CatalogHandlers) UpdateCatalog(ctx context.Context, request UpdateCatal
 			Connector:        &proj.Connector,
 			ExtraProps:       extraProps,
 			TrinoCatalogName: &newTrinoName,
+			Config:           newConfig,
 		})
 		if err != nil {
 			return err
@@ -663,12 +722,24 @@ func dbCatalogToPublic(c db.Catalog) Catalog {
 		TrinoCatalogName: c.TrinoCatalogName,
 		Warehouse:        c.Warehouse,
 		Connector:        c.Connector,
+		Config:           publicCatalogConfig(c),
 		Enabled:          &c.Enabled,
 		CreatedAt:        pgTimestampToTimePtr(c.CreatedAt),
 		UpdatedAt:        pgTimestampToTimePtr(c.UpdatedAt),
 		Description:      c.Description,
 	}
 	return out
+}
+
+// publicCatalogConfig is a catalog's configuration for responses. Catalog
+// values are never secret (connections.CatalogConfigurer); a stored value that
+// does not decode is answered as empty.
+func publicCatalogConfig(c db.Catalog) *map[string]string {
+	config, err := c.ConfigValues()
+	if err != nil {
+		config = map[string]string{}
+	}
+	return &config
 }
 
 func pgTimestampToTimePtr(ts db.Timestamptz) *time.Time {

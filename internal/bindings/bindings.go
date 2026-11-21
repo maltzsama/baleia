@@ -76,6 +76,9 @@ type BindingSpec struct {
 	EngineCatalog string
 	Connector     string // among Supports()[kind]; "" = the first
 	SourceRef     string // warehouse, database, …
+	// Config is the catalog's own validated configuration, for providers whose
+	// catalogs take one (connections.CatalogConfigurer); empty otherwise.
+	Config map[string]string
 	// ExtraProps merge over the defaults; protected keys are refused.
 	ExtraProps map[string]string
 }

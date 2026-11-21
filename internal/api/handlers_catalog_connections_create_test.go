@@ -605,6 +605,30 @@ func TestListConnectionProviders(t *testing.T) {
 	}
 }
 
+func TestListConnectionProviders_CatalogSchema(t *testing.T) {
+	t.Parallel()
+	h := createHandlers(t, nil, nil)
+	h.connections = withTopicCatalogs(t, connections.KindPolaris)
+	resp, err := h.ListConnectionProviders(testContext(), ListConnectionProvidersRequestObject{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemas := map[string][]ConnectionProviderField{}
+	for _, p := range resp.(ListConnectionProviders200JSONResponse) {
+		schemas[p.Kind] = p.CatalogSchema
+	}
+	if pg, ok := schemas["postgresql"]; !ok || pg == nil || len(pg) != 0 {
+		t.Errorf("postgresql catalog schema = %v, want an empty list", pg)
+	}
+	polaris := schemas["polaris"]
+	if len(polaris) != 2 || polaris[0].Key != "topics" || !polaris[0].Required || polaris[0].Secret {
+		t.Errorf("polaris catalog schema = %+v", polaris)
+	}
+	if d := polaris[1].Default; d == nil || *d != "default" {
+		t.Errorf("schema default = %v", d)
+	}
+}
+
 func TestListConnectionCategories(t *testing.T) {
 	t.Parallel()
 	h := createHandlers(t, nil, nil)
