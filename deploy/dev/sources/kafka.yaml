@@ -1,0 +1,89 @@
+# Apache Kafka source for the Kafka provider's e2e (#1064); not part of the dev
+# stack. kubectl apply -f deploy/dev/sources/kafka.yaml (make k8s-source NAME=kafka).
+#
+# One KRaft broker (Trino 484's connector needs Kafka 3.3+ with KRaft),
+# advertised under its Service name so the Trino coordinator and workers reach
+# it. The seed Job creates the e2e_orders topic with three JSON messages, and
+# only when it creates the topic, so a re-run never adds messages.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: src-kafka
+  namespace: baleia-dev
+  labels: { app: src-kafka, baleia/role: source }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: src-kafka }
+  template:
+    metadata:
+      labels: { app: src-kafka, baleia/role: source }
+    spec:
+      containers:
+        - name: kafka
+          image: apache/kafka:3.9.1
+          ports:
+            - containerPort: 9092
+          env:
+            - { name: KAFKA_NODE_ID, value: "1" }
+            - { name: KAFKA_PROCESS_ROLES, value: "broker,controller" }
+            - { name: KAFKA_LISTENERS, value: "PLAINTEXT://:9092,CONTROLLER://:9093" }
+            - { name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://src-kafka.baleia-dev.svc.cluster.local:9092" }
+            - { name: KAFKA_CONTROLLER_LISTENER_NAMES, value: "CONTROLLER" }
+            - { name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT" }
+            - { name: KAFKA_CONTROLLER_QUORUM_VOTERS, value: "1@localhost:9093" }
+            - { name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1" }
+            - { name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS, value: "0" }
+            - { name: KAFKA_NUM_PARTITIONS, value: "1" }
+          readinessProbe:
+            tcpSocket: { port: 9092 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: src-kafka
+  namespace: baleia-dev
+spec:
+  selector: { app: src-kafka }
+  ports:
+    - port: 9092
+      targetPort: 9092
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: src-kafka-seed
+  namespace: baleia-dev
+  labels: { app: src-kafka-seed, baleia/role: source }
+spec:
+  backoffLimit: 20
+  template:
+    metadata:
+      labels: { app: src-kafka-seed, baleia/role: source }
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: apache/kafka:3.9.1
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              broker=src-kafka.baleia-dev.svc.cluster.local:9092
+              bin=/opt/kafka/bin
+              until $bin/kafka-topics.sh --bootstrap-server "$broker" --list >/dev/null 2>&1; do sleep 2; done
+              if $bin/kafka-topics.sh --bootstrap-server "$broker" --list | grep -qx e2e_orders; then
+                echo "e2e_orders exists; nothing to seed"
+                exit 0
+              fi
+              $bin/kafka-topics.sh --bootstrap-server "$broker" --create --topic e2e_orders --partitions 1 --replication-factor 1
+              printf '%s\n' \
+                '{"id":1,"item":"book","amount":12.5}' \
+                '{"id":2,"item":"pen","amount":1.2}' \
+                '{"id":3,"item":"lamp","amount":30}' \
+                | $bin/kafka-console-producer.sh --bootstrap-server "$broker" --topic e2e_orders
+              echo "seeded e2e_orders"
