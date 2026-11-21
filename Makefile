@@ -107,6 +107,7 @@ BI_E2E_TLS_PROXY ?= $(or $(TMPDIR),/tmp)/baleia-bi-e2e-tlsproxy
 # Postgres (for the seed) and Trino (for the run smoke).
 e2e:
 	$(MAKE) k8s-up
+	kubectl -n $(K8S_NS) delete job src-kafka-seed --ignore-not-found
 	$(MAKE) k8s-source NAME=kafka
 	kubectl -n $(K8S_NS) wait --for=condition=complete job/src-kafka-seed --timeout=10m
 	$(MAKE) e2e-forward

@@ -3,8 +3,11 @@
 #
 # One KRaft broker (Trino 484's connector needs Kafka 3.3+ with KRaft),
 # advertised under its Service name so the Trino coordinator and workers reach
-# it. The seed Job creates the e2e_orders topic with three JSON messages, and
-# only when it creates the topic, so a re-run never adds messages.
+# it. The log directory is an emptyDir, so a container restart keeps the
+# topics, and topics are never created by a read. The seed Job leaves the
+# e2e_orders topic with exactly three JSON messages: it writes them into an
+# empty topic, recreates a topic a failed run left partly written, and does
+# nothing to a complete one, so it can run again at any time.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,6 +16,8 @@ metadata:
   labels: { app: src-kafka, baleia/role: source }
 spec:
   replicas: 1
+  # One broker: an update replaces it, never runs two side by side.
+  strategy: { type: Recreate }
   selector:
     matchLabels: { app: src-kafka }
   template:
@@ -37,10 +42,17 @@ spec:
             - { name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1" }
             - { name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS, value: "0" }
             - { name: KAFKA_NUM_PARTITIONS, value: "1" }
+            - { name: KAFKA_AUTO_CREATE_TOPICS_ENABLE, value: "false" }
+            - { name: KAFKA_LOG_DIRS, value: "/var/lib/kafka/data" }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/kafka/data }
           readinessProbe:
             tcpSocket: { port: 9092 }
             initialDelaySeconds: 5
             periodSeconds: 5
+      volumes:
+        - name: data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -76,14 +88,28 @@ spec:
               broker=src-kafka.baleia-dev.svc.cluster.local:9092
               bin=/opt/kafka/bin
               until $bin/kafka-topics.sh --bootstrap-server "$broker" --list >/dev/null 2>&1; do sleep 2; done
-              if $bin/kafka-topics.sh --bootstrap-server "$broker" --list | grep -qx e2e_orders; then
-                echo "e2e_orders exists; nothing to seed"
+              topics() { $bin/kafka-topics.sh --bootstrap-server "$broker" "$@"; }
+              count() { $bin/kafka-get-offsets.sh --bootstrap-server "$broker" --topic e2e_orders | awk -F: '{n += $3} END {print n + 0}'; }
+              topics --create --if-not-exists --topic e2e_orders --partitions 1 --replication-factor 1
+              end=$(count)
+              if [ "$end" -eq 3 ]; then
+                echo "e2e_orders holds its 3 messages; nothing to seed"
                 exit 0
               fi
-              $bin/kafka-topics.sh --bootstrap-server "$broker" --create --topic e2e_orders --partitions 1 --replication-factor 1
+              if [ "$end" -ne 0 ]; then
+                echo "e2e_orders holds $end messages; recreating it"
+                topics --delete --topic e2e_orders
+                while topics --list | grep -qx e2e_orders; do sleep 1; done
+                topics --create --topic e2e_orders --partitions 1 --replication-factor 1
+              fi
               printf '%s\n' \
                 '{"id":1,"item":"book","amount":12.5}' \
                 '{"id":2,"item":"pen","amount":1.2}' \
                 '{"id":3,"item":"lamp","amount":30}' \
                 | $bin/kafka-console-producer.sh --bootstrap-server "$broker" --topic e2e_orders
+              end=$(count)
+              if [ "$end" -ne 3 ]; then
+                echo "e2e_orders holds $end messages after seeding, want 3" >&2
+                exit 1
+              fi
               echo "seeded e2e_orders"
