@@ -252,9 +252,11 @@ done
 
 if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
   view_response="$workdir/$OPENMETADATA_VIEW_NAME.json"
+  view_fqn="$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.$OPENMETADATA_VIEW_NAME"
+  view_fqn_encoded="$(printf '%s' "$view_fqn" | jq -sRr @uri)"
   curl -fsS -H "Authorization: Bearer $openmetadata_token" \
     -o "$view_response" \
-    "$api_base/tables/name/$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.$OPENMETADATA_VIEW_NAME?fields=schemaDefinition"
+    "$api_base/tables/name/$view_fqn_encoded?fields=schemaDefinition"
   jq -e '(.tableType | ascii_downcase) == "view" and (.schemaDefinition // "") != ""' \
     "$view_response" >/dev/null || {
     echo "openmetadata-e2e: $OPENMETADATA_VIEW_NAME was not ingested as a view with a definition" >&2
