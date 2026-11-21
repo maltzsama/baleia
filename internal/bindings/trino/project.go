@@ -146,13 +146,17 @@ func userSession(p *projection, src connections.Config) {
 
 // restStorage switches a REST catalog from vended credentials to the
 // connection's own S3 credentials when it has an access key: stores without
-// STS have nothing to vend (#511). Without one the projection is unchanged.
+// STS have nothing to vend (#511). Without one it keeps vended credentials but
+// still projects the storage location (region, endpoint, path-style), so the
+// S3 client resolves the right region instead of falling back to the engine's
+// environment (#1118).
 func restStorage(p *projection, src connections.Config) {
-	if src.Value("storage.access_key") == "" {
+	if src.Value("storage.access_key") != "" {
+		p.props["iceberg.rest-catalog.vended-credentials-enabled"] = "false"
+		s3Storage(p, src)
 		return
 	}
-	p.props["iceberg.rest-catalog.vended-credentials-enabled"] = "false"
-	s3Storage(p, src)
+	s3Location(p, src)
 }
 
 // icebergREST is the shared shape of REST catalogs that are not Polaris.
@@ -300,6 +304,18 @@ func hiveProjection(connector string, src connections.Config) (projection, error
 // appears in DDL text or logs.
 func s3Storage(p *projection, src connections.Config) {
 	p.props["fs.s3.enabled"] = "true"
+	s3Location(p, src)
+	if k := src.Value("storage.access_key"); k != "" {
+		p.props["s3.aws-access-key"] = k
+	}
+	secretProp(p, "s3.aws-secret-key", "storage.secret_key", src)
+}
+
+// s3Location projects where the table data lives — endpoint, region and
+// path-style access — without any credentials. It serves both a connection's
+// own S3 credentials and vended-credentials catalogs, where the catalog vends
+// the keys but the location still pins the S3 client's region (#1118).
+func s3Location(p *projection, src connections.Config) {
 	if e := src.Value("storage.endpoint"); e != "" {
 		p.props["s3.endpoint"] = e
 	}
@@ -309,10 +325,6 @@ func s3Storage(p *projection, src connections.Config) {
 	if src.Value("storage.path_style") == "true" {
 		p.props["s3.path-style-access"] = "true"
 	}
-	if k := src.Value("storage.access_key"); k != "" {
-		p.props["s3.aws-access-key"] = k
-	}
-	secretProp(p, "s3.aws-secret-key", "storage.secret_key", src)
 }
 
 // glueProjection binds an AWS Glue Data Catalog connection as an Iceberg,

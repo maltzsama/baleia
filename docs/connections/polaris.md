@@ -26,9 +26,9 @@ Create it under **Connections**. Credentials are sealed with `BALEIA_ENCRYPTION_
 | `client_id` | text | yes |  |  |
 | `client_secret` | secret | yes |  |  |
 | `user_identity` | bool |  | `false` | The catalog manager authorizes each Baleia user with the access token of the identity provider they signed in with; it must trust that provider. Users signed in without one, and background work, act as this connection's own credentials. |
-| `storage.endpoint` | text |  |  | Only with an S3 access key, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
-| `storage.region` | text |  |  | Only with an S3 access key, e.g. us-east-1 |
-| `storage.path_style` | bool |  | `false` | Only with an S3 access key; required by most S3-compatible stores |
+| `storage.endpoint` | text |  |  | Object storage endpoint, e.g. https://<namespace>.compat.objectstorage.<region>.oraclecloud.com; empty uses the AWS default for the region |
+| `storage.region` | text |  |  | Object storage region, e.g. us-east-1; empty falls back to the engine's region |
+| `storage.path_style` | bool |  | `false` | Required by most S3-compatible stores |
 | `storage.access_key` | text |  |  | Set it when the object store has no STS: the engine then uses these credentials instead of vended ones |
 | `storage.secret_key` | secret |  |  |  |
 
