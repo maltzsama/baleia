@@ -285,6 +285,20 @@ describe('ConnectionWizard', () => {
 		expect(bodies[0].catalog_registration).not.toHaveProperty('config');
 	});
 
+	it('opens the configuration of a provider listed without a catalog schema', async () => {
+		// An API older than catalog_schema omits it during a rolling upgrade.
+		const legacy: Record<string, unknown> = { ...makeProvider() };
+		delete legacy.catalog_schema;
+		server.use(
+			http.get('/connection-providers', ({ response }) =>
+				response(200).json([legacy as ReturnType<typeof makeProvider>])
+			)
+		);
+		render(ConnectionWizard);
+		await fireEvent.click(await screen.findByText('Test Database'));
+		expect(screen.getByLabelText('Host *')).toBeTruthy();
+	});
+
 	it('does not continue a federated connection without an engine', async () => {
 		render(ConnectionWizard);
 		await fillConfiguration();

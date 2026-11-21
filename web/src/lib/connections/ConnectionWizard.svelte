@@ -236,7 +236,8 @@
 		accessMode = nextModes.length === 1 ? nextModes[0] : null;
 		bindEngineIds = [];
 		catalogName = '';
-		catalogValues = defaultValues(next.catalog_schema);
+		// An API older than catalog_schema omits it (a rolling upgrade).
+		catalogValues = defaultValues(next.catalog_schema ?? []);
 		testResult = null;
 		testError = null;
 		testedSnapshot = '';
