@@ -23,6 +23,8 @@ func TestReadOnly(t *testing.T) {
 		"-- a comment\nSELECT 1",
 		"/* a comment */ SELECT 1",
 		"SELECT 1;",
+		"EXECUTE IMMEDIATE 'SELECT 1' USING 1",
+		"execute immediate 'SELECT * FROM t WHERE x = ?' using 'value'",
 	}
 	for _, sql := range allowed {
 		if err := ReadOnly(d, sql); err != nil {
@@ -48,6 +50,8 @@ func TestReadOnly(t *testing.T) {
 		"CALL foo()",
 		"PREPARE p FROM SELECT 1",
 		"EXECUTE p",
+		"EXECUTE IMMEDIATE 'DROP TABLE t' USING 1",
+		"EXECUTE IMMEDIATE 'SELECT 1; DROP TABLE t' USING 1",
 		"SELECT 1; DROP TABLE t",
 	}
 	for _, sql := range rejected {

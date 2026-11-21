@@ -34,6 +34,10 @@ func ReadOnly(d dialect.Dialect, sql string) error {
 // kind. EXPLAIN is refused because EXPLAIN ANALYZE executes the statement it
 // explains; a statement the parser cannot read is not read-only.
 func readOnlyStatement(d dialect.Dialect, sql string) bool {
+	if query, ok := executeImmediateQuery(sql); ok {
+		return readOnlyStatement(d, query)
+	}
+
 	expr, err := dialect.ParseStatement(d, sql)
 	if err != nil || expr == nil {
 		return false
@@ -54,6 +58,59 @@ func readOnlyStatement(d dialect.Dialect, sql string) bool {
 	default:
 		return false
 	}
+}
+
+// executeImmediateQuery unwraps Trino's parameterized query form. The query
+// itself still goes through the same AST-based read-only check; the wrapper is
+// only a transport detail used by clients such as OpenMetadata's Trino
+// connector when binding metadata filters.
+func executeImmediateQuery(sql string) (string, bool) {
+	rest := strings.TrimSpace(sql)
+	word, remainder := splitLeadingWord(rest)
+	if !strings.EqualFold(word, "EXECUTE") {
+		return "", false
+	}
+	word, remainder = splitLeadingWord(remainder)
+	if !strings.EqualFold(word, "IMMEDIATE") {
+		return "", false
+	}
+	remainder = strings.TrimSpace(remainder)
+	if remainder == "" || remainder[0] != '\'' {
+		return "", false
+	}
+
+	var query strings.Builder
+	for i := 1; i < len(remainder); i++ {
+		if remainder[i] != '\'' {
+			query.WriteByte(remainder[i])
+			continue
+		}
+		if i+1 < len(remainder) && remainder[i+1] == '\'' {
+			query.WriteByte('\'')
+			i++
+			continue
+		}
+
+		tail := strings.TrimSpace(remainder[i+1:])
+		if tail != "" {
+			word, tail = splitLeadingWord(tail)
+			if !strings.EqualFold(word, "USING") || strings.TrimSpace(tail) == "" {
+				return "", false
+			}
+		}
+		return query.String(), true
+	}
+	return "", false
+}
+
+func splitLeadingWord(sql string) (string, string) {
+	sql = strings.TrimSpace(sql)
+	for i, r := range sql {
+		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
+			return sql[:i], sql[i:]
+		}
+	}
+	return sql, ""
 }
 
 // commandKeyword is the leading keyword of a Command node.
