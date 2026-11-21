@@ -40,6 +40,7 @@
 		canDirect,
 		canFederated,
 		databaseName,
+		defaultValues,
 		initialValues,
 		intentsFor,
 		missingFields,
@@ -80,6 +81,7 @@
 	let accessMode = $state<AccessMode | null>(null);
 	let bindEngineIds = $state<string[]>([]);
 	let catalogName = $state('');
+	let catalogValues = $state<Record<string, string>>({});
 
 	let testing = $state(false);
 	let testResult = $state<TestResult | null>(null);
@@ -188,6 +190,11 @@
 	);
 
 	const connectors = $derived(selectedSupport?.connectors ?? []);
+	/** The values each catalog of the type takes (its registration options). */
+	const catalogSchema = $derived(provider?.catalog_schema ?? []);
+	const catalogConfigMissing = $derived(
+		catalogSchema.some((f) => f.required && !(catalogValues[f.key] ?? '').trim())
+	);
 	const reservedNames = $derived(selectedSupport?.reserved_names ?? []);
 	const isDatabase = $derived(
 		provider ? provider.config_schema.some((f) => f.key === 'database') : false
@@ -229,6 +236,7 @@
 		accessMode = nextModes.length === 1 ? nextModes[0] : null;
 		bindEngineIds = [];
 		catalogName = '';
+		catalogValues = defaultValues(next.catalog_schema);
 		testResult = null;
 		testError = null;
 		testedSnapshot = '';
@@ -325,7 +333,12 @@
 					throw new Error(m.catalogs_that_name_is_reserved_by_the_engine());
 				}
 				draft.engine_ids = bindEngineIds;
-				draft.catalog_registration = { catalogs: outputs, warehouse: base, description: '' };
+				draft.catalog_registration = {
+					catalogs: outputs,
+					warehouse: base,
+					description: '',
+					config: catalogSchema.length > 0 ? catalogValues : undefined
+				};
 			}
 			// One request registers everything: the backend creates the engine
 			// (direct) or the catalogs and bindings (federated) with the
@@ -628,6 +641,15 @@
 							bind:value={catalogName}
 							placeholder={isDatabase ? 'postgres' : 'warehouse'}
 						/>
+						{#if catalogSchema.length > 0}
+							<div class="mt-3" data-testid="catalog-config">
+								<ProviderForm
+									provider={provider!}
+									schema={catalogSchema}
+									bind:values={catalogValues}
+								/>
+							</div>
+						{/if}
 						{#if catalogOutputs.length > 0}
 							<ul class="mt-2 flex flex-col gap-1 text-[11px] text-slate-600 dark:text-slate-300">
 								{#each catalogOutputs as output (output.trino_catalog_name)}
@@ -648,7 +670,8 @@
 			<Button
 				variant="primary"
 				disabled={(modes.length === 2 && accessMode === null) ||
-					(accessMode === FEDERATED && bindEngineIds.length === 0)}
+					(accessMode === FEDERATED && bindEngineIds.length === 0) ||
+					(accessMode === FEDERATED && catalogConfigMissing)}
 				onclick={() => (step = 4)}>{m.connections_connectionwizard_continue()}</Button
 			>
 		</div>

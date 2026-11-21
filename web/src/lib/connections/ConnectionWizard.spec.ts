@@ -212,6 +212,79 @@ describe('ConnectionWizard', () => {
 		expect(screen.getByRole('link', { name: 'Review the connection' })).toBeTruthy();
 	});
 
+	it('sends the catalog configuration a type declares with the catalogs', async () => {
+		const bodies: Record<string, unknown>[] = [];
+		server.use(
+			http.get('/connection-providers', ({ response }) =>
+				response(200).json([
+					makeProvider({
+						catalog_schema: [
+							{ key: 'topics', label: 'Topics', type: 'text', required: true, secret: false },
+							{
+								key: 'schema',
+								label: 'Schema',
+								type: 'text',
+								required: false,
+								secret: false,
+								default: 'default'
+							}
+						]
+					})
+				])
+			),
+			http.post('/catalog-connections', async ({ request, response }) => {
+				bodies.push((await request.json()) as Record<string, unknown>);
+				return response(201).json(
+					makeCreatedConnection({ access_mode: 'federated', catalogs: [makeCatalog()] })
+				);
+			})
+		);
+		render(ConnectionWizard);
+		await fillConfiguration();
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('radio', { name: /Through a query engine/ }));
+		await fireEvent.click(await screen.findByRole('checkbox', { name: /warehouse/ }));
+		const next = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement;
+		// A required catalog value holds the step.
+		expect(next.disabled).toBe(true);
+		await fireEvent.input(screen.getByLabelText('Topics *'), { target: { value: 'orders' } });
+		expect(next.disabled).toBe(false);
+		await fireEvent.click(next);
+		await fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+		expect(await screen.findByText('Tested')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+		expect(await screen.findByText('Created')).toBeTruthy();
+
+		expect(bodies[0].catalog_registration).toMatchObject({
+			config: { topics: 'orders', schema: 'default' }
+		});
+	});
+
+	it('sends no catalog configuration for a type that declares none', async () => {
+		const bodies: Record<string, unknown>[] = [];
+		server.use(
+			http.post('/catalog-connections', async ({ request, response }) => {
+				bodies.push((await request.json()) as Record<string, unknown>);
+				return response(201).json(
+					makeCreatedConnection({ access_mode: 'federated', catalogs: [makeCatalog()] })
+				);
+			})
+		);
+		render(ConnectionWizard);
+		await fillConfiguration();
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('radio', { name: /Through a query engine/ }));
+		await fireEvent.click(await screen.findByRole('checkbox', { name: /warehouse/ }));
+		expect(screen.queryByTestId('catalog-config')).toBeNull();
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+		expect(await screen.findByText('Tested')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+		expect(await screen.findByText('Created')).toBeTruthy();
+
+		expect(bodies[0].catalog_registration).not.toHaveProperty('config');
+	});
+
 	it('does not continue a federated connection without an engine', async () => {
 		render(ConnectionWizard);
 		await fillConfiguration();

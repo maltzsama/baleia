@@ -43,6 +43,8 @@ export type CreateCatalogInput = {
 	catalogs: { name: string; trino_catalog_name: string }[];
 	warehouse?: string;
 	description?: string;
+	/** The catalog's own values, for types that declare a catalog_schema. */
+	config?: Record<string, string>;
 };
 
 export type GrantInput = {
@@ -226,6 +228,7 @@ export async function createCatalog(
 			catalogs: input.catalogs,
 			warehouse: input.warehouse,
 			description: input.description,
+			config: input.config,
 			enabled: true
 		}
 	});
