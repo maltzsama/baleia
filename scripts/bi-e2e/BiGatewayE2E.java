@@ -235,8 +235,8 @@ public final class BiGatewayE2E {
         check("a disabled workspace refuses BI requests", () -> {
             String token = loginToken();
             String workspace = personalWorkspace(token);
-            setWorkspaceBI(token, workspace, false);
             try {
+                setWorkspaceBI(token, workspace, false);
                 HttpResponse<String> disabled = send(request(base + "/v1/info").GET());
                 if (disabled.statusCode() != 403) {
                     throw new AssertionError(

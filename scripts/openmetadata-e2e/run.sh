@@ -23,6 +23,15 @@ OPENMETADATA_GATEWAY_URL="${OPENMETADATA_GATEWAY_URL:-https://127.0.0.1:8444}"
 OPENMETADATA_K8S_NAMESPACE="${OPENMETADATA_K8S_NAMESPACE:-baleia-dev}"
 OPENMETADATA_KEY_FILE="${OPENMETADATA_KEY_FILE:-${BI_E2E_KEY_FILE:-/tmp/baleia-e2e-bi-key.secret}}"
 
+view_filter_yaml=""
+if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
+  # OpenMetadata treats tableFilterPattern as a regular expression. Quote the
+  # configured name as a literal and then encode the complete YAML scalar so
+  # names containing regex or YAML punctuation remain unambiguous.
+  view_regex="$(printf '%s' "$OPENMETADATA_VIEW_NAME" | sed 's/[][\\.^$|(){}*+?]/\\&/g')"
+  view_filter_yaml="$(printf '^%s$' "$view_regex" | jq -Rr @json)"
+fi
+
 if [[ ! -r "$OPENMETADATA_KEY_FILE" ]]; then
   echo "openmetadata-e2e: BI key file is not readable: $OPENMETADATA_KEY_FILE" >&2
   echo "Run the e2e seed first or set OPENMETADATA_KEY_FILE." >&2
@@ -206,7 +215,7 @@ source:
         includes:
           - "^orders$"
           - "^customer$"
-$(if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then printf '          - "^%s$"\n' "$OPENMETADATA_VIEW_NAME"; fi)
+$(if [[ -n "$view_filter_yaml" ]]; then printf '          - %s\n' "$view_filter_yaml"; fi)
 sink:
   type: metadata-rest
   config: {}
@@ -245,8 +254,8 @@ if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
   view_response="$workdir/$OPENMETADATA_VIEW_NAME.json"
   curl -fsS -H "Authorization: Bearer $openmetadata_token" \
     -o "$view_response" \
-    "$api_base/tables/name/$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.$OPENMETADATA_VIEW_NAME"
-  jq -e '(.tableType | ascii_downcase) == "view" and (.viewDefinition // "") != ""' \
+    "$api_base/tables/name/$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.$OPENMETADATA_VIEW_NAME?fields=schemaDefinition"
+  jq -e '(.tableType | ascii_downcase) == "view" and (.schemaDefinition // "") != ""' \
     "$view_response" >/dev/null || {
     echo "openmetadata-e2e: $OPENMETADATA_VIEW_NAME was not ingested as a view with a definition" >&2
     exit 1

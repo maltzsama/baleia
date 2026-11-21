@@ -836,8 +836,10 @@ Metadata introspection is recorded in query history and audit with
 `origin=bi`, like every other statement arriving through the BI gateway. This
 keeps monitoring, limits and retention consistent, but means a metadata scan
 can add visible read activity. The gateway logs and metrics expose request
-status, latency and the existing BI concurrency state; credentials, BI keys
-and OpenMetadata tokens are not logged or returned by Baleia API responses.
+status, latency and the existing BI concurrency state; credentials are never
+logged. The BI key is returned only once by the authenticated key-creation
+response, while later Baleia API responses never return it and OpenMetadata
+tokens are never handled by Baleia.
 
 The tested compatibility matrix is Trino `484`, OpenMetadata `1.12.6` with
 its `1.12.6.4` ingestion image, and the pinned Baleia gateway in the repository
