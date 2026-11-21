@@ -7054,7 +7054,7 @@ export interface components {
             truncated?: boolean | null;
             duration_ms?: number | null;
             error_message?: string | null;
-            /** @description Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, read_only_unsupported, conflict, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown). */
+            /** @description Typed reason of a failed or cancelled statement: an engine code (syntax, not_found, permission_denied, timeout, cancelled, resource_exhausted, engine_unavailable, read_only_unsupported, conflict, storage_error, internal), `editor_rejected`, or `interrupted` when the worker stopped mid-statement (its outcome on the engine is unknown). */
             error_code?: string | null;
             /** @description The engine's own error identifier (SQLSTATE, Trino errorName, gRPC status) */
             error_native?: string | null;

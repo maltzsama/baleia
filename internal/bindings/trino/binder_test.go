@@ -294,6 +294,31 @@ func TestProject_Kinds(t *testing.T) {
 			secrets: []string{"iceberg.rest-catalog.oauth2.token"},
 		},
 		{
+			name: "unity vended credentials keep the storage location (#1118)",
+			src: cfg(connections.KindUnity, map[string]string{
+				"url": "http://unity:8080/", "storage.endpoint": "https://ns.compat.objectstorage.us-east-2.oraclecloud.com",
+				"storage.region": "us-east-2", "storage.path_style": "true",
+			}, map[string]string{"token": "tok"}),
+			spec: bindings.BindingSpec{EngineCatalog: "lake", SourceRef: "unity"},
+			want: map[string]string{
+				"iceberg.catalog.type": "rest", "iceberg.rest-catalog.uri": "http://unity:8080/api/2.1/unity-catalog/iceberg",
+				"iceberg.rest-catalog.warehouse": "unity", "iceberg.rest-catalog.vended-credentials-enabled": "true", "fs.s3.enabled": "true",
+				"iceberg.rest-catalog.security": "OAUTH2", "iceberg.rest-catalog.oauth2.token": "tok",
+				"s3.endpoint": "https://ns.compat.objectstorage.us-east-2.oraclecloud.com", "s3.region": "us-east-2", "s3.path-style-access": "true",
+			},
+			secrets: []string{"iceberg.rest-catalog.oauth2.token"},
+		},
+		{
+			name: "iceberg rest vended credentials keep the region (#1118)",
+			src:  cfg(connections.KindIcebergREST, map[string]string{"url": "https://rest.example/catalog", "storage.region": "us-east-2"}, nil),
+			spec: bindings.BindingSpec{EngineCatalog: "rest", SourceRef: "w"},
+			want: map[string]string{
+				"iceberg.catalog.type": "rest", "iceberg.rest-catalog.uri": "https://rest.example/catalog",
+				"iceberg.rest-catalog.warehouse": "w", "iceberg.rest-catalog.security": "NONE", "fs.s3.enabled": "true",
+				"s3.region": "us-east-2",
+			},
+		},
+		{
 			name: "hive metastore as an iceberg catalog (default connector)",
 			src: cfg(connections.KindHiveMetastore, map[string]string{
 				"metastore_uri": "thrift://hms:9083", "storage.type": "s3",

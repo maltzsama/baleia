@@ -45,6 +45,7 @@ func TestErrorMapping(t *testing.T) {
 		{"SERVER_SHUTTING_DOWN", "INTERNAL_ERROR", queryengine.CodeUnavailable},
 		{"NOT_SUPPORTED", "USER_ERROR", queryengine.CodeSyntax},
 		{"GENERIC_INTERNAL_ERROR", "INTERNAL_ERROR", queryengine.CodeInternal},
+		{"ICEBERG_INVALID_METADATA", "INTERNAL_ERROR", queryengine.CodeStorage},
 	}
 	for _, c := range cases {
 		err := mapError(&trinoclient.QueryError{ErrorName: c.name, ErrorType: c.typ, Message: "m"})
