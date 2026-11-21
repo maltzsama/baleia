@@ -802,6 +802,54 @@ rewritten URI carries a signature any replica can verify with the shared
   /admin/bi-gateway`), turning BI off for a workspace (`bi_enabled`), or
   revoking the key takes effect at the next request on any replica.
 
+### OpenMetadata through the BI gateway
+
+OpenMetadata's stock **Trino** connector is the supported integration path.
+Baleia does not implement an OpenMetadata connector and does not call the
+OpenMetadata REST API. Configure one OpenMetadata database service per Baleia
+workspace, with the service's catalog and schema set to the physical scope the
+workspace is allowed to discover. Semantic models, metrics and saved queries
+remain Baleia content; OpenMetadata only sees them when they are materialized
+as Trino-visible objects.
+
+The service host must be the gateway's public TLS origin, including its port
+but not a `/v1` path. Use the workspace BI key as the Trino password and the
+key owner's e-mail as the Trino user. A production deployment must terminate
+TLS before the gateway or at the gateway's ingress; the key is a password
+credential and must not travel over plaintext HTTP. OpenMetadata owns the
+ingestion schedule and stores the metadata it discovers.
+
+The minimum Baleia-side privileges are:
+
+- the global BI gateway is enabled and healthy;
+- BI is enabled on the target workspace;
+- the workspace has a Trino target; and
+- the workspace is granted only the catalogs the service should discover.
+
+The gateway remains read-only for this integration. Catalog grants, workspace
+disablement and BI-key revocation are enforced on every request, including
+metadata polling and `nextUri` follows. Revoke the key or turn BI off for the
+workspace to make the integration fail closed; no OpenMetadata-side cleanup is
+required to stop access.
+
+Metadata introspection is recorded in query history and audit with
+`origin=bi`, like every other statement arriving through the BI gateway. This
+keeps monitoring, limits and retention consistent, but means a metadata scan
+can add visible read activity. The gateway logs and metrics expose request
+status, latency and the existing BI concurrency state; credentials, BI keys
+and OpenMetadata tokens are not logged or returned by Baleia API responses.
+
+The tested compatibility matrix is Trino `484`, OpenMetadata `1.12.6` with
+its `1.12.6.4` ingestion image, and the pinned Baleia gateway in the repository
+revision under test. The reproducible harness is `make e2e-openmetadata`,
+which is deliberately separate from `make e2e`: it starts the heavyweight
+OpenMetadata quickstart and is intended for manual runs or a dedicated nightly
+job, not ordinary pull-request CI. The harness asserts physical tables and
+their columns through OpenMetadata. View ingestion is enabled, and a view is
+asserted when `OPENMETADATA_VIEW_NAME` is set against a source connector that
+exposes a supported view definition; connectors without view definitions cannot
+provide view lineage through the Trino protocol.
+
 ## Runbooks
 
 ### BaleiaAPIDown
