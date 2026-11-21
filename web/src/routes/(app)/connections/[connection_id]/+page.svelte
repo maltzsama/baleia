@@ -76,11 +76,10 @@
 		error = '';
 		try {
 			conn = await getConnection(connectionId);
-			[catalogs, engines, impact, providers] = await Promise.all([
+			[catalogs, engines, impact] = await Promise.all([
 				listConnectionCatalogs(connectionId),
 				listEngines(),
-				getConnectionImpact(connectionId),
-				loadProviders()
+				getConnectionImpact(connectionId)
 			]);
 			const federated = engines.find((item) => item.class === 'federated');
 			if (federated && conn) {
@@ -110,8 +109,23 @@
 		}
 	}
 
-	function openCatalog() {
+	/**
+	 * Loads the provider metadata the Add catalog dialog needs (its
+	 * catalog_schema). A failure is shown in the dialog, which can be reopened
+	 * to retry, and never hides the connection's other data.
+	 */
+	async function ensureProviders() {
+		if (providers.length > 0) return;
+		try {
+			providers = await loadProviders();
+		} catch (e) {
+			catalogError = apiErrorMessage(e);
+		}
+	}
+
+	async function openCatalog() {
 		catalogError = '';
+		await ensureProviders();
 		catalogName = (conn?.name ?? '').replace(/[^a-zA-Z0-9_]+/g, '_');
 		catalogWarehouse = '';
 		catalogConfig = catalogDefaults(catalogSchema);
