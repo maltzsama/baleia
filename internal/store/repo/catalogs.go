@@ -26,6 +26,7 @@ func (r *Repo) CreateCatalog(ctx context.Context, arg db.CreateCatalogParams) (d
 		Warehouse:        arg.Warehouse,
 		Connector:        modelTextPtr(arg.Connector),
 		ExtraProps:       jsonOrDefault(arg.ExtraProps),
+		Config:           jsonOrDefault(arg.Config),
 		Enabled:          true,
 		CreatedAt:        now,
 		UpdatedAt:        now,
@@ -81,7 +82,7 @@ func (r *Repo) GetCatalogByTrinoName(ctx context.Context, arg db.GetCatalogByTri
 }
 
 // UpdateCatalog stores a catalog's new definition. A source catalog's
-// source_ref follows its warehouse.
+// source_ref follows its warehouse; a nil Config keeps the stored one.
 func (r *Repo) UpdateCatalog(ctx context.Context, arg db.UpdateCatalogParams) (db.Catalog, error) {
 	current, err := r.GetCatalogByID(ctx, arg.ID)
 	if err != nil {
@@ -98,6 +99,9 @@ func (r *Repo) UpdateCatalog(ctx context.Context, arg db.UpdateCatalogParams) (d
 	}
 	if current.Origin == "source" {
 		changes["source_ref"] = arg.Warehouse
+	}
+	if arg.Config != nil {
+		changes["config"] = jsonOrDefault(arg.Config)
 	}
 	if err := r.Users.db.WithContext(ctx).Model(&model.Catalog{}).
 		Where("id = ?", UUIDString(arg.ID)).Updates(changes).Error; err != nil {
@@ -1035,6 +1039,7 @@ func toDBCatalog(c model.Catalog) db.Catalog {
 		Warehouse:        c.Warehouse,
 		Connector:        textPtr(c.Connector),
 		ExtraProps:       []byte(c.ExtraProps),
+		Config:           []byte(c.Config),
 		Enabled:          c.Enabled,
 		CreatedAt:        PGTime(c.CreatedAt),
 		UpdatedAt:        PGTime(c.UpdatedAt),

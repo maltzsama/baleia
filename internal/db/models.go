@@ -149,6 +149,7 @@ type Catalog struct {
 	Warehouse        *string     `json:"warehouse"`
 	Connector        *string     `json:"connector"`
 	ExtraProps       []byte      `json:"extra_props"`
+	Config           []byte      `json:"config"`
 	Enabled          bool        `json:"enabled"`
 	CreatedAt        Timestamptz `json:"created_at"`
 	UpdatedAt        Timestamptz `json:"updated_at"`

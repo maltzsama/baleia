@@ -255,6 +255,16 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.StatementColumn{})
 			},
 		},
+		Migration{
+			// A catalog's own validated configuration (#1064), for connection
+			// types whose catalogs take one, such as the topic set of a Kafka
+			// catalog. Existing catalogs get the empty object.
+			Version: 22,
+			Name:    "add catalog configuration",
+			Up: func(db *gorm.DB) error {
+				return AutoMigrate(db, &model.Catalog{})
+			},
+		},
 	)
 }
 

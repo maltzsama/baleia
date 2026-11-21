@@ -56,6 +56,7 @@ type Catalog struct {
 	Warehouse        *string            `gorm:"column:warehouse"`
 	Connector        *Text              `gorm:"column:connector;size:255;default:'iceberg'"`
 	ExtraProps       JSON               `gorm:"column:extra_props;not null;default:('{}')"`
+	Config           JSON               `gorm:"column:config;not null;default:('{}')"`
 	Enabled          bool               `gorm:"column:enabled;not null;default:true"`
 	CreatedAt        time.Time          `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
 	UpdatedAt        time.Time          `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3)"`

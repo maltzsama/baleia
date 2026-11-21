@@ -213,6 +213,7 @@ type CreateCatalogParams struct {
 	Warehouse        *string `json:"warehouse"`
 	Connector        *string `json:"connector"`
 	ExtraProps       []byte  `json:"extra_props"`
+	Config           []byte  `json:"config"`
 }
 
 type CreateEngineParams struct {
@@ -2328,6 +2329,8 @@ type UpdateCatalogParams struct {
 	Connector        *string `json:"connector"`
 	ExtraProps       []byte  `json:"extra_props"`
 	TrinoCatalogName *string `json:"trino_catalog_name"`
+	// Config replaces the catalog configuration; nil keeps the stored one.
+	Config []byte `json:"config"`
 }
 
 type UpdateEngineParams struct {
