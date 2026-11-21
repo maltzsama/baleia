@@ -53,14 +53,14 @@ Lineage comes from the statements themselves, so it stays current as content cha
 An Apache Kafka connection ([its settings](../connections/kafka.md)) is read through Trino's Kafka connector. Each of its catalogs lists the topics it exposes, under one schema (`default` unless you name another), and each topic is a table.
 
 - **Columns.** Baleia ships no table description files, so a topic's columns are the connector's internal ones: `_key` and `_message` (the bytes as text), `_timestamp`, `_partition_id`, `_partition_offset`, `_headers` and the segment columns. Read JSON messages with Trino's JSON functions, for example `json_extract_scalar(_message, '$.id')`.
-- **Reads only.** Without table description files the connector has no encoder, so an `INSERT` fails; Baleia never produces messages or commits offsets.
+- **Reads.** Baleia never produces messages or commits offsets, and ships no table description files: without one for a topic the connector has no encoder, so an `INSERT` into it fails. Baleia does not block writes itself ([ADR 0016](../adr/0016-access-layers-and-workspace-roles.md)): if an operator places a description file with an encoder for a topic in the Trino nodes' table description directory (`etc/kafka` by default), Trino can write to that topic, and the Kafka cluster's own ACLs decide.
 - **Live data.** A topic changes as messages arrive and segments expire, so two reads of the same topic in one query (a self join) can see different rows.
 - **Topics.** Names must be lowercase letters, digits, `_` or `-`, without dots: Trino folds identifiers to lowercase and reads a dot as a schema qualifier. Changing a catalog's topics re-creates its Trino catalog.
 
 Operational prerequisites:
 
 - Kafka 3.3 or later with KRaft, and Trino 484.
-- Every Trino coordinator and worker must reach every broker, not only the bootstrap ones you list. Baleia's own check only dials the brokers from the API; the connection test's bind check is what proves Trino reaches them.
+- Every Trino coordinator and worker must reach every broker, not only the bootstrap ones you list. The connection test proves that the API reaches the brokers and that Trino loads the catalog, but listing the catalog's schemas does not contact the brokers: the first query on a topic is what proves the Trino nodes reach them.
 - Security is `PLAINTEXT` or `SSL` with the JVM's default trust store. A private CA, client certificates and SASL need files on every Trino node and are not supported, nor is a Schema Registry.
 
 ## Open in a BI tool
