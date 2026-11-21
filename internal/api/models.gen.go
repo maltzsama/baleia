@@ -1994,11 +1994,14 @@ type Catalog struct {
 	AllowedActions *[]CatalogAllowedAction `json:"allowed_actions,omitempty"`
 
 	// CatalogVersion SHA-256 hash of the registered properties (matches the plugin's computeCatalogVersion)
-	CatalogVersion *string             `json:"catalog_version"`
-	ConnectionId   *openapi_types.UUID `json:"connection_id,omitempty"`
-	Connector      *string             `json:"connector,omitempty"`
-	CreatedAt      *time.Time          `json:"created_at,omitempty"`
-	Description    *string             `json:"description"`
+	CatalogVersion *string `json:"catalog_version"`
+
+	// Config The catalog's own configuration, validated against the connection type's catalog_schema (GET /connection-providers). Empty for types whose catalogs take none.
+	Config       *map[string]string  `json:"config,omitempty"`
+	ConnectionId *openapi_types.UUID `json:"connection_id,omitempty"`
+	Connector    *string             `json:"connector,omitempty"`
+	CreatedAt    *time.Time          `json:"created_at,omitempty"`
+	Description  *string             `json:"description"`
 
 	// Discoverable The owner marked the catalog discoverable so workspace admins can find and request it (default off: a catalog name is itself information).
 	Discoverable *bool               `json:"discoverable,omitempty"`
@@ -2244,6 +2247,9 @@ type CatalogSummary struct {
 	// CatalogVersion SHA-256 hash of the registered properties (matches the plugin's computeCatalogVersion)
 	CatalogVersion *string `json:"catalog_version"`
 
+	// Config The catalog's own configuration, validated against the connection type's catalog_schema (GET /connection-providers). Empty for types whose catalogs take none.
+	Config *map[string]string `json:"config,omitempty"`
+
 	// Connection Null when the caller cannot view the connection
 	Connection   *EngineConnectionRef `json:"connection"`
 	ConnectionId *openapi_types.UUID  `json:"connection_id,omitempty"`
@@ -2352,6 +2358,9 @@ type ConnectionProvider struct {
 
 	// Capabilities Declared capabilities per access mode (ADR 0021 D.6)
 	Capabilities *map[string]map[string]ConnectionProviderCapabilities `json:"capabilities,omitempty"`
+
+	// CatalogSchema The values one catalog of the connection takes (its registration options, ADR 0021/0029), sent as a catalog's config. Never secret; empty for types whose catalogs take none.
+	CatalogSchema []ConnectionProviderField `json:"catalog_schema"`
 
 	// Category Presentation grouping; it does not determine access mode or compatibility (ADR 0021 D.10)
 	Category     *ConnectionProviderCategory `json:"category,omitempty"`
@@ -2573,8 +2582,11 @@ type CreateCatalogRequest struct {
 		Name             string `json:"name"`
 		TrinoCatalogName string `json:"trino_catalog_name"`
 	} `json:"catalogs"`
-	Description *string `json:"description,omitempty"`
-	Enabled     *bool   `json:"enabled,omitempty"`
+
+	// Config The catalog's own configuration, validated against the connection type's catalog_schema (GET /connection-providers); every catalog of the request gets it. Refused for types whose catalogs take none.
+	Config      *map[string]string `json:"config,omitempty"`
+	Description *string            `json:"description,omitempty"`
+	Enabled     *bool              `json:"enabled,omitempty"`
 
 	// ExtraProps Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties.
 	ExtraProps *map[string]string `json:"extra_props,omitempty"`
@@ -5204,8 +5216,10 @@ type UpdateCatalogDetailRequest struct {
 
 // UpdateCatalogRequest Partial update. `name` renames the catalog, `trino_catalog_name` renames its Trino catalog identifier, and the other fields replace their stored value.
 type UpdateCatalogRequest struct {
-	Connector   *string `json:"connector,omitempty"`
-	Description *string `json:"description,omitempty"`
+	// Config Replaces the catalog's configuration, validated against the connection type's catalog_schema. Omitted, the stored one is kept.
+	Config      *map[string]string `json:"config,omitempty"`
+	Connector   *string            `json:"connector,omitempty"`
+	Description *string            `json:"description,omitempty"`
 
 	// ExtraProps Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties.
 	ExtraProps       *map[string]string `json:"extra_props,omitempty"`

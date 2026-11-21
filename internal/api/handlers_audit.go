@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"sort"
 
 	"github.com/galileostudio/baleia/internal/audit"
@@ -276,20 +277,35 @@ func withID(ev audit.Event, id db.UUID) audit.Event {
 }
 
 // catalogChanges lists what a catalog update changes.
-func catalogChanges(logger *slog.Logger, c db.Catalog, name, trinoName, warehouse, connector string, extraProps []byte) map[string]audit.Change {
+// catalogEdit is a catalog update as the audit trail sees it; a nil config
+// means the stored one is kept.
+type catalogEdit struct {
+	name, trinoName, warehouse, connector string
+	extraProps, config                    []byte
+}
+
+func catalogChanges(logger *slog.Logger, c db.Catalog, e catalogEdit) map[string]audit.Change {
 	changes := map[string]audit.Change{}
 	add := func(k string, from, to string) {
 		if from != to {
 			changes[k] = audit.Change{From: from, To: to}
 		}
 	}
-	add("name", c.Name, name)
-	add("trino_catalog_name", c.TrinoName(), trinoName)
-	add("warehouse", c.WarehouseName(), warehouse)
-	add("connector", c.ConnectorName(), connector)
+	add("name", c.Name, e.name)
+	add("trino_catalog_name", c.TrinoName(), e.trinoName)
+	add("warehouse", c.WarehouseName(), e.warehouse)
+	add("connector", c.ConnectorName(), e.connector)
 	// Extra properties may carry engine secrets: only their keys are kept.
-	if string(c.ExtraProps) != string(extraProps) {
-		changes["extra_props"] = audit.Change{From: propKeys(logger, c.ExtraProps), To: propKeys(logger, extraProps)}
+	if string(c.ExtraProps) != string(e.extraProps) {
+		changes["extra_props"] = audit.Change{From: propKeys(logger, c.ExtraProps), To: propKeys(logger, e.extraProps)}
+	}
+	// Catalog configuration is never secret: its values are kept.
+	if e.config != nil {
+		from, _ := c.ConfigValues()
+		to, _ := db.Catalog{Config: e.config}.ConfigValues()
+		if !maps.Equal(from, to) {
+			changes["config"] = audit.Change{From: from, To: to}
+		}
 	}
 	if len(changes) == 0 {
 		return nil

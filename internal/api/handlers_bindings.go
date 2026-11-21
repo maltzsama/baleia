@@ -134,12 +134,25 @@ func syncPrimaryCatalog(ctx context.Context, q primaryCatalogStore, t bindingTar
 	return nil
 }
 
-func (h *core) bindingSpec(t bindingTarget, name, connector string, extra map[string]string) bindings.BindingSpec {
+// projectTarget projects the binding of t's catalog named name on t's engine.
+func (h *CatalogHandlers) projectTarget(ctx context.Context, t bindingTarget, name, connector string, extra map[string]string) (bindings.Projection, error) {
+	spec, err := h.bindingSpec(t, name, connector, extra)
+	if err != nil {
+		return bindings.Projection{}, err
+	}
+	return h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, spec)
+}
+
+func (h *core) bindingSpec(t bindingTarget, name, connector string, extra map[string]string) (bindings.BindingSpec, error) {
 	ref := ""
 	if t.catalog.SourceRef != nil {
 		ref = *t.catalog.SourceRef
 	}
-	return bindings.BindingSpec{EngineCatalog: name, Connector: connector, SourceRef: ref, ExtraProps: extra}
+	config, err := t.catalog.ConfigValues()
+	if err != nil {
+		return bindings.BindingSpec{}, fmt.Errorf("%w: %w", bindings.ErrInvalid, err)
+	}
+	return bindings.BindingSpec{EngineCatalog: name, Connector: connector, SourceRef: ref, Config: config, ExtraProps: extra}, nil
 }
 
 func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request CreateCatalogBindingRequestObject) (CreateCatalogBindingResponseObject, error) {
@@ -180,7 +193,7 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 			FieldError{Field: "engine_catalog_name", Code: FieldCodeInvalidFormat},
 		)}, nil
 	}
-	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, body.EngineCatalogName, connector, extra))
+	proj, err := h.projectTarget(ctx, t, body.EngineCatalogName, connector, extra)
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
@@ -293,7 +306,7 @@ func (h *CatalogHandlers) UpdateCatalogBinding(ctx context.Context, request Upda
 	if cur.Connector != nil {
 		connector = *cur.Connector
 	}
-	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, name, connector, extra))
+	proj, err := h.projectTarget(ctx, t, name, connector, extra)
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil
@@ -449,7 +462,7 @@ func (h *CatalogHandlers) SyncCatalogBinding(ctx context.Context, request SyncCa
 	if cur.Connector != nil {
 		connector = *cur.Connector
 	}
-	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, cur.EngineCatalogName, connector, extraPropsOf(h.logger, cur.ExtraProps)))
+	proj, err := h.projectTarget(ctx, t, cur.EngineCatalogName, connector, extraPropsOf(h.logger, cur.ExtraProps))
 	if bindingInvalid(err) {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return SyncCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: bindingUnprocessable(err)}, nil

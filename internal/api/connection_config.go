@@ -128,6 +128,26 @@ func asConfigError(err error) error {
 	return err
 }
 
+// catalogConfig validates the catalog configuration of a request against the
+// connection type's catalog schema (#1064). A failure is a 422 whose fields
+// are named config.<key>.
+func catalogConfig(p connections.Provider, values *map[string]string) (map[string]string, error) {
+	var in map[string]string
+	if values != nil {
+		in = *values
+	}
+	out, err := connections.ValidateCatalogConfig(p, in)
+	var ve *connections.ValidationError
+	if errors.As(err, &ve) {
+		fields := make([]connections.FieldError, len(ve.Fields))
+		for i, f := range ve.Fields {
+			fields[i] = connections.FieldError{Key: "config." + f.Key, Message: f.Message}
+		}
+		return nil, &configError{code: ErrorCodeValidationError, fields: fields}
+	}
+	return out, err
+}
+
 // createConfig builds and validates the config of a create request.
 func (h *core) createConfig(id db.UUID, body *CreateCatalogConnectionRequest) (connections.Config, error) {
 	p, err := h.provider(body.Type)
@@ -258,11 +278,10 @@ func (h *CatalogHandlers) ListConnectionCategories(ctx context.Context, _ ListCo
 func providerToPublic(p connections.Provider) ConnectionProvider {
 	meta := p.Meta()
 	cp := ConnectionProvider{
-		Kind:         string(p.Kind()),
-		Label:        p.Label(),
-		Family:       ConnectionProviderFamily(p.Family()),
-		Roles:        []ConnectionProviderRoles{},
-		ConfigSchema: []ConnectionProviderField{},
+		Kind:   string(p.Kind()),
+		Label:  p.Label(),
+		Family: ConnectionProviderFamily(p.Family()),
+		Roles:  []ConnectionProviderRoles{},
 	}
 	if meta.Description != "" {
 		d := meta.Description
@@ -319,7 +338,15 @@ func providerToPublic(p connections.Provider) ConnectionProvider {
 		reason := st.Reason
 		cp.Status.Reason = &reason
 	}
-	for _, f := range p.ConfigSchema() {
+	cp.ConfigSchema = fieldsToPublic(p.ConfigSchema())
+	cp.CatalogSchema = fieldsToPublic(connections.CatalogSchemaOf(p))
+	return cp
+}
+
+// fieldsToPublic converts a provider's config or catalog schema; never nil.
+func fieldsToPublic(fields []connections.Field) []ConnectionProviderField {
+	out := make([]ConnectionProviderField, 0, len(fields))
+	for _, f := range fields {
 		pf := ConnectionProviderField{
 			Key:      f.Key,
 			Label:    f.Label,
@@ -339,7 +366,7 @@ func providerToPublic(p connections.Provider) ConnectionProvider {
 			opts := append([]string(nil), f.Options...)
 			pf.Options = &opts
 		}
-		cp.ConfigSchema = append(cp.ConfigSchema, pf)
+		out = append(out, pf)
 	}
-	return cp
+	return out
 }

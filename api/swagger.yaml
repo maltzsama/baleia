@@ -1697,6 +1697,13 @@ components:
           type: string
           default: iceberg
           pattern: '^[a-z][a-z0-9_]{0,62}$'
+        config:
+          type: object
+          additionalProperties: { type: string }
+          description: >-
+            The catalog's own configuration, validated against the connection
+            type's catalog_schema (GET /connection-providers). Empty for types
+            whose catalogs take none.
         enabled:             { type: boolean, default: true }
         discoverable:
           type: boolean
@@ -1898,6 +1905,13 @@ components:
             (their catalog falls back to the connection's database) and for
             endpointless catalogs (memory, blackhole, faker, jmx, tpch, tpcds).
         description:        { type: string }
+        config:
+          type: object
+          additionalProperties: { type: string }
+          description: >-
+            The catalog's own configuration, validated against the connection
+            type's catalog_schema (GET /connection-providers); every catalog of
+            the request gets it. Refused for types whose catalogs take none.
         extra_props:
           type: object
           additionalProperties: { type: string }
@@ -1928,6 +1942,12 @@ components:
           type: string
           pattern: '^[a-z][a-z0-9_]{0,62}$'
         description:        { type: string }
+        config:
+          type: object
+          additionalProperties: { type: string }
+          description: >-
+            Replaces the catalog's configuration, validated against the
+            connection type's catalog_schema. Omitted, the stored one is kept.
         extra_props:
           type: object
           additionalProperties: { type: string }
@@ -3085,7 +3105,7 @@ components:
 
     ConnectionProvider:
       type: object
-      required: [kind, label, family, roles, status, config_schema]
+      required: [kind, label, family, roles, status, config_schema, catalog_schema]
       properties:
         kind: { type: string }
         label: { type: string }
@@ -3129,6 +3149,13 @@ components:
             reason: { type: string }
         config_schema:
           type: array
+          items: { $ref: "#/components/schemas/ConnectionProviderField" }
+        catalog_schema:
+          type: array
+          description: >-
+            The values one catalog of the connection takes (its registration
+            options, ADR 0021/0029), sent as a catalog's config. Never secret;
+            empty for types whose catalogs take none.
           items: { $ref: "#/components/schemas/ConnectionProviderField" }
 
     TestCatalogConnectionResult:

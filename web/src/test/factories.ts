@@ -325,6 +325,7 @@ export function makeProvider(overrides: Partial<ConnectionProvider> = {}): Conne
 			{ key: 'database', label: 'Database', type: 'text', required: true, secret: false },
 			{ key: 'password', label: 'Password', type: 'secret', required: true, secret: true }
 		],
+		catalog_schema: [],
 		...overrides
 	};
 }

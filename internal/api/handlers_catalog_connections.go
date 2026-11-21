@@ -301,7 +301,7 @@ func (h *CatalogHandlers) resyncBinding(ctx context.Context, p authz.Principal, 
 	if cur.Connector != nil {
 		connector = *cur.Connector
 	}
-	proj, err := h.projectBinding(ctx, t.conn, t.engine.ID, t.catalog.ID, h.bindingSpec(t, cur.EngineCatalogName, connector, extraPropsOf(h.logger, cur.ExtraProps)))
+	proj, err := h.projectTarget(ctx, t, cur.EngineCatalogName, connector, extraPropsOf(h.logger, cur.ExtraProps))
 	if err != nil {
 		h.logger.WarnContext(ctx, "project binding after a connection edit", "binding_id", idString(id), "err", err)
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))

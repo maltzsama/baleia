@@ -63,6 +63,9 @@ func (p Projector) Project(ctx context.Context, b db.CatalogBinding) (bindings.P
 	if cat.SourceRef != nil {
 		spec.SourceRef = *cat.SourceRef
 	}
+	if spec.Config, err = cat.ConfigValues(); err != nil {
+		return bindings.Projection{}, fmt.Errorf("%w: %w", bindings.ErrInvalid, err)
+	}
 	// A Hive-connector catalog of a metastore whose connection also exposes an
 	// Iceberg or Delta catalog here delegates those tables to it (#86).
 	if err := bindings.HiveRedirection(ctx, p.Store, connections.Kind(conn.Type), conn.ID, b.EngineID, b.CatalogID, spec.Connector, extra); err != nil {

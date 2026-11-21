@@ -5170,6 +5170,10 @@ export interface components {
             warehouse?: string;
             /** @default iceberg */
             connector: string;
+            /** @description The catalog's own configuration, validated against the connection type's catalog_schema (GET /connection-providers). Empty for types whose catalogs take none. */
+            config?: {
+                [key: string]: string;
+            };
             /** @default true */
             enabled: boolean;
             /**
@@ -5329,6 +5333,10 @@ export interface components {
             /** @description Warehouse or logical source the connector addresses. Required for catalog managers and Iceberg REST catalogs; omitted for databases (their catalog falls back to the connection's database) and for endpointless catalogs (memory, blackhole, faker, jmx, tpch, tpcds). */
             warehouse?: string;
             description?: string;
+            /** @description The catalog's own configuration, validated against the connection type's catalog_schema (GET /connection-providers); every catalog of the request gets it. Refused for types whose catalogs take none. */
+            config?: {
+                [key: string]: string;
+            };
             /** @description Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties. */
             extra_props?: {
                 [key: string]: string;
@@ -5348,6 +5356,10 @@ export interface components {
             warehouse?: string;
             connector?: string;
             description?: string;
+            /** @description Replaces the catalog's configuration, validated against the connection type's catalog_schema. Omitted, the stored one is kept. */
+            config?: {
+                [key: string]: string;
+            };
             /** @description Connector-specific overrides (flat string→string map) merged on top of the auto-generated properties. */
             extra_props?: {
                 [key: string]: string;
@@ -6382,6 +6394,8 @@ export interface components {
                 reason?: string;
             };
             config_schema: components["schemas"]["ConnectionProviderField"][];
+            /** @description The values one catalog of the connection takes (its registration options, ADR 0021/0029), sent as a catalog's config. Never secret; empty for types whose catalogs take none. */
+            catalog_schema: components["schemas"]["ConnectionProviderField"][];
         };
         TestCatalogConnectionResult: {
             success: boolean;
