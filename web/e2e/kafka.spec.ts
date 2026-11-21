@@ -16,7 +16,25 @@ test('@issue-1064 a Kafka topic is registered and read from the workbench', asyn
 	const suffix = Date.now().toString(36);
 	const catalog = `e2e_kafka_${suffix}`;
 
+	// The catalog is shared with a workspace of its own, so no other spec's
+	// workspace gains a catalog. The token is read from the page's own login
+	// response: a second login counts against the 10/min limit (#391).
+	let token = '';
+	await page.route('**/api/v1/auth/login', async (route) => {
+		const response = await route.fetch();
+		if (response.ok()) token = (await response.json()).token;
+		await route.fulfill({ response });
+	});
 	await loginAs('admin');
+	await page.unroute('**/api/v1/auth/login');
+	const workspaceName = `Kafka e2e ${suffix}`;
+	const created = await page.request.post('/api/v1/workspaces', {
+		headers: { Authorization: `Bearer ${token}` },
+		data: { name: workspaceName, type: 'personal' }
+	});
+	expect(created.status(), await created.text()).toBe(201);
+	const workspace: { id: string } = await created.json();
+
 	await page.goto('/connections/new');
 	await page.locator('[data-testid="provider-card"]', { hasText: 'Apache Kafka' }).click();
 	await expect(page.getByText('Step 2 of 4')).toBeVisible();
@@ -37,18 +55,11 @@ test('@issue-1064 a Kafka topic is registered and read from the workbench', asyn
 	await page.getByRole('button', { name: 'Create', exact: true }).click();
 	await expect(page.getByText('Created')).toBeVisible({ timeout: 60_000 });
 
-	// Share the catalog with every workspace offered, so the workbench's one
-	// sees it whichever it opens.
-	const workspaces = page.getByLabel('Workspace');
-	for (const value of await workspaces
-		.locator('option')
-		.evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))) {
-		await workspaces.selectOption(value);
-		await page.getByRole('button', { name: 'Grant', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Grant', exact: true })).toBeEnabled();
-	}
+	await page.getByLabel('Workspace').selectOption({ label: workspaceName });
+	await page.getByRole('button', { name: 'Grant', exact: true }).click();
+	await expect(page.getByText(/1 grant/)).toBeVisible();
 
-	await page.goto('/sql');
+	await page.goto(`/sql?ws=${workspace.id}`);
 	const catalogSelect = page.getByTestId('catalog-select');
 	const option = catalogSelect.locator('option', { hasText: catalog });
 	await expect(option).toHaveCount(1, { timeout: 30_000 });
@@ -76,5 +87,7 @@ test('@issue-1064 a Kafka topic is registered and read from the workbench', asyn
 	await expect(page.getByText(/failed/i).first()).toBeVisible({ timeout: 60_000 });
 	await expect(page.getByRole('gridcell', { name: '3', exact: true })).toHaveCount(0);
 	await run(`SELECT count(*) AS n FROM ${catalog}."default".e2e_orders`);
-	await expect(page.getByRole('gridcell', { name: '3', exact: true })).toBeVisible({ timeout: 60_000 });
+	await expect(page.getByRole('gridcell', { name: '3', exact: true })).toBeVisible({
+		timeout: 60_000
+	});
 });
