@@ -10,6 +10,7 @@
 package sqlref
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/dialect"
@@ -72,11 +73,13 @@ func ExtractWithDialect(d dialect.Dialect, sql string) Reference {
 // schema, stamped on unqualified table references). An unparsable statement
 // yields an empty Reference.
 func ExtractResolved(d dialect.Dialect, defaultSchema, sql string) Reference {
-	expr, err := dialect.ParseStatement(d, sql)
-	if err != nil || expr == nil {
-		return Reference{}
+	qualified, report := parseAndQualify(d, defaultSchema, sql, true)
+	if qualified == nil {
+		// Column qualification can reject a statement the table pass accepts
+		// (a duplicate alias, for instance); keep its tables rather than lose
+		// the whole reference.
+		qualified, report = parseAndQualify(d, defaultSchema, sql, false)
 	}
-	qualified, report := qualify(d, defaultSchema, expr)
 	if qualified == nil {
 		return Reference{}
 	}
@@ -91,42 +94,29 @@ func ExtractResolved(d dialect.Dialect, defaultSchema, sql string) Reference {
 		if len(path) == 0 {
 			continue
 		}
-		alias := tableExpr.Alias()
-		if alias == "" {
-			alias = path[len(path)-1]
-		}
 		kind := "read"
 		if isWriteTarget(qualified, tableExpr) {
 			kind = "write"
 		}
-		tables = append(tables, Table{Path: path, Alias: alias, Kind: kind})
+		tables = append(tables, Table{Path: path, Alias: tableAlias(tableExpr, path), Kind: kind})
 	}
 
-	// Resolve column qualifiers against every scope's sources, so a column
-	// through a CTE or derived table resolves to the physical table it reads.
-	byAlias := physicalTablesByAlias(qualified)
-
-	// A projection alias (AS x) referenced elsewhere (ORDER BY x) is not a
-	// physical column; skip it rather than infer a phantom.
-	outputAliases := make(map[string]bool)
-	for _, alias := range qualified.FindAll(expressions.KindAlias) {
-		if name := alias.Alias(); name != "" {
-			outputAliases[strings.ToLower(name)] = true
-		}
-	}
-
+	res := newResolver(qualified, report)
 	columns := make([]Column, 0, 8)
 	seenColumns := make(map[Column]bool, 8)
 	for _, columnExpr := range qualified.FindAll(expressions.KindColumn) {
 		name := columnExpr.Name()
-		if name == "" {
-			continue
+		if name == "" || name == "*" {
+			continue // a star is not a column
 		}
-		if columnExpr.TableName() == "" && outputAliases[strings.ToLower(name)] {
+		scope := res.scopeOf(columnExpr)
+		if isOutputAliasRef(scope, columnExpr) {
 			continue // a reference to a projection alias, not a physical column
 		}
-		namespace, table := resolveColumn(columnExpr.TableName(), byAlias, tables)
-		column := Column{Namespace: namespace, Table: table, Name: name}
+		column := Column{Name: name}
+		if physical, ok := res.column(scope, columnExpr); ok {
+			column = Column{Namespace: tableNamespace(physical.table), Table: tableName(physical.table), Name: physical.column}
+		}
 		if seenColumns[column] {
 			continue
 		}
@@ -134,29 +124,41 @@ func ExtractResolved(d dialect.Dialect, defaultSchema, sql string) Reference {
 		columns = append(columns, column)
 	}
 
-	return Reference{Tables: tables, Columns: columns, Joins: extractJoins(qualified, tables)}
+	return Reference{Tables: tables, Columns: columns, Joins: res.joins(qualified, ambiguousAliases(tables))}
 }
 
-// qualify runs the fork's qualify pass with table resolution only (no column
-// metadata), returning the qualified tree and the resolution report keyed by
-// the qualified tree's nodes.
-func qualify(d dialect.Dialect, defaultSchema string, expr expressions.Expression) (root expressions.Expression, report map[expressions.Expression]optimizer.ResolvedSource) {
+// parseAndQualify parses sql and runs the fork's qualify pass, returning the
+// qualified tree and the resolution report keyed by its nodes. With columns,
+// the pass also qualifies every column with the source it reads in its own
+// scope (#1089); schema inference stays off, so a column is qualified only
+// when the statement itself proves its source.
+func parseAndQualify(d dialect.Dialect, defaultSchema, sql string, columns bool) (root expressions.Expression, report map[expressions.Expression]optimizer.ResolvedSource) {
+	expr, err := dialect.ParseStatement(d, sql)
+	if err != nil || expr == nil {
+		return nil, nil
+	}
 	name, err := dialect.SqlglotDialect(d)
 	if err != nil {
 		return nil, nil
 	}
+	infer := false
 	report = make(map[expressions.Expression]optimizer.ResolvedSource)
 	opts := optimizer.QualifyOpts{
 		Dialect:          name,
 		ResolutionReport: report,
-		// Table resolution only: no column metadata, no star expansion, no
-		// identifier quoting. The returned tree keeps source spelling.
-		QualifyColumns:         false,
-		ExpandStars:            false,
-		ExpandAliasRefs:        false,
-		ValidateQualifyColumns: false,
-		QuoteIdentifiers:       false,
-		Identify:               false,
+		// No column metadata and no identifier quoting: the returned tree keeps
+		// the source spelling, normalized per dialect. Alias references are not
+		// expanded: without column metadata the pass cannot tell a WHERE name
+		// that reads a source column from a projection alias, so a name that
+		// matches an alias is left to isOutputAliasRef instead of rewritten.
+		QualifyColumns:            columns,
+		ExpandStars:               columns,
+		ExpandAliasRefs:           false,
+		InferSchema:               &infer,
+		AllowPartialQualification: true,
+		ValidateQualifyColumns:    false,
+		QuoteIdentifiers:          false,
+		Identify:                  false,
 	}
 	if defaultSchema != "" {
 		opts.DefaultSchema = defaultSchema
@@ -180,74 +182,263 @@ func physicalPath(src optimizer.ResolvedSource) []string {
 	return path
 }
 
-// physicalTablesByAlias maps an alias to the physical table it names, following
-// CTE and derived-table scopes: for `WITH x AS (SELECT id FROM orders)`, the
-// alias `x` maps to `orders`. An alias that resolves to no table, or to more
-// than one, is omitted (best-effort, never a phantom).
-func physicalTablesByAlias(root expressions.Expression) (out map[string]Table) {
-	out = map[string]Table{}
+// tableAlias is the name a reference to the table uses: the alias it declares,
+// or its own name when it declares none.
+func tableAlias(t expressions.Expression, path []string) string {
+	if alias := t.Alias(); alias != "" {
+		return alias
+	}
+	return path[len(path)-1]
+}
+
+// maxFollowDepth bounds how many CTE or derived-table projections a column is
+// followed through, so a malformed self-reference cannot recurse forever.
+const maxFollowDepth = 64
+
+// physicalColumn is a column reference resolved to the physical table it reads.
+type physicalColumn struct {
+	table  Table
+	column string
+}
+
+// resolver maps the references of a qualified tree to physical columns. The
+// fork's qualify pass has already qualified each column with the source it
+// reads in its own scope; the resolver only finds that scope and follows a CTE
+// or derived-table source to the physical table behind it.
+type resolver struct {
+	report map[expressions.Expression]optimizer.ResolvedSource
+	// owner maps a node to the innermost scope that contains it.
+	owner map[expressions.Expression]*optimizer.Scope
+}
+
+func newResolver(root expressions.Expression, report map[expressions.Expression]optimizer.ResolvedSource) (r *resolver) {
+	r = &resolver{report: report, owner: map[expressions.Expression]*optimizer.Scope{}}
 	defer func() {
 		if recover() != nil {
-			out = map[string]Table{}
+			// A tree the fork cannot traverse resolves nothing: every column is
+			// kept by name only, never against a guessed scope.
+			r.owner = map[expressions.Expression]*optimizer.Scope{}
 		}
 	}()
-	var resolve func(any) ([]string, bool)
-	resolve = func(src any) ([]string, bool) {
-		switch s := src.(type) {
-		case expressions.Expression:
-			if s != nil && s.Kind() == expressions.KindTable {
-				return tableNodePath(s), true
-			}
-		case *optimizer.Scope:
-			var paths [][]string
-			for _, inner := range s.Sources {
-				if path, ok := resolve(inner); ok {
-					paths = append(paths, path)
-				}
-			}
-			if len(paths) == 1 {
-				return paths[0], true
-			}
-		}
-		return nil, false
-	}
+	// TraverseScope yields a child scope before its parent, so the first scope
+	// to claim a node is the innermost one.
 	for _, scope := range optimizer.TraverseScope(root) {
-		for alias, src := range scope.Sources {
-			if path, ok := resolve(src); ok {
-				out[strings.ToLower(alias)] = Table{Path: path}
+		for _, node := range optimizer.WalkInScope(scope.Expression, nil) {
+			if _, claimed := r.owner[node]; !claimed {
+				r.owner[node] = scope
 			}
 		}
 	}
-	return out
+	return r
 }
 
-// tableNodePath reads a resolved table's catalog/schema/name parts.
-func tableNodePath(t expressions.Expression) []string {
-	path := make([]string, 0, 3)
-	for _, part := range []string{t.CatalogName(), t.SchemaName(), t.Name()} {
-		if part != "" {
-			path = append(path, part)
-		}
-	}
-	return path
+func (r *resolver) scopeOf(node expressions.Expression) *optimizer.Scope {
+	return r.owner[node]
 }
 
-// resolveColumn resolves a column's qualifier (the alias as written) to the
-// physical table's namespace and name; an empty qualifier resolves to the only
-// table when the statement reads exactly one. A qualifier that names no single
-// physical table resolves to nothing, so the column is dropped rather than
-// persisted as a phantom.
-func resolveColumn(qualifier string, byAlias map[string]Table, tables []Table) (namespace, table string) {
-	if qualifier != "" {
-		if t, ok := byAlias[strings.ToLower(qualifier)]; ok {
-			return tableNamespace(t), tableName(t)
+// column resolves a column reference in scope to the physical column it reads.
+func (r *resolver) column(scope *optimizer.Scope, columnExpr expressions.Expression) (physicalColumn, bool) {
+	if scope == nil {
+		return physicalColumn{}, false
+	}
+	source, ok := sourceOf(scope, columnExpr.TableName())
+	if !ok {
+		return physicalColumn{}, false
+	}
+	return r.follow(source, columnExpr.Name(), 0)
+}
+
+// sourceOf finds the source a qualifier names, from scope outward: a correlated
+// reference names a source of an enclosing query. Only a source the scope binds
+// as a row source (selected, or the table of a SEMI or ANTI JOIN) matches; a
+// CTE the scope merely inherits does not. An unqualified reference resolves only
+// when scope selects exactly one source, so it is never guessed.
+func sourceOf(scope *optimizer.Scope, qualifier string) (any, bool) {
+	if qualifier == "" {
+		names := scope.SelectedSourceNames()
+		if len(names) != 1 {
+			return nil, false
 		}
-		return "", ""
+		source, ok := scope.Sources[names[0]]
+		return source, ok
 	}
-	if len(tables) == 1 {
-		return tableNamespace(tables[0]), tableName(tables[0])
+	for cur := scope; cur != nil; cur = enclosing(cur) {
+		bound := slices.Contains(cur.SelectedSourceNames(), qualifier) || cur.SemiOrAntiJoinTables()[qualifier]
+		if !bound {
+			continue
+		}
+		if source, ok := cur.Sources[qualifier]; ok {
+			return source, true
+		}
 	}
-	return "", ""
+	return nil, false
+}
+
+// enclosing is the next scope a reference may bind to. A CTE body and a
+// non-lateral derived table cannot see the sources of the query that declares
+// them, only those of the query around it.
+func enclosing(scope *optimizer.Scope) *optimizer.Scope {
+	if scope.Parent == nil {
+		return nil
+	}
+	if scope.IsCTE() || scope.IsDerivedTable() {
+		return scope.Parent.Parent
+	}
+	return scope.Parent
+}
+
+// follow resolves an output name of a source to the physical column behind it:
+// a table is the physical source itself, and a CTE, derived table or subquery
+// is followed through the projection that produces the name.
+func (r *resolver) follow(source any, name string, depth int) (physicalColumn, bool) {
+	if depth > maxFollowDepth {
+		return physicalColumn{}, false
+	}
+	switch s := source.(type) {
+	case expressions.Expression:
+		resolved, ok := r.report[s]
+		if !ok || resolved.Kind != optimizer.Physical {
+			return physicalColumn{}, false
+		}
+		path := physicalPath(resolved)
+		if len(path) == 0 {
+			return physicalColumn{}, false
+		}
+		return physicalColumn{table: Table{Path: path, Alias: tableAlias(s, path)}, column: name}, true
+	case *optimizer.Scope:
+		return r.project(s, name, depth+1)
+	default:
+		return physicalColumn{}, false
+	}
+}
+
+// project follows an output name of a query to the column its projection reads.
+// A computed projection is not a physical column, and a set operation is not
+// followed because its branches may read different tables.
+func (r *resolver) project(scope *optimizer.Scope, name string, depth int) (physicalColumn, bool) {
+	query := scope.Expression
+	if query == nil || query.Kind() != expressions.KindSelect {
+		return physicalColumn{}, false
+	}
+	var stars []expressions.Expression
+	for _, item := range query.Selects() {
+		if item == nil {
+			continue
+		}
+		if isStar(item) {
+			stars = append(stars, item)
+			continue
+		}
+		if item.OutputName() != name {
+			continue
+		}
+		inner := item
+		if item.Kind() == expressions.KindAlias {
+			inner = item.This()
+		}
+		if inner == nil || inner.Kind() != expressions.KindColumn {
+			return physicalColumn{}, false
+		}
+		source, ok := sourceOf(scope, inner.TableName())
+		if !ok {
+			return physicalColumn{}, false
+		}
+		return r.follow(source, inner.Name(), depth)
+	}
+	// Without column metadata a star is not expanded: the name passes through
+	// it only when one star could produce it.
+	if len(stars) != 1 {
+		return physicalColumn{}, false
+	}
+	source, ok := sourceOf(scope, stars[0].TableName())
+	if !ok {
+		return physicalColumn{}, false
+	}
+	return r.follow(source, name, depth)
+}
+
+// isStar reports a star projection, including the qualified o.* form, which the
+// fork models as a column with a star child.
+func isStar(item expressions.Expression) bool {
+	if item.Kind() == expressions.KindStar {
+		return true
+	}
+	return item.Kind() == expressions.KindColumn && item.This() != nil && item.This().Kind() == expressions.KindStar
+}
+
+// isOutputAliasRef reports an unqualified reference to a projection alias of its
+// own scope (ORDER BY x after AS x), which is not a physical column. A column
+// inside the projection list itself is never one.
+func isOutputAliasRef(scope *optimizer.Scope, columnExpr expressions.Expression) bool {
+	if scope == nil || columnExpr.TableName() != "" {
+		return false
+	}
+	query := scope.Expression
+	if query == nil || query.Kind() != expressions.KindSelect || !slices.Contains(query.NamedSelects(), columnExpr.Name()) {
+		return false
+	}
+	projections := query.Selects()
+	for node := expressions.Expression(columnExpr); node != nil && node != query; node = node.Parent() {
+		if slices.Contains(projections, node) {
+			return false
+		}
+	}
+	return true
+}
+
+// joins resolves each equi-join predicate in the scope that contains it. An
+// endpoint read through a CTE or derived table is named after the physical
+// table and column behind it, so it matches the statement's table references;
+// an endpoint that does not resolve to one physical column is skipped. A join is
+// stored by alias, so an endpoint whose alias names more than one table of the
+// statement is skipped too: its reader could not tell which table it means.
+func (r *resolver) joins(root expressions.Expression, ambiguous map[string]bool) []Join {
+	joins := make([]Join, 0, 2)
+	seenJoins := make(map[Join]bool, 2)
+	for _, equality := range root.FindAll(expressions.KindEQ) {
+		left, right := equality.Left(), equality.Right()
+		if left == nil || right == nil || left.Kind() != expressions.KindColumn || right.Kind() != expressions.KindColumn {
+			continue
+		}
+		scope := r.scopeOf(equality)
+		if isOutputAliasRef(scope, left) || isOutputAliasRef(scope, right) {
+			continue // a projection alias is not a join endpoint
+		}
+		leftColumn, ok := r.column(scope, left)
+		if !ok || ambiguous[strings.ToLower(leftColumn.table.Alias)] {
+			continue
+		}
+		rightColumn, ok := r.column(scope, right)
+		if !ok || ambiguous[strings.ToLower(rightColumn.table.Alias)] {
+			continue
+		}
+		join := Join{
+			LeftAlias: leftColumn.table.Alias, LeftColumn: leftColumn.column,
+			RightAlias: rightColumn.table.Alias, RightColumn: rightColumn.column,
+		}
+		if seenJoins[join] {
+			continue
+		}
+		seenJoins[join] = true
+		joins = append(joins, join)
+	}
+	return joins
+}
+
+// ambiguousAliases reports the aliases that name more than one physical table in
+// the statement, compared without case as the join reader matches them.
+func ambiguousAliases(tables []Table) map[string]bool {
+	pathOf := make(map[string]string, len(tables))
+	ambiguous := map[string]bool{}
+	for _, table := range tables {
+		alias := strings.ToLower(table.Alias)
+		path := strings.Join(table.Path, ".")
+		if seen, ok := pathOf[alias]; ok && seen != path {
+			ambiguous[alias] = true
+		}
+		pathOf[alias] = path
+	}
+	return ambiguous
 }
 
 func tableNamespace(t Table) string {
@@ -259,33 +450,6 @@ func tableNamespace(t Table) string {
 
 func tableName(t Table) string {
 	return t.Path[len(t.Path)-1]
-}
-
-func extractJoins(root expressions.Expression, tables []Table) []Join {
-	aliases := make(map[string]bool, len(tables))
-	for _, table := range tables {
-		aliases[strings.ToLower(table.Alias)] = true
-	}
-	joins := make([]Join, 0, 2)
-	seenJoins := make(map[Join]bool, 2)
-	for _, equality := range root.FindAll(expressions.KindEQ) {
-		left, right := equality.Left(), equality.Right()
-		if left == nil || right == nil || left.Kind() != expressions.KindColumn || right.Kind() != expressions.KindColumn {
-			continue
-		}
-		join := Join{
-			LeftAlias: left.TableName(), LeftColumn: left.Name(),
-			RightAlias: right.TableName(), RightColumn: right.Name(),
-		}
-		if join.LeftAlias == "" || join.RightAlias == "" ||
-			!aliases[strings.ToLower(join.LeftAlias)] || !aliases[strings.ToLower(join.RightAlias)] ||
-			join.LeftColumn == "" || join.RightColumn == "" || seenJoins[join] {
-			continue
-		}
-		seenJoins[join] = true
-		joins = append(joins, join)
-	}
-	return joins
 }
 
 func isWriteTarget(root, table expressions.Expression) bool {
