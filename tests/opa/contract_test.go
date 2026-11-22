@@ -351,22 +351,28 @@ func redactQueryID(input map[string]any) {
 	}
 }
 
-// Q2. Side doors inside Trino: Iceberg metadata tables (<table>$files,
-// $partitions, $snapshots) expose a policied table's column bounds, values
-// and counts under another name, where no filter or mask applies. The Rego
-// denies them to user identities; time travel stays filtered.
+// Q2. Side doors inside Trino: Iceberg metadata tables such as <table>$files
+// and $partitions expose a policied table's column bounds and values under
+// another name, where no filter or mask applies. The Rego denies those to
+// user identities; the structural ones stay readable and time travel stays
+// filtered.
 func TestContract_IcebergSideDoors(t *testing.T) {
 	c := connect(t, "svc/trino-opa")
 	table := seedOrders(t, c, "orders_side")
 	publish(t, ordersPolicies("q2-side", "orders_side"), "trino-opa")
 	snapshot := c.query(t, admin, `SELECT CAST(snapshot_id AS varchar) FROM iceberg.spike."orders_side$snapshots" ORDER BY committed_at DESC LIMIT 1`).strings()[0]
-	for _, suffix := range []string{"files", "partitions", "snapshots", "manifests", "history", "refs"} {
+	for _, suffix := range []string{"files", "entries", "all_files", "all_entries", "partitions", "manifests", "all_manifests"} {
 		t.Run("$"+suffix+" is denied", func(t *testing.T) {
 			qerr := c.denied(t, user("u_bob"), `SELECT * FROM iceberg.spike."orders_side$`+suffix+`"`)
 			if qerr.ErrorName != "PERMISSION_DENIED" {
 				t.Errorf("error %v, want PERMISSION_DENIED", qerr)
 			}
 			c.query(t, admin, `SELECT count(*) FROM iceberg.spike."orders_side$`+suffix+`"`)
+		})
+	}
+	for _, suffix := range []string{"history", "refs", "snapshots", "properties", "metadata_log_entries"} {
+		t.Run("$"+suffix+" stays readable", func(t *testing.T) {
+			c.query(t, user("u_bob"), `SELECT count(*) FROM iceberg.spike."orders_side$`+suffix+`"`)
 		})
 	}
 	t.Run("time travel is filtered", func(t *testing.T) {

@@ -70,9 +70,18 @@ test_trusted_identity_bypasses_filters_and_masks if {
 		with data.baleia_deployment as deployment
 }
 
-test_metadata_tables_of_a_policied_table_are_denied if {
+test_value_metadata_tables_of_a_policied_table_are_denied if {
 	select := data.testdata.trino484.allow_SelectFromColumns.input
 	files := json.patch(select, [{"op": "replace", "path": "/action/resource/table/tableName", "value": "orders_contract$files"}])
+	snapshots := json.patch(select, [{"op": "replace", "path": "/action/resource/table/tableName", "value": "orders_contract$snapshots"}])
+	every suffix in ["entries", "all_files", "all_entries", "partitions", "manifests", "all_manifests"] {
+		not trino.allow with input as json.patch(select, [{"op": "replace", "path": "/action/resource/table/tableName", "value": concat("$", ["orders_contract", suffix])}])
+			with data.baleia.bundle as data.testdata.bundle
+			with data.baleia_deployment as deployment
+	}
+	trino.allow with input as snapshots
+		with data.baleia.bundle as data.testdata.bundle
+		with data.baleia_deployment as deployment
 	other := json.patch(select, [{"op": "replace", "path": "/action/resource/table/tableName", "value": "items$files"}])
 	admin := json.patch(files, [{"op": "replace", "path": "/context/identity/user", "value": "baleia_admin"}])
 	not trino.allow with input as files

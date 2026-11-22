@@ -25,17 +25,23 @@ allow if {
 	not side_door
 }
 
-# side_door is a statement that reads a policied table's rows or statistics
-# under another name, where no filter or mask can apply. Trusted identities
-# are exempt.
-#   - Iceberg metadata tables (<table>$files, $partitions, $snapshots, ...)
-#     expose column bounds, values and counts.
-#   - Iceberg's table_changes table function returns changed rows.
+# side_door is a statement that reads a policied table's values under another
+# name, where no filter or mask applies. Trusted identities are exempt, so
+# table health and maintenance keep them.
+#   - Metadata tables that carry column values: file and manifest bounds,
+#     partition values and statistics, readable metrics. The structural ones
+#     ($history, $refs, $snapshots, $properties, $metadata_log_entries) stay
+#     readable, so time travel keeps working; $snapshots reveals only the
+#     total row count.
+#   - Iceberg's table_changes table function, which returns changed rows.
+value_metadata_tables := {"files", "entries", "all_files", "all_entries", "partitions", "manifests", "all_manifests"}
+
 side_door if {
 	not core.trusted(identity)
 	table := input.action.resource.table
 	parts := split(table.tableName, "$")
-	count(parts) > 1
+	count(parts) == 2
+	parts[1] in value_metadata_tables
 	core.policied({"catalog": table.catalogName, "schema": table.schemaName, "name": parts[0]})
 }
 
