@@ -525,8 +525,7 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 		return
 	}
 	// Any member (or a global admin) may list; anyone else is told it does not exist.
-	ws, err := h.authz().Workspace(r.Context(), p, wsUUID, authz.ActRead)
-	if err != nil {
+	if _, err := h.authz().Workspace(r.Context(), p, wsUUID, authz.ActRead); err != nil {
 		if errors.Is(err, authz.ErrNotFound) {
 			h.writeAPIError(w, r, http.StatusNotFound, "not_found", "workspace not found", nil)
 		} else {
@@ -535,43 +534,10 @@ func (h *CatalogHandlers) ListWorkspaceCatalogs(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// The scope is the catalogs granted to the workspace, and nothing else:
+	// a personal workspace does not reach its owner's connections (ADR 0018).
 	var entries []workspaceCatalogEntry
 	seen := map[string]bool{}
-
-	// Catalogs of the connections the workspace's own user created (personal workspaces).
-	if ws.OwnerUserID.Valid {
-		conns, err := h.topology.ConnectionsOf(r.Context(), ws.OwnerUserID)
-		if err != nil {
-			h.logger.ErrorContext(r.Context(), "list connections for workspace", "err", err)
-			writeJSON(w, http.StatusOK, []workspaceCatalogEntry{})
-			return
-		}
-		for _, conn := range conns {
-			// The catalogs table is the source of truth — no Polaris REST call.
-			rows, err := h.topology.CatalogsOfConnection(r.Context(), conn.ID)
-			if err != nil {
-				h.logger.WarnContext(r.Context(), "list catalogs for connection", "conn", conn.Name, "err", err)
-				continue
-			}
-			for _, row := range rows {
-				// The tree lists Trino catalogs; native catalogs of direct
-				// engines are reached through targets (#13 PR 2b, #24).
-				name := row.TrinoName()
-				if !row.Enabled || name == "" || seen[name] {
-					continue
-				}
-				seen[name] = true
-				entries = append(entries, workspaceCatalogEntry{
-					ConnectionID:   uuidStr(conn.ID),
-					ConnectionName: conn.Name,
-					ConnectionType: conn.Type,
-					CatalogName:    name,
-				})
-			}
-		}
-	}
-
-	// Catalogs granted to the workspace, whoever owns their connection.
 	granted, err := h.topology.GrantedToWorkspace(r.Context(), wsUUID)
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "list granted catalogs for workspace", "err", err)
