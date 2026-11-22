@@ -587,13 +587,13 @@ func TestTableHealthKinds(t *testing.T) {
 	}
 }
 
-// TestEngineTableHealth: a Glue catalog bound with the Iceberg connector gets
-// table health through the engine; its Hive and Delta Lake catalogs, and every
-// Hive Metastore catalog, do not (#997).
+// TestEngineTableHealth: a Glue or Hive Metastore catalog bound with the
+// Iceberg connector gets table health through the engine; their Hive and
+// Delta Lake catalogs do not (#997, #1005).
 func TestEngineTableHealth(t *testing.T) {
 	t.Parallel()
 	reg := registry(t, connections.DialerOptions{})
-	if got, want := reg.EngineTableHealthKinds(), []string{"glue"}; !slices.Equal(got, want) {
+	if got, want := reg.EngineTableHealthKinds(), []string{"glue", "hive"}; !slices.Equal(got, want) {
 		t.Fatalf("EngineTableHealthKinds = %v, want %v", got, want)
 	}
 	for _, c := range []struct {
@@ -604,7 +604,9 @@ func TestEngineTableHealth(t *testing.T) {
 		{"glue", "iceberg", true},
 		{"glue", "hive", false},
 		{"glue", "delta_lake", false},
-		{"hive", "iceberg", false},
+		{"hive", "iceberg", true},
+		{"hive", "hive", false},
+		{"hive", "delta_lake", false},
 		{"polaris", "iceberg", true},
 		{"polaris", "", true},
 		{"postgresql", "iceberg", false},

@@ -1,0 +1,99 @@
+# Hive Metastore source (#86, #1005); not part of the dev stack.
+# Build its image first (deploy/dev/hive.Dockerfile adds the PostgreSQL JDBC
+# driver the official image omits):
+#   minikube -p baleia image build -t baleia-hive-metastore:4.0.1 -f hive.Dockerfile --build-opt=network=host deploy/dev
+# (when the build cannot fetch the driver from inside minikube, build the image
+# with the host's docker and minikube -p baleia image load it),
+# then kubectl apply -f deploy/dev/sources/hive-metastore.yaml
+# (make k8s-source NAME=hive-metastore).
+#
+# A standalone metastore backed by the dev PostgreSQL (database
+# hive_metastore, created by the init container), holding Iceberg, Hive and
+# Delta Lake tables whose data sits on the dev RustFS. The metastore itself
+# creates a schema's directory, so it reaches RustFS too: the image's
+# hadoop-aws jars go on the classpath and core-site.xml points s3:// at
+# RustFS. Register it as a Hive Metastore connection with the metastore URI
+# thrift://src-hive-metastore.baleia-dev.svc.cluster.local:9083, the S3
+# endpoint http://rustfs.baleia-dev.svc.cluster.local:9000, path-style access
+# and the rustfsadmin keys.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: src-hive-metastore-core-site
+  namespace: baleia-dev
+data:
+  core-site.xml: |
+    <configuration>
+      <property><name>fs.s3.impl</name><value>org.apache.hadoop.fs.s3a.S3AFileSystem</value></property>
+      <property><name>fs.s3a.endpoint</name><value>http://rustfs.baleia-dev.svc.cluster.local:9000</value></property>
+      <property><name>fs.s3a.endpoint.region</name><value>us-east-1</value></property>
+      <property><name>fs.s3a.path.style.access</name><value>true</value></property>
+      <property><name>fs.s3a.connection.ssl.enabled</name><value>false</value></property>
+      <property><name>fs.s3a.access.key</name><value>rustfsadmin</value></property>
+      <property><name>fs.s3a.secret.key</name><value>rustfsadmin</value></property>
+    </configuration>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: src-hive-metastore
+  namespace: baleia-dev
+  labels: { app: src-hive-metastore, baleia/role: source }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: src-hive-metastore }
+  template:
+    metadata:
+      labels: { app: src-hive-metastore, baleia/role: source }
+    spec:
+      initContainers:
+        - name: create-database
+          image: postgres:18
+          env:
+            - { name: PGPASSWORD, value: baleia }
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              until pg_isready -h postgres -U baleia -d baleia; do sleep 2; done
+              if [ -z "$(psql -h postgres -U baleia -d baleia -tAc "SELECT 1 FROM pg_database WHERE datname = 'hive_metastore'")" ]; then
+                psql -h postgres -U baleia -d baleia -c 'CREATE DATABASE hive_metastore'
+              fi
+      containers:
+        - name: metastore
+          image: baleia-hive-metastore:4.0.1
+          imagePullPolicy: Never
+          env:
+            - { name: SERVICE_NAME, value: metastore }
+            - { name: DB_DRIVER, value: postgres }
+            - { name: HADOOP_CLASSPATH, value: "/opt/hadoop/share/hadoop/tools/lib/*" }
+            - name: SERVICE_OPTS
+              value: >-
+                -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
+                -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://postgres:5432/hive_metastore
+                -Djavax.jdo.option.ConnectionUserName=baleia
+                -Djavax.jdo.option.ConnectionPassword=baleia
+          volumeMounts:
+            - { name: core-site, mountPath: /opt/hive/conf/core-site.xml, subPath: core-site.xml }
+          ports:
+            - containerPort: 9083
+          readinessProbe:
+            tcpSocket: { port: 9083 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+      volumes:
+        - name: core-site
+          configMap: { name: src-hive-metastore-core-site }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: src-hive-metastore
+  namespace: baleia-dev
+spec:
+  selector: { app: src-hive-metastore }
+  ports:
+    - port: 9083
+      targetPort: 9083

@@ -16,6 +16,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/glue"
+	"github.com/galileostudio/baleia/internal/connections/hive"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	qtrino "github.com/galileostudio/baleia/internal/queryengine/trino"
@@ -69,7 +70,9 @@ type metadataTables struct {
 	properties [][2]string
 	current    []string // snapshot id, summary JSON; nil for no snapshot
 	stats      []string // count, oldest ms, commits in the hour, in the day
-	fail       bool
+	fail       bool     // the engine fails reading it
+	missing    bool     // the engine does not have it as an Iceberg table
+	noCatalog  bool     // the engine does not have the binding's catalog
 }
 
 // metadataEngine answers the health reads from canned metadata tables and
@@ -107,7 +110,13 @@ func (s *metadataSession) Execute(_ context.Context, sql string, _ queryengine.C
 			continue
 		}
 		if t.fail {
-			return queryengine.NewError(queryengine.CodeNotFound, "fake", "", "table not found")
+			return queryengine.NewError(queryengine.CodeUnavailable, "fake", "", "engine unavailable")
+		}
+		if t.missing {
+			return queryengine.NewError(queryengine.CodeNotFound, "trino", "TABLE_NOT_FOUND", "table not found")
+		}
+		if t.noCatalog {
+			return queryengine.NewError(queryengine.CodeNotFound, "trino", "CATALOG_NOT_FOUND", "catalog not found")
 		}
 		switch {
 		case strings.Contains(sql, "$properties"):
@@ -341,6 +350,35 @@ func TestEngineTableHealth_Failures(t *testing.T) {
 		}
 	})
 
+	t.Run("a table the engine no longer has", func(t *testing.T) {
+		t.Parallel()
+		// Dropped since it was listed, or a snapshot row of the catalog's
+		// former connector: not a failure, and it does not use up the limit.
+		eng := &metadataEngine{tables: map[string]metadataTables{
+			"gone": {missing: true},
+			"ok":   {stats: []string{"0", "", "0", "0"}},
+		}}
+		tables := []connections.TableMeta{glueTable("s", "gone", "iceberg"), glueTable("s", "ok", "iceberg")}
+		a, store, params, catalog := glueHealthFixture(t, "iceberg", tables, eng, &config.Config{TableHealthMaxEngineTables: 1})
+		ctx := t.Context()
+		if err := a.lensAnalyzeTableHealth(ctx, params); err != nil {
+			t.Fatalf("pass: %v", err)
+		}
+		if _, err := store.GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{CatalogID: catalog, Namespace: "s", TableName: "ok"}); err != nil {
+			t.Errorf("the table after the missing one was not read: %v", err)
+		}
+	})
+
+	t.Run("the engine has no such catalog", func(t *testing.T) {
+		t.Parallel()
+		// Not found too, but the binding is wrong, not the table: a failure.
+		eng := &metadataEngine{tables: map[string]metadataTables{"orders": {noCatalog: true}}}
+		a, _, params, _ := glueHealthFixture(t, "iceberg", []connections.TableMeta{glueTable("s", "orders", "iceberg")}, eng, &config.Config{})
+		if err := a.lensAnalyzeTableHealth(t.Context(), params); err == nil {
+			t.Fatal("a pass whose engine has no catalog succeeded")
+		}
+	})
+
 	t.Run("hive connector", func(t *testing.T) {
 		t.Parallel()
 		eng := &metadataEngine{tables: map[string]metadataTables{}}
@@ -404,5 +442,119 @@ func TestTableHealthHeartbeats(t *testing.T) {
 	stop()
 	if beats.Load() != 0 {
 		t.Errorf("heartbeats outside an activity = %d, want none", beats.Load())
+	}
+}
+
+// hiveHealthFixture seeds a Hive Metastore connection whose catalog is bound
+// with the Iceberg connector on a Trino engine, its metadata snapshot (each
+// table with or without columns, as the engine lists it), and the activities
+// that read it.
+func hiveHealthFixture(t *testing.T, snapshot []snapshotTable, eng *metadataEngine) (*Activities, *repo.Repo, LensAnalyzeTableHealthParams, db.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	gdb := testdb.New(t)
+	store := repo.New(gdb)
+	user := seedUser(t, gdb, "hive", "hive@health.test")
+	conn := seedConnection(t, gdb, "hms-src", user)
+	engine := seedEngine(t, gdb, "hms-e", seedConnection(t, gdb, "hms-eng", user), user)
+	catalog, _ := seedCatalogBinding(t, gdb, conn, engine, "hms_iceberg")
+	if err := gdb.Model(&model.CatalogConnection{}).Where("id = ?", repo.UUIDString(conn)).
+		Updates(map[string]any{"type": "hive", "config": []byte(`{"metastore_uri":"thrift://hms:9083"}`)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := gdb.Model(&model.Catalog{}).Where("id = ?", repo.UUIDString(catalog)).
+		Update("connector", connections.IcebergConnector).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range snapshot {
+		row, err := store.UpsertMetadataTable(ctx, db.UpsertMetadataTableParams{
+			CatalogID: catalog, Namespace: []string{s.namespace}, Name: s.name, Kind: s.kind,
+			Fingerprint: "fp-" + s.name, Properties: []byte(`{}`),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.columns {
+			if err := store.InsertMetadataColumns(ctx, db.InsertMetadataColumnsParams{
+				TableID: row.ID, TypeSystem: "trino", Ordinals: []int32{1}, Names: []string{"id"},
+				NativeTypes: []string{"integer"}, Nullables: []bool{true}, Comments: []string{""},
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	dialer, err := connections.NewDialer(connections.DialerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, err := connections.NewRegistry(hive.New(dialer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	eng.Engine = testTrino
+	a := &Activities{store: store, engines: eng, connections: reg, logger: slog.New(slog.DiscardHandler), cfg: &config.Config{}}
+	params := LensAnalyzeTableHealthParams{
+		CatalogID: repo.UUIDString(catalog), CatalogConnectionID: repo.UUIDString(conn), Catalog: "hms_iceberg",
+	}
+	return a, store, params, catalog
+}
+
+// snapshotTable is one table of a catalog's metadata snapshot.
+type snapshotTable struct {
+	namespace, name, kind string
+	columns               bool
+}
+
+// TestEngineTableHealth_HiveMetastore: a Hive Metastore catalog bound with the
+// Iceberg connector gets health for the Iceberg tables of its metadata
+// snapshot. The engine lists the metastore's Hive tables there without
+// columns, and the connector's own system schema; neither is read, nor is a
+// view (#1005).
+func TestEngineTableHealth_HiveMetastore(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	eng := &metadataEngine{tables: map[string]metadataTables{
+		"orders": {properties: [][2]string{{"format-version", "2"}}, stats: []string{"3", strconv.FormatInt(time.Now().UnixMilli(), 10), "3", "3"}},
+	}}
+	a, store, params, catalog := hiveHealthFixture(t, []snapshotTable{
+		{"lake", "orders", "table", true},
+		{"lake", "orders_hive", "table", false},
+		{"lake", "orders_view", "view", true},
+		{"system", "iceberg_tables", "table", true},
+	}, eng)
+
+	if err := a.lensAnalyzeTableHealth(ctx, params); err != nil {
+		t.Fatalf("analyze: %v", err)
+	}
+	got, err := store.GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{CatalogID: catalog, Namespace: "lake", TableName: "orders"})
+	if err != nil {
+		t.Fatalf("orders health: %v", err)
+	}
+	if got.SnapshotCount != 3 || got.Catalog != "hms_iceberg" || *got.FormatVersion != 2 {
+		t.Errorf("orders = snapshots %d, catalog %q, format v%d", got.SnapshotCount, got.Catalog, *got.FormatVersion)
+	}
+	for _, sql := range eng.sqls {
+		if !strings.Contains(sql, `"hms_iceberg"."lake"."orders$`) {
+			t.Errorf("read a table that is not a snapshot Iceberg table: %s", sql)
+		}
+	}
+	for _, spec := range eng.specs {
+		if !spec.ReadOnly || spec.Identity.UserID != "" || spec.Tags.Source != "table_health" {
+			t.Errorf("session = read-only %v, user %q, source %q; want a read-only service session", spec.ReadOnly, spec.Identity.UserID, spec.Tags.Source)
+		}
+	}
+}
+
+// TestEngineTableHealth_HiveMetastoreNotSynced: a catalog whose snapshot holds
+// no table yet records nothing and reads nothing.
+func TestEngineTableHealth_HiveMetastoreNotSynced(t *testing.T) {
+	t.Parallel()
+	eng := &metadataEngine{}
+	a, _, params, _ := hiveHealthFixture(t, nil, eng)
+	if err := a.lensAnalyzeTableHealth(context.Background(), params); err != nil {
+		t.Fatalf("analyze: %v", err)
+	}
+	if len(eng.sqls) != 0 {
+		t.Fatalf("the engine read %v", eng.sqls)
 	}
 }

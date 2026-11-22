@@ -493,34 +493,37 @@ func TestTableMaintenance_Analyze(t *testing.T) {
 	}
 }
 
-// TestTableMaintenance_AnalyzeGlue: a Glue catalog is analyzed when it is
-// bound with the Iceberg connector, whose tables the engine measures; its
-// Hive and Delta Lake catalogs are refused (#997).
-func TestTableMaintenance_AnalyzeGlue(t *testing.T) {
+// TestTableMaintenance_AnalyzeMetastore: a Glue or Hive Metastore catalog is
+// analyzed when it is bound with the Iceberg connector, whose tables the
+// engine measures; their Hive and Delta Lake catalogs are refused (#997,
+// #1005).
+func TestTableMaintenance_AnalyzeMetastore(t *testing.T) {
 	t.Parallel()
-	for connector, analyzed := range map[string]bool{"iceberg": true, "hive": false, "delta_lake": false} {
-		t.Run(connector, func(t *testing.T) {
-			t.Parallel()
-			f := newMaintenanceFixture(t, "managed")
-			if err := f.gdb.Model(&model.CatalogConnection{}).Where("id = ?", repo.UUIDString(f.connectionID)).
-				Update("type", "glue").Error; err != nil {
-				t.Fatal(err)
-			}
-			if err := f.gdb.Model(&model.Catalog{}).Where("id = ?", repo.UUIDString(f.catalogID)).
-				Update("connector", connector).Error; err != nil {
-				t.Fatal(err)
-			}
-			resp, err := f.h.AnalyzeCatalogTableHealth(f.admin, AnalyzeCatalogTableHealthRequestObject{CatalogId: f.catalog()})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := isType[AnalyzeCatalogTableHealth202JSONResponse](resp); got != analyzed {
-				t.Fatalf("analyze a Glue %s catalog = %T, want analyzed %v", connector, resp, analyzed)
-			}
-			if !analyzed && !isType[AnalyzeCatalogTableHealth422JSONResponse](resp) {
-				t.Fatalf("analyze a Glue %s catalog = %T, want 422", connector, resp)
-			}
-		})
+	for _, kind := range []string{"glue", "hive"} {
+		for connector, analyzed := range map[string]bool{"iceberg": true, "hive": false, "delta_lake": false} {
+			t.Run(kind+"_"+connector, func(t *testing.T) {
+				t.Parallel()
+				f := newMaintenanceFixture(t, "managed")
+				if err := f.gdb.Model(&model.CatalogConnection{}).Where("id = ?", repo.UUIDString(f.connectionID)).
+					Update("type", kind).Error; err != nil {
+					t.Fatal(err)
+				}
+				if err := f.gdb.Model(&model.Catalog{}).Where("id = ?", repo.UUIDString(f.catalogID)).
+					Update("connector", connector).Error; err != nil {
+					t.Fatal(err)
+				}
+				resp, err := f.h.AnalyzeCatalogTableHealth(f.admin, AnalyzeCatalogTableHealthRequestObject{CatalogId: f.catalog()})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := isType[AnalyzeCatalogTableHealth202JSONResponse](resp); got != analyzed {
+					t.Fatalf("analyze a %s %s catalog = %T, want analyzed %v", kind, connector, resp, analyzed)
+				}
+				if !analyzed && !isType[AnalyzeCatalogTableHealth422JSONResponse](resp) {
+					t.Fatalf("analyze a %s %s catalog = %T, want 422", kind, connector, resp)
+				}
+			})
+		}
 	}
 }
 
