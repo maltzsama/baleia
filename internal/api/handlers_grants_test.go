@@ -291,7 +291,12 @@ func (q *authzFake) ListGrantedCatalogsOfWorkspace(_ context.Context, ws db.UUID
 	return out, nil
 }
 
-func (q *authzFake) ListCatalogConnections(context.Context, db.UUID) ([]db.CatalogConnection, error) {
+// ListCatalogConnections lists the connection for its creator, so a listing
+// that still reached a personal workspace owner's connections would show it.
+func (q *authzFake) ListCatalogConnections(_ context.Context, createdBy db.UUID) ([]db.CatalogConnection, error) {
+	if createdBy == q.conn.CreatedBy {
+		return []db.CatalogConnection{q.conn}, nil
+	}
 	return nil, nil
 }
 
@@ -779,6 +784,45 @@ func TestListWorkspaceCatalogs_GrantsAndCache(t *testing.T) {
 	_, _ = h.RevokeCatalogAccess(ctxAs(ownerID, "member"), RevokeCatalogAccessRequestObject{Id: wsID.Bytes, CatalogId: q.cat.ID.Bytes})
 	if code, out := listAs(memberID); code != 200 || len(out) != 0 {
 		t.Fatalf("after revoke the cached list is stale: %d %v", code, out)
+	}
+}
+
+// TestListWorkspaceCatalogs_PersonalNeedsGrant pins #1128: a personal
+// workspace lists only the catalogs granted to it, not every catalog of its
+// owner's connections (ADR 0018).
+func TestListWorkspaceCatalogs_PersonalNeedsGrant(t *testing.T) {
+	t.Parallel()
+	h, q := newGrantsHandlers(t)
+	q.cat.Enabled = true
+	personal := db.UUID{Bytes: [16]byte{0x5B}, Valid: true}
+	q.g.wss[personal.Bytes] = db.Workspace{ID: personal, Name: "mine", Type: "personal", OwnerUserID: q.conn.CreatedBy}
+
+	list := func() []workspaceCatalogEntry {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/workspaces/x/catalogs", nil)
+		rc := chi.NewRouteContext()
+		rc.URLParams.Add("id", uuidString(personal))
+		req = req.WithContext(context.WithValue(ctxAs(ownerID, "member"), chi.RouteCtxKey, rc))
+		rec := httptest.NewRecorder()
+		h.ListWorkspaceCatalogs(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rec.Code)
+		}
+		var out []workspaceCatalogEntry
+		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+
+	if out := list(); len(out) != 0 {
+		t.Fatalf("ungranted catalogs listed: %v", out)
+	}
+	if _, err := h.GrantCatalogAccess(ctxAs(ownerID, "member"), GrantCatalogAccessRequestObject{Id: personal.Bytes, Body: grantBody(q)}); err != nil {
+		t.Fatal(err)
+	}
+	if out := list(); len(out) != 1 || out[0].CatalogName != q.cat.TrinoName() {
+		t.Fatalf("after grant: %v", out)
 	}
 }
 

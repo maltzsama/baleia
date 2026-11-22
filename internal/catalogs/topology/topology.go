@@ -36,7 +36,6 @@ type Catalogs interface {
 	ListVisibleCatalogs(ctx context.Context, arg db.ListVisibleCatalogsParams) ([]db.Catalog, error)
 	ListCatalogGrants(ctx context.Context, catalogID db.UUID) ([]db.ListCatalogGrantsRow, error)
 	ListCatalogsByConnection(ctx context.Context, connectionID db.UUID) ([]db.Catalog, error)
-	ListCatalogConnections(ctx context.Context, createdBy db.UUID) ([]db.CatalogConnection, error)
 	ListGrantedCatalogsOfWorkspace(ctx context.Context, workspaceID db.UUID) ([]db.ListGrantedCatalogsOfWorkspaceRow, error)
 	GetCatalogByTrinoName(ctx context.Context, arg db.GetCatalogByTrinoNameParams) (db.Catalog, error)
 	GetCatalogSyncState(ctx context.Context, catalogID db.UUID) (db.GetCatalogSyncStateRow, error)
@@ -136,11 +135,6 @@ func (s *Service) Grants(ctx context.Context, catalogID db.UUID) ([]db.ListCatal
 // CatalogsOfConnection lists a connection's catalogs.
 func (s *Service) CatalogsOfConnection(ctx context.Context, connID db.UUID) ([]db.Catalog, error) {
 	return s.store.ListCatalogsByConnection(ctx, connID)
-}
-
-// ConnectionsOf lists the connections a user created.
-func (s *Service) ConnectionsOf(ctx context.Context, userID db.UUID) ([]db.CatalogConnection, error) {
-	return s.store.ListCatalogConnections(ctx, userID)
 }
 
 // GrantedToWorkspace lists the catalogs granted to a workspace.
