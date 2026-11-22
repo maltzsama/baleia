@@ -46,6 +46,11 @@ func (*Provider) Meta() connections.TypeMeta {
 	}
 }
 
+// EngineTableHealth implements connections.EngineTableHealth: a catalog bound
+// with the Iceberg connector gets health for its Iceberg tables through the
+// engine, which also lists them for the metadata snapshot (#1005).
+func (*Provider) EngineTableHealth() bool { return true }
+
 func (*Provider) Status() connections.Status {
 	return connections.Status{State: connections.StateSupported}
 }

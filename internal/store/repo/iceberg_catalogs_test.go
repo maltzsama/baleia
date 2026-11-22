@@ -142,6 +142,7 @@ func TestListTableHealthCatalogs(t *testing.T) {
 		{[]string{"polaris"}, []string{"glue"}, []string{"glue_iceberg", "lake"}},
 		{[]string{"polaris"}, nil, []string{"lake"}},
 		{nil, []string{"glue"}, []string{"glue_iceberg"}},
+		{nil, []string{"glue", "hive"}, []string{"glue_iceberg", "hms_iceberg"}},
 		{nil, nil, nil},
 	} {
 		if got := names(c.rest, c.engine); !slices.Equal(got, c.want) && (len(got) != 0 || len(c.want) != 0) {

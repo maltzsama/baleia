@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/monitoring"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"go.temporal.io/sdk/activity"
@@ -28,23 +29,75 @@ const maxTableProperties = 10_000
 // current-snapshot-id are read before that.
 var engineOnlyProperties = []string{"format", "format-version", "provider", "current-snapshot-id", "location", "created-at"}
 
+// engineTableSource is one catalog whose Iceberg tables an engine health pass
+// reads: the catalog name the health rows record, and a walk that visits each
+// table, in order, until visit fails.
+type engineTableSource struct {
+	catalog string
+	walk    func(ctx context.Context, visit func(namespace []string, name string) error) error
+}
+
+// walkerTableSources lists a metastore's Iceberg tables from its metadata
+// reader, which tells each table's format (Glue, #997).
+func walkerTableSources(walker connections.CatalogWalker, catalogs []connections.CatalogRef, target string) []engineTableSource {
+	var out []engineTableSource
+	for _, c := range catalogs {
+		if target != "" && c.Name != target {
+			continue
+		}
+		out = append(out, engineTableSource{catalog: c.Name, walk: func(ctx context.Context, visit func([]string, string) error) error {
+			return walker.WalkCatalog(ctx, c.Name, func(t connections.TableMeta) error {
+				if t.Format != "iceberg" || t.Ref.Unsupported.Is() {
+					return nil // Hive and Delta Lake tables of the same metastore get no health
+				}
+				return visit(t.Ref.Namespace, t.Ref.Name)
+			})
+		}})
+	}
+	return out
+}
+
+// icebergSystemSchema is the schema Trino's Iceberg connector adds to every
+// catalog for its own system tables (iceberg_tables); it holds no table of the
+// metastore.
+const icebergSystemSchema = "system"
+
+// snapshotTableSource lists a metastore's Iceberg tables from the catalog's
+// metadata snapshot, for a provider without a metadata reader (Hive
+// Metastore, #1005). The sync reads the snapshot through the engine that binds
+// the catalog with the Iceberg connector, which lists the metastore's other
+// tables too but gives only Iceberg tables columns.
+func (a *Activities) snapshotTableSource(catalogID db.UUID, catalog string) engineTableSource {
+	return engineTableSource{catalog: catalog, walk: func(ctx context.Context, visit func([]string, string) error) error {
+		tables, err := a.monitoring().ListSnapshotTablesWithColumns(ctx, catalogID)
+		if err != nil {
+			return fmt.Errorf("list the metadata snapshot: %w", err)
+		}
+		for _, t := range tables {
+			if len(t.Namespace) == 1 && t.Namespace[0] == icebergSystemSchema {
+				continue
+			}
+			if err := visit(t.Namespace, t.Name); err != nil {
+				return err
+			}
+		}
+		return nil
+	}}
+}
+
 // engineTableHealth records the health of a metastore catalog's Iceberg
-// tables (#997). The provider lists the tables and tells their format; the
-// engine that binds the catalog with the Iceberg connector reads each one's
-// metadata tables, read-only and as the service identity. A pass reads at
-// most the configured number of tables, in the provider's order; the tables
-// past it are skipped and logged.
-func (a *Activities) engineTableHealth(ctx context.Context, h *healthPass, reader connections.MetadataReader, catalogs []connections.CatalogRef, target string, params LensAnalyzeTableHealthParams) error {
+// tables (#997, #1005). The sources list the tables; the engine that binds
+// the catalog with the Iceberg connector reads each one's metadata tables,
+// read-only and as the service identity. A pass reads at most the configured
+// number of tables, in the sources' order; the tables past it are skipped and
+// logged.
+func (a *Activities) engineTableHealth(ctx context.Context, h *healthPass, sources []engineTableSource, params LensAnalyzeTableHealthParams) error {
 	cat, err := a.monitoring().GetCatalogByID(ctx, h.catalogID)
 	if err != nil {
 		return fmt.Errorf("get catalog: %w", err)
 	}
 	if cat.Connector == nil || *cat.Connector != connections.IcebergConnector {
 		return fmt.Errorf("table health reads catalog %s through the engine only with the Iceberg connector: %w", cat.Name, connections.ErrUnsupported)
-	}
-	walker, ok := reader.(connections.CatalogWalker)
-	if !ok {
-		return fmt.Errorf("catalog %s cannot list its tables with their format: %w", cat.Name, connections.ErrUnsupported)
 	}
 	bindings, err := a.monitoring().ListBindingsByCatalog(ctx, h.catalogID)
 	if err != nil {
@@ -76,16 +129,10 @@ func (a *Activities) engineTableHealth(ctx context.Context, h *healthPass, reade
 			firstErr = err
 		}
 	}
-	for _, c := range catalogs {
-		if target != "" && c.Name != target {
-			continue
-		}
-		err := walker.WalkCatalog(ctx, c.Name, func(t connections.TableMeta) error {
-			if t.Format != "iceberg" || t.Ref.Unsupported.Is() {
-				return nil // Hive and Delta Lake tables of the same metastore get no health
-			}
-			namespace := strings.Join(t.Ref.Namespace, ".")
-			if (params.Namespace != "" && namespace != params.Namespace) || (params.Table != "" && t.Ref.Name != params.Table) {
+	for _, src := range sources {
+		err := src.walk(ctx, func(ns []string, name string) error {
+			namespace := strings.Join(ns, ".")
+			if (params.Namespace != "" && namespace != params.Namespace) || (params.Table != "" && name != params.Table) {
 				return nil
 			}
 			if int(read.Load()) >= limit {
@@ -93,16 +140,16 @@ func (a *Activities) engineTableHealth(ctx context.Context, h *healthPass, reade
 				return nil
 			}
 			read.Add(1)
-			table := append(append([]string{b.EngineCatalogName}, t.Ref.Namespace...), t.Ref.Name)
+			table := append(append([]string{b.EngineCatalogName}, ns...), name)
 			count, m, err := a.engineSnapshotMetrics(ctx, eng, maintainer, table, h.now)
 			if err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
-				recordErr(fmt.Errorf("table %s.%s.%s: %w", c.Name, namespace, t.Ref.Name, err))
+				recordErr(fmt.Errorf("table %s.%s.%s: %w", src.catalog, namespace, name, err))
 				return nil
 			}
-			if err := h.save(ctx, c.Name, namespace, t.Ref.Name, count, m); err != nil {
+			if err := h.save(ctx, src.catalog, namespace, name, count, m); err != nil {
 				storeErr = err
 				return err
 			}
@@ -116,7 +163,7 @@ func (a *Activities) engineTableHealth(ctx context.Context, h *healthPass, reade
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			recordErr(fmt.Errorf("tables of catalog %s: %w", c.Name, err))
+			recordErr(fmt.Errorf("tables of catalog %s: %w", src.catalog, err))
 		}
 	}
 

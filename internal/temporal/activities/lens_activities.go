@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/monitoring"
 	"github.com/galileostudio/baleia/internal/monitoring/events"
 	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
@@ -332,6 +333,14 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 	if throughEngine && !connections.HasEngineTableHealth(provider) {
 		return fmt.Errorf("table health needs an Iceberg catalog, connection is %q: %w", conn.Type, connections.ErrUnsupported)
 	}
+	// A metastore without a metadata reader (Hive Metastore, #1005) is read
+	// through the engine by the metadata sync too, so the catalog's snapshot
+	// lists its tables.
+	if throughEngine && metadata.PathFor(provider) == metadata.PathEngine {
+		h := healthPass{a: a, catalogID: catalogID, connID: connID, now: time.Now()}
+		h.prepare(ctx)
+		return a.engineTableHealth(ctx, &h, []engineTableSource{a.snapshotTableSource(catalogID, params.Catalog)}, params)
+	}
 	cfg, err := providers.FromStored(reg, connections.Kind(conn.Type), conn.ID, conn.Url, conn.Config, plain)
 	if err != nil {
 		return err
@@ -361,7 +370,11 @@ func (a *Activities) lensAnalyzeTableHealth(ctx context.Context, params LensAnal
 		target = resolved
 	}
 	if throughEngine {
-		return a.engineTableHealth(ctx, &h, reader, catalogs, target, params)
+		walker, ok := reader.(connections.CatalogWalker)
+		if !ok {
+			return fmt.Errorf("connection %s cannot list its tables with their format: %w", conn.Name, connections.ErrUnsupported)
+		}
+		return a.engineTableHealth(ctx, &h, walkerTableSources(walker, catalogs, target), params)
 	}
 	var recorded int
 	var firstErr error

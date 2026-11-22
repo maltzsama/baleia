@@ -17,6 +17,7 @@ type monitoringStore interface {
 	InsertClusterSnapshot(ctx context.Context, arg db.InsertClusterSnapshotParams) (db.ClusterSnapshot, error)
 	ListTableHealthCatalogs(ctx context.Context, restKinds, engineKinds []string) ([]db.ListEnabledIcebergCatalogsRow, error)
 	ListTableMaintenancePolicies(ctx context.Context, catalogID db.UUID) ([]db.TableMaintenancePolicy, error)
+	ListSnapshotTablesWithColumns(ctx context.Context, catalogID db.UUID) ([]db.SnapshotTable, error)
 	UpsertTableHealthSnapshot(ctx context.Context, arg db.UpsertTableHealthSnapshotParams) (db.TableHealthSnapshot, error)
 	GetCatalogConnectionByID(ctx context.Context, id db.UUID) (db.CatalogConnection, error)
 	ListManagedMaintenancePolicies(ctx context.Context, catalogID db.UUID) ([]db.TableMaintenancePolicy, error)
