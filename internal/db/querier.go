@@ -445,6 +445,10 @@ type Querier interface {
 	// (#997).
 	ListTableHealthCatalogs(ctx context.Context, restKinds, engineKinds []string) ([]ListEnabledIcebergCatalogsRow, error)
 	ListEnabledLDAPProviders(ctx context.Context) ([]AuthProvider, error)
+	// Live tables with columns of a catalog's metadata snapshot, ordered: the
+	// Iceberg tables of a Hive Metastore catalog read through the engine
+	// (#1005).
+	ListSnapshotTablesWithColumns(ctx context.Context, catalogID UUID) ([]SnapshotTable, error)
 	// Catalogs the engine reported, with the managed/adopted mode (#38).
 	ListEngineObservations(ctx context.Context, engineID UUID) ([]EngineCatalogObservation, error)
 	// Per-class capacities configured for one engine (#399).
