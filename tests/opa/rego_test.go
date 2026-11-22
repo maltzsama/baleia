@@ -3,6 +3,7 @@
 package opa
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,7 +27,7 @@ func TestRego(t *testing.T) {
 	pod := fmt.Sprintf("opa-test-%d", time.Now().UnixNano())
 	mustKubectl(t, "create", "configmap", pod, "--from-file=src.tgz="+tmp)
 	t.Cleanup(func() {
-		_, _ = kubectl(t.Context(), nil, "delete", "pod,configmap", pod, "--wait=false") // best effort; the namespace is disposable
+		_, _ = kubectl(context.Background(), nil, "delete", "pod,configmap", pod, "--wait=false") // best effort; the namespace is disposable
 	})
 	manifest := fmt.Sprintf(`apiVersion: v1
 kind: Pod

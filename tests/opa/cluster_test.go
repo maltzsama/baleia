@@ -57,9 +57,10 @@ func kubectl(ctx context.Context, stdin []byte, args ...string) (string, error) 
 	return stdout.String(), nil
 }
 
+// mustKubectl also works in t.Cleanup, where t.Context() is already done.
 func mustKubectl(t testing.TB, args ...string) string {
 	t.Helper()
-	out, err := kubectl(t.Context(), nil, args...)
+	out, err := kubectl(context.WithoutCancel(t.Context()), nil, args...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,12 +190,14 @@ func restartPod(t testing.TB, deployment string) string {
 	return name
 }
 
+// scale also works in t.Cleanup.
 func scale(t testing.TB, deployment string, replicas int) {
 	t.Helper()
+	ctx := context.WithoutCancel(t.Context())
 	mustKubectl(t, "scale", "deployment/"+deployment, fmt.Sprintf("--replicas=%d", replicas))
 	if replicas == 0 {
-		err := eventually(t.Context(), 2*time.Minute, func() error {
-			out, err := kubectl(t.Context(), nil, "get", "pods", "-l", "app="+deployment, "-o", "name")
+		err := eventually(ctx, 2*time.Minute, func() error {
+			out, err := kubectl(ctx, nil, "get", "pods", "-l", "app="+deployment, "-o", "name")
 			if err != nil {
 				return err
 			}
@@ -208,7 +211,7 @@ func scale(t testing.TB, deployment string, replicas int) {
 		}
 		return
 	}
-	if err := waitRollout(t.Context(), deployment); err != nil {
+	if err := waitRollout(ctx, deployment); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -11,10 +11,11 @@ import (
 
 // decision is one OPA decision log entry (decision_logs.console: true).
 type decision struct {
-	Path    string         `json:"path"`
-	Input   map[string]any `json:"input"`
-	Result  any            `json:"result"`
-	Bundles map[string]struct {
+	Timestamp time.Time      `json:"timestamp"`
+	Path      string         `json:"path"`
+	Input     map[string]any `json:"input"`
+	Result    any            `json:"result"`
+	Bundles   map[string]struct {
 		Revision string `json:"revision"`
 	} `json:"bundles"`
 	Metrics struct {
@@ -55,6 +56,9 @@ func decisionsSince(t testing.TB, deployment string, since time.Time) []decision
 		var d decision
 		if err := json.Unmarshal([]byte(line), &d); err != nil {
 			t.Fatalf("decision log line %q: %v", line, err)
+		}
+		if d.Timestamp.Before(since) {
+			continue // --since-time has a one-second granularity
 		}
 		decisions = append(decisions, d)
 	}
