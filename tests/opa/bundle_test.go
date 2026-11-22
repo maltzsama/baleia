@@ -113,6 +113,7 @@ func writeTarball(files map[string][]byte) ([]byte, error) {
 type dataBundle struct {
 	FormatVersion int                                             `json:"format_version"`
 	Revision      string                                          `json:"revision"`
+	NotAfter      string                                          `json:"not_after"` // the lease, RFC 3339
 	Subjects      map[string]subject                              `json:"subjects"`
 	Tables        map[string]map[string]map[string]*tablePolicies `json:"tables"`
 }
@@ -155,6 +156,7 @@ func newBundle(revision string) *dataBundle {
 	return &dataBundle{
 		FormatVersion: 1,
 		Revision:      revision,
+		NotAfter:      time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339),
 		Subjects:      map[string]subject{},
 		Tables:        map[string]map[string]map[string]*tablePolicies{},
 	}

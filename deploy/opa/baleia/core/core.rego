@@ -27,13 +27,17 @@ bundle := data.baleia.bundle
 # deployment configuration, never from the data bundle.
 trusted(identity) if identity in data.baleia_deployment.trusted_identities
 
-# active is true while a supported data bundle revision is loaded. It is
-# undefined when no bundle was ever activated, when the bundle is invalid and
-# when the persisted copy was lost.
+# active is true while a supported, unexpired data bundle revision is loaded.
+# It is undefined when no bundle was ever activated, when the bundle is
+# invalid, when the persisted copy was lost, and once the bundle's lease
+# (not_after, RFC 3339) has passed: OPA keeps its last bundle while it cannot
+# reach Baleia, and the lease bounds how long a revoked policy can outlive its
+# revocation. Baleia re-issues a revision before the lease ends.
 active if {
 	bundle.format_version == format_version
 	is_string(bundle.revision)
 	bundle.revision != ""
+	time.now_ns() < time.parse_rfc3339_ns(bundle.not_after)
 }
 
 # allow(identity) is the only coarse decision: data policies are not a second

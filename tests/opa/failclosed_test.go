@@ -214,28 +214,26 @@ func TestFailClosed_BundleLifecycle(t *testing.T) {
 		}
 	})
 
-	t.Run("a stale bundle keeps being enforced while the service is unreachable", func(t *testing.T) {
-		// Published: bob loses his row. OPA cannot fetch it and keeps
-		// enforcing the previous revision; only its status shows it.
-		addr := forward(t, "pod/"+podName(t, "trino-opa"), 8181)
+	t.Run("a stale bundle is enforced only until its lease ends", func(t *testing.T) {
+		// Published: a revision whose lease ends soon. OPA then loses the
+		// bundle service: it keeps enforcing the revision until not_after,
+		// and denies user identities after it. Trusted identities go on.
+		const lease = 40 * time.Second
+		short := ordersPolicies("life-lease", "orders_lifecycle")
+		notAfter := time.Now().Add(lease)
+		short.NotAfter = notAfter.UTC().Format(time.RFC3339)
+		publish(t, short, "trino-opa")
 		scale(t, "bundles", 0)
 		t.Cleanup(func() { scale(t, "bundles", 1) })
-		err := eventually(t.Context(), time.Minute, func() error {
-			st, err := bundleStatus(t, addr)
-			if err != nil {
-				return err
-			}
-			if st.Code == "" {
-				return errors.New("no download error reported yet")
-			}
-			t.Logf("status: active=%s code=%s message=%s", st.ActiveRevision, st.Code, st.Message)
-			return nil
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
 		c := connect(t, "svc/trino-opa")
-		rows, qerr := ordersVisibleTo(t, c, table)
-		t.Logf("with a published revision OPA cannot fetch: rows=%q error=%v", rows, qerr)
+		if time.Now().Before(notAfter) {
+			if rows, qerr := ordersVisibleTo(t, c, table); qerr != nil || !slices.Equal(rows, []string{"2|US|open|***"}) {
+				t.Errorf("within the lease: %q %v", rows, qerr)
+			}
+		}
+		time.Sleep(time.Until(notAfter) + 3*time.Second)
+		qerr := c.denied(t, user("u_bob"), "SELECT id FROM "+table)
+		t.Logf("after the lease: %v", qerr)
+		c.query(t, as(serviceUser), "SELECT count(*) FROM "+table)
 	})
 }

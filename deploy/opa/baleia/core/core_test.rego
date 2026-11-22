@@ -11,6 +11,7 @@ orders := {"catalog": "lake", "schema": "sales", "name": "orders"}
 bundle := {
 	"format_version": 1,
 	"revision": "r1",
+	"not_after": "2200-01-01T00:00:00Z",
 	"subjects": {
 		"u_ana": {"user": "ana", "teams": ["br"], "groups": ["analysts"]},
 		"u_bob": {"user": "bob", "teams": ["us"], "groups": []},
@@ -101,4 +102,19 @@ test_allow if {
 	core.allow("u_ana") with data.baleia.bundle as bundle with data.baleia_deployment as deployment
 	core.allow("baleia_admin") with data.baleia_deployment as deployment
 	not core.allow("u_ana") with data.baleia_deployment as deployment
+}
+
+test_expired_lease_is_not_active if {
+	expired := object.union(bundle, {"not_after": "2000-01-01T00:00:00Z"})
+	not core.active with data.baleia.bundle as expired
+	core.row_filter("u_ana", orders) == "false" with data.baleia.bundle as expired
+		with data.baleia_deployment as deployment
+	not core.allow("u_ana") with data.baleia.bundle as expired
+		with data.baleia_deployment as deployment
+	core.allow("baleia") with data.baleia.bundle as expired
+		with data.baleia_deployment as deployment
+}
+
+test_missing_lease_is_not_active if {
+	not core.active with data.baleia.bundle as object.remove(bundle, ["not_after"])
 }

@@ -67,7 +67,7 @@
                   ]
                 }
               ],
-              "using": "status \u003c\u003e 'void'"
+              "using": "status <> 'void'"
             }
           ],
           "column_masks": {
@@ -107,5 +107,6 @@
         }
       }
     }
-  }
+  },
+  "not_after": "2200-01-01T00:00:00Z"
 }
