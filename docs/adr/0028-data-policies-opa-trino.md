@@ -1,8 +1,8 @@
 # 0028. Row filters and column masks: authored in Baleia, decided by OPA, enforced by Trino
 
-- Status: Proposed. Not to be accepted before the spike listed under "Current compliance".
-- Date: 2026-11-13
-- Issues: #994 (spike), #995 (implementation), #992 (chart hardening)
+- Status: Accepted, amended by the spike in #994 (results under "Spike results").
+- Date: 2026-11-13; amended 2026-11-22
+- Issues: #994 (spike), #995 (implementation), #993 (catalog-manager RBAC), #992 (chart hardening)
 - Extends: [0005](0005-trino-security-model.md) (a third access control next to the file rules and
   the catalog guard)
 
@@ -55,6 +55,38 @@ Facts the design must respect:
 
   Baleia's policy screen shows this requirement next to every policy. The operator documentation
   lists it as a deployment requirement, not a Baleia guarantee.
+- **With per-user identity, the user's own token reaches the catalog manager**
+  ([0015](0015-per-user-catalog-identity.md)). The catalog manager must let that user load the whole
+  table, so the same token used from Spark or PyIceberg bypasses Trino's filters. Two ways close it:
+  - **Default mode:** the network requirement above. End users have no path to the catalog manager
+    or storage.
+  - **Polaris-OPA mode** (see "Who can read"): Polaris's own OPA policy refuses to load a policied
+    table, or vend its credentials, unless the call comes from a Baleia session. The identity
+    provider adds a session role (for example `baleia_session`) only to tokens issued to Baleia's
+    confidential client, the tokens 0015 forwards. Polaris reads it through
+    `quarkus.oidc.roles.role-claim-path` and passes it to OPA in `actor.roles`. The spike showed it
+    on Polaris 1.9 and Keycloak: Baleia's token loads the policied table, the same user's token from
+    another client gets 403, other tables are untouched.
+
+### Who can read: two modes
+
+Data policies decide rows and columns; whole-object access stays with the catalog manager. Baleia
+supports two ways of deciding it, per Polaris connection:
+
+- **Default: the manager's own RBAC.** Baleia administers Polaris's internal RBAC
+  ([0027](0027-catalog-manager-rbac-administration.md), #993) and works with any Polaris.
+- **Optional: Polaris with its OPA authorizer** (`polaris.authorization.type=opa`, Polaris 1.9+),
+  reading the same Baleia bundle, so one source decides both layers.
+  - Polaris's input is `actor` (principal, roles, attributes), `action`, `resource` (targets,
+    secondaries) and `context`. It allows or denies whole objects only: Polaris has no row filters
+    or masks (apache/polaris#137 and #5245 are open), so Trino and this ADR still own them.
+  - This authorizer **replaces** Polaris's internal RBAC. In this mode #993's RBAC administration
+    does not apply; the Polaris policy is an adapter of the same PEP-neutral Rego (see "What OPA
+    decides").
+  - Polaris 1.9 adds `polaris.authentication.credential-mode`. Baleia supports both values, declared
+    on the connection like `auth_mode` (0027): `internal` (principals and grants in Polaris; the
+    session role must be granted to each principal) and `external` (no principal entity; principal
+    roles come from the token as-is).
 
 ### Optional, with three explicit states
 
@@ -78,10 +110,11 @@ Facts the design must respect:
   Pod: trino-coordinator
   ├── init: install-plugin   catalog-store plugin + Rego package, checksum verified (ADR 0004)
   ├── container: trino       access-control.config-files = base, catalog-guard, opa
-  │                          opa.policy.uri = http://localhost:8181/v1/data/baleia/allow
-  └── container: opa         Rego from the init volume (read-only)
-                             data bundle pulled from Baleia (GET /opa/bundles/baleia.tar.gz)
-                             persist: true; readiness GET /health?bundles=true
+  │                          opa.policy.*-uri = http://localhost:8181/v1/data/baleia/trino/...
+  └── container: opa         --addr=127.0.0.1:8181, --diagnostic-addr=:8282
+                             bundle "policy": file:///policy/policy.tar.gz (the verified Rego)
+                             bundle "baleia": GET /opa/bundles/baleia.tar.gz, signed, persist: true
+                             readiness GET :8282/health?bundles=true
   ```
 
   - **No network hop.** Trino calls OPA on `localhost` several times per statement.
@@ -89,7 +122,14 @@ Facts the design must respect:
     cannot happen inside it.
   - **One readiness for both.** The pod is ready only when both containers are.
   - **Coordinator only.** Access checks, filters and masks are resolved while the query is planned,
-    so workers need no OPA. The spike confirms this.
+    so workers need no OPA. The spike confirmed it: a worker with its own OPA served no decision.
+  - **OPA's API is loopback-only.** The data and policy API listens on `127.0.0.1`, so nothing on
+    the cluster network can query OPA or `PUT` a policy; probes and metrics use the diagnostic port.
+  - **The plugin properties ship with the Rego.** Trino treats an unset
+    `opa.policy.row-filters-uri`, or an undefined `row_filters` result, as "no filter". The five
+    URIs (`allow`, `batch`, `row_filters`, `column_mask`, `batch_column_masks`) are therefore part of
+    the versioned plugin release, next to the Rego; the chart renders them and an external
+    operator copies them.
 - **For an external Trino**, the operator installs OPA and the plugin configuration. Baleia
   publishes the Rego package, the plugin properties and the bundle endpoint for them. It does not
   manage that deployment.
@@ -99,7 +139,9 @@ Facts the design must respect:
 - **The Rego comes from the plugin release.** It ships in the versioned tarball, under the same
   `.sha256` as the catalog-store plugin ([0004](0004-plugin-distribution.md)). The existing
   `install-plugin` init container verifies the checksum and copies the Rego into a volume that the
-  OPA container mounts read-only.
+  OPA container mounts read-only. The Rego is packaged as an OPA bundle (roots `baleia/core`,
+  `baleia/trino`) that OPA loads with `resource: file:///policy/policy.tar.gz`. A data bundle that
+  claims an overlapping root is rejected, so the data bundle can never replace the Rego.
   - The chart contains no Rego text.
   - Changing the policy code means changing a pinned release and checksum, not editing a
     ConfigMap.
@@ -107,9 +149,12 @@ Facts the design must respect:
   is created with `immutable: true`: `config.properties`, the base rules, the guard properties,
   `baleia-rules.json`, the authenticator, and OPA's configuration. A change needs a delete and a
   recreate, which takes a separate permission and shows in the cluster audit log. This applies to
-  the existing files too, not only to OPA's.
-- **Drift is detected.** The Rego package exposes its own digest (`data.baleia.policy_digest`), and
-  OPA's status report carries it to Baleia. Baleia shows the engine as **enabled and unhealthy**
+  the existing files too, not only to OPA's. Their names carry a hash of their content: the kubelet
+  caches immutable ConfigMaps, and one deleted and recreated under the same name keeps serving the
+  old content to new pods.
+- **Drift is detected.** The Rego bundle's manifest revision is its digest (the SHA-256 of the
+  sorted `<path> <sha256>` lines of its Rego files), and OPA's status report carries it to Baleia
+  as `bundles.policy.active_revision`; every decision log carries it too. Baleia shows the engine as **enabled and unhealthy**
   (`data_policy_digest_mismatch`) when the digest differs from the one of the release the engine
   is pinned to.
   - This catches misconfiguration and careless tampering.
@@ -127,20 +172,62 @@ Facts the design must respect:
 ### What OPA decides
 
 - **Rego ships with the plugin release, data comes in the bundle.** The Rego package
-  (`deploy/opa/baleia/`) is versioned with the Trino plugin and tested in CI with `opa test` against
-  the plugin's input documents. OPA loads it from the verified init volume (see "Integrity of the
-  policy code"), **not from the bundle**. The bundle carries only data, under the root `baleia`.
-  The policy logic is therefore always present, even when no bundle has ever been activated.
+  (`deploy/opa/baleia/`) is versioned with the Trino plugin and tested with `opa test` against the
+  plugin's recorded input documents (`testdata/trino484`). OPA loads it from the verified init
+  volume (see "Integrity of the policy code"), **not from the data bundle**. The data bundle carries
+  only data, under the root `baleia/bundle`. The policy logic is therefore always present, even
+  when no bundle has ever been activated.
+- **The data flow.** The user fills the policy screens; Baleia saves the policies in its database;
+  on publish it serializes them as-is into the bundle JSON; OPA loads Rego plus JSON; the Rego only
+  reads the JSON. The Rego fixes only the semantics (below); every policy decision is the user's.
+- **One PEP-neutral core, one thin adapter per enforcement point.**
+  - `baleia.core` decides over Baleia's own terms: a subject (the engine identity), a table, a
+    column. It answers `allow`, `row_filter` and `column_mask`.
+  - `baleia.trino` translates the Trino OPA plugin's input into those terms. Another enforcement
+    point (Polaris, Spark, Kyuubi) is another adapter over the same core and the same bundle.
+- **The bundle JSON is a public, versioned contract.** `format_version` 1 has `revision`,
+  `not_after` (the lease, below), `subjects` (Trino identity → user, service account, teams,
+  identity-provider groups) and `tables` (catalog → schema → table → `row_policies` and
+  `column_masks`). It is documented for operators. A bundle with another `format_version` is not
+  active, so user identities are denied.
+- **Bring your own Rego.** An operator may point OPA at their own Rego package that reads the same
+  contract, without recompiling anything. The release package stays the default; the digest check
+  then reports the operator's digest.
+- **Trusted identities come from the deployment.** OPA reads them from a file the chart renders
+  next to the guard's properties (`baleia.admin-users`, `baleia.service-users`), never from the
+  data bundle.
 - **OPA is no second RBAC, but it denies when it has no data.** The `allow` rule is:
-  - **true** for trusted identities (`baleia.admin-users`, `baleia.service-users`);
-  - **true** for user identities once a bundle revision is active;
-  - **false** for every user identity while `data.baleia.revision` is undefined: no bundle yet,
-    an invalid bundle, or lost persistent storage.
+  - **true** for trusted identities;
+  - **true** for user identities while a bundle revision is active (supported `format_version`,
+    lease not expired);
+  - **false** for every user identity otherwise: no bundle yet, an invalid bundle, lost persistent
+    storage, or an expired lease.
 
   OPA never grants anything another layer denies: catalog and table access stay with the catalog
   guard ([0018](0018-workspace-catalog-scope.md)) and the catalog manager.
+- **Side doors are denied.** A policied table's values are reachable under other names, where no
+  filter or mask applies: Iceberg's value-bearing metadata tables (`$files`, `$entries`,
+  `$all_files`, `$all_entries`, `$partitions`, `$manifests`, `$all_manifests` expose column bounds
+  and partition values) and the `table_changes` table function. The spike read real masked e-mails
+  through `$files`. User identities are denied those for policied tables (and `table_changes` in a
+  catalog with policies). `$history`, `$refs`, `$snapshots`, `$properties` and
+  `$metadata_log_entries` stay readable, so time travel works; `$snapshots` reveals only the total
+  row count. Trusted identities keep them all for table health and maintenance.
 - **Filters and masks do not authorize writes.** Writes stay with the guard (read-only sessions)
   and the catalog manager.
+
+### Writes on policied tables (Trino 484)
+
+Trino decides what a write may do once a filter or a mask applies. The spike measured it:
+
+| Policy on the table | INSERT | UPDATE | DELETE | MERGE |
+|---|---|---|---|---|
+| Row filter only | allowed when the new row matches the filter, else denied (PostgreSQL's `WITH CHECK`) | refused | removes only visible rows | refused |
+| Column mask | refused | refused | refused | refused |
+
+Nothing leaks, but a policied table is close to read-only for every filtered or masked identity.
+The policy screen says so, and writes that need more go through a trusted job or an unpolicied
+table.
 
 ### Policy model
 
@@ -177,14 +264,47 @@ Policy expressions are not arbitrary SQL. Baleia parses them with its server-sid
 
 Then:
 
-- **Masks are usually presets.** Most masks pick one of `null`, `constant`, `hash`, `partial` (keep
-  the first or last *n* characters) or `redact`, which generate a known-safe expression. A custom
-  expression in the restricted language is allowed for advanced cases.
+- **Masks follow Dremio.** A mask is a user-written expression in the same restricted language as
+  filters, one mask applied per column. The UI offers templates that only fill in the expression:
+  null, constant, partial (keep the first or last *n* characters) and `sha256`. There is no built-in
+  "hash" type and no HMAC secret. The UI warns that an unsalted hash of low-cardinality values
+  (CPF, e-mail) can be reversed. (Dremio attaches UDFs with `SET MASKING POLICY`; its "Hash" type
+  exists only through its Ranger integration.)
 - **Type checks run in the engine.** For a row filter, the expression must be `boolean`. For a mask,
   its type must equal the column's type. The check is
   `EXPLAIN SELECT typeof(<expr>) FROM <table> WHERE false`, run as the admin identity.
 - **Invalid drafts stay drafts.** A draft that fails parsing, the allow-list or the type check
-  cannot be published (`data_policy_invalid`).
+  cannot be published (`data_policy_invalid`). Two masks with the same priority on one column are
+  refused at publish too: OPA cannot resolve them and Trino then fails every read of the table, not
+  only of that column.
+
+### Views
+
+Trino 484 evaluates a `SECURITY INVOKER` view as the caller and a `SECURITY DEFINER` view as its
+owner. It does not give OPA the invoker of a DEFINER view (`StatementAnalyzer.analyzeView` builds
+the session with the owner's identity, and the plugin input carries no original identity), and the
+core is not changed for it. Therefore:
+
+- **An INVOKER view applies the caller's filters and masks.**
+- **A DEFINER view applies its owner's.** A trusted owner is unfiltered, so publishing a policy is
+  refused while a trusted-owned DEFINER view reads the policied table; the refusal lists those
+  views, to be recreated as INVOKER or with an ordinary owner. `/governance` lists, for each
+  policied table, the DEFINER views over it and whose policy they apply.
+- **Today the catalog guard denies DEFINER views of ordinary owners.** The owner's identity carries
+  no `baleia.catalogs`, so the guard's fail-closed scope (0018) refuses it, with or without OPA (the
+  spike's finding). The guard changes to accept a DEFINER view owner's identity; that change has
+  its own issue and security analysis in the plugin repository.
+
+### Screens: `/governance`
+
+Policies live in one top-level area, `/governance`, integrated with catalog RBAC:
+
+- **Views:** By object, By subject, Realm, Revisions.
+- **By subject** shows, for one subject, what it can read (catalog RBAC), what is filtered (row
+  policies) and what is masked (column policies).
+- The Polaris RBAC screens of #993 live here too, not under `/connections/{id}/rbac`.
+- `/data`, `/catalogs` and `/engines` only link into it; OPA and bundle health may also show on
+  `/engines/{id}`.
 
 ### Subjects and their freshness
 
@@ -217,7 +337,17 @@ Then:
 - **Three states are shown separately.** OPA's status plugin reports to `POST /opa/status`.
   Baleia shows **draft** (saved), **published** (the pointer) and **active** (the revision each
   OPA reports), per engine. A policy is never shown as active because it was saved or published.
-- **Rollback** moves the pointer to an earlier revision, which is immutable and still stored.
+- **Every revision has a lease.** The signed bundle carries `not_after`; past it, the Rego treats
+  the bundle as inactive and denies user identities. OPA keeps its last bundle while it cannot
+  reach Baleia, and cannot know that a newer revision exists, so without a lease a revoked policy
+  could outlive its revocation indefinitely. The lease bounds that.
+  - Baleia re-issues a revision with the same policies and a fresh lease before the current one
+    ends. The re-issued revision is a new immutable object; nothing is rewritten.
+  - The lease length is a deployment setting (its name and default are #995's); it is the longest a
+    revocation can take to apply while OPA cannot reach Baleia, and the longest OPA keeps serving
+    users while Baleia is down.
+- **Rollback** re-issues an earlier revision's content with a fresh lease and moves the pointer to
+  it. The earlier revision stays stored and immutable.
 
 ### Availability
 
@@ -230,7 +360,8 @@ Then:
   identities also go through the plugin. No fallback skips OPA.
 - **Recovery does not depend on Trino.** It needs Baleia's bundle endpoint and object storage, and
   neither runs SQL through Trino. With `persist: true`, a restarted OPA comes up with its last
-  bundle even when Baleia is down.
+  bundle even when Baleia is down, and serves users until that bundle's lease ends; trusted
+  identities go on after it, so maintenance keeps running.
 
 ### Who may administer
 
@@ -259,36 +390,48 @@ rollback and failed publish is audited with the actor, the revision and the affe
   stops working: the chart recreates them, and the pod restarts.
 - **Cluster RBAC is part of the guarantee.** A deployment that lets broad identities write to the
   Trino namespace has no data-policy guarantee, and no guard guarantee either.
+- **The lease trades availability for revocation.** If Baleia stays unreachable longer than the
+  lease, user queries on engines with data policies stop until it is back; a revocation applies at
+  the latest when the lease ends.
+- **Policied tables are close to read-only for filtered identities** (Trino 484's write rules), and
+  their value-bearing metadata tables are closed to them.
+- **The bundle JSON is a public contract.** Changing it is a `format_version` bump, released with
+  the Rego that reads it; operators with their own Rego follow it.
+
+## Spike results (#994)
+
+Trino 484, `baleia-catalog-guard` 0.10.2 and OPA 1.22.4 (pinned by digest) on the minikube dev
+cluster; Polaris 1.9.0 and Keycloak 26.8.2 for the Polaris-OPA mode. The suite is kept:
+`go test -tags opa -count=1 -timeout 60m ./tests/opa/` (harness in `deploy/dev/opa-spike` and
+`deploy/dev/opa-spike-polaris`) and `opa test` over `deploy/opa/baleia`, which replays the recorded
+plugin inputs.
+
+| # | Question | Result |
+|---|---|---|
+| 1 | Composition | Pass. 17 guard guarantees (catalog DDL admin-only, no impersonation by another login, read-only sessions, fail-closed catalog scope) behave the same with and without OPA. |
+| 2 | Contract | Pass. Filters and masks apply to SELECT, joins, aggregates, predicates and time travel, batched and not; writes as in "Writes on policied tables"; side doors denied; conflicting masks fail the table. Inputs of every operation seen are recorded under `testdata/trino484`. |
+| 3 | Fail closed | Pass. OPA unreachable: every statement fails, trusted ones too. No bundle, lost storage, unsigned, wrongly signed, tampered, out-of-root and corrupt bundles: user identities denied, or the previous revision kept with the error in the status report. Unknown `format_version`: denied. A stale bundle is enforced only until its lease ends. |
+| 4 | Readiness | Pass. The client Service has no endpoint until a bundle is active. |
+| 5 | Latency | Single node, p50 per query on policied tables: +20-30 ms over no OPA with the non-batched endpoints (two runs); OPA's handler time 2-11 ms per query; the batched endpoints halve the decisions (9→5, 13→7, 23→11). Measured with console decision logging on, so an upper bound. |
+| 6 | Coordinator only | Pass. With splits only on the worker, the worker's OPA served no decision. |
+| 7 | Integrity | Pass. A wrong checksum stops the init container; the digest is in the status report; patching a security ConfigMap is refused; OPA's data API is unreachable from the cluster network. |
+| 8 | Polaris claims | Pass (see "Scope of the guarantee"). |
+| 9 | Views | INVOKER: the caller's policy. Trusted-owned DEFINER: unfiltered. Ordinary-owner DEFINER: denied by the guard (see "Views"). |
+
+**Identities that run SQL unfiltered.** Every user-facing path (editor, saved queries, agents,
+semantic layer, retrievers, BI gateway) runs as the user's own identity. The trusted ones:
+
+| Feature | Identity | Reads | With policies |
+|---|---|---|---|
+| Metadata sync, introspection, connection test, engine ping | service | schemas, tables, columns, functions, `SELECT 1` | metadata only |
+| Table health | service | Iceberg `$files`, `$manifests`, `$snapshots`, `$refs`, `$properties` | row counts and file statistics of policied tables reach the monitoring screens; documented |
+| Maintenance (`optimize`, `expire_snapshots`, Lens) | service | Iceberg procedures | must stay unfiltered: a filtered rewrite would drop rows |
+| Catalog DDL (binder), query cancel and info | admin | `CREATE/DROP CATALOG`, `system.runtime` | no table data |
 
 ## Current compliance
 
-Not implemented, and **not to be accepted** until a spike against Trino 484, the current
-`baleia-catalog-guard` and a pinned OPA version shows all of the following, with automated tests:
-
-1. **Composition.** `opa`, `file` and `baleia-catalog-guard` together in `access-control.config-files`
-   keep every guarantee of [0005](0005-trino-security-model.md) and
-   [0018](0018-workspace-catalog-scope.md): the existing guard test suite passes unchanged with OPA
-   added.
-2. **The real contract.** The plugin's input and output for allow, row filters and masks (batched
-   and not). What happens when a column gets more than one mask. How row filters behave on
-   `UPDATE`, `DELETE` and `MERGE`. The documented list of covered operations comes from this.
-3. **Fail-closed cases.**
-   - OPA unreachable;
-   - OPA up with no bundle;
-   - an invalid or unsigned bundle;
-   - lost persistent storage;
-   - a bundle older than the published revision.
-
-   Each must deny or error for user identities, never return "no filter" or "no mask".
-4. **Readiness.** The coordinator is not routable before activation.
-5. **Latency.** Per query, with the batched endpoints and OPA as a sidecar.
-6. **Coordinator only.** No access-control call reaches OPA from a worker.
-7. **Integrity.**
-   - A Rego file whose checksum does not match stops the init container.
-   - A digest mismatch shows the engine as unhealthy.
-   - The security ConfigMaps are created as immutable.
-
-If the spike fails on 2 or 3, the fallback below is reconsidered before any implementation starts.
+Not implemented. #995 implements this ADR; the Rego package and its tests exist in
+`deploy/opa/baleia/`, and the spike suite above stays as the regression test.
 
 ## Alternatives considered
 
@@ -326,5 +469,11 @@ If the spike fails on 2 or 3, the fallback below is reconsidered before any impl
 - **Filters and masks in `baleia-catalog-guard`, read from Baleia's database.** Rejected: a database
   lookup per check, and more custom security code in Java to maintain.
 - **SQL rewriting in Baleia.** Rejected by [0005](0005-trino-security-model.md).
-- **Polaris's external PDP.** Rejected: it authorizes catalog operations; it does not filter rows
-  or mask columns.
+- **Polaris's external PDP as the only layer.** Rejected: it authorizes whole objects; it does not
+  filter rows or mask columns. It is kept as the optional second enforcement point ("Who can read:
+  two modes").
+- **Bundles without a lease.** Rejected after the spike: OPA keeps its last bundle while Baleia is
+  unreachable, so a revocation would have no bound.
+- **Masks or filters on metadata tables instead of denying them.** Rejected: masking the bounds of
+  `$files` still leaks per-file and per-partition row counts, and the columns change across Trino
+  and Iceberg versions.
