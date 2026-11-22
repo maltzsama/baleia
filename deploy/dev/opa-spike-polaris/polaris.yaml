@@ -1,0 +1,46 @@
+# Polaris 1.9 with external (OIDC) authentication in credential-mode external
+# and the OPA authorizer, OPA as a sidecar on 8191 (Polaris owns 8181).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: polaris
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: polaris }
+  template:
+    metadata:
+      labels: { app: polaris }
+    spec:
+      containers:
+        - name: polaris
+          image: docker.io/apache/polaris:1.9.0
+          env:
+            - { name: POLARIS_BOOTSTRAP_CREDENTIALS, value: "POLARIS,root,s3cr3t" }
+          ports:
+            - { containerPort: 8181 }
+            - { containerPort: 8182 }
+          readinessProbe:
+            httpGet: { path: /q/health, port: 8182 }
+            initialDelaySeconds: 10
+            periodSeconds: 3
+          resources:
+            limits: { memory: 1536Mi }
+          volumeMounts:
+            - { name: config, mountPath: /deployments/config/application.properties, subPath: application.properties }
+        - name: opa
+          image: docker.io/openpolicyagent/opa:1.22.4-static@sha256:12cecac5a174368f7d3f09d3a19d040ebe0c91d576e520335ae7a985a26e39d3
+          args: ["run", "--server", "--addr=127.0.0.1:8191", "--set=decision_logs.console=true", "/policy/polaris.rego"]
+          volumeMounts:
+            - { name: config, mountPath: /policy/polaris.rego, subPath: polaris.rego }
+      volumes:
+        - { name: config, configMap: { name: polaris-opa } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: polaris
+spec:
+  selector: { app: polaris }
+  ports:
+    - { name: api, port: 8181 }
