@@ -1,0 +1,27 @@
+{
+  "input": {
+    "action": {
+      "operation": "FilterTables",
+      "resource": {
+        "table": {
+          "catalogName": "iceberg",
+          "schemaName": "spike",
+          "tableName": "orders_contract"
+        }
+      }
+    },
+    "context": {
+      "identity": {
+        "groups": [],
+        "user": "u_ana"
+      },
+      "properties": {},
+      "queryId": "20260101_000000_00000_xxxxx",
+      "softwareStack": {
+        "trinoVersion": "484"
+      }
+    }
+  },
+  "result": true,
+  "rule": "allow"
+}

@@ -1,0 +1,40 @@
+{
+  "input": {
+    "action": {
+      "filterResources": [
+        {
+          "table": {
+            "catalogName": "iceberg",
+            "columns": [
+              "id",
+              "region",
+              "status",
+              "email",
+              "$partition",
+              "$path",
+              "$file_modified_time"
+            ],
+            "schemaName": "spike",
+            "tableName": "orders_contract"
+          }
+        }
+      ],
+      "operation": "FilterColumns"
+    },
+    "context": {
+      "identity": {
+        "groups": [],
+        "user": "u_ana"
+      },
+      "properties": {},
+      "queryId": "20260101_000000_00000_xxxxx",
+      "softwareStack": {
+        "trinoVersion": "484"
+      }
+    }
+  },
+  "result": [
+    0
+  ],
+  "rule": "batch"
+}

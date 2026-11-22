@@ -1,0 +1,44 @@
+{
+  "input": {
+    "action": {
+      "filterResources": [
+        {
+          "schema": {
+            "catalogName": "iceberg",
+            "schemaName": "information_schema"
+          }
+        },
+        {
+          "schema": {
+            "catalogName": "iceberg",
+            "schemaName": "system"
+          }
+        },
+        {
+          "schema": {
+            "catalogName": "iceberg",
+            "schemaName": "spike"
+          }
+        }
+      ],
+      "operation": "FilterSchemas"
+    },
+    "context": {
+      "identity": {
+        "groups": [],
+        "user": "u_ana"
+      },
+      "properties": {},
+      "queryId": "20260101_000000_00000_xxxxx",
+      "softwareStack": {
+        "trinoVersion": "484"
+      }
+    }
+  },
+  "result": [
+    0,
+    1,
+    2
+  ],
+  "rule": "batch"
+}

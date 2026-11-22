@@ -1,0 +1,87 @@
+{
+  "input": {
+    "action": {
+      "filterResources": [
+        {
+          "table": {
+            "catalogName": "iceberg",
+            "schemaName": "spike",
+            "tableName": "orders_conflict_trino_opa_single"
+          }
+        },
+        {
+          "table": {
+            "catalogName": "iceberg",
+            "schemaName": "spike",
+            "tableName": "orders_read_trino_opa_single"
+          }
+        },
+        {
+          "table": {
+            "catalogName": "iceberg",
+            "schemaName": "spike",
+            "tableName": "orders_w_rows"
+          }
+        },
+        {
+          "table": {
+            "catalogName": "iceberg",
+            "schemaName": "spike",
+            "tableName": "orders_contract"
+          }
+        },
+        {
+          "table": {
+            "catalogName": "iceberg",
+            "schemaName": "spike",
+            "tableName": "orders_read_trino_opa"
+          }
+        },
+        {
+          "table": {
+            "catalogName": "iceberg",
+            "schemaName": "spike",
+            "tableName": "orders_write"
+          }
+        },
+        {
+          "table": {
+            "catalogName": "iceberg",
+            "schemaName": "spike",
+            "tableName": "orders_conflict_trino_opa"
+          }
+        },
+        {
+          "table": {
+            "catalogName": "iceberg",
+            "schemaName": "spike",
+            "tableName": "orders_w_masks"
+          }
+        }
+      ],
+      "operation": "FilterTables"
+    },
+    "context": {
+      "identity": {
+        "groups": [],
+        "user": "u_ana"
+      },
+      "properties": {},
+      "queryId": "20260101_000000_00000_xxxxx",
+      "softwareStack": {
+        "trinoVersion": "484"
+      }
+    }
+  },
+  "result": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "rule": "batch"
+}

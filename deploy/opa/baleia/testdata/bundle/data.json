@@ -1,0 +1,111 @@
+{
+  "format_version": 1,
+  "revision": "q2-contract",
+  "subjects": {
+    "u_ana": {
+      "user": "ana",
+      "teams": [
+        "br"
+      ],
+      "groups": [
+        "analysts"
+      ]
+    },
+    "u_bob": {
+      "user": "bob",
+      "teams": [
+        "us"
+      ],
+      "groups": []
+    },
+    "u_cid": {
+      "user": "cid",
+      "teams": [
+        "br",
+        "us"
+      ],
+      "groups": [
+        "auditors"
+      ]
+    }
+  },
+  "tables": {
+    "iceberg": {
+      "spike": {
+        "orders_contract": {
+          "row_policies": [
+            {
+              "name": "br",
+              "mode": "permissive",
+              "to": [
+                {
+                  "team": "br"
+                }
+              ],
+              "using": "region = 'BR'"
+            },
+            {
+              "name": "us",
+              "mode": "permissive",
+              "to": [
+                {
+                  "team": "us"
+                }
+              ],
+              "using": "region = 'US'"
+            },
+            {
+              "name": "no-void",
+              "mode": "restrictive",
+              "to": [
+                {
+                  "everyone": true,
+                  "except": [
+                    {
+                      "group": "auditors"
+                    }
+                  ]
+                }
+              ],
+              "using": "status \u003c\u003e 'void'"
+            }
+          ],
+          "column_masks": {
+            "email": [
+              {
+                "name": "hide",
+                "priority": 1,
+                "to": [
+                  {
+                    "everyone": true
+                  }
+                ],
+                "expression": "'***'"
+              },
+              {
+                "name": "analysts",
+                "priority": 5,
+                "to": [
+                  {
+                    "group": "analysts"
+                  }
+                ],
+                "expression": "substr(email, 1, 2) || '***'"
+              },
+              {
+                "name": "auditors",
+                "priority": 9,
+                "to": [
+                  {
+                    "group": "auditors"
+                  }
+                ],
+                "expression": "email"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

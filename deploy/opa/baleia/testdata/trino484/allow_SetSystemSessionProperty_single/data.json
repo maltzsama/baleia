@@ -1,0 +1,24 @@
+{
+  "input": {
+    "action": {
+      "operation": "SetSystemSessionProperty",
+      "resource": {
+        "systemSessionProperty": {
+          "name": "query_max_run_time"
+        }
+      }
+    },
+    "context": {
+      "identity": {
+        "groups": [],
+        "user": "u_ana"
+      },
+      "properties": {},
+      "softwareStack": {
+        "trinoVersion": "484"
+      }
+    }
+  },
+  "result": true,
+  "rule": "allow"
+}
