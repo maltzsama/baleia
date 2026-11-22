@@ -89,10 +89,24 @@ spec:
               bin=/opt/kafka/bin
               until $bin/kafka-topics.sh --bootstrap-server "$broker" --list >/dev/null 2>&1; do sleep 2; done
               topics() { $bin/kafka-topics.sh --bootstrap-server "$broker" "$@"; }
+              # The topic's one partition's offset at a time (-1 latest, -2
+              # earliest). The tool can skip a partition and still succeed, so
+              # anything but exactly one offset row fails and the Job retries.
+              offsets() {
+                out=$($bin/kafka-get-offsets.sh --bootstrap-server "$broker" --topic e2e_orders --time "$1")
+                if ! printf '%s\n' "$out" | grep -qxE 'e2e_orders:0:[0-9]+' || [ "$(printf '%s\n' "$out" | wc -l)" -ne 1 ]; then
+                  echo "unexpected offsets for e2e_orders: $out" >&2
+                  return 1
+                fi
+                echo "${out##*:}"
+              }
               # Retained messages: latest minus earliest offset, so messages the
               # retention removed are not counted.
-              offsets() { $bin/kafka-get-offsets.sh --bootstrap-server "$broker" --topic e2e_orders --time "$1" | awk -F: '{n += $3} END {print n + 0}'; }
-              count() { echo $(( $(offsets -1) - $(offsets -2) )); }
+              count() {
+                latest=$(offsets -1) || return 1
+                earliest=$(offsets -2) || return 1
+                echo $(( latest - earliest ))
+              }
               topics --create --if-not-exists --topic e2e_orders --partitions 1 --replication-factor 1
               end=$(count)
               if [ "$end" -eq 3 ]; then
