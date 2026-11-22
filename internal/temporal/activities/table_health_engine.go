@@ -122,7 +122,7 @@ func (a *Activities) engineTableHealth(ctx context.Context, h *healthPass, sourc
 	limit := a.cfg.TableHealthEngineTableLimit()
 	var read atomic.Int64
 	defer tableHealthHeartbeats(ctx, &read)()
-	var recorded, skipped int
+	var recorded, skipped, missing int
 	var firstErr, storeErr error
 	recordErr := func(err error) {
 		if firstErr == nil {
@@ -145,6 +145,15 @@ func (a *Activities) engineTableHealth(ctx context.Context, h *healthPass, sourc
 			if err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()
+				}
+				// The engine no longer has it as an Iceberg table: dropped
+				// since the source listed it, or a snapshot row left from the
+				// catalog's former connector until the next sync. It is not a
+				// failure and does not use up the limit.
+				if queryengine.CodeOf(err) == queryengine.CodeNotFound {
+					read.Add(-1)
+					missing++
+					return nil
 				}
 				recordErr(fmt.Errorf("table %s.%s.%s: %w", src.catalog, namespace, name, err))
 				return nil
@@ -174,6 +183,10 @@ func (a *Activities) engineTableHealth(ctx context.Context, h *healthPass, sourc
 	}
 	if firstErr != nil {
 		a.logger.WarnContext(ctx, "table health pass had failures", "catalog", params.Catalog, "err", firstErr)
+	}
+	if missing > 0 {
+		a.logger.InfoContext(ctx, "table health pass found tables the engine no longer has",
+			"catalog", params.Catalog, "missing", missing)
 	}
 	if skipped > 0 {
 		a.logger.WarnContext(ctx, "table health pass reached its table limit",

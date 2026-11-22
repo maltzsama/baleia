@@ -70,7 +70,8 @@ type metadataTables struct {
 	properties [][2]string
 	current    []string // snapshot id, summary JSON; nil for no snapshot
 	stats      []string // count, oldest ms, commits in the hour, in the day
-	fail       bool
+	fail       bool     // the engine fails reading it
+	missing    bool     // the engine does not have it as an Iceberg table
 }
 
 // metadataEngine answers the health reads from canned metadata tables and
@@ -108,6 +109,9 @@ func (s *metadataSession) Execute(_ context.Context, sql string, _ queryengine.C
 			continue
 		}
 		if t.fail {
+			return queryengine.NewError(queryengine.CodeUnavailable, "fake", "", "engine unavailable")
+		}
+		if t.missing {
 			return queryengine.NewError(queryengine.CodeNotFound, "fake", "", "table not found")
 		}
 		switch {
@@ -339,6 +343,25 @@ func TestEngineTableHealth_Failures(t *testing.T) {
 		ctx := t.Context()
 		if err := a.lensAnalyzeTableHealth(ctx, params); err == nil {
 			t.Fatal("a pass that recorded nothing succeeded")
+		}
+	})
+
+	t.Run("a table the engine no longer has", func(t *testing.T) {
+		t.Parallel()
+		// Dropped since it was listed, or a snapshot row of the catalog's
+		// former connector: not a failure, and it does not use up the limit.
+		eng := &metadataEngine{tables: map[string]metadataTables{
+			"gone": {missing: true},
+			"ok":   {stats: []string{"0", "", "0", "0"}},
+		}}
+		tables := []connections.TableMeta{glueTable("s", "gone", "iceberg"), glueTable("s", "ok", "iceberg")}
+		a, store, params, catalog := glueHealthFixture(t, "iceberg", tables, eng, &config.Config{TableHealthMaxEngineTables: 1})
+		ctx := t.Context()
+		if err := a.lensAnalyzeTableHealth(ctx, params); err != nil {
+			t.Fatalf("pass: %v", err)
+		}
+		if _, err := store.GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{CatalogID: catalog, Namespace: "s", TableName: "ok"}); err != nil {
+			t.Errorf("the table after the missing one was not read: %v", err)
 		}
 	})
 
