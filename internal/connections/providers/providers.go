@@ -9,6 +9,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/glue"
 	"github.com/galileostudio/baleia/internal/connections/hive"
 	"github.com/galileostudio/baleia/internal/connections/iceberg"
+	"github.com/galileostudio/baleia/internal/connections/kafka"
 	"github.com/galileostudio/baleia/internal/connections/lakekeeper"
 	"github.com/galileostudio/baleia/internal/connections/mysql"
 	"github.com/galileostudio/baleia/internal/connections/nessie"
@@ -62,6 +63,7 @@ func New(d *connections.Dialer, opts ...Options) (*connections.Registry, error) 
 		clickhouse.New(d),
 		flightsql.New(d),
 		trino.New(d, o.Dialects.MustGet(dialect.Trino)),
+		kafka.New(d),
 	}
 	all = append(all, planned.All()...)
 	all = append(all, synthetic.All()...)

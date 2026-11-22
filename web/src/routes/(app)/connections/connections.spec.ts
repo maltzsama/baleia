@@ -62,6 +62,45 @@ describe('connections page', () => {
 		expect(screen.getByText(/1 binding/)).toBeTruthy();
 	});
 
+	it('asks for the catalog configuration a type declares when adding a catalog', async () => {
+		const bodies: Record<string, unknown>[] = [];
+		server.use(
+			http.get('/connection-providers', ({ response }) =>
+				response(200).json([
+					makeProvider({
+						catalog_schema: [
+							{ key: 'topics', label: 'Topics', type: 'text', required: true, secret: false }
+						]
+					})
+				])
+			),
+			http.post('/connections/{connection_id}/catalogs', async ({ request, response }) => {
+				bodies.push((await request.json()) as Record<string, unknown>);
+				return response(201).json([makeCatalog({ connection_id: CONNECTION, name: 'events' })]);
+			})
+		);
+		render(ConnectionsPage);
+		await fireEvent.click(await screen.findByRole('button', { name: 'Add catalog' }));
+		await fireEvent.input(screen.getByLabelText('Catalog or warehouse name'), {
+			target: { value: 'events' }
+		});
+		// The card's button opened the dialog; its own is the last one.
+		const buttons = screen.getAllByRole('button', { name: 'Add catalog' });
+		const add = buttons[buttons.length - 1] as HTMLButtonElement;
+		// A required catalog value holds the dialog.
+		expect(add.disabled).toBe(true);
+		await fireEvent.input(screen.getByLabelText('Topics *'), { target: { value: 'orders' } });
+		expect(add.disabled).toBe(false);
+		await fireEvent.click(add);
+
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		expect(bodies[0]).toMatchObject({ config: { topics: 'orders' } });
+		// The dialog closes and the page reloads its cards.
+		await waitFor(() => expect(screen.queryByLabelText('Topics *')).toBeNull());
+		expect(await screen.findByText('lake')).toBeTruthy();
+		expect(await screen.findByText(/1 binding/)).toBeTruthy();
+	});
+
 	it('confirms deletion with the resource name and removes the card', async () => {
 		render(ConnectionsPage);
 		await screen.findByText('Warehouse');

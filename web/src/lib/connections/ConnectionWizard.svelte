@@ -40,7 +40,8 @@
 		canDirect,
 		canFederated,
 		databaseName,
-		defaultValues,
+		catalogDefaults,
+		catalogValuesMissing,
 		initialValues,
 		intentsFor,
 		missingFields,
@@ -52,7 +53,6 @@
 		roleLabel,
 		statusLabel,
 		type ConnectionProvider,
-		type ConnectionProviderField,
 		type Usage
 	} from './providers';
 
@@ -193,9 +193,7 @@
 	const connectors = $derived(selectedSupport?.connectors ?? []);
 	/** The values each catalog of the type takes (its registration options). */
 	const catalogSchema = $derived(provider?.catalog_schema ?? []);
-	const catalogConfigMissing = $derived(
-		catalogSchema.some((f) => f.required && !(catalogValues[f.key] ?? '').trim())
-	);
+	const catalogConfigMissing = $derived(catalogValuesMissing(catalogSchema, catalogValues));
 	const reservedNames = $derived(selectedSupport?.reserved_names ?? []);
 	const isDatabase = $derived(
 		provider ? provider.config_schema.some((f) => f.key === 'database') : false
@@ -267,18 +265,6 @@
 		}
 	}
 
-	/**
-	 * The starting catalog values: the schema's defaults, and false for a
-	 * checkbox without one, which is what the unchecked box shows.
-	 */
-	function catalogDefaults(fields: ConnectionProviderField[]): Record<string, string> {
-		const out: Record<string, string> = {};
-		for (const field of fields) {
-			if (field.type === 'bool') out[field.key] = 'false';
-		}
-		return { ...out, ...defaultValues(fields) };
-	}
-
 	function usage(): Usage {
 		return { accessMode, bindEngineIds };
 	}
@@ -300,7 +286,11 @@
 				intents: intentsFor(provider, usage()),
 				// The warehouse create() registers the catalog with, so the bind
 				// check binds the same one.
-				warehouse: needsCatalogs(usage()) ? catalogName.trim() || name : undefined
+				warehouse: needsCatalogs(usage()) ? catalogName.trim() || name : undefined,
+				// The bind check binds the catalog configuration the catalogs will
+				// be created with (a Kafka catalog's topics).
+				catalog_config:
+					accessMode === FEDERATED && catalogSchema.length > 0 ? catalogValues : undefined
 			});
 			if (run !== testRun || snap !== snapshot) return;
 			testResult = result;

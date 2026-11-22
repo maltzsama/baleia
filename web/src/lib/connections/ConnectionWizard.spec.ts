@@ -363,6 +363,36 @@ describe('ConnectionWizard', () => {
 		);
 	});
 
+	it('tests the bind with the catalog configuration the catalogs will get', async () => {
+		const tests: Record<string, unknown>[] = [];
+		server.use(
+			http.get('/connection-providers', ({ response }) =>
+				response(200).json([
+					makeProvider({
+						catalog_schema: [
+							{ key: 'topics', label: 'Topics', type: 'text', required: true, secret: false }
+						]
+					})
+				])
+			),
+			http.post('/catalog-connections/test', async ({ request, response }) => {
+				tests.push((await request.json()) as Record<string, unknown>);
+				return response(200).json(makeTestResult());
+			})
+		);
+		render(ConnectionWizard);
+		await fillConfiguration();
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('radio', { name: /Through a query engine/ }));
+		await fireEvent.click(await screen.findByRole('checkbox', { name: /warehouse/ }));
+		await fireEvent.input(screen.getByLabelText('Topics *'), { target: { value: 'orders' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+		expect(await screen.findByText('Tested')).toBeTruthy();
+
+		expect(tests[0]).toMatchObject({ catalog_config: { topics: 'orders' } });
+	});
+
 	it('does not continue a federated connection without an engine', async () => {
 		render(ConnectionWizard);
 		await fillConfiguration();

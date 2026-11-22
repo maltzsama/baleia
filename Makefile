@@ -107,6 +107,9 @@ BI_E2E_TLS_PROXY ?= $(or $(TMPDIR),/tmp)/baleia-bi-e2e-tlsproxy
 # Postgres (for the seed) and Trino (for the run smoke).
 e2e:
 	$(MAKE) k8s-up
+	kubectl -n $(K8S_NS) delete job src-redpanda-seed --ignore-not-found
+	$(MAKE) k8s-source NAME=redpanda
+	kubectl -n $(K8S_NS) wait --for=condition=complete job/src-redpanda-seed --timeout=10m
 	$(MAKE) e2e-forward
 	@echo "waiting for the API on :8080…"
 	@until curl -fsS http://localhost:8080/readyz >/dev/null 2>&1; do sleep 1; done

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -382,12 +383,39 @@ func (h *CatalogHandlers) TestCatalogConnection(ctx context.Context, request Tes
 	if err != nil {
 		return nil, err
 	}
+	if t.catalogConfig, err = h.firstCatalogConfig(ctx, provider, conn.ID); err != nil {
+		return nil, err
+	}
 	res := t.run(ctx)
 	if res.Success {
 		res.Version = &conn.Type
 	}
 	h.audited(ctx, testOutcome(ev, res.Success))
 	return TestCatalogConnection200JSONResponse(res), nil
+}
+
+// firstCatalogConfig is the configuration of the connection's first enabled
+// catalog, which a stored connection's bind check binds with when its type
+// declares a catalog schema; nil when it declares none or has no catalog.
+func (h *core) firstCatalogConfig(ctx context.Context, provider connections.Provider, connID db.UUID) (map[string]string, error) {
+	if len(connections.CatalogSchemaOf(provider)) == 0 {
+		return nil, nil
+	}
+	cats, err := h.topology.CatalogsOfConnection(ctx, connID)
+	if err != nil {
+		return nil, fmt.Errorf("catalogs of connection: %w", err)
+	}
+	for _, c := range cats {
+		if !c.Enabled {
+			continue
+		}
+		values, err := c.ConfigValues()
+		if err != nil {
+			return nil, err
+		}
+		return values, nil
+	}
+	return nil, nil
 }
 
 // connectionConfig returns the provider of a stored connection and its

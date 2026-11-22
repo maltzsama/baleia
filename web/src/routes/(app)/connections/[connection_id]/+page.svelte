@@ -13,6 +13,7 @@
 		getConnectionImpact,
 		listConnectionCatalogs,
 		listEngines,
+		loadProviders,
 		testStored,
 		type BindingSupport,
 		type Catalog,
@@ -27,7 +28,13 @@
 	import Input from '$lib/ui/Input.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
-	import { normalizeCatalogName } from '$lib/connections/providers';
+	import ProviderForm from '$lib/connections/ProviderForm.svelte';
+	import {
+		catalogDefaults,
+		catalogValuesMissing,
+		normalizeCatalogName,
+		type ConnectionProvider
+	} from '$lib/connections/providers';
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
 	import EngineBadge from '$lib/ui/patterns/EngineBadge.svelte';
 	import RelativeTime from '$lib/ui/patterns/RelativeTime.svelte';
@@ -52,6 +59,11 @@
 	let support = $state<BindingSupport | null>(null);
 	let catalogSaving = $state(false);
 	let catalogError = $state('');
+	let catalogConfig = $state<Record<string, string>>({});
+	let providers = $state<ConnectionProvider[]>([]);
+	const provider = $derived(providers.find((p) => p.kind === conn?.type));
+	/** The values each catalog of this connection's type takes. */
+	const catalogSchema = $derived(provider?.catalog_schema ?? []);
 
 	let deleteOpen = $state(false);
 
@@ -97,10 +109,26 @@
 		}
 	}
 
-	function openCatalog() {
+	/**
+	 * Loads the provider metadata the Add catalog dialog needs (its
+	 * catalog_schema). A failure is shown in the dialog, which can be reopened
+	 * to retry, and never hides the connection's other data.
+	 */
+	async function ensureProviders() {
+		if (providers.length > 0) return;
+		try {
+			providers = await loadProviders();
+		} catch (e) {
+			catalogError = apiErrorMessage(e);
+		}
+	}
+
+	async function openCatalog() {
 		catalogError = '';
+		await ensureProviders();
 		catalogName = (conn?.name ?? '').replace(/[^a-zA-Z0-9_]+/g, '_');
 		catalogWarehouse = '';
+		catalogConfig = catalogDefaults(catalogSchema);
 		catalogOpen = true;
 	}
 
@@ -119,7 +147,8 @@
 			});
 			await createCatalog(connectionId, {
 				catalogs: outputs,
-				warehouse: catalogWarehouse.trim() || undefined
+				warehouse: catalogWarehouse.trim() || undefined,
+				config: catalogSchema.length > 0 ? catalogConfig : undefined
 			});
 			catalogs = await listConnectionCatalogs(connectionId);
 			catalogOpen = false;
@@ -308,6 +337,9 @@
 			bind:value={catalogWarehouse}
 			class="font-mono"
 		/>
+		{#if provider && catalogSchema.length > 0}
+			<ProviderForm {provider} schema={catalogSchema} bind:values={catalogConfig} />
+		{/if}
 		{#if catalogError}<p class="text-danger" role="alert">{catalogError}</p>{/if}
 	</div>
 	{#snippet footer()}
@@ -318,7 +350,7 @@
 			<Button
 				variant="primary"
 				loading={catalogSaving}
-				disabled={catalogSaving}
+				disabled={catalogSaving || catalogValuesMissing(catalogSchema, catalogConfig)}
 				onclick={submitCatalog}
 			>
 				{m.common_add()}
