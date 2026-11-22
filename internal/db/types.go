@@ -878,6 +878,12 @@ type GetStatementReferenceTargetRow struct {
 	WorkspaceID UUID `json:"workspace_id"`
 }
 
+// SnapshotTable is one live table of a catalog's metadata snapshot.
+type SnapshotTable struct {
+	Namespace []string `json:"namespace"`
+	Name      string   `json:"name"`
+}
+
 type GetTableFingerprintsRow struct {
 	Namespace   []string `json:"namespace"`
 	Name        string   `json:"name"`

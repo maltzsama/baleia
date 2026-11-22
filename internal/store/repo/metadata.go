@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -738,6 +739,36 @@ func (r *Repo) GetTableFingerprints(ctx context.Context, catalogID db.UUID) ([]d
 			Properties:  []byte(row.Properties),
 		}
 	}
+	return out, nil
+}
+
+// ListSnapshotTablesWithColumns lists the live tables (not views) of a
+// catalog's metadata snapshot that have at least one column, ordered by
+// namespace and name. An engine lists a metastore's other tables in an Iceberg
+// catalog without columns (#1005).
+func (r *Repo) ListSnapshotTablesWithColumns(ctx context.Context, catalogID db.UUID) ([]db.SnapshotTable, error) {
+	if !catalogID.Valid {
+		return nil, nil
+	}
+	tx := r.Users.db.WithContext(ctx)
+	withColumns := tx.Model(&model.MetadataColumn{}).Select("1").
+		Where("metadata_columns.table_id = metadata_tables.id")
+	var rows []model.MetadataTable
+	if err := tx.Where("catalog_id = ? AND removed_at IS NULL AND kind = ?", UUIDString(catalogID), "table").
+		Where("EXISTS (?)", withColumns).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]db.SnapshotTable, len(rows))
+	for i, row := range rows {
+		out[i] = db.SnapshotTable{Namespace: []string(row.Namespace), Name: string(row.Name)}
+	}
+	slices.SortFunc(out, func(a, b db.SnapshotTable) int {
+		if c := slices.Compare(a.Namespace, b.Namespace); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
 	return out, nil
 }
 

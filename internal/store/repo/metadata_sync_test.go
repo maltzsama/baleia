@@ -3,10 +3,12 @@ package repo
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 )
 
 // TestMetadataSyncFence covers the ownership check every metadata write
@@ -110,5 +112,56 @@ func TestListMetadataTablesPage_UnsupportedReason(t *testing.T) {
 		if got[name] != w {
 			t.Errorf("table %q reason = %v, want %v", name, got[name], w)
 		}
+	}
+}
+
+// TestListSnapshotTablesWithColumns: a catalog's snapshot lists its live
+// tables with columns, ordered by namespace and name; tables without columns,
+// views and removed tables are left out (#1005).
+func TestListSnapshotTablesWithColumns(t *testing.T) {
+	t.Parallel()
+	f := newWorkbenchFixture(t)
+	ctx := context.Background()
+	for _, tb := range []struct {
+		ns, name, kind string
+		columns        bool
+	}{
+		{"sales", "orders", "table", true},
+		{"sales", "raw_orders", "table", false},
+		{"sales", "orders_view", "view", true},
+		{"audit", "events", "table", true},
+		{"sales", "dropped", "table", true},
+	} {
+		row, err := f.r.UpsertMetadataTable(ctx, db.UpsertMetadataTableParams{
+			CatalogID: f.catalogPG(), Namespace: []string{tb.ns}, Name: tb.name, Kind: tb.kind,
+			Fingerprint: "fp-" + tb.name, Properties: []byte(`{}`),
+		})
+		if err != nil {
+			t.Fatalf("UpsertMetadataTable(%s): %v", tb.name, err)
+		}
+		if tb.columns {
+			if err := f.r.InsertMetadataColumns(ctx, db.InsertMetadataColumnsParams{
+				TableID: row.ID, TypeSystem: "trino", Ordinals: []int32{1, 2}, Names: []string{"id", "amount"},
+				NativeTypes: []string{"integer", "double"}, Nullables: []bool{true, true}, Comments: []string{"", ""},
+			}); err != nil {
+				t.Fatalf("InsertMetadataColumns(%s): %v", tb.name, err)
+			}
+		}
+	}
+	if err := f.r.Users.db.WithContext(ctx).Model(&model.MetadataTable{}).Where("name = ?", "dropped").
+		Update("removed_at", time.Now()).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := f.r.ListSnapshotTablesWithColumns(ctx, f.catalogPG())
+	if err != nil {
+		t.Fatalf("ListSnapshotTablesWithColumns: %v", err)
+	}
+	want := []db.SnapshotTable{{Namespace: []string{"audit"}, Name: "events"}, {Namespace: []string{"sales"}, Name: "orders"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ListSnapshotTablesWithColumns = %+v, want %+v", got, want)
+	}
+	if none, err := f.r.ListSnapshotTablesWithColumns(ctx, db.UUID{}); err != nil || none != nil {
+		t.Fatalf("invalid catalog = %+v, %v", none, err)
 	}
 }
