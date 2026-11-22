@@ -1,0 +1,49 @@
+# Stands in for Baleia's bundle endpoints: GET /opa/bundles/baleia.tar.gz and
+# POST /opa/status (accepted and dropped; the suite reads OPA's /v1/status).
+# The suite uploads signed, unsigned and broken bundles into it, and scales it
+# to zero to make the bundle service unreachable.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bundles-nginx
+data:
+  default.conf: |
+    server {
+      listen 80;
+      root /usr/share/nginx/html;
+      location = /opa/status { return 204; }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bundles
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: bundles }
+  template:
+    metadata:
+      labels: { app: bundles }
+    spec:
+      containers:
+        - name: nginx
+          image: docker.io/library/nginx:1.27-alpine
+          readinessProbe:
+            tcpSocket: { port: 80 }
+            periodSeconds: 2
+          volumeMounts:
+            - { name: html, mountPath: /usr/share/nginx/html }
+            - { name: conf, mountPath: /etc/nginx/conf.d }
+      volumes:
+        - { name: html, emptyDir: {} }
+        - { name: conf, configMap: { name: bundles-nginx } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bundles
+spec:
+  selector: { app: bundles }
+  ports:
+    - { port: 80 }

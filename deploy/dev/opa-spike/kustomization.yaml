@@ -1,0 +1,46 @@
+# Spike harness for #994 (ADR 0028): Trino 484 with the catalog guard and the
+# OPA access control, on the minikube dev cluster. The Go suite in tests/opa
+# applies it, creates the per-run secrets (TLS, passwords, the OPA bundle
+# signing key, the Rego release tarball) and tears it down. Nothing here is
+# part of the Baleia chart.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: opa-spike
+resources:
+  - namespace.yaml
+  - storage.yaml
+  - bundles.yaml
+  - trino.yaml
+
+# Trino security configuration: immutable, as ADR 0028 requires, and named by
+# a hash of its content. The kubelet caches immutable ConfigMaps, so one that
+# is deleted and recreated under the same name keeps serving the old content
+# to new pods; a new name per content is the only reliable way to change it.
+generatorOptions:
+  immutable: true
+configMapGenerator:
+  - name: trino-security
+    files:
+      - trino/config-baseline.properties
+      - trino/config-opa.properties
+      - trino/config-opa-single.properties
+      - trino/config-opa-down.properties
+      - trino/config-worker.properties
+      - trino/password-authenticator.properties
+      - trino/baleia-base-access-control.properties
+      - trino/baleia-rules.json
+      - trino/baleia-catalog-guard.properties
+      - trino/opa-batched.properties
+      - trino/opa-single.properties
+      - trino/opa-down.properties
+      # OPA's trusted identities: the same as baleia.admin-users and
+      # baleia.service-users. Deployment configuration, not bundle data.
+      - trino/trusted.json
+  # Catalogs, copied into a writable directory at start (dynamic catalog
+  # management with the file store, so the guard's CREATE/DROP CATALOG checks
+  # are reachable).
+  - name: trino-catalogs
+    files:
+      - catalogs/iceberg.properties
+      - catalogs/memory.properties
+      - catalogs/tpch.properties

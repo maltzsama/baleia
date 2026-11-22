@@ -1,0 +1,114 @@
+# Postgres holds the Iceberg JDBC catalog; RustFS holds the table files. Both
+# are throwaway (emptyDir): the suite recreates the tables it needs.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+data:
+  # Trino's Iceberg JDBC catalog expects its metadata tables to exist.
+  iceberg.sql: |
+    CREATE TABLE iceberg_namespace_properties (
+      catalog_name VARCHAR(255) NOT NULL,
+      namespace VARCHAR(255) NOT NULL,
+      property_key VARCHAR(255),
+      property_value VARCHAR(1000),
+      PRIMARY KEY (catalog_name, namespace, property_key));
+    CREATE TABLE iceberg_tables (
+      catalog_name VARCHAR(255) NOT NULL,
+      table_namespace VARCHAR(255) NOT NULL,
+      table_name VARCHAR(255) NOT NULL,
+      metadata_location VARCHAR(1000),
+      previous_metadata_location VARCHAR(1000),
+      iceberg_type VARCHAR(5),
+      PRIMARY KEY (catalog_name, table_namespace, table_name));
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:18
+          env:
+            - { name: POSTGRES_DB, value: iceberg }
+            - { name: POSTGRES_USER, value: spike }
+            - { name: POSTGRES_PASSWORD, value: spike }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "spike", "-d", "iceberg"] }
+            periodSeconds: 2
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d }
+      volumes:
+        - { name: data, emptyDir: {} }
+        - { name: init, configMap: { name: postgres-init } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector: { app: postgres }
+  ports:
+    - { port: 5432 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rustfs
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: rustfs }
+  template:
+    metadata:
+      labels: { app: rustfs }
+    spec:
+      containers:
+        - name: rustfs
+          image: docker.io/rustfs/rustfs:1.0.4
+          ports:
+            - { containerPort: 9000 }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - { name: data, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rustfs
+spec:
+  selector: { app: rustfs }
+  ports:
+    - { port: 9000 }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bucket-init
+spec:
+  backoffLimit: 8
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: docker.io/amazon/aws-cli:latest
+          env:
+            - { name: AWS_ACCESS_KEY_ID, value: rustfsadmin }
+            - { name: AWS_SECRET_ACCESS_KEY, value: rustfsadmin }
+            - { name: AWS_DEFAULT_REGION, value: us-east-1 }
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until aws s3api --endpoint-url http://rustfs:9000 list-buckets >/dev/null 2>&1; do sleep 2; done
+              aws s3 mb s3://spike --endpoint-url http://rustfs:9000 || aws s3api head-bucket --bucket spike --endpoint-url http://rustfs:9000

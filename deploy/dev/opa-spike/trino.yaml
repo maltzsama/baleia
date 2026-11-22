@@ -1,0 +1,473 @@
+# Base rules + catalog guard, no OPA: the composition and latency baseline.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trino-baseline
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: trino-baseline }
+  template:
+    metadata:
+      labels: { app: trino-baseline }
+    spec:
+      securityContext: { fsGroup: 1000 }
+      initContainers:
+        - name: install-plugin
+          image: baleia-plugins:0.10.2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args: ["cp -a /baleia-catalog-store/. /plugin/"]
+          volumeMounts:
+            - { name: plugin, mountPath: /plugin }
+        - name: catalogs
+          image: docker.io/library/alpine:3.20
+          command: ["/bin/sh", "-ec"]
+          args: ["cp /catalogs/*.properties /catalog/"]
+          volumeMounts:
+            - { name: catalogs, mountPath: /catalogs }
+            - { name: catalog, mountPath: /catalog }
+      containers:
+        - name: trino
+          image: docker.io/trinodb/trino:484
+          env:
+            - name: TRINO_INTERNAL_SHARED_SECRET
+              valueFrom: { secretKeyRef: { name: trino-auth, key: shared-secret } }
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: https, containerPort: 8443 }
+          readinessProbe:
+            exec: { command: ["/usr/lib/trino/bin/health-check"] }
+            initialDelaySeconds: 10
+            periodSeconds: 3
+          resources:
+            requests: { memory: 1Gi }
+            limits: { memory: 3Gi }
+          volumeMounts:
+            - { name: plugin, mountPath: /usr/lib/trino/plugin/baleia-catalog-store, readOnly: true }
+            - { name: security, mountPath: /etc/trino/config.properties, subPath: config-baseline.properties }
+            - { name: security, mountPath: /etc/trino/baleia-base-access-control.properties, subPath: baleia-base-access-control.properties }
+            - { name: security, mountPath: /etc/trino/baleia-rules.json, subPath: baleia-rules.json }
+            - { name: security, mountPath: /etc/trino/baleia-catalog-guard.properties, subPath: baleia-catalog-guard.properties }
+            - { name: security, mountPath: /etc/trino/password-authenticator.properties, subPath: password-authenticator.properties }
+            - { name: auth, mountPath: /etc/trino/auth, readOnly: true }
+            - { name: catalog, mountPath: /etc/trino/catalog }
+      volumes:
+        - { name: plugin, emptyDir: {} }
+        - { name: security, configMap: { name: trino-security } }
+        - { name: catalogs, configMap: { name: trino-catalogs } }
+        - { name: catalog, emptyDir: {} }
+        - { name: auth, secret: { secretName: trino-auth } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trino-baseline
+spec:
+  selector: { app: trino-baseline }
+  ports:
+    - { name: https, port: 8443, targetPort: https }
+---
+# OPA keeps its last activated data bundle here (persist: true).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trino-opa-persist
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: { storage: 64Mi }
+---
+# Coordinator with the OPA sidecar and batched endpoints: the chart's target setup.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trino-opa
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: trino-opa }
+  template:
+    metadata:
+      labels: { app: trino-opa }
+    spec:
+      securityContext: { fsGroup: 1000 }
+      initContainers:
+        - name: install-plugin
+          image: baleia-plugins:0.10.2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args: ["cp -a /baleia-catalog-store/. /plugin/"]
+          volumeMounts:
+            - { name: plugin, mountPath: /plugin }
+        - name: catalogs
+          image: docker.io/library/alpine:3.20
+          command: ["/bin/sh", "-ec"]
+          args: ["cp /catalogs/*.properties /catalog/"]
+          volumeMounts:
+            - { name: catalogs, mountPath: /catalogs }
+            - { name: catalog, mountPath: /catalog }
+        # ADR 0004/0028: the Rego package comes from a release tarball whose
+        # checksum is verified before OPA may load it.
+        - name: verify-policy
+          image: docker.io/library/alpine:3.20
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              cd /release
+              echo "$(cat baleia-opa-policy.tar.gz.sha256)  baleia-opa-policy.tar.gz" | sha256sum -c -
+              cp baleia-opa-policy.tar.gz /policy/policy.tar.gz
+          volumeMounts:
+            - { name: release, mountPath: /release }
+            - { name: policy, mountPath: /policy }
+      containers:
+        - name: trino
+          image: docker.io/trinodb/trino:484
+          env:
+            - name: TRINO_INTERNAL_SHARED_SECRET
+              valueFrom: { secretKeyRef: { name: trino-auth, key: shared-secret } }
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: https, containerPort: 8443 }
+          readinessProbe:
+            exec: { command: ["/usr/lib/trino/bin/health-check"] }
+            initialDelaySeconds: 10
+            periodSeconds: 3
+          resources:
+            requests: { memory: 1Gi }
+            limits: { memory: 3Gi }
+          volumeMounts:
+            - { name: plugin, mountPath: /usr/lib/trino/plugin/baleia-catalog-store, readOnly: true }
+            - { name: security, mountPath: /etc/trino/config.properties, subPath: config-opa.properties }
+            - { name: security, mountPath: /etc/trino/baleia-base-access-control.properties, subPath: baleia-base-access-control.properties }
+            - { name: security, mountPath: /etc/trino/baleia-rules.json, subPath: baleia-rules.json }
+            - { name: security, mountPath: /etc/trino/baleia-catalog-guard.properties, subPath: baleia-catalog-guard.properties }
+            - { name: security, mountPath: /etc/trino/opa-batched.properties, subPath: opa-batched.properties }
+            - { name: security, mountPath: /etc/trino/opa-single.properties, subPath: opa-single.properties }
+            - { name: security, mountPath: /etc/trino/password-authenticator.properties, subPath: password-authenticator.properties }
+            - { name: auth, mountPath: /etc/trino/auth, readOnly: true }
+            - { name: catalog, mountPath: /etc/trino/catalog }
+        # OPA sidecar: the data API listens on localhost only, so nothing outside
+        # the pod can query or change it; the diagnostic port serves /health
+        # and /metrics. Ready only once both bundles are active.
+        - name: opa
+          image: docker.io/openpolicyagent/opa:1.22.4-static@sha256:12cecac5a174368f7d3f09d3a19d040ebe0c91d576e520335ae7a985a26e39d3
+          args:
+            - run
+            - --server
+            - --addr=127.0.0.1:8181
+            - --diagnostic-addr=0.0.0.0:8282
+            - --config-file=/opa-config/config.yaml
+            - /etc/opa/trusted.json
+          ports:
+            - { name: opa-diag, containerPort: 8282 }
+          readinessProbe:
+            httpGet: { path: "/health?bundles=true", port: 8282 }
+            periodSeconds: 2
+          volumeMounts:
+            - { name: opa-config, mountPath: /opa-config, readOnly: true }
+            - { name: security, mountPath: /etc/opa/trusted.json, subPath: trusted.json }
+            - { name: policy, mountPath: /policy, readOnly: true }
+            - { name: opa-persist, mountPath: /var/opa }
+      volumes:
+        - { name: plugin, emptyDir: {} }
+        - { name: security, configMap: { name: trino-security } }
+        - { name: catalogs, configMap: { name: trino-catalogs } }
+        - { name: catalog, emptyDir: {} }
+        - { name: auth, secret: { secretName: trino-auth } }
+        - { name: release, configMap: { name: opa-policy-release } }
+        - { name: policy, emptyDir: {} }
+        - { name: opa-config, configMap: { name: opa-config } }
+        - { name: opa-persist, persistentVolumeClaim: { claimName: trino-opa-persist } }
+---
+# The client Service: it routes only to a ready coordinator (Q4).
+apiVersion: v1
+kind: Service
+metadata:
+  name: trino-opa
+spec:
+  selector: { app: trino-opa }
+  ports:
+    - { name: https, port: 8443, targetPort: https }
+---
+# Worker discovery must reach the coordinator before it is ready.
+apiVersion: v1
+kind: Service
+metadata:
+  name: trino-opa-discovery
+spec:
+  publishNotReadyAddresses: true
+  selector: { app: trino-opa }
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+# Worker with the same access controls and its own OPA, which counts any call (Q6).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trino-opa-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: trino-opa-worker }
+  template:
+    metadata:
+      labels: { app: trino-opa-worker }
+    spec:
+      securityContext: { fsGroup: 1000 }
+      initContainers:
+        - name: install-plugin
+          image: baleia-plugins:0.10.2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args: ["cp -a /baleia-catalog-store/. /plugin/"]
+          volumeMounts:
+            - { name: plugin, mountPath: /plugin }
+        # ADR 0004/0028: the Rego package comes from a release tarball whose
+        # checksum is verified before OPA may load it.
+        - name: verify-policy
+          image: docker.io/library/alpine:3.20
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              cd /release
+              echo "$(cat baleia-opa-policy.tar.gz.sha256)  baleia-opa-policy.tar.gz" | sha256sum -c -
+              cp baleia-opa-policy.tar.gz /policy/policy.tar.gz
+          volumeMounts:
+            - { name: release, mountPath: /release }
+            - { name: policy, mountPath: /policy }
+      containers:
+        - name: trino
+          image: docker.io/trinodb/trino:484
+          env:
+            - name: TRINO_INTERNAL_SHARED_SECRET
+              valueFrom: { secretKeyRef: { name: trino-auth, key: shared-secret } }
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            exec: { command: ["/usr/lib/trino/bin/health-check"] }
+            initialDelaySeconds: 10
+            periodSeconds: 3
+          resources:
+            requests: { memory: 1Gi }
+            limits: { memory: 3Gi }
+          volumeMounts:
+            - { name: plugin, mountPath: /usr/lib/trino/plugin/baleia-catalog-store, readOnly: true }
+            - { name: security, mountPath: /etc/trino/config.properties, subPath: config-worker.properties }
+            - { name: security, mountPath: /etc/trino/baleia-base-access-control.properties, subPath: baleia-base-access-control.properties }
+            - { name: security, mountPath: /etc/trino/baleia-rules.json, subPath: baleia-rules.json }
+            - { name: security, mountPath: /etc/trino/baleia-catalog-guard.properties, subPath: baleia-catalog-guard.properties }
+            - { name: security, mountPath: /etc/trino/opa-batched.properties, subPath: opa-batched.properties }
+            - { name: security, mountPath: /etc/trino/opa-single.properties, subPath: opa-single.properties }
+        # OPA sidecar: the data API listens on localhost only, so nothing outside
+        # the pod can query or change it; the diagnostic port serves /health
+        # and /metrics. Ready only once both bundles are active.
+        - name: opa
+          image: docker.io/openpolicyagent/opa:1.22.4-static@sha256:12cecac5a174368f7d3f09d3a19d040ebe0c91d576e520335ae7a985a26e39d3
+          args:
+            - run
+            - --server
+            - --addr=127.0.0.1:8181
+            - --diagnostic-addr=0.0.0.0:8282
+            - --config-file=/opa-config/config.yaml
+            - /etc/opa/trusted.json
+          ports:
+            - { name: opa-diag, containerPort: 8282 }
+          readinessProbe:
+            httpGet: { path: "/health?bundles=true", port: 8282 }
+            periodSeconds: 2
+          volumeMounts:
+            - { name: opa-config, mountPath: /opa-config, readOnly: true }
+            - { name: security, mountPath: /etc/opa/trusted.json, subPath: trusted.json }
+            - { name: policy, mountPath: /policy, readOnly: true }
+            - { name: opa-persist, mountPath: /var/opa }
+      volumes:
+        - { name: plugin, emptyDir: {} }
+        - { name: security, configMap: { name: trino-security } }
+        - { name: release, configMap: { name: opa-policy-release } }
+        - { name: policy, emptyDir: {} }
+        - { name: opa-config, configMap: { name: opa-config } }
+        - { name: opa-persist, emptyDir: {} }
+---
+# Single node with the non-batched OPA endpoints.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trino-opa-single
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: trino-opa-single }
+  template:
+    metadata:
+      labels: { app: trino-opa-single }
+    spec:
+      securityContext: { fsGroup: 1000 }
+      initContainers:
+        - name: install-plugin
+          image: baleia-plugins:0.10.2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args: ["cp -a /baleia-catalog-store/. /plugin/"]
+          volumeMounts:
+            - { name: plugin, mountPath: /plugin }
+        - name: catalogs
+          image: docker.io/library/alpine:3.20
+          command: ["/bin/sh", "-ec"]
+          args: ["cp /catalogs/*.properties /catalog/"]
+          volumeMounts:
+            - { name: catalogs, mountPath: /catalogs }
+            - { name: catalog, mountPath: /catalog }
+        # ADR 0004/0028: the Rego package comes from a release tarball whose
+        # checksum is verified before OPA may load it.
+        - name: verify-policy
+          image: docker.io/library/alpine:3.20
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              cd /release
+              echo "$(cat baleia-opa-policy.tar.gz.sha256)  baleia-opa-policy.tar.gz" | sha256sum -c -
+              cp baleia-opa-policy.tar.gz /policy/policy.tar.gz
+          volumeMounts:
+            - { name: release, mountPath: /release }
+            - { name: policy, mountPath: /policy }
+      containers:
+        - name: trino
+          image: docker.io/trinodb/trino:484
+          env:
+            - name: TRINO_INTERNAL_SHARED_SECRET
+              valueFrom: { secretKeyRef: { name: trino-auth, key: shared-secret } }
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: https, containerPort: 8443 }
+          readinessProbe:
+            exec: { command: ["/usr/lib/trino/bin/health-check"] }
+            initialDelaySeconds: 10
+            periodSeconds: 3
+          resources:
+            requests: { memory: 1Gi }
+            limits: { memory: 3Gi }
+          volumeMounts:
+            - { name: plugin, mountPath: /usr/lib/trino/plugin/baleia-catalog-store, readOnly: true }
+            - { name: security, mountPath: /etc/trino/config.properties, subPath: config-opa-single.properties }
+            - { name: security, mountPath: /etc/trino/baleia-base-access-control.properties, subPath: baleia-base-access-control.properties }
+            - { name: security, mountPath: /etc/trino/baleia-rules.json, subPath: baleia-rules.json }
+            - { name: security, mountPath: /etc/trino/baleia-catalog-guard.properties, subPath: baleia-catalog-guard.properties }
+            - { name: security, mountPath: /etc/trino/opa-batched.properties, subPath: opa-batched.properties }
+            - { name: security, mountPath: /etc/trino/opa-single.properties, subPath: opa-single.properties }
+            - { name: security, mountPath: /etc/trino/password-authenticator.properties, subPath: password-authenticator.properties }
+            - { name: auth, mountPath: /etc/trino/auth, readOnly: true }
+            - { name: catalog, mountPath: /etc/trino/catalog }
+        # OPA sidecar: the data API listens on localhost only, so nothing outside
+        # the pod can query or change it; the diagnostic port serves /health
+        # and /metrics. Ready only once both bundles are active.
+        - name: opa
+          image: docker.io/openpolicyagent/opa:1.22.4-static@sha256:12cecac5a174368f7d3f09d3a19d040ebe0c91d576e520335ae7a985a26e39d3
+          args:
+            - run
+            - --server
+            - --addr=127.0.0.1:8181
+            - --diagnostic-addr=0.0.0.0:8282
+            - --config-file=/opa-config/config.yaml
+            - /etc/opa/trusted.json
+          ports:
+            - { name: opa-diag, containerPort: 8282 }
+          readinessProbe:
+            httpGet: { path: "/health?bundles=true", port: 8282 }
+            periodSeconds: 2
+          volumeMounts:
+            - { name: opa-config, mountPath: /opa-config, readOnly: true }
+            - { name: security, mountPath: /etc/opa/trusted.json, subPath: trusted.json }
+            - { name: policy, mountPath: /policy, readOnly: true }
+            - { name: opa-persist, mountPath: /var/opa }
+      volumes:
+        - { name: plugin, emptyDir: {} }
+        - { name: security, configMap: { name: trino-security } }
+        - { name: catalogs, configMap: { name: trino-catalogs } }
+        - { name: catalog, emptyDir: {} }
+        - { name: auth, secret: { secretName: trino-auth } }
+        - { name: release, configMap: { name: opa-policy-release } }
+        - { name: policy, emptyDir: {} }
+        - { name: opa-config, configMap: { name: opa-config } }
+        - { name: opa-persist, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trino-opa-single
+spec:
+  selector: { app: trino-opa-single }
+  ports:
+    - { name: https, port: 8443, targetPort: https }
+---
+# OPA configured but unreachable.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trino-opa-down
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: trino-opa-down }
+  template:
+    metadata:
+      labels: { app: trino-opa-down }
+    spec:
+      securityContext: { fsGroup: 1000 }
+      initContainers:
+        - name: install-plugin
+          image: baleia-plugins:0.10.2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args: ["cp -a /baleia-catalog-store/. /plugin/"]
+          volumeMounts:
+            - { name: plugin, mountPath: /plugin }
+        - name: catalogs
+          image: docker.io/library/alpine:3.20
+          command: ["/bin/sh", "-ec"]
+          args: ["cp /catalogs/*.properties /catalog/"]
+          volumeMounts:
+            - { name: catalogs, mountPath: /catalogs }
+            - { name: catalog, mountPath: /catalog }
+      containers:
+        - name: trino
+          image: docker.io/trinodb/trino:484
+          env:
+            - name: TRINO_INTERNAL_SHARED_SECRET
+              valueFrom: { secretKeyRef: { name: trino-auth, key: shared-secret } }
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: https, containerPort: 8443 }
+          readinessProbe:
+            exec: { command: ["/usr/lib/trino/bin/health-check"] }
+            initialDelaySeconds: 10
+            periodSeconds: 3
+          resources:
+            requests: { memory: 1Gi }
+            limits: { memory: 3Gi }
+          volumeMounts:
+            - { name: plugin, mountPath: /usr/lib/trino/plugin/baleia-catalog-store, readOnly: true }
+            - { name: security, mountPath: /etc/trino/config.properties, subPath: config-opa-down.properties }
+            - { name: security, mountPath: /etc/trino/baleia-base-access-control.properties, subPath: baleia-base-access-control.properties }
+            - { name: security, mountPath: /etc/trino/baleia-rules.json, subPath: baleia-rules.json }
+            - { name: security, mountPath: /etc/trino/baleia-catalog-guard.properties, subPath: baleia-catalog-guard.properties }
+            - { name: security, mountPath: /etc/trino/opa-down.properties, subPath: opa-down.properties }
+            - { name: security, mountPath: /etc/trino/password-authenticator.properties, subPath: password-authenticator.properties }
+            - { name: auth, mountPath: /etc/trino/auth, readOnly: true }
+            - { name: catalog, mountPath: /etc/trino/catalog }
+      volumes:
+        - { name: plugin, emptyDir: {} }
+        - { name: security, configMap: { name: trino-security } }
+        - { name: catalogs, configMap: { name: trino-catalogs } }
+        - { name: catalog, emptyDir: {} }
+        - { name: auth, secret: { secretName: trino-auth } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trino-opa-down
+spec:
+  selector: { app: trino-opa-down }
+  ports:
+    - { name: https, port: 8443, targetPort: https }
