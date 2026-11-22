@@ -150,7 +150,7 @@ func (a *Activities) engineTableHealth(ctx context.Context, h *healthPass, sourc
 				// since the source listed it, or a snapshot row left from the
 				// catalog's former connector until the next sync. It is not a
 				// failure and does not use up the limit.
-				if queryengine.CodeOf(err) == queryengine.CodeNotFound {
+				if tableGone(err) {
 					read.Add(-1)
 					missing++
 					return nil
@@ -193,6 +193,19 @@ func (a *Activities) engineTableHealth(ctx context.Context, h *healthPass, sourc
 			"catalog", params.Catalog, "limit", limit, "skipped", skipped)
 	}
 	return nil
+}
+
+// goneRelations are the Trino errorName values of a metadata read whose table
+// or schema the engine does not have; only the Trino adapter reads Iceberg
+// metadata tables. A missing catalog, column or function is a failure: the
+// binding or the statement is wrong, not the table.
+var goneRelations = map[string]bool{"TABLE_NOT_FOUND": true, "SCHEMA_NOT_FOUND": true}
+
+// tableGone reports whether a metadata read failed because the engine has no
+// such table or schema.
+func tableGone(err error) bool {
+	var e *queryengine.Error
+	return errors.As(err, &e) && e.Code == queryengine.CodeNotFound && goneRelations[e.Native]
 }
 
 // tableHealthHeartbeats keeps the activity heartbeating every heartbeatInterval

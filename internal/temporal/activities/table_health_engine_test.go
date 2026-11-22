@@ -72,6 +72,7 @@ type metadataTables struct {
 	stats      []string // count, oldest ms, commits in the hour, in the day
 	fail       bool     // the engine fails reading it
 	missing    bool     // the engine does not have it as an Iceberg table
+	noCatalog  bool     // the engine does not have the binding's catalog
 }
 
 // metadataEngine answers the health reads from canned metadata tables and
@@ -112,7 +113,10 @@ func (s *metadataSession) Execute(_ context.Context, sql string, _ queryengine.C
 			return queryengine.NewError(queryengine.CodeUnavailable, "fake", "", "engine unavailable")
 		}
 		if t.missing {
-			return queryengine.NewError(queryengine.CodeNotFound, "fake", "", "table not found")
+			return queryengine.NewError(queryengine.CodeNotFound, "trino", "TABLE_NOT_FOUND", "table not found")
+		}
+		if t.noCatalog {
+			return queryengine.NewError(queryengine.CodeNotFound, "trino", "CATALOG_NOT_FOUND", "catalog not found")
 		}
 		switch {
 		case strings.Contains(sql, "$properties"):
@@ -362,6 +366,16 @@ func TestEngineTableHealth_Failures(t *testing.T) {
 		}
 		if _, err := store.GetTableHealthByTable(ctx, db.GetTableHealthByTableParams{CatalogID: catalog, Namespace: "s", TableName: "ok"}); err != nil {
 			t.Errorf("the table after the missing one was not read: %v", err)
+		}
+	})
+
+	t.Run("the engine has no such catalog", func(t *testing.T) {
+		t.Parallel()
+		// Not found too, but the binding is wrong, not the table: a failure.
+		eng := &metadataEngine{tables: map[string]metadataTables{"orders": {noCatalog: true}}}
+		a, _, params, _ := glueHealthFixture(t, "iceberg", []connections.TableMeta{glueTable("s", "orders", "iceberg")}, eng, &config.Config{})
+		if err := a.lensAnalyzeTableHealth(t.Context(), params); err == nil {
+			t.Fatal("a pass whose engine has no catalog succeeded")
 		}
 	})
 
