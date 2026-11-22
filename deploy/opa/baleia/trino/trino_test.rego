@@ -69,3 +69,32 @@ test_trusted_identity_bypasses_filters_and_masks if {
 		with data.baleia.bundle as data.testdata.bundle
 		with data.baleia_deployment as deployment
 }
+
+test_metadata_tables_of_a_policied_table_are_denied if {
+	select := data.testdata.trino484.allow_SelectFromColumns.input
+	files := json.patch(select, [{"op": "replace", "path": "/action/resource/table/tableName", "value": "orders_contract$files"}])
+	other := json.patch(select, [{"op": "replace", "path": "/action/resource/table/tableName", "value": "items$files"}])
+	admin := json.patch(files, [{"op": "replace", "path": "/context/identity/user", "value": "baleia_admin"}])
+	not trino.allow with input as files
+		with data.baleia.bundle as data.testdata.bundle
+		with data.baleia_deployment as deployment
+	trino.allow with input as other
+		with data.baleia.bundle as data.testdata.bundle
+		with data.baleia_deployment as deployment
+	trino.allow with input as admin
+		with data.baleia.bundle as data.testdata.bundle
+		with data.baleia_deployment as deployment
+}
+
+test_table_changes_is_denied_in_a_policied_catalog if {
+	call := {
+		"action": {"operation": "ExecuteTableFunction", "resource": {"function": {"catalogName": "iceberg", "schemaName": "system", "functionName": "table_changes"}}},
+		"context": {"identity": {"user": "u_ana", "groups": []}, "softwareStack": {"trinoVersion": "484"}},
+	}
+	not trino.allow with input as call
+		with data.baleia.bundle as data.testdata.bundle
+		with data.baleia_deployment as deployment
+	trino.allow with input as json.patch(call, [{"op": "replace", "path": "/action/resource/function/catalogName", "value": "tpch"}])
+		with data.baleia.bundle as data.testdata.bundle
+		with data.baleia_deployment as deployment
+}

@@ -350,3 +350,33 @@ func redactQueryID(input map[string]any) {
 		}
 	}
 }
+
+// Q2. Side doors inside Trino: Iceberg metadata tables (<table>$files,
+// $partitions, $snapshots) expose a policied table's column bounds, values
+// and counts under another name, where no filter or mask applies. The Rego
+// denies them to user identities; time travel stays filtered.
+func TestContract_IcebergSideDoors(t *testing.T) {
+	c := connect(t, "svc/trino-opa")
+	table := seedOrders(t, c, "orders_side")
+	publish(t, ordersPolicies("q2-side", "orders_side"), "trino-opa")
+	snapshot := c.query(t, admin, `SELECT CAST(snapshot_id AS varchar) FROM iceberg.spike."orders_side$snapshots" ORDER BY committed_at DESC LIMIT 1`).strings()[0]
+	for _, suffix := range []string{"files", "partitions", "snapshots", "manifests", "history", "refs"} {
+		t.Run("$"+suffix+" is denied", func(t *testing.T) {
+			qerr := c.denied(t, user("u_bob"), `SELECT * FROM iceberg.spike."orders_side$`+suffix+`"`)
+			if qerr.ErrorName != "PERMISSION_DENIED" {
+				t.Errorf("error %v, want PERMISSION_DENIED", qerr)
+			}
+			c.query(t, admin, `SELECT count(*) FROM iceberg.spike."orders_side$`+suffix+`"`)
+		})
+	}
+	t.Run("time travel is filtered", func(t *testing.T) {
+		got := c.query(t, user("u_bob"), "SELECT id, email FROM "+table+" FOR VERSION AS OF "+snapshot).strings()
+		if !slices.Equal(got, []string{"2|***"}) {
+			t.Errorf("rows = %q, want 2|***", got)
+		}
+	})
+	t.Run("table_changes is denied", func(t *testing.T) {
+		qerr := c.denied(t, user("u_bob"), "SELECT * FROM TABLE(iceberg.system.table_changes('spike', 'orders_side', NULL, "+snapshot+"))")
+		t.Logf("table_changes: %v", qerr)
+	})
+}

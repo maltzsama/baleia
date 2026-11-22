@@ -95,6 +95,19 @@ row_policies(table) := object.get(table_entry(table), "row_policies", [])
 
 column_masks(table, column) := object.get(table_entry(table), ["column_masks", column], [])
 
+# policied(table) is true when the table has any row policy or column mask.
+policied(table) if count(row_policies(table)) > 0
+
+policied(table) if count(object.get(table_entry(table), "column_masks", {})) > 0
+
+# catalog_has_policies(catalog) is true when any table of the catalog is
+# policied.
+catalog_has_policies(catalog) if {
+	some schema, tables in object.get(bundle, ["tables", catalog], {})
+	some name, _ in tables
+	policied({"catalog": catalog, "schema": schema, "name": name})
+}
+
 valid_mode(policy) if policy.mode in {"permissive", "restrictive"}
 
 wrap(expression) := sprintf("(%s)", [expression])

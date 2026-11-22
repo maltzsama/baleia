@@ -20,7 +20,32 @@ identity := input.context.identity.user
 
 default allow := false
 
-allow if core.allow(identity)
+allow if {
+	core.allow(identity)
+	not side_door
+}
+
+# side_door is a statement that reads a policied table's rows or statistics
+# under another name, where no filter or mask can apply. Trusted identities
+# are exempt.
+#   - Iceberg metadata tables (<table>$files, $partitions, $snapshots, ...)
+#     expose column bounds, values and counts.
+#   - Iceberg's table_changes table function returns changed rows.
+side_door if {
+	not core.trusted(identity)
+	table := input.action.resource.table
+	parts := split(table.tableName, "$")
+	count(parts) > 1
+	core.policied({"catalog": table.catalogName, "schema": table.schemaName, "name": parts[0]})
+}
+
+side_door if {
+	not core.trusted(identity)
+	input.action.operation == "ExecuteTableFunction"
+	function := input.action.resource.function
+	function.functionName == "table_changes"
+	core.catalog_has_policies(function.catalogName)
+}
 
 # batch lists the indexes of input.action.filterResources the identity may
 # see. Visibility is the catalog guard's and the catalog manager's decision,
