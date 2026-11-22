@@ -4,8 +4,8 @@ import { expect, test } from './fixtures';
 // the engine binds the catalog, and the seeded topic is read from the
 // workbench as a table of the connector's internal columns. The broker and
 // its e2e_orders topic (three JSON messages) come from
-// deploy/dev/sources/kafka.yaml, which `make e2e` starts.
-const BROKER = 'src-kafka.baleia-dev.svc.cluster.local:9092';
+// deploy/dev/sources/redpanda.yaml (a Redpanda broker), which `make e2e` starts.
+const BROKER = 'src-redpanda.baleia-dev.svc.cluster.local:9092';
 
 test('@issue-1064 a Kafka topic is registered and read from the workbench', async ({
 	page,
