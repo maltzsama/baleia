@@ -153,6 +153,15 @@ grant(permissive) := wrap(concat(" OR ", permissive)) if count(permissive) > 0
 # or undefined when no mask matches (the column is then returned unmasked).
 # Priorities are unique within a column; a bundle that breaks this makes the
 # function conflict, and the engine fails the query instead of picking one.
+# A column with a mask is NULL for user identities once the bundle is no
+# longer active (its lease ended, or its format is unknown): a statement
+# authorized just before that must not read it unmasked.
+column_mask(identity, table, column) := "NULL" if {
+	not trusted(identity)
+	not active
+	count(column_masks(table, column)) > 0
+}
+
 column_mask(identity, table, column) := mask.expression if {
 	not trusted(identity)
 	active

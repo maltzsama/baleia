@@ -115,6 +115,21 @@ test_expired_lease_is_not_active if {
 		with data.baleia_deployment as deployment
 }
 
+test_expired_lease_nulls_masked_columns if {
+	expired := object.union(bundle, {"not_after": "2000-01-01T00:00:00Z"})
+
+	# A mask-only table: no row policy would hide its rows.
+	masks_only := object.union(expired, {"tables": {"lake": {"sales": {"orders": {"row_policies": []}}}}})
+	core.column_mask("u_cid", orders, "email") == "NULL" with data.baleia.bundle as masks_only
+		with data.baleia_deployment as deployment
+	not core.column_mask("u_cid", orders, "region") with data.baleia.bundle as masks_only
+		with data.baleia_deployment as deployment
+	not core.column_mask("u_cid", {"catalog": "lake", "schema": "sales", "name": "other"}, "email") with data.baleia.bundle as masks_only
+		with data.baleia_deployment as deployment
+	not core.column_mask("baleia", orders, "email") with data.baleia.bundle as masks_only
+		with data.baleia_deployment as deployment
+}
+
 test_missing_lease_is_not_active if {
 	not core.active with data.baleia.bundle as object.remove(bundle, ["not_after"])
 }
