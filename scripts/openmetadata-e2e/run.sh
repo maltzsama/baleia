@@ -5,10 +5,22 @@ set -euo pipefail
 # process. This script starts the pinned upstream quickstart, runs the stock
 # ingestion image, and points it at the already seeded Baleia BI gateway.
 
-OPENMETADATA_VERSION="${OPENMETADATA_VERSION:-1.12.6}"
-OPENMETADATA_COMPOSE_SHA256="${OPENMETADATA_COMPOSE_SHA256:-d19f9c1877368621452b626ae24e01722010d6fdcb0dc43b2b36bfc871f13f38}"
+# Supported OpenMetadata releases, each pinned by the SHA-256 of its quickstart
+# compose file. `make e2e-openmetadata` runs every release in
+# OPENMETADATA_VERSIONS; set OPENMETADATA_COMPOSE_SHA256 to try another one.
+OPENMETADATA_VERSION="${OPENMETADATA_VERSION:-2.1.0}"
+case "$OPENMETADATA_VERSION" in
+  2.0.9) pinned_compose_sha256=54dbae6828e1dddb9fd2fcccc868121d353d518ded64b47e75828d43ca64034f ;;
+  2.1.0) pinned_compose_sha256=34b145e3a682ef10f43513f4436b4373b99889a96caf6480277f27889d0bf9c9 ;;
+  *) pinned_compose_sha256="" ;;
+esac
+OPENMETADATA_COMPOSE_SHA256="${OPENMETADATA_COMPOSE_SHA256:-$pinned_compose_sha256}"
+if [[ -z "$OPENMETADATA_COMPOSE_SHA256" ]]; then
+  echo "openmetadata-e2e: OpenMetadata $OPENMETADATA_VERSION is not pinned; set OPENMETADATA_COMPOSE_SHA256" >&2
+  exit 1
+fi
 OPENMETADATA_COMPOSE_URL="${OPENMETADATA_COMPOSE_URL:-https://raw.githubusercontent.com/open-metadata/OpenMetadata/${OPENMETADATA_VERSION}-release/docker/docker-compose-quickstart/docker-compose.yml}"
-OPENMETADATA_PROJECT="${OPENMETADATA_PROJECT:-baleia-om-e2e}"
+OPENMETADATA_PROJECT="${OPENMETADATA_PROJECT:-baleia-om-e2e-${OPENMETADATA_VERSION//./-}}"
 OPENMETADATA_SERVICE="${OPENMETADATA_SERVICE:-baleia-bi-gateway}"
 OPENMETADATA_CATALOG="${OPENMETADATA_CATALOG:-e2e_tpch}"
 OPENMETADATA_SCHEMA="${OPENMETADATA_SCHEMA:-tiny}"
@@ -264,9 +276,68 @@ if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
   }
 fi
 
+# The semantic catalog routes (ADR 0030) are what the baleia-openmetadata
+# connector reads. Check them with the same key, and check that every physical
+# table they name is a table OpenMetadata just ingested through the Trino
+# connector: that name match is what lets the connector draw lineage.
+# The seed creates the semantic fixtures on e2e_tpch.tiny only, so the
+# semantic checks run when the harness ingests that schema and are skipped
+# for a custom view fixture.
+semantic_checked=false
+if [[ "$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA" == "e2e_tpch.tiny" ]]; then
+  semantic_get() {
+    curl -kfsS -u "$gateway_basic_auth" "$OPENMETADATA_GATEWAY_URL/baleia/v1/semantic$1"
+  }
+  semantic_summary="$workdir/semantic.json"
+  semantic_get "" >"$semantic_summary"
+  jq -e '.contract_version == 1 and .models >= 1 and .metrics >= 1' "$semantic_summary" >/dev/null || {
+    echo "openmetadata-e2e: the semantic catalog summary is not what the seed created" >&2
+    jq . "$semantic_summary" >&2 || true
+    exit 1
+  }
+  semantic_models="$workdir/semantic-models.json"
+  semantic_metrics="$workdir/semantic-metrics.json"
+  semantic_get "/models?limit=500" >"$semantic_models"
+  semantic_get "/metrics?limit=500" >"$semantic_metrics"
+  model_orders="$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.orders"
+  jq -e --arg t "$model_orders" '
+    any(.items[]; .slug == "e2e_bi_orders"
+      and .source.table == $t
+      and .source_tables == [$t]
+      and any(.columns[]; .name == "order_status" and .type == "string")
+      and any(.metrics[]; .name == "order_count" and (.sql | length) > 0))' "$semantic_models" >/dev/null || {
+    echo "openmetadata-e2e: the seeded model e2e_bi_orders is missing or incomplete in the semantic catalog" >&2
+    jq '.items[] | select(.slug == "e2e_bi_orders")' "$semantic_models" >&2 || true
+    exit 1
+  }
+  jq -e --arg t "$model_orders" '
+    any(.items[]; .slug == "e2e_bi_order_count" and .source_tables == [$t] and (.sql | length) > 0)' \
+    "$semantic_metrics" >/dev/null || {
+    echo "openmetadata-e2e: the seeded metric e2e_bi_order_count is missing or incomplete in the semantic catalog" >&2
+    exit 1
+  }
+  jq -e '[.items[].slug] | index("e2e_orders") == null' "$semantic_models" >/dev/null || {
+    echo "openmetadata-e2e: the semantic catalog exposed another workspace's model" >&2
+    exit 1
+  }
+  jq -r '.items[].source_tables[]' "$semantic_models" "$semantic_metrics" | sort -u | while read -r source_table; do
+    fqn_encoded="$(printf '%s' "$OPENMETADATA_SERVICE.$source_table" | jq -sRr @uri)"
+    curl -fsS -o /dev/null -H "Authorization: Bearer $openmetadata_token" "$api_base/tables/name/$fqn_encoded" || {
+      echo "openmetadata-e2e: semantic source table $source_table is not an OpenMetadata table of $OPENMETADATA_SERVICE" >&2
+      exit 1
+    }
+  done
+  semantic_checked=true
+else
+  echo "openmetadata-e2e: semantic catalog checks skipped: they need the seeded e2e_tpch.tiny schema"
+fi
+
 echo "openmetadata-e2e: OpenMetadata $OPENMETADATA_VERSION ingested $OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA through the Baleia BI gateway"
 echo "openmetadata-e2e: physical table columns were present in OpenMetadata"
 if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
   echo "openmetadata-e2e: view $OPENMETADATA_VIEW_NAME and its definition were present in OpenMetadata"
+fi
+if [[ "$semantic_checked" == true ]]; then
+  echo "openmetadata-e2e: the semantic catalog names its source tables as OpenMetadata ingested them"
 fi
 echo "openmetadata-e2e: metadata scans are recorded by Baleia as origin=bi; inspect query history separately when validating noise policy"

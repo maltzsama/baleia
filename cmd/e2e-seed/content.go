@@ -119,3 +119,49 @@ func ensureMetadata(ctx context.Context, q db.Querier, catalog db.Catalog) error
 	}
 	return nil
 }
+
+// ensureBISemanticContent seeds a model and a metric on tiny.orders in the
+// admin's personal workspace, the workspace of the e2e BI key, so the
+// OpenMetadata harness (#1135) can read them through the gateway's semantic
+// catalog routes (ADR 0030).
+func ensureBISemanticContent(ctx context.Context, q db.Querier, svc *content.Service, admin db.User, catalog db.Catalog, binding db.CatalogBinding) error {
+	workspaceID, err := q.PersonalWorkspaceID(ctx, admin.ID)
+	if err != nil {
+		return err
+	}
+	space, err := q.GetDefaultSpace(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if _, err := q.GetSemanticModelBySlug(ctx, db.GetSemanticModelBySlugParams{WorkspaceID: workspaceID, Slug: "e2e_bi_orders"}); errors.Is(err, db.ErrNoRows) {
+		if _, err := svc.CreateSemanticModel(ctx, admin.ID, db.CreateSemanticModelParams{
+			WorkspaceID: workspaceID, SpaceID: space.ID, Slug: "e2e_bi_orders", Label: "E2E BI Orders",
+			CatalogID: catalog.ID, BindingID: binding.ID,
+			Definition: []byte(`{"description":"Orders exposed to external catalogs.",
+				"source":{"kind":"table","namespace":["tiny"],"table":"orders"},
+				"primary_key":["orderkey"],
+				"dimensions":[{"name":"orderkey","type":"int64"},
+					{"name":"order_status","label":"Order status","sql":"orderstatus","type":"string"}],
+				"metrics":[{"name":"order_count","label":"Orders","aggregation":"count"}]}`),
+			FormatVersion: 1, OwnerUserID: admin.ID, UpdatedBy: admin.ID,
+		}); err != nil {
+			return fmt.Errorf("model: %w", err)
+		}
+	} else if err != nil {
+		return err
+	}
+	if _, err := q.GetSemanticMetricBySlug(ctx, db.GetSemanticMetricBySlugParams{WorkspaceID: workspaceID, Slug: "e2e_bi_order_count"}); errors.Is(err, db.ErrNoRows) {
+		if _, err := svc.CreateSemanticMetric(ctx, admin.ID, db.CreateSemanticMetricParams{
+			WorkspaceID: workspaceID, SpaceID: space.ID, Slug: "e2e_bi_order_count", Label: "E2E BI order count",
+			Description: "Orders, counted for external catalogs.",
+			CatalogID:   catalog.ID, Namespace: []string{"tiny"}, TableName: "orders", BindingID: binding.ID,
+			Definition: []byte(`{"type":"simple","aggregation":"count"}`), FormatVersion: 1,
+			OwnerUserID: admin.ID, UpdatedBy: admin.ID,
+		}); err != nil {
+			return fmt.Errorf("metric: %w", err)
+		}
+	} else if err != nil {
+		return err
+	}
+	return nil
+}

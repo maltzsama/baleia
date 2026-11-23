@@ -15,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-forward e2e-bi e2e-openmetadata e2e-down
+.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-seed e2e-forward e2e-bi e2e-openmetadata e2e-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_AGENTS_ENABLED=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -110,6 +110,14 @@ e2e:
 	kubectl -n $(K8S_NS) delete job src-redpanda-seed --ignore-not-found
 	$(MAKE) k8s-source NAME=redpanda
 	kubectl -n $(K8S_NS) wait --for=condition=complete job/src-redpanda-seed --timeout=10m
+	$(MAKE) e2e-seed
+	$(MAKE) e2e-bi
+	cd web && E2E_BASE_URL=http://localhost:8080 npx playwright test
+
+# Forwards the cluster's ports and seeds it with cmd/e2e-seed (accounts, the
+# e2e_tpch target, a BI key, semantic content). `e2e` and the OpenMetadata
+# nightly call it after k8s-up.
+e2e-seed:
 	$(MAKE) e2e-forward
 	@echo "waiting for the API on :8080…"
 	@until curl -fsS http://localhost:8080/readyz >/dev/null 2>&1; do sleep 1; done
@@ -125,8 +133,6 @@ e2e:
 		E2E_TRINO_PASSWORD="$$pw" \
 		E2E_BI_KEY_FILE=$(BI_E2E_KEY_FILE) \
 		go run -tags e2e ./cmd/e2e-seed
-	$(MAKE) e2e-bi
-	cd web && E2E_BASE_URL=http://localhost:8080 npx playwright test
 
 e2e-forward:
 	kubectl -n $(K8S_NS) port-forward svc/baleia-api 8080:8080 &
@@ -170,9 +176,15 @@ e2e-bi:
 # gateway. The target is separate from e2e because OpenMetadata starts a
 # multi-container quickstart and is intentionally opt-in for local/nightly
 # validation.
+# Every supported OpenMetadata release, one after the other (#1135).
+OPENMETADATA_VERSIONS ?= 2.0.9 2.1.0
+
 e2e-openmetadata:
 	@test -r $(BI_E2E_KEY_FILE) || { echo "e2e-openmetadata: run the e2e seed first; missing $(BI_E2E_KEY_FILE)" >&2; exit 1; }
-	BI_E2E_KEY_FILE=$(BI_E2E_KEY_FILE) scripts/openmetadata-e2e/run.sh
+	@for version in $(OPENMETADATA_VERSIONS); do \
+		echo "e2e-openmetadata: OpenMetadata $$version"; \
+		BI_E2E_KEY_FILE=$(BI_E2E_KEY_FILE) OPENMETADATA_VERSION=$$version scripts/openmetadata-e2e/run.sh || exit 1; \
+	done
 
 e2e-down:
 	K8S_PURGE=1 $(MAKE) k8s-down

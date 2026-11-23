@@ -17,6 +17,7 @@ the phase-3 issues reference as **FD1–FD16**.
 | `cd website && npm ci && npm run build` | Build the documentation site (Docusaurus over `docs/`); `npm start` serves it with reload. |
 | `make build` / `build-web` / `build-all` | Compile binaries / frontend / both. |
 | `make e2e` | minikube (`make k8s-up`) + `cmd/e2e-seed` + the BI gateway JDBC e2e (`make e2e-bi`) + Playwright (`web/e2e`). |
+| `make e2e-openmetadata` | OpenMetadata 2.0.9 and 2.1.0 against the seeded cluster (Trino connector through the BI gateway, semantic catalog routes); opt-in, and nightly in `openmetadata-e2e`. |
 | `make e2e-down` | Tear minikube down (`k8s-down` with `K8S_PURGE=1`). |
 
 Backend definition of done (`DoD-standard`): `go vet ./...`, `go test -race
@@ -28,7 +29,7 @@ Postgres, MySQL, MariaDB), `Lint` (golangci-lint, `.golangci.yml`, new issues
 only), `Vulnerabilities` (govulncheck) and `Dead code` (deadcode). On a pull request the `Changes` job
 skips the jobs its paths cannot affect; pushes run everything. The release
 workflow starts only after CI succeeds on `main`, and a failed nightly
-(`web-e2e`, `k8s-smoke`, `sources`) opens a `Nightly failure` issue.
+(`web-e2e`, `k8s-smoke`, `sources`, `openmetadata-e2e`) opens a `Nightly failure` issue.
 
 ## Pull requests
 

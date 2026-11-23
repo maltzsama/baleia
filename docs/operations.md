@@ -878,13 +878,14 @@ history. `contract_version` changes only on an incompatible change.
 curl -u "owner@example.com:$BI_KEY" "https://bi.example.com/baleia/v1/semantic/models?limit=100"
 ```
 
-The tested compatibility matrix is Trino `484`, OpenMetadata `1.12.6` with
-its `1.12.6.4` ingestion image, and the pinned Baleia gateway in the repository
-revision under test. The reproducible harness is `make e2e-openmetadata`,
+The tested compatibility matrix is Trino `484`, OpenMetadata `2.0.9` and
+`2.1.0` with their matching ingestion images, and the pinned Baleia gateway in
+the repository revision under test. The reproducible harness is `make e2e-openmetadata`,
 which is deliberately separate from `make e2e`: it starts the heavyweight
 OpenMetadata quickstart and is intended for manual runs or a dedicated nightly
-job, not ordinary pull-request CI. The harness asserts physical tables and
-their columns through OpenMetadata. View ingestion is enabled, and a view is
+job (`openmetadata-e2e`), not ordinary pull-request CI. The harness asserts
+physical tables and their columns through OpenMetadata, and that the semantic
+catalog routes name exactly the tables OpenMetadata ingested. View ingestion is enabled, and a view is
 asserted when `OPENMETADATA_VIEW_NAME` is set against a source connector that
 exposes a supported view definition; connectors without view definitions cannot
 provide view lineage through the Trino protocol.
