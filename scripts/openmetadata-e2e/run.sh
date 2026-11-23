@@ -18,10 +18,13 @@ OPENMETADATA_ADMIN_EMAIL="${OPENMETADATA_ADMIN_EMAIL:-admin@open-metadata.org}"
 OPENMETADATA_ADMIN_PASSWORD="${OPENMETADATA_ADMIN_PASSWORD:-admin}"
 OPENMETADATA_SERVER_PORT="${OPENMETADATA_SERVER_PORT:-18585}"
 OPENMETADATA_ADMIN_PORT="${OPENMETADATA_ADMIN_PORT:-18586}"
-OPENMETADATA_GATEWAY_PORT="${OPENMETADATA_GATEWAY_PORT:-18443}"
+OPENMETADATA_GATEWAY_PORT="${OPENMETADATA_GATEWAY_PORT:-19443}"
 OPENMETADATA_GATEWAY_URL="${OPENMETADATA_GATEWAY_URL:-https://127.0.0.1:8444}"
 OPENMETADATA_K8S_NAMESPACE="${OPENMETADATA_K8S_NAMESPACE:-baleia-dev}"
 OPENMETADATA_KEY_FILE="${OPENMETADATA_KEY_FILE:-${BI_E2E_KEY_FILE:-/tmp/baleia-e2e-bi-key.secret}}"
+BALEIA_API_URL="${BALEIA_API_URL:-http://127.0.0.1:8080/api/v1}"
+OPENMETADATA_PROXY_PORT="${OPENMETADATA_PROXY_PORT:-18587}"
+OPENLINEAGE_ENDPOINT="${OPENLINEAGE_ENDPOINT:-http://host.minikube.internal:${OPENMETADATA_PROXY_PORT}/api/v1/openlineage/lineage}"
 
 view_filter_yaml=""
 if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
@@ -54,9 +57,17 @@ tls_proxy_log="$workdir/gateway-tls-proxy.log"
 tls_proxy="$workdir/gateway-tls-proxy"
 gateway_pid=""
 tls_proxy_pid=""
+api_pid=""
+auth_proxy_pid=""
+destination_configured=false
 compose_args=(-p "$OPENMETADATA_PROJECT" -f "$compose" -f "$compose_override")
 
 cleanup() {
+  if [[ "$destination_configured" == true ]]; then
+    curl -fsS -X DELETE -H "Authorization: Bearer $baleia_token" \
+      "$BALEIA_API_URL/workspaces/$workspace/openlineage/destination" >/dev/null || \
+      echo "openmetadata-e2e: failed to remove temporary OpenLineage destination" >&2
+  fi
   if [[ -n "$gateway_pid" ]]; then
     kill "$gateway_pid" 2>/dev/null || true
     wait "$gateway_pid" 2>/dev/null || true
@@ -64,6 +75,14 @@ cleanup() {
   if [[ -n "$tls_proxy_pid" ]]; then
     kill "$tls_proxy_pid" 2>/dev/null || true
     wait "$tls_proxy_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$api_pid" ]]; then
+    kill "$api_pid" 2>/dev/null || true
+    wait "$api_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$auth_proxy_pid" ]]; then
+    kill "$auth_proxy_pid" 2>/dev/null || true
+    wait "$auth_proxy_pid" 2>/dev/null || true
   fi
   docker compose "${compose_args[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
   # The quickstart bind-mounts MySQL data and creates root-owned files in the
@@ -102,7 +121,7 @@ services:
   openmetadata-server:
     container_name: !reset null
     ports: !override
-      - "127.0.0.1:$OPENMETADATA_SERVER_PORT:8585"
+      - "0.0.0.0:$OPENMETADATA_SERVER_PORT:8585"
       - "127.0.0.1:$OPENMETADATA_ADMIN_PORT:8586"
   ingestion:
     container_name: !reset null
@@ -152,6 +171,20 @@ if [[ "$OPENMETADATA_GATEWAY_URL" == "https://127.0.0.1:8444" ]]; then
   }
 fi
 
+if [[ "$BALEIA_API_URL" == "http://127.0.0.1:8080/api/v1" ]] && ! curl -sS -o /dev/null --max-time 2 "$BALEIA_API_URL/auth/me"; then
+  kubectl -n "$OPENMETADATA_K8S_NAMESPACE" port-forward svc/baleia-api 8080:8080 >"$workdir/api-forward.log" 2>&1 &
+  api_pid=$!
+  for _ in $(seq 1 30); do
+    if curl -sS -o /dev/null --max-time 1 "$BALEIA_API_URL/auth/me"; then break; fi
+    sleep 1
+  done
+  if ! curl -sS -o /dev/null --max-time 2 "$BALEIA_API_URL/auth/me"; then
+    echo "openmetadata-e2e: Baleia API did not become reachable" >&2
+    sed -n '1,80p' "$workdir/api-forward.log" >&2 || true
+    exit 1
+  fi
+fi
+
 gateway_scheme=http
 gateway_hostport="$OPENMETADATA_GATEWAY_URL"
 if [[ "$gateway_hostport" == https://* ]]; then
@@ -183,6 +216,10 @@ curl -fsS --retry 5 --retry-delay 2 \
   -o "$login_response" \
   "http://127.0.0.1:${OPENMETADATA_SERVER_PORT}/api/v1/users/login"
 openmetadata_token="$(jq -er '.accessToken' "$login_response")"
+go build -tags e2e -o "$workdir/openmetadata-authproxy" ./scripts/openmetadata-e2e/authproxy.go
+OPENMETADATA_LOGIN_FILE="$login_response" OPENMETADATA_PROXY_TARGET="http://127.0.0.1:${OPENMETADATA_SERVER_PORT}" \
+  OPENMETADATA_PROXY_BIND="0.0.0.0:${OPENMETADATA_PROXY_PORT}" "$workdir/openmetadata-authproxy" >"$workdir/authproxy.log" 2>&1 &
+auth_proxy_pid=$!
 
 # The token is passed only through the temporary workflow and is removed by
 # cleanup. It is never printed or persisted in the repository.
@@ -250,6 +287,25 @@ for table in orders customer; do
   }
 done
 
+# Log in before provisioning logical output datasets, whose identities include
+# the workspace ID to avoid collisions between workspaces.
+login_response_baleia="$workdir/baleia-login.json"
+curl -fsS -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg password "${E2E_PASSWORD:-e2e-password}" '{email:"member@e2e.test",password:$password}')" \
+  -o "$login_response_baleia" "$BALEIA_API_URL/auth/login"
+baleia_token="$(jq -er '.token' "$login_response_baleia")"
+workspace="$(curl -fsS -H "Authorization: Bearer $baleia_token" "$BALEIA_API_URL/auth/me" | jq -er '.personal_workspace_id')"
+workspace_key="${workspace//-/}"
+
+# OpenMetadata 1.12.6 cannot auto-create these logical output datasets on the
+# quickstart database. Provision the test assets before publishing events.
+for output in "baleia_${workspace_key}_model_e2e_orders" "baleia_${workspace_key}_model_e2e_customers" "baleia_${workspace_key}_metric_e2e_nation_count"; do
+  jq -n --arg name "$output" --arg schema "$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA" \
+    '{name:$name,databaseSchema:$schema,columns:[{name:"value",dataType:"STRING"}]}' >"$workdir/output-table.json"
+  curl -fsS -X PUT -H "Authorization: Bearer $openmetadata_token" -H 'Content-Type: application/json' \
+    --data-binary @"$workdir/output-table.json" "$api_base/tables" >/dev/null
+done
+
 if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
   view_response="$workdir/$OPENMETADATA_VIEW_NAME.json"
   view_fqn="$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.$OPENMETADATA_VIEW_NAME"
@@ -263,6 +319,42 @@ if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
     exit 1
   }
 fi
+
+echo "openmetadata-e2e: publishing workspace OpenLineage events"
+curl -fsS -H "Authorization: Bearer $baleia_token" \
+  -o "$workdir/existing-destination.json" "$BALEIA_API_URL/workspaces/$workspace/openlineage/destination"
+if jq -e '.configured == true' "$workdir/existing-destination.json" >/dev/null; then
+  echo "openmetadata-e2e: workspace already has an OpenLineage destination; refusing to overwrite it" >&2
+  exit 1
+fi
+jq -n --arg endpoint "$OPENLINEAGE_ENDPOINT" --arg namespace "$OPENMETADATA_SERVICE" \
+  '{endpoint:$endpoint,namespace:$namespace,token:""}' >"$workdir/destination.json"
+curl -fsS -X PUT -H "Authorization: Bearer $baleia_token" -H 'Content-Type: application/json' \
+  --data-binary @"$workdir/destination.json" "$BALEIA_API_URL/workspaces/$workspace/openlineage/destination" >/dev/null
+destination_configured=true
+curl -fsS -X POST -H "Authorization: Bearer $baleia_token" \
+  -o "$workdir/export.json" "$BALEIA_API_URL/workspaces/$workspace/openlineage/export"
+jq -e '.sent > 0 and .failed == 0' "$workdir/export.json" >/dev/null || {
+  echo "openmetadata-e2e: OpenLineage export failed" >&2
+  jq '{sent,skipped,failed}' "$workdir/export.json" >&2
+  exit 1
+}
+orders_fqn="$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.orders"
+orders_encoded="$(printf '%s' "$orders_fqn" | jq -sRr @uri)"
+output_fqn="$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.baleia_${workspace_key}_model_e2e_orders"
+output_encoded="$(printf '%s' "$output_fqn" | jq -sRr @uri)"
+output_id="$(curl -fsS -H "Authorization: Bearer $openmetadata_token" "$api_base/tables/name/$output_encoded" | jq -er '.id')"
+orders_id="$(curl -fsS -H "Authorization: Bearer $openmetadata_token" "$api_base/tables/name/$orders_encoded" | jq -er '.id')"
+curl -fsS -H "Authorization: Bearer $openmetadata_token" \
+  -o "$workdir/lineage.json" "$api_base/lineage/table/name/$orders_encoded?upstreamDepth=0&downstreamDepth=2"
+jq -e --arg from "$orders_id" --arg to "$output_id" 'any(.downstreamEdges[]?; .fromEntity == $from and .toEntity == $to)' "$workdir/lineage.json" >/dev/null || {
+  echo "openmetadata-e2e: no OpenLineage edge resolved for $orders_fqn" >&2
+  exit 1
+}
+curl -fsS -X DELETE -H "Authorization: Bearer $baleia_token" \
+  "$BALEIA_API_URL/workspaces/$workspace/openlineage/destination" >/dev/null
+destination_configured=false
+echo "openmetadata-e2e: OpenLineage events created a downstream lineage edge"
 
 echo "openmetadata-e2e: OpenMetadata $OPENMETADATA_VERSION ingested $OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA through the Baleia BI gateway"
 echo "openmetadata-e2e: physical table columns were present in OpenMetadata"

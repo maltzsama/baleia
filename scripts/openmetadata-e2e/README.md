@@ -2,8 +2,8 @@
 
 This harness validates the supported integration path from issue #1122:
 OpenMetadata's stock Trino connector connects to a workspace-scoped Baleia BI
-gateway. It does not add an OpenMetadata connector to Baleia and it does not
-emit OpenLineage events.
+gateway. It also verifies that Baleia publishes OpenLineage events to the
+OpenMetadata HTTP ingestion endpoint and that a resulting lineage edge exists.
 
 The harness pins OpenMetadata `1.12.6` and the official quickstart compose file
 by SHA-256. The ingestion image and server use the same pinned release, as
@@ -34,15 +34,22 @@ nightly/scheduled integration job.
 The script starts and removes a temporary OpenMetadata quickstart, forwards
 the Baleia BI gateway, logs in with the quickstart's default test admin, runs
 the stock `metadata ingest` command, asserts the service and both tables through
-the OpenMetadata API, and removes all OpenMetadata containers and volumes on
-exit. The local gateway hop is HTTP only inside the test; a deployed
+the OpenMetadata API, creates test output datasets, and verifies a lineage edge.
+The OpenMetadata 1.12.6 quickstart cannot automatically create the output
+datasets in this fixture, so they must exist before event ingestion. The script
+removes all OpenMetadata containers and volumes on exit. The local gateway hop is HTTP only inside the test; a deployed
 integration must use TLS because the BI key is a password credential. The
-OpenMetadata server binds its host ports `18585`/`18586` to loopback by default
-so an existing
+OpenMetadata server binds port `18585` on all host interfaces to permit the
+minikube API to reach it; port `18586` stays on loopback. The non-default ports avoid an existing
 local quickstart on `8585` or Baleia's API on `8080` does not collide. The
 temporary ingestion container has no published port and uses host networking
 only for this local one-shot process, so it can reach the two host-published
 test endpoints without Docker bridge-specific routing.
+
+The local fixture adds the OpenMetadata token in a temporary host proxy on port
+`18587`; Baleia sends events to that test proxy without a bearer token. The
+proxy forwards to OpenMetadata over loopback and is removed when the test exits.
+For real deployments, configure HTTPS when supplying a bearer token.
 
 ## Assertions and limitations
 
@@ -82,8 +89,7 @@ follow-up implementation decision, not in this test harness.
 
 Views are enabled in the OpenMetadata workflow. View-definition discovery is
 validated by the opt-in `OPENMETADATA_VIEW_NAME` assertion above when the
-source exposes a supported definition; the harness does not claim an upstream
-lineage edge unless it is asserted separately.
+source exposes a supported definition.
 
 The harness never prints or persists the BI key or OpenMetadata JWT outside
 temporary files, which are removed on exit. The quickstart admin password is
