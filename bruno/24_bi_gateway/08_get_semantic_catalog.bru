@@ -1,0 +1,24 @@
+meta {
+  name: Read the Semantic Catalog Summary (gateway)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{bi_gateway_url}}/baleia/v1/semantic
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{semantic_key_email}}
+  password: {{semantic_key_secret}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.contract_version: eq 1
+  res.body.workspace.id: eq {{workspace_id}}
+  res.body.models: isNumber
+  res.body.metrics: isNumber
+}

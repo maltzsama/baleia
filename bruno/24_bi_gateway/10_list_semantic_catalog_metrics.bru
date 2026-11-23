@@ -1,0 +1,22 @@
+meta {
+  name: List Semantic Catalog Metrics (gateway)
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{bi_gateway_url}}/baleia/v1/semantic/metrics?limit=100
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{semantic_key_email}}
+  password: {{semantic_key_secret}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.contract_version: eq 1
+  res.body.items: isArray
+}

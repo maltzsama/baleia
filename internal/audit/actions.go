@@ -110,6 +110,9 @@ const (
 
 	// BIGatewayUpdate changes the global BI gateway switch (ADR 0017).
 	BIGatewayUpdate Action = "bi_gateway.update"
+	// BISemanticCatalogRead is a read of the semantic catalog through the BI
+	// gateway by a BI key (ADR 0030).
+	BISemanticCatalogRead Action = "bi_gateway.semantic_read"
 
 	WorkloadRuleCreate Action = "workload.rule_create"
 	WorkloadRuleUpdate Action = "workload.rule_update"
@@ -146,7 +149,7 @@ var allActions = []Action{
 	SpaceCreate, SpaceUpdate, SpaceDelete, SpaceMemberSet, SpaceMemberRemove,
 	SavedQueryCreate, SavedQueryUpdate, SavedQueryDelete, FolderCreate, FolderDelete,
 	WorkloadUpdate,
-	BIGatewayUpdate,
+	BIGatewayUpdate, BISemanticCatalogRead,
 	WorkloadRuleCreate, WorkloadRuleUpdate, WorkloadRuleDelete,
 }
 
