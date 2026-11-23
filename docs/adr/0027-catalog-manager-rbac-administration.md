@@ -169,7 +169,10 @@ They are exposed as `allowed_actions` on the connection (`manage_catalog_rbac`,
   no copy to drift.
 - `auth_mode` and `principal_claim` repeat Polaris's configuration. If they disagree with the
   server, principal creation and the user mapping are wrong, so the connection test checks the
-  claim: an identity-provider user's token must resolve to a principal that exists.
+  claim. With `credential_mode` `internal`, an identity-provider user's token must resolve to a
+  principal that exists. With `credential_mode` `external`, no principal entity exists to find:
+  the test checks that the token carries the claim and that Polaris accepts it, with the principal
+  roles it maps.
 - Deployments where most users are local or LDAP, or with `user_identity` off, gain little from
   per-principal grants. The screens say so instead of hiding it.
 - Baleia now holds a powerful secret. Supplying it is the operator's choice. The narrowest

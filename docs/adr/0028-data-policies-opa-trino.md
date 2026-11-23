@@ -208,11 +208,12 @@ supports two ways of deciding it, per Polaris connection:
 - **Side doors are denied.** A policied table's values are reachable under other names, where no
   filter or mask applies: Iceberg's value-bearing metadata tables (`$files`, `$entries`,
   `$all_files`, `$all_entries`, `$partitions`, `$manifests`, `$all_manifests` expose column bounds
-  and partition values) and the `table_changes` table function. The spike read real masked e-mails
-  through `$files`. User identities are denied those for policied tables (and `table_changes` in a
-  catalog with policies). `$history`, `$refs`, `$snapshots`, `$properties` and
-  `$metadata_log_entries` stay readable, so time travel works; `$snapshots` reveals only the total
-  row count. Trusted identities keep them all for table health and maintenance.
+  and partition values) and the `table_changes` table function (which Trino 484 authorizes as
+  `ExecuteFunction`, or `CreateViewWithExecuteFunction` for a view's owner). The spike read real
+  masked e-mails through `$files`. User identities are denied those for policied tables (and
+  `table_changes` in a catalog with policies). `$history`, `$refs`, `$snapshots`, `$properties`
+  and `$metadata_log_entries` stay readable, so time travel works; `$snapshots` reveals only the
+  total row count. Trusted identities keep them all for table health and maintenance.
 - **Filters and masks do not authorize writes.** Writes stay with the guard (read-only sessions)
   and the catalog manager.
 
@@ -338,9 +339,11 @@ Policies live in one top-level area, `/governance`, integrated with catalog RBAC
   Baleia shows **draft** (saved), **published** (the pointer) and **active** (the revision each
   OPA reports), per engine. A policy is never shown as active because it was saved or published.
 - **Every revision has a lease.** The signed bundle carries `not_after`; past it, the Rego treats
-  the bundle as inactive and denies user identities. OPA keeps its last bundle while it cannot
-  reach Baleia, and cannot know that a newer revision exists, so without a lease a revoked policy
-  could outlive its revocation indefinitely. The lease bounds that.
+  the bundle as inactive and denies user identities; a statement authorized just before the lease
+  ends still gets no rows from a filtered table and NULL in every masked column. OPA keeps its
+  last bundle while it cannot reach Baleia, and cannot know that a newer revision exists, so
+  without a lease a revoked policy could outlive its revocation indefinitely. The lease bounds
+  that.
   - Baleia re-issues a revision with the same policies and a fresh lease before the current one
     ends. The re-issued revision is a new immutable object; nothing is rewritten.
   - The lease length is a deployment setting (its name and default are #995's); it is the longest a
