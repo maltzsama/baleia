@@ -46,7 +46,7 @@ active if {
 # the catalog manager.
 allow(identity) if trusted(identity)
 
-allow(identity) if active
+allow(_) if active
 
 # subject(identity) is the identity's entry in the bundle's subject map, or an
 # empty object for an identity Baleia does not know (it then matches only
@@ -120,7 +120,7 @@ wrap(expression) := sprintf("(%s)", [expression])
 # apply to the table for this identity, or undefined when the table has no row
 # policy. The expression is built here, (p1 OR p2 ...) AND r1 AND r2 ..., so
 # the engine's own combination of several filters never changes the meaning.
-row_filter(identity, table) := "false" if {
+row_filter(identity, _) := "false" if {
 	not trusted(identity)
 	not active
 }
