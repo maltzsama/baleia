@@ -384,7 +384,20 @@ func TestContract_IcebergSideDoors(t *testing.T) {
 		}
 	})
 	t.Run("table_changes is denied", func(t *testing.T) {
-		qerr := c.denied(t, user("u_bob"), "SELECT * FROM TABLE(iceberg.system.table_changes('spike', 'orders_side', NULL, "+snapshot+"))")
-		t.Logf("table_changes: %v", qerr)
+		// Two real snapshots, so the call is valid and only authorization
+		// can refuse it.
+		c.query(t, admin, "INSERT INTO "+table+" VALUES (5, 'US', 'open', 'eve@example.com')")
+		end := c.query(t, admin, `SELECT CAST(snapshot_id AS varchar) FROM iceberg.spike."orders_side$snapshots" ORDER BY committed_at DESC LIMIT 1`).strings()[0]
+		if end == snapshot {
+			t.Fatal("the insert made no new snapshot")
+		}
+		changes := "SELECT id FROM TABLE(iceberg.system.table_changes('spike', 'orders_side', " + snapshot + ", " + end + "))"
+		if got := c.query(t, admin, changes).strings(); !slices.Equal(got, []string{"5"}) {
+			t.Fatalf("admin table_changes = %q, want 5", got)
+		}
+		qerr := c.denied(t, user("u_bob"), changes)
+		if qerr.ErrorName != "PERMISSION_DENIED" {
+			t.Errorf("error %v, want PERMISSION_DENIED", qerr)
+		}
 	})
 }

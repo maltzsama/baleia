@@ -97,13 +97,19 @@ test_value_metadata_tables_of_a_policied_table_are_denied if {
 
 test_table_changes_is_denied_in_a_policied_catalog if {
 	call := {
-		"action": {"operation": "ExecuteTableFunction", "resource": {"function": {"catalogName": "iceberg", "schemaName": "system", "functionName": "table_changes"}}},
+		"action": {"operation": "ExecuteFunction", "resource": {"function": {"catalogName": "iceberg", "schemaName": "system", "functionName": "table_changes"}}},
 		"context": {"identity": {"user": "u_ana", "groups": []}, "softwareStack": {"trinoVersion": "484"}},
 	}
 	not trino.allow with input as call
 		with data.baleia.bundle as data.testdata.bundle
 		with data.baleia_deployment as deployment
+	not trino.allow with input as json.patch(call, [{"op": "replace", "path": "/action/operation", "value": "CreateViewWithExecuteFunction"}])
+		with data.baleia.bundle as data.testdata.bundle
+		with data.baleia_deployment as deployment
 	trino.allow with input as json.patch(call, [{"op": "replace", "path": "/action/resource/function/catalogName", "value": "tpch"}])
+		with data.baleia.bundle as data.testdata.bundle
+		with data.baleia_deployment as deployment
+	trino.allow with input as json.patch(call, [{"op": "replace", "path": "/context/identity/user", "value": "baleia_admin"}])
 		with data.baleia.bundle as data.testdata.bundle
 		with data.baleia_deployment as deployment
 }

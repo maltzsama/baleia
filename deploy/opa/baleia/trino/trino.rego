@@ -34,6 +34,8 @@ allow if {
 #     readable, so time travel keeps working; $snapshots reveals only the
 #     total row count.
 #   - Iceberg's table_changes table function, which returns changed rows.
+#     Trino 484 authorizes a table function as ExecuteFunction, and as
+#     CreateViewWithExecuteFunction for the owner of a view that calls it.
 value_metadata_tables := {"files", "entries", "all_files", "all_entries", "partitions", "manifests", "all_manifests"}
 
 side_door if {
@@ -47,7 +49,7 @@ side_door if {
 
 side_door if {
 	not core.trusted(identity)
-	input.action.operation == "ExecuteTableFunction"
+	input.action.operation in {"ExecuteFunction", "CreateViewWithExecuteFunction"}
 	function := input.action.resource.function
 	function.functionName == "table_changes"
 	core.catalog_has_policies(function.catalogName)
