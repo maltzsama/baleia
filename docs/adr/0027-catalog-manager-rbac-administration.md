@@ -170,9 +170,15 @@ They are exposed as `allowed_actions` on the connection (`manage_catalog_rbac`,
 - `auth_mode` and `principal_claim` repeat Polaris's configuration. If they disagree with the
   server, principal creation and the user mapping are wrong, so the connection test checks the
   claim. With `credential_mode` `internal`, an identity-provider user's token must resolve to a
-  principal that exists. With `credential_mode` `external`, no principal entity exists to find:
-  the test checks that the token carries the claim and that Polaris accepts it, with the principal
-  roles it maps.
+  principal that exists. With `credential_mode` `external`, no principal entity exists to find,
+  and Polaris has no API that returns the principal name it derived from a token, so a
+  `principal_claim` that differs from Polaris's mapping cannot be detected. The test checks only
+  that the token carries the claim and that Polaris accepts it, with the principal roles it maps.
+  The mismatch is kept harmless instead: in this mode access comes from the principal roles in
+  the token, never from the principal name (the internal authorizer grants to roles; with
+  `authorizer` `opa`, the Polaris policy decides on roles and the bundle, never on
+  `actor.principal`), and the screens mark external-mode principal names as "from Baleia's
+  configuration, not verified with Polaris".
 - Deployments where most users are local or LDAP, or with `user_identity` off, gain little from
   per-principal grants. The screens say so instead of hiding it.
 - Baleia now holds a powerful secret. Supplying it is the operator's choice. The narrowest
