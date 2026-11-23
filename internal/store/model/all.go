@@ -36,6 +36,7 @@ func All() []any {
 		&MigrationItem{},
 		&Migration{},
 		&OIDCLoginAttempt{},
+		&OpenLineageDestination{},
 		&PasswordResetToken{},
 		&QueryExecution{},
 		&QueryFolder{},

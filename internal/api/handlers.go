@@ -271,6 +271,7 @@ func NewAPI(d Deps) (*API, error) {
 		catalogCache:   newCache[[]workspaceCatalogEntry](d.Realtime, "catalog", 60*time.Second),
 		functionsCache: newCache[[]metadata.FunctionReference](d.Realtime, "functions", time.Hour),
 		connections:    d.Engines.Connections,
+		dialer:         d.Engines.Dialer,
 		engines:        d.Engines.Engines,
 		kinds:          d.Engines.Kinds,
 		dialects:       d.Engines.Dialects,

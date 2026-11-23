@@ -37,6 +37,7 @@ require (
 	github.com/exaring/otelpgx v0.13.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/godoes/gorm-oracle v1.6.20
+	github.com/google/jsonschema-go v0.4.3
 	github.com/maltzsama/sqlglot-go v0.42.2
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/redis/go-redis/v9 v9.23.0
@@ -74,7 +75,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect

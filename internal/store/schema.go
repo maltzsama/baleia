@@ -265,6 +265,11 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.Catalog{})
 			},
 		},
+		Migration{
+			Version: 23,
+			Name:    "add OpenLineage destinations",
+			Up:      func(db *gorm.DB) error { return AutoMigrate(db, &model.OpenLineageDestination{}) },
+		},
 	)
 }
 

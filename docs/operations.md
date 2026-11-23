@@ -804,13 +804,33 @@ rewritten URI carries a signature any replica can verify with the shared
 
 ### OpenMetadata through the BI gateway
 
-OpenMetadata's stock **Trino** connector is the supported integration path.
-Baleia does not implement an OpenMetadata connector and does not call the
-OpenMetadata REST API. Configure one OpenMetadata database service per Baleia
+OpenMetadata's stock **Trino** connector is the supported physical metadata
+integration path. Configure one OpenMetadata database service per Baleia
 workspace, with the service's catalog and schema set to the physical scope the
-workspace is allowed to discover. Semantic models, metrics and saved queries
-remain Baleia content; OpenMetadata only sees them when they are materialized
-as Trino-visible objects.
+workspace is allowed to discover. Baleia can also publish its semantic lineage
+as OpenLineage events to a configured HTTP destination.
+
+Workspace owners and administrators configure that destination using
+`PUT /api/v1/workspaces/{id}/openlineage/destination` with the complete HTTP
+endpoint, dataset namespace and optional bearer token, then publish a snapshot
+using `POST /api/v1/workspaces/{id}/openlineage/export`. The token is encrypted
+with the keyring and never returned. Bearer tokens require HTTPS, except for
+literal loopback IP addresses; hostnames such as `localhost` are not exempt.
+`DELETE` on the destination removes it.
+The optional `kind` query parameter selects `model`, `metric` or `saved_query`;
+omitting it publishes all visible kinds. Delivery uses individual events and
+retries transport errors, HTTP 429 and server errors up to three attempts;
+retries can cause duplicate events, so receivers must handle re-emission.
+The `sent` count means the receiver accepted HTTP requests; it does not prove
+that the receiver resolved datasets or created lineage edges.
+
+Events identify physical inputs by catalog, namespace and table; logical
+outputs use the first resolved input's catalog and namespace and a name of the
+form `baleia_<workspace-id-without-hyphens>_<kind>_<slug>` to avoid collisions
+between workspaces. These represent semantic content as OpenLineage
+datasets rather than native semantic entities. Configure the receiving system
+to resolve both inputs and outputs. The OpenMetadata 1.12.6 E2E pre-creates
+logical output datasets because automatic creation fails in its quickstart.
 
 The service host must be the gateway's public TLS origin, including its port
 but not a `/v1` path. Use the workspace BI key as the Trino password and the
@@ -838,8 +858,7 @@ keeps monitoring, limits and retention consistent, but means a metadata scan
 can add visible read activity. The gateway logs and metrics expose request
 status, latency and the existing BI concurrency state; credentials are never
 logged. The BI key is returned only once by the authenticated key-creation
-response, while later Baleia API responses never return it and OpenMetadata
-tokens are never handled by Baleia.
+response, while later Baleia API responses never return it.
 
 The tested compatibility matrix is Trino `484`, OpenMetadata `1.12.6` with
 its `1.12.6.4` ingestion image, and the pinned Baleia gateway in the repository

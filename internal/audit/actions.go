@@ -92,7 +92,8 @@ const (
 	RetrieverDelete  Action = "retriever.delete"
 	RetrieverRefresh Action = "retriever.refresh"
 
-	MetadataSync Action = "metadata.sync"
+	MetadataSync  Action = "metadata.sync"
+	LineageExport Action = "lineage.export"
 
 	SpaceCreate       Action = "space.create"
 	SpaceUpdate       Action = "space.update"
@@ -142,7 +143,7 @@ var allActions = []Action{
 	ResultsDownload,
 	MaintenanceTrigger, MaintenanceParametersSet, MaintenanceParametersRemoved, MaintenanceRunRequested,
 	RetrieverCreate, RetrieverUpdate, RetrieverDelete, RetrieverRefresh,
-	MetadataSync,
+	MetadataSync, LineageExport,
 	SpaceCreate, SpaceUpdate, SpaceDelete, SpaceMemberSet, SpaceMemberRemove,
 	SavedQueryCreate, SavedQueryUpdate, SavedQueryDelete, FolderCreate, FolderDelete,
 	WorkloadUpdate,

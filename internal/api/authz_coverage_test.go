@@ -175,6 +175,11 @@ func matrixRow(name string, a access) authorizationMatrixRow {
 			row.globalRole = "admin where applicable"
 			row.workspaceRole = "workspace admin"
 			row.denial = "404 when invisible; 403 when below admin"
+		case hasCall(a, "lineageManager"):
+			row.scope = "workspace lineage destination"
+			row.globalRole = "admin or workspace owner"
+			row.workspaceRole = "workspace owner"
+			row.denial = "404 when invisible; 403 when not owner"
 		case hasCall(a, "contentSpace", "spaceForWrite", "requireSpace"):
 			row.scope = "workspace data plane plus space ceiling"
 			row.workspaceRole = "workspace role capped by space role"
@@ -512,8 +517,12 @@ var operationAccess = map[string]access{
 	"ListJoinSuggestions":    checked("metadataWorkspace", "grantedTable"),
 	// The function catalog calls the engine, so it resolves the target (the
 	// workspace's granted binding) instead of reading the snapshot.
-	"ListMetadataFunctions": checked("metadataWorkspace", "ResolveTarget"),
-	"ListLineage":           checked("metadataWorkspace", "grantedTable"),
+	"ListMetadataFunctions":        checked("metadataWorkspace", "ResolveTarget"),
+	"ListLineage":                  checked("metadataWorkspace", "grantedTable"),
+	"GetOpenLineageDestination":    checked("lineageManager"),
+	"PutOpenLineageDestination":    checked("lineageManager"),
+	"DeleteOpenLineageDestination": checked("lineageManager"),
+	"ExportOpenLineage":            checked("lineageManager"),
 	// Semantic layer v1 (#33): workspace members; docs only on catalogs the
 	// workspace may use (semanticCatalog wraps grantedCatalog). Docs are not
 	// content items, so #40 does not add a space check here.

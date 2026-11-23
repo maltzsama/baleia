@@ -568,6 +568,28 @@ components:
         edges:
           type: array
           items: { $ref: "#/components/schemas/LineageEdge" }
+    OpenLineageDestination:
+      type: object
+      required: [configured, endpoint, namespace]
+      properties:
+        configured: { type: boolean }
+        endpoint: { type: string }
+        namespace: { type: string }
+    UpdateOpenLineageDestination:
+      type: object
+      required: [endpoint, namespace]
+      properties:
+        endpoint: { type: string, format: uri }
+        namespace: { type: string, minLength: 1, maxLength: 256 }
+        token: { type: string, writeOnly: true, description: "Bearer token; omit to retain the existing token." }
+    OpenLineageExportResult:
+      type: object
+      required: [run_id, sent, skipped, failed]
+      properties:
+        run_id: { type: string, format: uuid }
+        sent: { type: integer }
+        skipped: { type: integer }
+        failed: { type: integer }
     IdentityProviderType:
       type: string
       enum: [oidc, ldap]
@@ -6610,6 +6632,74 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/LineageGraph" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /workspaces/{id}/openlineage/destination:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [Metadata]
+      operationId: getOpenLineageDestination
+      summary: "Read the workspace OpenLineage HTTP destination"
+      responses:
+        "200":
+          description: "Destination without credentials"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpenLineageDestination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Metadata]
+      operationId: putOpenLineageDestination
+      summary: "Configure the workspace OpenLineage HTTP destination"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateOpenLineageDestination" }
+      responses:
+        "200":
+          description: "Destination without credentials"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpenLineageDestination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [Metadata]
+      operationId: deleteOpenLineageDestination
+      summary: "Remove the workspace OpenLineage destination"
+      responses:
+        "204": { description: "Destination removed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /workspaces/{id}/openlineage/export:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [Metadata]
+      operationId: exportOpenLineage
+      summary: "Publish the workspace lineage snapshot as OpenLineage events"
+      parameters:
+        - name: kind
+          in: query
+          description: "Restrict the snapshot to one content kind. Omit to export all kinds."
+          schema: { type: string, enum: [model, metric, saved_query] }
+      responses:
+        "200":
+          description: "Event delivery counts"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpenLineageExportResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 

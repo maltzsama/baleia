@@ -1,0 +1,15 @@
+meta {
+  name: Reject unauthenticated export
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/openlineage/export
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+}

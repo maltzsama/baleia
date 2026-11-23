@@ -639,6 +639,18 @@ type ServerInterface interface {
 	// A table with its columns, typed and named for one of its catalog's bindings
 	// (GET /workspaces/{id}/metadata/tables/{table_id})
 	GetMetadataTable(w http.ResponseWriter, r *http.Request, id PathId, tableId openapi_types.UUID, params GetMetadataTableParams)
+	// Remove the workspace OpenLineage destination
+	// (DELETE /workspaces/{id}/openlineage/destination)
+	DeleteOpenLineageDestination(w http.ResponseWriter, r *http.Request, id PathId)
+	// Read the workspace OpenLineage HTTP destination
+	// (GET /workspaces/{id}/openlineage/destination)
+	GetOpenLineageDestination(w http.ResponseWriter, r *http.Request, id PathId)
+	// Configure the workspace OpenLineage HTTP destination
+	// (PUT /workspaces/{id}/openlineage/destination)
+	PutOpenLineageDestination(w http.ResponseWriter, r *http.Request, id PathId)
+	// Publish the workspace lineage snapshot as OpenLineage events
+	// (POST /workspaces/{id}/openlineage/export)
+	ExportOpenLineage(w http.ResponseWriter, r *http.Request, id PathId, params ExportOpenLineageParams)
 	// Users and teams a non-admin manager may add to a space
 	// (GET /workspaces/{id}/principals)
 	ListWorkspacePrincipals(w http.ResponseWriter, r *http.Request, id PathId, params ListWorkspacePrincipalsParams)
@@ -2085,6 +2097,30 @@ func (_ Unimplemented) SearchMetadata(w http.ResponseWriter, r *http.Request, id
 // A table with its columns, typed and named for one of its catalog's bindings
 // (GET /workspaces/{id}/metadata/tables/{table_id})
 func (_ Unimplemented) GetMetadataTable(w http.ResponseWriter, r *http.Request, id PathId, tableId openapi_types.UUID, params GetMetadataTableParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove the workspace OpenLineage destination
+// (DELETE /workspaces/{id}/openlineage/destination)
+func (_ Unimplemented) DeleteOpenLineageDestination(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Read the workspace OpenLineage HTTP destination
+// (GET /workspaces/{id}/openlineage/destination)
+func (_ Unimplemented) GetOpenLineageDestination(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Configure the workspace OpenLineage HTTP destination
+// (PUT /workspaces/{id}/openlineage/destination)
+func (_ Unimplemented) PutOpenLineageDestination(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Publish the workspace lineage snapshot as OpenLineage events
+// (POST /workspaces/{id}/openlineage/export)
+func (_ Unimplemented) ExportOpenLineage(w http.ResponseWriter, r *http.Request, id PathId, params ExportOpenLineageParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10087,6 +10123,149 @@ func (siw *ServerInterfaceWrapper) GetMetadataTable(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteOpenLineageDestination operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOpenLineageDestination(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOpenLineageDestination(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOpenLineageDestination operation middleware
+func (siw *ServerInterfaceWrapper) GetOpenLineageDestination(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOpenLineageDestination(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutOpenLineageDestination operation middleware
+func (siw *ServerInterfaceWrapper) PutOpenLineageDestination(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutOpenLineageDestination(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportOpenLineage operation middleware
+func (siw *ServerInterfaceWrapper) ExportOpenLineage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExportOpenLineageParams
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportOpenLineage(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkspacePrincipals operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkspacePrincipals(w http.ResponseWriter, r *http.Request) {
 
@@ -14014,6 +14193,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/metadata/tables/{table_id}", wrapper.GetMetadataTable)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/workspaces/{id}/openlineage/destination", wrapper.DeleteOpenLineageDestination)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/{id}/openlineage/destination", wrapper.GetOpenLineageDestination)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/workspaces/{id}/openlineage/destination", wrapper.PutOpenLineageDestination)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/{id}/openlineage/export", wrapper.ExportOpenLineage)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/{id}/principals", wrapper.ListWorkspacePrincipals)
@@ -23143,6 +23334,205 @@ func (response GetMetadataTable404JSONResponse) VisitGetMetadataTableResponse(w 
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeleteOpenLineageDestinationRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type DeleteOpenLineageDestinationResponseObject interface {
+	VisitDeleteOpenLineageDestinationResponse(w http.ResponseWriter) error
+}
+
+type DeleteOpenLineageDestination204Response struct {
+}
+
+func (response DeleteOpenLineageDestination204Response) VisitDeleteOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteOpenLineageDestination401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteOpenLineageDestination401JSONResponse) VisitDeleteOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteOpenLineageDestination403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteOpenLineageDestination403JSONResponse) VisitDeleteOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteOpenLineageDestination404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteOpenLineageDestination404JSONResponse) VisitDeleteOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetOpenLineageDestinationRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetOpenLineageDestinationResponseObject interface {
+	VisitGetOpenLineageDestinationResponse(w http.ResponseWriter) error
+}
+
+type GetOpenLineageDestination200JSONResponse OpenLineageDestination
+
+func (response GetOpenLineageDestination200JSONResponse) VisitGetOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetOpenLineageDestination401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetOpenLineageDestination401JSONResponse) VisitGetOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetOpenLineageDestination403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetOpenLineageDestination403JSONResponse) VisitGetOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetOpenLineageDestination404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetOpenLineageDestination404JSONResponse) VisitGetOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutOpenLineageDestinationRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *PutOpenLineageDestinationJSONRequestBody
+}
+
+type PutOpenLineageDestinationResponseObject interface {
+	VisitPutOpenLineageDestinationResponse(w http.ResponseWriter) error
+}
+
+type PutOpenLineageDestination200JSONResponse OpenLineageDestination
+
+func (response PutOpenLineageDestination200JSONResponse) VisitPutOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutOpenLineageDestination401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PutOpenLineageDestination401JSONResponse) VisitPutOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutOpenLineageDestination403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutOpenLineageDestination403JSONResponse) VisitPutOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutOpenLineageDestination404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutOpenLineageDestination404JSONResponse) VisitPutOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutOpenLineageDestination422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response PutOpenLineageDestination422JSONResponse) VisitPutOpenLineageDestinationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportOpenLineageRequestObject struct {
+	Id     PathId `json:"id"`
+	Params ExportOpenLineageParams
+}
+
+type ExportOpenLineageResponseObject interface {
+	VisitExportOpenLineageResponse(w http.ResponseWriter) error
+}
+
+type ExportOpenLineage200JSONResponse OpenLineageExportResult
+
+func (response ExportOpenLineage200JSONResponse) VisitExportOpenLineageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportOpenLineage401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ExportOpenLineage401JSONResponse) VisitExportOpenLineageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportOpenLineage403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ExportOpenLineage403JSONResponse) VisitExportOpenLineageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportOpenLineage404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ExportOpenLineage404JSONResponse) VisitExportOpenLineageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ExportOpenLineage422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ExportOpenLineage422JSONResponse) VisitExportOpenLineageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListWorkspacePrincipalsRequestObject struct {
 	Id     PathId `json:"id"`
 	Params ListWorkspacePrincipalsParams
@@ -26963,6 +27353,18 @@ type StrictServerInterface interface {
 	// A table with its columns, typed and named for one of its catalog's bindings
 	// (GET /workspaces/{id}/metadata/tables/{table_id})
 	GetMetadataTable(ctx context.Context, request GetMetadataTableRequestObject) (GetMetadataTableResponseObject, error)
+	// Remove the workspace OpenLineage destination
+	// (DELETE /workspaces/{id}/openlineage/destination)
+	DeleteOpenLineageDestination(ctx context.Context, request DeleteOpenLineageDestinationRequestObject) (DeleteOpenLineageDestinationResponseObject, error)
+	// Read the workspace OpenLineage HTTP destination
+	// (GET /workspaces/{id}/openlineage/destination)
+	GetOpenLineageDestination(ctx context.Context, request GetOpenLineageDestinationRequestObject) (GetOpenLineageDestinationResponseObject, error)
+	// Configure the workspace OpenLineage HTTP destination
+	// (PUT /workspaces/{id}/openlineage/destination)
+	PutOpenLineageDestination(ctx context.Context, request PutOpenLineageDestinationRequestObject) (PutOpenLineageDestinationResponseObject, error)
+	// Publish the workspace lineage snapshot as OpenLineage events
+	// (POST /workspaces/{id}/openlineage/export)
+	ExportOpenLineage(ctx context.Context, request ExportOpenLineageRequestObject) (ExportOpenLineageResponseObject, error)
 	// Users and teams a non-admin manager may add to a space
 	// (GET /workspaces/{id}/principals)
 	ListWorkspacePrincipals(ctx context.Context, request ListWorkspacePrincipalsRequestObject) (ListWorkspacePrincipalsResponseObject, error)
@@ -32973,6 +33375,118 @@ func (sh *strictHandler) GetMetadataTable(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMetadataTableResponseObject); ok {
 		if err := validResponse.VisitGetMetadataTableResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteOpenLineageDestination operation middleware
+func (sh *strictHandler) DeleteOpenLineageDestination(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request DeleteOpenLineageDestinationRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteOpenLineageDestination(ctx, request.(DeleteOpenLineageDestinationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteOpenLineageDestination")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteOpenLineageDestinationResponseObject); ok {
+		if err := validResponse.VisitDeleteOpenLineageDestinationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOpenLineageDestination operation middleware
+func (sh *strictHandler) GetOpenLineageDestination(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetOpenLineageDestinationRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOpenLineageDestination(ctx, request.(GetOpenLineageDestinationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOpenLineageDestination")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOpenLineageDestinationResponseObject); ok {
+		if err := validResponse.VisitGetOpenLineageDestinationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutOpenLineageDestination operation middleware
+func (sh *strictHandler) PutOpenLineageDestination(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request PutOpenLineageDestinationRequestObject
+
+	request.Id = id
+
+	var body PutOpenLineageDestinationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutOpenLineageDestination(ctx, request.(PutOpenLineageDestinationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutOpenLineageDestination")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutOpenLineageDestinationResponseObject); ok {
+		if err := validResponse.VisitPutOpenLineageDestinationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportOpenLineage operation middleware
+func (sh *strictHandler) ExportOpenLineage(w http.ResponseWriter, r *http.Request, id PathId, params ExportOpenLineageParams) {
+	var request ExportOpenLineageRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportOpenLineage(ctx, request.(ExportOpenLineageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportOpenLineage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportOpenLineageResponseObject); ok {
+		if err := validResponse.VisitExportOpenLineageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

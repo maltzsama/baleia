@@ -1523,6 +1523,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/openlineage/destination": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Read the workspace OpenLineage HTTP destination */
+        get: operations["getOpenLineageDestination"];
+        /** Configure the workspace OpenLineage HTTP destination */
+        put: operations["putOpenLineageDestination"];
+        post?: never;
+        /** Remove the workspace OpenLineage destination */
+        delete: operations["deleteOpenLineageDestination"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/openlineage/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish the workspace lineage snapshot as OpenLineage events */
+        post: operations["exportOpenLineage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{id}/semantic/tags": {
         parameters: {
             query?: never;
@@ -4288,6 +4328,25 @@ export interface components {
         LineageGraph: {
             nodes: components["schemas"]["LineageNode"][];
             edges: components["schemas"]["LineageEdge"][];
+        };
+        OpenLineageDestination: {
+            configured: boolean;
+            endpoint: string;
+            namespace: string;
+        };
+        UpdateOpenLineageDestination: {
+            /** Format: uri */
+            endpoint: string;
+            namespace: string;
+            /** @description Bearer token; omit to retain the existing token. */
+            token?: string;
+        };
+        OpenLineageExportResult: {
+            /** Format: uuid */
+            run_id: string;
+            sent: number;
+            skipped: number;
+            failed: number;
         };
         /** @enum {string} */
         IdentityProviderType: "oidc" | "ldap";
@@ -10400,6 +10459,113 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getOpenLineageDestination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Destination without credentials */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenLineageDestination"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putOpenLineageDestination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOpenLineageDestination"];
+            };
+        };
+        responses: {
+            /** @description Destination without credentials */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenLineageDestination"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteOpenLineageDestination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Destination removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    exportOpenLineage: {
+        parameters: {
+            query?: {
+                /** @description Restrict the snapshot to one content kind. Omit to export all kinds. */
+                kind?: "model" | "metric" | "saved_query";
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Event delivery counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenLineageExportResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
         };

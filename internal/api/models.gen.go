@@ -1445,6 +1445,13 @@ const (
 	Prefix SearchMetadataParamsMatch = "prefix"
 )
 
+// Defines values for ExportOpenLineageParamsKind.
+const (
+	ExportOpenLineageParamsKindMetric     ExportOpenLineageParamsKind = "metric"
+	ExportOpenLineageParamsKindModel      ExportOpenLineageParamsKind = "model"
+	ExportOpenLineageParamsKindSavedQuery ExportOpenLineageParamsKind = "saved_query"
+)
+
 // Defines values for TriggerRetrieverRefreshJSONBodyRefreshType.
 const (
 	Full        TriggerRetrieverRefreshJSONBodyRefreshType = "full"
@@ -4215,6 +4222,21 @@ type OIDCProvider struct {
 // OIDCProviderType defines model for OIDCProvider.Type.
 type OIDCProviderType string
 
+// OpenLineageDestination defines model for OpenLineageDestination.
+type OpenLineageDestination struct {
+	Configured bool   `json:"configured"`
+	Endpoint   string `json:"endpoint"`
+	Namespace  string `json:"namespace"`
+}
+
+// OpenLineageExportResult defines model for OpenLineageExportResult.
+type OpenLineageExportResult struct {
+	Failed  int                `json:"failed"`
+	RunId   openapi_types.UUID `json:"run_id"`
+	Sent    int                `json:"sent"`
+	Skipped int                `json:"skipped"`
+}
+
 // Pagination defines model for Pagination.
 type Pagination struct {
 	Page       int `json:"page"`
@@ -5329,6 +5351,15 @@ type UpdateOIDCConfig struct {
 // UpdateOIDCConfigDefaultRole defines model for UpdateOIDCConfig.DefaultRole.
 type UpdateOIDCConfigDefaultRole string
 
+// UpdateOpenLineageDestination defines model for UpdateOpenLineageDestination.
+type UpdateOpenLineageDestination struct {
+	Endpoint  string `json:"endpoint"`
+	Namespace string `json:"namespace"`
+
+	// Token Bearer token; omit to retain the existing token.
+	Token *string `json:"token,omitempty"`
+}
+
 // UpdatePasswordRequest defines model for UpdatePasswordRequest.
 type UpdatePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
@@ -6140,6 +6171,15 @@ type GetMetadataTableParams struct {
 	BindingId *openapi_types.UUID `form:"binding_id,omitempty" json:"binding_id,omitempty"`
 }
 
+// ExportOpenLineageParams defines parameters for ExportOpenLineage.
+type ExportOpenLineageParams struct {
+	// Kind Restrict the snapshot to one content kind. Omit to export all kinds.
+	Kind *ExportOpenLineageParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// ExportOpenLineageParamsKind defines parameters for ExportOpenLineage.
+type ExportOpenLineageParamsKind string
+
 // ListWorkspacePrincipalsParams defines parameters for ListWorkspacePrincipals.
 type ListWorkspacePrincipalsParams struct {
 	Q     *string `form:"q,omitempty" json:"q,omitempty"`
@@ -6502,6 +6542,9 @@ type AddWorkspaceMemberJSONRequestBody = AddWorkspaceMemberRequest
 
 // SetWorkspaceMemberJSONRequestBody defines body for SetWorkspaceMember for application/json ContentType.
 type SetWorkspaceMemberJSONRequestBody = SetWorkspaceMemberRequest
+
+// PutOpenLineageDestinationJSONRequestBody defines body for PutOpenLineageDestination for application/json ContentType.
+type PutOpenLineageDestinationJSONRequestBody = UpdateOpenLineageDestination
 
 // CreateSavedQueryJSONRequestBody defines body for CreateSavedQuery for application/json ContentType.
 type CreateSavedQueryJSONRequestBody = CreateSavedQueryRequest

@@ -1,0 +1,26 @@
+meta {
+  name: Reject invalid OpenLineage endpoint
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{base_url}}/workspaces/{{workspace_id}}/openlineage/destination
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "endpoint": "invalid",
+    "namespace": "baleia"
+  }
+}
+
+assert {
+  res.status: eq 422
+}

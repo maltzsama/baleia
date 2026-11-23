@@ -66,6 +66,7 @@ type core struct {
 	s3 *storage.S3Client
 	// connections holds every connection provider (docs/adr/0002).
 	connections *connections.Registry
+	dialer      *connections.Dialer
 	// engines runs SQL (docs/adr/0002), built at the wiring site.
 	engines engineSource
 	kinds   engineKinds
