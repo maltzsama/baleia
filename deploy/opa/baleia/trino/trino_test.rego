@@ -113,3 +113,18 @@ test_table_changes_is_denied_in_a_policied_catalog if {
 		with data.baleia.bundle as data.testdata.bundle
 		with data.baleia_deployment as deployment
 }
+
+test_filter_columns_returns_column_indexes if {
+	example := data.testdata.trino484.batch_FilterColumns
+	columns := example.input.action.filterResources[0].table.columns
+	count(columns) > 1
+	trino.batch == {i | some i in numbers.range(0, count(columns) - 1)} with input as example.input
+		with data.baleia.bundle as data.testdata.bundle
+		with data.baleia_deployment as deployment
+	empty := json.patch(example.input, [{"op": "replace", "path": "/action/filterResources/0/table/columns", "value": []}])
+	trino.batch == set() with input as empty
+		with data.baleia.bundle as data.testdata.bundle
+		with data.baleia_deployment as deployment
+	trino.batch == set() with input as example.input
+		with data.baleia_deployment as deployment
+}

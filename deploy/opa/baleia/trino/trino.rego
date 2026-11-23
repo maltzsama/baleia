@@ -55,12 +55,21 @@ side_door if {
 	core.catalog_has_policies(function.catalogName)
 }
 
-# batch lists the indexes of input.action.filterResources the identity may
-# see. Visibility is the catalog guard's and the catalog manager's decision,
-# so it is all of them or, without an active bundle, none.
+# batch lists the indexes the identity may see. Visibility is the catalog
+# guard's and the catalog manager's decision, so it is all of them or, without
+# an active bundle, none. The indexes point into input.action.filterResources,
+# except for FilterColumns: Trino sends one table per request and reads the
+# indexes against that table's columns.
 batch contains index if {
 	core.allow(identity)
+	input.action.operation != "FilterColumns"
 	some index, _ in input.action.filterResources
+}
+
+batch contains index if {
+	core.allow(identity)
+	input.action.operation == "FilterColumns"
+	some index, _ in input.action.filterResources[0].table.columns
 }
 
 table_of(resource) := {
