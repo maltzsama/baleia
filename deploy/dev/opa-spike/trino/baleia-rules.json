@@ -2,5 +2,9 @@
   "catalogs": [{"allow": "owner"}],
   "impersonation": [
     {"original_user": "^baleia_admin$", "new_user": ".*", "allow": true}
+  ],
+  "functions": [
+    {"catalog": "system", "schema": "builtin", "privileges": ["EXECUTE", "GRANT_EXECUTE"]},
+    {"catalog": "iceberg", "schema": "system", "function": "table_changes", "privileges": ["EXECUTE", "GRANT_EXECUTE"]}
   ]
 }

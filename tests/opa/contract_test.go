@@ -385,7 +385,10 @@ func TestContract_IcebergSideDoors(t *testing.T) {
 	})
 	t.Run("table_changes is denied", func(t *testing.T) {
 		// Two real snapshots, so the call is valid and only authorization
-		// can refuse it.
+		// can refuse it. Trino's file rules allow only built-in functions by
+		// default, which already refuses table_changes to everyone; the
+		// harness rules open it, as an operator's own rules may, so the OPA
+		// rule is what is tested.
 		c.query(t, admin, "INSERT INTO "+table+" VALUES (5, 'US', 'open', 'eve@example.com')")
 		end := c.query(t, admin, `SELECT CAST(snapshot_id AS varchar) FROM iceberg.spike."orders_side$snapshots" ORDER BY committed_at DESC LIMIT 1`).strings()[0]
 		if end == snapshot {
@@ -394,6 +397,10 @@ func TestContract_IcebergSideDoors(t *testing.T) {
 		changes := "SELECT id FROM TABLE(iceberg.system.table_changes('spike', 'orders_side', " + snapshot + ", " + end + "))"
 		if got := c.query(t, admin, changes).strings(); !slices.Equal(got, []string{"5"}) {
 			t.Fatalf("admin table_changes = %q, want 5", got)
+		}
+		// Without OPA the same user reads the changed rows.
+		if got := connect(t, "svc/trino-baseline").query(t, user("u_bob"), changes).strings(); !slices.Equal(got, []string{"5"}) {
+			t.Fatalf("u_bob table_changes without OPA = %q, want 5", got)
 		}
 		qerr := c.denied(t, user("u_bob"), changes)
 		if qerr.ErrorName != "PERMISSION_DENIED" {
