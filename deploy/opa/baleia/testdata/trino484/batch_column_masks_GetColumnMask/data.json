@@ -1,0 +1,92 @@
+{
+  "input": {
+    "action": {
+      "filterResources": [
+        {
+          "column": {
+            "catalogName": "iceberg",
+            "columnName": "id",
+            "columnType": "integer",
+            "schemaName": "spike",
+            "tableName": "orders_contract"
+          }
+        },
+        {
+          "column": {
+            "catalogName": "iceberg",
+            "columnName": "region",
+            "columnType": "varchar",
+            "schemaName": "spike",
+            "tableName": "orders_contract"
+          }
+        },
+        {
+          "column": {
+            "catalogName": "iceberg",
+            "columnName": "status",
+            "columnType": "varchar",
+            "schemaName": "spike",
+            "tableName": "orders_contract"
+          }
+        },
+        {
+          "column": {
+            "catalogName": "iceberg",
+            "columnName": "email",
+            "columnType": "varchar",
+            "schemaName": "spike",
+            "tableName": "orders_contract"
+          }
+        },
+        {
+          "column": {
+            "catalogName": "iceberg",
+            "columnName": "$partition",
+            "columnType": "varchar",
+            "schemaName": "spike",
+            "tableName": "orders_contract"
+          }
+        },
+        {
+          "column": {
+            "catalogName": "iceberg",
+            "columnName": "$path",
+            "columnType": "varchar",
+            "schemaName": "spike",
+            "tableName": "orders_contract"
+          }
+        },
+        {
+          "column": {
+            "catalogName": "iceberg",
+            "columnName": "$file_modified_time",
+            "columnType": "timestamp(3) with time zone",
+            "schemaName": "spike",
+            "tableName": "orders_contract"
+          }
+        }
+      ],
+      "operation": "GetColumnMask"
+    },
+    "context": {
+      "identity": {
+        "groups": [],
+        "user": "u_ana"
+      },
+      "properties": {},
+      "queryId": "20260101_000000_00000_xxxxx",
+      "softwareStack": {
+        "trinoVersion": "484"
+      }
+    }
+  },
+  "result": [
+    {
+      "index": 3,
+      "viewExpression": {
+        "expression": "substr(email, 1, 2) || '***'"
+      }
+    }
+  ],
+  "rule": "batch_column_masks"
+}

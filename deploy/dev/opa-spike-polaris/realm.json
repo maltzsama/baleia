@@ -1,0 +1,48 @@
+{
+  "realm": "baleia",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "baleia",
+      "description": "Baleia's confidential client: the tokens ADR 0015 forwards to the catalog manager.",
+      "secret": "baleia-secret",
+      "publicClient": false,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "polaris-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "polaris_roles",
+            "claim.value": "baleia_session",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "spark",
+      "description": "Any other client of the same user (Spark, PyIceberg, a notebook).",
+      "secret": "spark-secret",
+      "publicClient": false,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false
+    }
+  ],
+  "users": [
+    {
+      "username": "ana",
+      "email": "ana@example.com",
+      "firstName": "Ana",
+      "lastName": "Spike",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "ana-password", "temporary": false }]
+    }
+  ]
+}

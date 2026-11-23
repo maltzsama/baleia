@@ -1,0 +1,19 @@
+# Spike harness for #994 Q8 (ADR 0027/0028, Polaris-OPA mode): Keycloak and
+# Polaris 1.9 with its OPA authorizer, in the opa-spike namespace. Applied by
+# tests/opa (TestPolaris*) on demand; nothing here is part of the chart.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: opa-spike
+resources:
+  - keycloak.yaml
+  - polaris.yaml
+generatorOptions:
+  immutable: true
+configMapGenerator:
+  - name: keycloak-realm
+    files:
+      - realm.json
+  - name: polaris-opa
+    files:
+      - polaris.rego
+      - application.properties

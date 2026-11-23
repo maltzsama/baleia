@@ -1,0 +1,27 @@
+{
+  "input": {
+    "action": {
+      "operation": "DropTable",
+      "resource": {
+        "table": {
+          "catalogName": "iceberg",
+          "schemaName": "spike",
+          "tableName": "orders_contract_ctas"
+        }
+      }
+    },
+    "context": {
+      "identity": {
+        "groups": [],
+        "user": "u_ana"
+      },
+      "properties": {},
+      "queryId": "20260101_000000_00000_xxxxx",
+      "softwareStack": {
+        "trinoVersion": "484"
+      }
+    }
+  },
+  "result": true,
+  "rule": "allow"
+}

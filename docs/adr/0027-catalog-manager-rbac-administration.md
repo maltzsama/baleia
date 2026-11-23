@@ -1,8 +1,8 @@
 # 0027. Catalog-manager RBAC is administered through Baleia and owned by the manager
 
-- Status: Proposed
-- Date: 2026-11-13
-- Issues: #993
+- Status: Proposed, amended 2026-11-22 by the spike in #994
+- Date: 2026-11-13; amended 2026-11-22
+- Issues: #993, #994
 - Builds on: [0015](0015-per-user-catalog-identity.md), [0016](0016-access-layers-and-workspace-roles.md)
   layer 2, [0018](0018-workspace-catalog-scope.md) (admin plane)
 
@@ -76,6 +76,8 @@ administrator; none is inferred from a failed call.
 | `mgmt_client_id`, `mgmt_client_secret` | The credential used for administration. Sealed by the keyring, decrypted fail-closed, never returned by the API. |
 | `auth_mode` | `internal`, `external` or `mixed`. Must match Polaris's `polaris.authentication.type`. |
 | `principal_claim` | The token claim Polaris maps to a principal name. Must match Polaris's configuration. |
+| `credential_mode` | `internal` or `external`. Must match Polaris's `polaris.authentication.credential-mode` (Polaris 1.9+; older versions behave as `internal`). |
+| `authorizer` | `internal` (Polaris RBAC, the default) or `opa` (Polaris's OPA authorizer reading Baleia's bundle, [0028](0028-data-policies-opa-trino.md)). |
 
 - **Mutations use only the management credential.** The service that performs mutations is built
   from the management credential alone. With no management credential there is no mutation
@@ -96,8 +98,12 @@ administrator; none is inferred from a failed call.
 - **Principals:** list and inspect. Creation depends on `auth_mode`:
   - `internal` or `mixed`: Baleia can create a principal with credentials. The credentials are shown
     once (FD8) and Baleia never stores them.
-  - `external`: Baleia creates a principal by name only, so an identity-provider user can be
-    granted roles before their first query.
+  - `external` with `credential_mode` `internal`: Baleia creates a principal by name only, so an
+    identity-provider user can be granted roles before their first query.
+  - `credential_mode` `external`: Polaris keeps no principal entity for identity-provider users;
+    their principal roles come from the token, mapped by Polaris's principal-roles mapper. Baleia
+    neither creates those principals nor assigns them roles; the screens show the roles as read from
+    the identity provider, read-only, and the membership is administered there.
 
 ### Resolving targets on the server
 
@@ -131,6 +137,10 @@ They are exposed as `allowed_actions` on the connection (`manage_catalog_rbac`,
     missing from it. Baleia never guesses from the user's e-mail.
 - Every grant view uses this mapping. It never presents a grant to an individual principal as
   effective for a Baleia user who does not reach Polaris as that principal.
+- **With `authorizer` `opa`, this ADR's administration does not apply.** Polaris's OPA authorizer
+  replaces its internal RBAC: grants and roles stored in Polaris no longer decide anything, and
+  Baleia's bundle does. The RBAC screens then show the bundle's decisions, under `/governance`
+  ([0028](0028-data-policies-opa-trino.md)).
 - **The connection's mode is stated on every screen:**
   - "Per user": grants apply to identity-provider users;
   - "Connection account for every user": only the connection account's roles apply to Baleia
@@ -159,7 +169,19 @@ They are exposed as `allowed_actions` on the connection (`manage_catalog_rbac`,
   no copy to drift.
 - `auth_mode` and `principal_claim` repeat Polaris's configuration. If they disagree with the
   server, principal creation and the user mapping are wrong, so the connection test checks the
-  claim: an identity-provider user's token must resolve to a principal that exists.
+  claim. With `credential_mode` `internal`, an identity-provider user's token must resolve to a
+  principal that exists. With `credential_mode` `external`, no principal entity exists to find,
+  and Polaris has no API that returns the principal name it derived from a token, so a
+  `principal_claim` that differs from Polaris's mapping cannot be detected. The test checks only
+  that the token carries the claim and that Polaris accepts it, with the principal roles it maps.
+  The mismatch is kept harmless instead: in this mode access comes from the principal roles in
+  the token, never from the principal name (the internal authorizer grants to roles; with
+  `authorizer` `opa`, the Polaris policy decides on roles and the bundle, not on
+  `actor.principal`), and the screens mark external-mode principal names as "from Baleia's
+  configuration, not verified with Polaris". The one name-based rule is a bootstrap exception:
+  Polaris's own `root` credential, which must also hold the `service_admin` principal role. The
+  identity provider must never issue `service_admin`, or a token named `root` would pass it; the
+  connection test fails when a user token carries that role.
 - Deployments where most users are local or LDAP, or with `user_identity` off, gain little from
   per-principal grants. The screens say so instead of hiding it.
 - Baleia now holds a powerful secret. Supplying it is the operator's choice. The narrowest
@@ -191,6 +213,7 @@ from the data credential and only lists catalogs.
   would need manage privileges.
 - **Link out to the manager's own console.** Rejected as the only option: Polaris ships no
   administration UI, and nothing outside Baleia knows the Baleia user ↔ principal mapping.
-- **Polaris's external PDP (OPA inside Polaris).** Out of scope. It replaces Polaris's authorizer
-  rather than administering it, and it does not filter rows or mask columns. See
-  [0028](0028-data-policies-opa-trino.md).
+- **Polaris's external PDP (OPA inside Polaris) as out of scope.** Reversed by the #994 spike: it is
+  supported as the optional `authorizer: opa` mode. It replaces Polaris's authorizer rather than
+  administering it, and it does not filter rows or mask columns, so it complements
+  [0028](0028-data-policies-opa-trino.md) instead of replacing it.

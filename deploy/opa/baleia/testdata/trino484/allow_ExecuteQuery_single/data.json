@@ -1,0 +1,19 @@
+{
+  "input": {
+    "action": {
+      "operation": "ExecuteQuery"
+    },
+    "context": {
+      "identity": {
+        "groups": [],
+        "user": "u_ana"
+      },
+      "properties": {},
+      "softwareStack": {
+        "trinoVersion": "484"
+      }
+    }
+  },
+  "result": true,
+  "rule": "allow"
+}
