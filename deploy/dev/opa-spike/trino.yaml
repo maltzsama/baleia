@@ -115,9 +115,9 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              cd /release
-              echo "$(cat baleia-opa-policy.tar.gz.sha256)  baleia-opa-policy.tar.gz" | sha256sum -c -
-              cp baleia-opa-policy.tar.gz /policy/policy.tar.gz
+              # Verify the copy OPA will load, not the source it came from.
+              cp /release/baleia-opa-policy.tar.gz /policy/policy.tar.gz
+              echo "$(cat /release/baleia-opa-policy.tar.gz.sha256)  /policy/policy.tar.gz" | sha256sum -c - || { rm -f /policy/policy.tar.gz; exit 1; }
           volumeMounts:
             - { name: release, mountPath: /release }
             - { name: policy, mountPath: /policy }
@@ -231,9 +231,9 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              cd /release
-              echo "$(cat baleia-opa-policy.tar.gz.sha256)  baleia-opa-policy.tar.gz" | sha256sum -c -
-              cp baleia-opa-policy.tar.gz /policy/policy.tar.gz
+              # Verify the copy OPA will load, not the source it came from.
+              cp /release/baleia-opa-policy.tar.gz /policy/policy.tar.gz
+              echo "$(cat /release/baleia-opa-policy.tar.gz.sha256)  /policy/policy.tar.gz" | sha256sum -c - || { rm -f /policy/policy.tar.gz; exit 1; }
           volumeMounts:
             - { name: release, mountPath: /release }
             - { name: policy, mountPath: /policy }
@@ -326,9 +326,9 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              cd /release
-              echo "$(cat baleia-opa-policy.tar.gz.sha256)  baleia-opa-policy.tar.gz" | sha256sum -c -
-              cp baleia-opa-policy.tar.gz /policy/policy.tar.gz
+              # Verify the copy OPA will load, not the source it came from.
+              cp /release/baleia-opa-policy.tar.gz /policy/policy.tar.gz
+              echo "$(cat /release/baleia-opa-policy.tar.gz.sha256)  /policy/policy.tar.gz" | sha256sum -c - || { rm -f /policy/policy.tar.gz; exit 1; }
           volumeMounts:
             - { name: release, mountPath: /release }
             - { name: policy, mountPath: /policy }

@@ -25,7 +25,8 @@ func TestIntegrity_TamperedRegoStopsTheInitContainer(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The checksum the release published (of the untampered tarball).
-	sha := strings.TrimSpace(mustKubectl(t, "get", "configmap", "opa-policy-release", "-o", `jsonpath={.data.baleia-opa-policy\.tar\.gz\.sha256}`))
+	release := mustKubectl(t, "get", "deployment", "trino-opa", "-o", `jsonpath={.spec.template.spec.volumes[?(@.name=="release")].configMap.name}`)
+	sha := strings.TrimSpace(mustKubectl(t, "get", "configmap", release, "-o", `jsonpath={.data.baleia-opa-policy\.tar\.gz\.sha256}`))
 	if err := os.WriteFile(filepath.Join(dir, "baleia-opa-policy.tar.gz.sha256"), []byte(sha+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -48,9 +49,8 @@ spec:
       command: ["/bin/sh", "-ec"]
       args:
         - |
-          cd /release
-          echo "$(cat baleia-opa-policy.tar.gz.sha256)  baleia-opa-policy.tar.gz" | sha256sum -c -
-          cp baleia-opa-policy.tar.gz /policy/policy.tar.gz
+          cp /release/baleia-opa-policy.tar.gz /policy/policy.tar.gz
+          echo "$(cat /release/baleia-opa-policy.tar.gz.sha256)  /policy/policy.tar.gz" | sha256sum -c - || { rm -f /policy/policy.tar.gz; exit 1; }
       volumeMounts: [{name: release, mountPath: /release}, {name: policy, mountPath: /policy}]
   containers:
     - name: opa
@@ -106,16 +106,21 @@ func TestIntegrity_PolicyDigestIsReported(t *testing.T) {
 	}
 }
 
-// Q7. Every ConfigMap with Trino security configuration is immutable.
+// Q7. Every ConfigMap with Trino or OPA security configuration (Trino's
+// access control, OPA's configuration, the Rego release) is immutable.
 func TestIntegrity_SecurityConfigMapsAreImmutable(t *testing.T) {
 	out := mustKubectl(t, "get", "configmaps", "-o", `jsonpath={range .items[*]}{.metadata.name} {.immutable}{"\n"}{end}`)
-	found := false
+	found := map[string]bool{}
 	for line := range strings.Lines(out) {
 		fields := strings.Fields(line)
-		if len(fields) == 0 || !strings.HasPrefix(fields[0], "trino-security-") {
+		if len(fields) == 0 {
 			continue
 		}
-		found = true
+		prefix, ok := securityConfigMap(fields[0])
+		if !ok {
+			continue
+		}
+		found[prefix] = true
 		if len(fields) != 2 || fields[1] != "true" {
 			t.Errorf("%s is not immutable", fields[0])
 		}
@@ -125,9 +130,24 @@ func TestIntegrity_SecurityConfigMapsAreImmutable(t *testing.T) {
 			t.Errorf("patching %s: %v, want an immutable-field error", fields[0], err)
 		}
 	}
-	if !found {
-		t.Fatal("no trino-security ConfigMap")
+	for _, prefix := range securityConfigMaps {
+		if !found[prefix] {
+			t.Errorf("no %s* ConfigMap", prefix)
+		}
 	}
+}
+
+var securityConfigMaps = []string{"trino-security-", "opa-config-", "opa-policy-release-"}
+
+// securityConfigMap reports whether name is a content-named security
+// ConfigMap, and its prefix.
+func securityConfigMap(name string) (string, bool) {
+	for _, prefix := range securityConfigMaps {
+		if strings.HasPrefix(name, prefix) {
+			return prefix, true
+		}
+	}
+	return "", false
 }
 
 // Q7. OPA's data and policy API listens on the pod's loopback only: nothing

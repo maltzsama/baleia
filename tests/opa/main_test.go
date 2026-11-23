@@ -39,11 +39,11 @@ var harness struct {
 // with the harness key; the Rego comes from the verified release tarball.
 const opaConfigTemplate = `services:
   baleia:
-    url: http://bundles.opa-spike.svc.cluster.local/
+    url: http://bundles.opa-spike.svc.cluster.local/opa/
 bundles:
   baleia:
     service: baleia
-    resource: opa/bundles/baleia.tar.gz
+    resource: bundles/baleia.tar.gz
     persist: true
     polling: { min_delay_seconds: 1, max_delay_seconds: 2 }
     signing: { keyid: baleia }
@@ -85,10 +85,7 @@ func setUp(ctx context.Context) error {
 	if _, err := kubectl(ctx, nil, "apply", "-f", filepath.Join(dir, "namespace.yaml")); err != nil {
 		return err
 	}
-	if err := createHarness(ctx); err != nil {
-		return err
-	}
-	if _, err := kubectl(ctx, nil, "apply", "-k", dir); err != nil {
+	if err := createHarness(ctx, dir); err != nil {
 		return err
 	}
 	if err := waitRollout(ctx, "bundles"); err != nil {
@@ -112,8 +109,10 @@ func setUp(ctx context.Context) error {
 
 // createHarness generates the TLS certificate, the password file, the
 // internal shared secret, the bundle signing key and the Rego release
-// tarball, and stores them in the namespace.
-func createHarness(ctx context.Context) error {
+// tarball, stores them in the namespace and applies the harness in dir. The
+// OPA configuration and the Rego release go into immutable ConfigMaps named
+// by their content (ADR 0028), through an overlay of dir.
+func createHarness(ctx context.Context, dir string) error {
 	signingKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err
@@ -185,15 +184,36 @@ func createHarness(ctx context.Context) error {
 			"--from-literal=admin-password=" + passwords[adminUser],
 			"--from-literal=outsider-password=" + passwords[outsider],
 			"--from-literal=policy-digest=" + digest},
-		{"create", "configmap", "opa-policy-release",
-			"--from-file=baleia-opa-policy.tar.gz=" + files["tarball"],
-			"--from-file=baleia-opa-policy.tar.gz.sha256=" + files["sha"]},
-		{"create", "configmap", "opa-config", "--from-file=config.yaml=" + files["config"]},
 	}
 	for _, step := range steps {
 		if _, err := kubectl(ctx, nil, step...); err != nil {
 			return err
 		}
+	}
+	// Kustomize takes a base only by a relative path.
+	base, err := filepath.Rel(tmp, dir)
+	if err != nil {
+		return err
+	}
+	overlay := fmt.Sprintf(`apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: %s
+resources:
+  - %s
+generatorOptions:
+  immutable: true
+configMapGenerator:
+  - name: opa-config
+    files: [config.yaml]
+  - name: opa-policy-release
+    files: [baleia-opa-policy.tar.gz, baleia-opa-policy.tar.gz.sha256]
+`, namespace, base)
+	write("kustomization.yaml", []byte(overlay))
+	if writeErr != nil {
+		return writeErr
+	}
+	if _, err := kubectl(ctx, nil, "apply", "-k", tmp); err != nil {
+		return err
 	}
 	return setHarness(signingKey, certPEM, passwords, digest)
 }
