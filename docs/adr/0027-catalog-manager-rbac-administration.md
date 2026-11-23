@@ -176,9 +176,12 @@ They are exposed as `allowed_actions` on the connection (`manage_catalog_rbac`,
   that the token carries the claim and that Polaris accepts it, with the principal roles it maps.
   The mismatch is kept harmless instead: in this mode access comes from the principal roles in
   the token, never from the principal name (the internal authorizer grants to roles; with
-  `authorizer` `opa`, the Polaris policy decides on roles and the bundle, never on
+  `authorizer` `opa`, the Polaris policy decides on roles and the bundle, not on
   `actor.principal`), and the screens mark external-mode principal names as "from Baleia's
-  configuration, not verified with Polaris".
+  configuration, not verified with Polaris". The one name-based rule is a bootstrap exception:
+  Polaris's own `root` credential, which must also hold the `service_admin` principal role. The
+  identity provider must never issue `service_admin`, or a token named `root` would pass it; the
+  connection test fails when a user token carries that role.
 - Deployments where most users are local or LDAP, or with `user_identity` off, gain little from
   per-principal grants. The screens say so instead of hiding it.
 - Baleia now holds a powerful secret. Supplying it is the operator's choice. The narrowest
