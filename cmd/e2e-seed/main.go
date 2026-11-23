@@ -110,6 +110,9 @@ func main() {
 	if err := ensureV1Metric(ctx, q, contentSvc, member, catalog, binding); err != nil {
 		log.Fatalf("e2e-seed: v1 metric: %v", err)
 	}
+	if err := ensureBISemanticContent(ctx, q, contentSvc, admin, catalog, binding); err != nil {
+		log.Fatalf("e2e-seed: BI semantic content: %v", err)
+	}
 	if err := ensureMetadata(ctx, q, catalog); err != nil {
 		log.Fatalf("e2e-seed: metadata: %v", err)
 	}
