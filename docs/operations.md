@@ -804,13 +804,21 @@ rewritten URI carries a signature any replica can verify with the shared
 
 ### OpenMetadata through the BI gateway
 
-OpenMetadata's stock **Trino** connector is the supported integration path.
-Baleia does not implement an OpenMetadata connector and does not call the
-OpenMetadata REST API. Configure one OpenMetadata database service per Baleia
-workspace, with the service's catalog and schema set to the physical scope the
-workspace is allowed to discover. Semantic models, metrics and saved queries
-remain Baleia content; OpenMetadata only sees them when they are materialized
-as Trino-visible objects.
+OpenMetadata discovers Baleia through two connectors that share the workspace
+BI key, and Baleia never calls OpenMetadata:
+
+- OpenMetadata's stock **Trino** connector ingests the physical metadata:
+  catalogs, schemas, tables, columns and views.
+- The [`baleia-openmetadata`](https://github.com/maltzsama/baleia-openmetadata)
+  connector ingests the semantic catalog: semantic models as data models and
+  metrics as metrics, with lineage to the tables the Trino connector ingested.
+  It reads the [semantic catalog routes](#semantic-catalog-routes) of the
+  gateway.
+
+Configure one OpenMetadata database service per Baleia workspace, with the
+service's catalog and schema set to the physical scope the workspace is allowed
+to discover. Saved queries are workbench content and are not exposed to
+OpenMetadata.
 
 The service host must be the gateway's public TLS origin, including its port
 but not a `/v1` path. Use the workspace BI key as the Trino password and the
@@ -840,6 +848,35 @@ status, latency and the existing BI concurrency state; credentials are never
 logged. The BI key is returned only once by the authenticated key-creation
 response, while later Baleia API responses never return it and OpenMetadata
 tokens are never handled by Baleia.
+
+#### Semantic catalog routes
+
+The gateway listener serves the key's workspace semantic catalog, read-only
+([ADR 0030](adr/0030-semantic-catalog-through-the-bi-gateway.md)). The routes
+authenticate like a statement (HTTP Basic with the key owner's e-mail and the
+BI key) and honor the global and workspace BI switches:
+
+| Route | Response |
+|---|---|
+| `GET /baleia/v1/semantic` | `contract_version`, `workspace`, `models` and `metrics` counts |
+| `GET /baleia/v1/semantic/models?after=&limit=` | `items` (semantic models) and `next_after` |
+| `GET /baleia/v1/semantic/metrics?after=&limit=` | `items` (standalone metrics) and `next_after` |
+
+`limit` defaults to 100 and accepts 1 to 500; pass the previous page's
+`next_after` as `after` until it is absent. A model carries its columns (the
+visible dimensions with their logical types), its metrics with the SQL Baleia
+compiles for each, its source and `source_tables`. A metric carries its
+rendered SQL and `source_tables`. Source tables are named
+`catalog.schema.table` as the key's engine names them, which is how the Trino
+connector names them through the gateway, and only granted tables on that
+engine are listed. Content visible to the key owner is returned; content in
+spaces the owner cannot read is not. Each read is audited as
+`bi_gateway.semantic_read`; reads are not statements and do not appear in query
+history. `contract_version` changes only on an incompatible change.
+
+```sh
+curl -u "owner@example.com:$BI_KEY" "https://bi.example.com/baleia/v1/semantic/models?limit=100"
+```
 
 The tested compatibility matrix is Trino `484`, OpenMetadata `1.12.6` with
 its `1.12.6.4` ingestion image, and the pinned Baleia gateway in the repository

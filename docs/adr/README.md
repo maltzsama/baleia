@@ -26,7 +26,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0014](0014-workload-management.md) | Workload management: per-engine admission queues | Accepted |
 | [0015](0015-per-user-catalog-identity.md) | Per-user identity to the catalog manager | Accepted |
 | [0016](0016-access-layers-and-workspace-roles.md) | Three access layers and workspace roles | Accepted; layer 1 / grant flow superseded by 0018 |
-| [0017](0017-bi-gateway.md) | BI tools reach the engines only through Baleia (the BI gateway) | Accepted; amends 0001 |
+| [0017](0017-bi-gateway.md) | BI tools reach the engines only through Baleia (the BI gateway) | Accepted; amends 0001; extended by 0030 |
 | [0018](0018-workspace-catalog-scope.md) | Workspace-scoped catalog access | Proposed; supersedes 0016 layer 1, extends 0005 |
 | [0019](0019-sqlingo-editor-sql-intelligence.md) | sqlingo is the editor's SQL intelligence; the server keeps its own parser | Accepted |
 | [0020](0020-gorm-store.md) | GORM is the store ORM; no handwritten SQL survives in the data layer | Accepted; amended by 0024 (partitioning behind a PartitionManager seam) |
@@ -39,6 +39,7 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0027](0027-catalog-manager-rbac-administration.md) | Catalog-manager RBAC is administered through Baleia and owned by the manager | Proposed (amended by #994) |
 | [0028](0028-data-policies-opa-trino.md) | Row filters and column masks: authored in Baleia, decided by OPA, enforced by Trino | Accepted (spike #994); extends 0005 |
 | [0029](0029-connection-access-modes-determine-engine-and-catalog-lifecycle.md) | Connection access modes determine engine and catalog lifecycle | Proposed; builds on 0002, 0006, 0021; amends 0002, 0021 |
+| [0030](0030-semantic-catalog-through-the-bi-gateway.md) | External catalogs read the semantic catalog through the BI gateway | Accepted; extends 0017 |
 
 ## Owner decisions
 

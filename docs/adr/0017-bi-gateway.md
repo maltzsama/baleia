@@ -1,6 +1,6 @@
 # 0017. BI tools reach the engines only through Baleia (the BI gateway)
 
-- Status: Accepted. Amends [0001](0001-control-plane-only.md).
+- Status: Accepted. Amends [0001](0001-control-plane-only.md). Extended by [0030](0030-semantic-catalog-through-the-bi-gateway.md) (semantic catalog routes).
 - Date: 2026-11-05
 - Issues: #560 (BI files, removed in 0.6.2); design `DESIGN-catalog-scope.md` §6, §9.5
 
