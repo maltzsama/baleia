@@ -25,6 +25,7 @@ import (
 	"github.com/galileostudio/baleia/internal/execscope"
 	"github.com/galileostudio/baleia/internal/identity/bikeys"
 	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/galileostudio/baleia/internal/semanticcatalog"
 	"github.com/galileostudio/baleia/internal/workload"
 )
 
@@ -55,7 +56,10 @@ type Deps struct {
 	// PublicURL is the externally reachable base URL used to rewrite Trino
 	// URIs. Empty derives the scheme and host from each request.
 	PublicURL string
-	Logger    *slog.Logger
+	// Semantic serves the workspace semantic catalog (ADR 0030); nil leaves
+	// its routes unserved.
+	Semantic semanticcatalog.Reader
+	Logger   *slog.Logger
 }
 
 // Keys authenticates an HTTP Basic credential; *bikeys.Service implements it.
@@ -154,6 +158,8 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		g.follow(w, r)
+	case semanticRoute(r.URL.Path):
+		g.semantic(w, r)
 	case strings.HasPrefix(r.URL.Path, "/v1/query/"):
 		// infoUri points at the gateway, but the Trino web UI is never exposed.
 		http.NotFound(w, r)

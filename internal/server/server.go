@@ -144,6 +144,7 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 			CatalogCredentials: core.CatalogCredentials,
 			Dialect:            trinoDialect,
 			PublicURL:          cfg.BIGatewayURL,
+			Semantic:           h.BISemanticCatalog(cfg.PublicURL),
 			Logger:             core.Logger,
 		})
 		if err != nil {

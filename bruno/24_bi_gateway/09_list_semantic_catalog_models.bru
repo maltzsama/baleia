@@ -1,0 +1,31 @@
+meta {
+  name: List Semantic Catalog Models (gateway)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{bi_gateway_url}}/baleia/v1/semantic/models?limit=100
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{semantic_key_email}}
+  password: {{semantic_key_secret}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.contract_version: eq 1
+  res.body.items: isArray
+}
+
+tests {
+  test("models name their physical sources in the engine's catalog names", function () {
+    for (const model of res.getBody().items) {
+      expect(model.source_tables).to.be.an("array");
+      expect(model.columns).to.be.an("array");
+    }
+  });
+}

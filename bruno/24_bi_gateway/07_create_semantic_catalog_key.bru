@@ -1,0 +1,32 @@
+meta {
+  name: Create BI Key for the Semantic Catalog
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/workspaces/{{workspace_id}}/bi-keys
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "OpenMetadata",
+    "engine_id": "{{trino_engine_id}}"
+  }
+}
+
+vars:post-response {
+  semantic_key_id: res.body.id
+  semantic_key_secret: res.body.secret
+  semantic_key_email: res.body.owner_email
+}
+
+assert {
+  res.status: eq 201
+}
