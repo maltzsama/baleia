@@ -213,7 +213,10 @@ supports two ways of deciding it, per Polaris connection:
   masked e-mails through `$files`. User identities are denied those for policied tables (and
   `table_changes` in a catalog with policies). `$history`, `$refs`, `$snapshots`, `$properties`
   and `$metadata_log_entries` stay readable, so time travel works; `$snapshots` reveals only the
-  total row count. Trusted identities keep them all for table health and maintenance.
+  total row count. Trusted identities keep them all for table health and maintenance. Trino's
+  file rules allow only built-in functions unless they list others, so with Baleia's default
+  rules `table_changes` is already refused to everyone; the OPA rule holds when an operator's own
+  rules open connector functions.
 - **Filters and masks do not authorize writes.** Writes stay with the guard (read-only sessions)
   and the catalog manager.
 
