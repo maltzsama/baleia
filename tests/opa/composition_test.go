@@ -5,6 +5,7 @@ package opa
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +59,14 @@ func TestComposition_GuardGuaranteesHoldWithOPA(t *testing.T) {
 				outcomes[variant] = append(outcomes[variant], fmt.Sprintf("%s=%t", tc.name, allowed))
 				if allowed != tc.allowed {
 					t.Errorf("%s: allowed=%t (%v), want %t", tc.sql, allowed, res.err, tc.allowed)
+				}
+				// A denial must come from access control, not from an object
+				// that a broken earlier run left behind.
+				if !tc.allowed && res.err != nil && res.err.ErrorName != "PERMISSION_DENIED" {
+					t.Errorf("%s: %v, want PERMISSION_DENIED", tc.sql, res.err)
+				}
+				if !tc.allowed && allowed && strings.HasPrefix(tc.sql, "CREATE TABLE") {
+					c.query(t, admin, "DROP TABLE IF EXISTS memory.default.q1_ro")
 				}
 			})
 		}

@@ -343,9 +343,10 @@ func publish(t testing.TB, b *dataBundle, deployments ...string) {
 type opaStatus struct {
 	Result struct {
 		Bundles map[string]struct {
-			ActiveRevision string `json:"active_revision"`
-			Code           string `json:"code"`
-			Message        string `json:"message"`
+			ActiveRevision string    `json:"active_revision"`
+			Code           string    `json:"code"`
+			Message        string    `json:"message"`
+			LastRequest    time.Time `json:"last_request"`
 			Errors         []struct {
 				Message string `json:"message"`
 			} `json:"errors"`

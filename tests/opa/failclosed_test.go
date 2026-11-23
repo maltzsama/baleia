@@ -28,6 +28,7 @@ type bundleState struct {
 	ActiveRevision string
 	Code           string
 	Message        string
+	LastRequest    time.Time
 }
 
 func bundleStatus(t testing.TB, addr string) (bundleState, error) {
@@ -40,7 +41,7 @@ func bundleStatus(t testing.TB, addr string) (bundleState, error) {
 	for _, e := range b.Errors {
 		msg += "; " + e.Message
 	}
-	return bundleState{ActiveRevision: b.ActiveRevision, Code: b.Code, Message: msg}, nil
+	return bundleState{ActiveRevision: b.ActiveRevision, Code: b.Code, Message: msg, LastRequest: b.LastRequest}, nil
 }
 
 // serviceEndpoints counts the ready addresses behind a Service.
@@ -112,13 +113,16 @@ func TestFailClosed_BundleLifecycle(t *testing.T) {
 				}
 			}
 			serve(t, tarball)
-			// OPA polls every 1-2s; let it try this bundle before reading the
-			// status, which may still carry the previous case's error.
-			time.Sleep(5 * time.Second)
+			// The status keeps the previous case's error until OPA polls
+			// again: read only a report of a request made after serve.
+			served := time.Now()
 			err := eventually(t.Context(), time.Minute, func() error {
 				st, err := bundleStatus(t, addr)
 				if err != nil {
 					return err
+				}
+				if !st.LastRequest.After(served) {
+					return errors.New("no request since the bundle was served")
 				}
 				if st.Code == "" {
 					return errors.New("no bundle error reported yet")
@@ -180,8 +184,14 @@ func TestFailClosed_BundleLifecycle(t *testing.T) {
 		err = eventually(t.Context(), 4*time.Minute, func() error {
 			// A forward opened before Trino listens dies; open one per try.
 			direct = connect(t, "pod/"+pod)
-			_, err := direct.run(t.Context(), admin, "SELECT 1")
-			return err
+			res, err := direct.run(t.Context(), admin, "SELECT 1")
+			if err != nil {
+				return err
+			}
+			if res.err != nil {
+				return res.err
+			}
+			return nil
 		})
 		if err != nil {
 			t.Fatalf("trino did not start: %v", err)

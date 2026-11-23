@@ -51,8 +51,11 @@ func TestViews_DefinerAndInvoker(t *testing.T) {
 			})
 			t.Run("invoker view applies the caller's policy", func(t *testing.T) {
 				res, err := read("v_invoker_user")
-				if err != nil || res.err != nil {
-					t.Fatalf("%v %v", err, res.err)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if res.err != nil {
+					t.Fatal(res.err)
 				}
 				expected := []string{"1|BR|ana@example.com", "2|US|bob@example.com", "3|BR|cid@example.com", "4|EU|dan@example.com"}
 				if variant == "trino-opa" {
@@ -66,8 +69,11 @@ func TestViews_DefinerAndInvoker(t *testing.T) {
 				// Why publishing a policy must refuse trusted-owned DEFINER views
 				// over a policied table (handover decision 5).
 				res, err := read("v_definer_admin")
-				if err != nil || res.err != nil {
-					t.Fatalf("%v %v", err, res.err)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if res.err != nil {
+					t.Fatal(res.err)
 				}
 				expected := []string{"1|BR|ana@example.com", "2|US|bob@example.com", "3|BR|cid@example.com", "4|EU|dan@example.com"}
 				if got := res.strings(); !slices.Equal(got, expected) {
