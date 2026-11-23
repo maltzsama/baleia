@@ -1,14 +1,24 @@
 # OpenMetadata through the Baleia BI gateway
 
-This harness validates the supported integration path from issue #1122:
-OpenMetadata's stock Trino connector connects to a workspace-scoped Baleia BI
-gateway. It does not add an OpenMetadata connector to Baleia and it does not
-emit OpenLineage events.
+This harness validates how OpenMetadata discovers Baleia (#1122, #1135):
 
-The harness pins OpenMetadata `1.12.6` and the official quickstart compose file
-by SHA-256. The ingestion image and server use the same pinned release, as
-required by OpenMetadata. The release can be overridden for a deliberate
-version-matrix run, together with its compose checksum.
+- OpenMetadata's stock **Trino** connector ingests the seeded physical tables
+  through a workspace-scoped Baleia BI gateway, with the workspace BI key.
+- The gateway's **semantic catalog routes**
+  ([ADR 0030](../../docs/adr/0030-semantic-catalog-through-the-bi-gateway.md))
+  return the seeded model and metric with the same key, and every physical
+  table they name is a table OpenMetadata ingested. That name match is what the
+  [`baleia-openmetadata`](https://github.com/maltzsama/baleia-openmetadata)
+  connector relies on for lineage. Running that connector here is #1137.
+
+Baleia never calls OpenMetadata and stores no OpenMetadata credential.
+
+The harness supports OpenMetadata **2.0.9** and **2.1.0**, each pinned by the
+SHA-256 of its official quickstart compose file. The ingestion image and the
+server come from the same release, as OpenMetadata requires. `make
+e2e-openmetadata` runs every release in `OPENMETADATA_VERSIONS` (default
+`2.0.9 2.1.0`) one after the other; set `OPENMETADATA_VERSION` and
+`OPENMETADATA_COMPOSE_SHA256` to run the script against another release.
 
 ## Run
 
@@ -16,8 +26,7 @@ The Baleia minikube environment must be running and seeded first. The normal
 setup is:
 
 ```sh
-make e2e
-# Optional, manual or scheduled integration validation:
+make e2e            # or: make k8s-up && make e2e-seed
 make e2e-openmetadata
 make e2e-down
 ```
@@ -28,14 +37,15 @@ using another path.
 
 `make e2e-openmetadata` is intentionally not called by `make e2e` or the
 ordinary PR CI path. The OpenMetadata quickstart is a heavyweight external
-integration dependency, so run this target manually or from a dedicated
-nightly/scheduled integration job.
+integration dependency, so the target runs manually and in the nightly
+`openmetadata-e2e` workflow, one release per runner, which opens a `Nightly
+failure` issue when a scheduled run fails.
 
 The script starts and removes a temporary OpenMetadata quickstart, forwards
 the Baleia BI gateway, logs in with the quickstart's default test admin, runs
 the stock `metadata ingest` command, asserts the service and both tables through
-the OpenMetadata API, and removes all OpenMetadata containers and volumes on
-exit. The local gateway hop is HTTP only inside the test; a deployed
+the OpenMetadata API, reads the semantic catalog routes with the BI key, and
+removes all OpenMetadata containers and volumes on exit. The local gateway hop is HTTP only inside the test; a deployed
 integration must use TLS because the BI key is a password credential. The
 OpenMetadata server binds its host ports `18585`/`18586` to loopback by default
 so an existing
@@ -62,7 +72,10 @@ OPENMETADATA_VIEW_NAME=orders_view \
 make e2e-openmetadata
 ```
 
-The selected fixture schema must also contain the physical `orders` and
+The semantic catalog checks need the seeded `e2e_tpch.tiny` schema, so they
+are skipped, with a message, when `OPENMETADATA_CATALOG` or
+`OPENMETADATA_SCHEMA` selects another one. The selected fixture schema must
+also contain the physical `orders` and
 `customer` tables, with columns, in addition to `orders_view`; the harness
 checks those two tables on every run. It then requires the OpenMetadata entity
 to be a view and to contain a non-empty view definition. This is intentionally
