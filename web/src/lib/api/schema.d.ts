@@ -6650,7 +6650,7 @@ export interface components {
             data_policies: boolean;
             /** @enum {string} */
             health: "disabled" | "healthy" | "unhealthy";
-            /** @description Why the engine is unhealthy: no_report, report_stale, bundle_error, no_active_revision (no data bundle activated), lease_expired (the active revision's lease passed, so OPA denies every user) or data_policy_digest_mismatch */
+            /** @description Why the engine is unhealthy: no_report, report_stale, bundle_error, no_active_revision (no data bundle activated), lease_expired (the active revision's lease passed, so OPA denies every user identity; the trusted admin and service identities keep access) or data_policy_digest_mismatch */
             reason?: string | null;
             /** @description The data revision the engine's OPA reports active */
             active_revision?: string | null;
