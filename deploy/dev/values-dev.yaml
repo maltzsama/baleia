@@ -1,5 +1,6 @@
 # Dev values for a minikube-local deployment of the baleia chart.
-# The image is built into minikube with `minikube image build -t baleia:dev .`.
+# The image is built into minikube with
+# `minikube -p baleia image build -t baleia:dev --build-opt=network=host .`.
 image:
   repository: baleia
   tag: dev
