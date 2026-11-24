@@ -104,3 +104,24 @@ type MetadataReader interface {
 	LoadTable(ctx context.Context, t TableRef) (*TableMeta, error)
 	Close() error
 }
+
+// View is a Trino view stored by a catalog manager: its SQL, the catalog and
+// schema unqualified names in it resolve against, and the owner it runs as.
+// Owner is empty for a SECURITY INVOKER view, which runs as its caller.
+type View struct {
+	Namespace      Namespace
+	Name           string
+	SQL            string
+	DefaultCatalog string
+	DefaultSchema  Namespace
+	Owner          string
+}
+
+// ViewReader is implemented by metadata readers that can list and load the
+// views Trino stores in the catalog manager, with their owner. Data policies
+// need it to find SECURITY DEFINER views over a policied table (ADR 0028).
+type ViewReader interface {
+	// ListViews returns the names of a namespace's views.
+	ListViews(ctx context.Context, catalog string, ns Namespace) ([]string, error)
+	LoadView(ctx context.Context, catalog string, ns Namespace, name string) (View, error)
+}

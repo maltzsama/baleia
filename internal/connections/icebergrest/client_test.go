@@ -144,3 +144,76 @@ func TestListTables_Classifier(t *testing.T) {
 		t.Fatalf("ListTables with a failing classifier = %+v, %v; want both unmarked", tables, err)
 	}
 }
+
+// TestViews: Trino's Iceberg REST views list across pages and load with their
+// Trino SQL, default namespace and run-as owner (DEFINER); an INVOKER view has
+// no owner, and a server without the view endpoints has no views.
+func TestViews(t *testing.T) {
+	t.Parallel()
+	view := func(owner string) map[string]any {
+		props := map[string]any{}
+		if owner != "" {
+			props["trino.run-as-owner"] = owner
+		}
+		return map[string]any{"metadata": map[string]any{
+			"current-version-id": 2,
+			"properties":         props,
+			"versions": []map[string]any{
+				{"version-id": 1, "representations": []map[string]any{{"type": "sql", "sql": "SELECT 1", "dialect": "trino"}}},
+				{"version-id": 2, "default-catalog": "lake", "default-namespace": []string{"sales"},
+					"representations": []map[string]any{
+						{"type": "sql", "sql": "SELECT * FROM spark_only", "dialect": "spark"},
+						{"type": "sql", "sql": "SELECT * FROM orders", "dialect": "trino"},
+					}},
+			},
+		}}
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/config":
+			_ = json.NewEncoder(w).Encode(map[string]any{})
+		case "/v1/namespaces/sales/views":
+			if r.URL.Query().Get("pageToken") == "" {
+				_ = json.NewEncoder(w).Encode(map[string]any{"identifiers": []map[string]any{{"name": "v_definer"}}, "next-page-token": "p2"})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"identifiers": []map[string]any{{"name": "v_invoker"}}})
+		case "/v1/namespaces/sales/views/v_definer":
+			_ = json.NewEncoder(w).Encode(view("baleia_admin"))
+		case "/v1/namespaces/sales/views/v_invoker":
+			_ = json.NewEncoder(w).Encode(view(""))
+		case "/v1/namespaces/legacy/views":
+			w.WriteHeader(http.StatusNotImplemented)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	list := func(context.Context) ([]connections.CatalogRef, error) { return nil, nil }
+	same := func(c string) string { return c }
+	r := New(srv.URL, Auth{}, nil, srv.Client()).ReaderWithCatalogs(list, same)
+	vr, ok := r.(connections.ViewReader)
+	if !ok {
+		t.Fatal("the Iceberg REST reader does not read views")
+	}
+	ctx := context.Background()
+	names, err := vr.ListViews(ctx, "c", connections.Namespace{"sales"})
+	if err != nil || len(names) != 2 || names[0] != "v_definer" || names[1] != "v_invoker" {
+		t.Fatalf("ListViews = %v, %v", names, err)
+	}
+	definer, err := vr.LoadView(ctx, "c", connections.Namespace{"sales"}, "v_definer")
+	if err != nil || definer.Owner != "baleia_admin" || definer.SQL != "SELECT * FROM orders" ||
+		definer.DefaultCatalog != "lake" || len(definer.DefaultSchema) != 1 || definer.DefaultSchema[0] != "sales" {
+		t.Fatalf("LoadView DEFINER = %+v, %v", definer, err)
+	}
+	invoker, err := vr.LoadView(ctx, "c", connections.Namespace{"sales"}, "v_invoker")
+	if err != nil || invoker.Owner != "" {
+		t.Fatalf("LoadView INVOKER = %+v, %v", invoker, err)
+	}
+	if names, err := vr.ListViews(ctx, "c", connections.Namespace{"legacy"}); err != nil || len(names) != 0 {
+		t.Fatalf("ListViews without view endpoints = %v, %v", names, err)
+	}
+	if names, err := vr.ListViews(ctx, "c", connections.Namespace{"gone"}); err != nil || len(names) != 0 {
+		t.Fatalf("ListViews of a missing namespace = %v, %v", names, err)
+	}
+}
