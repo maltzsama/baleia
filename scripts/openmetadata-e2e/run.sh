@@ -34,6 +34,14 @@ OPENMETADATA_GATEWAY_PORT="${OPENMETADATA_GATEWAY_PORT:-18443}"
 OPENMETADATA_GATEWAY_URL="${OPENMETADATA_GATEWAY_URL:-https://127.0.0.1:8444}"
 OPENMETADATA_K8S_NAMESPACE="${OPENMETADATA_K8S_NAMESPACE:-baleia-dev}"
 OPENMETADATA_KEY_FILE="${OPENMETADATA_KEY_FILE:-${BI_E2E_KEY_FILE:-/tmp/baleia-e2e-bi-key.secret}}"
+# The Baleia connector (#1137): the pip requirement installed into the
+# ingestion image, a released version by default or a local wheel path; "skip"
+# leaves the connector out of the run.
+BALEIA_OPENMETADATA="${BALEIA_OPENMETADATA:-baleia-openmetadata==0.1.*}"
+BALEIA_OPENMETADATA_SERVICE="${BALEIA_OPENMETADATA_SERVICE:-baleia-semantic}"
+BALEIA_API_URL="${BALEIA_API_URL:-http://127.0.0.1:8080/api/v1}"
+BALEIA_ADMIN_EMAIL="${BALEIA_ADMIN_EMAIL:-admin@e2e.test}"
+BALEIA_ADMIN_PASSWORD="${BALEIA_ADMIN_PASSWORD:-${E2E_PASSWORD:-e2e-password}}"
 
 view_filter_yaml=""
 if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
@@ -65,10 +73,19 @@ gateway_log="$workdir/gateway-port-forward.log"
 tls_proxy_log="$workdir/gateway-tls-proxy.log"
 tls_proxy="$workdir/gateway-tls-proxy"
 gateway_pid=""
+connector_image=""
+throwaway_model_url=""
+baleia_token=""
 tls_proxy_pid=""
 compose_args=(-p "$OPENMETADATA_PROJECT" -f "$compose" -f "$compose_override")
 
 cleanup() {
+  if [[ -n "$throwaway_model_url" && -n "$baleia_token" ]]; then
+    curl -fsS --max-time 10 -X DELETE -H "Authorization: Bearer $baleia_token" "$throwaway_model_url" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$connector_image" ]]; then
+    docker image rm -f "$connector_image" >/dev/null 2>&1 || true
+  fi
   if [[ -n "$gateway_pid" ]]; then
     kill "$gateway_pid" 2>/dev/null || true
     wait "$gateway_pid" 2>/dev/null || true
@@ -332,6 +349,147 @@ else
   echo "openmetadata-e2e: semantic catalog checks skipped: they need the seeded e2e_tpch.tiny schema"
 fi
 
+# The Baleia connector (#1137): OpenMetadata's ingestion image with
+# baleia-openmetadata installed reads the semantic catalog routes with the same
+# BI key and creates data models, metrics and lineage to the tables the Trino
+# connector just ingested. A throwaway model then proves soft deletion.
+connector_checked=false
+if [[ "$semantic_checked" == true && "$BALEIA_OPENMETADATA" != skip ]]; then
+  ingestion_image="$(grep -oE 'image: *docker\.getcollate\.io/openmetadata/ingestion:[^ ]+' "$compose" | head -1 | sed 's/image: *//')"
+  connector_context="$workdir/connector-image"
+  mkdir -p "$connector_context"
+  requirement="$BALEIA_OPENMETADATA"
+  copy_wheel=""
+  if [[ -f "$BALEIA_OPENMETADATA" ]]; then
+    cp "$BALEIA_OPENMETADATA" "$connector_context/"
+    requirement="/tmp/$(basename "$BALEIA_OPENMETADATA")"
+    copy_wheel="COPY $(basename "$BALEIA_OPENMETADATA") $requirement"
+  fi
+  cat >"$connector_context/Dockerfile" <<DOCKERFILE
+FROM $ingestion_image
+USER airflow
+$copy_wheel
+RUN pip install --no-cache-dir "$requirement"
+DOCKERFILE
+  connector_image="baleia-om-e2e-connector:${OPENMETADATA_VERSION}"
+  echo "openmetadata-e2e: building $ingestion_image with $BALEIA_OPENMETADATA"
+  docker build -q -t "$connector_image" "$connector_context" >/dev/null
+
+  connector_workflow="$workdir/baleia-workflow.yml"
+  # The connector refuses a plain http gateway unless told it is internal.
+  allow_http_yaml=""
+  if [[ "$OPENMETADATA_GATEWAY_URL" == http://* ]]; then
+    allow_http_yaml='        allowHttp: "true"'
+  fi
+  # A slug unique per run: a model left by an interrupted run never collides.
+  throwaway_slug="e2e_bi_throwaway_$(od -An -N4 -tx4 /dev/urandom | tr -d ' \n')"
+  cat >"$connector_workflow" <<EOF2
+source:
+  type: customdashboard
+  serviceName: $BALEIA_OPENMETADATA_SERVICE
+  serviceConnection:
+    config:
+      type: CustomDashboard
+      sourcePythonClass: baleia_openmetadata.source.BaleiaSource
+      connectionOptions:
+        baleiaUrl: $OPENMETADATA_GATEWAY_URL
+        biKeyEmail: $OPENMETADATA_USER
+        trinoServiceNames: $OPENMETADATA_SERVICE
+        verifyTls: "false"
+$allow_http_yaml
+  sourceConfig:
+    config:
+      type: DashboardMetadata
+sink:
+  type: metadata-rest
+  config: {}
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: http://127.0.0.1:${OPENMETADATA_SERVER_PORT}/api
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: $openmetadata_token
+EOF2
+  run_connector() {
+    # The key reaches the container through the environment, never the
+    # workflow file, so OpenMetadata never stores it.
+    BALEIA_BI_KEY="$(<"$OPENMETADATA_KEY_FILE")" docker run --rm --network host \
+      -e BALEIA_BI_KEY --entrypoint metadata \
+      -v "$connector_workflow:/tmp/baleia-workflow.yml:ro" \
+      "$connector_image" ingest -c /tmp/baleia-workflow.yml
+  }
+  om_get() {
+    curl -fsS -H "Authorization: Bearer $openmetadata_token" "$api_base$1"
+  }
+  table_fqn="$OPENMETADATA_SERVICE.$OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA.orders"
+  model_fqn="$BALEIA_OPENMETADATA_SERVICE.model.e2e_bi_orders"
+
+  # A throwaway model, created through Baleia's API, to delete later.
+  baleia_token="$(curl -fsS -H 'Content-Type: application/json' \
+    -d "$(jq -n --arg e "$BALEIA_ADMIN_EMAIL" --arg p "$BALEIA_ADMIN_PASSWORD" '{email:$e,password:$p}')" \
+    "$BALEIA_API_URL/auth/login" | jq -er '.token')"
+  baleia_workspace="$(curl -fsS -H "Authorization: Bearer $baleia_token" "$BALEIA_API_URL/auth/me" | jq -er '.personal_workspace_id')"
+  catalog_id="$(curl -fsS -H "Authorization: Bearer $baleia_token" "$BALEIA_API_URL/workspaces/$baleia_workspace/targets" \
+    | jq -er --arg c "$OPENMETADATA_CATALOG" '[.[] | select(.engine_catalog_name == $c)][0].catalog_id')"
+  throwaway="$(curl -fsS -H "Authorization: Bearer $baleia_token" -H 'Content-Type: application/json' \
+    -d "$(jq -n --arg c "$catalog_id" --arg s "$OPENMETADATA_SCHEMA" --arg slug "$throwaway_slug" '{slug:$slug,label:"E2E BI throwaway",catalog_id:$c,
+          definition:{source:{kind:"table",namespace:[$s],table:"customer"},primary_key:["custkey"],dimensions:[{name:"custkey",type:"int64"}]}}')" \
+    "$BALEIA_API_URL/workspaces/$baleia_workspace/semantic/models")"
+  throwaway_model_url="$BALEIA_API_URL/workspaces/$baleia_workspace/semantic/models/$(jq -er '.id' <<<"$throwaway")"
+
+  echo "openmetadata-e2e: running the Baleia connector"
+  run_connector
+  om_get "/services/dashboardServices/name/$BALEIA_OPENMETADATA_SERVICE" >"$workdir/connector-service.json"
+  jq -e '.serviceType == "CustomDashboard" and (.connection.config.connectionOptions | has("biKey") | not)' \
+    "$workdir/connector-service.json" >/dev/null || {
+    echo "openmetadata-e2e: the Baleia dashboard service is missing or stores the BI key" >&2
+    exit 1
+  }
+  om_get "/dashboard/datamodels/name/$model_fqn?fields=columns" >"$workdir/connector-model.json"
+  jq -e '(.columns | map(.name + ":" + .dataType)) as $c
+    | ($c | index("order_status:STRING")) != null and ($c | index("order_count:NUMBER")) != null' \
+    "$workdir/connector-model.json" >/dev/null || {
+    echo "openmetadata-e2e: data model $model_fqn is missing or has the wrong columns" >&2
+    jq '{name, columns: [.columns[]? | {name, dataType}]}' "$workdir/connector-model.json" >&2 || true
+    exit 1
+  }
+  for metric in "${BALEIA_OPENMETADATA_SERVICE}__e2e_bi_order_count" "${BALEIA_OPENMETADATA_SERVICE}__e2e_bi_orders__order_count"; do
+    om_get "/metrics/name/$metric" | jq -e '(.metricExpression.code // "") | test("COUNT")' >/dev/null || {
+      echo "openmetadata-e2e: metric $metric is missing or has no SQL expression" >&2
+      exit 1
+    }
+  done
+  om_get "/lineage/table/name/$(printf '%s' "$table_fqn" | jq -sRr @uri)?upstreamDepth=0&downstreamDepth=1" \
+    >"$workdir/connector-lineage.json"
+  jq -e --arg m "$model_fqn" --arg x "${BALEIA_OPENMETADATA_SERVICE}__e2e_bi_order_count" \
+    '[.nodes[]?.fullyQualifiedName] as $n | ($n | index($m)) != null and ($n | index($x)) != null' \
+    "$workdir/connector-lineage.json" >/dev/null || {
+    echo "openmetadata-e2e: no lineage from $table_fqn to the Baleia data model and metric" >&2
+    jq '[.nodes[]?.fullyQualifiedName]' "$workdir/connector-lineage.json" >&2 || true
+    exit 1
+  }
+  om_get "/dashboard/datamodels/name/$BALEIA_OPENMETADATA_SERVICE.model.$throwaway_slug" >/dev/null || {
+    echo "openmetadata-e2e: the throwaway model was not ingested" >&2
+    exit 1
+  }
+
+  echo "openmetadata-e2e: deleting the throwaway model in Baleia and running the connector again"
+  curl -fsS -X DELETE -H "Authorization: Bearer $baleia_token" "$throwaway_model_url" >/dev/null
+  throwaway_model_url=""
+  run_connector
+  om_get "/dashboard/datamodels/name/$BALEIA_OPENMETADATA_SERVICE.model.$throwaway_slug?include=deleted" \
+    | jq -e '.deleted == true' >/dev/null || {
+    echo "openmetadata-e2e: the deleted Baleia model was not soft-deleted in OpenMetadata" >&2
+    exit 1
+  }
+  om_get "/dashboard/datamodels/name/$model_fqn" | jq -e '.deleted != true' >/dev/null || {
+    echo "openmetadata-e2e: the second run deleted a model Baleia still has" >&2
+    exit 1
+  }
+  connector_checked=true
+fi
+
 echo "openmetadata-e2e: OpenMetadata $OPENMETADATA_VERSION ingested $OPENMETADATA_CATALOG.$OPENMETADATA_SCHEMA through the Baleia BI gateway"
 echo "openmetadata-e2e: physical table columns were present in OpenMetadata"
 if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
@@ -339,5 +497,8 @@ if [[ -n "$OPENMETADATA_VIEW_NAME" ]]; then
 fi
 if [[ "$semantic_checked" == true ]]; then
   echo "openmetadata-e2e: the semantic catalog names its source tables as OpenMetadata ingested them"
+fi
+if [[ "$connector_checked" == true ]]; then
+  echo "openmetadata-e2e: baleia-openmetadata ($BALEIA_OPENMETADATA) created the data model, metrics and lineage, and soft-deleted a removed model"
 fi
 echo "openmetadata-e2e: metadata scans are recorded by Baleia as origin=bi; inspect query history separately when validating noise policy"
