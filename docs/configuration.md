@@ -93,6 +93,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_TRINO_CA_FILE` | — | PEM bundle trusted for the coordinator's certificate, besides the system roots (a private CA or a self-signed certificate). With the Helm chart, mount the bundle with `extraVolumes` and `extraVolumeMounts` |
 | `BALEIA_TRINO_SERVICE_USER` | `baleia` | Worker fallback identity for executions |
 | `BALEIA_TRINO_USER_IDENTITY` | `uuid` | Map Baleia users to Trino users: `uuid`→`u_<uuid>` or `email` |
+| `BALEIA_DATA_POLICIES` | `off` | Row filters and column masks ([ADR 0028](adr/0028-data-policies-opa-trino.md)): `off` or `opa`. Policies apply only to catalogs bound to engines whose `data_policies` flag is on; binding a catalog that has policies to an engine without it is refused (`data_policies_unenforced`) |
 | `BALEIA_AGENTS_ENABLED` | `false` | Mount the agent management API and `/mcp` ([mcp.md](mcp.md)). Off by default |
 | `BALEIA_AGENT_TOKEN_DEFAULT_TTL` | `720h` | Default lifetime of an agent token when `expires_in_days` is omitted |
 | `BALEIA_AGENT_TOKEN_MAX_TTL` | `2160h` | Maximum accepted agent-token lifetime (90 days) |
