@@ -145,10 +145,29 @@ func (r *DataPolicies) CreateRevision(ctx context.Context, rev datapolicy.Revisi
 
 // PublishRevision stores a revision under the next number and moves the
 // published pointer to it, in one transaction: a replica never serves a
-// pointer to a revision that is not stored.
-func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revision) (datapolicy.Revision, error) {
+// pointer to a revision that is not stored. The pointer must still name base
+// (uuid.Nil: nothing published yet), read under a row lock, or the call fails
+// with datapolicy.ErrVersionConflict: two publishes built on the same revision
+// cannot both land, so neither loses the other's change.
+func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revision, base uuid.UUID) (datapolicy.Revision, error) {
 	var out datapolicy.Revision
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var pointers []model.DataPolicyPointer
+		if err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+			Where("id = ?", true).Find(&pointers).Error; err != nil {
+			return err
+		}
+		current := ""
+		if len(pointers) > 0 {
+			current = string(pointers[0].RevisionID)
+		}
+		want := ""
+		if base != uuid.Nil {
+			want = base.String()
+		}
+		if current != want {
+			return datapolicy.ErrVersionConflict
+		}
 		created, err := createRevision(tx, rev)
 		if err != nil {
 			return err

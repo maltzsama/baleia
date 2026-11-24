@@ -357,7 +357,7 @@ func TestDataPolicies_PublishMovesThePointer(t *testing.T) {
 		t.Fatalf("PublishedRevision before any publish: %v, want ErrNotFound", err)
 	}
 	lease := time.Now().Add(time.Hour)
-	first, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{"catalogs":{}}`), lease, &author))
+	first, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{"catalogs":{}}`), lease, &author), uuid.Nil)
 	if err != nil {
 		t.Fatalf("PublishRevision: %v", err)
 	}
@@ -368,9 +368,16 @@ func TestDataPolicies_PublishMovesThePointer(t *testing.T) {
 	if _, err := r.CreateRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{}`), lease, nil)); err != nil {
 		t.Fatal(err)
 	}
-	second, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonReissue, first.Content, lease.Add(time.Hour), nil))
+	second, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonReissue, first.Content, lease.Add(time.Hour), nil), first.ID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// A publish built on a revision that is no longer published is refused.
+	if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, first.Content, lease, nil), first.ID); !errors.Is(err, datapolicy.ErrVersionConflict) {
+		t.Fatalf("a publish over a stale base: %v, want ErrVersionConflict", err)
+	}
+	if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, first.Content, lease, nil), uuid.Nil); !errors.Is(err, datapolicy.ErrVersionConflict) {
+		t.Fatalf("a first publish when one exists: %v, want ErrVersionConflict", err)
 	}
 	got, err := r.PublishedRevision(ctx)
 	if err != nil || got.ID != second.ID || got.Number != 3 {
