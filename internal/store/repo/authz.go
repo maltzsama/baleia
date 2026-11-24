@@ -84,6 +84,7 @@ func (r *Repo) GetEngineByID(ctx context.Context, id db.UUID) (db.Engine, error)
 		CostThresholdBytes:         row.CostThresholdBytes,
 		ExternalUrl:                row.ExternalURL,
 		TrinoResourceGroupsEnabled: row.TrinoResourceGroupsEnabled,
+		DataPolicies:               row.DataPolicies,
 	}, nil
 }
 

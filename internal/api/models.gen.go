@@ -546,6 +546,8 @@ const (
 	ErrorCodeCredentialsUnreadable     ErrorCode = "credentials_unreadable"
 	ErrorCodeCustomSqlForbidden        ErrorCode = "custom_sql_forbidden"
 	ErrorCodeCustomSqlRequiresReadOnly ErrorCode = "custom_sql_requires_read_only"
+	ErrorCodeDataPoliciesUnenforced    ErrorCode = "data_policies_unenforced"
+	ErrorCodeDataPolicyInvalid         ErrorCode = "data_policy_invalid"
 	ErrorCodeDestinationNotEligible    ErrorCode = "destination_not_eligible"
 	ErrorCodeDropFailed                ErrorCode = "drop_failed"
 	ErrorCodeEncryptionFailed          ErrorCode = "encryption_failed"
@@ -2867,6 +2869,9 @@ type Engine struct {
 
 	// CredentialsReadOnly Copied from the connection: its credentials only allow reads
 	CredentialsReadOnly *bool `json:"credentials_read_only,omitempty"`
+
+	// DataPolicies The engine runs the OPA access control with Baleia's Rego, so catalogs bound to it may carry row filters and column masks (ADR 0028)
+	DataPolicies bool `json:"data_policies"`
 
 	// Dialect How to write SQL for it; keyword and function lists are at GET /dialects/{name}
 	Dialect *EngineDialect `json:"dialect"`
@@ -5260,7 +5265,10 @@ type UpdateEngineRequest struct {
 	ClearCostThreshold *bool  `json:"clear_cost_threshold,omitempty"`
 	CostRoutingEnabled *bool  `json:"cost_routing_enabled,omitempty"`
 	CostThresholdBytes *int64 `json:"cost_threshold_bytes"`
-	Enabled            *bool  `json:"enabled,omitempty"`
+
+	// DataPolicies State that the engine enforces data policies (ADR 0028). Turning it off is refused with 422 data_policies_unenforced while the engine has a binding of a catalog that carries data policies
+	DataPolicies *bool `json:"data_policies,omitempty"`
+	Enabled      *bool `json:"enabled,omitempty"`
 }
 
 // UpdateFolderRequest defines model for UpdateFolderRequest.

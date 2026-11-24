@@ -121,6 +121,7 @@ export function makeEngine(overrides: Partial<Engine> = {}): Engine {
 		connection_id: '00000000-0000-0000-0000-000000000005',
 		identity_mode: 'service',
 		enabled: true,
+		data_policies: false,
 		created_at: '2026-01-01T00:00:00Z',
 		allowed_actions: ['view', 'update', 'delete'],
 		...overrides

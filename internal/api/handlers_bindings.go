@@ -179,6 +179,16 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: *invalid}, nil
 	}
+	unenforced, err := h.policiesUnenforced(ctx, t.catalog, t.engine)
+	if err != nil {
+		return nil, err
+	}
+	if unenforced {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: dataPoliciesUnenforced(
+			"the catalog has data policies and the engine does not enforce them",
+		)}, nil
+	}
 	connector, extra := "", map[string]string{}
 	if body.Connector != nil {
 		connector = *body.Connector

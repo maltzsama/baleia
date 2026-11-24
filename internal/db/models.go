@@ -267,6 +267,7 @@ type Engine struct {
 	CostThresholdBytes         *int64      `json:"cost_threshold_bytes"`
 	ExternalUrl                *string     `json:"external_url"`
 	TrinoResourceGroupsEnabled bool        `json:"trino_resource_groups_enabled"`
+	DataPolicies               bool        `json:"data_policies"`
 }
 
 type EngineCatalogObservation struct {

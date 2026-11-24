@@ -34,6 +34,7 @@ func engineToPublic(e db.Engine) Engine {
 		ConnectionId: openapi_types.UUID(e.ConnectionID.Bytes),
 		IdentityMode: EngineIdentityMode(e.IdentityMode),
 		Enabled:      e.Enabled,
+		DataPolicies: e.DataPolicies,
 		CreatedAt:    pgTimestampToTime(e.CreatedAt),
 	}
 	// Cost routing is opt-in per engine (#550).
@@ -210,10 +211,22 @@ func (h *CatalogHandlers) UpdateEngine(ctx context.Context, request UpdateEngine
 			return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "cost_threshold_bytes and clear_cost_threshold are mutually exclusive")}, nil
 		}
 	}
+	if body.DataPolicies != nil && !*body.DataPolicies {
+		serves, err := h.dataPolicies.EngineServesPoliciedCatalogs(ctx, uuid.UUID(request.Id))
+		if err != nil {
+			return nil, err
+		}
+		if serves {
+			return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: dataPoliciesUnenforced(
+				"the engine has a binding of a catalog that has data policies",
+			)}, nil
+		}
+	}
 	// One UPDATE applies enabled and the settings together (#591).
 	eng, err := h.engineAdmin.Update(ctx, db.UpdateEngineParams{
 		ID:                 id,
 		Enabled:            body.Enabled,
+		DataPolicies:       body.DataPolicies,
 		CostRoutingEnabled: body.CostRoutingEnabled,
 		CostThresholdBytes: body.CostThresholdBytes,
 		ClearCostThreshold: body.ClearCostThreshold,

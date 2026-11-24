@@ -72,6 +72,9 @@ func (r *Repo) UpdateEngine(ctx context.Context, arg db.UpdateEngineParams) (db.
 	if arg.Enabled != nil {
 		changes["enabled"] = *arg.Enabled
 	}
+	if arg.DataPolicies != nil {
+		changes["data_policies"] = *arg.DataPolicies
+	}
 	if arg.IdentityMode != nil {
 		changes["identity_mode"] = *arg.IdentityMode
 	}
@@ -302,6 +305,7 @@ func toDBEngine(e model.Engine) db.Engine {
 		CostThresholdBytes:         e.CostThresholdBytes,
 		ExternalUrl:                e.ExternalURL,
 		TrinoResourceGroupsEnabled: e.TrinoResourceGroupsEnabled,
+		DataPolicies:               e.DataPolicies,
 	}
 }
 

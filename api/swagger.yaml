@@ -186,7 +186,7 @@ components:
     # web/messages/{en,pt-BR}.json (enforced by TestErrorCodesClosed).
     ErrorCode:
       type: string
-      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeCatalogReadOnly, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceMemberNotInTeam, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspaceOwnerRoleFixed, ErrorCodeWorkspacePersonal]
+      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeCatalogReadOnly, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDataPoliciesUnenforced, ErrorCodeDataPolicyInvalid, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceMemberNotInTeam, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspaceOwnerRoleFixed, ErrorCodeWorkspacePersonal]
       enum:
         - account_suspended
         - agent_token_not_allowed
@@ -209,6 +209,8 @@ components:
         - credentials_unreadable
         - custom_sql_forbidden
         - custom_sql_requires_read_only
+        - data_policies_unenforced
+        - data_policy_invalid
         - destination_not_eligible
         - drop_failed
         - encryption_failed
@@ -2130,7 +2132,7 @@ components:
 
     Engine:
       type: object
-      required: [id, name, kind, class, connection_id, identity_mode, enabled, created_at, allowed_actions]
+      required: [id, name, kind, class, connection_id, identity_mode, enabled, data_policies, created_at, allowed_actions]
       properties:
         allowed_actions:
           type: array
@@ -2143,6 +2145,9 @@ components:
         connection_id: { type: string, format: uuid }
         identity_mode: { type: string, enum: [impersonation, connection, per_user] }
         enabled: { type: boolean }
+        data_policies:
+          type: boolean
+          description: "The engine runs the OPA access control with Baleia's Rego, so catalogs bound to it may carry row filters and column masks (ADR 0028)"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         cost_routing_enabled:
@@ -2331,6 +2336,9 @@ components:
       type: object
       properties:
         enabled: { type: boolean }
+        data_policies:
+          type: boolean
+          description: "State that the engine enforces data policies (ADR 0028). Turning it off is refused with 422 data_policies_unenforced while the engine has a binding of a catalog that carries data policies"
         cost_routing_enabled: { type: boolean }
         cost_threshold_bytes: { type: integer, format: int64, nullable: true, minimum: 1 }
         clear_cost_threshold: { type: boolean, description: "Set cost_threshold_bytes to null; cannot be combined with cost_threshold_bytes" }
@@ -8199,6 +8207,9 @@ paths:
       tags: [Engines]
       operationId: updateEngine
       summary: "Enable or disable an engine (owner of its connection or an admin)"
+      description: >
+        422 data_policies_unenforced when data_policies is turned off while
+        the engine has a binding of a catalog that carries data policies.
       requestBody:
         required: true
         content:
@@ -8544,8 +8555,9 @@ paths:
         when the catalog already has a binding on the engine, name_in_use
         when the engine already has a catalog of that name. 422
         binding_unsupported (native catalog, direct engine, or a source kind
-        or connector the binder cannot bind), property_not_overridable,
-        reserved_name, validation_error.
+        or connector the binder cannot bind), data_policies_unenforced (the
+        catalog carries data policies and the engine does not enforce them),
+        property_not_overridable, reserved_name, validation_error.
       requestBody:
         required: true
         content:
