@@ -33,6 +33,8 @@ var allowedFunctionCalls = []string{
 	"to_utf8(c)", "to_hex(c)", "sha256(c)", "sha512(c)",
 	// dates
 	"year(c)", "quarter(c)", "month(c)", "day(c)", "date_trunc('day', c)",
+	// The parser reads date_trunc over a DATE as its own node.
+	"date_trunc('day', CAST(c AS DATE))",
 	"date_add('day', 1, c)", "date_diff('day', c, c)",
 	// conditionals
 	"nullif(c, c)", "coalesce(c, c)", "if(c, c)", "if(c, c, c)",

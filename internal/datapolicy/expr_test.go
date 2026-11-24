@@ -25,6 +25,7 @@ func TestCompile(t *testing.T) {
 		{name: "keep last characters", input: "lpad(substr(cpf, length(cpf) - 1), 11, '*')", expected: "LPAD(SUBSTR(cpf, LENGTH(cpf) - 1), 11, '*')"},
 		{name: "sha256 mask", input: "to_hex(sha256(to_utf8(email)))", expected: "TO_HEX(SHA256(TO_UTF8(email)))"},
 		{name: "date truncation and literal", input: "date_trunc('day', ts) = DATE '2020-01-01'", expected: "DATE_TRUNC('DAY', ts) = CAST('2020-01-01' AS DATE)"},
+		{name: "date truncation of a date", input: "date_trunc('month', CAST(ts AS DATE)) = DATE '2020-01-01'", expected: "DATE_TRUNC('MONTH', CAST(ts AS DATE)) = CAST('2020-01-01' AS DATE)"},
 		{name: "cast with parameters", input: "cast(amount AS decimal(10, 2)) > 1", expected: "CAST(amount AS DECIMAL(10, 2)) > 1"},
 		{name: "null constant mask", input: "NULL", expected: "NULL"},
 		{name: "string constant mask", input: "'***'", expected: "'***'"},
@@ -133,7 +134,7 @@ func TestAllowedFunctionKinds(t *testing.T) {
 	}
 	slices.Sort(gotKinds)
 	expectedKinds := []string{
-		"Abs", "Ceil", "Concat", "DateAdd", "DateDiff", "Day", "Encode", "Floor", "Greatest", "Least",
+		"Abs", "Ceil", "Concat", "DateAdd", "DateDiff", "DateTrunc", "Day", "Encode", "Floor", "Greatest", "Least",
 		"Lower", "Month", "Quarter", "RegexpExtract", "RegexpLike", "RegexpReplace", "Replace", "Reverse",
 		"Round", "SHA2Digest", "Sign", "StrPosition", "Substring", "TimestampTrunc", "Trim", "Trunc", "Upper", "Year",
 	}
