@@ -81,41 +81,37 @@ func (h *DataPolicyHandlers) dataPolicyCatalog(ctx context.Context, id uuid.UUID
 var errUnsupportedCatalog = errors.New("the catalog's views cannot be read")
 
 // catalogNames returns the catalog's names on the engines that serve it and
-// the engine to type-check on. Every binding must be on an engine that
+// its bindings, in creation order, to type-check on. Every binding must be on an engine that
 // enforces data policies, and there must be one (errPoliciesUnenforced); the
 // catalog's connection must serve Iceberg REST, whose views Baleia reads
 // (errUnsupportedCatalog).
-func (h *DataPolicyHandlers) catalogNames(ctx context.Context, cat db.Catalog, conn db.CatalogConnection) ([]string, db.CatalogBinding, error) {
+func (h *DataPolicyHandlers) catalogNames(ctx context.Context, cat db.Catalog, conn db.CatalogConnection) ([]string, []db.CatalogBinding, error) {
 	provider, err := h.connections.Get(connections.Kind(conn.Type))
 	if err != nil || cat.Origin != "source" {
-		return nil, db.CatalogBinding{}, errUnsupportedCatalog
+		return nil, nil, errUnsupportedCatalog
 	}
 	if _, rest := provider.(connections.IcebergRESTEndpoint); !rest {
-		return nil, db.CatalogBinding{}, errUnsupportedCatalog
+		return nil, nil, errUnsupportedCatalog
 	}
 	bindings, err := h.queries.ListBindingsByCatalog(ctx, cat.ID)
 	if err != nil {
-		return nil, db.CatalogBinding{}, err
+		return nil, nil, err
 	}
-	var names []string
-	var first db.CatalogBinding
+	names := make([]string, 0, len(bindings))
 	for _, b := range bindings {
 		eng, err := h.queries.GetEngineByID(ctx, b.EngineID)
 		if err != nil {
-			return nil, db.CatalogBinding{}, err
+			return nil, nil, err
 		}
 		if !eng.DataPolicies {
-			return nil, db.CatalogBinding{}, errPoliciesUnenforced
-		}
-		if len(names) == 0 {
-			first = b
+			return nil, nil, errPoliciesUnenforced
 		}
 		names = append(names, b.EngineCatalogName)
 	}
 	if len(names) == 0 {
-		return nil, db.CatalogBinding{}, errPoliciesUnenforced
+		return nil, nil, errPoliciesUnenforced
 	}
-	return slices.Compact(slices.Sorted(slices.Values(names))), first, nil
+	return slices.Compact(slices.Sorted(slices.Values(names))), bindings, nil
 }
 
 // expressionTypes is what an engine needs to type-check a policy; the Trino
@@ -125,23 +121,28 @@ type expressionTypes interface {
 }
 
 // checkPolicy runs the language check against the table's stored columns
-// and the type check on binding's engine. An engine that cannot be asked
-// leaves the policy pending: it is checked again at its next update.
-func (h *DataPolicyHandlers) checkPolicy(ctx context.Context, p *datapolicy.Policy, cat db.Catalog, binding db.CatalogBinding) {
+// and the type check on the first binding whose engine can be asked; every
+// binding is on an engine that enforces data policies. When none can be
+// asked the policy stays pending: it is checked again at its next update.
+func (h *DataPolicyHandlers) checkPolicy(ctx context.Context, p *datapolicy.Policy, cat db.Catalog, bindings []db.CatalogBinding) {
 	columns := h.tableColumns(ctx, cat.ID, p.Target.Schema, p.Target.Table)
 	p.Validation, p.Compiled, p.InvalidReason, p.InvalidDetail = datapolicy.ValidationPending, "", "", ""
-	eng, err := h.engines.Get(ctx, binding.EngineID)
-	if err != nil {
-		h.logger.WarnContext(ctx, "data policy type check: engine unavailable", "engine_id", binding.EngineID, "err", err)
+	for _, binding := range bindings {
+		eng, err := h.engines.Get(ctx, binding.EngineID)
+		if err != nil {
+			h.logger.WarnContext(ctx, "data policy type check: engine unavailable", "engine_id", binding.EngineID, "err", err)
+			continue
+		}
+		typer, ok := eng.(expressionTypes)
+		if !ok {
+			continue
+		}
+		table := []string{binding.EngineCatalogName, p.Target.Schema, p.Target.Table}
+		if err := datapolicy.Check(ctx, p, columns, typer, table); err != nil {
+			h.logger.WarnContext(ctx, "data policy type check failed to run", "engine_id", binding.EngineID, "err", err)
+			continue
+		}
 		return
-	}
-	typer, ok := eng.(expressionTypes)
-	if !ok {
-		return
-	}
-	table := []string{binding.EngineCatalogName, p.Target.Schema, p.Target.Table}
-	if err := datapolicy.Check(ctx, p, columns, typer, table); err != nil {
-		h.logger.WarnContext(ctx, "data policy type check failed to run", "engine_id", binding.EngineID, "err", err)
 	}
 }
 
@@ -216,7 +217,7 @@ func (h *DataPolicyHandlers) CreateDataPolicy(ctx context.Context, request Creat
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateDataPolicy422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "a body is required")}, nil
 	}
-	_, binding, err := h.catalogNames(ctx, cat, conn)
+	_, bindings, err := h.catalogNames(ctx, cat, conn)
 	if resp, ok := catalogTargetRefusal(err); ok {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateDataPolicy422JSONResponse{UnprocessableEntityJSONResponse: resp}, nil
@@ -230,7 +231,7 @@ func (h *DataPolicyHandlers) CreateDataPolicy(ctx context.Context, request Creat
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateDataPolicy422JSONResponse{UnprocessableEntityJSONResponse: resp}, nil
 	}
-	h.checkPolicy(ctx, &p, cat, binding)
+	h.checkPolicy(ctx, &p, cat, bindings)
 	created, err := h.policies.Create(ctx, p)
 	if errors.Is(err, datapolicy.ErrNameTaken) {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
@@ -292,7 +293,7 @@ func (h *DataPolicyHandlers) UpdateDataPolicy(ctx context.Context, request Updat
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateDataPolicy422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "a body is required")}, nil
 	}
-	_, binding, err := h.catalogNames(ctx, cat, conn)
+	_, bindings, err := h.catalogNames(ctx, cat, conn)
 	if resp, ok := catalogTargetRefusal(err); ok {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateDataPolicy422JSONResponse{UnprocessableEntityJSONResponse: resp}, nil
@@ -311,7 +312,7 @@ func (h *DataPolicyHandlers) UpdateDataPolicy(ctx context.Context, request Updat
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return UpdateDataPolicy422JSONResponse{UnprocessableEntityJSONResponse: resp}, nil
 	}
-	h.checkPolicy(ctx, &p, cat, binding)
+	h.checkPolicy(ctx, &p, cat, bindings)
 	updated, err := h.policies.Update(ctx, p, body.Version)
 	switch {
 	case errors.Is(err, datapolicy.ErrVersionConflict):

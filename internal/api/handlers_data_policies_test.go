@@ -42,9 +42,13 @@ func (typedEngine) ExpressionTypes(_ context.Context, _ []string, exprs []string
 	return []string{"varchar", "varchar"}, nil
 }
 
-type typedEngines struct{}
+// typedEngines serves a typedEngine for every engine but the down ones.
+type typedEngines struct{ down map[db.UUID]bool }
 
-func (typedEngines) Get(context.Context, db.UUID) (queryengine.Engine, error) {
+func (e typedEngines) Get(_ context.Context, id db.UUID) (queryengine.Engine, error) {
+	if e.down[id] {
+		return nil, errors.New("engine unavailable")
+	}
 	return typedEngine{fake.New(fake.Options{})}, nil
 }
 
@@ -275,6 +279,54 @@ func TestDataPolicies_Authoring(t *testing.T) {
 		t.Fatal("get returned nothing")
 	} else if _, ok := resp.(GetDataPolicy404JSONResponse); !ok {
 		t.Fatalf("get after delete = %+v", resp)
+	}
+}
+
+// TestDataPolicies_TypeCheckOnAnEngineThatAnswers: an engine that cannot be
+// asked does not keep a policy pending while another engine serving the
+// catalog can type-check it.
+func TestDataPolicies_TypeCheckOnAnEngineThatAnswers(t *testing.T) {
+	t.Parallel()
+	f := newDataPolicyFixture(t)
+	ctx := context.Background()
+	f.h.engines = typedEngines{down: map[db.UUID]bool{f.engineID: true}}
+	if code, body, row := f.create(t, f.admin, rowFilterBody("eu", "region = 'EU'")); code != 201 || row.Validation != DataPolicyValidationPending {
+		t.Fatalf("with the only engine down = %d %s", code, body)
+	}
+
+	q := repo.New(f.gdb)
+	first, err := q.GetEngineByID(ctx, f.engineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engConn, err := q.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
+		ID: repo.PGUUID(repo.NewUUID()), Name: "policies-engine-2", Type: "trino",
+		Url: "http://trino-2.test", CreatedBy: first.CreatedBy,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := q.CreateEngine(ctx, db.CreateEngineParams{
+		Name: "policies_engine_2", Kind: "trino", Class: "federated", ConnectionID: engConn.ID,
+		IdentityMode: "connection", CreatedBy: first.CreatedBy,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	on := true
+	if _, err := q.UpdateEngine(ctx, db.UpdateEngineParams{ID: second.ID, DataPolicies: &on}); err != nil {
+		t.Fatal(err)
+	}
+	connector := "iceberg"
+	binding := model.CatalogBinding{
+		ID: model.UUID(repo.NewUUID()), CatalogID: model.UUID(uuid.UUID(f.catalog).String()), EngineID: model.UUID(second.ID.String()),
+		EngineCatalogName: "lake", Connector: &connector, Mode: "managed", Enabled: true, LifecycleState: "active",
+	}
+	if err := f.gdb.Create(&binding).Error; err != nil {
+		t.Fatal(err)
+	}
+	if code, body, row := f.create(t, f.admin, rowFilterBody("us", "region = 'US'")); code != 201 || row.Validation != DataPolicyValidationValid {
+		t.Fatalf("with a second engine up = %d %s", code, body)
 	}
 }
 
