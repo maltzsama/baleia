@@ -495,6 +495,39 @@ func TestDataPolicies_DefinerViewsOverPoliciesInForce(t *testing.T) {
 	}
 }
 
+// TestDataPolicies_DefinerViewsOverPendingPolicies: an enabled draft policy
+// counts before its type check ran, and a disabled one does not.
+func TestDataPolicies_DefinerViewsOverPendingPolicies(t *testing.T) {
+	t.Parallel()
+	f := newDataPolicyFixture(t)
+	ctx := f.admin
+	f.h.engines = typedEngines{down: map[db.UUID]bool{f.engineID: true}}
+	if code, body, row := f.create(t, ctx, rowFilterBody("eu", "region = 'EU'")); code != 201 || row.Validation != DataPolicyValidationPending {
+		t.Fatalf("pending policy = %d %s", code, body)
+	}
+	off := rowFilterBody("off", "region = 'EU'")
+	off.Table = "customers"
+	off.State = ptr(DataPolicyStateDisabled)
+	if code, body, _ := f.create(t, ctx, off); code != 201 {
+		t.Fatalf("disabled policy = %d %s", code, body)
+	}
+	f.views = datapolicy.ViewInspection{Views: []datapolicy.CatalogView{
+		viewsql.Resolve([]string{"lake"}, connections.View{
+			Namespace: connections.Namespace{"sales"}, Name: "v_orders", Owner: "ana", SQL: "SELECT * FROM orders",
+		}),
+		viewsql.Resolve([]string{"lake"}, connections.View{
+			Namespace: connections.Namespace{"sales"}, Name: "v_customers", Owner: "bia", SQL: "SELECT * FROM customers",
+		}),
+	}}
+	resp, err := f.h.ListCatalogDefinerViews(ctx, ListCatalogDefinerViewsRequestObject{Id: f.catalog})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if views := resp.(ListCatalogDefinerViews200JSONResponse); len(views) != 1 || views[0].Owner != "ana" {
+		t.Fatalf("definer views = %+v, want only the view over the pending policy's table", views)
+	}
+}
+
 func TestDataPolicies_Status(t *testing.T) {
 	t.Parallel()
 	f := newDataPolicyFixture(t)

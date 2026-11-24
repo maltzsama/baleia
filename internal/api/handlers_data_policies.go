@@ -575,13 +575,23 @@ func (h *DataPolicyHandlers) ListCatalogDefinerViews(ctx context.Context, reques
 	}
 	// The views are judged against the policies in force and the draft: a
 	// policy deleted from the draft still applies until the next publish.
-	content := datapolicy.Content{Catalogs: map[string]datapolicy.CatalogContent{"draft": datapolicy.CatalogContentOf(names, policies)}}
+	// Every enabled draft policy counts, validated or not, since it is the
+	// one a publish would put in force; a disabled one would not be.
 	inForce, published, err := h.publishedCatalog(ctx, uuid.UUID(cat.ID.Bytes))
 	if err != nil {
 		return nil, err
 	}
+	policied := map[datapolicy.TableName]bool{}
 	if published {
-		content.Catalogs["published"] = inForce
+		policied = datapolicy.Content{Catalogs: map[string]datapolicy.CatalogContent{"published": inForce}}.PoliciedTables()
+	}
+	for _, p := range policies {
+		if p.State != datapolicy.StateEnabled {
+			continue
+		}
+		for _, name := range names {
+			policied[datapolicy.NewTableName(name, p.Target.Schema, p.Target.Table)] = true
+		}
 	}
 	views, err := h.views(ctx)
 	if err != nil {
@@ -594,7 +604,7 @@ func (h *DataPolicyHandlers) ListCatalogDefinerViews(ctx context.Context, reques
 	for _, name := range h.settings.DataPolicy.Trusted {
 		trusted[name] = true
 	}
-	for _, r := range datapolicy.DefinerReach(views.Views, content.PoliciedTables()) {
+	for _, r := range datapolicy.DefinerReach(views.Views, policied) {
 		reads := make([]string, 0, len(r.Reads))
 		for _, t := range r.Reads {
 			reads = append(reads, t.String())
