@@ -608,7 +608,7 @@ func (h *DataPolicyHandlers) ListDataPolicyRevisions(ctx context.Context, reques
 	case errors.Is(err, authz.ErrUnauthenticated):
 		return ListDataPolicyRevisions401JSONResponse{UnauthorizedJSONResponse: dataPolicyUnauthorized()}, nil
 	case errors.Is(err, authz.ErrForbidden):
-		return ListDataPolicyRevisions403JSONResponse{ForbiddenJSONResponse: forbiddenDataPolicies()}, nil
+		return ListDataPolicyRevisions403JSONResponse{ForbiddenJSONResponse: forbiddenDataPolicyAdmin()}, nil
 	}
 	limit := 50
 	if request.Params.Limit != nil {
@@ -638,7 +638,7 @@ func (h *DataPolicyHandlers) RollbackDataPolicyRevision(ctx context.Context, req
 		return RollbackDataPolicyRevision401JSONResponse{UnauthorizedJSONResponse: dataPolicyUnauthorized()}, nil
 	case errors.Is(err, authz.ErrForbidden):
 		h.audited(ctx, ev.Denied(audit.ReasonForbidden))
-		return RollbackDataPolicyRevision403JSONResponse{ForbiddenJSONResponse: forbiddenDataPolicies()}, nil
+		return RollbackDataPolicyRevision403JSONResponse{ForbiddenJSONResponse: forbiddenDataPolicyAdmin()}, nil
 	}
 	if !h.settings.DataPolicy.Enabled || h.publisher == nil {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
@@ -705,7 +705,7 @@ func (h *DataPolicyHandlers) GetDataPolicyStatus(ctx context.Context, _ GetDataP
 	case errors.Is(err, authz.ErrUnauthenticated):
 		return GetDataPolicyStatus401JSONResponse{UnauthorizedJSONResponse: dataPolicyUnauthorized()}, nil
 	case errors.Is(err, authz.ErrForbidden):
-		return GetDataPolicyStatus403JSONResponse{ForbiddenJSONResponse: forbiddenDataPolicies()}, nil
+		return GetDataPolicyStatus403JSONResponse{ForbiddenJSONResponse: forbiddenDataPolicyAdmin()}, nil
 	}
 	out := DataPolicyStatus{Enabled: h.settings.DataPolicy.Enabled, Engines: []DataPolicyEngineState{}}
 	if digest := h.settings.DataPolicy.ExpectedDigest; digest != "" {
@@ -797,6 +797,12 @@ func dataPolicyUnauthorized() UnauthorizedJSONResponse {
 
 func forbiddenDataPolicies() ForbiddenJSONResponse {
 	return ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only the owner of the catalog's connection or an admin may manage its data policies"}
+}
+
+// forbiddenDataPolicyAdmin refuses the deployment-wide operations: revisions,
+// rollback and status belong to global admins, not to catalog owners.
+func forbiddenDataPolicyAdmin() ForbiddenJSONResponse {
+	return ForbiddenJSONResponse{Code: ErrorCodeForbidden, Message: "only an admin may manage data policy revisions and read their status"}
 }
 
 func dataPolicyNotFound() NotFoundJSONResponse {

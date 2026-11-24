@@ -401,7 +401,7 @@ func TestDataPolicies_PublishAndRollback(t *testing.T) {
 	// Only a global admin lists revisions and rolls back.
 	if resp, _ := f.h.ListDataPolicyRevisions(f.member, ListDataPolicyRevisionsRequestObject{}); resp == nil {
 		t.Fatal("no response")
-	} else if _, ok := resp.(ListDataPolicyRevisions403JSONResponse); !ok {
+	} else if denied, ok := resp.(ListDataPolicyRevisions403JSONResponse); !ok || !strings.Contains(denied.Message, "only an admin") {
 		t.Fatalf("member revisions = %+v", resp)
 	}
 	second, ok := publish(ctx).(PublishCatalogDataPolicies201JSONResponse)
