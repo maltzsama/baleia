@@ -515,6 +515,7 @@ func (h *DataPolicyHandlers) PublishCatalogDataPolicies(ctx context.Context, req
 		}}, nil
 	}
 	if err != nil {
+		h.audited(ctx, ev.Failed(audit.ReasonInternal))
 		return nil, err
 	}
 	views, err := h.views(ctx)
