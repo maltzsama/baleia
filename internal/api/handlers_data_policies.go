@@ -694,6 +694,7 @@ func (h *DataPolicyHandlers) GetDataPolicyStatus(ctx context.Context, _ GetDataP
 		byEngine[s.EngineID] = s
 	}
 	now := time.Now().UTC()
+	leases := map[string]*time.Time{}
 	for _, eng := range engines {
 		if eng.Kind != "trino" {
 			continue
@@ -705,6 +706,9 @@ func (h *DataPolicyHandlers) GetDataPolicyStatus(ctx context.Context, _ GetDataP
 		}
 		if s, ok := byEngine[id]; ok {
 			in.Status = &s
+			if in.ActiveNotAfter, err = h.revisionLease(ctx, leases, s.ActiveRevision); err != nil {
+				return nil, err
+			}
 		}
 		state := datapolicy.EngineHealth(in)
 		item := DataPolicyEngineState{
@@ -721,6 +725,30 @@ func (h *DataPolicyHandlers) GetDataPolicyStatus(ctx context.Context, _ GetDataP
 		out.Engines = append(out.Engines, item)
 	}
 	return GetDataPolicyStatus200JSONResponse(out), nil
+}
+
+// revisionLease returns the lease end of the revision an engine reports
+// active, or nil when the report names no revision Baleia stored; leases
+// caches the lookups of one status request.
+func (h *DataPolicyHandlers) revisionLease(ctx context.Context, leases map[string]*time.Time, active string) (*time.Time, error) {
+	if lease, ok := leases[active]; ok {
+		return lease, nil
+	}
+	id, err := uuid.Parse(active)
+	if err != nil {
+		leases[active] = nil
+		return nil, nil //nolint:nilerr // a report may name no revision; health judges that on its own
+	}
+	rev, err := h.policies.GetRevision(ctx, id)
+	if errors.Is(err, datapolicy.ErrNotFound) {
+		leases[active] = nil
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	leases[active] = &rev.NotAfter
+	return &rev.NotAfter, nil
 }
 
 // ── conversions and responses ────────────────────────────────────────────────
