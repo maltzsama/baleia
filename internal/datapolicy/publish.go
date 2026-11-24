@@ -285,6 +285,9 @@ func (p *Publisher) CatalogChanged(ctx context.Context, catalogID uuid.UUID, nam
 	if !ok {
 		return len(current.Tables) > 0, nil
 	}
+	if len(current.Tables) > 0 && !slices.Equal(normalNames(current.Names), normalNames(published.Names)) {
+		return true, nil
+	}
 	a, err := json.Marshal(current.Tables)
 	if err != nil {
 		return false, err
@@ -294,6 +297,11 @@ func (p *Publisher) CatalogChanged(ctx context.Context, catalogID uuid.UUID, nam
 		return false, err
 	}
 	return !bytes.Equal(a, b), nil
+}
+
+// normalNames sorts names and drops repeats.
+func normalNames(names []string) []string {
+	return slices.Compact(slices.Sorted(slices.Values(names)))
 }
 
 func subjectsEqual(a, b map[string]SubjectEntry) bool {

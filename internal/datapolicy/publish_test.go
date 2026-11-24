@@ -367,6 +367,9 @@ func TestPublisher_CatalogChanged(t *testing.T) {
 	if changed, err := p.CatalogChanged(ctx, sales, []string{"lake"}); err != nil || changed {
 		t.Fatalf("after publishing = %v, %v", changed, err)
 	}
+	if changed, err := p.CatalogChanged(ctx, sales, []string{"lake_v2"}); err != nil || !changed {
+		t.Fatalf("after a binding rename = %v, %v", changed, err)
+	}
 	store.policies[sales][0].Compiled = "region = 'US'"
 	if changed, err := p.CatalogChanged(ctx, sales, []string{"lake"}); err != nil || !changed {
 		t.Fatalf("after an edit = %v, %v", changed, err)
