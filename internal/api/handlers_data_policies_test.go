@@ -460,8 +460,15 @@ func TestDataPolicies_DefinerViewsOverPoliciesInForce(t *testing.T) {
 	} else if _, ok := resp.(PublishCatalogDataPolicies201JSONResponse); !ok {
 		t.Fatalf("publish = %+v", resp)
 	}
-	if _, err := f.h.DeleteDataPolicy(ctx, DeleteDataPolicyRequestObject{Id: row.Id}); err != nil {
+	if resp, err := f.h.DeleteDataPolicy(ctx, DeleteDataPolicyRequestObject{Id: row.Id}); err != nil {
 		t.Fatal(err)
+	} else if _, ok := resp.(DeleteDataPolicy204Response); !ok {
+		t.Fatalf("delete = %+v", resp)
+	}
+	if resp, err := f.h.ListCatalogDataPolicies(ctx, ListCatalogDataPoliciesRequestObject{Id: f.catalog}); err != nil {
+		t.Fatal(err)
+	} else if list, ok := resp.(ListCatalogDataPolicies200JSONResponse); !ok || len(list.Policies) != 0 {
+		t.Fatalf("draft after the delete = %+v, want no policy", resp)
 	}
 	f.views = datapolicy.ViewInspection{Views: []datapolicy.CatalogView{viewsql.Resolve([]string{"lake"}, connections.View{
 		Namespace: connections.Namespace{"sales"}, Name: "v_all", Owner: "ana", SQL: "SELECT * FROM orders",
