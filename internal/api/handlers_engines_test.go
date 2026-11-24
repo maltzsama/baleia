@@ -415,3 +415,9 @@ func TestUpdateEngine_DataPolicies(t *testing.T) {
 		t.Fatalf("turn off = %d %s", rec.Code, rec.Body)
 	}
 }
+
+func (q *engineQuerier) LockEngineForUpdate(_ context.Context, id db.UUID) (db.Engine, error) {
+	e := q.engine
+	e.ID = id
+	return e, nil
+}

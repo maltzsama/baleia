@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/galileostudio/baleia/internal/datapolicy"
+	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
 )
 
@@ -227,5 +228,63 @@ func TestDataPolicies_Revisions(t *testing.T) {
 
 	if _, err := r.CreateRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte("not json"), lease, nil)); err == nil {
 		t.Fatal("a revision whose content is not JSON was stored")
+	}
+}
+
+// TestLockEngineForUpdate: a second transaction that locks the same engine
+// waits until the first one ends, which is what serializes a binding with a
+// change of the engine's data_policies flag.
+func TestLockEngineForUpdate(t *testing.T) {
+	t.Parallel()
+	f := newWorkbenchFixture(t)
+	ctx := context.Background()
+	engine := PGUUID(string(f.engine))
+
+	locked := make(chan struct{})
+	release := make(chan struct{})
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- f.r.TxCatalogWrite(ctx, func(tx *Repo) error {
+			if _, err := tx.LockEngineForUpdate(ctx, engine); err != nil {
+				return err
+			}
+			close(locked)
+			<-release
+			return nil
+		})
+	}()
+	<-locked
+
+	secondLocked := make(chan time.Time, 1)
+	secondDone := make(chan error, 1)
+	go func() {
+		secondDone <- f.r.TxCatalogWrite(ctx, func(tx *Repo) error {
+			if _, err := tx.LockEngineForUpdate(ctx, engine); err != nil {
+				return err
+			}
+			secondLocked <- time.Now()
+			return nil
+		})
+	}()
+
+	select {
+	case <-secondLocked:
+		t.Fatal("a second transaction locked the engine while the first held it")
+	case <-time.After(500 * time.Millisecond):
+	}
+	released := time.Now()
+	close(release)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first transaction: %v", err)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatalf("second transaction: %v", err)
+	}
+	if got := <-secondLocked; got.Before(released) {
+		t.Fatal("the second lock was taken before the first transaction ended")
+	}
+
+	if _, err := f.r.LockEngineForUpdate(ctx, PGUUID(NewUUID())); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("locking an unknown engine: %v, want db.ErrNoRows", err)
 	}
 }

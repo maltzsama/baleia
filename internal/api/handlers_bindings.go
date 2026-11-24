@@ -179,16 +179,6 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: *invalid}, nil
 	}
-	unenforced, err := h.policiesUnenforced(ctx, t.catalog, t.engine)
-	if err != nil {
-		return nil, err
-	}
-	if unenforced {
-		h.audited(ctx, ev.Failed(audit.ReasonValidation))
-		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: dataPoliciesUnenforced(
-			"the catalog has data policies and the engine does not enforce them",
-		)}, nil
-	}
 	connector, extra := "", map[string]string{}
 	if body.Connector != nil {
 		connector = *body.Connector
@@ -215,6 +205,20 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 
 	var created db.CatalogBinding
 	txErr := h.inTx(ctx, func(qtx db.Querier) error {
+		// The engine row stays locked until the binding commits, so turning
+		// its data_policies flag off cannot slip in between the check and
+		// the insert (ADR 0028).
+		eng, err := qtx.LockEngineForUpdate(ctx, t.engine.ID)
+		if err != nil {
+			return err
+		}
+		unenforced, err := h.policiesUnenforced(ctx, t.catalog, eng)
+		if err != nil {
+			return err
+		}
+		if unenforced {
+			return errPoliciesUnenforced
+		}
 		b, err := qtx.CreateManagedBinding(ctx, db.CreateManagedBindingParams{
 			CatalogID: t.catalog.ID, EngineID: t.engine.ID, EngineCatalogName: proj.EngineCatalog,
 			Connector: &proj.Connector, ExtraProps: rawExtra, DesiredVersion: &proj.Version,
@@ -225,6 +229,12 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 		created = b
 		return syncPrimaryCatalog(ctx, qtx, t, b)
 	})
+	if errors.Is(txErr, errPoliciesUnenforced) {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return CreateCatalogBinding422JSONResponse{UnprocessableEntityJSONResponse: dataPoliciesUnenforced(
+			"the catalog has data policies and the engine does not enforce them",
+		)}, nil
+	}
 	if c, ok := bindingConflict(txErr); ok {
 		h.audited(ctx, ev.Failed(audit.ReasonConflict))
 		return CreateCatalogBinding409JSONResponse{ConflictJSONResponse: c}, nil

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
@@ -14,6 +15,10 @@ type dataPolicyGuard interface {
 	CatalogHasPolicies(ctx context.Context, catalogID uuid.UUID) (bool, error)
 	EngineServesPoliciedCatalogs(ctx context.Context, engineID uuid.UUID) (bool, error)
 }
+
+// errPoliciesUnenforced aborts a write that would leave a catalog's data
+// policies on an engine that does not enforce them.
+var errPoliciesUnenforced = errors.New("data policies would be unenforced")
 
 // noDataPolicies is the guard of an API built without a store: only tests
 // build one, and they have no policies.

@@ -373,6 +373,9 @@ type Querier interface {
 	LatestReconcileRuns(ctx context.Context) ([]LatestReconcileRunsRow, error)
 	LatestRetrieverRefresh(ctx context.Context, retrieverID UUID) (LatestRetrieverRefreshRow, error)
 	LinkTrinoClusterEngine(ctx context.Context, arg LinkTrinoClusterEngineParams) error
+	// LockEngineForUpdate reads an engine and locks its row until the
+	// transaction ends, or returns ErrNoRows.
+	LockEngineForUpdate(ctx context.Context, id UUID) (Engine, error)
 	ListAPIKeysByUser(ctx context.Context, userID UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
 	// The workspaces the user administers (#653).

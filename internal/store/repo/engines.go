@@ -105,6 +105,23 @@ func (r *Repo) UpdateEngine(ctx context.Context, arg db.UpdateEngineParams) (db.
 	return r.GetEngineByID(ctx, arg.ID)
 }
 
+// LockEngineForUpdate reads an engine and locks its row until the surrounding
+// transaction ends (SELECT ... FOR UPDATE), or returns db.ErrNoRows. Writes
+// that depend on the engine's data_policies flag take this lock first, so a
+// binding and a change of the flag cannot interleave (ADR 0028).
+func (r *Repo) LockEngineForUpdate(ctx context.Context, id db.UUID) (db.Engine, error) {
+	var row model.Engine
+	err := r.Users.db.WithContext(ctx).Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+		Where("id = ?", UUIDString(id)).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return db.Engine{}, db.ErrNoRows
+	}
+	if err != nil {
+		return db.Engine{}, err
+	}
+	return toDBEngine(row), nil
+}
+
 // DeleteEngine removes an engine; its bindings cascade.
 func (r *Repo) DeleteEngine(ctx context.Context, id db.UUID) error {
 	return r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).Delete(&model.Engine{}).Error

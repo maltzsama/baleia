@@ -345,3 +345,7 @@ func TestBindingAPI_DataPoliciesUnenforced(t *testing.T) {
 		t.Fatalf("binding to an engine that enforces data policies: %d %s", c, b)
 	}
 }
+
+func (q *bindingQuerier) LockEngineForUpdate(ctx context.Context, id db.UUID) (db.Engine, error) {
+	return q.GetEngineByID(ctx, id)
+}

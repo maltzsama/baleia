@@ -211,26 +211,42 @@ func (h *CatalogHandlers) UpdateEngine(ctx context.Context, request UpdateEngine
 			return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: unprocessable(ErrorCodeValidationError, "cost_threshold_bytes and clear_cost_threshold are mutually exclusive")}, nil
 		}
 	}
-	if body.DataPolicies != nil && !*body.DataPolicies {
-		serves, err := h.dataPolicies.EngineServesPoliciedCatalogs(ctx, uuid.UUID(request.Id))
-		if err != nil {
-			return nil, err
-		}
-		if serves {
-			return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: dataPoliciesUnenforced(
-				"the engine has a binding of a catalog that has data policies",
-			)}, nil
-		}
-	}
-	// One UPDATE applies enabled and the settings together (#591).
-	eng, err := h.engineAdmin.Update(ctx, db.UpdateEngineParams{
+	params := db.UpdateEngineParams{
 		ID:                 id,
 		Enabled:            body.Enabled,
 		DataPolicies:       body.DataPolicies,
 		CostRoutingEnabled: body.CostRoutingEnabled,
 		CostThresholdBytes: body.CostThresholdBytes,
 		ClearCostThreshold: body.ClearCostThreshold,
-	})
+	}
+	var eng db.Engine
+	if body.DataPolicies != nil && !*body.DataPolicies {
+		// Turning data policies off checks the engine's bindings and writes
+		// under the engine's row lock, which a new binding also takes, so a
+		// catalog with policies cannot be bound in between (ADR 0028).
+		err = h.inTx(ctx, func(qtx db.Querier) error {
+			if _, err := qtx.LockEngineForUpdate(ctx, id); err != nil {
+				return err
+			}
+			serves, err := h.dataPolicies.EngineServesPoliciedCatalogs(ctx, uuid.UUID(request.Id))
+			if err != nil {
+				return err
+			}
+			if serves {
+				return errPoliciesUnenforced
+			}
+			eng, err = qtx.UpdateEngine(ctx, params)
+			return err
+		})
+	} else {
+		// One UPDATE applies enabled and the settings together (#591).
+		eng, err = h.engineAdmin.Update(ctx, params)
+	}
+	if errors.Is(err, errPoliciesUnenforced) {
+		return UpdateEngine422JSONResponse{UnprocessableEntityJSONResponse: dataPoliciesUnenforced(
+			"the engine has a binding of a catalog that has data policies",
+		)}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
