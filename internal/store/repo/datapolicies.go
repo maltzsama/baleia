@@ -335,3 +335,41 @@ func optionalUUID(id *model.UUID) (*uuid.UUID, error) {
 	}
 	return &v, nil
 }
+
+// ListSubjectSources returns every active account with its teams and the
+// identity-provider groups of its latest sign-in, for the bundle's subject
+// map (ADR 0028). Suspended accounts are left out.
+func (r *DataPolicies) ListSubjectSources(ctx context.Context) ([]datapolicy.SubjectSource, error) {
+	var users []model.User
+	if err := r.db.WithContext(ctx).Select("id", "email", "kind").
+		Where("status = ?", "active").Order("id").Find(&users).Error; err != nil {
+		return nil, fmt.Errorf("list active users: %w", err)
+	}
+	var members []model.TeamMember
+	if err := r.db.WithContext(ctx).Select("user_id", "team_id").Find(&members).Error; err != nil {
+		return nil, fmt.Errorf("list team members: %w", err)
+	}
+	var groups []model.UserIDPGroup
+	if err := r.db.WithContext(ctx).Find(&groups).Error; err != nil {
+		return nil, fmt.Errorf("list identity-provider groups: %w", err)
+	}
+	teamsOf := map[model.UUID][]string{}
+	for _, m := range members {
+		teamsOf[m.UserID] = append(teamsOf[m.UserID], string(m.TeamID))
+	}
+	groupsOf := map[model.UUID][]string{}
+	for _, g := range groups {
+		groupsOf[g.UserID] = append(groupsOf[g.UserID], string(g.Name))
+	}
+	out := make([]datapolicy.SubjectSource, 0, len(users))
+	for _, u := range users {
+		out = append(out, datapolicy.SubjectSource{
+			UserID:         PGUUID(string(u.ID)),
+			Email:          string(u.Email),
+			ServiceAccount: u.Kind == "service_account",
+			Teams:          teamsOf[u.ID],
+			Groups:         groupsOf[u.ID],
+		})
+	}
+	return out, nil
+}

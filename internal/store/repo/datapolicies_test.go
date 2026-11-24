@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/galileostudio/baleia/internal/datapolicy"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/google/uuid"
 )
 
@@ -286,5 +288,61 @@ func TestLockEngineForUpdate(t *testing.T) {
 
 	if _, err := f.r.LockEngineForUpdate(ctx, PGUUID(NewUUID())); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("locking an unknown engine: %v, want db.ErrNoRows", err)
+	}
+}
+
+func TestDataPolicies_SubjectSources(t *testing.T) {
+	t.Parallel()
+	f, r, _, _ := dataPolicyFixture(t)
+	ctx := context.Background()
+	suspended := createAPIKeyUser(t, f.gdb, "suspended@example.test")
+	if err := f.gdb.Model(&model.User{}).Where("id = ?", string(suspended.ID)).Update("status", "suspended").Error; err != nil {
+		t.Fatal(err)
+	}
+	team := model.Team{ID: model.UUID(NewUUID()), Name: "data", CreatedBy: f.owner, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if err := f.gdb.Create(&team).Error; err != nil {
+		t.Fatal(err)
+	}
+	member := model.TeamMember{ID: model.UUID(NewUUID()), TeamID: team.ID, UserID: f.owner, Role: "member", JoinedAt: time.Now().UTC()}
+	if err := f.gdb.Create(&member).Error; err != nil {
+		t.Fatal(err)
+	}
+	owner := PGUUID(string(f.owner))
+	if err := f.r.ReplaceUserIDPGroups(ctx, owner, []string{"analysts", " analysts ", "", "auditors"}); err != nil {
+		t.Fatalf("ReplaceUserIDPGroups: %v", err)
+	}
+
+	sources, err := r.ListSubjectSources(ctx)
+	if err != nil {
+		t.Fatalf("ListSubjectSources: %v", err)
+	}
+	byID := map[string]datapolicy.SubjectSource{}
+	for _, s := range sources {
+		byID[s.UserID.String()] = s
+	}
+	if _, ok := byID[string(suspended.ID)]; ok {
+		t.Fatal("a suspended account is in the subject map")
+	}
+	got, ok := byID[string(f.owner)]
+	if !ok || !slices.Contains(got.Teams, string(team.ID)) {
+		t.Fatalf("owner = %+v (%v), want its team", got, ok)
+	}
+	slices.Sort(got.Groups)
+	if !slices.Equal(got.Groups, []string{"analysts", "auditors"}) {
+		t.Fatalf("owner groups = %v, want them trimmed and deduplicated", got.Groups)
+	}
+
+	// The next sign-in replaces the groups, an empty one clears them.
+	if err := f.r.ReplaceUserIDPGroups(ctx, owner, nil); err != nil {
+		t.Fatal(err)
+	}
+	sources, err = r.ListSubjectSources(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range sources {
+		if s.UserID.String() == string(f.owner) && len(s.Groups) != 0 {
+			t.Fatalf("groups after an empty sign-in = %v", s.Groups)
+		}
 	}
 }
