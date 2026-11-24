@@ -1,0 +1,37 @@
+meta {
+  name: Data Policies - Create while off
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/catalogs/{{explorer_catalog_id}}/data-policies
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "eu-only",
+    "kind": "row_filter",
+    "schema": "sales",
+    "table": "orders",
+    "mode": "permissive",
+    "subjects": [{"everyone": true}],
+    "expression": "region = 'EU'"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.code: eq data_policies_disabled
+}
+
+docs {
+  POST /catalogs/{id}/data-policies is refused while BALEIA_DATA_POLICIES is
+  off, the default of the dev stack.
+}

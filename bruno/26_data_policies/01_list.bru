@@ -1,0 +1,26 @@
+meta {
+  name: Data Policies - List
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/catalogs/{{explorer_catalog_id}}/data-policies
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.policies: isArray
+}
+
+docs {
+  GET /catalogs/{id}/data-policies (ADR 0028, #1144): the catalog's row
+  filters and column masks, its names on enforcing engines and whether it has
+  an unpublished draft. enabled reflects BALEIA_DATA_POLICIES.
+}

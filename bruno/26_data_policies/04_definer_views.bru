@@ -1,0 +1,25 @@
+meta {
+  name: Data Policies - DEFINER views
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/catalogs/{{explorer_catalog_id}}/data-policies/definer-views
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+docs {
+  The SECURITY DEFINER views over the catalog's policied tables, and whose
+  policies they apply; empty without policies.
+}

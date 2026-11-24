@@ -1,0 +1,26 @@
+meta {
+  name: Data Policies - Status
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{base_url}}/data-policies/status
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.enabled: eq false
+  res.body.engines: isArray
+}
+
+docs {
+  GET /data-policies/status (global admin): the published revision and each
+  Trino engine's integration, disabled while BALEIA_DATA_POLICIES is off.
+}

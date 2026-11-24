@@ -1,0 +1,25 @@
+meta {
+  name: Data Policies - Revisions
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{base_url}}/data-policies/revisions?limit=10
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}
+
+docs {
+  GET /data-policies/revisions (global admin): published revisions, newest
+  first, the published one marked.
+}
