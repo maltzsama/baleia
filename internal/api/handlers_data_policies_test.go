@@ -266,7 +266,7 @@ func TestDataPolicies_Authoring(t *testing.T) {
 	}
 	if resp, _ := f.h.UpdateDataPolicy(ctx, UpdateDataPolicyRequestObject{Id: row.Id, Body: &update}); resp == nil {
 		t.Fatal("stale update returned nothing")
-	} else if _, conflict := resp.(UpdateDataPolicy409JSONResponse); !conflict {
+	} else if conflict, ok := resp.(UpdateDataPolicy409JSONResponse); !ok || conflict.Code != ErrorCodeVersionConflict {
 		t.Fatalf("stale update = %+v, want 409 version_conflict", resp)
 	}
 
