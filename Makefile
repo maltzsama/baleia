@@ -274,9 +274,10 @@ k8s-plugin-bundle:
 # node's network: the node's Docker bridge has no IPv6, and apk hangs on the
 # Alpine CDN's IPv6 addresses there. It goes through docker-env rather than
 # `minikube image build --build-opt=network=host`, which minikube 1.39 passes
-# on as a flag its builder rejects.
+# on as a flag its builder rejects. docker-env needs the Docker runtime, which
+# minikube start asks for explicitly.
 k8s-up:
-	minikube start -p $(K8S_PROFILE) $(K8S_DRIVER_FLAG) --cpus=$(K8S_CPUS) --memory=$(K8S_MEMORY)
+	minikube start -p $(K8S_PROFILE) $(K8S_DRIVER_FLAG) --container-runtime=docker --cpus=$(K8S_CPUS) --memory=$(K8S_MEMORY)
 	kubectl apply -k deploy/dev
 	eval "$$(minikube -p $(K8S_PROFILE) docker-env)" && docker build --network=host -t baleia:dev .
 	$(MAKE) k8s-plugin-bundle
