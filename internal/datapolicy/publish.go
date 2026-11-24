@@ -95,21 +95,26 @@ func (p *Publisher) now() time.Time {
 // masks with one priority on a column, an engine catalog name another
 // catalog already has, catalogs whose views cannot be read, and trusted-owned
 // DEFINER views over a policied table.
+//
+// The catalog's policies are read again at every attempt: a retry after a
+// concurrent publish never writes a snapshot older than what that publish
+// saw.
 func (p *Publisher) PublishCatalog(ctx context.Context, catalogID uuid.UUID, names []string, views ViewInspection, by uuid.UUID) (Revision, error) {
-	policies, err := p.Store.ListByCatalog(ctx, catalogID)
-	if err != nil {
-		return Revision{}, fmt.Errorf("list the catalog's policies: %w", err)
-	}
-	if problems := PublishProblems(policies); len(problems) > 0 {
-		return Revision{}, &RefusedError{Problems: problems}
-	}
-	catalog := CatalogContentOf(names, policies)
-	return p.publish(ctx, ReasonPublish, nil, &by, views, func(content *Content) {
+	return p.publish(ctx, ReasonPublish, nil, &by, views, func(ctx context.Context, content *Content) error {
+		policies, err := p.Store.ListByCatalog(ctx, catalogID)
+		if err != nil {
+			return fmt.Errorf("list the catalog's policies: %w", err)
+		}
+		if problems := PublishProblems(policies); len(problems) > 0 {
+			return &RefusedError{Problems: problems}
+		}
+		catalog := CatalogContentOf(names, policies)
 		if len(catalog.Tables) == 0 {
 			delete(content.Catalogs, catalogID.String())
-			return
+			return nil
 		}
 		content.Catalogs[catalogID.String()] = catalog
+		return nil
 	})
 }
 
@@ -124,8 +129,9 @@ func (p *Publisher) Rollback(ctx context.Context, revisionID uuid.UUID, views Vi
 	if err := json.Unmarshal(source.Content, &earlier); err != nil {
 		return Revision{}, fmt.Errorf("read revision %s: %w", source.ID, err)
 	}
-	return p.publish(ctx, ReasonRollback, &source.ID, &by, views, func(content *Content) {
+	return p.publish(ctx, ReasonRollback, &source.ID, &by, views, func(_ context.Context, content *Content) error {
 		content.Catalogs = earlier.Catalogs
+		return nil
 	})
 }
 
@@ -169,13 +175,15 @@ func (p *Publisher) Reissue(ctx context.Context) (Revision, bool, error) {
 // publish applies change to the published content, refreshes the subjects,
 // checks the result and publishes it. A concurrent publish that landed first
 // makes it start over from the new revision.
-func (p *Publisher) publish(ctx context.Context, reason RevisionReason, source, by *uuid.UUID, views ViewInspection, change func(*Content)) (Revision, error) {
+func (p *Publisher) publish(ctx context.Context, reason RevisionReason, source, by *uuid.UUID, views ViewInspection, change func(context.Context, *Content) error) (Revision, error) {
 	for attempt := 1; ; attempt++ {
 		content, base, err := p.published(ctx)
 		if err != nil {
 			return Revision{}, err
 		}
-		change(&content)
+		if err := change(ctx, &content); err != nil {
+			return Revision{}, err
+		}
 		if content.Subjects, err = p.subjects(ctx); err != nil {
 			return Revision{}, err
 		}

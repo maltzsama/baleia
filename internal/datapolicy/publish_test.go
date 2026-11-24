@@ -270,6 +270,33 @@ func TestPublisher_ConcurrentPublishKeepsBoth(t *testing.T) {
 	}
 }
 
+// TestPublisher_RetryReadsTheCatalogAgain: a publish that loses the race to
+// a publish of the same catalog writes the catalog as it is now, never the
+// snapshot it read before the race.
+func TestPublisher_RetryReadsTheCatalogAgain(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Now()
+	store := newMemStore()
+	sales := uuid.New()
+	store.policies[sales] = publishedPolicies(sales)
+	p := newPublisher(t, store, &memObjects{}, &now)
+	store.raceOnce = func() {
+		store.policies[sales][0].Compiled = "region = 'US'"
+		if _, err := p.PublishCatalog(ctx, sales, []string{"lake"}, ViewInspection{}, uuid.New()); err != nil {
+			t.Errorf("racing publish: %v", err)
+		}
+	}
+	rev, err := p.PublishCatalog(ctx, sales, []string{"lake"}, ViewInspection{}, uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := contentOf(t, rev).Catalogs[sales.String()].Tables["sales"]["orders"].RowPolicies
+	if len(rows) != 1 || rows[0].Using != "region = 'US'" {
+		t.Fatalf("row policies = %+v, want the edit the racing publish carried", rows)
+	}
+}
+
 func TestPublisher_ReissueAndRollback(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
