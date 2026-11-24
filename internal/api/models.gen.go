@@ -198,13 +198,14 @@ const (
 
 // Defines values for CatalogAllowedAction.
 const (
-	CatalogAllowedActionBrowse        CatalogAllowedAction = "browse"
-	CatalogAllowedActionCreateBinding CatalogAllowedAction = "create_binding"
-	CatalogAllowedActionDelete        CatalogAllowedAction = "delete"
-	CatalogAllowedActionGrant         CatalogAllowedAction = "grant"
-	CatalogAllowedActionSyncMetadata  CatalogAllowedAction = "sync_metadata"
-	CatalogAllowedActionUpdate        CatalogAllowedAction = "update"
-	CatalogAllowedActionView          CatalogAllowedAction = "view"
+	CatalogAllowedActionBrowse             CatalogAllowedAction = "browse"
+	CatalogAllowedActionCreateBinding      CatalogAllowedAction = "create_binding"
+	CatalogAllowedActionDelete             CatalogAllowedAction = "delete"
+	CatalogAllowedActionGrant              CatalogAllowedAction = "grant"
+	CatalogAllowedActionManageDataPolicies CatalogAllowedAction = "manage_data_policies"
+	CatalogAllowedActionSyncMetadata       CatalogAllowedAction = "sync_metadata"
+	CatalogAllowedActionUpdate             CatalogAllowedAction = "update"
+	CatalogAllowedActionView               CatalogAllowedAction = "view"
 )
 
 // Defines values for CatalogBindingLifecycleState.
@@ -452,6 +453,71 @@ const (
 	CreateWorkspaceRequestTypeShared   CreateWorkspaceRequestType = "shared"
 )
 
+// Defines values for DataPolicyAllowedAction.
+const (
+	DataPolicyAllowedActionDelete DataPolicyAllowedAction = "delete"
+	DataPolicyAllowedActionUpdate DataPolicyAllowedAction = "update"
+)
+
+// Defines values for DataPolicyEngineStateHealth.
+const (
+	DataPolicyHealthDisabled  DataPolicyEngineStateHealth = "disabled"
+	DataPolicyHealthHealthy   DataPolicyEngineStateHealth = "healthy"
+	DataPolicyHealthUnhealthy DataPolicyEngineStateHealth = "unhealthy"
+)
+
+// Defines values for DataPolicyKind.
+const (
+	DataPolicyKindColumnMask DataPolicyKind = "column_mask"
+	DataPolicyKindRowFilter  DataPolicyKind = "row_filter"
+)
+
+// Defines values for DataPolicyMode.
+const (
+	DataPolicyModePermissive  DataPolicyMode = "permissive"
+	DataPolicyModeRestrictive DataPolicyMode = "restrictive"
+)
+
+// Defines values for DataPolicyProblemCode.
+const (
+	DataPolicyProblemCatalogNameConflict DataPolicyProblemCode = "catalog_name_conflict"
+	DataPolicyProblemDuplicatePriority   DataPolicyProblemCode = "duplicate_priority"
+	DataPolicyProblemInvalid             DataPolicyProblemCode = "invalid"
+	DataPolicyProblemNotChecked          DataPolicyProblemCode = "not_checked"
+	DataPolicyProblemTrustedDefinerView  DataPolicyProblemCode = "trusted_definer_view"
+	DataPolicyProblemViewsNotInspectable DataPolicyProblemCode = "views_not_inspectable"
+)
+
+// Defines values for DataPolicyRevisionReason.
+const (
+	DataPolicyRevisionReasonPublish  DataPolicyRevisionReason = "publish"
+	DataPolicyRevisionReasonReissue  DataPolicyRevisionReason = "reissue"
+	DataPolicyRevisionReasonRollback DataPolicyRevisionReason = "rollback"
+	DataPolicyRevisionReasonSubjects DataPolicyRevisionReason = "subjects"
+)
+
+// Defines values for DataPolicyState.
+const (
+	DataPolicyStateDisabled DataPolicyState = "disabled"
+	DataPolicyStateEnabled  DataPolicyState = "enabled"
+)
+
+// Defines values for DataPolicyTemplate.
+const (
+	DataPolicyTemplateConstant DataPolicyTemplate = "constant"
+	DataPolicyTemplateCustom   DataPolicyTemplate = "custom"
+	DataPolicyTemplateNull     DataPolicyTemplate = "null_value"
+	DataPolicyTemplatePartial  DataPolicyTemplate = "partial"
+	DataPolicyTemplateSha256   DataPolicyTemplate = "sha256"
+)
+
+// Defines values for DataPolicyValidation.
+const (
+	DataPolicyValidationInvalid DataPolicyValidation = "invalid"
+	DataPolicyValidationPending DataPolicyValidation = "pending"
+	DataPolicyValidationValid   DataPolicyValidation = "valid"
+)
+
 // Defines values for DirectoryReconcileActionAction.
 const (
 	DirectoryReconcileActionActionReinstate DirectoryReconcileActionAction = "reinstate"
@@ -546,7 +612,9 @@ const (
 	ErrorCodeCredentialsUnreadable     ErrorCode = "credentials_unreadable"
 	ErrorCodeCustomSqlForbidden        ErrorCode = "custom_sql_forbidden"
 	ErrorCodeCustomSqlRequiresReadOnly ErrorCode = "custom_sql_requires_read_only"
+	ErrorCodeDataPoliciesDisabled      ErrorCode = "data_policies_disabled"
 	ErrorCodeDataPoliciesUnenforced    ErrorCode = "data_policies_unenforced"
+	ErrorCodeDataPoliciesUnsupported   ErrorCode = "data_policies_unsupported"
 	ErrorCodeDataPolicyInvalid         ErrorCode = "data_policy_invalid"
 	ErrorCodeDestinationNotEligible    ErrorCode = "destination_not_eligible"
 	ErrorCodeDropFailed                ErrorCode = "drop_failed"
@@ -674,6 +742,7 @@ const (
 	CreateSharedWorkspace GlobalAction = "create_shared_workspace"
 	CreateWorkspace       GlobalAction = "create_workspace"
 	ManageAssistant       GlobalAction = "manage_assistant"
+	ManageDataPolicies    GlobalAction = "manage_data_policies"
 	ManageIdentity        GlobalAction = "manage_identity"
 	ManageUsers           GlobalAction = "manage_users"
 	ManageWorkload        GlobalAction = "manage_workload"
@@ -2174,6 +2243,19 @@ type CatalogConnectionImpact struct {
 	RunningExecutions int                  `json:"running_executions"`
 }
 
+// CatalogDataPolicies defines model for CatalogDataPolicies.
+type CatalogDataPolicies struct {
+	// Draft The catalog's policies differ from the published revision
+	Draft bool `json:"draft"`
+
+	// Enabled BALEIA_DATA_POLICIES=opa
+	Enabled bool `json:"enabled"`
+
+	// Names The catalog's names on the engines that enforce data policies
+	Names    []string     `json:"names"`
+	Policies []DataPolicy `json:"policies"`
+}
+
 // CatalogEngineRef defines model for CatalogEngineRef.
 type CatalogEngineRef struct {
 	Class string             `json:"class"`
@@ -2600,6 +2682,24 @@ type CreateCatalogRequest struct {
 	Warehouse *string `json:"warehouse,omitempty"`
 }
 
+// CreateDataPolicyRequest defines model for CreateDataPolicyRequest.
+type CreateDataPolicyRequest struct {
+	Column      *string             `json:"column,omitempty"`
+	Description *string             `json:"description,omitempty"`
+	Expression  string              `json:"expression"`
+	Kind        DataPolicyKind      `json:"kind"`
+	Mode        *DataPolicyMode     `json:"mode,omitempty"`
+	Name        string              `json:"name"`
+	Priority    *int32              `json:"priority,omitempty"`
+	Schema      string              `json:"schema"`
+	State       *DataPolicyState    `json:"state,omitempty"`
+	Subjects    []DataPolicySubject `json:"subjects"`
+	Table       string              `json:"table"`
+
+	// Template Which editor template filled a mask's expression; a hint only
+	Template *DataPolicyTemplate `json:"template,omitempty"`
+}
+
 // CreateEngineRequest defines model for CreateEngineRequest.
 type CreateEngineRequest struct {
 	// Connection Configuration of the engine-family connection backing this engine. Its provider must have the federated_engine role and no data-source access mode. The connection and engine are persisted atomically.
@@ -2795,6 +2895,166 @@ type CronPreviewResult struct {
 	Next          []time.Time `json:"next"`
 	Valid         bool        `json:"valid"`
 }
+
+// DataPolicy defines model for DataPolicy.
+type DataPolicy struct {
+	AllowedActions *[]DataPolicyAllowedAction `json:"allowed_actions,omitempty"`
+	CatalogId      openapi_types.UUID         `json:"catalog_id"`
+
+	// Column The masked column (column_mask only)
+	Column *string `json:"column"`
+
+	// Compiled The checked canonical expression OPA serves; set while validation is valid
+	Compiled    *string             `json:"compiled"`
+	CreatedAt   time.Time           `json:"created_at"`
+	CreatedBy   *openapi_types.UUID `json:"created_by"`
+	Description string              `json:"description"`
+
+	// Expression As authored, in the restricted expression language
+	Expression string             `json:"expression"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// InvalidDetail The offending construct (a function, column or type), never the expression
+	InvalidDetail *string `json:"invalid_detail"`
+
+	// InvalidReason Why validation is invalid: a stable code (function_not_allowed, unknown_column, not_boolean, type_mismatch, engine_refused, …)
+	InvalidReason *string        `json:"invalid_reason"`
+	Kind          DataPolicyKind `json:"kind"`
+
+	// Mode row_filter only
+	Mode *DataPolicyMode `json:"mode"`
+	Name string          `json:"name"`
+
+	// Priority column_mask only: the highest matching priority wins; unique per column at publish
+	Priority   int32                `json:"priority"`
+	Schema     string               `json:"schema"`
+	State      DataPolicyState      `json:"state"`
+	Subjects   []DataPolicySubject  `json:"subjects"`
+	Table      string               `json:"table"`
+	Template   *DataPolicyTemplate  `json:"template"`
+	UpdatedAt  time.Time            `json:"updated_at"`
+	Validation DataPolicyValidation `json:"validation"`
+	Version    int64                `json:"version"`
+}
+
+// DataPolicyAllowedAction defines model for DataPolicyAllowedAction.
+type DataPolicyAllowedAction string
+
+// DataPolicyDefinerView defines model for DataPolicyDefinerView.
+type DataPolicyDefinerView struct {
+	// Owner The identity it runs as: whose policies apply
+	Owner string `json:"owner"`
+
+	// Reads Policied tables it reads, directly or through other views
+	Reads []string `json:"reads"`
+
+	// Trusted Owned by a trusted identity: it reads unfiltered and blocks publishing
+	Trusted bool `json:"trusted"`
+
+	// Unreadable Its SQL could not be parsed, so it is taken to read every policied table
+	Unreadable bool `json:"unreadable"`
+
+	// View catalog.schema.view on the engines
+	View string `json:"view"`
+}
+
+// DataPolicyEngineState defines model for DataPolicyEngineState.
+type DataPolicyEngineState struct {
+	// ActiveRevision The data revision the engine's OPA reports active
+	ActiveRevision *string `json:"active_revision"`
+
+	// DataPolicies The engine's data_policies flag
+	DataPolicies bool                        `json:"data_policies"`
+	EngineId     openapi_types.UUID          `json:"engine_id"`
+	EngineName   string                      `json:"engine_name"`
+	Health       DataPolicyEngineStateHealth `json:"health"`
+
+	// Reason Why the engine is unhealthy: no_report, report_stale, bundle_error or data_policy_digest_mismatch
+	Reason     *string    `json:"reason"`
+	ReportedAt *time.Time `json:"reported_at"`
+}
+
+// DataPolicyEngineStateHealth defines model for DataPolicyEngineState.Health.
+type DataPolicyEngineStateHealth string
+
+// DataPolicyKind defines model for DataPolicyKind.
+type DataPolicyKind string
+
+// DataPolicyMode defines model for DataPolicyMode.
+type DataPolicyMode string
+
+// DataPolicyProblem defines model for DataPolicyProblem.
+type DataPolicyProblem struct {
+	Code DataPolicyProblemCode `json:"code"`
+
+	// Detail The reason code, catalog name or view the problem is about
+	Detail   *string             `json:"detail"`
+	PolicyId *openapi_types.UUID `json:"policy_id"`
+}
+
+// DataPolicyProblemCode defines model for DataPolicyProblem.Code.
+type DataPolicyProblemCode string
+
+// DataPolicyRefusal defines model for DataPolicyRefusal.
+type DataPolicyRefusal struct {
+	Code     ErrorCode           `json:"code"`
+	Message  string              `json:"message"`
+	Problems []DataPolicyProblem `json:"problems"`
+}
+
+// DataPolicyRevision defines model for DataPolicyRevision.
+type DataPolicyRevision struct {
+	CreatedAt time.Time           `json:"created_at"`
+	CreatedBy *openapi_types.UUID `json:"created_by"`
+
+	// Digest SHA-256 of the revision's content
+	Digest string             `json:"digest"`
+	Id     openapi_types.UUID `json:"id"`
+
+	// NotAfter The lease: OPA denies users once it has passed
+	NotAfter time.Time `json:"not_after"`
+	Number   int64     `json:"number"`
+
+	// Published The revision the published pointer names
+	Published bool                     `json:"published"`
+	Reason    DataPolicyRevisionReason `json:"reason"`
+
+	// SourceId The revision a re-issue or rollback copies
+	SourceId *openapi_types.UUID `json:"source_id"`
+}
+
+// DataPolicyRevisionReason defines model for DataPolicyRevisionReason.
+type DataPolicyRevisionReason string
+
+// DataPolicyState defines model for DataPolicyState.
+type DataPolicyState string
+
+// DataPolicyStatus defines model for DataPolicyStatus.
+type DataPolicyStatus struct {
+	// Enabled BALEIA_DATA_POLICIES=opa
+	Enabled bool                    `json:"enabled"`
+	Engines []DataPolicyEngineState `json:"engines"`
+
+	// ExpectedPolicyDigest The Rego digest engines must report
+	ExpectedPolicyDigest *string             `json:"expected_policy_digest,omitempty"`
+	Published            *DataPolicyRevision `json:"published"`
+}
+
+// DataPolicySubject One reference a policy applies to: exactly one of user, team, group (identity-provider group name), service_account or everyone. everyone may carry except, a list of named references.
+type DataPolicySubject struct {
+	Everyone       *bool                `json:"everyone,omitempty"`
+	Except         *[]DataPolicySubject `json:"except,omitempty"`
+	Group          *string              `json:"group,omitempty"`
+	ServiceAccount *openapi_types.UUID  `json:"service_account,omitempty"`
+	Team           *openapi_types.UUID  `json:"team,omitempty"`
+	User           *openapi_types.UUID  `json:"user,omitempty"`
+}
+
+// DataPolicyTemplate Which editor template filled a mask's expression; a hint only
+type DataPolicyTemplate string
+
+// DataPolicyValidation defines model for DataPolicyValidation.
+type DataPolicyValidation string
 
 // Dialect defines model for Dialect.
 type Dialect = EngineDialect
@@ -5236,6 +5496,27 @@ type UpdateCatalogRequest struct {
 	Warehouse        *string            `json:"warehouse,omitempty"`
 }
 
+// UpdateDataPolicyRequest defines model for UpdateDataPolicyRequest.
+type UpdateDataPolicyRequest struct {
+	Column      *string             `json:"column,omitempty"`
+	Description *string             `json:"description,omitempty"`
+	Expression  string              `json:"expression"`
+	Kind        DataPolicyKind      `json:"kind"`
+	Mode        *DataPolicyMode     `json:"mode,omitempty"`
+	Name        string              `json:"name"`
+	Priority    *int32              `json:"priority,omitempty"`
+	Schema      string              `json:"schema"`
+	State       *DataPolicyState    `json:"state,omitempty"`
+	Subjects    []DataPolicySubject `json:"subjects"`
+	Table       string              `json:"table"`
+
+	// Template Which editor template filled a mask's expression; a hint only
+	Template *DataPolicyTemplate `json:"template,omitempty"`
+
+	// Version The version read; another update since then is a 409 version_conflict
+	Version int64 `json:"version"`
+}
+
 // UpdateEngineQueue defines model for UpdateEngineQueue.
 type UpdateEngineQueue struct {
 	Class          UpdateEngineQueueClass `json:"class"`
@@ -5791,6 +6072,9 @@ type QueryPerPage = int
 // Conflict defines model for Conflict.
 type Conflict = Error
 
+// DataPolicyRefused defines model for DataPolicyRefused.
+type DataPolicyRefused = DataPolicyRefusal
+
 // Forbidden defines model for Forbidden.
 type Forbidden = Error
 
@@ -5948,6 +6232,11 @@ type ListTableHealthParams struct {
 type PutTableMaintenanceParams struct {
 	// IfMatch The revision being replaced.
 	IfMatch *string `json:"If-Match,omitempty"`
+}
+
+// ListDataPolicyRevisionsParams defines parameters for ListDataPolicyRevisions.
+type ListDataPolicyRevisionsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // GetDialectParams defines parameters for GetDialect.
@@ -6412,6 +6701,9 @@ type RunTableMaintenanceJSONRequestBody = ManualMaintenanceRequest
 // CreateCatalogBindingJSONRequestBody defines body for CreateCatalogBinding for application/json ContentType.
 type CreateCatalogBindingJSONRequestBody = CreateBindingRequest
 
+// CreateDataPolicyJSONRequestBody defines body for CreateDataPolicy for application/json ContentType.
+type CreateDataPolicyJSONRequestBody = CreateDataPolicyRequest
+
 // CreateCatalogJSONRequestBody defines body for CreateCatalog for application/json ContentType.
 type CreateCatalogJSONRequestBody = CreateCatalogRequest
 
@@ -6420,6 +6712,9 @@ type UpdateCatalogJSONRequestBody = UpdateCatalogRequest
 
 // PreviewCronJSONRequestBody defines body for PreviewCron for application/json ContentType.
 type PreviewCronJSONRequestBody = CronPreviewRequest
+
+// UpdateDataPolicyJSONRequestBody defines body for UpdateDataPolicy for application/json ContentType.
+type UpdateDataPolicyJSONRequestBody = UpdateDataPolicyRequest
 
 // ExplainSQLJSONRequestBody defines body for ExplainSQL for application/json ContentType.
 type ExplainSQLJSONRequestBody = ExplainRequest

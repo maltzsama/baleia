@@ -92,6 +92,7 @@ func testAPI(f handlerFields) *API {
 		WorkspaceHandlers: newWorkspaceHandlers(c),
 		AuthHandlers:      newAuthHandlers(c),
 	}
+	h.DataPolicyHandlers = newDataPolicyHandlers(c, nil)
 	h.attentionCache = f.attentionCache
 	return h
 }

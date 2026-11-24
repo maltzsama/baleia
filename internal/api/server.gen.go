@@ -300,6 +300,18 @@ type ServerInterface interface {
 	// Bind a source catalog into a federated engine
 	// (POST /catalogs/{id}/bindings)
 	CreateCatalogBinding(w http.ResponseWriter, r *http.Request, id PathId)
+	// A catalog's data policies (owner of its connection or an admin)
+	// (GET /catalogs/{id}/data-policies)
+	ListCatalogDataPolicies(w http.ResponseWriter, r *http.Request, id PathId)
+	// Add a row filter or column mask to one of the catalog's tables
+	// (POST /catalogs/{id}/data-policies)
+	CreateDataPolicy(w http.ResponseWriter, r *http.Request, id PathId)
+	// SECURITY DEFINER views over the catalog's policied tables, and whose policies they apply
+	// (GET /catalogs/{id}/data-policies/definer-views)
+	ListCatalogDefinerViews(w http.ResponseWriter, r *http.Request, id PathId)
+	// Publish the catalog's current policies in a new signed revision
+	// (POST /catalogs/{id}/data-policies/publish)
+	PublishCatalogDataPolicies(w http.ResponseWriter, r *http.Request, id PathId)
 	// Connection categories in presentation order (ADR 0021 D.10)
 	// (GET /connection-categories)
 	ListConnectionCategories(w http.ResponseWriter, r *http.Request)
@@ -324,6 +336,24 @@ type ServerInterface interface {
 	// Next runs of a cron expression, from the server's parser
 	// (POST /cron/preview)
 	PreviewCron(w http.ResponseWriter, r *http.Request)
+	// Published revisions, newest first (global admin)
+	// (GET /data-policies/revisions)
+	ListDataPolicyRevisions(w http.ResponseWriter, r *http.Request, params ListDataPolicyRevisionsParams)
+	// Publish an earlier revision's policies again with a fresh lease (global admin)
+	// (POST /data-policies/revisions/{id}/rollback)
+	RollbackDataPolicyRevision(w http.ResponseWriter, r *http.Request, id PathId)
+	// The published revision and each engine's integration (global admin)
+	// (GET /data-policies/status)
+	GetDataPolicyStatus(w http.ResponseWriter, r *http.Request)
+	// Remove a data policy; it stays in force until the catalog is published
+	// (DELETE /data-policies/{id})
+	DeleteDataPolicy(w http.ResponseWriter, r *http.Request, id PathId)
+	// One data policy
+	// (GET /data-policies/{id})
+	GetDataPolicy(w http.ResponseWriter, r *http.Request, id PathId)
+	// Replace a data policy and check it again
+	// (PUT /data-policies/{id})
+	UpdateDataPolicy(w http.ResponseWriter, r *http.Request, id PathId)
 	// A SQL dialect with its keyword and function lists (for the editor)
 	// (GET /dialects/{name})
 	GetDialect(w http.ResponseWriter, r *http.Request, name string, params GetDialectParams)
@@ -1410,6 +1440,30 @@ func (_ Unimplemented) CreateCatalogBinding(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// A catalog's data policies (owner of its connection or an admin)
+// (GET /catalogs/{id}/data-policies)
+func (_ Unimplemented) ListCatalogDataPolicies(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a row filter or column mask to one of the catalog's tables
+// (POST /catalogs/{id}/data-policies)
+func (_ Unimplemented) CreateDataPolicy(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SECURITY DEFINER views over the catalog's policied tables, and whose policies they apply
+// (GET /catalogs/{id}/data-policies/definer-views)
+func (_ Unimplemented) ListCatalogDefinerViews(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Publish the catalog's current policies in a new signed revision
+// (POST /catalogs/{id}/data-policies/publish)
+func (_ Unimplemented) PublishCatalogDataPolicies(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Connection categories in presentation order (ADR 0021 D.10)
 // (GET /connection-categories)
 func (_ Unimplemented) ListConnectionCategories(w http.ResponseWriter, r *http.Request) {
@@ -1455,6 +1509,42 @@ func (_ Unimplemented) UpdateCatalog(w http.ResponseWriter, r *http.Request, con
 // Next runs of a cron expression, from the server's parser
 // (POST /cron/preview)
 func (_ Unimplemented) PreviewCron(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Published revisions, newest first (global admin)
+// (GET /data-policies/revisions)
+func (_ Unimplemented) ListDataPolicyRevisions(w http.ResponseWriter, r *http.Request, params ListDataPolicyRevisionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Publish an earlier revision's policies again with a fresh lease (global admin)
+// (POST /data-policies/revisions/{id}/rollback)
+func (_ Unimplemented) RollbackDataPolicyRevision(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The published revision and each engine's integration (global admin)
+// (GET /data-policies/status)
+func (_ Unimplemented) GetDataPolicyStatus(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a data policy; it stays in force until the catalog is published
+// (DELETE /data-policies/{id})
+func (_ Unimplemented) DeleteDataPolicy(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One data policy
+// (GET /data-policies/{id})
+func (_ Unimplemented) GetDataPolicy(w http.ResponseWriter, r *http.Request, id PathId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a data policy and check it again
+// (PUT /data-policies/{id})
+func (_ Unimplemented) UpdateDataPolicy(w http.ResponseWriter, r *http.Request, id PathId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5782,6 +5872,138 @@ func (siw *ServerInterfaceWrapper) CreateCatalogBinding(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListCatalogDataPolicies operation middleware
+func (siw *ServerInterfaceWrapper) ListCatalogDataPolicies(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCatalogDataPolicies(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateDataPolicy operation middleware
+func (siw *ServerInterfaceWrapper) CreateDataPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateDataPolicy(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCatalogDefinerViews operation middleware
+func (siw *ServerInterfaceWrapper) ListCatalogDefinerViews(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCatalogDefinerViews(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublishCatalogDataPolicies operation middleware
+func (siw *ServerInterfaceWrapper) PublishCatalogDataPolicies(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublishCatalogDataPolicies(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListConnectionCategories operation middleware
 func (siw *ServerInterfaceWrapper) ListConnectionCategories(w http.ResponseWriter, r *http.Request) {
 
@@ -6031,6 +6253,195 @@ func (siw *ServerInterfaceWrapper) PreviewCron(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PreviewCron(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDataPolicyRevisions operation middleware
+func (siw *ServerInterfaceWrapper) ListDataPolicyRevisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListDataPolicyRevisionsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDataPolicyRevisions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RollbackDataPolicyRevision operation middleware
+func (siw *ServerInterfaceWrapper) RollbackDataPolicyRevision(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RollbackDataPolicyRevision(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDataPolicyStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetDataPolicyStatus(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDataPolicyStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteDataPolicy operation middleware
+func (siw *ServerInterfaceWrapper) DeleteDataPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteDataPolicy(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDataPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetDataPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDataPolicy(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateDataPolicy operation middleware
+func (siw *ServerInterfaceWrapper) UpdateDataPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id PathId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateDataPolicy(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13677,6 +14088,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/catalogs/{id}/bindings", wrapper.CreateCatalogBinding)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{id}/data-policies", wrapper.ListCatalogDataPolicies)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalogs/{id}/data-policies", wrapper.CreateDataPolicy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/catalogs/{id}/data-policies/definer-views", wrapper.ListCatalogDefinerViews)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/catalogs/{id}/data-policies/publish", wrapper.PublishCatalogDataPolicies)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/connection-categories", wrapper.ListConnectionCategories)
 	})
 	r.Group(func(r chi.Router) {
@@ -13699,6 +14122,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/cron/preview", wrapper.PreviewCron)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/data-policies/revisions", wrapper.ListDataPolicyRevisions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/data-policies/revisions/{id}/rollback", wrapper.RollbackDataPolicyRevision)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/data-policies/status", wrapper.GetDataPolicyStatus)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/data-policies/{id}", wrapper.DeleteDataPolicy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/data-policies/{id}", wrapper.GetDataPolicy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/data-policies/{id}", wrapper.UpdateDataPolicy)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dialects/{name}", wrapper.GetDialect)
@@ -14232,6 +14673,8 @@ type ArrowStreamApplicationvndApacheArrowStreamResponse struct {
 }
 
 type ConflictJSONResponse Error
+
+type DataPolicyRefusedJSONResponse DataPolicyRefusal
 
 type ForbiddenJSONResponse Error
 
@@ -18229,6 +18672,239 @@ func (response CreateCatalogBinding422JSONResponse) VisitCreateCatalogBindingRes
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListCatalogDataPoliciesRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListCatalogDataPoliciesResponseObject interface {
+	VisitListCatalogDataPoliciesResponse(w http.ResponseWriter) error
+}
+
+type ListCatalogDataPolicies200JSONResponse CatalogDataPolicies
+
+func (response ListCatalogDataPolicies200JSONResponse) VisitListCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogDataPolicies401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListCatalogDataPolicies401JSONResponse) VisitListCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogDataPolicies403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListCatalogDataPolicies403JSONResponse) VisitListCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogDataPolicies404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListCatalogDataPolicies404JSONResponse) VisitListCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateDataPolicyRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *CreateDataPolicyJSONRequestBody
+}
+
+type CreateDataPolicyResponseObject interface {
+	VisitCreateDataPolicyResponse(w http.ResponseWriter) error
+}
+
+type CreateDataPolicy201JSONResponse DataPolicy
+
+func (response CreateDataPolicy201JSONResponse) VisitCreateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateDataPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateDataPolicy401JSONResponse) VisitCreateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateDataPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateDataPolicy403JSONResponse) VisitCreateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateDataPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateDataPolicy404JSONResponse) VisitCreateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateDataPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateDataPolicy409JSONResponse) VisitCreateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateDataPolicy422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateDataPolicy422JSONResponse) VisitCreateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogDefinerViewsRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type ListCatalogDefinerViewsResponseObject interface {
+	VisitListCatalogDefinerViewsResponse(w http.ResponseWriter) error
+}
+
+type ListCatalogDefinerViews200JSONResponse []DataPolicyDefinerView
+
+func (response ListCatalogDefinerViews200JSONResponse) VisitListCatalogDefinerViewsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogDefinerViews401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListCatalogDefinerViews401JSONResponse) VisitListCatalogDefinerViewsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogDefinerViews403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListCatalogDefinerViews403JSONResponse) VisitListCatalogDefinerViewsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogDefinerViews404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListCatalogDefinerViews404JSONResponse) VisitListCatalogDefinerViewsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCatalogDefinerViews503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response ListCatalogDefinerViews503JSONResponse) VisitListCatalogDefinerViewsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PublishCatalogDataPoliciesRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type PublishCatalogDataPoliciesResponseObject interface {
+	VisitPublishCatalogDataPoliciesResponse(w http.ResponseWriter) error
+}
+
+type PublishCatalogDataPolicies201JSONResponse DataPolicyRevision
+
+func (response PublishCatalogDataPolicies201JSONResponse) VisitPublishCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PublishCatalogDataPolicies401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PublishCatalogDataPolicies401JSONResponse) VisitPublishCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PublishCatalogDataPolicies403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PublishCatalogDataPolicies403JSONResponse) VisitPublishCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PublishCatalogDataPolicies404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PublishCatalogDataPolicies404JSONResponse) VisitPublishCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PublishCatalogDataPolicies409JSONResponse struct{ ConflictJSONResponse }
+
+func (response PublishCatalogDataPolicies409JSONResponse) VisitPublishCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PublishCatalogDataPolicies422JSONResponse struct{ DataPolicyRefusedJSONResponse }
+
+func (response PublishCatalogDataPolicies422JSONResponse) VisitPublishCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PublishCatalogDataPolicies503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response PublishCatalogDataPolicies503JSONResponse) VisitPublishCatalogDataPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListConnectionCategoriesRequestObject struct {
 }
 
@@ -18575,6 +19251,288 @@ type PreviewCron422JSONResponse struct {
 }
 
 func (response PreviewCron422JSONResponse) VisitPreviewCronResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListDataPolicyRevisionsRequestObject struct {
+	Params ListDataPolicyRevisionsParams
+}
+
+type ListDataPolicyRevisionsResponseObject interface {
+	VisitListDataPolicyRevisionsResponse(w http.ResponseWriter) error
+}
+
+type ListDataPolicyRevisions200JSONResponse []DataPolicyRevision
+
+func (response ListDataPolicyRevisions200JSONResponse) VisitListDataPolicyRevisionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListDataPolicyRevisions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListDataPolicyRevisions401JSONResponse) VisitListDataPolicyRevisionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListDataPolicyRevisions403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListDataPolicyRevisions403JSONResponse) VisitListDataPolicyRevisionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RollbackDataPolicyRevisionRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type RollbackDataPolicyRevisionResponseObject interface {
+	VisitRollbackDataPolicyRevisionResponse(w http.ResponseWriter) error
+}
+
+type RollbackDataPolicyRevision201JSONResponse DataPolicyRevision
+
+func (response RollbackDataPolicyRevision201JSONResponse) VisitRollbackDataPolicyRevisionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RollbackDataPolicyRevision401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RollbackDataPolicyRevision401JSONResponse) VisitRollbackDataPolicyRevisionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RollbackDataPolicyRevision403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RollbackDataPolicyRevision403JSONResponse) VisitRollbackDataPolicyRevisionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RollbackDataPolicyRevision404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RollbackDataPolicyRevision404JSONResponse) VisitRollbackDataPolicyRevisionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RollbackDataPolicyRevision409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RollbackDataPolicyRevision409JSONResponse) VisitRollbackDataPolicyRevisionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RollbackDataPolicyRevision422JSONResponse struct{ DataPolicyRefusedJSONResponse }
+
+func (response RollbackDataPolicyRevision422JSONResponse) VisitRollbackDataPolicyRevisionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RollbackDataPolicyRevision503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response RollbackDataPolicyRevision503JSONResponse) VisitRollbackDataPolicyRevisionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDataPolicyStatusRequestObject struct {
+}
+
+type GetDataPolicyStatusResponseObject interface {
+	VisitGetDataPolicyStatusResponse(w http.ResponseWriter) error
+}
+
+type GetDataPolicyStatus200JSONResponse DataPolicyStatus
+
+func (response GetDataPolicyStatus200JSONResponse) VisitGetDataPolicyStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDataPolicyStatus401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetDataPolicyStatus401JSONResponse) VisitGetDataPolicyStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDataPolicyStatus403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetDataPolicyStatus403JSONResponse) VisitGetDataPolicyStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteDataPolicyRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type DeleteDataPolicyResponseObject interface {
+	VisitDeleteDataPolicyResponse(w http.ResponseWriter) error
+}
+
+type DeleteDataPolicy204Response = NoContentResponse
+
+func (response DeleteDataPolicy204Response) VisitDeleteDataPolicyResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteDataPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteDataPolicy401JSONResponse) VisitDeleteDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteDataPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteDataPolicy403JSONResponse) VisitDeleteDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteDataPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteDataPolicy404JSONResponse) VisitDeleteDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDataPolicyRequestObject struct {
+	Id PathId `json:"id"`
+}
+
+type GetDataPolicyResponseObject interface {
+	VisitGetDataPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetDataPolicy200JSONResponse DataPolicy
+
+func (response GetDataPolicy200JSONResponse) VisitGetDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDataPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetDataPolicy401JSONResponse) VisitGetDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetDataPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetDataPolicy404JSONResponse) VisitGetDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateDataPolicyRequestObject struct {
+	Id   PathId `json:"id"`
+	Body *UpdateDataPolicyJSONRequestBody
+}
+
+type UpdateDataPolicyResponseObject interface {
+	VisitUpdateDataPolicyResponse(w http.ResponseWriter) error
+}
+
+type UpdateDataPolicy200JSONResponse DataPolicy
+
+func (response UpdateDataPolicy200JSONResponse) VisitUpdateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateDataPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateDataPolicy401JSONResponse) VisitUpdateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateDataPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateDataPolicy403JSONResponse) VisitUpdateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateDataPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateDataPolicy404JSONResponse) VisitUpdateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateDataPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateDataPolicy409JSONResponse) VisitUpdateDataPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateDataPolicy422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateDataPolicy422JSONResponse) VisitUpdateDataPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
 
@@ -26624,6 +27582,18 @@ type StrictServerInterface interface {
 	// Bind a source catalog into a federated engine
 	// (POST /catalogs/{id}/bindings)
 	CreateCatalogBinding(ctx context.Context, request CreateCatalogBindingRequestObject) (CreateCatalogBindingResponseObject, error)
+	// A catalog's data policies (owner of its connection or an admin)
+	// (GET /catalogs/{id}/data-policies)
+	ListCatalogDataPolicies(ctx context.Context, request ListCatalogDataPoliciesRequestObject) (ListCatalogDataPoliciesResponseObject, error)
+	// Add a row filter or column mask to one of the catalog's tables
+	// (POST /catalogs/{id}/data-policies)
+	CreateDataPolicy(ctx context.Context, request CreateDataPolicyRequestObject) (CreateDataPolicyResponseObject, error)
+	// SECURITY DEFINER views over the catalog's policied tables, and whose policies they apply
+	// (GET /catalogs/{id}/data-policies/definer-views)
+	ListCatalogDefinerViews(ctx context.Context, request ListCatalogDefinerViewsRequestObject) (ListCatalogDefinerViewsResponseObject, error)
+	// Publish the catalog's current policies in a new signed revision
+	// (POST /catalogs/{id}/data-policies/publish)
+	PublishCatalogDataPolicies(ctx context.Context, request PublishCatalogDataPoliciesRequestObject) (PublishCatalogDataPoliciesResponseObject, error)
 	// Connection categories in presentation order (ADR 0021 D.10)
 	// (GET /connection-categories)
 	ListConnectionCategories(ctx context.Context, request ListConnectionCategoriesRequestObject) (ListConnectionCategoriesResponseObject, error)
@@ -26648,6 +27618,24 @@ type StrictServerInterface interface {
 	// Next runs of a cron expression, from the server's parser
 	// (POST /cron/preview)
 	PreviewCron(ctx context.Context, request PreviewCronRequestObject) (PreviewCronResponseObject, error)
+	// Published revisions, newest first (global admin)
+	// (GET /data-policies/revisions)
+	ListDataPolicyRevisions(ctx context.Context, request ListDataPolicyRevisionsRequestObject) (ListDataPolicyRevisionsResponseObject, error)
+	// Publish an earlier revision's policies again with a fresh lease (global admin)
+	// (POST /data-policies/revisions/{id}/rollback)
+	RollbackDataPolicyRevision(ctx context.Context, request RollbackDataPolicyRevisionRequestObject) (RollbackDataPolicyRevisionResponseObject, error)
+	// The published revision and each engine's integration (global admin)
+	// (GET /data-policies/status)
+	GetDataPolicyStatus(ctx context.Context, request GetDataPolicyStatusRequestObject) (GetDataPolicyStatusResponseObject, error)
+	// Remove a data policy; it stays in force until the catalog is published
+	// (DELETE /data-policies/{id})
+	DeleteDataPolicy(ctx context.Context, request DeleteDataPolicyRequestObject) (DeleteDataPolicyResponseObject, error)
+	// One data policy
+	// (GET /data-policies/{id})
+	GetDataPolicy(ctx context.Context, request GetDataPolicyRequestObject) (GetDataPolicyResponseObject, error)
+	// Replace a data policy and check it again
+	// (PUT /data-policies/{id})
+	UpdateDataPolicy(ctx context.Context, request UpdateDataPolicyRequestObject) (UpdateDataPolicyResponseObject, error)
 	// A SQL dialect with its keyword and function lists (for the editor)
 	// (GET /dialects/{name})
 	GetDialect(ctx context.Context, request GetDialectRequestObject) (GetDialectResponseObject, error)
@@ -29811,6 +30799,117 @@ func (sh *strictHandler) CreateCatalogBinding(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// ListCatalogDataPolicies operation middleware
+func (sh *strictHandler) ListCatalogDataPolicies(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListCatalogDataPoliciesRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCatalogDataPolicies(ctx, request.(ListCatalogDataPoliciesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCatalogDataPolicies")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCatalogDataPoliciesResponseObject); ok {
+		if err := validResponse.VisitListCatalogDataPoliciesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateDataPolicy operation middleware
+func (sh *strictHandler) CreateDataPolicy(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request CreateDataPolicyRequestObject
+
+	request.Id = id
+
+	var body CreateDataPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateDataPolicy(ctx, request.(CreateDataPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateDataPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateDataPolicyResponseObject); ok {
+		if err := validResponse.VisitCreateDataPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCatalogDefinerViews operation middleware
+func (sh *strictHandler) ListCatalogDefinerViews(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request ListCatalogDefinerViewsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCatalogDefinerViews(ctx, request.(ListCatalogDefinerViewsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCatalogDefinerViews")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCatalogDefinerViewsResponseObject); ok {
+		if err := validResponse.VisitListCatalogDefinerViewsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PublishCatalogDataPolicies operation middleware
+func (sh *strictHandler) PublishCatalogDataPolicies(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request PublishCatalogDataPoliciesRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PublishCatalogDataPolicies(ctx, request.(PublishCatalogDataPoliciesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PublishCatalogDataPolicies")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PublishCatalogDataPoliciesResponseObject); ok {
+		if err := validResponse.VisitPublishCatalogDataPoliciesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListConnectionCategories operation middleware
 func (sh *strictHandler) ListConnectionCategories(w http.ResponseWriter, r *http.Request) {
 	var request ListConnectionCategoriesRequestObject
@@ -30030,6 +31129,167 @@ func (sh *strictHandler) PreviewCron(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PreviewCronResponseObject); ok {
 		if err := validResponse.VisitPreviewCronResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListDataPolicyRevisions operation middleware
+func (sh *strictHandler) ListDataPolicyRevisions(w http.ResponseWriter, r *http.Request, params ListDataPolicyRevisionsParams) {
+	var request ListDataPolicyRevisionsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListDataPolicyRevisions(ctx, request.(ListDataPolicyRevisionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListDataPolicyRevisions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListDataPolicyRevisionsResponseObject); ok {
+		if err := validResponse.VisitListDataPolicyRevisionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RollbackDataPolicyRevision operation middleware
+func (sh *strictHandler) RollbackDataPolicyRevision(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request RollbackDataPolicyRevisionRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RollbackDataPolicyRevision(ctx, request.(RollbackDataPolicyRevisionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RollbackDataPolicyRevision")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RollbackDataPolicyRevisionResponseObject); ok {
+		if err := validResponse.VisitRollbackDataPolicyRevisionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetDataPolicyStatus operation middleware
+func (sh *strictHandler) GetDataPolicyStatus(w http.ResponseWriter, r *http.Request) {
+	var request GetDataPolicyStatusRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDataPolicyStatus(ctx, request.(GetDataPolicyStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDataPolicyStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetDataPolicyStatusResponseObject); ok {
+		if err := validResponse.VisitGetDataPolicyStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteDataPolicy operation middleware
+func (sh *strictHandler) DeleteDataPolicy(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request DeleteDataPolicyRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteDataPolicy(ctx, request.(DeleteDataPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteDataPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteDataPolicyResponseObject); ok {
+		if err := validResponse.VisitDeleteDataPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetDataPolicy operation middleware
+func (sh *strictHandler) GetDataPolicy(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request GetDataPolicyRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDataPolicy(ctx, request.(GetDataPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDataPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetDataPolicyResponseObject); ok {
+		if err := validResponse.VisitGetDataPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateDataPolicy operation middleware
+func (sh *strictHandler) UpdateDataPolicy(w http.ResponseWriter, r *http.Request, id PathId) {
+	var request UpdateDataPolicyRequestObject
+
+	request.Id = id
+
+	var body UpdateDataPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateDataPolicy(ctx, request.(UpdateDataPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateDataPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateDataPolicyResponseObject); ok {
+		if err := validResponse.VisitUpdateDataPolicyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

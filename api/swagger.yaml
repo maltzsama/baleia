@@ -49,6 +49,8 @@ tags:
     description: "External Iceberg catalog connections"
   - name: Engines
     description: "Query engines (federated or direct) and the catalogs bound to them"
+  - name: DataPolicies
+    description: "Row filters and column masks, decided by OPA and enforced by Trino (ADR 0028)"
   - name: Workload
     description: "Per-engine admission queues and the ordered classification rules"
   - name: Catalog
@@ -158,6 +160,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    DataPolicyRefused:
+      description: "The publish is refused: every reason is listed (data_policy_invalid)"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/DataPolicyRefusal" }
     TooManyRequests:
       description: "Rate limited"
       headers:
@@ -186,7 +193,7 @@ components:
     # web/messages/{en,pt-BR}.json (enforced by TestErrorCodesClosed).
     ErrorCode:
       type: string
-      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeCatalogReadOnly, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDataPoliciesUnenforced, ErrorCodeDataPolicyInvalid, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceMemberNotInTeam, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspaceOwnerRoleFixed, ErrorCodeWorkspacePersonal]
+      x-enum-varnames: [ErrorCodeAccountSuspended, ErrorCodeAgentTokenNotAllowed, ErrorCodeAssistantDisabled, ErrorCodeBadRequest, ErrorCodeBindingBusy, ErrorCodeBindingDisabled, ErrorCodeBindingExists, ErrorCodeBindingIsPrimary, ErrorCodeBindingNotManaged, ErrorCodeBindingUnsupported, ErrorCodeCancelFailed, ErrorCodeCancelled, ErrorCodeCatalogNotManaged, ErrorCodeCatalogReadOnly, ErrorCodeConcurrentChange, ErrorCodeConflict, ErrorCodeConnectionError, ErrorCodeConnectionInUse, ErrorCodeCredentialsUnreadable, ErrorCodeCustomSqlForbidden, ErrorCodeCustomSqlRequiresReadOnly, ErrorCodeDataPoliciesDisabled, ErrorCodeDataPoliciesUnenforced, ErrorCodeDataPoliciesUnsupported, ErrorCodeDataPolicyInvalid, ErrorCodeDestinationNotEligible, ErrorCodeDropFailed, ErrorCodeEncryptionFailed, ErrorCodeEncryptionUnavailable, ErrorCodeEngineError, ErrorCodeEngineInUse, ErrorCodeEngineRequired, ErrorCodeEngineUnavailable, ErrorCodeEngineUnreachable, ErrorCodeEngineUnsupported, ErrorCodeExecutionsRunning, ErrorCodeFolderCycle, ErrorCodeForbidden, ErrorCodeGrainNotAllowed, ErrorCodeIdpUnavailable, ErrorCodeInternal, ErrorCodeInternalError, ErrorCodeInvalidBundle, ErrorCodeInvalidCredentials, ErrorCodeInvalidDefinition, ErrorCodeInvalidIdentifier, ErrorCodeInvalidSql, ErrorCodeInvalidTimeRange, ErrorCodeMaintenanceExternal, ErrorCodeNameConflict, ErrorCodeNameInUse, ErrorCodeNotDirect, ErrorCodeNotFound, ErrorCodeNotRunning, ErrorCodeNotSupported, ErrorCodePermissionDenied, ErrorCodePropertyNotOverridable, ErrorCodeProviderInUse, ErrorCodeProviderUnsupported, ErrorCodeQueueFull, ErrorCodeQueueTimeout, ErrorCodeRateLimited, ErrorCodeReadOnlyUnsupported, ErrorCodeRefused, ErrorCodeReservedName, ErrorCodeResourceExhausted, ErrorCodeServiceUnavailable, ErrorCodeSlugConflict, ErrorCodeSpaceMissing, ErrorCodeSpaceNotFound, ErrorCodeSyncInProgress, ErrorCodeSyntax, ErrorCodeTargetNotGranted, ErrorCodeTargetRequired, ErrorCodeTargetUnavailable, ErrorCodeTimeout, ErrorCodeTurnRunning, ErrorCodeUnauthorized, ErrorCodeUnsupportedBundleVersion, ErrorCodeUnsupportedSyntax, ErrorCodeUserInUse, ErrorCodeUserOwnsWorkspace, ErrorCodeValidationError, ErrorCodeVersionConflict, ErrorCodeWorkspaceMemberNotInTeam, ErrorCodeWorkspaceNotFound, ErrorCodeWorkspaceOwnerRoleFixed, ErrorCodeWorkspacePersonal]
       enum:
         - account_suspended
         - agent_token_not_allowed
@@ -209,7 +216,9 @@ components:
         - credentials_unreadable
         - custom_sql_forbidden
         - custom_sql_requires_read_only
+        - data_policies_disabled
         - data_policies_unenforced
+        - data_policies_unsupported
         - data_policy_invalid
         - destination_not_eligible
         - drop_failed
@@ -1279,7 +1288,7 @@ components:
       enum: [view, update, delete, test, reconcile, bind_into]
     CatalogAllowedAction:
       type: string
-      enum: [view, browse, update, delete, sync_metadata, grant, create_binding]
+      enum: [view, browse, update, delete, sync_metadata, grant, create_binding, manage_data_policies]
     CatalogBindingAllowedAction:
       type: string
       enum: [view, update, delete, sync]
@@ -1298,7 +1307,8 @@ components:
     GlobalAction:
       type: string
       enum: [create_connection, create_workspace, create_shared_workspace, manage_users,
-             manage_identity, view_all_audit, view_system, manage_assistant, manage_workload]
+             manage_identity, view_all_audit, view_system, manage_assistant, manage_workload,
+             manage_data_policies]
     Features:
       type: object
       required: [agents, assistant, bi_gateway, retrievers]
@@ -3086,6 +3096,213 @@ components:
         connectors: { type: array, items: { type: string }, description: "The first is the default" }
         protected_key_patterns: { type: array, items: { type: string }, description: "Glob patterns (case-insensitive) of extra-property keys that cannot be overridden" }
         reserved_names: { type: array, items: { type: string } }
+
+    # ── Data policies (ADR 0028) ──────────────────────────────
+    DataPolicySubject:
+      type: object
+      description: >
+        One reference a policy applies to: exactly one of user, team, group
+        (identity-provider group name), service_account or everyone. everyone
+        may carry except, a list of named references.
+      properties:
+        user: { type: string, format: uuid }
+        team: { type: string, format: uuid }
+        group: { type: string, maxLength: 255 }
+        service_account: { type: string, format: uuid }
+        everyone: { type: boolean }
+        except:
+          type: array
+          items: { $ref: "#/components/schemas/DataPolicySubject" }
+
+    DataPolicyKind:
+      type: string
+      x-enum-varnames: [DataPolicyKindRowFilter, DataPolicyKindColumnMask]
+      enum: [row_filter, column_mask]
+    DataPolicyMode:
+      type: string
+      x-enum-varnames: [DataPolicyModePermissive, DataPolicyModeRestrictive]
+      enum: [permissive, restrictive]
+    DataPolicyState:
+      type: string
+      x-enum-varnames: [DataPolicyStateEnabled, DataPolicyStateDisabled]
+      enum: [enabled, disabled]
+    DataPolicyTemplate:
+      type: string
+      x-enum-varnames: [DataPolicyTemplateNull, DataPolicyTemplateConstant, DataPolicyTemplatePartial, DataPolicyTemplateSha256, DataPolicyTemplateCustom]
+      enum: [null_value, constant, partial, sha256, custom]
+      description: "Which editor template filled a mask's expression; a hint only"
+    DataPolicyValidation:
+      type: string
+      x-enum-varnames: [DataPolicyValidationPending, DataPolicyValidationValid, DataPolicyValidationInvalid]
+      enum: [pending, valid, invalid]
+    DataPolicyAllowedAction:
+      type: string
+      x-enum-varnames: [DataPolicyAllowedActionUpdate, DataPolicyAllowedActionDelete]
+      enum: [update, delete]
+
+    DataPolicy:
+      type: object
+      required: [id, catalog_id, name, description, kind, schema, table, priority, subjects, expression, state, validation, version, created_at, updated_at, allowed_actions]
+      properties:
+        allowed_actions:
+          type: array
+          readOnly: true
+          items: { $ref: "#/components/schemas/DataPolicyAllowedAction" }
+        id: { type: string, format: uuid }
+        catalog_id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        kind: { $ref: "#/components/schemas/DataPolicyKind" }
+        schema: { type: string }
+        table: { type: string }
+        column: { type: string, nullable: true, description: "The masked column (column_mask only)" }
+        mode:
+          allOf: [{ $ref: "#/components/schemas/DataPolicyMode" }]
+          nullable: true
+          description: "row_filter only"
+        priority: { type: integer, format: int32, description: "column_mask only: the highest matching priority wins; unique per column at publish" }
+        subjects:
+          type: array
+          items: { $ref: "#/components/schemas/DataPolicySubject" }
+        expression: { type: string, description: "As authored, in the restricted expression language" }
+        compiled: { type: string, nullable: true, description: "The checked canonical expression OPA serves; set while validation is valid" }
+        template:
+          allOf: [{ $ref: "#/components/schemas/DataPolicyTemplate" }]
+          nullable: true
+        state: { $ref: "#/components/schemas/DataPolicyState" }
+        validation: { $ref: "#/components/schemas/DataPolicyValidation" }
+        invalid_reason: { type: string, nullable: true, description: "Why validation is invalid: a stable code (function_not_allowed, unknown_column, not_boolean, type_mismatch, engine_refused, …)" }
+        invalid_detail: { type: string, nullable: true, description: "The offending construct (a function, column or type), never the expression" }
+        version: { type: integer, format: int64 }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CreateDataPolicyRequest:
+      type: object
+      required: [name, kind, schema, table, subjects, expression]
+      properties:
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$" }
+        description: { type: string, maxLength: 1024 }
+        kind: { $ref: "#/components/schemas/DataPolicyKind" }
+        schema: { type: string, maxLength: 255 }
+        table: { type: string, maxLength: 255 }
+        column: { type: string, maxLength: 255 }
+        mode: { $ref: "#/components/schemas/DataPolicyMode" }
+        priority: { type: integer, format: int32, minimum: 0 }
+        subjects:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/DataPolicySubject" }
+        expression: { type: string, maxLength: 4096 }
+        template: { $ref: "#/components/schemas/DataPolicyTemplate" }
+        state: { $ref: "#/components/schemas/DataPolicyState" }
+
+    UpdateDataPolicyRequest:
+      allOf:
+        - $ref: "#/components/schemas/CreateDataPolicyRequest"
+        - type: object
+          required: [version]
+          properties:
+            version: { type: integer, format: int64, description: "The version read; another update since then is a 409 version_conflict" }
+
+    DataPolicyDefinerView:
+      type: object
+      required: [view, owner, reads, trusted, unreadable]
+      properties:
+        view: { type: string, description: "catalog.schema.view on the engines" }
+        owner: { type: string, description: "The identity it runs as: whose policies apply" }
+        reads:
+          type: array
+          items: { type: string }
+          description: "Policied tables it reads, directly or through other views"
+        trusted: { type: boolean, description: "Owned by a trusted identity: it reads unfiltered and blocks publishing" }
+        unreadable: { type: boolean, description: "Its SQL could not be parsed, so it is taken to read every policied table" }
+
+    CatalogDataPolicies:
+      type: object
+      required: [enabled, names, draft, policies]
+      properties:
+        enabled: { type: boolean, description: "BALEIA_DATA_POLICIES=opa" }
+        names:
+          type: array
+          items: { type: string }
+          description: "The catalog's names on the engines that enforce data policies"
+        draft: { type: boolean, description: "The catalog's policies differ from the published revision" }
+        policies:
+          type: array
+          items: { $ref: "#/components/schemas/DataPolicy" }
+
+    DataPolicyRevisionReason:
+      type: string
+      x-enum-varnames: [DataPolicyRevisionReasonPublish, DataPolicyRevisionReasonReissue, DataPolicyRevisionReasonRollback, DataPolicyRevisionReasonSubjects]
+      enum: [publish, reissue, rollback, subjects]
+    DataPolicyRevision:
+      type: object
+      required: [id, number, reason, digest, not_after, created_at, published]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: integer, format: int64 }
+        reason: { $ref: "#/components/schemas/DataPolicyRevisionReason" }
+        source_id: { type: string, format: uuid, nullable: true, description: "The revision a re-issue or rollback copies" }
+        digest: { type: string, description: "SHA-256 of the revision's content" }
+        not_after: { type: string, format: date-time, description: "The lease: OPA denies users once it has passed" }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        published: { type: boolean, description: "The revision the published pointer names" }
+
+    DataPolicyProblem:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          x-enum-varnames: [DataPolicyProblemInvalid, DataPolicyProblemNotChecked, DataPolicyProblemDuplicatePriority, DataPolicyProblemCatalogNameConflict, DataPolicyProblemTrustedDefinerView, DataPolicyProblemViewsNotInspectable]
+          enum: [invalid, not_checked, duplicate_priority, catalog_name_conflict, trusted_definer_view, views_not_inspectable]
+        policy_id: { type: string, format: uuid, nullable: true }
+        detail: { type: string, nullable: true, description: "The reason code, catalog name or view the problem is about" }
+
+    DataPolicyRefusal:
+      type: object
+      required: [code, message, problems]
+      properties:
+        code: { $ref: "#/components/schemas/ErrorCode" }
+        message: { type: string }
+        problems:
+          type: array
+          items: { $ref: "#/components/schemas/DataPolicyProblem" }
+
+    DataPolicyEngineState:
+      type: object
+      required: [engine_id, engine_name, data_policies, health]
+      properties:
+        engine_id: { type: string, format: uuid }
+        engine_name: { type: string }
+        data_policies: { type: boolean, description: "The engine's data_policies flag" }
+        health:
+          type: string
+          x-enum-varnames: [DataPolicyHealthDisabled, DataPolicyHealthHealthy, DataPolicyHealthUnhealthy]
+          enum: [disabled, healthy, unhealthy]
+        reason:
+          type: string
+          nullable: true
+          description: "Why the engine is unhealthy: no_report, report_stale, bundle_error or data_policy_digest_mismatch"
+        active_revision: { type: string, nullable: true, description: "The data revision the engine's OPA reports active" }
+        reported_at: { type: string, format: date-time, nullable: true }
+
+    DataPolicyStatus:
+      type: object
+      required: [enabled, engines]
+      properties:
+        enabled: { type: boolean, description: "BALEIA_DATA_POLICIES=opa" }
+        published:
+          allOf: [{ $ref: "#/components/schemas/DataPolicyRevision" }]
+          nullable: true
+        expected_policy_digest: { type: string, description: "The Rego digest engines must report" }
+        engines:
+          type: array
+          items: { $ref: "#/components/schemas/DataPolicyEngineState" }
 
     ConnectionCategory:
       type: object
@@ -10446,3 +10663,205 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /catalogs/{id}/data-policies:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [DataPolicies]
+      operationId: listCatalogDataPolicies
+      summary: "A catalog's data policies (owner of its connection or an admin)"
+      responses:
+        "200":
+          description: "Policies"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogDataPolicies" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [DataPolicies]
+      operationId: createDataPolicy
+      summary: "Add a row filter or column mask to one of the catalog's tables"
+      description: >
+        The expression is checked against the restricted language and typed by
+        an engine that enforces data policies; an invalid one is stored as an
+        invalid draft (validation invalid), which cannot be published. 409
+        data_policies_disabled while BALEIA_DATA_POLICIES is off, name_in_use
+        when the table already has a policy of that name. 422
+        data_policies_unenforced (the catalog is bound to an engine without
+        data_policies, or to none that has it), data_policies_unsupported (the
+        catalog is not an Iceberg REST catalog, whose views Baleia can read),
+        validation_error.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDataPolicyRequest" }
+      responses:
+        "201":
+          description: "Created"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataPolicy" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /catalogs/{id}/data-policies/publish:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [DataPolicies]
+      operationId: publishCatalogDataPolicies
+      summary: "Publish the catalog's current policies in a new signed revision"
+      description: >
+        Builds a revision with this catalog's enabled policies and every other
+        catalog as published, signs it, stores it and moves the published
+        pointer. 422 data_policy_invalid lists every problem: invalid or
+        unchecked policies, two masks with one priority on a column, an engine
+        catalog name another catalog has, catalogs bound to enforcing engines
+        whose views cannot be read, trusted-owned DEFINER views over a policied
+        table. 409 data_policies_disabled while BALEIA_DATA_POLICIES is off.
+      responses:
+        "201":
+          description: "Published"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataPolicyRevision" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/DataPolicyRefused" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /catalogs/{id}/data-policies/definer-views:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [DataPolicies]
+      operationId: listCatalogDefinerViews
+      summary: "SECURITY DEFINER views over the catalog's policied tables, and whose policies they apply"
+      responses:
+        "200":
+          description: "Views"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DataPolicyDefinerView" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /data-policies/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      tags: [DataPolicies]
+      operationId: getDataPolicy
+      summary: "One data policy"
+      responses:
+        "200":
+          description: "Policy"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataPolicy" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [DataPolicies]
+      operationId: updateDataPolicy
+      summary: "Replace a data policy and check it again"
+      description: >
+        409 version_conflict when the policy changed since the version read,
+        name_in_use, data_policies_disabled. The change is a draft until the
+        catalog is published.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDataPolicyRequest" }
+      responses:
+        "200":
+          description: "Updated"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataPolicy" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [DataPolicies]
+      operationId: deleteDataPolicy
+      summary: "Remove a data policy; it stays in force until the catalog is published"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /data-policies/revisions:
+    get:
+      tags: [DataPolicies]
+      operationId: listDataPolicyRevisions
+      summary: "Published revisions, newest first (global admin)"
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+      responses:
+        "200":
+          description: "Revisions"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DataPolicyRevision" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /data-policies/revisions/{id}/rollback:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    post:
+      tags: [DataPolicies]
+      operationId: rollbackDataPolicyRevision
+      summary: "Publish an earlier revision's policies again with a fresh lease (global admin)"
+      description: >
+        The earlier revision stays as it is; the new revision copies its
+        policies with today's subjects. Refused like a publish (422
+        data_policy_invalid).
+      responses:
+        "201":
+          description: "Published"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataPolicyRevision" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/DataPolicyRefused" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /data-policies/status:
+    get:
+      tags: [DataPolicies]
+      operationId: getDataPolicyStatus
+      summary: "The published revision and each engine's integration (global admin)"
+      responses:
+        "200":
+          description: "Status"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataPolicyStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }

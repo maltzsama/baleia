@@ -24,6 +24,11 @@ func (h *core) catalogActions(ctx context.Context, id db.UUID) []CatalogAllowedA
 		acts = append(acts, CatalogAllowedActionUpdate, CatalogAllowedActionDelete,
 			CatalogAllowedActionSyncMetadata, CatalogAllowedActionGrant, CatalogAllowedActionCreateBinding)
 	}
+	// Data policies are on the admin plane (ADR 0028): the same check their
+	// handlers run.
+	if _, _, err := h.authz().Catalog(ctx, p, id, authz.ActAdmin); err == nil {
+		acts = append(acts, CatalogAllowedActionManageDataPolicies)
+	}
 	return acts
 }
 
