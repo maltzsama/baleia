@@ -480,6 +480,19 @@ func TestDataPolicies_DefinerViewsOverPoliciesInForce(t *testing.T) {
 	if views := resp.(ListCatalogDefinerViews200JSONResponse); len(views) != 1 || views[0].Owner != "ana" {
 		t.Fatalf("definer views = %+v, want the view over the published policy's table", views)
 	}
+
+	// An engine that stopped enforcing data policies blocks the next publish,
+	// not the policies in force.
+	if err := f.gdb.Model(&model.Engine{}).Where("id = ?", f.engineID.String()).Update("data_policies", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	resp, err = f.h.ListCatalogDefinerViews(ctx, ListCatalogDefinerViewsRequestObject{Id: f.catalog})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if views := resp.(ListCatalogDefinerViews200JSONResponse); len(views) != 1 || views[0].Owner != "ana" {
+		t.Fatalf("definer views on an unenforced binding = %+v, want the view over the published policy's table", views)
+	}
 }
 
 func TestDataPolicies_Status(t *testing.T) {

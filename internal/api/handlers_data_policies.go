@@ -559,10 +559,14 @@ func (h *DataPolicyHandlers) ListCatalogDefinerViews(ctx context.Context, reques
 	}
 	out := []DataPolicyDefinerView{}
 	names, _, err := h.catalogNames(ctx, cat, conn)
-	if _, refused := catalogTargetRefusal(err); refused {
+	switch {
+	case errors.Is(err, errPoliciesUnenforced):
+		// The draft cannot be published while an engine does not enforce
+		// it, but the published revision stays in force: only it counts.
+		names = nil
+	case errors.Is(err, errUnsupportedCatalog):
 		return ListCatalogDefinerViews200JSONResponse(out), nil
-	}
-	if err != nil {
+	case err != nil:
 		return nil, err
 	}
 	policies, err := h.policies.ListByCatalog(ctx, uuid.UUID(cat.ID.Bytes))

@@ -10747,7 +10747,7 @@ paths:
       tags: [DataPolicies]
       operationId: listCatalogDefinerViews
       summary: "SECURITY DEFINER views over the catalog's policied tables, and whose policies they apply"
-      description: "A table is policied when the published revision or the catalog's draft holds a policy on it: a policy deleted from the draft applies until the next publish."
+      description: "A table is policied when the published revision or the catalog's draft holds a policy on it: a policy deleted from the draft applies until the next publish. While an engine the catalog is bound to does not enforce data policies, only the published revision counts."
       responses:
         "200":
           description: "Views"
