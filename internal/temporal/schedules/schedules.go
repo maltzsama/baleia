@@ -151,6 +151,10 @@ const (
 	DirectoryReconcile = "directory-reconcile"
 	// TablePopularity recomputes the popular tables of every workspace (#562).
 	TablePopularity = "table-popularity"
+	// DataPolicyReissue re-issues the published data policy revision when
+	// the subjects changed or its lease runs low (ADR 0028); it exists only
+	// while BALEIA_DATA_POLICIES=opa.
+	DataPolicyReissue = "data-policy-reissue"
 )
 
 // Remove deletes a schedule an earlier configuration created; a schedule

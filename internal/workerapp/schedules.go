@@ -11,6 +11,10 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
+// dataPolicyReissueEvery is the data policy re-issue cadence: the debounce of
+// subject changes, and well inside the shortest lease (15m).
+const dataPolicyReissueEvery = 5 * time.Minute
+
 // EnsureSchedules creates the recurring jobs as Temporal Schedules,
 // idempotently on every boot. Each workflow does a single pass and returns.
 func EnsureSchedules(ctx context.Context, c client.Client, cfg *config.Config) error {
@@ -39,6 +43,17 @@ func EnsureSchedules(ctx context.Context, c client.Client, cfg *config.Config) e
 	} else {
 		// Best effort: an absent schedule is the state we want.
 		_ = schedules.Remove(ctx, c, schedules.AuditExport)
+	}
+	// Data policy re-issue (ADR 0028) runs only while data policies are on.
+	if cfg.DataPoliciesEnabled() {
+		if err := schedules.Ensure(ctx, c, TaskQueue, []schedules.Spec{
+			schedulespecs.DataPolicyReissue(dataPolicyReissueEvery),
+		}); err != nil {
+			return fmt.Errorf("data policy schedule: %w", err)
+		}
+	} else {
+		// Best effort: an absent schedule is the state we want.
+		_ = schedules.Remove(ctx, c, schedules.DataPolicyReissue)
 	}
 	// Cold offload and retention (ADR 0024, ADR 0026).
 	ensure, remove, err := coldSchedules(cfg)

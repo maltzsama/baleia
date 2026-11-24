@@ -17,6 +17,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/crypto"
+	"github.com/galileostudio/baleia/internal/datapolicy"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/metrics"
@@ -91,6 +92,9 @@ type Activities struct {
 	// temporalClient signals the adaptive admission gate (#551, #579). Nil in
 	// tests that build activities without a worker client.
 	temporalClient client.Client
+	// dataPolicies re-issues the published data policy revision (ADR 0028);
+	// nil while data policies are off.
+	dataPolicies *datapolicy.Publisher
 }
 
 // SetTemporal wires the client the cluster poller signals admission with.
@@ -170,6 +174,7 @@ func Register(w worker.Worker, a *Activities) {
 	w.RegisterActivity(RefreshEngineCatalogs)
 	w.RegisterActivity(ListSyncableCatalogs)
 	w.RegisterActivity(CleanupExpiredTokens)
+	w.RegisterActivity(ReissueDataPolicies)
 	w.RegisterActivity(RefreshTablePopularity)
 	w.RegisterActivity(RecordQueueState)
 	w.RegisterActivity(RecordQueueAdmission)
