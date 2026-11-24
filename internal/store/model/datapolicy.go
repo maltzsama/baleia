@@ -46,8 +46,10 @@ type DataPolicyRevision struct {
 	Reason Text  `gorm:"column:reason;not null;size:16"`
 	// SourceID is the revision whose content this one re-issues.
 	SourceID *UUID `gorm:"column:source_id"`
-	// Content is the published policies, the input of the bundle's tables.
-	Content JSON `gorm:"column:content;not null"`
+	// Content is the published policies, the input of the bundle's tables:
+	// JSON, stored as text so its bytes, and therefore its digest, survive
+	// the round trip (jsonb would normalize them).
+	Content string `gorm:"column:content;not null"`
 	// Digest is the SHA-256 of Content, hex.
 	Digest       Text                `gorm:"column:digest;not null;size:64"`
 	NotAfter     time.Time           `gorm:"column:not_after;not null"`

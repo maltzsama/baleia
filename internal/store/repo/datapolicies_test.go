@@ -2,6 +2,8 @@ package repo
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"testing"
 	"time"
@@ -207,6 +209,22 @@ func TestDataPolicies_Revisions(t *testing.T) {
 	if err != nil || len(list) != 2 || list[0].Number != 2 {
 		t.Fatalf("ListRevisions = %+v, %v; want newest first", list, err)
 	}
+	// The stored bytes are the ones the digest was taken over: no
+	// normalization of whitespace or key order on any backend.
+	spaced := []byte(`{ "tables" : {"b": 1,   "a": [ 2, 1 ]} }`)
+	third, err := r.CreateRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, spaced, lease, nil))
+	if err != nil {
+		t.Fatalf("CreateRevision: %v", err)
+	}
+	stored, err := r.GetRevision(ctx, third.ID)
+	if err != nil {
+		t.Fatalf("GetRevision: %v", err)
+	}
+	sum := sha256.Sum256(stored.Content)
+	if string(stored.Content) != string(spaced) || hex.EncodeToString(sum[:]) != stored.Digest {
+		t.Fatalf("stored content %q does not hash to its digest %s", stored.Content, stored.Digest)
+	}
+
 	if _, err := r.CreateRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte("not json"), lease, nil)); err == nil {
 		t.Fatal("a revision whose content is not JSON was stored")
 	}

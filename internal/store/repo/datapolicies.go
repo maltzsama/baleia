@@ -271,7 +271,7 @@ func toRevisionRow(rev datapolicy.Revision) model.DataPolicyRevision {
 		Number:    rev.Number,
 		Reason:    model.Text(rev.Reason),
 		SourceID:  optionalModelUUID(rev.SourceID),
-		Content:   model.JSON(rev.Content),
+		Content:   string(rev.Content),
 		Digest:    model.Text(rev.Digest),
 		NotAfter:  rev.NotAfter.UTC(),
 		CreatedBy: optionalModelUUID(rev.CreatedBy),
