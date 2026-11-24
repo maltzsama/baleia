@@ -184,12 +184,19 @@ func (h *DataPolicyHandlers) ListCatalogDataPolicies(ctx context.Context, reques
 	for _, p := range policies {
 		out.Policies = append(out.Policies, dataPolicyToPublic(p))
 	}
-	if names, _, err := h.catalogNames(ctx, cat, conn); err == nil {
-		out.Names = names
-		if h.publisher != nil {
-			if out.Draft, err = h.publisher.CatalogChanged(ctx, uuid.UUID(cat.ID.Bytes), names); err != nil {
-				return nil, err
-			}
+	// A catalog that cannot carry policies has no names and no draft; a
+	// failed lookup is an error, never a known draft state.
+	names, _, err := h.catalogNames(ctx, cat, conn)
+	if _, refused := catalogTargetRefusal(err); refused {
+		return ListCatalogDataPolicies200JSONResponse(out), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out.Names = names
+	if h.publisher != nil {
+		if out.Draft, err = h.publisher.CatalogChanged(ctx, uuid.UUID(cat.ID.Bytes), names); err != nil {
+			return nil, err
 		}
 	}
 	return ListCatalogDataPolicies200JSONResponse(out), nil
@@ -550,8 +557,11 @@ func (h *DataPolicyHandlers) ListCatalogDefinerViews(ctx context.Context, reques
 	}
 	out := []DataPolicyDefinerView{}
 	names, _, err := h.catalogNames(ctx, cat, conn)
-	if err != nil {
+	if _, refused := catalogTargetRefusal(err); refused {
 		return ListCatalogDefinerViews200JSONResponse(out), nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	policies, err := h.policies.ListByCatalog(ctx, uuid.UUID(cat.ID.Bytes))
 	if err != nil {
