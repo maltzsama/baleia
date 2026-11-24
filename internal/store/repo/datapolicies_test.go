@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -155,6 +156,41 @@ func TestDataPolicies_CatalogAndEngineChecks(t *testing.T) {
 	}
 	if serves, err := r.EngineServesPoliciedCatalogs(ctx, engineID); err != nil || !serves {
 		t.Fatalf("EngineServesPoliciedCatalogs = %v, %v; want true", serves, err)
+	}
+	if serves, err := r.EngineServesPoliciedCatalogs(ctx, uuid.New()); err != nil || serves {
+		t.Fatalf("an engine without bindings = %v, %v", serves, err)
+	}
+}
+
+// TestDataPolicies_ChecksCountPublishedPolicies: a policy deleted from the
+// draft stays in force until the next publish, so the checks still see it.
+func TestDataPolicies_ChecksCountPublishedPolicies(t *testing.T) {
+	t.Parallel()
+	f, r, catalogID, author := dataPolicyFixture(t)
+	ctx := context.Background()
+	engineID := uuid.MustParse(string(f.engine))
+
+	content, err := json.Marshal(datapolicy.Content{Catalogs: map[string]datapolicy.CatalogContent{
+		catalogID.String(): datapolicy.CatalogContentOf([]string{"lake"}, []datapolicy.Policy{func() datapolicy.Policy {
+			p := rowFilter(catalogID, author, "eu")
+			p.Validation, p.Compiled = datapolicy.ValidationValid, "region = 'EU'"
+			return p
+		}()}),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, content, time.Now().Add(time.Hour), &author), uuid.Nil); err != nil {
+		t.Fatal(err)
+	}
+	if has, err := r.CatalogHasPolicies(ctx, catalogID); err != nil || !has {
+		t.Fatalf("CatalogHasPolicies with only a published policy = %v, %v; want true", has, err)
+	}
+	if serves, err := r.EngineServesPoliciedCatalogs(ctx, engineID); err != nil || !serves {
+		t.Fatalf("EngineServesPoliciedCatalogs with only a published policy = %v, %v; want true", serves, err)
+	}
+	if has, err := r.CatalogHasPolicies(ctx, uuid.New()); err != nil || has {
+		t.Fatalf("another catalog = %v, %v", has, err)
 	}
 	if serves, err := r.EngineServesPoliciedCatalogs(ctx, uuid.New()); err != nil || serves {
 		t.Fatalf("an engine without bindings = %v, %v", serves, err)

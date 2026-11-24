@@ -113,22 +113,77 @@ func (r *DataPolicies) Delete(ctx context.Context, id uuid.UUID) (bool, error) {
 }
 
 // CatalogHasPolicies reports whether a catalog carries any data policy,
-// enabled or not.
+// enabled or not, in its draft or in the published revision: a policy
+// deleted from the draft stays in force until the next publish.
 func (r *DataPolicies) CatalogHasPolicies(ctx context.Context, catalogID uuid.UUID) (bool, error) {
 	var n int64
-	err := r.db.WithContext(ctx).Model(&model.DataPolicy{}).
-		Where("catalog_id = ?", catalogID.String()).Limit(1).Count(&n).Error
-	return n > 0, err
+	if err := r.db.WithContext(ctx).Model(&model.DataPolicy{}).
+		Where("catalog_id = ?", catalogID.String()).Limit(1).Count(&n).Error; err != nil {
+		return false, err
+	}
+	if n > 0 {
+		return true, nil
+	}
+	published, err := r.publishedCatalogs(ctx)
+	if err != nil {
+		return false, err
+	}
+	return published[catalogID], nil
 }
 
 // EngineServesPoliciedCatalogs reports whether an engine has a binding of a
-// catalog that carries data policies.
+// catalog that carries data policies, in its draft or in the published
+// revision.
 func (r *DataPolicies) EngineServesPoliciedCatalogs(ctx context.Context, engineID uuid.UUID) (bool, error) {
 	bound := r.db.Model(&model.CatalogBinding{}).Select("catalog_id").Where("engine_id = ?", engineID.String())
 	var n int64
-	err := r.db.WithContext(ctx).Model(&model.DataPolicy{}).
-		Where("catalog_id IN (?)", bound).Limit(1).Count(&n).Error
-	return n > 0, err
+	if err := r.db.WithContext(ctx).Model(&model.DataPolicy{}).
+		Where("catalog_id IN (?)", bound).Limit(1).Count(&n).Error; err != nil {
+		return false, err
+	}
+	if n > 0 {
+		return true, nil
+	}
+	published, err := r.publishedCatalogs(ctx)
+	if err != nil || len(published) == 0 {
+		return false, err
+	}
+	var ids []string
+	if err := r.db.WithContext(ctx).Model(&model.CatalogBinding{}).
+		Where("engine_id = ?", engineID.String()).Pluck("catalog_id", &ids).Error; err != nil {
+		return false, err
+	}
+	for _, raw := range ids {
+		if id, err := uuid.Parse(raw); err == nil && published[id] {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// publishedCatalogs returns the catalogs the published revision holds
+// policies for; none when nothing is published.
+func (r *DataPolicies) publishedCatalogs(ctx context.Context) (map[uuid.UUID]bool, error) {
+	rev, err := r.PublishedRevision(ctx)
+	if errors.Is(err, datapolicy.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var content datapolicy.Content
+	if err := json.Unmarshal(rev.Content, &content); err != nil {
+		return nil, fmt.Errorf("read revision %s: %w", rev.ID, err)
+	}
+	out := make(map[uuid.UUID]bool, len(content.Catalogs))
+	for key, catalog := range content.Catalogs {
+		id, err := uuid.Parse(key)
+		if err != nil {
+			return nil, fmt.Errorf("read revision %s: catalog %q: %w", rev.ID, key, err)
+		}
+		out[id] = len(catalog.Tables) > 0
+	}
+	return out, nil
 }
 
 // CreateRevision stores a revision under the next number without publishing
