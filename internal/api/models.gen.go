@@ -2997,8 +2997,10 @@ type DataPolicyProblemCode string
 
 // DataPolicyRefusal defines model for DataPolicyRefusal.
 type DataPolicyRefusal struct {
-	Code     ErrorCode           `json:"code"`
-	Message  string              `json:"message"`
+	Code    ErrorCode `json:"code"`
+	Message string    `json:"message"`
+
+	// Problems Every reason the publish is refused; filled only for data_policy_invalid, empty for data_policies_unenforced and data_policies_unsupported
 	Problems []DataPolicyProblem `json:"problems"`
 }
 

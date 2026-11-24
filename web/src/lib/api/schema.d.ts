@@ -6639,6 +6639,7 @@ export interface components {
         DataPolicyRefusal: {
             code: components["schemas"]["ErrorCode"];
             message: string;
+            /** @description Every reason the publish is refused; filled only for data_policy_invalid, empty for data_policies_unenforced and data_policies_unsupported */
             problems: components["schemas"]["DataPolicyProblem"][];
         };
         DataPolicyEngineState: {
@@ -8094,7 +8095,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description The publish is refused: every reason is listed (data_policy_invalid) */
+        /** @description The publish is refused. data_policy_invalid lists every reason in problems; data_policies_unenforced (a binding on an engine that does not enforce data policies, or no binding) and data_policies_unsupported (a catalog whose views Baleia cannot read) carry an empty problems list and are explained by their code. */
         DataPolicyRefused: {
             headers: {
                 [name: string]: unknown;
