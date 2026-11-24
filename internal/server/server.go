@@ -23,6 +23,7 @@ import (
 	"github.com/galileostudio/baleia/internal/bigateway"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/datapolicy"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/mcp"
@@ -32,11 +33,14 @@ import (
 	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/realtime"
+	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/galileostudio/baleia/internal/trinoidentity"
 	"github.com/galileostudio/baleia/internal/ws"
 	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -50,6 +54,8 @@ type Server struct {
 	store           *gorm.DB
 	queries         db.Querier
 	metrics         *metrics.Registry
+	// storage holds the data policy bundles OPA downloads (ADR 0028).
+	storage *storage.S3Client
 
 	handlers *api.API
 	// background is the handlers' work that outlives a request; Run waits
@@ -80,7 +86,7 @@ type drainer interface {
 // session and sweeper) ends with it.
 func New(ctx context.Context, core *app.Core) (*Server, error) {
 	cfg := core.Config
-	s := &Server{logger: core.Logger, cfg: cfg, mux: chi.NewRouter(), store: core.Store, queries: core.Queries, metrics: core.Metrics}
+	s := &Server{logger: core.Logger, cfg: cfg, mux: chi.NewRouter(), store: core.Store, queries: core.Queries, metrics: core.Metrics, storage: core.Storage}
 
 	// Monitoring SSE: changes written by the worker reach this process through
 	// PostgreSQL LISTEN/NOTIFY, then fan out to connected clients (#733).
@@ -113,6 +119,8 @@ func New(ctx context.Context, core *app.Core) (*Server, error) {
 		Identity:      api.IdentityDeps{OIDC: core.OIDC, IDPTokens: core.IDPTokens},
 		Monitoring:    monitoringHub,
 		Realtime:      core.Realtime,
+
+		DataPolicySigningKey: core.DataPolicySigningKey,
 	})
 	if err != nil {
 		return nil, err
@@ -325,6 +333,7 @@ func (s *Server) routes() {
 		events = s.queryEvents
 	}
 	mountQueryEvents(s.mux, events)
+	s.mountOPA()
 
 	s.mux.Get("/api/v1/ws/workspaces/{id}/executions/{execution_id}", s.ws.StreamExecution)
 
@@ -823,4 +832,24 @@ func mountQueryEvents(mux chi.Router, events http.Handler) {
 		return
 	}
 	mux.Post("/internal/trino/query-events", events.ServeHTTP)
+}
+
+// mountOPA serves OPA's data policy bundle downloads and status reports (ADR
+// 0028). They are off, answering 404, unless BALEIA_DATA_POLICIES=opa and
+// BALEIA_OPA_TOKEN are set.
+func (s *Server) mountOPA() {
+	opa := &datapolicy.OPAHandler{Logger: s.logger}
+	if s.cfg.DataPoliciesEnabled() && s.store != nil && s.storage != nil {
+		policies := repo.NewDataPolicies(s.store)
+		opa.Store, opa.Objects, opa.Token = policies, s.storage, s.cfg.OPAToken
+		opa.EngineExists = func(ctx context.Context, id uuid.UUID) (bool, error) {
+			_, err := s.queries.GetEngineByID(ctx, db.UUID{Bytes: id, Valid: true})
+			if errors.Is(err, db.ErrNoRows) {
+				return false, nil
+			}
+			return err == nil, err
+		}
+	}
+	s.mux.Get(datapolicy.BundlePath, opa.ServeBundle)
+	s.mux.Post(datapolicy.StatusPath, opa.ReceiveStatus)
 }

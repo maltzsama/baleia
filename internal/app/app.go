@@ -7,6 +7,7 @@ package app
 import (
 	"cmp"
 	"context"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -25,6 +26,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/connections/sqlite"
 	"github.com/galileostudio/baleia/internal/crypto"
+	"github.com/galileostudio/baleia/internal/datapolicy"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	"github.com/galileostudio/baleia/internal/engines"
@@ -113,6 +115,9 @@ type Core struct {
 	Binder  *bindtrino.Binder
 	// Audit is best effort: a failed write is counted, never fatal.
 	Audit *audit.Postgres
+	// DataPolicySigningKey signs the data policy bundles (ADR 0028); nil
+	// while BALEIA_DATA_POLICIES is off.
+	DataPolicySigningKey *rsa.PrivateKey
 
 	closers []func()
 }
@@ -205,6 +210,11 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 	})
 	if err != nil {
 		return nil, fmt.Errorf("invalid connection network settings: %w", err)
+	}
+	if cfg.DataPoliciesEnabled() {
+		if c.DataPolicySigningKey, err = loadDataPolicySigningKey(cfg); err != nil {
+			return nil, err
+		}
 	}
 	c.Dialects = dialect.NewRegistry()
 	pOpts := providers.Options{
@@ -304,3 +314,18 @@ func (c *Core) Close() {
 
 // ErrNoService is returned by New when Options.Service is empty.
 var ErrNoService = errors.New("app: Options.Service is required")
+
+// loadDataPolicySigningKey resolves BALEIA_DATA_POLICY_SIGNING_KEY, normally
+// an @baleia-secret reference to a mounted Secret, and parses the key. A
+// deployment with data policies on does not start without it.
+func loadDataPolicySigningKey(cfg *config.Config) (*rsa.PrivateKey, error) {
+	text, err := connections.SecretResolver{FileBaseDir: cfg.SecretFileBaseDir}.Resolve(cfg.DataPolicySigningKey)
+	if err != nil {
+		return nil, fmt.Errorf("BALEIA_DATA_POLICY_SIGNING_KEY: %w", err)
+	}
+	key, err := datapolicy.ParseSigningKey(text)
+	if err != nil {
+		return nil, fmt.Errorf("BALEIA_DATA_POLICY_SIGNING_KEY: %w", err)
+	}
+	return key, nil
+}
