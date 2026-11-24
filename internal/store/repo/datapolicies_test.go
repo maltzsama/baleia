@@ -7,6 +7,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -382,6 +383,46 @@ func TestDataPolicies_PublishMovesThePointer(t *testing.T) {
 	got, err := r.PublishedRevision(ctx)
 	if err != nil || got.ID != second.ID || got.Number != 3 {
 		t.Fatalf("PublishedRevision = %+v, %v; want the re-issue, number 3", got, err)
+	}
+}
+
+// TestDataPolicies_ConcurrentFirstPublications: of two first publications
+// racing, one lands and the other fails with ErrVersionConflict; neither
+// overwrites the other's pointer.
+func TestDataPolicies_ConcurrentFirstPublications(t *testing.T) {
+	t.Parallel()
+	_, r, _, _ := dataPolicyFixture(t)
+	ctx := context.Background()
+	lease := time.Now().Add(time.Hour)
+	const racers = 2
+	var (
+		wg        sync.WaitGroup
+		published = make([]datapolicy.Revision, racers)
+		errs      = make([]error, racers)
+		start     = make(chan struct{})
+	)
+	for i := range racers {
+		wg.Go(func() {
+			<-start
+			published[i], errs[i] = r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{"catalogs":{}}`), lease, nil), uuid.Nil)
+		})
+	}
+	close(start)
+	wg.Wait()
+	var landed []datapolicy.Revision
+	for i, err := range errs {
+		switch {
+		case err == nil:
+			landed = append(landed, published[i])
+		case !errors.Is(err, datapolicy.ErrVersionConflict):
+			t.Fatalf("racing first publication: %v, want success or ErrVersionConflict", err)
+		}
+	}
+	if len(landed) != 1 {
+		t.Fatalf("%d first publications landed, want exactly one", len(landed))
+	}
+	if got, err := r.PublishedRevision(ctx); err != nil || got.ID != landed[0].ID {
+		t.Fatalf("PublishedRevision = %v, %v; want the one that landed", got.ID, err)
 	}
 }
 

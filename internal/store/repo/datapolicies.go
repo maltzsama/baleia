@@ -145,16 +145,21 @@ func (r *DataPolicies) CreateRevision(ctx context.Context, rev datapolicy.Revisi
 
 // PublishRevision stores a revision under the next number and moves the
 // published pointer to it, in one transaction: a replica never serves a
-// pointer to a revision that is not stored. The pointer must still name base
-// (uuid.Nil: nothing published yet), read under a row lock, or the call fails
-// with datapolicy.ErrVersionConflict: two publishes built on the same revision
-// cannot both land, so neither loses the other's change.
+// pointer to a revision that is not stored. The pointer must still name base,
+// read under a row lock, or the call fails with datapolicy.ErrVersionConflict:
+// two publishes built on the same revision cannot both land, so neither loses
+// the other's change. A first publication (base uuid.Nil) inserts the pointer
+// and never overwrites one: a concurrent first publication that wrote it
+// first, or took the revision number first, makes it fail the same way.
 func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revision, base uuid.UUID) (datapolicy.Revision, error) {
 	var out datapolicy.Revision
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		read := tx.Where("id = ?", true)
+		if base != uuid.Nil {
+			read = read.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate})
+		}
 		var pointers []model.DataPolicyPointer
-		if err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
-			Where("id = ?", true).Find(&pointers).Error; err != nil {
+		if err := read.Find(&pointers).Error; err != nil {
 			return err
 		}
 		current := ""
@@ -172,16 +177,22 @@ func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revis
 		if err != nil {
 			return err
 		}
-		pointer := model.DataPolicyPointer{ID: true, RevisionID: model.UUID(created.ID.String()), UpdatedAt: time.Now().UTC()}
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"revision_id", "updated_at"}),
-		}).Create(&pointer).Error; err != nil {
+		now := time.Now().UTC()
+		if base == uuid.Nil {
+			pointer := model.DataPolicyPointer{ID: true, RevisionID: model.UUID(created.ID.String()), UpdatedAt: now}
+			if err := tx.Create(&pointer).Error; err != nil {
+				return fmt.Errorf("create the published pointer: %w", err)
+			}
+		} else if err := tx.Model(&model.DataPolicyPointer{}).Where("id = ?", true).
+			Updates(map[string]any{"revision_id": model.UUID(created.ID.String()), "updated_at": now}).Error; err != nil {
 			return fmt.Errorf("move the published pointer: %w", err)
 		}
 		out = created
 		return nil
 	})
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return datapolicy.Revision{}, datapolicy.ErrVersionConflict
+	}
 	return out, err
 }
 
