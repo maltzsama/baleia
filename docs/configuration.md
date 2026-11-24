@@ -94,6 +94,10 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_TRINO_SERVICE_USER` | `baleia` | Worker fallback identity for executions |
 | `BALEIA_TRINO_USER_IDENTITY` | `uuid` | Map Baleia users to Trino users: `uuid`→`u_<uuid>` or `email` |
 | `BALEIA_DATA_POLICIES` | `off` | Row filters and column masks ([ADR 0028](adr/0028-data-policies-opa-trino.md)): `off` or `opa`. Policies apply only to catalogs bound to engines whose `data_policies` flag is on; binding a catalog that has policies to an engine without it is refused (`data_policies_unenforced`) |
+| `BALEIA_DATA_POLICY_LEASE` | `24h` | How long a published data policy bundle stays valid (at least `15m`): the longest a revocation can take while OPA cannot reach Baleia, and the longest OPA keeps serving users while Baleia is down. Baleia re-issues the revision before it ends |
+| `BALEIA_DATA_POLICY_SIGNING_KEY` | — | PEM RSA private key that signs the bundle, normally an `@baleia-secret[file:name]` reference to a mounted Secret ([secrets.md](secrets.md)); OPA verifies with its public key. Required with `opa` |
+| `BALEIA_OPA_TOKEN` | — | Bearer token OPA sends to `GET /opa/bundles/baleia.tar.gz` and `POST /opa/status` (at least 16 characters). Required with `opa`; without it both endpoints answer 404 |
+| `BALEIA_DATA_POLICY_REGO_DIGEST` | release Rego | Digest of the Rego engines must run, for an operator's own Rego; an engine that reports another one is unhealthy (`data_policy_digest_mismatch`) |
 | `BALEIA_AGENTS_ENABLED` | `false` | Mount the agent management API and `/mcp` ([mcp.md](mcp.md)). Off by default |
 | `BALEIA_AGENT_TOKEN_DEFAULT_TTL` | `720h` | Default lifetime of an agent token when `expires_in_days` is omitted |
 | `BALEIA_AGENT_TOKEN_MAX_TTL` | `2160h` | Maximum accepted agent-token lifetime (90 days) |

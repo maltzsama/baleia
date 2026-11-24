@@ -344,7 +344,10 @@ func TestConfig_DataPolicies(t *testing.T) {
 		t.Fatalf("opa = %q, want %q", got, DataPoliciesOPA)
 	}
 	for _, value := range []string{"", DataPoliciesOff, DataPoliciesOPA} {
-		c := &Config{JWTSecret: "a-long-random-value-not-the-default", DataPolicies: value}
+		c := &Config{
+			JWTSecret: "a-long-random-value-not-the-default", DataPolicies: value,
+			OPAToken: "opa-token-0123456789", DataPolicySigningKey: "@baleia-secret[file:key.pem]", DataPolicyLease: time.Hour,
+		}
 		if err := c.Validate(); err != nil {
 			t.Errorf("Validate with %q: %v", value, err)
 		}
@@ -352,5 +355,40 @@ func TestConfig_DataPolicies(t *testing.T) {
 	c := &Config{JWTSecret: "a-long-random-value-not-the-default", DataPolicies: "on"}
 	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "BALEIA_DATA_POLICIES") {
 		t.Fatalf("Validate with an unknown mode = %v, want a BALEIA_DATA_POLICIES error", err)
+	}
+}
+
+func TestConfig_DataPoliciesOPA(t *testing.T) {
+	t.Setenv("BALEIA_DATA_POLICY_LEASE", "")
+	if got := Load().DataPolicyLease; got != DefaultDataPolicyLease {
+		t.Fatalf("default lease = %s, want %s", got, DefaultDataPolicyLease)
+	}
+	t.Setenv("BALEIA_DATA_POLICY_LEASE", "2h")
+	if got := Load().DataPolicyLease; got != 2*time.Hour {
+		t.Fatalf("lease = %s, want 2h", got)
+	}
+	valid := func() *Config {
+		return &Config{
+			JWTSecret: "a-long-random-value-not-the-default", DataPolicies: DataPoliciesOPA,
+			OPAToken: "opa-token-0123456789", DataPolicySigningKey: "@baleia-secret[file:key.pem]", DataPolicyLease: time.Hour,
+		}
+	}
+	if err := valid().Validate(); err != nil || !valid().DataPoliciesEnabled() {
+		t.Fatalf("Validate = %v", err)
+	}
+	for name, change := range map[string]func(*Config){
+		"short token": func(c *Config) { c.OPAToken = "short" },
+		"no key":      func(c *Config) { c.DataPolicySigningKey = "" },
+		"short lease": func(c *Config) { c.DataPolicyLease = time.Minute },
+	} {
+		c := valid()
+		change(c)
+		if err := c.Validate(); err == nil {
+			t.Errorf("%s: Validate accepted it", name)
+		}
+	}
+	// Off needs none of it.
+	if err := (&Config{JWTSecret: "a-long-random-value-not-the-default", DataPolicies: DataPoliciesOff}).Validate(); err != nil {
+		t.Fatalf("off: %v", err)
 	}
 }
