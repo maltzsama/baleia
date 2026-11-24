@@ -61,3 +61,32 @@ type DataPolicyRevision struct {
 
 // TableName is the table of DataPolicyRevision.
 func (DataPolicyRevision) TableName() string { return "data_policy_revisions" }
+
+// DataPolicyPointer is the published revision: one row, moved in the same
+// transaction that creates the revision it names (ADR 0028). Every replica
+// serves the bundle of the revision it points at.
+type DataPolicyPointer struct {
+	ID         bool                `gorm:"column:id;primaryKey;not null;default:true;check:data_policy_pointer_id_check,((id = TRUE))"`
+	RevisionID UUID                `gorm:"column:revision_id;not null"`
+	UpdatedAt  time.Time           `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3)"`
+	Revision   *DataPolicyRevision `gorm:"foreignKey:RevisionID;references:ID;constraint:OnDelete:RESTRICT"`
+}
+
+// TableName is the table of DataPolicyPointer.
+func (DataPolicyPointer) TableName() string { return "data_policy_pointer" }
+
+// DataPolicyEngineStatus is the latest status an engine's OPA reported
+// (POST /opa/status): the data bundle revision it activated, the policy
+// bundle's digest, and the activation error, if any.
+type DataPolicyEngineStatus struct {
+	EngineID       UUID      `gorm:"column:engine_id;primaryKey;not null"`
+	ReportedAt     time.Time `gorm:"column:reported_at;not null"`
+	ActiveRevision Text      `gorm:"column:active_revision;not null;size:64;default:''"`
+	PolicyDigest   Text      `gorm:"column:policy_digest;not null;size:64;default:''"`
+	Code           Text      `gorm:"column:code;not null;size:64;default:''"`
+	Message        Text      `gorm:"column:message;not null;size:1024;default:''"`
+	Engine         *Engine   `gorm:"foreignKey:EngineID;references:ID;constraint:OnDelete:CASCADE"`
+}
+
+// TableName is the table of DataPolicyEngineStatus.
+func (DataPolicyEngineStatus) TableName() string { return "data_policy_engine_status" }

@@ -22,6 +22,8 @@ func All() []any {
 		&ClusterSnapshot{},
 		&ContentVersion{},
 		&DataPolicy{},
+		&DataPolicyEngineStatus{},
+		&DataPolicyPointer{},
 		&DataPolicyRevision{},
 		&DirectoryReconcileRun{},
 		&EngineCatalogObservation{},

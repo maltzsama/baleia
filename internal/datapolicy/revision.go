@@ -60,3 +60,15 @@ func NewRevision(reason RevisionReason, content []byte, notAfter time.Time, crea
 		CreatedBy: createdBy,
 	}
 }
+
+// EngineStatus is the latest status an engine's OPA reported: the data
+// bundle revision it activated, the digest of the policy bundle (the Rego) it
+// runs, and the activation error code and message, if any.
+type EngineStatus struct {
+	EngineID       uuid.UUID
+	ReportedAt     time.Time
+	ActiveRevision string
+	PolicyDigest   string
+	Code           string
+	Message        string
+}

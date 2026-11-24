@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/galileostudio/baleia/internal/datapolicy"
 	"github.com/galileostudio/baleia/internal/store/model"
@@ -130,34 +131,126 @@ func (r *DataPolicies) EngineServesPoliciedCatalogs(ctx context.Context, engineI
 	return n > 0, err
 }
 
-// CreateRevision stores a revision under the next number. The number is
-// taken in the same transaction; a concurrent writer that took it first makes
-// this one fail on the unique number rather than share it.
+// CreateRevision stores a revision under the next number without publishing
+// it.
 func (r *DataPolicies) CreateRevision(ctx context.Context, rev datapolicy.Revision) (datapolicy.Revision, error) {
-	if !json.Valid(rev.Content) {
-		return datapolicy.Revision{}, errors.New("datapolicy revision: content is not JSON")
-	}
 	var out datapolicy.Revision
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var last []int64
-		if err := tx.Model(&model.DataPolicyRevision{}).
-			Order(clause.OrderByColumn{Column: clause.Column{Name: "number"}, Desc: true}).
-			Limit(1).Pluck("number", &last).Error; err != nil {
+		created, err := createRevision(tx, rev)
+		out = created
+		return err
+	})
+	return out, err
+}
+
+// PublishRevision stores a revision under the next number and moves the
+// published pointer to it, in one transaction: a replica never serves a
+// pointer to a revision that is not stored.
+func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revision) (datapolicy.Revision, error) {
+	var out datapolicy.Revision
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		created, err := createRevision(tx, rev)
+		if err != nil {
 			return err
 		}
-		rev.Number = 1
-		if len(last) > 0 {
-			rev.Number = last[0] + 1
+		pointer := model.DataPolicyPointer{ID: true, RevisionID: model.UUID(created.ID.String()), UpdatedAt: time.Now().UTC()}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"revision_id", "updated_at"}),
+		}).Create(&pointer).Error; err != nil {
+			return fmt.Errorf("move the published pointer: %w", err)
 		}
-		rev.CreatedAt = time.Now().UTC()
-		row := toRevisionRow(rev)
-		if err := tx.Create(&row).Error; err != nil {
-			return err
-		}
-		out = rev
+		out = created
 		return nil
 	})
 	return out, err
+}
+
+// PublishedRevision returns the revision the pointer names, or
+// datapolicy.ErrNotFound when nothing was ever published.
+func (r *DataPolicies) PublishedRevision(ctx context.Context) (datapolicy.Revision, error) {
+	var pointer model.DataPolicyPointer
+	err := r.db.WithContext(ctx).Where("id = ?", true).First(&pointer).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return datapolicy.Revision{}, datapolicy.ErrNotFound
+	}
+	if err != nil {
+		return datapolicy.Revision{}, err
+	}
+	id, err := uuid.Parse(string(pointer.RevisionID))
+	if err != nil {
+		return datapolicy.Revision{}, fmt.Errorf("published pointer: %w", err)
+	}
+	return r.GetRevision(ctx, id)
+}
+
+// createRevision takes the next number in tx and stores rev under it. A
+// concurrent writer that took the number first makes this one fail on the
+// unique number rather than share it.
+func createRevision(tx *gorm.DB, rev datapolicy.Revision) (datapolicy.Revision, error) {
+	if !json.Valid(rev.Content) {
+		return datapolicy.Revision{}, errors.New("datapolicy revision: content is not JSON")
+	}
+	var last []int64
+	if err := tx.Model(&model.DataPolicyRevision{}).
+		Order(clause.OrderByColumn{Column: clause.Column{Name: "number"}, Desc: true}).
+		Limit(1).Pluck("number", &last).Error; err != nil {
+		return datapolicy.Revision{}, err
+	}
+	rev.Number = 1
+	if len(last) > 0 {
+		rev.Number = last[0] + 1
+	}
+	rev.CreatedAt = time.Now().UTC()
+	row := toRevisionRow(rev)
+	if err := tx.Create(&row).Error; err != nil {
+		return datapolicy.Revision{}, err
+	}
+	return rev, nil
+}
+
+// RecordEngineStatus stores an engine's latest OPA status report, replacing
+// the previous one.
+func (r *DataPolicies) RecordEngineStatus(ctx context.Context, s datapolicy.EngineStatus) error {
+	row := model.DataPolicyEngineStatus{
+		EngineID:       model.UUID(s.EngineID.String()),
+		ReportedAt:     s.ReportedAt.UTC(),
+		ActiveRevision: model.Text(truncateRunes(s.ActiveRevision, 64)),
+		PolicyDigest:   model.Text(truncateRunes(s.PolicyDigest, 64)),
+		Code:           model.Text(truncateRunes(s.Code, 64)),
+		Message:        model.Text(truncateRunes(s.Message, 1024)),
+	}
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "engine_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"reported_at", "active_revision", "policy_digest", "code", "message"}),
+	}).Create(&row).Error
+}
+
+// ListEngineStatuses returns every engine's latest OPA status report.
+func (r *DataPolicies) ListEngineStatuses(ctx context.Context) ([]datapolicy.EngineStatus, error) {
+	var rows []model.DataPolicyEngineStatus
+	if err := r.db.WithContext(ctx).Order("engine_id").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]datapolicy.EngineStatus, 0, len(rows))
+	for _, row := range rows {
+		id, err := uuid.Parse(string(row.EngineID))
+		if err != nil {
+			return nil, fmt.Errorf("engine status %q: %w", row.EngineID, err)
+		}
+		out = append(out, datapolicy.EngineStatus{
+			EngineID: id, ReportedAt: row.ReportedAt.UTC(), ActiveRevision: string(row.ActiveRevision),
+			PolicyDigest: string(row.PolicyDigest), Code: string(row.Code), Message: string(row.Message),
+		})
+	}
+	return out, nil
+}
+
+func truncateRunes(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n])
 }
 
 // GetRevision returns one revision, or datapolicy.ErrNotFound.

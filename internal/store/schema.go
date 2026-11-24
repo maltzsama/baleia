@@ -292,6 +292,19 @@ func AllMigrations() (*Registry, error) {
 				return createForeignKeys(db, []any{&model.UserIDPGroup{}})
 			},
 		},
+		Migration{
+			// The published-revision pointer and each engine's latest OPA
+			// status report (ADR 0028, #1144). Nothing is published yet.
+			Version: 25,
+			Name:    "add data policy publication",
+			Up: func(db *gorm.DB) error {
+				added := []any{&model.DataPolicyPointer{}, &model.DataPolicyEngineStatus{}}
+				if err := AutoMigrate(db, added...); err != nil {
+					return err
+				}
+				return createForeignKeys(db, added)
+			},
+		},
 	)
 }
 

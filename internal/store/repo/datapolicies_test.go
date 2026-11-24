@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/galileostudio/baleia/internal/datapolicy"
 	"github.com/galileostudio/baleia/internal/db"
@@ -344,5 +346,57 @@ func TestDataPolicies_SubjectSources(t *testing.T) {
 		if s.UserID.String() == string(f.owner) && len(s.Groups) != 0 {
 			t.Fatalf("groups after an empty sign-in = %v", s.Groups)
 		}
+	}
+}
+
+func TestDataPolicies_PublishMovesThePointer(t *testing.T) {
+	t.Parallel()
+	_, r, _, author := dataPolicyFixture(t)
+	ctx := context.Background()
+	if _, err := r.PublishedRevision(ctx); !errors.Is(err, datapolicy.ErrNotFound) {
+		t.Fatalf("PublishedRevision before any publish: %v, want ErrNotFound", err)
+	}
+	lease := time.Now().Add(time.Hour)
+	first, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{"catalogs":{}}`), lease, &author))
+	if err != nil {
+		t.Fatalf("PublishRevision: %v", err)
+	}
+	if got, err := r.PublishedRevision(ctx); err != nil || got.ID != first.ID {
+		t.Fatalf("PublishedRevision = %v, %v; want the first", got.ID, err)
+	}
+	// A revision stored without publishing does not move the pointer.
+	if _, err := r.CreateRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{}`), lease, nil)); err != nil {
+		t.Fatal(err)
+	}
+	second, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonReissue, first.Content, lease.Add(time.Hour), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.PublishedRevision(ctx)
+	if err != nil || got.ID != second.ID || got.Number != 3 {
+		t.Fatalf("PublishedRevision = %+v, %v; want the re-issue, number 3", got, err)
+	}
+}
+
+func TestDataPolicies_EngineStatus(t *testing.T) {
+	t.Parallel()
+	f, r, _, _ := dataPolicyFixture(t)
+	ctx := context.Background()
+	engine := uuid.MustParse(string(f.engine))
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	if err := r.RecordEngineStatus(ctx, datapolicy.EngineStatus{EngineID: engine, ReportedAt: at, ActiveRevision: "r1", PolicyDigest: "d1"}); err != nil {
+		t.Fatalf("RecordEngineStatus: %v", err)
+	}
+	long := strings.Repeat("é", 2000)
+	if err := r.RecordEngineStatus(ctx, datapolicy.EngineStatus{EngineID: engine, ReportedAt: at.Add(time.Minute), Code: "bundle_error", Message: long}); err != nil {
+		t.Fatalf("RecordEngineStatus replacing: %v", err)
+	}
+	statuses, err := r.ListEngineStatuses(ctx)
+	if err != nil || len(statuses) != 1 {
+		t.Fatalf("ListEngineStatuses = %+v, %v", statuses, err)
+	}
+	s := statuses[0]
+	if s.EngineID != engine || s.ActiveRevision != "" || s.Code != "bundle_error" || utf8.RuneCountInString(s.Message) != 1024 || !s.ReportedAt.Equal(at.Add(time.Minute)) {
+		t.Fatalf("status = %+v, want the latest report with its message truncated", s)
 	}
 }
