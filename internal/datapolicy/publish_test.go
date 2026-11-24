@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -337,7 +338,8 @@ func TestPublisher_ReissueAndRollback(t *testing.T) {
 	if err != nil || len(contentOf(t, emptied).Catalogs) != 0 {
 		t.Fatalf("emptying = %v", err)
 	}
-	back, err := p.Rollback(ctx, first.ID, ViewInspection{}, uuid.New())
+	renamed := func(context.Context, uuid.UUID) ([]string, error) { return []string{"lake_v2", "lake_v2"}, nil }
+	back, err := p.Rollback(ctx, first.ID, ViewInspection{}, uuid.New(), renamed)
 	if err != nil {
 		t.Fatalf("Rollback: %v", err)
 	}
@@ -345,8 +347,24 @@ func TestPublisher_ReissueAndRollback(t *testing.T) {
 	if back.Reason != ReasonRollback || *back.SourceID != first.ID || len(c.Catalogs) != 1 || len(c.Subjects) != 1 {
 		t.Fatalf("rollback = %+v, content %+v", back, c)
 	}
-	if _, err := p.Rollback(ctx, uuid.New(), ViewInspection{}, uuid.New()); !errors.Is(err, ErrNotFound) {
+	if got := c.Catalogs[sales.String()].Names; !slices.Equal(got, []string{"lake_v2"}) {
+		t.Fatalf("restored names = %v, want the catalog's names today", got)
+	}
+	if _, err := p.Rollback(ctx, uuid.New(), ViewInspection{}, uuid.New(), renamed); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Rollback to an unknown revision: %v", err)
+	}
+
+	// A catalog that cannot carry policies today refuses the rollback; one
+	// that is gone leaves the bundle.
+	unenforced := errors.New("unenforced binding")
+	refusing := func(context.Context, uuid.UUID) ([]string, error) { return nil, unenforced }
+	if _, err := p.Rollback(ctx, first.ID, ViewInspection{}, uuid.New(), refusing); !errors.Is(err, unenforced) {
+		t.Fatalf("Rollback over an unenforced binding: %v", err)
+	}
+	gone := func(context.Context, uuid.UUID) ([]string, error) { return nil, nil }
+	dropped, err := p.Rollback(ctx, first.ID, ViewInspection{}, uuid.New(), gone)
+	if err != nil || len(contentOf(t, dropped).Catalogs) != 0 {
+		t.Fatalf("Rollback of a deleted catalog = %v, %v", contentOf(t, dropped).Catalogs, err)
 	}
 }
 

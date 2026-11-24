@@ -640,7 +640,13 @@ func (h *DataPolicyHandlers) RollbackDataPolicyRevision(ctx context.Context, req
 			Code: ErrorCodeServiceUnavailable, Message: "the catalog managers' views could not be read",
 		}}, nil
 	}
-	rev, err := h.publisher.Rollback(ctx, request.Id, views, uuid.UUID(principal.UserID.Bytes))
+	rev, err := h.publisher.Rollback(ctx, request.Id, views, uuid.UUID(principal.UserID.Bytes), h.rollbackNames)
+	if resp, ok := catalogTargetRefusal(err); ok {
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return RollbackDataPolicyRevision422JSONResponse{DataPolicyRefusedJSONResponse: DataPolicyRefusedJSONResponse{
+			Code: resp.Code, Message: resp.Message, Problems: []DataPolicyProblem{},
+		}}, nil
+	}
 	if errors.Is(err, datapolicy.ErrNotFound) {
 		h.audited(ctx, ev.Failed(audit.ReasonNotFound))
 		return RollbackDataPolicyRevision404JSONResponse{NotFoundJSONResponse: NotFoundJSONResponse{Code: ErrorCodeNotFound, Message: "revision not found"}}, nil
@@ -660,6 +666,26 @@ func (h *DataPolicyHandlers) RollbackDataPolicyRevision(ctx context.Context, req
 	ev.Changes = map[string]audit.Change{"revision": {To: rev.ID.String()}}
 	h.audited(ctx, ev.Allowed())
 	return RollbackDataPolicyRevision201JSONResponse(revisionToPublic(rev, true)), nil
+}
+
+// rollbackNames gives a catalog a rollback restores its names today, under
+// the rule publishing applies (catalogNames): a catalog now bound to an engine
+// that does not enforce data policies refuses the rollback. A deleted catalog
+// leaves the bundle.
+func (h *DataPolicyHandlers) rollbackNames(ctx context.Context, catalogID uuid.UUID) ([]string, error) {
+	cat, err := h.queries.GetCatalogByID(ctx, db.UUID{Bytes: catalogID, Valid: true})
+	if errors.Is(err, db.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	conn, err := h.queries.GetCatalogConnectionByID(ctx, cat.ConnectionID)
+	if err != nil {
+		return nil, err
+	}
+	names, _, err := h.catalogNames(ctx, cat, conn)
+	return names, err
 }
 
 func (h *DataPolicyHandlers) GetDataPolicyStatus(ctx context.Context, _ GetDataPolicyStatusRequestObject) (GetDataPolicyStatusResponseObject, error) {

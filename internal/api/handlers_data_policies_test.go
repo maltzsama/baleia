@@ -370,11 +370,24 @@ func TestDataPolicies_PublishAndRollback(t *testing.T) {
 		t.Fatalf("revisions = %+v", revisions)
 	}
 
+	// A rollback restores a catalog only while every engine that serves it
+	// enforces data policies.
+	if err := f.gdb.Model(&model.Engine{}).Where("id = ?", f.engineID.String()).Update("data_policies", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	rollResp, err = f.h.RollbackDataPolicyRevision(ctx, RollbackDataPolicyRevisionRequestObject{Id: first.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refusedRoll, ok := rollResp.(RollbackDataPolicyRevision422JSONResponse); !ok || refusedRoll.Code != ErrorCodeDataPoliciesUnenforced {
+		t.Fatalf("rollback over an unenforced binding = %+v", rollResp)
+	}
+
 	got := map[string]int{}
 	for _, a := range f.audit.actions() {
 		got[string(a)]++
 	}
-	if got["data_policy.publish"] != 3 || got["data_policy.rollback"] != 1 || got["data_policy.create"] != 1 {
+	if got["data_policy.publish"] != 3 || got["data_policy.rollback"] != 2 || got["data_policy.create"] != 1 {
 		t.Fatalf("audit = %v", got)
 	}
 }

@@ -118,9 +118,19 @@ func (p *Publisher) PublishCatalog(ctx context.Context, catalogID uuid.UUID, nam
 	})
 }
 
+// CatalogNames returns a catalog's names on the engines that serve it now,
+// for a rollback. It fails when the catalog cannot carry policies today (a
+// binding on an engine that does not enforce them); a nil slice and no error
+// mean the catalog is gone and its policies leave the bundle.
+type CatalogNames func(ctx context.Context, catalogID uuid.UUID) ([]string, error)
+
 // Rollback publishes an earlier revision's policies again, with today's
-// subjects and a fresh lease. The earlier revision stays as it is.
-func (p *Publisher) Rollback(ctx context.Context, revisionID uuid.UUID, views ViewInspection, by uuid.UUID) (Revision, error) {
+// subjects and a fresh lease. The earlier revision stays as it is. Each
+// restored catalog takes the names names returns for it now, and the
+// rollback fails with names' error when a catalog cannot carry policies
+// today: a binding added since then may be on an engine that would not
+// enforce them.
+func (p *Publisher) Rollback(ctx context.Context, revisionID uuid.UUID, views ViewInspection, by uuid.UUID, names CatalogNames) (Revision, error) {
 	source, err := p.Store.GetRevision(ctx, revisionID)
 	if err != nil {
 		return Revision{}, err
@@ -129,8 +139,25 @@ func (p *Publisher) Rollback(ctx context.Context, revisionID uuid.UUID, views Vi
 	if err := json.Unmarshal(source.Content, &earlier); err != nil {
 		return Revision{}, fmt.Errorf("read revision %s: %w", source.ID, err)
 	}
+	restored := make(map[string]CatalogContent, len(earlier.Catalogs))
+	for _, key := range slices.Sorted(maps.Keys(earlier.Catalogs)) {
+		catalogID, err := uuid.Parse(key)
+		if err != nil {
+			return Revision{}, fmt.Errorf("read revision %s: catalog %q: %w", source.ID, key, err)
+		}
+		current, err := names(ctx, catalogID)
+		if err != nil {
+			return Revision{}, err
+		}
+		if current == nil {
+			continue
+		}
+		catalog := earlier.Catalogs[key]
+		catalog.Names = normalNames(current)
+		restored[key] = catalog
+	}
 	return p.publish(ctx, ReasonRollback, &source.ID, &by, views, func(_ context.Context, content *Content) error {
-		content.Catalogs = earlier.Catalogs
+		content.Catalogs = maps.Clone(restored)
 		return nil
 	})
 }
