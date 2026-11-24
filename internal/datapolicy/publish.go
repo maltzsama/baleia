@@ -139,25 +139,27 @@ func (p *Publisher) Rollback(ctx context.Context, revisionID uuid.UUID, views Vi
 	if err := json.Unmarshal(source.Content, &earlier); err != nil {
 		return Revision{}, fmt.Errorf("read revision %s: %w", source.ID, err)
 	}
-	restored := make(map[string]CatalogContent, len(earlier.Catalogs))
-	for _, key := range slices.Sorted(maps.Keys(earlier.Catalogs)) {
-		catalogID, err := uuid.Parse(key)
-		if err != nil {
-			return Revision{}, fmt.Errorf("read revision %s: catalog %q: %w", source.ID, key, err)
+	// The names are resolved on every attempt: a retry after a concurrent
+	// publish also sees a binding renamed in between.
+	return p.publish(ctx, ReasonRollback, &source.ID, &by, views, func(ctx context.Context, content *Content) error {
+		restored := make(map[string]CatalogContent, len(earlier.Catalogs))
+		for _, key := range slices.Sorted(maps.Keys(earlier.Catalogs)) {
+			catalogID, err := uuid.Parse(key)
+			if err != nil {
+				return fmt.Errorf("read revision %s: catalog %q: %w", source.ID, key, err)
+			}
+			current, err := names(ctx, catalogID)
+			if err != nil {
+				return err
+			}
+			if current == nil {
+				continue
+			}
+			catalog := earlier.Catalogs[key]
+			catalog.Names = normalNames(current)
+			restored[key] = catalog
 		}
-		current, err := names(ctx, catalogID)
-		if err != nil {
-			return Revision{}, err
-		}
-		if current == nil {
-			continue
-		}
-		catalog := earlier.Catalogs[key]
-		catalog.Names = normalNames(current)
-		restored[key] = catalog
-	}
-	return p.publish(ctx, ReasonRollback, &source.ID, &by, views, func(_ context.Context, content *Content) error {
-		content.Catalogs = maps.Clone(restored)
+		content.Catalogs = restored
 		return nil
 	})
 }

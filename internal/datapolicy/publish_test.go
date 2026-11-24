@@ -298,6 +298,35 @@ func TestPublisher_RetryReadsTheCatalogAgain(t *testing.T) {
 	}
 }
 
+func TestPublisher_RollbackRetryResolvesNamesAgain(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Now()
+	store := newMemStore()
+	sales := uuid.New()
+	store.policies[sales] = publishedPolicies(sales)
+	p := newPublisher(t, store, &memObjects{}, &now)
+	first, err := p.PublishCatalog(ctx, sales, []string{"lake"}, ViewInspection{}, uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "lake"
+	names := func(context.Context, uuid.UUID) ([]string, error) { return []string{name}, nil }
+	store.raceOnce = func() {
+		name = "lake_v2"
+		if _, err := p.PublishCatalog(ctx, sales, []string{name}, ViewInspection{}, uuid.New()); err != nil {
+			t.Errorf("racing publish: %v", err)
+		}
+	}
+	back, err := p.Rollback(ctx, first.ID, ViewInspection{}, uuid.New(), names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := contentOf(t, back).Catalogs[sales.String()].Names; !slices.Equal(got, []string{"lake_v2"}) {
+		t.Fatalf("restored names = %v, want the name the binding took during the retry", got)
+	}
+}
+
 func TestPublisher_ReissueAndRollback(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
