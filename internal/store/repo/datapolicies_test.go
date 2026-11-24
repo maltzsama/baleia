@@ -17,6 +17,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/google/uuid"
+	"gorm.io/gorm/clause"
 )
 
 func dataPolicyFixture(t *testing.T) (*workbenchFixture, *DataPolicies, uuid.UUID, uuid.UUID) {
@@ -169,17 +170,9 @@ func TestDataPolicies_ChecksCountPublishedPolicies(t *testing.T) {
 	f, r, catalogID, author := dataPolicyFixture(t)
 	ctx := context.Background()
 	engineID := uuid.MustParse(string(f.engine))
+	enforce(t, f, true)
 
-	content, err := json.Marshal(datapolicy.Content{Catalogs: map[string]datapolicy.CatalogContent{
-		catalogID.String(): datapolicy.CatalogContentOf([]string{"lake"}, []datapolicy.Policy{func() datapolicy.Policy {
-			p := rowFilter(catalogID, author, "eu")
-			p.Validation, p.Compiled = datapolicy.ValidationValid, "region = 'EU'"
-			return p
-		}()}),
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	content := policiedContent(t, catalogID, author)
 	if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, content, time.Now().Add(time.Hour), &author), uuid.Nil); err != nil {
 		t.Fatal(err)
 	}
@@ -194,6 +187,79 @@ func TestDataPolicies_ChecksCountPublishedPolicies(t *testing.T) {
 	}
 	if serves, err := r.EngineServesPoliciedCatalogs(ctx, uuid.New()); err != nil || serves {
 		t.Fatalf("an engine without bindings = %v, %v", serves, err)
+	}
+}
+
+// TestDataPolicies_PublishRequiresEnforcingEngines: a publish or a rollback
+// that puts policies in force on a catalog bound to an engine that does not
+// enforce them is refused, also when the engine stops enforcing while the
+// publish runs; a re-issue is not.
+func TestDataPolicies_PublishRequiresEnforcingEngines(t *testing.T) {
+	t.Parallel()
+	f, r, catalogID, author := dataPolicyFixture(t)
+	ctx := context.Background()
+	lease := time.Now().Add(time.Hour)
+	content := policiedContent(t, catalogID, author)
+
+	for _, reason := range []datapolicy.RevisionReason{datapolicy.ReasonPublish, datapolicy.ReasonRollback} {
+		if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(reason, content, lease, &author), uuid.Nil); !errors.Is(err, datapolicy.ErrPoliciesUnenforced) {
+			t.Fatalf("%s on an engine that does not enforce = %v, want ErrPoliciesUnenforced", reason, err)
+		}
+	}
+	enforce(t, f, true)
+	first, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, content, lease, &author), uuid.Nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The engine stops enforcing under its row lock, as UpdateEngine does,
+	// while a publish runs: the publish waits for the lock and sees the flag.
+	tx := f.gdb.Begin()
+	if err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+		Where("id = ?", string(f.engine)).First(&model.Engine{}).Error; err != nil {
+		tx.Rollback()
+		t.Fatal(err)
+	}
+	if err := tx.Model(&model.Engine{}).Where("id = ?", string(f.engine)).Update("data_policies", false).Error; err != nil {
+		tx.Rollback()
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, content, lease, &author), first.ID)
+		done <- err
+	}()
+	if err := tx.Commit().Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, datapolicy.ErrPoliciesUnenforced) {
+		t.Fatalf("publish racing the engine turning off = %v, want ErrPoliciesUnenforced", err)
+	}
+
+	if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonReissue, content, lease, nil), first.ID); err != nil {
+		t.Fatalf("re-issue on an engine that stopped enforcing = %v, want it to keep the lease", err)
+	}
+}
+
+// policiedContent is a revision's content with one row filter on catalogID.
+func policiedContent(t *testing.T, catalogID, author uuid.UUID) []byte {
+	t.Helper()
+	p := rowFilter(catalogID, author, "eu")
+	p.Validation, p.Compiled = datapolicy.ValidationValid, "region = 'EU'"
+	content, err := json.Marshal(datapolicy.Content{Catalogs: map[string]datapolicy.CatalogContent{
+		catalogID.String(): datapolicy.CatalogContentOf([]string{"lake"}, []datapolicy.Policy{p}),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return content
+}
+
+// enforce sets the fixture engine's data_policies flag.
+func enforce(t *testing.T, f *workbenchFixture, on bool) {
+	t.Helper()
+	if err := f.gdb.Model(&model.Engine{}).Where("id = ?", string(f.engine)).Update("data_policies", on).Error; err != nil {
+		t.Fatal(err)
 	}
 }
 

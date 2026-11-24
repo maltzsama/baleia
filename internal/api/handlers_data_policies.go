@@ -528,6 +528,13 @@ func (h *DataPolicyHandlers) PublishCatalogDataPolicies(ctx context.Context, req
 		}}, nil
 	}
 	rev, err := h.publisher.PublishCatalog(ctx, uuid.UUID(cat.ID.Bytes), names, views, uuid.UUID(principal.UserID.Bytes))
+	if resp, ok := catalogTargetRefusal(err); ok {
+		// An engine stopped enforcing between the check above and the commit.
+		h.audited(ctx, ev.Failed(audit.ReasonValidation))
+		return PublishCatalogDataPolicies422JSONResponse{DataPolicyRefusedJSONResponse: DataPolicyRefusedJSONResponse{
+			Code: resp.Code, Message: resp.Message, Problems: []DataPolicyProblem{},
+		}}, nil
+	}
 	if refused, ok := publishRefusal(err); ok {
 		h.audited(ctx, ev.Failed(audit.ReasonValidation))
 		return PublishCatalogDataPolicies422JSONResponse{DataPolicyRefusedJSONResponse: refused}, nil

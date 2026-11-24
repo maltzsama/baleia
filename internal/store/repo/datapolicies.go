@@ -205,7 +205,10 @@ func (r *DataPolicies) CreateRevision(ctx context.Context, rev datapolicy.Revisi
 // two publishes built on the same revision cannot both land, so neither loses
 // the other's change. A first publication (base uuid.Nil) inserts the pointer
 // and never overwrites one: a concurrent first publication that wrote it
-// first, or took the revision number first, makes it fail the same way.
+// first, or took the revision number first, makes it fail the same way. A
+// publish or a rollback also locks the engines its catalogs are bound to and
+// fails with datapolicy.ErrPoliciesUnenforced when one does not enforce data
+// policies (requireEnforcingEngines).
 func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revision, base uuid.UUID) (datapolicy.Revision, error) {
 	var out datapolicy.Revision
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -228,6 +231,11 @@ func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revis
 		if current != want {
 			return datapolicy.ErrVersionConflict
 		}
+		if rev.Reason == datapolicy.ReasonPublish || rev.Reason == datapolicy.ReasonRollback {
+			if err := requireEnforcingEngines(tx, rev.Content); err != nil {
+				return err
+			}
+		}
 		created, err := createRevision(tx, rev)
 		if err != nil {
 			return err
@@ -249,6 +257,48 @@ func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revis
 		return datapolicy.Revision{}, datapolicy.ErrVersionConflict
 	}
 	return out, err
+}
+
+// requireEnforcingEngines locks, in id order, every engine bound to a
+// catalog content holds policies for, and fails with
+// datapolicy.ErrPoliciesUnenforced when one does not enforce data policies.
+// Turning an engine's data_policies off takes the same row lock before it
+// checks the published revision, so the two cannot interleave (ADR 0028). A
+// re-issue skips it: it never adds a policy, and refusing it would let the
+// lease lapse for every user.
+func requireEnforcingEngines(tx *gorm.DB, raw []byte) error {
+	var content datapolicy.Content
+	if err := json.Unmarshal(raw, &content); err != nil {
+		return fmt.Errorf("datapolicy revision: %w", err)
+	}
+	catalogs := make([]string, 0, len(content.Catalogs))
+	for key, catalog := range content.Catalogs {
+		if len(catalog.Tables) > 0 {
+			catalogs = append(catalogs, key)
+		}
+	}
+	if len(catalogs) == 0 {
+		return nil
+	}
+	var engineIDs []string
+	if err := tx.Model(&model.CatalogBinding{}).Where("catalog_id IN ?", catalogs).
+		Pluck("engine_id", &engineIDs).Error; err != nil {
+		return err
+	}
+	if len(engineIDs) == 0 {
+		return nil
+	}
+	var engines []model.Engine
+	if err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+		Where("id IN ?", engineIDs).Order("id").Find(&engines).Error; err != nil {
+		return err
+	}
+	for _, e := range engines {
+		if !e.DataPolicies {
+			return datapolicy.ErrPoliciesUnenforced
+		}
+	}
+	return nil
 }
 
 // PublishedRevision returns the revision the pointer names, or

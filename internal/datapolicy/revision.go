@@ -14,6 +14,9 @@ var (
 	ErrNotFound        = errors.New("datapolicy: not found")
 	ErrNameTaken       = errors.New("datapolicy: a policy of the table already has that name")
 	ErrVersionConflict = errors.New("datapolicy: the policy changed since it was read")
+	// ErrPoliciesUnenforced refuses a revision that would put policies in
+	// force on a catalog bound to an engine that does not enforce them.
+	ErrPoliciesUnenforced = errors.New("datapolicy: an engine bound to the catalog does not enforce data policies")
 )
 
 // RevisionReason says why a revision was built.
