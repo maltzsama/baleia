@@ -279,7 +279,7 @@ k8s-plugin-bundle:
 k8s-up:
 	minikube start -p $(K8S_PROFILE) $(K8S_DRIVER_FLAG) --container-runtime=docker --cpus=$(K8S_CPUS) --memory=$(K8S_MEMORY)
 	kubectl apply -k deploy/dev
-	eval "$$(minikube -p $(K8S_PROFILE) docker-env)" && docker build --network=host -t baleia:dev .
+	eval "$$(minikube -p $(K8S_PROFILE) docker-env --shell bash)" && docker build --network=host -t baleia:dev .
 	$(MAKE) k8s-plugin-bundle
 	helm upgrade --install baleia deploy/helm/baleia -n $(K8S_NS) \
 		-f deploy/dev/values-dev.yaml \
