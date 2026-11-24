@@ -350,6 +350,40 @@ func TestDataPolicies_SubjectSources(t *testing.T) {
 	}
 }
 
+// TestReplaceUserIDPGroups_ConcurrentSignIns: two sign-ins of one user that
+// replace the groups at once leave one sign-in's groups, never a mix.
+func TestReplaceUserIDPGroups_ConcurrentSignIns(t *testing.T) {
+	t.Parallel()
+	f, r, _, _ := dataPolicyFixture(t)
+	ctx := context.Background()
+	owner := PGUUID(string(f.owner))
+	for range 10 {
+		var wg sync.WaitGroup
+		errs := make([]error, 2)
+		start := make(chan struct{})
+		for i, groups := range [][]string{{"privileged"}, {"plain"}} {
+			wg.Go(func() {
+				<-start
+				errs[i] = f.r.ReplaceUserIDPGroups(ctx, owner, groups)
+			})
+		}
+		close(start)
+		wg.Wait()
+		if err := errors.Join(errs...); err != nil {
+			t.Fatal(err)
+		}
+		sources, err := r.ListSubjectSources(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range sources {
+			if s.UserID.String() == string(f.owner) && len(s.Groups) != 1 {
+				t.Fatalf("groups after two concurrent sign-ins = %v, want one sign-in's", s.Groups)
+			}
+		}
+	}
+}
+
 func TestDataPolicies_PublishMovesThePointer(t *testing.T) {
 	t.Parallel()
 	_, r, _, author := dataPolicyFixture(t)

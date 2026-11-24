@@ -269,6 +269,10 @@ func (s *Providers) ListEnabledLDAPProviders(ctx context.Context) ([]db.AuthProv
 // replacing the previous sign-in's, in one transaction. Blank and duplicate
 // names are dropped, and so are names longer than a policy subject can name
 // (ADR 0028).
+//
+// The user's row is locked first, as ApplyGroupWorkspaceRoles does: two
+// sign-ins of one user replace the groups one after the other, and the last
+// one's groups are what remains.
 func (r *Repo) ReplaceUserIDPGroups(ctx context.Context, userID db.UUID, groups []string) error {
 	id := model.UUID(UUIDString(userID))
 	rows := make([]model.UserIDPGroup, 0, len(groups))
@@ -282,6 +286,10 @@ func (r *Repo) ReplaceUserIDPGroups(ctx context.Context, userID db.UUID, groups 
 		rows = append(rows, model.UserIDPGroup{UserID: id, Name: model.Text(name)})
 	}
 	return r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+			Where("id = ?", string(id)).First(&model.User{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("user_id = ?", string(id)).Delete(&model.UserIDPGroup{}).Error; err != nil {
 			return err
 		}
