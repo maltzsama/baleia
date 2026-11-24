@@ -18,6 +18,8 @@ const (
 	UnhealthyNoReport       = "no_report"
 	UnhealthyReportStale    = "report_stale"
 	UnhealthyBundleError    = "bundle_error"
+	UnhealthyNoRevision     = "no_active_revision"
+	UnhealthyLeaseExpired   = "lease_expired"
 	UnhealthyDigestMismatch = "data_policy_digest_mismatch"
 )
 
@@ -38,6 +40,9 @@ type HealthInput struct {
 	EngineEnabled     bool
 	// Status is the engine's latest report, nil when it never reported.
 	Status *EngineStatus
+	// ActiveNotAfter is the lease end of the revision the engine reports
+	// active, nil when it is not known. Past it, OPA denies every user.
+	ActiveNotAfter *time.Time
 	// ExpectedDigest is the digest of the Rego the engine must run.
 	ExpectedDigest string
 	// StaleAfter is how long a report stays current.
@@ -60,6 +65,10 @@ func EngineHealth(in HealthInput) EngineState {
 		state.Health, state.Reason = HealthUnhealthy, UnhealthyReportStale
 	case in.Status.Code != "":
 		state.Health, state.Reason = HealthUnhealthy, UnhealthyBundleError
+	case in.Status.ActiveRevision == "":
+		state.Health, state.Reason = HealthUnhealthy, UnhealthyNoRevision
+	case in.ActiveNotAfter != nil && !in.Now.Before(*in.ActiveNotAfter):
+		state.Health, state.Reason = HealthUnhealthy, UnhealthyLeaseExpired
 	case in.ExpectedDigest != "" && in.Status.PolicyDigest != in.ExpectedDigest:
 		state.Health, state.Reason = HealthUnhealthy, UnhealthyDigestMismatch
 	}

@@ -21,6 +21,9 @@ func TestEngineHealth(t *testing.T) {
 		{name: "healthy", input: HealthInput{DeploymentEnabled: true, EngineEnabled: true, Status: fresh, ExpectedDigest: "d1"}, health: HealthHealthy},
 		{name: "stale report", input: HealthInput{DeploymentEnabled: true, EngineEnabled: true, Status: &EngineStatus{ReportedAt: now.Add(-time.Hour)}}, health: HealthUnhealthy, reason: UnhealthyReportStale},
 		{name: "activation error", input: HealthInput{DeploymentEnabled: true, EngineEnabled: true, Status: &EngineStatus{ReportedAt: now, Code: "bundle_error"}}, health: HealthUnhealthy, reason: UnhealthyBundleError},
+		{name: "no data revision", input: HealthInput{DeploymentEnabled: true, EngineEnabled: true, Status: &EngineStatus{ReportedAt: now, PolicyDigest: "d1"}, ExpectedDigest: "d1"}, health: HealthUnhealthy, reason: UnhealthyNoRevision},
+		{name: "lease passed", input: HealthInput{DeploymentEnabled: true, EngineEnabled: true, Status: fresh, ExpectedDigest: "d1", ActiveNotAfter: new(now.Add(-time.Second))}, health: HealthUnhealthy, reason: UnhealthyLeaseExpired},
+		{name: "lease running", input: HealthInput{DeploymentEnabled: true, EngineEnabled: true, Status: fresh, ExpectedDigest: "d1", ActiveNotAfter: new(now.Add(time.Hour))}, health: HealthHealthy},
 		{name: "another Rego", input: HealthInput{DeploymentEnabled: true, EngineEnabled: true, Status: fresh, ExpectedDigest: "d2"}, health: HealthUnhealthy, reason: UnhealthyDigestMismatch},
 	}
 	for _, tt := range tests {
