@@ -132,6 +132,22 @@ func matrixRow(name string, a access) authorizationMatrixRow {
 			row.globalRole = "admin or catalog and engine owner"
 			row.workspaceRole = "none"
 			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "dataPolicyCatalog", "policyAccess"):
+			row.scope = "admin plane resource ownership"
+			row.globalRole = "admin or owner of the catalog's connection"
+			row.workspaceRole = "none"
+			row.denial = "404 when invisible; 403 when visible but insufficient"
+		case hasCall(a, "globalAdmin"):
+			row.scope = "global administration"
+			row.globalRole = "admin"
+			row.workspaceRole = "none"
+			row.denial = "403"
+		case hasCall(a, "authorized"):
+			row.actor = "OPA bundle token"
+			row.globalRole = "none"
+			row.workspaceRole = "none"
+			row.scope = "data policy bundle and status"
+			row.denial = "401, or 404 while data policies are off"
 		case hasCall(a, "maintenanceTable", "catalogForMonitoring"):
 			row.scope = "catalog monitoring resource"
 			row.globalRole = "admin or catalog owner"
@@ -221,6 +237,10 @@ func matrixRow(name string, a access) authorizationMatrixRow {
 			row.action = "allowed_actions:workspace.*"
 		case hasCall(a, "maintenanceTable", "catalogForMonitoring"):
 			row.action = "allowed_actions:table_maintenance.*"
+		case hasCall(a, "dataPolicyCatalog", "policyAccess"):
+			row.action = "allowed_actions:catalog.manage_data_policies"
+		case hasCall(a, "globalAdmin"):
+			row.action = "global_actions:manage_data_policies"
 		}
 	}
 	return row
@@ -436,7 +456,21 @@ var operationAccess = map[string]access{
 	"ListCatalogBindings": checked("Catalog"),
 	// bindingAccess and managedBinding run Catalog and Engine with ActWrite
 	// (handlers_bindings.go; TestBindingAPI_Authz).
-	"CreateCatalogBinding":        checked("bindingAccess"),
+	"CreateCatalogBinding": checked("bindingAccess"),
+
+	// Data policies (ADR 0028): the catalog's admin plane (connection owner or
+	// global admin), each policy through its catalog, revisions and status
+	// for global admins.
+	"ListCatalogDataPolicies":     checked("dataPolicyCatalog"),
+	"CreateDataPolicy":            checked("dataPolicyCatalog"),
+	"PublishCatalogDataPolicies":  checked("dataPolicyCatalog"),
+	"ListCatalogDefinerViews":     checked("dataPolicyCatalog"),
+	"GetDataPolicy":               checked("policyAccess"),
+	"UpdateDataPolicy":            checked("policyAccess"),
+	"DeleteDataPolicy":            checked("policyAccess"),
+	"ListDataPolicyRevisions":     checked("globalAdmin"),
+	"RollbackDataPolicyRevision":  checked("globalAdmin"),
+	"GetDataPolicyStatus":         checked("globalAdmin"),
 	"UpdateCatalogBinding":        checked("managedBinding"),
 	"DeleteCatalogBinding":        checked("managedBinding"),
 	"SyncCatalogBinding":          checked("managedBinding"),
@@ -670,6 +704,11 @@ var routeAccess = map[string]access{
 	"POST /internal/trino/query-events": {kind: kindChecked, pkg: "../monitoring/queryevents", calls: []string{"ConstantTimeCompare"}},
 	// With ingestion off the path only answers 404 (http.NotFound).
 	"ANY /internal/trino/query-events": {kind: kindPublic},
+
+	// OPA downloads the data policy bundle and reports its status with the
+	// BALEIA_OPA_TOKEN bearer token, compared in constant time (ADR 0028).
+	"GET /opa/bundles/baleia.tar.gz": {kind: kindChecked, pkg: "../datapolicy", calls: []string{"authorized"}},
+	"POST /opa/status":               {kind: kindChecked, pkg: "../datapolicy", calls: []string{"authorized"}},
 
 	// The WebSocket authenticates with a single-use ticket issued by
 	// POST /ws-tickets; the JWT never appears in the URL (#26).

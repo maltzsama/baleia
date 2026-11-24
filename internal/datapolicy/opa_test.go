@@ -108,3 +108,12 @@ func TestOPAHandler_ReceiveStatus(t *testing.T) {
 		t.Fatalf("garbage = %d", code)
 	}
 }
+
+// TestOPAPaths pins the paths the server mounts as literals for the
+// authorization coverage audit.
+func TestOPAPaths(t *testing.T) {
+	t.Parallel()
+	if BundlePath != "/opa/bundles/baleia.tar.gz" || StatusPath != "/opa/status" {
+		t.Fatalf("paths changed: %s %s; update internal/server/server.go", BundlePath, StatusPath)
+	}
+}

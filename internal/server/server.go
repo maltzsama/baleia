@@ -850,6 +850,8 @@ func (s *Server) mountOPA() {
 			return err == nil, err
 		}
 	}
-	s.mux.Get(datapolicy.BundlePath, opa.ServeBundle)
-	s.mux.Post(datapolicy.StatusPath, opa.ReceiveStatus)
+	// Literal paths, so the authorization coverage audit sees the routes;
+	// they equal datapolicy.BundlePath and datapolicy.StatusPath.
+	s.mux.Get("/opa/bundles/baleia.tar.gz", opa.ServeBundle)
+	s.mux.Post("/opa/status", opa.ReceiveStatus)
 }
