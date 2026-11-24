@@ -26,7 +26,8 @@ jobs:
       image: ${{ github.event_name != 'pull_request' || steps.image.outputs.image == 'true' }}
       web: ${{ github.event_name != 'pull_request' || steps.inputs.outputs.web == 'true' }}
     steps:
-      # Everything but the website, the SPA and prose is a Go input.
+      # Everything but the website, the SPA, prose and the OpenMetadata
+      # harness (shell, run manually and nightly) is a Go input.
       - id: go
         if: github.event_name == 'pull_request'
         uses: dorny/paths-filter@v4
@@ -39,6 +40,7 @@ jobs:
               - "!web/**"
               - "!docs/**"
               - "!**/*.md"
+              - "!scripts/openmetadata-e2e/**"
       # The image builds the SPA and every Go binary.
       - id: image
         if: github.event_name == 'pull_request'
@@ -51,6 +53,7 @@ jobs:
               - "!website/**"
               - "!docs/**"
               - "!**/*.md"
+              - "!scripts/openmetadata-e2e/**"
       - id: inputs
         if: github.event_name == 'pull_request'
         uses: dorny/paths-filter@v4
