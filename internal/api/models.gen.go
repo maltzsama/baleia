@@ -2969,7 +2969,7 @@ type DataPolicyEngineState struct {
 	EngineName   string                      `json:"engine_name"`
 	Health       DataPolicyEngineStateHealth `json:"health"`
 
-	// Reason Why the engine is unhealthy: no_report, report_stale, bundle_error, no_active_revision (no data bundle activated), lease_expired (the active revision's lease passed, so OPA denies every user identity; the trusted admin and service identities keep access) or data_policy_digest_mismatch
+	// Reason Why the engine is unhealthy: no_report, report_stale, bundle_error, no_active_revision (no data bundle activated), unknown_revision (the active revision is not one Baleia stored, so its lease cannot be checked), lease_expired (the active revision's lease passed, so OPA denies every user identity; the trusted admin and service identities keep access) or data_policy_digest_mismatch
 	Reason     *string    `json:"reason"`
 	ReportedAt *time.Time `json:"reported_at"`
 }

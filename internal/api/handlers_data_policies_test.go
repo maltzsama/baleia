@@ -512,7 +512,19 @@ func TestDataPolicies_Status(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if e := engineState(status()); e.Health != DataPolicyHealthHealthy || e.ActiveRevision == nil || *e.ActiveRevision != "r1" {
+	if e := engineState(status()); e.Health != DataPolicyHealthUnhealthy || e.Reason == nil || *e.Reason != datapolicy.UnhealthyUnknownRevision {
+		t.Fatalf("engine reporting a revision Baleia did not store = %+v", e)
+	}
+	rev, err := f.h.policies.CreateRevision(context.Background(), datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{}`), time.Now().Add(time.Hour), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.h.policies.RecordEngineStatus(context.Background(), datapolicy.EngineStatus{
+		EngineID: uuid.UUID(f.engineID.Bytes), ReportedAt: time.Now(), ActiveRevision: rev.ID.String(), PolicyDigest: *s.ExpectedPolicyDigest,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if e := engineState(status()); e.Health != DataPolicyHealthHealthy || e.ActiveRevision == nil || *e.ActiveRevision != rev.ID.String() {
 		t.Fatalf("engine after a report = %+v", e)
 	}
 	if resp, _ := f.h.GetDataPolicyStatus(f.member, GetDataPolicyStatusRequestObject{}); resp == nil {

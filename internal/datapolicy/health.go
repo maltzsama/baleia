@@ -15,12 +15,13 @@ const (
 
 // Reasons an enabled engine is unhealthy.
 const (
-	UnhealthyNoReport       = "no_report"
-	UnhealthyReportStale    = "report_stale"
-	UnhealthyBundleError    = "bundle_error"
-	UnhealthyNoRevision     = "no_active_revision"
-	UnhealthyLeaseExpired   = "lease_expired"
-	UnhealthyDigestMismatch = "data_policy_digest_mismatch"
+	UnhealthyNoReport        = "no_report"
+	UnhealthyReportStale     = "report_stale"
+	UnhealthyBundleError     = "bundle_error"
+	UnhealthyNoRevision      = "no_active_revision"
+	UnhealthyUnknownRevision = "unknown_revision"
+	UnhealthyLeaseExpired    = "lease_expired"
+	UnhealthyDigestMismatch  = "data_policy_digest_mismatch"
 )
 
 // EngineState is one engine's integration: its health, why it is unhealthy,
@@ -41,7 +42,8 @@ type HealthInput struct {
 	// Status is the engine's latest report, nil when it never reported.
 	Status *EngineStatus
 	// ActiveNotAfter is the lease end of the revision the engine reports
-	// active, nil when it is not known. Past it, OPA denies every user.
+	// active, nil when Baleia stored no such revision: its lease cannot be
+	// checked, so the engine is unhealthy. Past it, OPA denies every user.
 	ActiveNotAfter *time.Time
 	// ExpectedDigest is the digest of the Rego the engine must run.
 	ExpectedDigest string
@@ -67,7 +69,9 @@ func EngineHealth(in HealthInput) EngineState {
 		state.Health, state.Reason = HealthUnhealthy, UnhealthyBundleError
 	case in.Status.ActiveRevision == "":
 		state.Health, state.Reason = HealthUnhealthy, UnhealthyNoRevision
-	case in.ActiveNotAfter != nil && !in.Now.Before(*in.ActiveNotAfter):
+	case in.ActiveNotAfter == nil:
+		state.Health, state.Reason = HealthUnhealthy, UnhealthyUnknownRevision
+	case !in.Now.Before(*in.ActiveNotAfter):
 		state.Health, state.Reason = HealthUnhealthy, UnhealthyLeaseExpired
 	case in.ExpectedDigest != "" && in.Status.PolicyDigest != in.ExpectedDigest:
 		state.Health, state.Reason = HealthUnhealthy, UnhealthyDigestMismatch
