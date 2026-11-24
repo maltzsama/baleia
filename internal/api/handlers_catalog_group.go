@@ -40,6 +40,9 @@ type CatalogHandlers struct {
 	lineage lineageReads
 	// popular lists the workspace's most used tables (#562).
 	popular popularTablesReads
+	// dataPolicies keeps catalogs with data policies off engines that do not
+	// enforce them (ADR 0028).
+	dataPolicies dataPolicyGuard
 }
 
 // catalogStores hands each binding package the store it declares.
@@ -76,11 +79,13 @@ func newCatalogHandlers(c *core, binder *bindtrino.Binder) *CatalogHandlers {
 		}
 		lineageStore lineageReads       = c.queries
 		popularStore popularTablesReads = c.queries
+		policies     dataPolicyGuard    = noDataPolicies{}
 	)
 	if c.store != nil {
 		r := repo.New(c.store)
 		connStore, engineStore, catalogStore = r, r, r
 		lineageStore, popularStore = r, r
+		policies = repo.NewDataPolicies(c.store)
 		engineTx = func(ctx context.Context, fn func(manage.TxStore) error) error {
 			return r.TxEngines(ctx, fn)
 		}
@@ -95,6 +100,7 @@ func newCatalogHandlers(c *core, binder *bindtrino.Binder) *CatalogHandlers {
 	return &CatalogHandlers{
 		core: c, binder: binder, engineAdmin: manage.New(engineStore, engineTx), catalogAdmin: admin.New(catalogStore, catalogTx),
 		conns: conns.New(connStore), stores: stores, lineage: lineageStore, popular: popularStore,
+		dataPolicies:    policies,
 		connectionTests: newTestLimiter(),
 		ddlTimeout:      catalogDDLTimeout,
 	}

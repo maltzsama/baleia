@@ -61,6 +61,9 @@ kind: Service
 metadata:
   name: postgres
 spec:
+  # Reachable from the host at $(minikube -p baleia ip):30432 for the DB-backed
+  # tests; see the NodePort note in sources/mysql.yaml.
+  type: NodePort
   selector: { app: postgres }
   ports:
-    - { port: 5432, targetPort: 5432 }
+    - { port: 5432, targetPort: 5432, nodePort: 30432 }

@@ -333,3 +333,24 @@ func TestConfig_PartitionDaysAhead(t *testing.T) {
 		t.Fatalf("Validate() = %v, want an error naming BALEIA_PARTITION_DAYS_AHEAD", err)
 	}
 }
+
+func TestConfig_DataPolicies(t *testing.T) {
+	t.Setenv("BALEIA_DATA_POLICIES", "")
+	if got := Load().DataPolicies; got != DataPoliciesOff {
+		t.Fatalf("default = %q, want %q", got, DataPoliciesOff)
+	}
+	t.Setenv("BALEIA_DATA_POLICIES", "opa")
+	if got := Load().DataPolicies; got != DataPoliciesOPA {
+		t.Fatalf("opa = %q, want %q", got, DataPoliciesOPA)
+	}
+	for _, value := range []string{"", DataPoliciesOff, DataPoliciesOPA} {
+		c := &Config{JWTSecret: "a-long-random-value-not-the-default", DataPolicies: value}
+		if err := c.Validate(); err != nil {
+			t.Errorf("Validate with %q: %v", value, err)
+		}
+	}
+	c := &Config{JWTSecret: "a-long-random-value-not-the-default", DataPolicies: "on"}
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "BALEIA_DATA_POLICIES") {
+		t.Fatalf("Validate with an unknown mode = %v, want a BALEIA_DATA_POLICIES error", err)
+	}
+}

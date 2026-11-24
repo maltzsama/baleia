@@ -28,17 +28,19 @@ var (
 // Trino engine on a system-owned connection, and its bindings.
 type bindingQuerier struct {
 	lifecycleFake
-	mu            sync.Mutex
-	catalog       db.Catalog
-	engineKind    string
-	clusterOfEng  db.UUID
-	createErr     error
-	updatedCats   []db.UpdateCatalogParams
-	createdBinds  []db.CreateManagedBindingParams
-	updatedBinds  []db.UpdateBindingParams
-	deletedBinds  int
-	registry      []string
-	sourceCreated db.UUID
+	mu         sync.Mutex
+	catalog    db.Catalog
+	engineKind string
+	// engineDataPolicies is the engine's data_policies flag (ADR 0028).
+	engineDataPolicies bool
+	clusterOfEng       db.UUID
+	createErr          error
+	updatedCats        []db.UpdateCatalogParams
+	createdBinds       []db.CreateManagedBindingParams
+	updatedBinds       []db.UpdateBindingParams
+	deletedBinds       int
+	registry           []string
+	sourceCreated      db.UUID
 }
 
 func newBindingQuerier(t *testing.T) *bindingQuerier {
@@ -72,7 +74,7 @@ func (q *bindingQuerier) GetEngineByID(_ context.Context, id db.UUID) (db.Engine
 	if id != bEngine {
 		return db.Engine{}, db.ErrNoRows
 	}
-	return db.Engine{ID: id, Name: "default", Kind: q.engineKind, Class: "federated", ConnectionID: bEngineConn, Enabled: true}, nil
+	return db.Engine{ID: id, Name: "default", Kind: q.engineKind, Class: "federated", ConnectionID: bEngineConn, Enabled: true, DataPolicies: q.engineDataPolicies}, nil
 }
 
 func (q *bindingQuerier) GetTrinoClusterByEngine(_ context.Context, id db.UUID) (db.TrinoCluster, error) {
@@ -319,4 +321,31 @@ func TestEngineBindingSupport(t *testing.T) {
 	if s := resp.(GetEngineBindingSupport200JSONResponse); len(s) != 0 {
 		t.Errorf("a direct engine binds nothing: %v", s)
 	}
+}
+
+// TestBindingAPI_DataPoliciesUnenforced: a catalog that carries data policies
+// is bound only to an engine that enforces them (ADR 0028).
+func TestBindingAPI_DataPoliciesUnenforced(t *testing.T) {
+	t.Parallel()
+	q := newBindingQuerier(t)
+	h, _ := bindingHandlers(t, q)
+	h.dataPolicies = fakePolicyGuard{catalog: true}
+	admin := ctxAs(adminID, "admin")
+	body := CreateBindingRequest{EngineId: openapi_types.UUID(bEngine.Bytes), EngineCatalogName: "x"}
+
+	if c, b := createBinding(t, h, admin, body); c != 422 || !strings.Contains(b, "data_policies_unenforced") {
+		t.Fatalf("binding a policied catalog to an engine without data policies: %d %s", c, b)
+	}
+	if len(q.createdBinds) != 0 {
+		t.Fatalf("a refused binding was stored: %+v", q.createdBinds)
+	}
+
+	q.engineDataPolicies = true
+	if c, b := createBinding(t, h, admin, body); c != 201 {
+		t.Fatalf("binding to an engine that enforces data policies: %d %s", c, b)
+	}
+}
+
+func (q *bindingQuerier) LockEngineForUpdate(ctx context.Context, id db.UUID) (db.Engine, error) {
+	return q.GetEngineByID(ctx, id)
 }

@@ -20,6 +20,8 @@
 	"error_credentials_unreadable": "Não foi possível ler as credenciais armazenadas.",
 	"error_custom_sql_forbidden": "O SQL personalizado não pode conter DDL nem vários comandos.",
 	"error_custom_sql_requires_read_only": "O SQL personalizado exige um motor somente leitura.",
+	"error_data_policies_unenforced": "Este catálogo tem políticas de dados, e o motor não as aplica.",
+	"error_data_policy_invalid": "A política de dados é inválida e não pode ser publicada.",
 	"error_destination_not_eligible": "O destino não é elegível.",
 	"error_drop_failed": "A operação de remoção falhou.",
 	"error_encryption_failed": "Não foi possível criptografar as credenciais.",

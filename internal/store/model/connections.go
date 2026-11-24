@@ -24,23 +24,26 @@ func (CatalogConnection) TableName() string { return "catalog_connections" }
 
 // Engine is the engines table.
 type Engine struct {
-	ID                         UUID               `gorm:"column:id;primaryKey;not null"`
-	Name                       Text               `gorm:"column:name;not null;size:128;uniqueIndex:engines_name_key,priority:1;check:engines_class_check,((class IN ('federated', 'direct')))"`
-	Kind                       string             `gorm:"column:kind;not null;check:engines_identity_mode_check,((identity_mode IN ('impersonation', 'connection', 'per_user')))"`
-	Class                      string             `gorm:"column:class;not null;check:engines_max_running_total_check,(((max_running_total IS NULL) OR (max_running_total >= 0)))"`
-	ConnectionID               UUID               `gorm:"column:connection_id;not null;uniqueIndex:engines_connection_id_key,priority:1;check:engines_cost_threshold_bytes_check,(((cost_threshold_bytes IS NULL) OR (cost_threshold_bytes > 0)))"`
-	IdentityMode               Text               `gorm:"column:identity_mode;not null;size:255;default:'connection'"`
-	Enabled                    bool               `gorm:"column:enabled;not null;default:true"`
-	CreatedBy                  *UUID              `gorm:"column:created_by"`
-	CreatedAt                  time.Time          `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt                  time.Time          `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3)"`
-	MaxRunningTotal            *int32             `gorm:"column:max_running_total"`
-	CostRoutingEnabled         bool               `gorm:"column:cost_routing_enabled;not null;default:false"`
-	CostThresholdBytes         *int64             `gorm:"column:cost_threshold_bytes"`
-	ExternalURL                *string            `gorm:"column:external_url"`
-	TrinoResourceGroupsEnabled bool               `gorm:"column:trino_resource_groups_enabled;not null;default:false"`
-	Connection                 *CatalogConnection `gorm:"foreignKey:ConnectionID;references:ID;constraint:OnDelete:RESTRICT"`
-	CreatedByRef               *User              `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnDelete:SET NULL"`
+	ID                         UUID      `gorm:"column:id;primaryKey;not null"`
+	Name                       Text      `gorm:"column:name;not null;size:128;uniqueIndex:engines_name_key,priority:1;check:engines_class_check,((class IN ('federated', 'direct')))"`
+	Kind                       string    `gorm:"column:kind;not null;check:engines_identity_mode_check,((identity_mode IN ('impersonation', 'connection', 'per_user')))"`
+	Class                      string    `gorm:"column:class;not null;check:engines_max_running_total_check,(((max_running_total IS NULL) OR (max_running_total >= 0)))"`
+	ConnectionID               UUID      `gorm:"column:connection_id;not null;uniqueIndex:engines_connection_id_key,priority:1;check:engines_cost_threshold_bytes_check,(((cost_threshold_bytes IS NULL) OR (cost_threshold_bytes > 0)))"`
+	IdentityMode               Text      `gorm:"column:identity_mode;not null;size:255;default:'connection'"`
+	Enabled                    bool      `gorm:"column:enabled;not null;default:true"`
+	CreatedBy                  *UUID     `gorm:"column:created_by"`
+	CreatedAt                  time.Time `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP(3)"`
+	UpdatedAt                  time.Time `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP(3)"`
+	MaxRunningTotal            *int32    `gorm:"column:max_running_total"`
+	CostRoutingEnabled         bool      `gorm:"column:cost_routing_enabled;not null;default:false"`
+	CostThresholdBytes         *int64    `gorm:"column:cost_threshold_bytes"`
+	ExternalURL                *string   `gorm:"column:external_url"`
+	TrinoResourceGroupsEnabled bool      `gorm:"column:trino_resource_groups_enabled;not null;default:false"`
+	// DataPolicies states that the engine runs the OPA access control with
+	// Baleia's Rego (ADR 0028), so its catalogs may carry data policies.
+	DataPolicies bool               `gorm:"column:data_policies;not null;default:false"`
+	Connection   *CatalogConnection `gorm:"foreignKey:ConnectionID;references:ID;constraint:OnDelete:RESTRICT"`
+	CreatedByRef *User              `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnDelete:SET NULL"`
 }
 
 func (Engine) TableName() string { return "engines" }

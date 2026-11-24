@@ -21,6 +21,8 @@ spec:
             - containerPort: 3306
           env:
             - { name: MYSQL_ROOT_PASSWORD, value: baleia_dev }
+            # The store suite logs in as root from the host, as in CI.
+            - { name: MYSQL_ROOT_HOST, value: "%" }
 ---
 apiVersion: v1
 kind: Service
@@ -28,7 +30,13 @@ metadata:
   name: src-mysql
   namespace: baleia-dev
 spec:
+  # A NodePort lets the store suite reach the database directly at
+  # $(minikube -p baleia ip):30306. Through kubectl port-forward every
+  # statement pays a round trip through the API server, and one migrated test
+  # database takes over ten times longer.
+  type: NodePort
   selector: { app: src-mysql }
   ports:
     - port: 3306
       targetPort: 3306
+      nodePort: 30306

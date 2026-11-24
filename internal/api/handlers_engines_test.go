@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/dialect"
 	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
+	"github.com/google/uuid"
 )
 
 // fakeEngineProvider is a direct-engine provider whose metadata reader lists
@@ -109,6 +110,9 @@ func (q *engineQuerier) UpdateEngine(_ context.Context, p db.UpdateEngineParams)
 	e.ID = p.ID
 	if p.Enabled != nil {
 		e.Enabled = *p.Enabled
+	}
+	if p.DataPolicies != nil {
+		e.DataPolicies = *p.DataPolicies
 	}
 	if p.CostRoutingEnabled != nil {
 		e.CostRoutingEnabled = *p.CostRoutingEnabled
@@ -364,4 +368,56 @@ func TestUpdateEngine_CostRouting(t *testing.T) {
 	if rec := updateEngine(t, h, &UpdateEngineRequest{CostThresholdBytes: ptr(int64(1)), ClearCostThreshold: ptr(true)}); rec.Code != 422 {
 		t.Fatalf("ambiguous = %d %s", rec.Code, rec.Body)
 	}
+}
+
+// fakePolicyGuard answers the data policy checks with fixed values.
+type fakePolicyGuard struct{ catalog, engine bool }
+
+func (g fakePolicyGuard) CatalogHasPolicies(context.Context, uuid.UUID) (bool, error) {
+	return g.catalog, nil
+}
+
+func (g fakePolicyGuard) EngineServesPoliciedCatalogs(context.Context, uuid.UUID) (bool, error) {
+	return g.engine, nil
+}
+
+// TestUpdateEngine_DataPolicies: the flag is stored and returned, and it
+// cannot be turned off while the engine serves a catalog with data policies
+// (ADR 0028).
+func TestUpdateEngine_DataPolicies(t *testing.T) {
+	t.Parallel()
+	q := engineFixture(t, testUserID)
+	h := engineHandlers(t, q)
+
+	rec := updateEngine(t, h, &UpdateEngineRequest{DataPolicies: ptr(true)})
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"data_policies":true`) {
+		t.Fatalf("turn on = %d %s", rec.Code, rec.Body)
+	}
+	if len(q.updated) != 1 || q.updated[0].DataPolicies == nil || !*q.updated[0].DataPolicies {
+		t.Fatalf("turn on params = %+v", q.updated)
+	}
+
+	q.updated = nil
+	h.dataPolicies = fakePolicyGuard{engine: true}
+	rec = updateEngine(t, h, &UpdateEngineRequest{Enabled: ptr(true), DataPolicies: ptr(false)})
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "data_policies_unenforced") {
+		t.Fatalf("turn off while serving policies = %d %s", rec.Code, rec.Body)
+	}
+	if len(q.updated) != 0 {
+		t.Fatal("a refused request wrote to the engine")
+	}
+	if rec := updateEngine(t, h, &UpdateEngineRequest{DataPolicies: ptr(true)}); rec.Code != 200 {
+		t.Fatalf("keeping it on while serving policies = %d %s", rec.Code, rec.Body)
+	}
+
+	h.dataPolicies = fakePolicyGuard{}
+	if rec := updateEngine(t, h, &UpdateEngineRequest{DataPolicies: ptr(false)}); rec.Code != 200 {
+		t.Fatalf("turn off = %d %s", rec.Code, rec.Body)
+	}
+}
+
+func (q *engineQuerier) LockEngineForUpdate(_ context.Context, id db.UUID) (db.Engine, error) {
+	e := q.engine
+	e.ID = id
+	return e, nil
 }

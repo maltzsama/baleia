@@ -104,6 +104,11 @@ type Config struct {
 	// PluginVersion is the pinned baleia-trino-catalog-store release reported
 	// by the system status (#291).
 	PluginVersion string
+	// DataPolicies turns on row filters and column masks for the deployment
+	// (BALEIA_DATA_POLICIES, ADR 0028): DataPoliciesOff (the default) or
+	// DataPoliciesOPA. Empty means off. Each engine also states whether it
+	// enforces them.
+	DataPolicies string
 	// RequireCatalogScope fails user queries when the pinned plugin does not
 	// enforce the baleia.catalogs workspace scope (ADR 0018 §5). Off by
 	// default, the API/worker only log a startup error in that case.
@@ -361,6 +366,7 @@ func Load() *Config {
 		TrinoPassword:                     getEnv("BALEIA_TRINO_PASSWORD", ""),
 		TrinoCAFile:                       getEnv("BALEIA_TRINO_CA_FILE", ""),
 		TrinoUserIdentity:                 getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
+		DataPolicies:                      getEnv("BALEIA_DATA_POLICIES", DataPoliciesOff),
 		PluginVersion:                     getEnv("BALEIA_PLUGIN_VERSION", MinScopePluginVersion),
 		RequireCatalogScope:               getEnv("BALEIA_REQUIRE_CATALOG_SCOPE", "false") == "true",
 		JWTSecret:                         getEnv("JWT_SECRET", DefaultJWTSecret),
@@ -527,10 +533,21 @@ func (c *Config) ValidateRegistryKey() error {
 	return nil
 }
 
+// Values of BALEIA_DATA_POLICIES.
+const (
+	DataPoliciesOff = "off"
+	DataPoliciesOPA = "opa"
+)
+
 // Validate rejects configuration that must not reach production.
 func (c *Config) Validate() error {
 	if err := ValidateSecret(c.JWTSecret); err != nil {
 		return err
+	}
+	switch c.DataPolicies {
+	case "", DataPoliciesOff, DataPoliciesOPA:
+	default:
+		return fmt.Errorf("BALEIA_DATA_POLICIES must be %q or %q (got %q)", DataPoliciesOff, DataPoliciesOPA, c.DataPolicies)
 	}
 	if _, err := c.SlogLevel(); err != nil {
 		return err

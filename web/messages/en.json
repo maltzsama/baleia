@@ -20,6 +20,8 @@
 	"error_credentials_unreadable": "The stored credentials could not be read.",
 	"error_custom_sql_forbidden": "Custom SQL may not contain DDL or multiple statements.",
 	"error_custom_sql_requires_read_only": "Custom SQL requires a read-only engine.",
+	"error_data_policies_unenforced": "This catalog has data policies, and the engine does not enforce them.",
+	"error_data_policy_invalid": "The data policy is invalid and cannot be published.",
 	"error_destination_not_eligible": "The destination is not eligible.",
 	"error_drop_failed": "The drop operation failed.",
 	"error_encryption_failed": "The credentials could not be encrypted.",

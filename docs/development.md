@@ -57,6 +57,12 @@ and `go.temporal.io/sdk` together, in one change (#525).
 ## Tests
 
 - **Backend:** `go vet ./...` and `go test ./...`. Tests that need a database read `BALEIA_TEST_DATABASE_URL` and are skipped without it; the DSN picks the backend, so the same variable points at PostgreSQL or the MySQL/MariaDB go-sql-driver DSN. CI runs the store tests against PostgreSQL and a dedicated job repeats the migration and runner tests against MySQL and MariaDB.
+- **DB-backed tests on minikube:** point `BALEIA_TEST_DATABASE_URL` at the node's NodePorts, not at a `kubectl port-forward`: every statement through a port-forward pays a round trip through the API server, and each test migrates a fresh database (about 11 000 statements), so the store suite runs over ten times slower. With `IP=$(minikube -p baleia ip)`:
+  - PostgreSQL: `postgres://baleia:baleia@$IP:30432/baleia?sslmode=disable`
+  - MySQL (`make k8s-source NAME=mysql`): `root:baleia_dev@tcp($IP:30306)/`
+  - MariaDB (`make k8s-source NAME=mariadb`): `root:baleia_dev@tcp($IP:30307)/`
+
+  The node's IP is reachable from Linux hosts. Where it is not (the Docker driver on macOS or Windows), `minikube -p baleia service -n baleia-dev <service> --url` opens a local tunnel to the NodePort; a `kubectl port-forward` still works, only much slower.
 - **Web app:** from `web/`, `npm run check`, `npm run lint`, `npm run format:check`, `npm test` and `npm run build`. [`AGENTS.md`](../AGENTS.md) has the frontend rules.
 - **End to end:** `make e2e` runs the Playwright suite (`web/e2e`) against minikube, seeded by `cmd/e2e-seed`.
 - **API:** the Bruno collection in `bruno/` runs against a seeded minikube stack: `make e2e` seeds it with `cmd/e2e-seed` (a fresh `make k8s-up` has no accounts yet, only the setup wizard). Then `cd bruno && npx @usebruno/cli@2.13.0 run --env minikube --env-var admin_password=e2e-password` signs in as the seeded admin, `admin@e2e.test`. The environments leave the password empty: pass local-only values with `--env-var`, never commit them. Cases that need more setup are skipped, not failed: `07_update_password` (set `admin_password_new`) and `14_login_ldap` (an LDAP provider). The password-reset cases send real reset requests, which are limited to 5 per 15 minutes per IP: runs closer together than that answer 429.

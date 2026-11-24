@@ -100,7 +100,9 @@ type Engine struct {
 	url       string
 	proxyHTTP *http.Client
 	client    *trinoclient.Client // runs statements; identity set per session
-	admin     *trinoclient.Client // kills queries by handle; never runs user SQL
+	// admin kills queries by handle and runs the data policy type check
+	// (ADR 0028); it never runs a user's statement.
+	admin *trinoclient.Client
 }
 
 func (e *Engine) ID() string                          { return e.id }
@@ -348,6 +350,35 @@ func trinoDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh", d/time.Hour)
 	}
 	return fmt.Sprintf("%dm", (d+time.Minute-1)/time.Minute)
+}
+
+// ExpressionTypes returns Trino's type of each expression evaluated over
+// table, for the data policy type check (ADR 0028). It runs as the admin
+// identity, which data policies never filter, and reads no rows: the
+// statement is "SELECT e1, e2, ... FROM table WHERE false", and the types
+// come from the result's columns. exprs must already have passed
+// datapolicy.Compile; they are written into the statement as they are.
+func (e *Engine) ExpressionTypes(ctx context.Context, table []string, exprs []string) ([]string, error) {
+	if len(exprs) == 0 {
+		return nil, errors.New("no expression to type")
+	}
+	name, err := e.Dialect().QualifiedName(table...)
+	if err != nil {
+		return nil, fmt.Errorf("invalid table name: %w", err)
+	}
+	sql := fmt.Sprintf("SELECT %s FROM %s WHERE false", strings.Join(exprs, ", "), name)
+	res, err := e.admin.Execute(ctx, sql, "", "")
+	if err != nil {
+		return nil, err
+	}
+	if len(res.Columns) != len(exprs) {
+		return nil, fmt.Errorf("trino returned %d columns for %d expressions", len(res.Columns), len(exprs))
+	}
+	types := make([]string, 0, len(res.Columns))
+	for _, c := range res.Columns {
+		types = append(types, c.Type)
+	}
+	return types, nil
 }
 
 var _ queryengine.QueryResourcesReader = (*Engine)(nil)

@@ -2341,6 +2341,7 @@ type UpdateCatalogParams struct {
 
 type UpdateEngineParams struct {
 	Enabled            *bool   `json:"enabled"`
+	DataPolicies       *bool   `json:"data_policies"`
 	IdentityMode       *string `json:"identity_mode"`
 	CostRoutingEnabled *bool   `json:"cost_routing_enabled"`
 	ClearCostThreshold *bool   `json:"clear_cost_threshold"`

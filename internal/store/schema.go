@@ -265,6 +265,20 @@ func AllMigrations() (*Registry, error) {
 				return AutoMigrate(db, &model.Catalog{})
 			},
 		},
+		Migration{
+			// Row filters and column masks (ADR 0028, #1143): the per-engine
+			// switch, the authored policies and their immutable revisions.
+			// Existing engines start without data policies.
+			Version: 23,
+			Name:    "add data policies",
+			Up: func(db *gorm.DB) error {
+				added := []any{&model.Engine{}, &model.DataPolicy{}, &model.DataPolicyRevision{}}
+				if err := AutoMigrate(db, added...); err != nil {
+					return err
+				}
+				return createForeignKeys(db, added)
+			},
+		},
 	)
 }
 

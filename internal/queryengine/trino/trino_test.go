@@ -620,3 +620,33 @@ func TestProxyClient(t *testing.T) {
 		t.Fatalf("ProxyClient = %q, %v; want the engine's connection", base, client)
 	}
 }
+
+func TestExpressionTypes(t *testing.T) {
+	t.Parallel()
+	var got string
+	f := &fakeCoordinator{respond: func(sql string) (http.Header, map[string]any) {
+		got = sql
+		return nil, map[string]any{
+			"id":      "q1",
+			"columns": []map[string]any{{"name": "_col0", "type": "boolean"}, {"name": "_col1", "type": "varchar"}},
+			"stats":   map[string]any{"state": "FINISHED"},
+		}
+	}}
+	e := testEngine(t, f)
+	types, err := e.ExpressionTypes(context.Background(), []string{"sales", "public", "orders"}, []string{"region = 'EU'", `"email"`})
+	if err != nil {
+		t.Fatalf("ExpressionTypes: %v", err)
+	}
+	if len(types) != 2 || types[0] != "boolean" || types[1] != "varchar" {
+		t.Fatalf("types = %v, want [boolean varchar]", types)
+	}
+	if want := `SELECT region = 'EU', "email" FROM "sales"."public"."orders" WHERE false`; got != want {
+		t.Fatalf("statement = %q, want %q", got, want)
+	}
+	if user := f.last().Get("X-Trino-User"); user != "adm" {
+		t.Fatalf("ran as %q, want the admin identity", user)
+	}
+	if _, err := e.ExpressionTypes(context.Background(), []string{"t"}, nil); err == nil {
+		t.Fatal("ExpressionTypes without expressions returned no error")
+	}
+}

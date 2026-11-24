@@ -2561,7 +2561,10 @@ export interface paths {
         delete: operations["deleteEngine"];
         options?: never;
         head?: never;
-        /** Enable or disable an engine (owner of its connection or an admin) */
+        /**
+         * Enable or disable an engine (owner of its connection or an admin)
+         * @description 422 data_policies_unenforced when data_policies is turned off while the engine has a binding of a catalog that carries data policies.
+         */
         patch: operations["updateEngine"];
         trace?: never;
     };
@@ -2775,7 +2778,7 @@ export interface paths {
         put?: never;
         /**
          * Bind a source catalog into a federated engine
-         * @description The engine's binder projects the catalog's connection into the engine and materializes it (Trino: registry row, then CREATE CATALOG). Requires write access to the catalog's connection and to the engine (G-admin or owner of the engine's connection). 409 binding_exists when the catalog already has a binding on the engine, name_in_use when the engine already has a catalog of that name. 422 binding_unsupported (native catalog, direct engine, or a source kind or connector the binder cannot bind), property_not_overridable, reserved_name, validation_error.
+         * @description The engine's binder projects the catalog's connection into the engine and materializes it (Trino: registry row, then CREATE CATALOG). Requires write access to the catalog's connection and to the engine (G-admin or owner of the engine's connection). 409 binding_exists when the catalog already has a binding on the engine, name_in_use when the engine already has a catalog of that name. 422 binding_unsupported (native catalog, direct engine, or a source kind or connector the binder cannot bind), data_policies_unenforced (the catalog carries data policies and the engine does not enforce them), property_not_overridable, reserved_name, validation_error.
          */
         post: operations["createCatalogBinding"];
         delete?: never;
@@ -4093,7 +4096,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "catalog_read_only" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_member_not_in_team" | "workspace_not_found" | "workspace_owner_role_fixed" | "workspace_personal";
+        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "catalog_read_only" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "data_policies_unenforced" | "data_policy_invalid" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_member_not_in_team" | "workspace_not_found" | "workspace_owner_role_fixed" | "workspace_personal";
         /** @enum {string} */
         Locale: "en" | "pt-BR";
         /** @enum {string} */
@@ -5495,6 +5498,8 @@ export interface components {
             /** @enum {string} */
             identity_mode: "impersonation" | "connection" | "per_user";
             enabled: boolean;
+            /** @description The engine runs the OPA access control with Baleia's Rego, so catalogs bound to it may carry row filters and column masks (ADR 0028) */
+            data_policies: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -5628,6 +5633,8 @@ export interface components {
         };
         UpdateEngineRequest: {
             enabled?: boolean;
+            /** @description State that the engine enforces data policies (ADR 0028). Turning it off is refused with 422 data_policies_unenforced while the engine has a binding of a catalog that carries data policies */
+            data_policies?: boolean;
             cost_routing_enabled?: boolean;
             /** Format: int64 */
             cost_threshold_bytes?: number | null;

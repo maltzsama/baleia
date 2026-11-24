@@ -1,5 +1,6 @@
 # Dev values for a minikube-local deployment of the baleia chart.
-# The image is built into minikube with `minikube image build -t baleia:dev .`.
+# The image is built into the minikube node by `make k8s-up`
+# (docker-env, then `docker build --network=host -t baleia:dev .`).
 image:
   repository: baleia
   tag: dev
