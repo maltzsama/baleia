@@ -884,8 +884,10 @@ the repository revision under test. The reproducible harness is `make e2e-openme
 which is deliberately separate from `make e2e`: it starts the heavyweight
 OpenMetadata quickstart and is intended for manual runs or a dedicated nightly
 job (`openmetadata-e2e`), not ordinary pull-request CI. The harness asserts
-physical tables and their columns through OpenMetadata, and that the semantic
-catalog routes name exactly the tables OpenMetadata ingested. View ingestion is enabled, and a view is
+physical tables and their columns through OpenMetadata, that the semantic
+catalog routes name exactly the tables OpenMetadata ingested, and that the
+released `baleia-openmetadata` connector creates the data models, metrics and
+lineage and soft-deletes a model removed from Baleia. View ingestion is enabled, and a view is
 asserted when `OPENMETADATA_VIEW_NAME` is set against a source connector that
 exposes a supported view definition; connectors without view definitions cannot
 provide view lineage through the Trino protocol.

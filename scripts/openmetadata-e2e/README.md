@@ -9,7 +9,13 @@ This harness validates how OpenMetadata discovers Baleia (#1122, #1135):
   return the seeded model and metric with the same key, and every physical
   table they name is a table OpenMetadata ingested. That name match is what the
   [`baleia-openmetadata`](https://github.com/maltzsama/baleia-openmetadata)
-  connector relies on for lineage. Running that connector here is #1137.
+  connector relies on for lineage.
+- The **Baleia connector** runs from OpenMetadata's ingestion image with
+  `baleia-openmetadata` installed (#1137). With the same BI key, read from
+  the environment and never stored in OpenMetadata, it creates the
+  `e2e_bi_orders` data model and the seeded metrics, with lineage from the
+  `orders` table the Trino connector ingested. A throwaway model created
+  through Baleia's API and then deleted must be soft-deleted by the next run.
 
 Baleia never calls OpenMetadata and stores no OpenMetadata credential.
 
@@ -19,6 +25,13 @@ server come from the same release, as OpenMetadata requires. `make
 e2e-openmetadata` runs every release in `OPENMETADATA_VERSIONS` (default
 `2.0.9 2.1.0`) one after the other; set `OPENMETADATA_VERSION` and
 `OPENMETADATA_COMPOSE_SHA256` to run the script against another release.
+
+`BALEIA_OPENMETADATA` is the pip requirement installed into the ingestion
+image: `baleia-openmetadata==0.1.*` by default, a local wheel path to test an
+unreleased connector, or `skip` to leave the connector out. The throwaway model
+is created and deleted as `admin@e2e.test` through the API forwarded on
+`localhost:8080` by `make e2e-seed` (`BALEIA_API_URL`, `BALEIA_ADMIN_EMAIL`,
+`BALEIA_ADMIN_PASSWORD`).
 
 ## Run
 
