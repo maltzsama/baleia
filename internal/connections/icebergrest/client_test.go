@@ -184,6 +184,12 @@ func TestViews(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(view(""))
 		case "/v1/namespaces/legacy/views":
 			w.WriteHeader(http.StatusNotImplemented)
+		case "/v1/namespaces/flaky/views":
+			if r.URL.Query().Get("pageToken") == "" {
+				_ = json.NewEncoder(w).Encode(map[string]any{"identifiers": []map[string]any{{"name": "v1"}}, "next-page-token": "p2"})
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -215,5 +221,9 @@ func TestViews(t *testing.T) {
 	}
 	if names, err := vr.ListViews(ctx, "c", connections.Namespace{"gone"}); err != nil || len(names) != 0 {
 		t.Fatalf("ListViews of a missing namespace = %v, %v", names, err)
+	}
+	// A later page that fails is an error: the views on it would go unchecked.
+	if names, err := vr.ListViews(ctx, "c", connections.Namespace{"flaky"}); err == nil {
+		t.Fatalf("ListViews with a failing later page = %v, want an error", names)
 	}
 }

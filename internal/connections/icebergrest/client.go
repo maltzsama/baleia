@@ -374,7 +374,9 @@ func (r *reader) ListTables(ctx context.Context, catalog string, ns connections.
 const trinoRunAsOwner = "trino.run-as-owner"
 
 // ListViews returns the names of a namespace's views. A server without the
-// view endpoints (501) or a namespace that is gone (404) has none.
+// view endpoints (501) or a namespace that is gone (404) has none; either
+// answer on a later page is an error, since views on the pages not read
+// would go unchecked.
 func (r *reader) ListViews(ctx context.Context, catalog string, ns connections.Namespace) ([]string, error) {
 	root, err := r.c.root(ctx, r.warehouseOf(catalog))
 	if err != nil {
@@ -395,8 +397,8 @@ func (r *reader) ListViews(ctx context.Context, catalog string, ns connections.N
 		}
 		err := r.c.Get(ctx, "list views", root+"/namespaces/"+encodeNamespace(ns)+"/views", q, &out)
 		var status *StatusError
-		if errors.Is(err, connections.ErrNotFound) || (errors.As(err, &status) && status.Status == http.StatusNotImplemented) {
-			return names, nil
+		if token == "" && (errors.Is(err, connections.ErrNotFound) || (errors.As(err, &status) && status.Status == http.StatusNotImplemented)) {
+			return nil, nil
 		}
 		if err != nil {
 			return nil, err
