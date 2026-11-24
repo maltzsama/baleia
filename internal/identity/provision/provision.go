@@ -69,6 +69,22 @@ func ApplyWorkspaces(ctx context.Context, store WorkspaceMembers, userID db.UUID
 	return nil
 }
 
+// GroupRecorder stores the identity-provider groups of a user's latest
+// sign-in; *repo.Repo implements it.
+type GroupRecorder interface {
+	ReplaceUserIDPGroups(ctx context.Context, userID db.UUID, groups []string) error
+}
+
+// RecordGroups stores the groups a sign-in carried, replacing the previous
+// sign-in's. Data policies match subjects by these groups (ADR 0028), so a
+// failure fails the sign-in rather than leave a removed group in effect.
+func RecordGroups(ctx context.Context, store GroupRecorder, userID db.UUID, groups []string) error {
+	if err := store.ReplaceUserIDPGroups(ctx, userID, groups); err != nil {
+		return fmt.Errorf("record identity-provider groups: %w", err)
+	}
+	return nil
+}
+
 // Accounts finds, creates and updates directory-linked accounts;
 // *repo.Repo implements it.
 type Accounts interface {
@@ -77,6 +93,7 @@ type Accounts interface {
 	UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error
 	TeamMembers
 	WorkspaceMembers
+	GroupRecorder
 }
 
 // ErrNotProvisioned: the OIDC subject has no account and may not get one.
@@ -120,6 +137,9 @@ func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, provider
 			if err := ApplyWorkspaces(ctx, store, user.ID, mapped.Workspaces); err != nil {
 				return db.User{}, err
 			}
+			if err := RecordGroups(ctx, store, user.ID, info.Groups); err != nil {
+				return db.User{}, err
+			}
 			return user, nil
 		}
 		if !isUniqueViolation(err) {
@@ -140,6 +160,9 @@ func OIDCUser(ctx context.Context, logger *slog.Logger, store Accounts, provider
 	}
 	ApplyTeams(ctx, logger, store, user.ID, mapped.Teams)
 	if err := ApplyWorkspaces(ctx, store, user.ID, mapped.Workspaces); err != nil {
+		return db.User{}, err
+	}
+	if err := RecordGroups(ctx, store, user.ID, info.Groups); err != nil {
 		return db.User{}, err
 	}
 	return user, nil

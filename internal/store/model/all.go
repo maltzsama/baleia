@@ -70,6 +70,7 @@ func All() []any {
 		&TrinoCluster{},
 		&TrinoQuerySnapshot{},
 		&TrinoResourceGroupRevision{},
+		&UserIDPGroup{},
 		&UserIDPToken{},
 		&User{},
 		&Webhook{},

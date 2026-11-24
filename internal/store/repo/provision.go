@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/model"
@@ -262,3 +264,33 @@ func (s *Providers) ListEnabledLDAPProviders(ctx context.Context) ([]db.AuthProv
 	}
 	return out, nil
 }
+
+// ReplaceUserIDPGroups stores the groups of the user's latest sign-in,
+// replacing the previous sign-in's, in one transaction. Blank and duplicate
+// names are dropped, and so are names longer than a policy subject can name
+// (ADR 0028).
+func (r *Repo) ReplaceUserIDPGroups(ctx context.Context, userID db.UUID, groups []string) error {
+	id := model.UUID(UUIDString(userID))
+	rows := make([]model.UserIDPGroup, 0, len(groups))
+	seen := make(map[string]bool, len(groups))
+	for _, g := range groups {
+		name := strings.TrimSpace(g)
+		if name == "" || utf8.RuneCountInString(name) > maxIDPGroupLength || seen[name] {
+			continue
+		}
+		seen[name] = true
+		rows = append(rows, model.UserIDPGroup{UserID: id, Name: model.Text(name)})
+	}
+	return r.Users.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", string(id)).Delete(&model.UserIDPGroup{}).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return tx.Create(&rows).Error
+	})
+}
+
+// maxIDPGroupLength is the longest group name stored, the size of its column.
+const maxIDPGroupLength = 255

@@ -28,6 +28,7 @@ type Store interface {
 	UpdateUserRole(ctx context.Context, arg db.UpdateUserRoleParams) error
 	provision.TeamMembers
 	provision.WorkspaceMembers
+	provision.GroupRecorder
 }
 
 // Directory verifies a user's credentials against an LDAP directory.
@@ -142,6 +143,9 @@ func (s *Service) Directory(ctx context.Context, providerID db.UUID, username, p
 	}
 	provision.ApplyTeams(ctx, s.logger, s.store, user.ID, result.Teams)
 	if err := provision.ApplyWorkspaces(ctx, s.store, user.ID, result.Workspaces); err != nil {
+		return db.User{}, err
+	}
+	if err := provision.RecordGroups(ctx, s.store, user.ID, result.Groups); err != nil {
 		return db.User{}, err
 	}
 	return user, nil

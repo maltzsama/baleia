@@ -376,6 +376,9 @@ type Querier interface {
 	// LockEngineForUpdate reads an engine and locks its row until the
 	// transaction ends, or returns ErrNoRows.
 	LockEngineForUpdate(ctx context.Context, id UUID) (Engine, error)
+	// ReplaceUserIDPGroups stores the identity-provider groups of a user's
+	// latest sign-in, replacing the previous ones.
+	ReplaceUserIDPGroups(ctx context.Context, userID UUID, groups []string) error
 	ListAPIKeysByUser(ctx context.Context, userID UUID) ([]ApiKey, error)
 	ListActiveTrinoQueries(ctx context.Context) ([]TrinoQuerySnapshot, error)
 	// The workspaces the user administers (#653).

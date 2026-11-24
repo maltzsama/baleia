@@ -16,6 +16,8 @@ import (
 )
 
 type fakeStore struct {
+	// groups are the last recorded sign-in groups by user (ADR 0028).
+	groups     map[[16]byte][]string
 	byEmail    map[string]db.User
 	byExternal map[string]db.User
 	providers  map[[16]byte]db.AuthProvider
@@ -50,6 +52,11 @@ func (f *fakeStore) UpdateUserRole(_ context.Context, arg db.UpdateUserRoleParam
 }
 
 func (f *fakeStore) ApplyGroupWorkspaceRoles(context.Context, db.ApplyGroupWorkspaceRolesParams) error {
+	return nil
+}
+
+func (f *fakeStore) ReplaceUserIDPGroups(_ context.Context, userID db.UUID, groups []string) error {
+	f.groups = map[[16]byte][]string{userID.Bytes: groups}
 	return nil
 }
 
@@ -137,7 +144,7 @@ func TestDirectory(t *testing.T) {
 	off := db.User{ID: newID(), AuthProvider: "ldap", AuthProviderID: ap.ID, Role: "member", Status: "suspended"}
 	st.byExternal["uid=ana"], st.byExternal["uid=off"] = ana, off
 	dir := fakeDirectory{users: map[string]*identityldap.User{
-		"ana:right": {ExternalID: "uid=ana", Role: "admin", Teams: []identity.TeamAssignment{{TeamID: team, TeamRole: "member"}}},
+		"ana:right": {ExternalID: "uid=ana", Role: "admin", Groups: []string{"analysts"}, Teams: []identity.TeamAssignment{{TeamID: team, TeamRole: "member"}}},
 		"off:right": {ExternalID: "uid=off", Role: "member"},
 	}}
 	s := New(slog.New(slog.DiscardHandler), st, dir, kr, bcrypt.MinCost)
@@ -151,6 +158,9 @@ func TestDirectory(t *testing.T) {
 	}
 	if len(st.teams) != 1 || st.teams[0].UserID != ana.ID {
 		t.Errorf("teams = %+v, want the mapped team applied", st.teams)
+	}
+	if got := st.groups[ana.ID.Bytes]; len(got) != 1 || got[0] != "analysts" {
+		t.Errorf("recorded groups = %v, want the directory's", got)
 	}
 
 	for _, c := range []struct {
