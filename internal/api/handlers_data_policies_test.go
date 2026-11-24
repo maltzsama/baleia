@@ -7,14 +7,17 @@ import (
 	"crypto/rsa"
 	"errors"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/datapolicy"
 	"github.com/galileostudio/baleia/internal/datapolicy/viewsql"
 	"github.com/galileostudio/baleia/internal/db"
@@ -420,5 +423,102 @@ func TestDataPolicies_Status(t *testing.T) {
 		t.Fatal("no response")
 	} else if _, ok := resp.(GetDataPolicyStatus403JSONResponse); !ok {
 		t.Fatalf("member status = %+v", resp)
+	}
+}
+
+// TestDataPolicies_InspectViews reads a catalog's views through its Polaris
+// connection: a DEFINER view comes back with its owner and what it reads,
+// and a catalog bound through a view-capable connector whose views cannot be
+// read is reported.
+func TestDataPolicies_InspectViews(t *testing.T) {
+	t.Parallel()
+	f := newDataPolicyFixture(t)
+	polaris := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/catalog/v1/oauth/tokens":
+			_, _ = io.WriteString(w, `{"access_token":"t","token_type":"bearer","expires_in":3600}`)
+		case r.URL.Path == "/api/catalog/v1/config":
+			_, _ = io.WriteString(w, `{"defaults":{},"overrides":{"prefix":"wh"}}`)
+		case r.URL.Path == "/api/catalog/v1/wh/namespaces" && r.URL.Query().Get("parent") == "":
+			_, _ = io.WriteString(w, `{"namespaces":[["sales"]]}`)
+		case r.URL.Path == "/api/catalog/v1/wh/namespaces":
+			_, _ = io.WriteString(w, `{"namespaces":[]}`)
+		case r.URL.Path == "/api/catalog/v1/wh/namespaces/sales/views":
+			_, _ = io.WriteString(w, `{"identifiers":[{"namespace":["sales"],"name":"v_all"}]}`)
+		case r.URL.Path == "/api/catalog/v1/wh/namespaces/sales/views/v_all":
+			_, _ = io.WriteString(w, `{"metadata":{"current-version-id":1,"properties":{"trino.run-as-owner":"baleia_admin"},
+				"versions":[{"version-id":1,"default-catalog":"lake","default-namespace":["sales"],
+				"representations":[{"type":"sql","sql":"SELECT * FROM orders","dialect":"trino"}]}]}}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(polaris.Close)
+
+	kr, err := crypto.NewKeyring("data-policy-test-key-0123456789abcdef", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.h.keyring = kr
+	var cat model.Catalog
+	if err := f.gdb.Where("id = ?", f.catalog.String()).First(&cat).Error; err != nil {
+		t.Fatal(err)
+	}
+	sealed, err := kr.Seal([]byte(`{"client_secret":"s"}`), catalogs.CredentialsAAD(repo.PGUUID(string(cat.ConnectionID))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gdb.Model(&model.CatalogConnection{}).Where("id = ?", string(cat.ConnectionID)).Updates(map[string]any{
+		"url": polaris.URL, "config": model.JSON(`{"url":"` + polaris.URL + `","client_id":"c"}`), "credentials_enc": sealed,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	inspection, err := f.h.inspectViews(context.Background())
+	if err != nil {
+		t.Fatalf("inspectViews: %v", err)
+	}
+	if len(inspection.Uninspectable) != 0 || len(inspection.Views) != 1 {
+		t.Fatalf("inspection = %+v", inspection)
+	}
+	v := inspection.Views[0]
+	if v.View.Owner != "baleia_admin" || len(v.Reads) != 1 || v.Reads[0] != datapolicy.NewTableName("lake", "sales", "orders") {
+		t.Fatalf("view = %+v", v)
+	}
+
+	// A Hive catalog bound on the same engine has views Baleia cannot read.
+	var source model.CatalogConnection
+	if err := f.gdb.Where("id = ?", string(cat.ConnectionID)).First(&source).Error; err != nil {
+		t.Fatal(err)
+	}
+	hive, err := repo.New(f.gdb).CreateCatalogConnection(context.Background(), db.CreateCatalogConnectionParams{
+		ID: repo.PGUUID(repo.NewUUID()), Name: "policies-hive", Type: "hive", Url: "thrift://hms.test:9083",
+		CreatedBy: repo.PGUUID(string(*source.CreatedBy)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hms, warehouse, hiveConnector := model.Text("hms"), "hms", model.Text("hive")
+	hiveCatalog := model.Catalog{
+		ID: model.UUID(repo.NewUUID()), ConnectionID: model.UUID(repo.UUIDString(hive.ID)), Name: "hms",
+		TrinoCatalogName: &hms, ClusterID: cat.ClusterID, Warehouse: &warehouse, Connector: &hiveConnector, Origin: "source",
+	}
+	if err := f.gdb.Create(&hiveCatalog).Error; err != nil {
+		t.Fatal(err)
+	}
+	bindingConnector := "hive"
+	if err := f.gdb.Create(&model.CatalogBinding{
+		ID: model.UUID(repo.NewUUID()), CatalogID: hiveCatalog.ID, EngineID: model.UUID(f.engineID.String()),
+		EngineCatalogName: "hms", Connector: &bindingConnector, Mode: "managed", Enabled: true, LifecycleState: "active",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	inspection, err = f.h.inspectViews(context.Background())
+	if err != nil {
+		t.Fatalf("inspectViews with a Hive catalog: %v", err)
+	}
+	if len(inspection.Uninspectable) != 1 || inspection.Uninspectable[0] != "hms" || len(inspection.Views) != 1 {
+		t.Fatalf("inspection with a Hive catalog = %+v", inspection)
 	}
 }
