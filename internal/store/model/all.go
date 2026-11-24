@@ -21,6 +21,8 @@ func All() []any {
 		&Catalog{},
 		&ClusterSnapshot{},
 		&ContentVersion{},
+		&DataPolicy{},
+		&DataPolicyRevision{},
 		&DirectoryReconcileRun{},
 		&EngineCatalogObservation{},
 		&EngineQueueCapacity{},
