@@ -173,7 +173,7 @@ func TestBundle(t *testing.T) {
 }
 
 // TestOPAFileHash pins OPA's canonical JSON hashing: key order and spacing do
-// not change the hash.
+// not change the hash, and both hashes are the ones OPA itself computes.
 func TestOPAFileHash(t *testing.T) {
 	t.Parallel()
 	a, err := opaFileHash("x.json", []byte(`{"b":1,"a":[1,"<"]}`))
@@ -187,6 +187,15 @@ func TestOPAFileHash(t *testing.T) {
 	raw, err := opaFileHash("policy.rego", []byte("package x"))
 	if err != nil || raw == a {
 		t.Fatalf("raw file hash = %s, %v", raw, err)
+	}
+
+	// The hashes `opa sign --bundle` (OPA 1.22.4) wrote for these two files.
+	const (
+		opaDataHash   = "f21ec32c9c16f4e63bb5b9e13d013b7eb39aabfa844b55baa533ca9d1c929d17"
+		opaPolicyHash = "f29a61410674e7e3184fb918a75bd5db888db98e3646d8852cc47162be9146a8"
+	)
+	if a != opaDataHash || raw != opaPolicyHash {
+		t.Fatalf("hashes = %s, %s; want OPA's %s, %s", a, raw, opaDataHash, opaPolicyHash)
 	}
 }
 
