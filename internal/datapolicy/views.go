@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/sqlref"
 )
 
 // TableName names a table or view on the engines: its engine catalog name,
@@ -20,15 +18,20 @@ type TableName struct {
 
 func (t TableName) String() string { return t.Catalog + "." + t.Schema + "." + t.Table }
 
-func newTableName(catalog, schema, table string) TableName {
+// NewTableName names a table, lowercase as Trino resolves names.
+func NewTableName(catalog, schema, table string) TableName {
 	return TableName{Catalog: strings.ToLower(catalog), Schema: strings.ToLower(schema), Table: strings.ToLower(table)}
 }
 
 // CatalogView is a view found in a catalog manager, with the engine catalog
-// names of the catalog that holds it.
+// names of the catalog that holds it and the tables and views its SQL reads
+// (package viewsql resolves them). Unreadable means its SQL could not be
+// parsed.
 type CatalogView struct {
-	Catalogs []string
-	View     connections.View
+	Catalogs   []string
+	View       connections.View
+	Reads      []TableName
+	Unreadable bool
 }
 
 // ViewReach is a SECURITY DEFINER view and the policied tables it reads,
@@ -42,8 +45,6 @@ type ViewReach struct {
 	Unreadable bool
 }
 
-var trinoSQL = dialect.NewRegistry().MustGet(dialect.Trino)
-
 // PoliciedTables lists the tables a content's catalogs put policies on, by
 // every engine name of their catalog.
 func (c Content) PoliciedTables() map[TableName]bool {
@@ -52,7 +53,7 @@ func (c Content) PoliciedTables() map[TableName]bool {
 		for schema, tables := range catalog.Tables {
 			for table := range tables {
 				for _, name := range catalog.Names {
-					out[newTableName(name, schema, table)] = true
+					out[NewTableName(name, schema, table)] = true
 				}
 			}
 		}
@@ -74,10 +75,9 @@ func DefinerReach(views []CatalogView, policied map[TableName]bool) []ViewReach 
 	var order []TableName
 	for _, cv := range views {
 		schema := strings.Join(cv.View.Namespace, ".")
-		reads, unreadable := viewReads(cv)
-		n := &node{view: cv.View, reads: reads, unreadable: unreadable}
+		n := &node{view: cv.View, reads: cv.Reads, unreadable: cv.Unreadable}
 		for _, catalog := range cv.Catalogs {
-			key := newTableName(catalog, schema, cv.View.Name)
+			key := NewTableName(catalog, schema, cv.View.Name)
 			nodes[key] = n
 			order = append(order, key)
 		}
@@ -143,38 +143,4 @@ func TrustedDefinerViews(reach []ViewReach, trusted map[string]bool) []ViewReach
 		}
 	}
 	return out
-}
-
-// viewReads resolves the tables a view's SQL reads against its default
-// catalog and schema. A view without a default catalog resolves against the
-// catalog that holds it.
-func viewReads(cv CatalogView) ([]TableName, bool) {
-	if _, err := dialect.ParseStatement(trinoSQL, cv.View.SQL); err != nil {
-		return nil, true
-	}
-	defaultSchema := strings.Join(cv.View.DefaultSchema, ".")
-	if defaultSchema == "" {
-		defaultSchema = strings.Join(cv.View.Namespace, ".")
-	}
-	catalogs := cv.Catalogs
-	if cv.View.DefaultCatalog != "" {
-		catalogs = []string{cv.View.DefaultCatalog}
-	}
-	ref := sqlref.ExtractResolved(trinoSQL, defaultSchema, cv.View.SQL)
-	var out []TableName
-	for _, t := range ref.Tables {
-		switch len(t.Path) {
-		case 3:
-			out = append(out, newTableName(t.Path[0], t.Path[1], t.Path[2]))
-		case 2:
-			for _, catalog := range catalogs {
-				out = append(out, newTableName(catalog, t.Path[0], t.Path[1]))
-			}
-		case 1:
-			for _, catalog := range catalogs {
-				out = append(out, newTableName(catalog, defaultSchema, t.Path[0]))
-			}
-		}
-	}
-	return out, false
 }

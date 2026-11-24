@@ -226,9 +226,11 @@ func TestPublisher_Refusals(t *testing.T) {
 		t.Parallel()
 		store := newMemStore()
 		store.policies[sales] = publishedPolicies(sales)
-		views := ViewInspection{Views: []CatalogView{{Catalogs: []string{"lake"}, View: connections.View{
-			Namespace: connections.Namespace{"sales"}, Name: "v", Owner: "baleia_admin", SQL: "SELECT * FROM orders",
-		}}}}
+		views := ViewInspection{Views: []CatalogView{{
+			Catalogs: []string{"lake"},
+			View:     connections.View{Namespace: connections.Namespace{"sales"}, Name: "v", Owner: "baleia_admin", SQL: "SELECT * FROM orders"},
+			Reads:    []TableName{NewTableName("lake", "sales", "orders")},
+		}}}
 		_, err := newPublisher(t, store, &memObjects{}, &now).PublishCatalog(ctx, sales, []string{"lake"}, views, uuid.New())
 		refused(t, err, ProblemTrustedDefiner)
 	})

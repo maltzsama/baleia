@@ -14,6 +14,7 @@ import (
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/connections/providers"
 	"github.com/galileostudio/baleia/internal/datapolicy"
+	"github.com/galileostudio/baleia/internal/datapolicy/viewsql"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
@@ -455,7 +456,7 @@ func (h *DataPolicyHandlers) catalogViews(ctx context.Context, catalogID db.UUID
 				if err != nil {
 					return err
 				}
-				out = append(out, datapolicy.CatalogView{Catalogs: names, View: v})
+				out = append(out, viewsql.Resolve(names, v))
 			}
 			if err := walk(ns); err != nil {
 				return err

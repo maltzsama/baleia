@@ -16,6 +16,7 @@ import (
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/galileostudio/baleia/internal/datapolicy"
+	"github.com/galileostudio/baleia/internal/datapolicy/viewsql"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/queryengine/fake"
@@ -326,9 +327,9 @@ func TestDataPolicies_PublishAndRollback(t *testing.T) {
 	}
 
 	// A trusted-owned DEFINER view over the policied table refuses the publish.
-	f.views = datapolicy.ViewInspection{Views: []datapolicy.CatalogView{{Catalogs: []string{"lake"}, View: connections.View{
+	f.views = datapolicy.ViewInspection{Views: []datapolicy.CatalogView{viewsql.Resolve([]string{"lake"}, connections.View{
 		Namespace: connections.Namespace{"sales"}, Name: "v_all", Owner: "baleia_admin", SQL: "SELECT * FROM orders",
-	}}}}
+	})}}
 	refused, ok := publish(ctx).(PublishCatalogDataPolicies422JSONResponse)
 	if !ok || len(refused.Problems) != 1 || refused.Problems[0].Code != DataPolicyProblemTrustedDefinerView || refused.Code != ErrorCodeDataPolicyInvalid {
 		t.Fatalf("publish with a trusted DEFINER view = %+v", refused)
