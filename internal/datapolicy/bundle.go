@@ -6,8 +6,10 @@ import (
 	"compress/gzip"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"maps"
 	"slices"
@@ -299,4 +301,25 @@ func hashPrimitive(h hashWriter, v any) error {
 	}
 	h.Write(bytes.TrimRight(buf.Bytes(), "\n"))
 	return nil
+}
+
+// ParseSigningKey reads the PEM RSA private key that signs the bundles,
+// PKCS #1 or PKCS #8.
+func ParseSigningKey(pemText string) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode([]byte(pemText))
+	if block == nil {
+		return nil, fmt.Errorf("datapolicy signing key: no PEM block")
+	}
+	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+		return key, nil
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("datapolicy signing key: %w", err)
+	}
+	key, ok := parsed.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("datapolicy signing key: not an RSA key")
+	}
+	return key, nil
 }

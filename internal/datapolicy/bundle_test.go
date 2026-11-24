@@ -6,7 +6,9 @@ import (
 	"compress/gzip"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"slices"
 	"testing"
@@ -184,5 +186,25 @@ func TestOPAFileHash(t *testing.T) {
 	raw, err := opaFileHash("policy.rego", []byte("package x"))
 	if err != nil || raw == a {
 		t.Fatalf("raw file hash = %s, %v", raw, err)
+	}
+}
+
+func TestParseSigningKey(t *testing.T) {
+	t.Parallel()
+	key := testKey(t)
+	pkcs1 := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkcs8 := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	for name, text := range map[string][]byte{"pkcs1": pkcs1, "pkcs8": pkcs8} {
+		got, err := ParseSigningKey(string(text))
+		if err != nil || !got.Equal(key) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := ParseSigningKey("not a key"); err == nil {
+		t.Error("parsed text without a PEM block")
 	}
 }
