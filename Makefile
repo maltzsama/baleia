@@ -270,12 +270,15 @@ k8s-plugin-bundle:
 	minikube -p $(K8S_PROFILE) image load $(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG)
 
 # Start minikube, deploy the dependency stack, build baleia:dev into the node,
-# then install the chart. The build uses the node's network: the node's Docker
-# bridge has no IPv6, and apk hangs on the Alpine CDN's IPv6 addresses there.
+# then install the chart. The build runs on the node's Docker daemon with the
+# node's network: the node's Docker bridge has no IPv6, and apk hangs on the
+# Alpine CDN's IPv6 addresses there. It goes through docker-env rather than
+# `minikube image build --build-opt=network=host`, which minikube 1.39 passes
+# on as a flag its builder rejects.
 k8s-up:
 	minikube start -p $(K8S_PROFILE) $(K8S_DRIVER_FLAG) --cpus=$(K8S_CPUS) --memory=$(K8S_MEMORY)
 	kubectl apply -k deploy/dev
-	minikube -p $(K8S_PROFILE) image build -t baleia:dev --build-opt=network=host .
+	eval "$$(minikube -p $(K8S_PROFILE) docker-env)" && docker build --network=host -t baleia:dev .
 	$(MAKE) k8s-plugin-bundle
 	helm upgrade --install baleia deploy/helm/baleia -n $(K8S_NS) \
 		-f deploy/dev/values-dev.yaml \

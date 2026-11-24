@@ -1,7 +1,7 @@
 # Hive Metastore source (#86, #1005); not part of the dev stack.
 # Build its image first (deploy/dev/hive.Dockerfile adds the PostgreSQL JDBC
 # driver the official image omits):
-#   minikube -p baleia image build -t baleia-hive-metastore:4.0.1 -f hive.Dockerfile --build-opt=network=host deploy/dev
+#   eval "$(minikube -p baleia docker-env)" && docker build --network=host -t baleia-hive-metastore:4.0.1 -f deploy/dev/hive.Dockerfile deploy/dev
 # (when the build cannot fetch the driver from inside minikube, build the image
 # with the host's docker and minikube -p baleia image load it),
 # then kubectl apply -f deploy/dev/sources/hive-metastore.yaml
