@@ -133,12 +133,12 @@ type FieldError struct {
 	Code  string
 }
 
-// Field error codes.
+// Field error codes, a subset of the API's closed FieldCode set.
 const (
 	FieldRequired      = "required"
 	FieldInvalidFormat = "invalid_format"
 	FieldTooLong       = "too_long"
-	FieldInvalidValue  = "invalid_value"
+	FieldOutOfRange    = "out_of_range"
 	FieldNotAllowed    = "not_allowed"
 )
 
@@ -191,7 +191,7 @@ func (p *Policy) Validate() error {
 	switch p.State {
 	case StateEnabled, StateDisabled:
 	default:
-		add("state", FieldInvalidValue)
+		add("state", FieldInvalidFormat)
 	}
 	if p.Expression == "" {
 		add("expression", FieldRequired)
@@ -200,7 +200,7 @@ func (p *Policy) Validate() error {
 	switch p.Kind {
 	case KindRowFilter:
 		if p.Mode != ModePermissive && p.Mode != ModeRestrictive {
-			add("mode", FieldInvalidValue)
+			add("mode", FieldInvalidFormat)
 		}
 		if p.Target.Column != "" {
 			add("column", FieldNotAllowed)
@@ -219,13 +219,13 @@ func (p *Policy) Validate() error {
 		switch p.Template {
 		case "", MaskTemplateNull, MaskTemplateConstant, MaskTemplatePartial, MaskTemplateSHA256, MaskTemplateCustom:
 		default:
-			add("template", FieldInvalidValue)
+			add("template", FieldInvalidFormat)
 		}
 		if p.Priority < 0 {
-			add("priority", FieldInvalidValue)
+			add("priority", FieldOutOfRange)
 		}
 	default:
-		add("kind", FieldInvalidValue)
+		add("kind", FieldInvalidFormat)
 	}
 
 	if err := validateSubjects(p.Subjects); err != nil {
@@ -249,8 +249,8 @@ func checkIdentifier(field, value string, add func(field, code string)) {
 // errSubject* are the codes of an invalid subject list (FieldError codes).
 var (
 	errSubjectsRequired = errors.New(FieldRequired)
-	errSubjectsTooMany  = errors.New(FieldTooLong)
-	errSubjectInvalid   = errors.New(FieldInvalidValue)
+	errSubjectsTooMany  = errors.New(FieldOutOfRange)
+	errSubjectInvalid   = errors.New(FieldInvalidFormat)
 )
 
 // validateSubjects checks the subject list: one to MaxSubjects references,
