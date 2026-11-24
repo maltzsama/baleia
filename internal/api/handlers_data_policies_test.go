@@ -444,6 +444,37 @@ func TestDataPolicies_PublishAndRollback(t *testing.T) {
 	}
 }
 
+// TestDataPolicies_DefinerViewsOverPoliciesInForce: a policy deleted from the
+// draft still applies until the next publish, and so do the DEFINER views
+// over its table.
+func TestDataPolicies_DefinerViewsOverPoliciesInForce(t *testing.T) {
+	t.Parallel()
+	f := newDataPolicyFixture(t)
+	ctx := f.admin
+	_, body, row := f.create(t, ctx, rowFilterBody("eu", "region = 'EU'"))
+	if row.Id == (openapi_types.UUID{}) {
+		t.Fatalf("create = %s", body)
+	}
+	if resp, err := f.h.PublishCatalogDataPolicies(ctx, PublishCatalogDataPoliciesRequestObject{Id: f.catalog}); err != nil {
+		t.Fatal(err)
+	} else if _, ok := resp.(PublishCatalogDataPolicies201JSONResponse); !ok {
+		t.Fatalf("publish = %+v", resp)
+	}
+	if _, err := f.h.DeleteDataPolicy(ctx, DeleteDataPolicyRequestObject{Id: row.Id}); err != nil {
+		t.Fatal(err)
+	}
+	f.views = datapolicy.ViewInspection{Views: []datapolicy.CatalogView{viewsql.Resolve([]string{"lake"}, connections.View{
+		Namespace: connections.Namespace{"sales"}, Name: "v_all", Owner: "ana", SQL: "SELECT * FROM orders",
+	})}}
+	resp, err := f.h.ListCatalogDefinerViews(ctx, ListCatalogDefinerViewsRequestObject{Id: f.catalog})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if views := resp.(ListCatalogDefinerViews200JSONResponse); len(views) != 1 || views[0].Owner != "ana" {
+		t.Fatalf("definer views = %+v, want the view over the published policy's table", views)
+	}
+}
+
 func TestDataPolicies_Status(t *testing.T) {
 	t.Parallel()
 	f := newDataPolicyFixture(t)

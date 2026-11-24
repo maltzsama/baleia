@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -568,7 +569,16 @@ func (h *DataPolicyHandlers) ListCatalogDefinerViews(ctx context.Context, reques
 	if err != nil {
 		return nil, err
 	}
-	content := datapolicy.Content{Catalogs: map[string]datapolicy.CatalogContent{cat.ID.String(): datapolicy.CatalogContentOf(names, policies)}}
+	// The views are judged against the policies in force and the draft: a
+	// policy deleted from the draft still applies until the next publish.
+	content := datapolicy.Content{Catalogs: map[string]datapolicy.CatalogContent{"draft": datapolicy.CatalogContentOf(names, policies)}}
+	inForce, published, err := h.publishedCatalog(ctx, uuid.UUID(cat.ID.Bytes))
+	if err != nil {
+		return nil, err
+	}
+	if published {
+		content.Catalogs["published"] = inForce
+	}
 	views, err := h.views(ctx)
 	if err != nil {
 		h.logger.WarnContext(ctx, "data policy definer views: views could not be read", "err", err)
@@ -588,6 +598,24 @@ func (h *DataPolicyHandlers) ListCatalogDefinerViews(ctx context.Context, reques
 		out = append(out, DataPolicyDefinerView{View: r.View.String(), Owner: r.Owner, Reads: reads, Trusted: trusted[r.Owner], Unreadable: r.Unreadable})
 	}
 	return ListCatalogDefinerViews200JSONResponse(out), nil
+}
+
+// publishedCatalog returns what the published revision holds for a catalog,
+// and whether it holds anything.
+func (h *DataPolicyHandlers) publishedCatalog(ctx context.Context, catalogID uuid.UUID) (datapolicy.CatalogContent, bool, error) {
+	rev, err := h.policies.PublishedRevision(ctx)
+	if errors.Is(err, datapolicy.ErrNotFound) {
+		return datapolicy.CatalogContent{}, false, nil
+	}
+	if err != nil {
+		return datapolicy.CatalogContent{}, false, err
+	}
+	var content datapolicy.Content
+	if err := json.Unmarshal(rev.Content, &content); err != nil {
+		return datapolicy.CatalogContent{}, false, fmt.Errorf("read revision %s: %w", rev.ID, err)
+	}
+	catalog, ok := content.Catalogs[catalogID.String()]
+	return catalog, ok, nil
 }
 
 // ── revisions and status (global admin) ──────────────────────────────────────

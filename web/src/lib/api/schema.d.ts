@@ -4145,7 +4145,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** SECURITY DEFINER views over the catalog's policied tables, and whose policies they apply */
+        /**
+         * SECURITY DEFINER views over the catalog's policied tables, and whose policies they apply
+         * @description A table is policied when the published revision or the catalog's draft holds a policy on it: a policy deleted from the draft applies until the next publish.
+         */
         get: operations["listCatalogDefinerViews"];
         put?: never;
         post?: never;
