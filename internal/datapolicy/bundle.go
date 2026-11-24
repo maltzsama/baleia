@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"hash"
 	"maps"
 	"slices"
 	"strings"
@@ -256,9 +257,7 @@ func opaFileHash(name string, content []byte) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-type hashWriter interface{ Write([]byte) (int, error) }
-
-func hashWalk(h hashWriter, v any) error {
+func hashWalk(h hash.Hash, v any) error {
 	switch x := v.(type) {
 	case map[string]any:
 		h.Write([]byte("{"))
@@ -292,7 +291,7 @@ func hashWalk(h hashWriter, v any) error {
 	return nil
 }
 
-func hashPrimitive(h hashWriter, v any) error {
+func hashPrimitive(h hash.Hash, v any) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)

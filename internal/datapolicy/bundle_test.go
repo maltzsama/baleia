@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"io"
 	"slices"
 	"testing"
@@ -37,7 +38,7 @@ func untar(t *testing.T, tarball []byte) map[string][]byte {
 	files := map[string][]byte{}
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return files
 		}
 		if err != nil {
