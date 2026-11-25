@@ -15,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-seed e2e-forward e2e-bi e2e-openmetadata e2e-down
+.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-data-policy-key k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-seed e2e-forward e2e-bi e2e-openmetadata e2e-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_AGENTS_ENABLED=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -270,6 +270,18 @@ k8s-plugin-bundle:
 		-t $(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG) -f deploy/dev/plugins.Dockerfile .
 	minikube -p $(K8S_PROFILE) image load $(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG)
 
+# The dev cluster runs with data policies on (ADR 0028). Their bundle signing
+# key pair is made once per workstation and never committed. K8S_HELM_ARGS
+# passes extra flags to the chart, e.g. turning data policies on in a cluster
+# created before they were: --set-string
+# secrets.values.BALEIA_DEFAULT_ENGINE_ID=<id of the engine named "default">.
+K8S_DATA_POLICY_KEY ?= $(or $(TMPDIR),/tmp)/baleia-dev-data-policy.pem
+K8S_HELM_ARGS       ?=
+
+k8s-data-policy-key:
+	@test -s $(K8S_DATA_POLICY_KEY) || openssl genrsa -out $(K8S_DATA_POLICY_KEY) 2048
+	@openssl rsa -in $(K8S_DATA_POLICY_KEY) -pubout -out $(K8S_DATA_POLICY_KEY).pub 2>/dev/null
+
 # Start minikube, deploy the dependency stack, build baleia:dev into the node,
 # then install the chart. The build runs on the node's Docker daemon with the
 # node's network: the node's Docker bridge has no IPv6, and apk hangs on the
@@ -282,11 +294,15 @@ k8s-up:
 	kubectl apply -k deploy/dev
 	eval "$$(minikube -p $(K8S_PROFILE) docker-env --shell bash)" && docker build --network=host -t baleia:dev .
 	$(MAKE) k8s-plugin-bundle
+	$(MAKE) k8s-data-policy-key
 	helm upgrade --install baleia deploy/helm/baleia -n $(K8S_NS) \
 		-f deploy/dev/values-dev.yaml \
 		--set-string config.BALEIA_PLUGIN_VERSION=$(K8S_PLUGIN_VERSION) \
 		--set trino.plugin.image=$(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG) \
 		--set trino.plugin.version=$(K8S_PLUGIN_VERSION) \
+		--set-file secrets.values.BALEIA_DATA_POLICY_SIGNING_KEY=$(K8S_DATA_POLICY_KEY) \
+		--set-file trino.dataPolicies.publicKey=$(K8S_DATA_POLICY_KEY).pub \
+		$(K8S_HELM_ARGS) \
 		--wait --timeout 10m
 	# The image tag is mutable ("dev") and the chart has no checksum
 	# annotation, so the upgrade leaves the pod spec unchanged and the API

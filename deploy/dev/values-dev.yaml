@@ -77,6 +77,16 @@ trino:
     version: "0.11.0"              # baleia-trino-catalog-store release
     image: "baleia-plugins:0.11.0"  # built by `make k8s-plugin-bundle`; tag = plugin release version
     imagePullPolicy: Never
+  # Data policies (ADR 0028): the e2e suite seeds policies and checks rows and
+  # masks through the editor and the BI gateway. `make k8s-up` passes the
+  # signing key pair (k8s-data-policy-key); OPA polls fast so a publish shows
+  # within seconds.
+  dataPolicies:
+    enabled: true
+    opa:
+      polling:
+        minDelaySeconds: 1
+        maxDelaySeconds: 3
   # jvmHeap is unset: the image's jvm.config gives the heap 80% of the memory
   # limit. Code cache, metaspace, direct buffers and the Parquet readers come
   # on top of it: at 2Gi the pod was OOMKilled reading a table (#665).
