@@ -109,6 +109,22 @@ type Config struct {
 	// DataPoliciesOPA. Empty means off. Each engine also states whether it
 	// enforces them.
 	DataPolicies string
+	// DataPolicyLease is how long a published revision's bundle stays valid
+	// (BALEIA_DATA_POLICY_LEASE, default 24h): the longest a revocation can
+	// take while OPA cannot reach Baleia, and the longest OPA serves users
+	// while Baleia is down. Baleia re-issues the revision before it ends.
+	DataPolicyLease time.Duration
+	// DataPolicySigningKey is the PEM RSA private key that signs the bundle
+	// (BALEIA_DATA_POLICY_SIGNING_KEY), normally an @baleia-secret reference
+	// to a mounted Secret; OPA verifies with its public key.
+	DataPolicySigningKey string
+	// OPAToken is the bearer token OPA sends to fetch the bundle and report
+	// its status (BALEIA_OPA_TOKEN).
+	OPAToken string
+	// DataPolicyRegoDigest overrides the digest of the Rego engines must run
+	// (BALEIA_DATA_POLICY_REGO_DIGEST), for an operator's own Rego; empty
+	// expects the release package.
+	DataPolicyRegoDigest string
 	// RequireCatalogScope fails user queries when the pinned plugin does not
 	// enforce the baleia.catalogs workspace scope (ADR 0018 §5). Off by
 	// default, the API/worker only log a startup error in that case.
@@ -367,6 +383,10 @@ func Load() *Config {
 		TrinoCAFile:                       getEnv("BALEIA_TRINO_CA_FILE", ""),
 		TrinoUserIdentity:                 getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
 		DataPolicies:                      getEnv("BALEIA_DATA_POLICIES", DataPoliciesOff),
+		DataPolicyLease:                   st.positiveDuration("BALEIA_DATA_POLICY_LEASE", DefaultDataPolicyLease),
+		DataPolicySigningKey:              getEnv("BALEIA_DATA_POLICY_SIGNING_KEY", ""),
+		OPAToken:                          getEnv("BALEIA_OPA_TOKEN", ""),
+		DataPolicyRegoDigest:              getEnv("BALEIA_DATA_POLICY_REGO_DIGEST", ""),
 		PluginVersion:                     getEnv("BALEIA_PLUGIN_VERSION", MinScopePluginVersion),
 		RequireCatalogScope:               getEnv("BALEIA_REQUIRE_CATALOG_SCOPE", "false") == "true",
 		JWTSecret:                         getEnv("JWT_SECRET", DefaultJWTSecret),
@@ -539,15 +559,44 @@ const (
 	DataPoliciesOPA = "opa"
 )
 
+// Data policy lease bounds: the default, and the shortest accepted, which
+// leaves the worker's re-issue cadence room to act before the lease ends.
+const (
+	DefaultDataPolicyLease = 24 * time.Hour
+	MinDataPolicyLease     = 15 * time.Minute
+)
+
+// DataPoliciesEnabled reports BALEIA_DATA_POLICIES=opa.
+func (c *Config) DataPoliciesEnabled() bool { return c.DataPolicies == DataPoliciesOPA }
+
+// validateDataPolicies checks what data policies need once they are on.
+func (c *Config) validateDataPolicies() error {
+	switch c.DataPolicies {
+	case "", DataPoliciesOff:
+		return nil
+	case DataPoliciesOPA:
+	default:
+		return fmt.Errorf("BALEIA_DATA_POLICIES must be %q or %q (got %q)", DataPoliciesOff, DataPoliciesOPA, c.DataPolicies)
+	}
+	if len(c.OPAToken) < MinJWTSecretLen {
+		return fmt.Errorf("BALEIA_OPA_TOKEN must be set, at least %d characters, when BALEIA_DATA_POLICIES=opa", MinJWTSecretLen)
+	}
+	if c.DataPolicySigningKey == "" {
+		return errors.New("BALEIA_DATA_POLICY_SIGNING_KEY must be set when BALEIA_DATA_POLICIES=opa")
+	}
+	if c.DataPolicyLease < MinDataPolicyLease {
+		return fmt.Errorf("BALEIA_DATA_POLICY_LEASE must be at least %s (got %s)", MinDataPolicyLease, c.DataPolicyLease)
+	}
+	return nil
+}
+
 // Validate rejects configuration that must not reach production.
 func (c *Config) Validate() error {
 	if err := ValidateSecret(c.JWTSecret); err != nil {
 		return err
 	}
-	switch c.DataPolicies {
-	case "", DataPoliciesOff, DataPoliciesOPA:
-	default:
-		return fmt.Errorf("BALEIA_DATA_POLICIES must be %q or %q (got %q)", DataPoliciesOff, DataPoliciesOPA, c.DataPolicies)
+	if err := c.validateDataPolicies(); err != nil {
+		return err
 	}
 	if _, err := c.SlogLevel(); err != nil {
 		return err

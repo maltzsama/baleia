@@ -1,0 +1,32 @@
+meta {
+  name: Data Policies - Update unknown
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{base_url}}/data-policies/00000000-0000-4000-8000-000000000000
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "eu-only",
+    "kind": "row_filter",
+    "schema": "sales",
+    "table": "orders",
+    "mode": "permissive",
+    "subjects": [{"everyone": true}],
+    "expression": "region = 'EU'",
+    "version": 1
+  }
+}
+
+assert {
+  res.status: eq 404
+}

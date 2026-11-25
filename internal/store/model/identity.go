@@ -231,3 +231,15 @@ type Workspace struct {
 }
 
 func (Workspace) TableName() string { return "workspaces" }
+
+// UserIDPGroup is one identity-provider group of a user, as of their latest
+// sign-in. Data policies match subjects by group (ADR 0028); the groups are
+// replaced at every sign-in and removed with the user.
+type UserIDPGroup struct {
+	UserID UUID  `gorm:"column:user_id;primaryKey;not null"`
+	Name   Text  `gorm:"column:name;primaryKey;not null;size:255"`
+	User   *User `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:CASCADE"`
+}
+
+// TableName is the table of UserIDPGroup.
+func (UserIDPGroup) TableName() string { return "user_idp_groups" }

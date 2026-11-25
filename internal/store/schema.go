@@ -279,6 +279,32 @@ func AllMigrations() (*Registry, error) {
 				return createForeignKeys(db, added)
 			},
 		},
+		Migration{
+			// The identity-provider groups of each user's latest sign-in,
+			// which data policies match subjects by (ADR 0028, #1144). They
+			// start empty and fill at each user's next sign-in.
+			Version: 24,
+			Name:    "add identity-provider groups",
+			Up: func(db *gorm.DB) error {
+				if err := AutoMigrate(db, &model.UserIDPGroup{}); err != nil {
+					return err
+				}
+				return createForeignKeys(db, []any{&model.UserIDPGroup{}})
+			},
+		},
+		Migration{
+			// The published-revision pointer and each engine's latest OPA
+			// status report (ADR 0028, #1144). Nothing is published yet.
+			Version: 25,
+			Name:    "add data policy publication",
+			Up: func(db *gorm.DB) error {
+				added := []any{&model.DataPolicyPointer{}, &model.DataPolicyEngineStatus{}}
+				if err := AutoMigrate(db, added...); err != nil {
+					return err
+				}
+				return createForeignKeys(db, added)
+			},
+		},
 	)
 }
 

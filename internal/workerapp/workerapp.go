@@ -15,6 +15,7 @@ import (
 	"github.com/galileostudio/baleia/internal/bindings"
 	"github.com/galileostudio/baleia/internal/bindings/stored"
 	"github.com/galileostudio/baleia/internal/config"
+	"github.com/galileostudio/baleia/internal/datapolicy"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/metadata"
 	"github.com/galileostudio/baleia/internal/obs"
@@ -51,6 +52,13 @@ func wireActivities(core *app.Core, cfg *config.Config, logger *slog.Logger, len
 	act.SetStore(core.StoreRepo)
 	act.SetMetrics(reg)
 	act.SetTemporal(core.Temporal)
+	// Data policies (ADR 0028): the key is loaded only while they are on.
+	if core.DataPolicySigningKey != nil {
+		act.SetDataPolicyPublisher(&datapolicy.Publisher{
+			Store: repo.NewDataPolicies(core.Store), Objects: core.Storage, Key: core.DataPolicySigningKey,
+			Lease: cfg.DataPolicyLease, IdentityMode: cfg.TrinoUserIdentity,
+		})
+	}
 	r := core.StoreRepo
 	act.SetMetadataSyncer(metadata.NewSyncer(r, func(ctx context.Context, runID db.UUID, fn func(metadata.Store) error) error {
 		return r.TxMetadata(ctx, runID, func(tx *repo.Repo) error { return fn(tx) })
@@ -145,4 +153,5 @@ func registerWorkflows(w worker.Worker) {
 	w.RegisterWorkflow(workflows.EphemeralCatalogSweepWorkflow)
 	w.RegisterWorkflow(workflows.TokenCleanupWorkflow)
 	w.RegisterWorkflow(workflows.RefreshTablePopularityWorkflow)
+	w.RegisterWorkflow(workflows.DataPolicyReissueWorkflow)
 }

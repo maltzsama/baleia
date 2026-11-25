@@ -3,6 +3,7 @@ package api
 import (
 	"cmp"
 	"context"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -55,6 +56,7 @@ type API struct {
 	*SemanticHandlers
 	*AgentHandlers
 	*OpsHandlers
+	*DataPolicyHandlers
 }
 
 // The handlers implement the whole generated strict server; the split by
@@ -197,6 +199,9 @@ type Deps struct {
 	// Realtime is the shared cross-replica backbone (ADR 0022). Nil or
 	// disabled keeps the caches local.
 	Realtime *realtime.Client
+	// DataPolicySigningKey signs the data policy bundles (ADR 0028); nil
+	// while BALEIA_DATA_POLICIES is off.
+	DataPolicySigningKey *rsa.PrivateKey
 }
 
 // ObservabilityDeps are optional: a nil Audit records nothing, a nil
@@ -307,6 +312,7 @@ func NewAPI(d Deps) (*API, error) {
 		AgentHandlers:     newAgentHandlers(c, assistantService, d.Assistant, d.Engines.Dialer),
 		OpsHandlers:       newOpsHandlers(c, storeSchema{db: d.Data.Store}),
 	}
+	h.DataPolicyHandlers = newDataPolicyHandlers(c, d.DataPolicySigningKey)
 	if d.Observability.Metrics != nil {
 		h.registerMetrics(d.Observability.Metrics)
 	}

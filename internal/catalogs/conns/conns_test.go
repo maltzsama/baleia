@@ -15,6 +15,7 @@ type fakeStore struct {
 	conns             []db.CatalogConnection
 	createErr, delErr error
 	updateErr         error
+	backsEngine       bool
 }
 
 func (f *fakeStore) ListVisibleCatalogConnections(context.Context, db.ListVisibleCatalogConnectionsParams) ([]db.CatalogConnection, error) {
@@ -31,6 +32,10 @@ func (f *fakeStore) UpdateCatalogConnection(_ context.Context, arg db.UpdateCata
 
 func (f *fakeStore) DeleteCatalogConnection(context.Context, db.UUID) error { return f.delErr }
 
+func (f *fakeStore) CatalogConnectionBacksEngine(context.Context, db.UUID) (bool, error) {
+	return f.backsEngine, nil
+}
+
 func TestWrites_MapConflicts(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -45,12 +50,13 @@ func TestWrites_MapConflicts(t *testing.T) {
 		t.Errorf("rename to a taken name = %v, want ErrNameTaken", err)
 	}
 
-	st.delErr = &db.PGError{Code: "23001", ConstraintName: "engines_connection_id_fkey"}
+	// MySQL and MariaDB report no constraint name.
+	st.delErr, st.backsEngine = &db.PGError{Code: "23503"}, true
 	if err := s.Delete(ctx, newID()); !errors.Is(err, ErrBacksEngine) {
 		t.Errorf("engine on it = %v, want ErrBacksEngine", err)
 	}
-	other := &db.PGError{Code: "23503", ConstraintName: "something_else_fkey"}
-	st.delErr = other
+	other := &db.PGError{Code: "23503", ConstraintName: "fk_migrations_target_catalog_connection"}
+	st.delErr, st.backsEngine = other, false
 	if err := s.Delete(ctx, newID()); !errors.Is(err, other) {
 		t.Errorf("other FK = %v, want it unchanged", err)
 	}

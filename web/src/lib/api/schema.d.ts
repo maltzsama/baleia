@@ -4091,12 +4091,159 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/catalogs/{id}/data-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** A catalog's data policies (owner of its connection or an admin) */
+        get: operations["listCatalogDataPolicies"];
+        put?: never;
+        /**
+         * Add a row filter or column mask to one of the catalog's tables
+         * @description The expression is checked against the restricted language and typed by an engine that enforces data policies; an invalid one is stored as an invalid draft (validation invalid), which cannot be published. 409 data_policies_disabled while BALEIA_DATA_POLICIES is off, name_in_use when the table already has a policy of that name. 422 data_policies_unenforced (the catalog is bound to an engine without data_policies, or to none that has it), data_policies_unsupported (the catalog is not an Iceberg REST catalog, whose views Baleia can read), validation_error.
+         */
+        post: operations["createDataPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{id}/data-policies/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish the catalog's current policies in a new signed revision
+         * @description Builds a revision with this catalog's enabled policies and every other catalog as published, signs it, stores it and moves the published pointer. 422 data_policy_invalid lists every problem: invalid or unchecked policies, two masks with one priority on a column, an engine catalog name another catalog has, catalogs bound to enforcing engines whose views cannot be read, trusted-owned DEFINER views over a policied table. 409 data_policies_disabled while BALEIA_DATA_POLICIES is off.
+         */
+        post: operations["publishCatalogDataPolicies"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogs/{id}/data-policies/definer-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * SECURITY DEFINER views over the catalog's policied tables, and whose policies they apply
+         * @description A table is policied when the published revision holds a policy on it, or the catalog's draft holds an enabled one (validated or still pending): a policy deleted from the draft applies until the next publish. While an engine the catalog is bound to does not enforce data policies, only the published revision counts.
+         */
+        get: operations["listCatalogDefinerViews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data-policies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** One data policy */
+        get: operations["getDataPolicy"];
+        /**
+         * Replace a data policy and check it again
+         * @description 409 version_conflict when the policy changed since the version read, name_in_use, data_policies_disabled. The change is a draft until the catalog is published.
+         */
+        put: operations["updateDataPolicy"];
+        post?: never;
+        /** Remove a data policy; it stays in force until the catalog is published */
+        delete: operations["deleteDataPolicy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data-policies/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Published revisions, newest first (global admin) */
+        get: operations["listDataPolicyRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data-policies/revisions/{id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish an earlier revision's policies again with a fresh lease (global admin)
+         * @description The earlier revision stays as it is; the new revision copies its policies with today's subjects. Refused like a publish (422 data_policy_invalid).
+         */
+        post: operations["rollbackDataPolicyRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data-policies/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The published revision and each engine's integration (global admin) */
+        get: operations["getDataPolicyStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "catalog_read_only" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "data_policies_unenforced" | "data_policy_invalid" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_member_not_in_team" | "workspace_not_found" | "workspace_owner_role_fixed" | "workspace_personal";
+        ErrorCode: "account_suspended" | "agent_token_not_allowed" | "assistant_disabled" | "bad_request" | "binding_busy" | "binding_disabled" | "binding_exists" | "binding_is_primary" | "binding_not_managed" | "binding_unsupported" | "cancel_failed" | "cancelled" | "catalog_not_managed" | "catalog_read_only" | "concurrent_change" | "conflict" | "connection_error" | "connection_in_use" | "credentials_unreadable" | "custom_sql_forbidden" | "custom_sql_requires_read_only" | "data_policies_disabled" | "data_policies_unenforced" | "data_policies_unsupported" | "data_policy_invalid" | "destination_not_eligible" | "drop_failed" | "encryption_failed" | "encryption_unavailable" | "engine_error" | "engine_in_use" | "engine_required" | "engine_unavailable" | "engine_unreachable" | "engine_unsupported" | "executions_running" | "folder_cycle" | "forbidden" | "grain_not_allowed" | "idp_unavailable" | "internal" | "internal_error" | "invalid_bundle" | "invalid_credentials" | "invalid_definition" | "invalid_identifier" | "invalid_sql" | "invalid_time_range" | "maintenance_external" | "name_conflict" | "name_in_use" | "not_direct" | "not_found" | "not_running" | "not_supported" | "permission_denied" | "property_not_overridable" | "provider_in_use" | "provider_unsupported" | "queue_full" | "queue_timeout" | "rate_limited" | "read_only_unsupported" | "refused" | "reserved_name" | "resource_exhausted" | "service_unavailable" | "slug_conflict" | "space_missing" | "space_not_found" | "sync_in_progress" | "syntax" | "target_not_granted" | "target_required" | "target_unavailable" | "timeout" | "turn_running" | "unauthorized" | "unsupported_bundle_version" | "unsupported_syntax" | "user_in_use" | "user_owns_workspace" | "validation_error" | "version_conflict" | "workspace_member_not_in_team" | "workspace_not_found" | "workspace_owner_role_fixed" | "workspace_personal";
         /** @enum {string} */
         Locale: "en" | "pt-BR";
         /** @enum {string} */
@@ -4859,7 +5006,7 @@ export interface components {
         /** @enum {string} */
         EngineAllowedAction: "view" | "update" | "delete" | "test" | "reconcile" | "bind_into";
         /** @enum {string} */
-        CatalogAllowedAction: "view" | "browse" | "update" | "delete" | "sync_metadata" | "grant" | "create_binding";
+        CatalogAllowedAction: "view" | "browse" | "update" | "delete" | "sync_metadata" | "grant" | "create_binding" | "manage_data_policies";
         /** @enum {string} */
         CatalogBindingAllowedAction: "view" | "update" | "delete" | "sync";
         /**
@@ -4868,7 +5015,7 @@ export interface components {
          */
         WorkspaceAllowedAction: "view" | "update" | "delete" | "manage_grants" | "set_defaults" | "run" | "create_space" | "edit_content" | "manage_members";
         /** @enum {string} */
-        GlobalAction: "create_connection" | "create_workspace" | "create_shared_workspace" | "manage_users" | "manage_identity" | "view_all_audit" | "view_system" | "manage_assistant" | "manage_workload";
+        GlobalAction: "create_connection" | "create_workspace" | "create_shared_workspace" | "manage_users" | "manage_identity" | "view_all_audit" | "view_system" | "manage_assistant" | "manage_workload" | "manage_data_policies";
         Features: {
             agents: boolean;
             assistant: boolean;
@@ -6343,6 +6490,194 @@ export interface components {
             protected_key_patterns: string[];
             reserved_names: string[];
         };
+        /** @description One reference a policy applies to: exactly one of user, team, group (identity-provider group name), service_account or everyone. everyone may carry except, a list of named references. */
+        DataPolicySubject: {
+            /** Format: uuid */
+            user?: string;
+            /** Format: uuid */
+            team?: string;
+            group?: string;
+            /** Format: uuid */
+            service_account?: string;
+            everyone?: boolean;
+            except?: components["schemas"]["DataPolicySubject"][];
+        };
+        /** @enum {string} */
+        DataPolicyKind: "row_filter" | "column_mask";
+        /** @enum {string} */
+        DataPolicyMode: "permissive" | "restrictive";
+        /** @enum {string} */
+        DataPolicyState: "enabled" | "disabled";
+        /**
+         * @description Which editor template filled a mask's expression; a hint only
+         * @enum {string}
+         */
+        DataPolicyTemplate: "null_value" | "constant" | "partial" | "sha256" | "custom";
+        /** @enum {string} */
+        DataPolicyValidation: "pending" | "valid" | "invalid";
+        /**
+         * @description What Trino 484 lets a write do once the policy applies to the writer: checked (allowed when the new row matches the row filter, else denied, as PostgreSQL's WITH CHECK), visible_rows (applies only to the rows the filter leaves visible) or refused.
+         * @enum {string}
+         */
+        DataPolicyWriteEffect: "checked" | "visible_rows" | "refused";
+        /** @description What each write does on the policy's table for the identities the policy applies to (ADR 0028, "Writes on policied tables"). Several policies on one table combine to the most restrictive effect; writes that need more go through a trusted job or an unpolicied table. */
+        DataPolicyWrites: {
+            insert: components["schemas"]["DataPolicyWriteEffect"];
+            update: components["schemas"]["DataPolicyWriteEffect"];
+            delete: components["schemas"]["DataPolicyWriteEffect"];
+            merge: components["schemas"]["DataPolicyWriteEffect"];
+        };
+        /** @enum {string} */
+        DataPolicyAllowedAction: "update" | "delete";
+        DataPolicy: {
+            readonly allowed_actions: components["schemas"]["DataPolicyAllowedAction"][];
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            catalog_id: string;
+            name: string;
+            description: string;
+            kind: components["schemas"]["DataPolicyKind"];
+            schema: string;
+            table: string;
+            /** @description The masked column (column_mask only) */
+            column?: string | null;
+            /** @description row_filter only */
+            mode?: components["schemas"]["DataPolicyMode"] | null;
+            /**
+             * Format: int32
+             * @description column_mask only: the highest matching priority wins; unique per column at publish
+             */
+            priority: number;
+            subjects: components["schemas"]["DataPolicySubject"][];
+            /** @description As authored, in the restricted expression language */
+            expression: string;
+            /** @description The checked canonical expression OPA serves; set while validation is valid */
+            compiled?: string | null;
+            template?: components["schemas"]["DataPolicyTemplate"] | null;
+            state: components["schemas"]["DataPolicyState"];
+            validation: components["schemas"]["DataPolicyValidation"];
+            /** @description Why validation is invalid: a stable code (function_not_allowed, unknown_column, not_boolean, type_mismatch, engine_refused, …) */
+            invalid_reason?: string | null;
+            /** @description The offending construct (a function, column or type), never the expression */
+            invalid_detail?: string | null;
+            writes: components["schemas"]["DataPolicyWrites"];
+            /** Format: int64 */
+            version: number;
+            /** Format: uuid */
+            created_by?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateDataPolicyRequest: {
+            name: string;
+            description?: string;
+            kind: components["schemas"]["DataPolicyKind"];
+            schema: string;
+            table: string;
+            column?: string;
+            mode?: components["schemas"]["DataPolicyMode"];
+            /** Format: int32 */
+            priority?: number;
+            subjects: components["schemas"]["DataPolicySubject"][];
+            expression: string;
+            template?: components["schemas"]["DataPolicyTemplate"];
+            state?: components["schemas"]["DataPolicyState"];
+        };
+        UpdateDataPolicyRequest: components["schemas"]["CreateDataPolicyRequest"] & {
+            /**
+             * Format: int64
+             * @description The version read; another update since then is a 409 version_conflict
+             */
+            version: number;
+        };
+        DataPolicyDefinerView: {
+            /** @description catalog.schema.view on the engines */
+            view: string;
+            /** @description The identity it runs as: whose policies apply */
+            owner: string;
+            /** @description Policied tables it reads, directly or through other views */
+            reads: string[];
+            /** @description Owned by a trusted identity: it reads unfiltered and blocks publishing */
+            trusted: boolean;
+            /** @description Its SQL could not be parsed, so it is taken to read every policied table */
+            unreadable: boolean;
+        };
+        CatalogDataPolicies: {
+            /** @description BALEIA_DATA_POLICIES=opa */
+            enabled: boolean;
+            /** @description The catalog's names on the engines that enforce data policies */
+            names: string[];
+            /** @description The catalog's policies differ from the published revision */
+            draft: boolean;
+            policies: components["schemas"]["DataPolicy"][];
+        };
+        /** @enum {string} */
+        DataPolicyRevisionReason: "publish" | "reissue" | "rollback" | "subjects";
+        DataPolicyRevision: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            number: number;
+            reason: components["schemas"]["DataPolicyRevisionReason"];
+            /**
+             * Format: uuid
+             * @description The revision a re-issue or rollback copies
+             */
+            source_id?: string | null;
+            /** @description SHA-256 of the revision's content */
+            digest: string;
+            /**
+             * Format: date-time
+             * @description The lease: OPA denies users once it has passed
+             */
+            not_after: string;
+            /** Format: uuid */
+            created_by?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** @description The revision the published pointer names */
+            published: boolean;
+        };
+        DataPolicyProblem: {
+            /** @enum {string} */
+            code: "invalid" | "not_checked" | "duplicate_priority" | "catalog_name_conflict" | "trusted_definer_view" | "views_not_inspectable";
+            /** Format: uuid */
+            policy_id?: string | null;
+            /** @description The reason code, catalog name or view the problem is about */
+            detail?: string | null;
+        };
+        DataPolicyRefusal: {
+            code: components["schemas"]["ErrorCode"];
+            message: string;
+            /** @description Every reason the publish is refused; filled only for data_policy_invalid, empty for data_policies_unenforced and data_policies_unsupported */
+            problems: components["schemas"]["DataPolicyProblem"][];
+        };
+        DataPolicyEngineState: {
+            /** Format: uuid */
+            engine_id: string;
+            engine_name: string;
+            /** @description The engine's data_policies flag */
+            data_policies: boolean;
+            /** @enum {string} */
+            health: "disabled" | "healthy" | "unhealthy";
+            /** @description Why the engine is unhealthy: no_report, report_stale, bundle_error, no_active_revision (no data bundle activated), unknown_revision (the active revision is not one Baleia stored, so its lease cannot be checked), lease_expired (the active revision's lease passed, so OPA denies every user identity; the trusted admin and service identities keep access) or data_policy_digest_mismatch */
+            reason?: string | null;
+            /** @description The data revision the engine's OPA reports active */
+            active_revision?: string | null;
+            /** Format: date-time */
+            reported_at?: string | null;
+        };
+        DataPolicyStatus: {
+            /** @description BALEIA_DATA_POLICIES=opa */
+            enabled: boolean;
+            published?: components["schemas"]["DataPolicyRevision"] | null;
+            /** @description The Rego digest engines must report */
+            expected_policy_digest?: string;
+            engines: components["schemas"]["DataPolicyEngineState"][];
+        };
         ConnectionCategory: {
             /** @enum {string} */
             category: "relational" | "analytical" | "catalog_manager" | "metastore" | "lakehouse" | "cloud_platform" | "nosql" | "search" | "analytics" | "streaming" | "observability" | "external_service" | "synthetic" | "internal_catalog" | "engine";
@@ -7771,6 +8106,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description The publish is refused. data_policy_invalid lists every reason in problems; data_policies_unenforced (a binding on an engine that does not enforce data policies, or no binding) and data_policies_unsupported (a catalog whose views Baleia cannot read) carry an empty problems list and are explained by their code. */
+        DataPolicyRefused: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["DataPolicyRefusal"];
             };
         };
         /** @description Rate limited */
@@ -15003,6 +15347,262 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listCatalogDataPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogDataPolicies"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createDataPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDataPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataPolicy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    publishCatalogDataPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataPolicyRevision"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["DataPolicyRefused"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listCatalogDefinerViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Views */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataPolicyDefinerView"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getDataPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataPolicy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateDataPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDataPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataPolicy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteDataPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listDataPolicyRevisions: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revisions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataPolicyRevision"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    rollbackDataPolicyRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataPolicyRevision"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["DataPolicyRefused"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getDataPolicyStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataPolicyStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
 }

@@ -4,13 +4,20 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"slices"
+	"strings"
+	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/galileostudio/baleia/internal/datapolicy"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/google/uuid"
+	"gorm.io/gorm/clause"
 )
 
 func dataPolicyFixture(t *testing.T) (*workbenchFixture, *DataPolicies, uuid.UUID, uuid.UUID) {
@@ -156,6 +163,166 @@ func TestDataPolicies_CatalogAndEngineChecks(t *testing.T) {
 	}
 }
 
+// TestDataPolicies_ChecksCountPublishedPolicies: a policy deleted from the
+// draft stays in force until the next publish, so the checks still see it.
+func TestDataPolicies_ChecksCountPublishedPolicies(t *testing.T) {
+	t.Parallel()
+	f, r, catalogID, author := dataPolicyFixture(t)
+	ctx := context.Background()
+	engineID := uuid.MustParse(string(f.engine))
+	enforce(t, f, true)
+
+	content := policiedContent(t, catalogID, author)
+	if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, content, time.Now().Add(time.Hour), &author), uuid.Nil); err != nil {
+		t.Fatal(err)
+	}
+	if has, err := r.CatalogHasPolicies(ctx, catalogID); err != nil || !has {
+		t.Fatalf("CatalogHasPolicies with only a published policy = %v, %v; want true", has, err)
+	}
+	if serves, err := r.EngineServesPoliciedCatalogs(ctx, engineID); err != nil || !serves {
+		t.Fatalf("EngineServesPoliciedCatalogs with only a published policy = %v, %v; want true", serves, err)
+	}
+	if has, err := r.CatalogHasPolicies(ctx, uuid.New()); err != nil || has {
+		t.Fatalf("another catalog = %v, %v", has, err)
+	}
+	if serves, err := r.EngineServesPoliciedCatalogs(ctx, uuid.New()); err != nil || serves {
+		t.Fatalf("an engine without bindings = %v, %v", serves, err)
+	}
+}
+
+// TestDataPolicies_PublishRequiresEnforcingEngines: a publish or a rollback
+// that puts policies in force on a catalog bound to an engine that does not
+// enforce them is refused, also when the engine stops enforcing while the
+// publish runs; a re-issue is not.
+func TestDataPolicies_PublishRequiresEnforcingEngines(t *testing.T) {
+	t.Parallel()
+	f, r, catalogID, author := dataPolicyFixture(t)
+	ctx := context.Background()
+	lease := time.Now().Add(time.Hour)
+	content := policiedContent(t, catalogID, author)
+
+	for _, reason := range []datapolicy.RevisionReason{datapolicy.ReasonPublish, datapolicy.ReasonRollback} {
+		if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(reason, content, lease, &author), uuid.Nil); !errors.Is(err, datapolicy.ErrPoliciesUnenforced) {
+			t.Fatalf("%s on an engine that does not enforce = %v, want ErrPoliciesUnenforced", reason, err)
+		}
+	}
+	enforce(t, f, true)
+	first, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, content, lease, &author), uuid.Nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The engine stops enforcing under its row lock, as UpdateEngine does,
+	// while a publish runs: the publish waits for the lock and sees the flag.
+	tx := f.gdb.Begin()
+	if err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+		Where("id = ?", string(f.engine)).First(&model.Engine{}).Error; err != nil {
+		tx.Rollback()
+		t.Fatal(err)
+	}
+	if err := tx.Model(&model.Engine{}).Where("id = ?", string(f.engine)).Update("data_policies", false).Error; err != nil {
+		tx.Rollback()
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, content, lease, &author), first.ID)
+		done <- err
+	}()
+	if err := tx.Commit().Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, datapolicy.ErrPoliciesUnenforced) {
+		t.Fatalf("publish racing the engine turning off = %v, want ErrPoliciesUnenforced", err)
+	}
+
+	if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonReissue, content, lease, nil), first.ID); err != nil {
+		t.Fatalf("re-issue on an engine that stopped enforcing = %v, want it to keep the lease", err)
+	}
+}
+
+func TestDataPolicies_PublishRacingABinding(t *testing.T) {
+	t.Parallel()
+	f, r, catalogID, author := dataPolicyFixture(t)
+	ctx := context.Background()
+	lease := time.Now().Add(time.Hour)
+	content := policiedContent(t, catalogID, author)
+	enforce(t, f, true)
+	first, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{"catalogs":{}}`), lease, &author), uuid.Nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	conn := model.CatalogConnection{
+		ID: model.UUID(NewUUID()), Name: model.Text("unenforcing-" + NewUUID()[:8]),
+		Type: "trino", URL: "http://trino-b.test", CreatedAt: now, UpdatedAt: now,
+	}
+	if err := f.gdb.Create(&conn).Error; err != nil {
+		t.Fatal(err)
+	}
+	unenforcing := model.Engine{
+		ID: model.UUID(NewUUID()), Name: model.Text("trino-b"), Kind: "trino", Class: "federated",
+		ConnectionID: conn.ID, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := f.gdb.Create(&unenforcing).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// A binding of the catalog to an engine that does not enforce, made
+	// under the catalog's row lock as CreateCatalogBinding does, while a
+	// rollback brings the catalog's policies back: the rollback waits for
+	// the lock and sees the binding.
+	tx := f.gdb.Begin()
+	if err := New(tx).LockCatalogForUpdate(ctx, PGUUID(string(f.catalog))); err != nil {
+		tx.Rollback()
+		t.Fatal(err)
+	}
+	if err := tx.Create(&model.CatalogBinding{
+		ID: model.UUID(NewUUID()), CatalogID: f.catalog, EngineID: unenforcing.ID,
+		EngineCatalogName: "lake_b", Mode: "adopted", CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		tx.Rollback()
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonRollback, content, lease, &author), first.ID)
+		done <- err
+	}()
+	time.Sleep(200 * time.Millisecond)
+	if err := tx.Commit().Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, datapolicy.ErrPoliciesUnenforced) {
+		t.Fatalf("rollback racing a binding to an engine that does not enforce = %v, want ErrPoliciesUnenforced", err)
+	}
+	if err := New(f.gdb).LockCatalogForUpdate(ctx, PGUUID(NewUUID())); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("LockCatalogForUpdate of an unknown catalog = %v, want ErrNoRows", err)
+	}
+}
+
+// policiedContent is a revision's content with one row filter on catalogID.
+func policiedContent(t *testing.T, catalogID, author uuid.UUID) []byte {
+	t.Helper()
+	p := rowFilter(catalogID, author, "eu")
+	p.Validation, p.Compiled = datapolicy.ValidationValid, "region = 'EU'"
+	content, err := json.Marshal(datapolicy.Content{Catalogs: map[string]datapolicy.CatalogContent{
+		catalogID.String(): datapolicy.CatalogContentOf([]string{"lake"}, []datapolicy.Policy{p}),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return content
+}
+
+// enforce sets the fixture engine's data_policies flag.
+func enforce(t *testing.T, f *workbenchFixture, on bool) {
+	t.Helper()
+	if err := f.gdb.Model(&model.Engine{}).Where("id = ?", string(f.engine)).Update("data_policies", on).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDataPolicies_DeletingTheCatalogRemovesItsPolicies(t *testing.T) {
 	t.Parallel()
 	f, r, catalogID, author := dataPolicyFixture(t)
@@ -286,5 +453,194 @@ func TestLockEngineForUpdate(t *testing.T) {
 
 	if _, err := f.r.LockEngineForUpdate(ctx, PGUUID(NewUUID())); !errors.Is(err, db.ErrNoRows) {
 		t.Fatalf("locking an unknown engine: %v, want db.ErrNoRows", err)
+	}
+}
+
+func TestDataPolicies_SubjectSources(t *testing.T) {
+	t.Parallel()
+	f, r, _, _ := dataPolicyFixture(t)
+	ctx := context.Background()
+	suspended := createAPIKeyUser(t, f.gdb, "suspended@example.test")
+	if err := f.gdb.Model(&model.User{}).Where("id = ?", string(suspended.ID)).Update("status", "suspended").Error; err != nil {
+		t.Fatal(err)
+	}
+	team := model.Team{ID: model.UUID(NewUUID()), Name: "data", CreatedBy: f.owner, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if err := f.gdb.Create(&team).Error; err != nil {
+		t.Fatal(err)
+	}
+	member := model.TeamMember{ID: model.UUID(NewUUID()), TeamID: team.ID, UserID: f.owner, Role: "member", JoinedAt: time.Now().UTC()}
+	if err := f.gdb.Create(&member).Error; err != nil {
+		t.Fatal(err)
+	}
+	owner := PGUUID(string(f.owner))
+	if err := f.r.ReplaceUserIDPGroups(ctx, owner, []string{"analysts", " analysts ", "", "auditors"}); err != nil {
+		t.Fatalf("ReplaceUserIDPGroups: %v", err)
+	}
+
+	sources, err := r.ListSubjectSources(ctx)
+	if err != nil {
+		t.Fatalf("ListSubjectSources: %v", err)
+	}
+	byID := map[string]datapolicy.SubjectSource{}
+	for _, s := range sources {
+		byID[s.UserID.String()] = s
+	}
+	if _, ok := byID[string(suspended.ID)]; ok {
+		t.Fatal("a suspended account is in the subject map")
+	}
+	got, ok := byID[string(f.owner)]
+	if !ok || !slices.Contains(got.Teams, string(team.ID)) {
+		t.Fatalf("owner = %+v (%v), want its team", got, ok)
+	}
+	slices.Sort(got.Groups)
+	if !slices.Equal(got.Groups, []string{"analysts", "auditors"}) {
+		t.Fatalf("owner groups = %v, want them trimmed and deduplicated", got.Groups)
+	}
+
+	// The next sign-in replaces the groups, an empty one clears them.
+	if err := f.r.ReplaceUserIDPGroups(ctx, owner, nil); err != nil {
+		t.Fatal(err)
+	}
+	sources, err = r.ListSubjectSources(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range sources {
+		if s.UserID.String() == string(f.owner) && len(s.Groups) != 0 {
+			t.Fatalf("groups after an empty sign-in = %v", s.Groups)
+		}
+	}
+}
+
+// TestReplaceUserIDPGroups_ConcurrentSignIns: two sign-ins of one user that
+// replace the groups at once leave one sign-in's groups, never a mix.
+func TestReplaceUserIDPGroups_ConcurrentSignIns(t *testing.T) {
+	t.Parallel()
+	f, r, _, _ := dataPolicyFixture(t)
+	ctx := context.Background()
+	owner := PGUUID(string(f.owner))
+	for range 10 {
+		var wg sync.WaitGroup
+		errs := make([]error, 2)
+		start := make(chan struct{})
+		for i, groups := range [][]string{{"privileged"}, {"plain"}} {
+			wg.Go(func() {
+				<-start
+				errs[i] = f.r.ReplaceUserIDPGroups(ctx, owner, groups)
+			})
+		}
+		close(start)
+		wg.Wait()
+		if err := errors.Join(errs...); err != nil {
+			t.Fatal(err)
+		}
+		sources, err := r.ListSubjectSources(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range sources {
+			if s.UserID.String() == string(f.owner) && len(s.Groups) != 1 {
+				t.Fatalf("groups after two concurrent sign-ins = %v, want one sign-in's", s.Groups)
+			}
+		}
+	}
+}
+
+func TestDataPolicies_PublishMovesThePointer(t *testing.T) {
+	t.Parallel()
+	_, r, _, author := dataPolicyFixture(t)
+	ctx := context.Background()
+	if _, err := r.PublishedRevision(ctx); !errors.Is(err, datapolicy.ErrNotFound) {
+		t.Fatalf("PublishedRevision before any publish: %v, want ErrNotFound", err)
+	}
+	lease := time.Now().Add(time.Hour)
+	first, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{"catalogs":{}}`), lease, &author), uuid.Nil)
+	if err != nil {
+		t.Fatalf("PublishRevision: %v", err)
+	}
+	if got, err := r.PublishedRevision(ctx); err != nil || got.ID != first.ID {
+		t.Fatalf("PublishedRevision = %v, %v; want the first", got.ID, err)
+	}
+	// A revision stored without publishing does not move the pointer.
+	if _, err := r.CreateRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{}`), lease, nil)); err != nil {
+		t.Fatal(err)
+	}
+	second, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonReissue, first.Content, lease.Add(time.Hour), nil), first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A publish built on a revision that is no longer published is refused.
+	if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, first.Content, lease, nil), first.ID); !errors.Is(err, datapolicy.ErrVersionConflict) {
+		t.Fatalf("a publish over a stale base: %v, want ErrVersionConflict", err)
+	}
+	if _, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, first.Content, lease, nil), uuid.Nil); !errors.Is(err, datapolicy.ErrVersionConflict) {
+		t.Fatalf("a first publish when one exists: %v, want ErrVersionConflict", err)
+	}
+	got, err := r.PublishedRevision(ctx)
+	if err != nil || got.ID != second.ID || got.Number != 3 {
+		t.Fatalf("PublishedRevision = %+v, %v; want the re-issue, number 3", got, err)
+	}
+}
+
+// TestDataPolicies_ConcurrentFirstPublications: of two first publications
+// racing, one lands and the other fails with ErrVersionConflict; neither
+// overwrites the other's pointer.
+func TestDataPolicies_ConcurrentFirstPublications(t *testing.T) {
+	t.Parallel()
+	_, r, _, _ := dataPolicyFixture(t)
+	ctx := context.Background()
+	lease := time.Now().Add(time.Hour)
+	const racers = 2
+	var (
+		wg        sync.WaitGroup
+		published = make([]datapolicy.Revision, racers)
+		errs      = make([]error, racers)
+		start     = make(chan struct{})
+	)
+	for i := range racers {
+		wg.Go(func() {
+			<-start
+			published[i], errs[i] = r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{"catalogs":{}}`), lease, nil), uuid.Nil)
+		})
+	}
+	close(start)
+	wg.Wait()
+	var landed []datapolicy.Revision
+	for i, err := range errs {
+		switch {
+		case err == nil:
+			landed = append(landed, published[i])
+		case !errors.Is(err, datapolicy.ErrVersionConflict):
+			t.Fatalf("racing first publication: %v, want success or ErrVersionConflict", err)
+		}
+	}
+	if len(landed) != 1 {
+		t.Fatalf("%d first publications landed, want exactly one", len(landed))
+	}
+	if got, err := r.PublishedRevision(ctx); err != nil || got.ID != landed[0].ID {
+		t.Fatalf("PublishedRevision = %v, %v; want the one that landed", got.ID, err)
+	}
+}
+
+func TestDataPolicies_EngineStatus(t *testing.T) {
+	t.Parallel()
+	f, r, _, _ := dataPolicyFixture(t)
+	ctx := context.Background()
+	engine := uuid.MustParse(string(f.engine))
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	if err := r.RecordEngineStatus(ctx, datapolicy.EngineStatus{EngineID: engine, ReportedAt: at, ActiveRevision: "r1", PolicyDigest: "d1"}); err != nil {
+		t.Fatalf("RecordEngineStatus: %v", err)
+	}
+	long := strings.Repeat("é", 2000)
+	if err := r.RecordEngineStatus(ctx, datapolicy.EngineStatus{EngineID: engine, ReportedAt: at.Add(time.Minute), Code: "bundle_error", Message: long}); err != nil {
+		t.Fatalf("RecordEngineStatus replacing: %v", err)
+	}
+	statuses, err := r.ListEngineStatuses(ctx)
+	if err != nil || len(statuses) != 1 {
+		t.Fatalf("ListEngineStatuses = %+v, %v", statuses, err)
+	}
+	s := statuses[0]
+	if s.EngineID != engine || s.ActiveRevision != "" || s.Code != "bundle_error" || utf8.RuneCountInString(s.Message) != 1024 || !s.ReportedAt.Equal(at.Add(time.Minute)) {
+		t.Fatalf("status = %+v, want the latest report with its message truncated", s)
 	}
 }

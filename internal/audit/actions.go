@@ -26,6 +26,14 @@ const (
 	GrantCreate Action = "grant.create"
 	GrantRevoke Action = "grant.revoke"
 
+	// Data policies (ADR 0028): every publish, rollback and failed publish is
+	// audited with the actor, the revision and the affected catalog.
+	DataPolicyCreate   Action = "data_policy.create"
+	DataPolicyUpdate   Action = "data_policy.update"
+	DataPolicyDelete   Action = "data_policy.delete"
+	DataPolicyPublish  Action = "data_policy.publish"
+	DataPolicyRollback Action = "data_policy.rollback"
+
 	WorkspaceUpdate       Action = "workspace.update"
 	WorkspaceMemberSet    Action = "workspace.member_set"
 	WorkspaceMemberRemove Action = "workspace.member_remove"
@@ -129,6 +137,7 @@ var allActions = []Action{
 	CatalogCreate, CatalogUpdate, CatalogRename, CatalogDelete, CatalogSync, CatalogReconcile,
 	BindingCreate, BindingUpdate, BindingDelete, BindingSync,
 	GrantCreate, GrantRevoke,
+	DataPolicyCreate, DataPolicyUpdate, DataPolicyDelete, DataPolicyPublish, DataPolicyRollback,
 	WorkspaceUpdate, WorkspaceMemberSet, WorkspaceMemberRemove,
 	TeamMemberAdd, TeamMemberRemove, TeamRoleChange,
 	ServiceAccountCreate, ServiceAccountUpdate, ServiceAccountDelete, ServiceAccountTokenCreate, ServiceAccountTokenRevoke,

@@ -18,6 +18,7 @@ type Store interface {
 	CreateCatalogConnection(ctx context.Context, arg db.CreateCatalogConnectionParams) (db.CatalogConnection, error)
 	UpdateCatalogConnection(ctx context.Context, arg db.UpdateCatalogConnectionParams) (db.CatalogConnection, error)
 	DeleteCatalogConnection(ctx context.Context, id db.UUID) error
+	CatalogConnectionBacksEngine(ctx context.Context, id db.UUID) (bool, error)
 }
 
 var (
@@ -66,11 +67,19 @@ func isUniqueViolation(err error) bool {
 }
 
 // Delete removes a connection and, by cascade, its catalogs. A connection
-// an engine runs on is ErrBacksEngine.
+// an engine runs on is ErrBacksEngine. The engine is looked up rather than
+// read from the violated constraint's name, which MySQL and MariaDB do not
+// report and other references to the connection share.
 func (s *Service) Delete(ctx context.Context, id db.UUID) error {
 	err := s.store.DeleteCatalogConnection(ctx, id)
-	pgErr, ok := db.AsPGError(err)
-	if ok && manage.IsFKViolation(err) && pgErr.ConstraintName == "engines_connection_id_fkey" {
+	if !manage.IsFKViolation(err) {
+		return err
+	}
+	backs, lookupErr := s.store.CatalogConnectionBacksEngine(ctx, id)
+	if lookupErr != nil {
+		return errors.Join(err, lookupErr)
+	}
+	if backs {
 		return ErrBacksEngine
 	}
 	return err

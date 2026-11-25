@@ -1,8 +1,10 @@
 package api
 
 import (
+	"cmp"
 	"time"
 
+	"github.com/galileostudio/baleia/deploy/opa"
 	"github.com/galileostudio/baleia/internal/config"
 )
 
@@ -18,6 +20,21 @@ type Settings struct {
 	Ops         OpsSettings
 	Connections ConnectionSettings
 	BIGateway   BIGatewaySettings
+	DataPolicy  DataPolicySettings
+}
+
+// DataPolicySettings are the deployment's data policy settings (ADR 0028).
+type DataPolicySettings struct {
+	// Enabled is BALEIA_DATA_POLICIES=opa.
+	Enabled bool
+	// IdentityMode is BALEIA_TRINO_USER_IDENTITY, which the subject map
+	// follows.
+	IdentityMode string
+	Lease        time.Duration
+	// Trusted are the trusted Trino identities: never filtered or masked.
+	Trusted []string
+	// ExpectedDigest is the Rego digest engines must report.
+	ExpectedDigest string
 }
 
 // BIGatewaySettings describe what the BI data-source file points at (ADR
@@ -155,6 +172,13 @@ func SettingsFromConfig(c *config.Config) Settings {
 			TemporalNamespace:   c.TemporalNamespace,
 		},
 		Connections: ConnectionSettings{AdminsOnly: c.ConnectionsCreate == "admins"},
+		DataPolicy: DataPolicySettings{
+			Enabled:        c.DataPoliciesEnabled(),
+			IdentityMode:   c.TrinoUserIdentity,
+			Lease:          c.DataPolicyLease,
+			Trusted:        []string{c.TrinoAdminUser, c.TrinoServiceUser},
+			ExpectedDigest: cmp.Or(c.DataPolicyRegoDigest, opa.Digest()),
+		},
 		BIGateway: BIGatewaySettings{
 			Enabled:            c.BIGatewayAddr != "" && c.BIGatewayURL != "",
 			URL:                c.BIGatewayURL,

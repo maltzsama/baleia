@@ -523,11 +523,21 @@ func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 	if err := gdb.Model(&model.TrinoCluster{}).Where("engine_id = ?", UUIDString(engine.ID)).Update("engine_id", nil).Error; err != nil {
 		t.Fatalf("unlink cluster: %v", err)
 	}
+	// The engine runs on the connection, which RESTRICT keeps.
+	if err := r.DeleteCatalogConnection(ctx, connID); err == nil {
+		t.Fatal("DeleteCatalogConnection under an engine succeeded, want a foreign key violation")
+	}
+	if backs, err := r.CatalogConnectionBacksEngine(ctx, connID); err != nil || !backs {
+		t.Fatalf("CatalogConnectionBacksEngine with an engine = %v, %v; want true", backs, err)
+	}
 	if err := r.DeleteEngine(ctx, engine.ID); err != nil {
 		t.Fatalf("DeleteEngine: %v", err)
 	}
 	if _, err := r.GetEngineByID(ctx, engine.ID); !errors.Is(err, db.ErrNoRows) {
 		t.Errorf("deleted engine = %v, want db.ErrNoRows", err)
+	}
+	if backs, err := r.CatalogConnectionBacksEngine(ctx, connID); err != nil || backs {
+		t.Fatalf("CatalogConnectionBacksEngine without an engine = %v, %v; want false", backs, err)
 	}
 	if err := r.DeleteCatalogConnection(ctx, connID); err != nil {
 		t.Fatalf("DeleteCatalogConnection: %v", err)

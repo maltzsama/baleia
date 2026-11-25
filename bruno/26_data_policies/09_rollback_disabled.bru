@@ -1,0 +1,20 @@
+meta {
+  name: Data Policies - Rollback while off
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/data-policies/revisions/00000000-0000-4000-8000-000000000000/rollback
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+assert {
+  res.status: eq 409
+  res.body.code: eq data_policies_disabled
+}

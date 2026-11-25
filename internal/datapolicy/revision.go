@@ -14,6 +14,9 @@ var (
 	ErrNotFound        = errors.New("datapolicy: not found")
 	ErrNameTaken       = errors.New("datapolicy: a policy of the table already has that name")
 	ErrVersionConflict = errors.New("datapolicy: the policy changed since it was read")
+	// ErrPoliciesUnenforced refuses a revision that would put policies in
+	// force on a catalog bound to an engine that does not enforce them.
+	ErrPoliciesUnenforced = errors.New("datapolicy: an engine bound to the catalog does not enforce data policies")
 )
 
 // RevisionReason says why a revision was built.
@@ -59,4 +62,16 @@ func NewRevision(reason RevisionReason, content []byte, notAfter time.Time, crea
 		NotAfter:  notAfter.UTC(),
 		CreatedBy: createdBy,
 	}
+}
+
+// EngineStatus is the latest status an engine's OPA reported: the data
+// bundle revision it activated, the digest of the policy bundle (the Rego) it
+// runs, and the activation error code and message, if any.
+type EngineStatus struct {
+	EngineID       uuid.UUID
+	ReportedAt     time.Time
+	ActiveRevision string
+	PolicyDigest   string
+	Code           string
+	Message        string
 }

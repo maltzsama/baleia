@@ -27,6 +27,12 @@ func Core(metadataSyncEvery time.Duration) []schedules.Spec {
 	}
 }
 
+// DataPolicyReissue re-issues the published data policy revision when it is
+// due (ADR 0028).
+func DataPolicyReissue(every time.Duration) schedules.Spec {
+	return schedules.Spec{ID: schedules.DataPolicyReissue, Workflow: workflows.DataPolicyReissueWorkflow, Every: every}
+}
+
 // CatalogReconcile is the opt-in binding reconciliation schedule (#37).
 func CatalogReconcile(every time.Duration) schedules.Spec {
 	return schedules.Spec{ID: schedules.CatalogReconcile, Workflow: workflows.CatalogReconcileWorkflow, Every: every}

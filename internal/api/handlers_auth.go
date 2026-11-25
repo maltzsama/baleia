@@ -296,7 +296,7 @@ func (h *core) globalActions(ctx context.Context, p authz.Principal) []GlobalAct
 	}
 	acts = append(acts, CreateWorkspace)
 	if p.IsAdmin() {
-		return append(acts, CreateSharedWorkspace, ManageUsers, ManageIdentity, ViewAllAudit, ViewSystem, ManageAssistant, ManageWorkload)
+		return append(acts, CreateSharedWorkspace, ManageUsers, ManageIdentity, ViewAllAudit, ViewSystem, ManageAssistant, ManageWorkload, ManageDataPolicies)
 	}
 	if h.access.OwnsTeam(ctx, p.UserID) {
 		acts = append(acts, CreateSharedWorkspace)

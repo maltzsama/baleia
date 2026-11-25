@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/auth"
@@ -17,6 +18,18 @@ type fakeMembers struct {
 	fail  map[string]bool
 	// workspaceErr fails the group workspace roles (#653)
 	workspaceErr error
+	// groups is the last recorded sign-in's groups; groupsErr fails the
+	// recording (ADR 0028).
+	groups    []string
+	groupsErr error
+}
+
+func (f *fakeMembers) ReplaceUserIDPGroups(_ context.Context, _ db.UUID, groups []string) error {
+	if f.groupsErr != nil {
+		return f.groupsErr
+	}
+	f.groups = groups
+	return nil
 }
 
 func (f *fakeMembers) ApplyGroupWorkspaceRoles(context.Context, db.ApplyGroupWorkspaceRolesParams) error {
@@ -104,6 +117,22 @@ func TestOIDCUser(t *testing.T) {
 		st.workspaceErr = errors.New("database down")
 		if _, err := OIDCUser(ctx, slog.New(slog.DiscardHandler), st, provider, cfg, info("s9", "ana9@x.io", true, "data")); err == nil {
 			t.Fatal("a sign-in must not succeed with stale group roles")
+		}
+	})
+
+	t.Run("a sign-in records its groups, or fails", func(t *testing.T) {
+		t.Parallel()
+		st := newAccounts()
+		if _, err := OIDCUser(ctx, slog.New(slog.DiscardHandler), st, provider, cfg, info("s8", "ana8@x.io", true, "data", "analysts")); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(st.groups, []string{"data", "analysts"}) {
+			t.Fatalf("recorded groups = %v", st.groups)
+		}
+		failing := newAccounts()
+		failing.groupsErr = errors.New("database down")
+		if _, err := OIDCUser(ctx, slog.New(slog.DiscardHandler), failing, provider, cfg, info("s7", "ana7@x.io", true, "data")); err == nil {
+			t.Fatal("a sign-in succeeded without recording its groups")
 		}
 	})
 

@@ -23,8 +23,15 @@ func For(ctx context.Context, q UserStore, mode string, uid db.UUID) (string, er
 	if err != nil {
 		return "", err
 	}
+	return Of(mode, uid, u.Email), nil
+}
+
+// Of is the mapping For applies, for callers that already hold the user's id
+// and e-mail, such as the data policy subject map (ADR 0028): both paths
+// produce the same identity.
+func Of(mode string, uid db.UUID, email string) string {
 	if mode == "email" {
-		return u.Email, nil
+		return email
 	}
-	return "u_" + uid.String(), nil
+	return "u_" + uid.String()
 }

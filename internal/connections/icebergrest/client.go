@@ -368,6 +368,97 @@ func (r *reader) ListTables(ctx context.Context, catalog string, ns connections.
 	return tables, out.NextPageToken, nil
 }
 
+// trinoRunAsOwner is the view property Trino's Iceberg REST catalog writes the
+// owner of a SECURITY DEFINER view into (AbstractTrinoCatalog
+// ICEBERG_VIEW_RUN_AS_OWNER, Trino 484); an INVOKER view has none.
+const trinoRunAsOwner = "trino.run-as-owner"
+
+// ListViews returns the names of a namespace's views. A server without the
+// view endpoints (501) or a namespace that is gone (404) has none; either
+// answer on a later page is an error, since views on the pages not read
+// would go unchecked.
+func (r *reader) ListViews(ctx context.Context, catalog string, ns connections.Namespace) ([]string, error) {
+	root, err := r.c.root(ctx, r.warehouseOf(catalog))
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	token := ""
+	for {
+		q := url.Values{}
+		if token != "" {
+			q.Set("pageToken", token)
+		}
+		var out struct {
+			Identifiers []struct {
+				Name string `json:"name"`
+			} `json:"identifiers"`
+			NextPageToken string `json:"next-page-token"`
+		}
+		err := r.c.Get(ctx, "list views", root+"/namespaces/"+encodeNamespace(ns)+"/views", q, &out)
+		var status *StatusError
+		if token == "" && (errors.Is(err, connections.ErrNotFound) || (errors.As(err, &status) && status.Status == http.StatusNotImplemented)) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range out.Identifiers {
+			names = append(names, id.Name)
+		}
+		if out.NextPageToken == "" || out.NextPageToken == token {
+			return names, nil
+		}
+		token = out.NextPageToken
+	}
+}
+
+// LoadView returns a view's current Trino SQL, its default catalog and
+// namespace, and its owner when it is a SECURITY DEFINER view.
+func (r *reader) LoadView(ctx context.Context, catalog string, ns connections.Namespace, name string) (connections.View, error) {
+	root, err := r.c.root(ctx, r.warehouseOf(catalog))
+	if err != nil {
+		return connections.View{}, err
+	}
+	type representation struct {
+		Type    string `json:"type"`
+		SQL     string `json:"sql"`
+		Dialect string `json:"dialect"`
+	}
+	var out struct {
+		Metadata struct {
+			CurrentVersionID int64             `json:"current-version-id"`
+			Properties       map[string]string `json:"properties"`
+			Versions         []struct {
+				VersionID        int64            `json:"version-id"`
+				Representations  []representation `json:"representations"`
+				DefaultCatalog   string           `json:"default-catalog"`
+				DefaultNamespace []string         `json:"default-namespace"`
+			} `json:"versions"`
+		} `json:"metadata"`
+	}
+	path := root + "/namespaces/" + encodeNamespace(ns) + "/views/" + url.PathEscape(name)
+	if err := r.c.Get(ctx, "load view", path, nil, &out); err != nil {
+		return connections.View{}, err
+	}
+	view := connections.View{Namespace: ns, Name: name, Owner: out.Metadata.Properties[trinoRunAsOwner]}
+	for _, v := range out.Metadata.Versions {
+		if v.VersionID != out.Metadata.CurrentVersionID {
+			continue
+		}
+		view.DefaultCatalog, view.DefaultSchema = v.DefaultCatalog, v.DefaultNamespace
+		for _, rep := range v.Representations {
+			if rep.Type == "sql" && strings.EqualFold(rep.Dialect, "trino") {
+				view.SQL = rep.SQL
+			}
+		}
+	}
+	if view.SQL == "" {
+		return connections.View{}, fmt.Errorf("view %s has no Trino SQL in its current version", name)
+	}
+	return view, nil
+}
+
 type tableMetadata struct {
 	FormatVersion   int               `json:"format-version"`
 	TableUUID       string            `json:"table-uuid"`

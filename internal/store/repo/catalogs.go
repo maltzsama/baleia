@@ -131,6 +131,20 @@ func (r *Repo) SetCatalogEnabled(ctx context.Context, arg db.SetCatalogEnabledPa
 		Updates(map[string]any{"enabled": arg.Enabled, "updated_at": time.Now().UTC()}).Error
 }
 
+// LockCatalogForUpdate locks a catalog's row until the surrounding
+// transaction ends (SELECT ... FOR UPDATE), or returns db.ErrNoRows. A new
+// binding takes it before it checks the catalog's data policies, and a
+// publish or rollback takes it on every catalog it holds policies for, so the
+// two cannot interleave (ADR 0028).
+func (r *Repo) LockCatalogForUpdate(ctx context.Context, id db.UUID) error {
+	err := r.Users.db.WithContext(ctx).Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+		Where("id = ?", UUIDString(id)).First(&model.Catalog{}).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return db.ErrNoRows
+	}
+	return err
+}
+
 // DeleteCatalog removes a catalog; its bindings cascade.
 func (r *Repo) DeleteCatalog(ctx context.Context, id db.UUID) error {
 	return r.Users.db.WithContext(ctx).Where("id = ?", UUIDString(id)).Delete(&model.Catalog{}).Error

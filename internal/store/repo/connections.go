@@ -107,6 +107,16 @@ func (r *Repo) DeleteCatalogConnection(ctx context.Context, id db.UUID) error {
 		Delete(&model.CatalogConnection{}).Error
 }
 
+// CatalogConnectionBacksEngine reports whether an engine runs on the
+// connection, which keeps the connection from being deleted.
+func (r *Repo) CatalogConnectionBacksEngine(ctx context.Context, id db.UUID) (bool, error) {
+	var count int64
+	err := r.Users.db.WithContext(ctx).Model(&model.Engine{}).
+		Where("connection_id = ?", UUIDString(id)).
+		Count(&count).Error
+	return count > 0, err
+}
+
 // CatalogConnectionNameExists reports whether another connection has the name.
 func (r *Repo) CatalogConnectionNameExists(ctx context.Context, name string) (bool, error) {
 	var count int64

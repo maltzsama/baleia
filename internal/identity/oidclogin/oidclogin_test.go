@@ -77,6 +77,8 @@ func (f *fakeAccounts) ApplyGroupWorkspaceRoles(context.Context, db.ApplyGroupWo
 	return nil
 }
 
+func (f *fakeAccounts) ReplaceUserIDPGroups(context.Context, db.UUID, []string) error { return nil }
+
 func (f *fakeAccounts) UpsertTeamMember(context.Context, db.UpsertTeamMemberParams) error {
 	return nil
 }
