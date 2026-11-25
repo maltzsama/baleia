@@ -45,11 +45,17 @@ func (typedEngine) ExpressionTypes(_ context.Context, _ []string, exprs []string
 // typedEngines serves a typedEngine for every engine but the down ones.
 type typedEngines struct{ down map[db.UUID]bool }
 
+// wrappedEngine stands for the manager's wrapper: it embeds the Engine
+// interface only, so the adapter's extensions are reachable through Unwrap.
+type wrappedEngine struct{ queryengine.Engine }
+
+func (w wrappedEngine) Unwrap() queryengine.Engine { return w.Engine }
+
 func (e typedEngines) Get(_ context.Context, id db.UUID) (queryengine.Engine, error) {
 	if e.down[id] {
 		return nil, errors.New("engine unavailable")
 	}
-	return typedEngine{fake.New(fake.Options{})}, nil
+	return wrappedEngine{typedEngine{fake.New(fake.Options{})}}, nil
 }
 
 func (typedEngines) DefaultTrino(context.Context) (queryengine.Engine, error) {

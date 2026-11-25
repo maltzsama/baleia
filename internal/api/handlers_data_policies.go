@@ -17,6 +17,7 @@ import (
 	"github.com/galileostudio/baleia/internal/datapolicy"
 	"github.com/galileostudio/baleia/internal/datapolicy/viewsql"
 	"github.com/galileostudio/baleia/internal/db"
+	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -134,8 +135,11 @@ func (h *DataPolicyHandlers) checkPolicy(ctx context.Context, p *datapolicy.Poli
 			h.logger.WarnContext(ctx, "data policy type check: engine unavailable", "engine_id", binding.EngineID, "err", err)
 			continue
 		}
-		typer, ok := eng.(expressionTypes)
+		// The manager wraps every engine; the Trino adapter behind it types
+		// the expressions.
+		typer, ok := queryengine.As[expressionTypes](eng)
 		if !ok {
+			h.logger.WarnContext(ctx, "data policy type check: the engine cannot type expressions", "engine_id", binding.EngineID)
 			continue
 		}
 		table := []string{binding.EngineCatalogName, p.Target.Schema, p.Target.Table}
