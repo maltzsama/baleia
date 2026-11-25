@@ -56,7 +56,7 @@ The Secret (`secrets.values`, or the keys of `existingSecret`) needs three keys:
 |---|---|
 | `BALEIA_DATA_POLICY_SIGNING_KEY` | The PEM private key. The API and worker sign every bundle with it. |
 | `BALEIA_OPA_TOKEN` | The bearer token OPA uses to fetch the bundle and report its status, 16 or more characters. `secrets.create` generates it once. |
-| `BALEIA_DEFAULT_ENGINE_ID` | The id of the default Trino engine. OPA reports its status under this id. `secrets.create` generates it on a new install. |
+| `BALEIA_DEFAULT_ENGINE_ID` | A UUID the coordinator's OPA reports its status under. Baleia records those reports on the default Trino engine, so it is not the engine's id and nobody needs to look one up. `secrets.create` generates it once; with `existingSecret`, put any fresh UUID there. It must not be the id of another engine. |
 
 With data policies on, the chart:
 
@@ -83,20 +83,17 @@ as before data policies were on.
 
 ### Turning them on in an existing release
 
-An existing release already has a default engine, and the chart cannot know
-its id. Read the id of the engine named `default` (`GET /api/v1/engines`) and
-set it before you upgrade:
+Nothing in the database changes: the default engine keeps its id, its
+catalogs and its history.
 
 ```bash
 helm upgrade baleia ./deploy/helm/baleia --reuse-values \
   --set trino.dataPolicies.enabled=true \
   --set-file trino.dataPolicies.publicKey=data-policy.pub \
-  --set-file secrets.values.BALEIA_DATA_POLICY_SIGNING_KEY=data-policy.pem \
-  --set-string secrets.values.BALEIA_DEFAULT_ENGINE_ID=<id>
+  --set-file secrets.values.BALEIA_DATA_POLICY_SIGNING_KEY=data-policy.pem
 ```
 
-Without the id, the chart refuses the upgrade. With `existingSecret`, add the
-three keys to that Secret instead.
+With `existingSecret`, add the three keys to that Secret instead.
 
 ### Marking the engine
 

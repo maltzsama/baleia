@@ -288,9 +288,7 @@ k8s-plugin-bundle:
 
 # The dev cluster runs with data policies on (ADR 0028). Their bundle signing
 # key pair is made once per workstation and never committed. K8S_HELM_ARGS
-# passes extra flags to the chart, e.g. turning data policies on in a cluster
-# created before they were: --set-string
-# secrets.values.BALEIA_DEFAULT_ENGINE_ID=<id of the engine named "default">.
+# passes extra flags to the chart.
 K8S_DATA_POLICY_KEY ?= $(or $(TMPDIR),/tmp)/baleia-dev-data-policy.pem
 K8S_HELM_ARGS       ?=
 

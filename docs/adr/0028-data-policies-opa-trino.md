@@ -370,9 +370,13 @@ Policies live in one top-level area, `/governance`, integrated with catalog RBAC
   API at startup, and the worker's re-issue pass if that fails. It is signed and leased like any
   other. Until the first policy is published nobody is filtered, as before data policies were
   on.
-- **OPA names its engine before the engine exists.** OPA's status reports carry the engine id in
-  its labels. The chart generates the id once (`BALEIA_DEFAULT_ENGINE_ID`) and the default engine
-  is created with it; an existing engine keeps its id, which the operator then gives the chart.
+- **The chart's OPA reports under an id the chart chose.** OPA's status reports carry an engine id
+  in its labels, and the chart renders them before it can know the default engine's id (a store
+  migration creates that engine with a random one). The chart generates a UUID once
+  (`BALEIA_DEFAULT_ENGINE_ID`), gives it to OPA and to Baleia, and Baleia records reports under it
+  on the default Trino engine. No engine is re-keyed and no operator looks an id up; startup
+  refuses a value that is another engine's id. The OPA of an external Trino reports under its
+  engine's own id. As before, the token, not the id, authenticates a report.
 - **Fail closed, no bypass.** If OPA is unreachable, Trino's checks fail and so do queries. This
   includes Baleia's maintenance, probes and reconciliation on that engine, because trusted
   identities also go through the plugin. No fallback skips OPA.
@@ -466,7 +470,8 @@ Implemented except the `/governance` screens (#1146), in #995's parts:
     tarball) under its `.sha256`. `install-plugin` copies them into a read-only volume. A contract
     test pins the release's Rego to `deploy/opa/baleia`, and CI runs `opa test` in both
     repositories.
-  - Baleia publishes the initial revision, and the default engine gets a deployment-chosen id.
+  - Baleia publishes the initial revision, and resolves the chart's OPA reports to the default
+    engine.
   - Operator documentation: [data-policies.md](../data-policies.md).
 - **End to end on minikube**, with policies seeded through `cmd/e2e-seed`:
   - two users get different rows and masked values through the editor (Playwright,

@@ -210,10 +210,11 @@ trino:
   #   BALEIA_OPA_TOKEN                the bearer token OPA fetches the bundle and
   #                                   reports its status with, 16+ characters;
   #                                   secrets.create generates it once when unset.
-  #   BALEIA_DEFAULT_ENGINE_ID        the id of the default Trino engine, which OPA
-  #                                   reports under. secrets.create generates it
-  #                                   on a new install; on an upgrade, set it to
-  #                                   the id of the engine that already exists.
+  #   BALEIA_DEFAULT_ENGINE_ID        a UUID the coordinator's OPA reports its
+  #                                   status under; Baleia records it on the
+  #                                   default Trino engine. secrets.create
+  #                                   generates it once; with existingSecret,
+  #                                   put any fresh UUID there.
   # The coordinator must not be reachable by end users, nor the catalog manager
   # and the storage of restricted tables (docs/data-policies.md).
   dataPolicies:
