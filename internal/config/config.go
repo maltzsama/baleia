@@ -98,6 +98,12 @@ type Config struct {
 	// TrinoCAFile is a PEM bundle trusted for the coordinator's certificate,
 	// besides the system roots. Empty uses the system roots only.
 	TrinoCAFile string
+	// DefaultEngineID is the id the default Trino engine is created with
+	// (BALEIA_DEFAULT_ENGINE_ID, a UUID). The deployment that runs that
+	// engine's OPA names it in OPA's labels before the engine exists, so the
+	// chart generates it once and passes it to both. Empty picks a random id;
+	// an engine that already exists keeps its id.
+	DefaultEngineID string
 	// TrinoUserIdentity selects how a logged-in Baleia user maps to a Trino
 	// identity for their queries: "uuid" (u_<uuid>) or "email".
 	TrinoUserIdentity string
@@ -381,6 +387,7 @@ func Load() *Config {
 		TrinoServiceUser:                  getEnv("BALEIA_TRINO_SERVICE_USER", "baleia"),
 		TrinoPassword:                     getEnv("BALEIA_TRINO_PASSWORD", ""),
 		TrinoCAFile:                       getEnv("BALEIA_TRINO_CA_FILE", ""),
+		DefaultEngineID:                   getEnv("BALEIA_DEFAULT_ENGINE_ID", ""),
 		TrinoUserIdentity:                 getEnv("BALEIA_TRINO_USER_IDENTITY", "uuid"),
 		DataPolicies:                      getEnv("BALEIA_DATA_POLICIES", DataPoliciesOff),
 		DataPolicyLease:                   st.positiveDuration("BALEIA_DATA_POLICY_LEASE", DefaultDataPolicyLease),
@@ -597,6 +604,11 @@ func (c *Config) Validate() error {
 	}
 	if err := c.validateDataPolicies(); err != nil {
 		return err
+	}
+	if c.DefaultEngineID != "" {
+		if _, err := uuid.Parse(c.DefaultEngineID); err != nil {
+			return fmt.Errorf("BALEIA_DEFAULT_ENGINE_ID must be a UUID (got %q)", c.DefaultEngineID)
+		}
 	}
 	if _, err := c.SlogLevel(); err != nil {
 		return err

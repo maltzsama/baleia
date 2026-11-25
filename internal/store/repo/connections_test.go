@@ -37,6 +37,35 @@ func containsEngine(rows []db.Engine, id db.UUID) bool {
 // TestConnectionsAndCatalogsRoundTrip (#771) exercises the GORM persistence of
 // connections, engines, catalogs, bindings, queue capacities, grants and the
 // registry, which the topology service and the catalog handlers run on.
+// TestCreateEngine_GivenID keeps the id the caller picks: the default Trino
+// engine is created with BALEIA_DEFAULT_ENGINE_ID, which its OPA reports.
+func TestCreateEngine_GivenID(t *testing.T) {
+	t.Parallel()
+	gdb := testdb.New(t)
+	ctx := context.Background()
+	r := New(gdb)
+
+	connID := db.UUID{Bytes: uuid.New(), Valid: true}
+	if _, err := r.CreateCatalogConnection(ctx, db.CreateCatalogConnectionParams{
+		ID: connID, Name: "trino-given-id", Type: "trino", Url: "http://trino.test", Config: []byte(`{}`),
+	}); err != nil {
+		t.Fatalf("CreateCatalogConnection: %v", err)
+	}
+	id := db.UUID{Bytes: uuid.New(), Valid: true}
+	engine, err := r.CreateEngine(ctx, db.CreateEngineParams{
+		ID: id, Name: "given-id", Kind: "trino", Class: "federated", ConnectionID: connID, IdentityMode: "impersonation",
+	})
+	if err != nil {
+		t.Fatalf("CreateEngine: %v", err)
+	}
+	if engine.ID != id {
+		t.Fatalf("engine id = %v, want %v", engine.ID, id)
+	}
+	if engines, err := r.ListEngines(ctx); err != nil || !containsEngine(engines, id) {
+		t.Fatalf("ListEngines = %d, %v", len(engines), err)
+	}
+}
+
 func TestConnectionsAndCatalogsRoundTrip(t *testing.T) {
 	t.Parallel()
 	gdb := testdb.New(t)

@@ -16,8 +16,12 @@ import (
 // CreateEngine inserts an engine.
 func (r *Repo) CreateEngine(ctx context.Context, arg db.CreateEngineParams) (db.Engine, error) {
 	now := time.Now().UTC()
+	id := NewUUID()
+	if arg.ID.Valid {
+		id = UUIDString(arg.ID)
+	}
 	row := model.Engine{
-		ID:           model.UUID(NewUUID()),
+		ID:           model.UUID(id),
 		Name:         model.Text(arg.Name),
 		Kind:         arg.Kind,
 		Class:        arg.Class,

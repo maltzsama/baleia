@@ -11,6 +11,7 @@ import (
 	"github.com/galileostudio/baleia/internal/crypto"
 	"github.com/galileostudio/baleia/internal/db"
 	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -41,10 +42,19 @@ func PrepareAPI(ctx context.Context, logger *slog.Logger, cfg *config.Config, st
 
 	// Engine endpoints live in the database; TRINO_URL only seeds and updates
 	// the default Trino engine Baleia created itself.
+	var engineID uuid.UUID
+	if cfg.DefaultEngineID != "" {
+		id, err := uuid.Parse(cfg.DefaultEngineID)
+		if err != nil {
+			return fmt.Errorf("BALEIA_DEFAULT_ENGINE_ID: %w", err)
+		}
+		engineID = id
+	}
 	if err := st.Store.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return EnsureDefaultTrinoEngine(ctx, logger, repo.New(tx), DefaultTrinoEngine{
 			URL: cfg.TrinoURL, ServiceUser: cfg.TrinoServiceUser, AdminUser: cfg.TrinoAdminUser,
 			Password: cfg.TrinoPassword != "", CA: st.TrinoCA, Seal: sealCredentials(st.Keyring),
+			EngineID: engineID,
 		})
 	}); err != nil {
 		return fmt.Errorf("default trino engine: %w", err)

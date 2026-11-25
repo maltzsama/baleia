@@ -40,6 +40,10 @@ type DefaultTrinoEngine struct {
 	// Seal encrypts the connection's credentials bound to its id (the keyring);
 	// required when Password is set.
 	Seal func(plain []byte, connID db.UUID) (string, error)
+	// EngineID is BALEIA_DEFAULT_ENGINE_ID: the id the engine is created with,
+	// which the deployment also gives the engine's OPA. uuid.Nil picks a
+	// random one. An existing engine keeps its id.
+	EngineID uuid.UUID
 }
 
 // TrinoPasswordRef is the external secret reference the default engine stores
@@ -109,6 +113,12 @@ func EnsureDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q Defaul
 		return fmt.Errorf("default trino engine: %w", err)
 	}
 
+	if env.EngineID != uuid.Nil && row.Engine.ID.Valid && uuid.UUID(row.Engine.ID.Bytes) != env.EngineID {
+		// The id cannot change once the engine exists: an OPA labelled with
+		// BALEIA_DEFAULT_ENGINE_ID would report for an unknown engine.
+		logger.WarnContext(ctx, "the default trino engine exists with another id; set BALEIA_DEFAULT_ENGINE_ID to it",
+			"engine", row.Engine.Name, "engine_id", uuid.UUID(row.Engine.ID.Bytes).String(), "configured_id", env.EngineID.String())
+	}
 	conn := row.CatalogConnection
 	if conn.CreatedBy.Valid {
 		logger.InfoContext(ctx, "default trino engine is managed by a user; TRINO_URL is not applied", "engine", row.Engine.Name)
@@ -206,7 +216,12 @@ func createDefaultTrinoEngine(ctx context.Context, logger *slog.Logger, q Defaul
 		return fmt.Errorf("create default trino connection: %w", err)
 	}
 
+	var engineID db.UUID
+	if env.EngineID != uuid.Nil {
+		engineID = db.UUID{Bytes: env.EngineID, Valid: true}
+	}
 	eng, err := q.CreateEngine(ctx, db.CreateEngineParams{
+		ID:           engineID,
 		Name:         "default",
 		Kind:         "trino",
 		Class:        "federated",
