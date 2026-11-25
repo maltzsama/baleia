@@ -52,6 +52,13 @@ test('@issue-383 autocomplete follows the statement context', async ({
 	await page.unroute('**/api/v1/auth/login');
 	await syncTpchMetadata(page, token);
 
+	// The tab's catalog drives the completions; e2e_governed (data policies)
+	// may be the workspace's first catalog.
+	const catalog = page.getByTestId('catalog-select');
+	const tpch = catalog.locator('option', { hasText: 'e2e_tpch' });
+	await tpch.waitFor({ state: 'attached', timeout: 15_000 });
+	await catalog.selectOption((await tpch.getAttribute('value')) ?? '');
+
 	// Start of a statement: statement keywords, not functions.
 	await typeSql(page, 's');
 	await expect(options(page).first()).toHaveAccessibleName('SELECT');
