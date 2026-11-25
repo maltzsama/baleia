@@ -164,15 +164,45 @@ func (p *Publisher) Rollback(ctx context.Context, revisionID uuid.UUID, views Vi
 	})
 }
 
+// PublishInitial publishes a revision without policies when nothing is
+// published yet, and reports whether it did. OPA then has a bundle to
+// activate, so the engines it gates become ready: an engine cannot take the
+// catalog DDL that the first policy needs before that (ADR 0028). Nobody is
+// filtered until the first policy is published, as before data policies were
+// turned on. Once any revision is published it does nothing, and a replica
+// that loses the race to another one reports false.
+func (p *Publisher) PublishInitial(ctx context.Context) (Revision, bool, error) {
+	_, err := p.Store.PublishedRevision(ctx)
+	if err == nil {
+		return Revision{}, false, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return Revision{}, false, err
+	}
+	subjects, err := p.subjects(ctx)
+	if err != nil {
+		return Revision{}, false, err
+	}
+	content := Content{Catalogs: map[string]CatalogContent{}, Subjects: subjects}
+	rev, err := p.store(ctx, ReasonPublish, nil, nil, content, uuid.Nil)
+	if errors.Is(err, ErrVersionConflict) {
+		return Revision{}, false, nil
+	}
+	if err != nil {
+		return Revision{}, false, err
+	}
+	return rev, true, nil
+}
+
 // Reissue keeps the published policies current: it publishes them again
 // when the subjects changed (team membership, sign-in groups) or when less
-// than half of the lease is left. It does nothing when nothing is published
-// or neither holds. Re-issuing does not judge views: it never changes a
-// policy, and a lapsed lease would deny every user.
+// than half of the lease is left. While nothing is published it publishes
+// the initial revision (PublishInitial). Re-issuing does not judge views: it
+// never changes a policy, and a lapsed lease would deny every user.
 func (p *Publisher) Reissue(ctx context.Context) (Revision, bool, error) {
 	published, err := p.Store.PublishedRevision(ctx)
 	if errors.Is(err, ErrNotFound) {
-		return Revision{}, false, nil
+		return p.PublishInitial(ctx)
 	}
 	if err != nil {
 		return Revision{}, false, err
