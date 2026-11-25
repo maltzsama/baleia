@@ -412,6 +412,7 @@ func TestConfig_DefaultEngineID(t *testing.T) {
 		{name: "unset", id: ""},
 		{name: "uuid", id: id},
 		{name: "not a uuid", id: "default", wantErr: true},
+		{name: "the nil uuid", id: "00000000-0000-0000-0000-000000000000", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

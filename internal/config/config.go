@@ -606,8 +606,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if c.DefaultEngineID != "" {
-		if _, err := uuid.Parse(c.DefaultEngineID); err != nil {
-			return fmt.Errorf("BALEIA_DEFAULT_ENGINE_ID must be a UUID (got %q)", c.DefaultEngineID)
+		// The nil UUID would turn the default engine's OPA reports off.
+		if id, err := uuid.Parse(c.DefaultEngineID); err != nil || id == uuid.Nil {
+			return fmt.Errorf("BALEIA_DEFAULT_ENGINE_ID must be a non-nil UUID (got %q)", c.DefaultEngineID)
 		}
 	}
 	if _, err := c.SlogLevel(); err != nil {
