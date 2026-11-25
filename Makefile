@@ -2,7 +2,7 @@ BALEIA_DIR ?= $(CURDIR)
 
 # The baleia-trino-catalog-store release Baleia runs and tests its contract
 # against (#88, #39): the single pin for compose, the dev cluster and CI.
-BALEIA_PLUGIN_VERSION ?= 0.10.2
+BALEIA_PLUGIN_VERSION ?= 0.11.0
 TRINO_VERSION         ?= 484
 BALEIA_PLUGIN_TARBALL  = baleia-catalog-store-$(BALEIA_PLUGIN_VERSION)+trino$(TRINO_VERSION).tar.gz
 BALEIA_PLUGIN_URL     ?= https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v$(BALEIA_PLUGIN_VERSION)/$(BALEIA_PLUGIN_TARBALL)
@@ -27,7 +27,8 @@ worker:
 # The plugin is never built here: compose and the dev cluster install the
 # released tarball (sha256-verified) into the official Trino image.
 
-# contract-fetch extracts contract/ of the pinned release into
+# contract-fetch extracts contract/ and opa/ (the Rego bundle and the OPA
+# access-control properties, ADR 0028) of the pinned release into
 # internal/contract/testdata for the contract tests (go test -tags contract).
 .PHONY: contract-fetch
 contract-fetch:
@@ -35,7 +36,7 @@ contract-fetch:
 	curl -fsSL -o internal/contract/testdata/p.tgz "$(BALEIA_PLUGIN_URL)"
 	curl -fsSL -o internal/contract/testdata/p.sha256 "$(BALEIA_PLUGIN_URL).sha256"
 	cd internal/contract/testdata && echo "$$(cut -d' ' -f1 p.sha256)  p.tgz" | sha256sum -c - \
-		&& tar -xzf p.tgz contract VERSION \
+		&& tar -xzf p.tgz contract opa VERSION \
 		&& test "$$(cat VERSION)" = "$(BALEIA_PLUGIN_VERSION)+trino$(TRINO_VERSION)" \
 		&& rm p.tgz p.sha256
 	@echo ">>> contract of plugin $$(cat internal/contract/testdata/VERSION) in internal/contract/testdata"
