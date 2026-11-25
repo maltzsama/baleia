@@ -66,6 +66,9 @@ func (s *seedDataPolicies) run(ctx context.Context, admin, member, viewer db.Use
 	if err != nil {
 		return fmt.Errorf("catalog: %w", err)
 	}
+	if err := s.bindingActive(ctx, catalog.ID); err != nil {
+		return err
+	}
 	// The personal workspaces (the BI keys') and the shared one, where the
 	// editor opens.
 	shared, err := s.q.GetWorkspaceByPolarisName(ctx, "e2e_shared")
@@ -216,6 +219,32 @@ func (s *seedDataPolicies) catalog(ctx context.Context, engineID string) (db.Cat
 	return s.q.GetCatalogByTrinoName(ctx, lookup)
 }
 
+// bindingActive fails unless the catalog's binding on the engine is active:
+// registration answers 201 even when applying the catalog to the engine
+// failed, and the rows need the engine catalog.
+func (s *seedDataPolicies) bindingActive(ctx context.Context, catalogID db.UUID) error {
+	bindings, err := s.q.ListBindingsByCatalog(ctx, catalogID)
+	if err != nil {
+		return err
+	}
+	if len(bindings) == 0 {
+		return errors.New("the governed catalog has no binding")
+	}
+	for _, b := range bindings {
+		if b.LifecycleState != "active" {
+			var code, msg string
+			if b.LastErrorCode != nil {
+				code = *b.LastErrorCode
+			}
+			if b.LastErrorMessage != nil {
+				msg = *b.LastErrorMessage
+			}
+			return fmt.Errorf("binding %s is %s: %s %s", b.EngineCatalogName, b.LifecycleState, code, msg)
+		}
+	}
+	return nil
+}
+
 // rows writes four customers, two per region, once.
 func (s *seedDataPolicies) rows(ctx context.Context) error {
 	for _, sql := range []string{
@@ -293,7 +322,10 @@ func (s *seedDataPolicies) publish(ctx context.Context, catalogID, engineID stri
 	if err := s.api(ctx, http.MethodPost, "/catalogs/"+catalogID+"/data-policies/publish", map[string]any{}, &rev); err != nil {
 		return err
 	}
-	deadline := time.Now().Add(2 * time.Minute)
+	wait, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	tick := time.NewTicker(2 * time.Second)
+	defer tick.Stop()
 	for {
 		var status struct {
 			Engines []struct {
@@ -301,7 +333,8 @@ func (s *seedDataPolicies) publish(ctx context.Context, catalogID, engineID stri
 				ActiveRevision *string `json:"active_revision"`
 			} `json:"engines"`
 		}
-		if err := s.api(ctx, http.MethodGet, "/data-policies/status", nil, &status); err != nil {
+		err := s.api(wait, http.MethodGet, "/data-policies/status", nil, &status)
+		if err != nil && wait.Err() == nil {
 			return err
 		}
 		for _, e := range status.Engines {
@@ -309,10 +342,11 @@ func (s *seedDataPolicies) publish(ctx context.Context, catalogID, engineID stri
 				return nil
 			}
 		}
-		if time.Now().After(deadline) {
+		select {
+		case <-wait.Done():
 			return fmt.Errorf("the engine's OPA did not activate revision %s in time", rev.ID)
+		case <-tick.C:
 		}
-		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -359,10 +393,14 @@ func (s *seedDataPolicies) api(ctx context.Context, method, path string, body, o
 	return doJSON(req, out)
 }
 
+// seedHTTP bounds every request, so a stalled answer fails the seed instead
+// of hanging it.
+var seedHTTP = &http.Client{Timeout: time.Minute}
+
 // doJSON sends req and decodes the answer into out. ok lists the accepted
 // statuses; empty accepts any 2xx.
 func doJSON(req *http.Request, out any, ok ...int) error {
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := seedHTTP.Do(req)
 	if err != nil {
 		return err
 	}
