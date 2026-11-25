@@ -47,6 +47,6 @@ try:
         if not next_uri:
             break
         page = call(urllib.request.Request(next_uri, headers=headers))
-except Exception as exc:  # A dropped connection is a failed statement too.
-    result["state"], result["error"] = "FAILED", f"{type(exc).__name__}: {exc}"
+except Exception as exc:  # No answer from Trino: not a statement outcome.
+    result["state"], result["error"] = "TRANSPORT_ERROR", f"{type(exc).__name__}: {exc}"
 print(json.dumps(result))

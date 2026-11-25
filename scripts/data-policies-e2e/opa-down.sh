@@ -92,6 +92,10 @@ for who in member admin; do
   rows="$(field "$result" rows)"
   [ "$state" = "FAILED" ] || fail "with OPA down the $who's statement ended $state with rows $rows"
   [ "$rows" = "[]" ] || fail "with OPA down the $who got rows: $rows"
+  # Trino itself must refuse the statement for want of OPA; a dropped
+  # connection (TRANSPORT_ERROR above) or another failure proves nothing.
+  error="$(field "$result" error)"
+  [[ "$error" == *"OPA"* ]] || fail "with OPA down the $who's statement failed for another reason: $error"
   echo "ok    with OPA down the $who's statement fails: $(field "$result" error | head -c 160)"
 done
 
