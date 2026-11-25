@@ -15,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-data-policy-key k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-seed e2e-forward e2e-bi e2e-openmetadata e2e-down
+.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-data-policy-key k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-seed e2e-forward e2e-bi e2e-opa-down e2e-openmetadata e2e-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_AGENTS_ENABLED=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -102,6 +102,9 @@ E2E_TRINO_CA ?= $(or $(TMPDIR),/tmp)/baleia-e2e-trino-ca.pem
 BI_E2E_JDBC_VERSION ?= 484
 BI_E2E_JDBC_JAR ?= $(or $(TMPDIR),/tmp)/trino-jdbc-$(BI_E2E_JDBC_VERSION).jar
 BI_E2E_KEY_FILE ?= $(or $(TMPDIR),/tmp)/baleia-e2e-bi-key.secret
+# The member's and the viewer's BI keys, for the data policy checks (#1145).
+BI_E2E_MEMBER_KEY_FILE ?= $(or $(TMPDIR),/tmp)/baleia-e2e-bi-member-key.secret
+BI_E2E_VIEWER_KEY_FILE ?= $(or $(TMPDIR),/tmp)/baleia-e2e-bi-viewer-key.secret
 BI_E2E_URL ?= https://localhost:8444
 BI_E2E_TLS_PROXY ?= $(or $(TMPDIR),/tmp)/baleia-bi-e2e-tlsproxy
 # Runs against the minikube dev cluster (not compose). Port-forwards the API,
@@ -114,10 +117,12 @@ e2e:
 	$(MAKE) e2e-seed
 	$(MAKE) e2e-bi
 	cd web && E2E_BASE_URL=http://localhost:8080 npx playwright test
+	$(MAKE) e2e-opa-down
 
 # Forwards the cluster's ports and seeds it with cmd/e2e-seed (accounts, the
-# e2e_tpch target, a BI key, semantic content). `e2e` and the OpenMetadata
-# nightly call it after k8s-up.
+# e2e_tpch target, a BI key, semantic content, and the data policies on
+# e2e_governed with the member's and the viewer's BI keys). `e2e` and the
+# OpenMetadata nightly call it after k8s-up.
 e2e-seed:
 	$(MAKE) e2e-forward
 	@echo "waiting for the API on :8080…"
@@ -133,6 +138,9 @@ e2e-seed:
 		E2E_TRINO_CA_FILE=$(E2E_TRINO_CA) \
 		E2E_TRINO_PASSWORD="$$pw" \
 		E2E_BI_KEY_FILE=$(BI_E2E_KEY_FILE) \
+		E2E_POLARIS_URL=http://localhost:18181 \
+		E2E_BI_MEMBER_KEY_FILE=$(BI_E2E_MEMBER_KEY_FILE) \
+		E2E_BI_VIEWER_KEY_FILE=$(BI_E2E_VIEWER_KEY_FILE) \
 		go run -tags e2e ./cmd/e2e-seed
 
 e2e-forward:
@@ -140,6 +148,7 @@ e2e-forward:
 	kubectl -n $(K8S_NS) port-forward svc/postgres 5433:5432 &
 	kubectl -n $(K8S_NS) port-forward svc/baleia-trino 8081:8443 &
 	kubectl -n $(K8S_NS) port-forward svc/baleia-bi-gateway 8443:8443 &
+	kubectl -n $(K8S_NS) port-forward svc/polaris 18181:8181 &
 
 # Drives the Trino protocol through the gateway with the Trino JDBC driver:
 # Basic auth, a query, multi-page follows, every replica validating a nextUri,
@@ -170,8 +179,15 @@ e2e-bi:
 	curl -sSk -o /dev/null $(BI_E2E_URL)/v1/info || { echo "e2e-bi: the gateway is not reachable at $(BI_E2E_URL)" >&2; exit 1; }; \
 	BI_E2E_URL=$(BI_E2E_URL) BI_E2E_USER=admin@e2e.test \
 		BI_E2E_KEY_FILE=$(BI_E2E_KEY_FILE) BI_E2E_CATALOG=e2e_tpch BI_E2E_SCHEMA=tiny \
+		BI_E2E_MEMBER_KEY_FILE=$(BI_E2E_MEMBER_KEY_FILE) BI_E2E_VIEWER_KEY_FILE=$(BI_E2E_VIEWER_KEY_FILE) \
 		BI_E2E_PODS="$${pods#,}" \
 		java -cp $(BI_E2E_JDBC_JAR) scripts/bi-e2e/BiGatewayE2E.java
+
+# Data policies fail closed (ADR 0028, #1145): with the coordinator's OPA
+# stopped, every statement fails, the trusted admin's too, and the policies
+# hold again once it resumes. It pauses OPA, so `e2e` runs it last.
+e2e-opa-down:
+	scripts/data-policies-e2e/opa-down.sh
 
 # Runs the pinned OpenMetadata Trino connector against the already seeded BI
 # gateway. The target is separate from e2e because OpenMetadata starts a
