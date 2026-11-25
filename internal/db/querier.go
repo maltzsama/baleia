@@ -379,6 +379,9 @@ type Querier interface {
 	// LockCatalogForUpdate locks a catalog's row until the transaction
 	// ends, or returns ErrNoRows.
 	LockCatalogForUpdate(ctx context.Context, id UUID) error
+	// CatalogConnectionBacksEngine reports whether an engine runs on the
+	// connection.
+	CatalogConnectionBacksEngine(ctx context.Context, id UUID) (bool, error)
 	// ReplaceUserIDPGroups stores the identity-provider groups of a user's
 	// latest sign-in, replacing the previous ones.
 	ReplaceUserIDPGroups(ctx context.Context, userID UUID, groups []string) error

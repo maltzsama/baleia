@@ -282,6 +282,9 @@ func (q *deleteConnQuerier) GetCatalogConnectionByID(context.Context, db.UUID) (
 	return q.conn, nil
 }
 func (q *deleteConnQuerier) DeleteCatalogConnection(context.Context, db.UUID) error { return q.err }
+func (q *deleteConnQuerier) CatalogConnectionBacksEngine(context.Context, db.UUID) (bool, error) {
+	return true, nil
+}
 
 // TestDeleteConnectionBackingEngine409: engines reference their connection
 // ON DELETE RESTRICT, which Postgres reports as 23001.
@@ -289,7 +292,7 @@ func TestDeleteConnectionBackingEngine409(t *testing.T) {
 	t.Parallel()
 	q := &deleteConnQuerier{
 		conn: ownedConnection(t, "postgresql", testUserID),
-		err:  &db.PGError{Code: "23001", ConstraintName: "engines_connection_id_fkey"},
+		err:  &db.PGError{Code: "23001", ConstraintName: "fk_engines_connection"},
 	}
 	h := engineHandlers(t, nil)
 	h.queries = q
