@@ -116,6 +116,22 @@ func main() {
 	if err := ensureMetadata(ctx, q, catalog); err != nil {
 		log.Fatalf("e2e-seed: metadata: %v", err)
 	}
+	// Data policies (#1145) need the API, Polaris and Trino.
+	trinoURL, polarisURL := os.Getenv("E2E_TRINO_URL"), os.Getenv("E2E_POLARIS_URL")
+	if trinoURL != "" && polarisURL != "" {
+		client, err := adminTrino(trinoURL)
+		if err != nil {
+			log.Fatalf("e2e-seed: trino: %v", err)
+		}
+		apiURL := os.Getenv("E2E_API_URL")
+		if apiURL == "" {
+			apiURL = "http://localhost:8080"
+		}
+		s := &seedDataPolicies{q: q, apiURL: apiURL, polaris: polarisURL, password: password, trino: client}
+		if err := s.run(ctx, admin, member, viewer); err != nil {
+			log.Fatalf("e2e-seed: data policies: %v", err)
+		}
+	}
 
 	log.Printf("e2e-seed: ready (admin/member/viewer @e2e.test)")
 }
