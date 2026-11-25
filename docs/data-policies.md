@@ -86,14 +86,22 @@ as before data policies were on.
 Nothing in the database changes: the default engine keeps its id, its
 catalogs and its history.
 
+`--reuse-values` keeps the plugin release the release runs, so select one that
+ships the OPA policy (0.11.0 or later). With `trino.plugin.image`, select the
+image of that release too.
+
 ```bash
 helm upgrade baleia ./deploy/helm/baleia --reuse-values \
+  --set-string trino.plugin.version=0.11.0 \
   --set trino.dataPolicies.enabled=true \
   --set-file trino.dataPolicies.publicKey=data-policy.pub \
   --set-file secrets.values.BALEIA_DATA_POLICY_SIGNING_KEY=data-policy.pem
 ```
 
-With `existingSecret`, add the three keys to that Secret instead.
+With `existingSecret`, add the three keys to that Secret instead. The API and
+the worker read the signing key and the OPA token at start: with
+`secrets.create` a change to either rolls them; with `existingSecret`, restart
+them after you change one.
 
 ### Marking the engine
 
