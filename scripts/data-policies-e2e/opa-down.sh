@@ -24,17 +24,25 @@ fail() {
 
 work="$(mktemp -d)"
 container=""
+# unpause resumes the frozen OPA container. It also succeeds when the
+# container no longer needs it: the kubelet may have replaced it after its
+# liveness probe failed, which leaves the old one stopped, not paused.
+unpause() {
+  minikube -p "$profile" ssh -- docker unpause "$container" >/dev/null 2>&1 && return 0
+  [ "$(minikube -p "$profile" ssh -- docker inspect -f '{{.State.Paused}}' "$container" 2>/dev/null | tr -d '\r')" != "true" ]
+}
 resume() {
   if [ -n "$container" ]; then
-    minikube -p "$profile" ssh -- docker unpause "$container" >/dev/null 2>&1 || true
+    unpause || true
   fi
   rm -rf "$work"
 }
 trap resume EXIT
 
 kubectl -n "$ns" get secret baleia-secret -o jsonpath='{.data.BALEIA_TRINO_PASSWORD}' | base64 -d >"$work/password"
+login="$(python3 -c 'import json,sys; print(json.dumps({"email": "member@e2e.test", "password": sys.argv[1]}))' "$password")"
 token="$(curl -fsS -X POST "$api/api/v1/auth/login" -H 'Content-Type: application/json' \
-  -d "{\"email\":\"member@e2e.test\",\"password\":\"$password\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+  -d "$login" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
 member_id="$(curl -fsS "$api/api/v1/auth/me" -H "Authorization: Bearer $token" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 member="u_$member_id"
 
@@ -74,7 +82,8 @@ for who in member admin; do
   echo "ok    with OPA down the $who's statement fails: $(field "$result" error | head -c 160)"
 done
 
-minikube -p "$profile" ssh -- docker unpause "$container" >/dev/null 2>&1 || true
+# Forget the container only once it runs again, so the EXIT handler retries.
+unpause || fail "could not unpause OPA in $pod"
 container=""
 kubectl -n "$ns" wait --for=condition=ready pod -l app.kubernetes.io/component=trino --timeout=5m >/dev/null
 for _ in $(seq 1 30); do
