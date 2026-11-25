@@ -20,6 +20,7 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: {{ .Values.api.port | quote }}
         prometheus.io/path: /metrics
+        {{- include "baleia.dataPolicySecretsChecksum" . | nindent 8 }}
     spec:
       {{- include "baleia.podSecurityContext" . | nindent 6 }}
       containers:

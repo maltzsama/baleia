@@ -151,6 +151,16 @@ config does not list it (the deployments already reference every config key). */
 {{- end }}
 {{- end }}
 
+{{/* Pod annotation that rolls the API and worker when the data policy key or
+OPA token given in secrets.values change: both are read from the environment
+once, at start, so a running pod would keep signing with the old key or
+checking the old token. With existingSecret, restart them yourself. */}}
+{{- define "baleia.dataPolicySecretsChecksum" -}}
+{{- if and (include "baleia.dataPolicies" .) .Values.secrets.create }}
+checksum/data-policy-secrets: {{ printf "%s\n%s" (.Values.secrets.values.BALEIA_DATA_POLICY_SIGNING_KEY | default "") (.Values.secrets.values.BALEIA_OPA_TOKEN | default "") | sha256sum }}
+{{- end }}
+{{- end }}
+
 {{/* Non-empty when the in-chart Trino requires authentication (#647). */}}
 {{- define "baleia.trinoAuth" -}}
 {{- if and .Values.trino.enabled .Values.trino.auth.enabled }}true{{ end }}
