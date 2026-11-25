@@ -4,7 +4,8 @@ Data policies are row filters and column masks. You write them in Baleia, OPA
 decides them, and Trino enforces them
 ([ADR 0028](adr/0028-data-policies-opa-trino.md)). This page covers how to run
 them: turning them on with the Helm chart, setting them up for a Trino that
-Baleia does not install, and what the deployment must guarantee.
+Baleia does not install, what the deployment must guarantee, and the
+`/governance` screens where policies are written and published.
 
 ## What is guaranteed
 
@@ -113,6 +114,36 @@ them. After the upgrade, turn the flag on for the default engine:
 `PATCH /api/v1/engines/{id}` with `{"data_policies": true}`, or the engine's
 settings in the UI. The engine's data policy status then shows the revision
 its OPA reports.
+
+## Writing and publishing policies
+
+Policies live under **Governance** (`/governance`), shown to global admins and
+to whoever can create connections:
+
+- **By object** lists one catalog's policies per table. You see this page
+  only for catalogs whose connection you own, unless you are a global admin.
+  - Add a row filter (permissive or restrictive) or a column mask, and edit
+    or delete one. Saving checks the expression and keeps it as a draft.
+  - **Publish** builds a signed revision. A refused publish lists every
+    reason, such as an invalid policy, two masks with one priority, or a
+    trusted-owned DEFINER view.
+  - For each table, the page also shows what writes do (Trino 484's rules),
+    the `SECURITY DEFINER` views over it and whose policies they apply, and
+    the revision each engine runs.
+  - Mask templates (null, constant, partial, `sha256`) only fill in the
+    expression. An unsalted `sha256` of low-cardinality values can be
+    reversed.
+- **By subject** shows what is filtered and masked for one user, team,
+  identity-provider group, service account or everyone.
+  - It reads the saved, enabled policies of the catalogs you manage.
+  - For a user, it includes their teams. Policies on the user's identity-provider
+    groups are not included: choose the group to see them.
+- **Revisions** (global admins) lists published revisions with their lease,
+  and each engine's health and active revision. Use it to roll back to an
+  earlier revision.
+
+Each page also states the guarantee's scope, the side-door requirement, and
+when each subject attribute reaches the engines.
 
 ## An external Trino
 

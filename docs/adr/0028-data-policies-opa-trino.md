@@ -457,7 +457,7 @@ semantic layer, retrievers, BI gateway) runs as the user's own identity. The tru
 
 ## Current compliance
 
-Implemented except the `/governance` screens (#1146), in #995's parts:
+Implemented in #995's parts:
 
 - **Policy model, publication and the OPA endpoints** (#1143, #1144). Revisions are immutable,
   signed with a 24h lease by default, and re-issued; rollback, engine health, the refusal of
@@ -477,6 +477,17 @@ Implemented except the `/governance` screens (#1146), in #995's parts:
   - two users get different rows and masked values through the editor (Playwright,
     `@issue-1145`) and the BI gateway (the JDBC e2e);
   - with OPA paused, every statement fails, the trusted admin's too (`make e2e-opa-down`).
+
+- **The `/governance` screens** (#1146): By object, By subject and Revisions.
+  - Editors for row filters and masks; mask templates only fill in the
+    expression, with the warning on unsalted hashes.
+  - Each page states the Trino-path-only scope, the side-door requirement,
+    Trino 484's write rules, each attribute's freshness, the DEFINER views
+    over each policied table, and the active revision per engine.
+  - Deletes and rollbacks ask for confirmation.
+  - Covered by MSW page tests and Playwright (`@issue-1146`).
+  - The Realm view and "what a subject can read" (catalog RBAC) come with
+    the Polaris RBAC screens of #993.
 
 Open: the guard still refuses DEFINER views of ordinary owners
 (maltzsama/baleia-trino-catalog-store#117), and one statement can mix revisions (#1149). The
