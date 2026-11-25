@@ -1,7 +1,7 @@
 # 0028. Row filters and column masks: authored in Baleia, decided by OPA, enforced by Trino
 
 - Status: Accepted, amended by the spike in #994 (results under "Spike results").
-- Date: 2026-11-13; amended 2026-11-22
+- Date: 2026-11-13; amended 2026-11-22 and 2026-11-25 (the initial revision and the engine id)
 - Issues: #994 (spike), #995 (implementation), #993 (catalog-manager RBAC), #992 (chart hardening)
 - Extends: [0005](0005-trino-security-model.md) (a third access control next to the file rules and
   the catalog guard)
@@ -216,7 +216,10 @@ supports two ways of deciding it, per Polaris connection:
   total row count. Trusted identities keep them all for table health and maintenance. Trino's
   file rules allow only built-in functions unless they list others, so with Baleia's default
   rules `table_changes` is already refused to everyone; the OPA rule holds when an operator's own
-  rules open connector functions.
+  rules open connector functions. The list covers Iceberg REST catalogs, the only ones that take
+  policies: they have no materialized views, so `<name>$materialized_view_storage` cannot reach a
+  policied table there. Allowing policies on another catalog type means reviewing the side doors
+  again.
 - **Filters and masks do not authorize writes.** Writes stay with the guard (read-only sessions)
   and the catalog manager.
 
@@ -361,6 +364,15 @@ Policies live in one top-level area, `/governance`, integrated with catalog RBAC
   pod is not ready, and the Trino Service sends it no traffic, until a bundle is activated. Trino
   therefore never takes user queries with incomplete policy configuration. An external Trino's
   operator must provide the same gate.
+- **The first bundle exists before the first policy.** The gate would otherwise deadlock a new
+  deployment: the first policy needs a catalog bound on the engine, and binding needs the engine
+  ready. While nothing is published, Baleia publishes an initial revision without policies: the
+  API at startup, and the worker's re-issue pass if that fails. It is signed and leased like any
+  other. Until the first policy is published nobody is filtered, as before data policies were
+  on.
+- **OPA names its engine before the engine exists.** OPA's status reports carry the engine id in
+  its labels. The chart generates the id once (`BALEIA_DEFAULT_ENGINE_ID`) and the default engine
+  is created with it; an existing engine keeps its id, which the operator then gives the chart.
 - **Fail closed, no bypass.** If OPA is unreachable, Trino's checks fail and so do queries. This
   includes Baleia's maintenance, probes and reconciliation on that engine, because trusted
   identities also go through the plugin. No fallback skips OPA.
@@ -403,6 +415,11 @@ rollback and failed publish is audited with the actor, the revision and the affe
   their value-bearing metadata tables are closed to them.
 - **The bundle JSON is a public contract.** Changing it is a `format_version` bump, released with
   the Rego that reads it; operators with their own Rego follow it.
+- **One statement can mix two revisions.** Trino asks OPA separately for the access check, the row
+  filters and the masks of a statement. A bundle that activates between those calls can combine
+  a filter of one revision with a mask of another. The Rego cannot tie the calls together (the
+  filter and mask calls carry no query id); #1149 decides between a mechanism and an accepted,
+  documented limit.
 
 ## Spike results (#994)
 
@@ -436,8 +453,29 @@ semantic layer, retrievers, BI gateway) runs as the user's own identity. The tru
 
 ## Current compliance
 
-Not implemented. #995 implements this ADR; the Rego package and its tests exist in
-`deploy/opa/baleia/`, and the spike suite above stays as the regression test.
+Implemented except the `/governance` screens (#1146), in #995's parts:
+
+- **Policy model, publication and the OPA endpoints** (#1143, #1144). Revisions are immutable,
+  signed with a 24h lease by default, and re-issued; rollback, engine health, the refusal of
+  trusted-owned DEFINER views, and the admin API.
+- **Deployment** (#1145).
+  - The chart runs OPA as a sidecar of the coordinator: the official image pinned by digest, the
+    decision API on loopback, and readiness on `/health?bundles=true`. The data bundle is signed
+    and persisted, and OPA is the third access control.
+  - The Rego and the five-URI OPA properties ship in the plugin release (0.11.0+, the `+trino484`
+    tarball) under its `.sha256`. `install-plugin` copies them into a read-only volume. A contract
+    test pins the release's Rego to `deploy/opa/baleia`, and CI runs `opa test` in both
+    repositories.
+  - Baleia publishes the initial revision, and the default engine gets a deployment-chosen id.
+  - Operator documentation: [data-policies.md](../data-policies.md).
+- **End to end on minikube**, with policies seeded through `cmd/e2e-seed`:
+  - two users get different rows and masked values through the editor (Playwright,
+    `@issue-1145`) and the BI gateway (the JDBC e2e);
+  - with OPA paused, every statement fails, the trusted admin's too (`make e2e-opa-down`).
+
+Open: the guard still refuses DEFINER views of ordinary owners
+(maltzsama/baleia-trino-catalog-store#117), and one statement can mix revisions (#1149). The
+spike suite above stays as the regression test of the Rego against Trino.
 
 ## Alternatives considered
 
