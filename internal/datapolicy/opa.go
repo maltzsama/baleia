@@ -43,8 +43,15 @@ type OPAHandler struct {
 	Token string
 	// EngineExists reports whether a reporting engine is known.
 	EngineExists func(ctx context.Context, id uuid.UUID) (bool, error)
-	Logger       *slog.Logger
-	Now          func() time.Time
+	// DefaultEngineAlias is BALEIA_DEFAULT_ENGINE_ID: the id the default Trino
+	// engine's OPA reports under. The chart generates it before any engine
+	// exists, so it is not the engine's own id; a report under it is the
+	// default engine's (DefaultEngine). uuid.Nil turns the alias off.
+	DefaultEngineAlias uuid.UUID
+	// DefaultEngine returns the default Trino engine's id, or ErrNotFound.
+	DefaultEngine func(ctx context.Context) (uuid.UUID, error)
+	Logger        *slog.Logger
+	Now           func() time.Time
 }
 
 func (h *OPAHandler) authorized(r *http.Request) bool {
@@ -131,6 +138,19 @@ func (h *OPAHandler) ReceiveStatus(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
+	}
+	if h.DefaultEngineAlias != uuid.Nil && engineID == h.DefaultEngineAlias && h.DefaultEngine != nil {
+		def, err := h.DefaultEngine(r.Context())
+		if errors.Is(err, ErrNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			h.logger().ErrorContext(r.Context(), "look up the default trino engine", "err", err)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		engineID = def
 	}
 	known, err := h.EngineExists(r.Context(), engineID)
 	if err != nil {

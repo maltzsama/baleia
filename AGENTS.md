@@ -26,7 +26,9 @@ Backend definition of done (`DoD-standard`): `go vet ./...`, `go test -race
 case for every new endpoint. CI (`.github/workflows/ci.yml`) runs the same:
 `Test` with Postgres and `-race`, `Store` (the store suite once per backend:
 Postgres, MySQL, MariaDB), `Lint` (golangci-lint, `.golangci.yml`, new issues
-only), `Vulnerabilities` (govulncheck) and `Dead code` (deadcode). On a pull request the `Changes` job
+only), `Vulnerabilities` (govulncheck), `Dead code` (deadcode) and `OPA`
+(`opa check`, `opa fmt` and `opa test` over the data policy Rego in
+`deploy/opa/baleia`). On a pull request the `Changes` job
 skips the jobs its paths cannot affect; pushes run everything. The release
 workflow starts only after CI succeeds on `main`, and a failed nightly
 (`web-e2e`, `k8s-smoke`, `sources`, `openmetadata-e2e`) opens a `Nightly failure` issue.

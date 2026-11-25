@@ -9,6 +9,17 @@ metadata:
 {{- if hasKey .Values.config "BALEIA_METRICS_TOKEN" }}
 {{- fail "BALEIA_METRICS_TOKEN is a credential: set secrets.values.BALEIA_METRICS_TOKEN, or the key in existingSecret, not config" }}
 {{- end }}
+{{- range $key := list "BALEIA_OPA_TOKEN" "BALEIA_DEFAULT_ENGINE_ID" }}
+{{- if hasKey $.Values.config $key }}
+{{- fail (printf "%s belongs in secrets.values or existingSecret, not config" $key) }}
+{{- end }}
+{{- end }}
+{{- if and (include "baleia.dataPolicies" .) (hasKey .Values.config "BALEIA_DATA_POLICIES") (ne .Values.config.BALEIA_DATA_POLICIES "opa") }}
+{{- fail "trino.dataPolicies.enabled sets BALEIA_DATA_POLICIES=opa; remove config.BALEIA_DATA_POLICIES or set it to opa" }}
+{{- end }}
+{{- if and (include "baleia.dataPolicies" .) (not .Values.trino.dataPolicies.publicKey) }}
+{{- fail "trino.dataPolicies.publicKey is required while trino.dataPolicies.enabled: the PEM public key of BALEIA_DATA_POLICY_SIGNING_KEY" }}
+{{- end }}
 {{- if hasKey .Values.config "BALEIA_BI_GATEWAY_ADDR" }}
 {{- fail "BALEIA_BI_GATEWAY_ADDR is rendered from biGateway.enabled and biGateway.port, not config" }}
 {{- end }}
@@ -42,6 +53,9 @@ data:
   {{- end }}
   {{- with include "baleia.biGatewayURL" . }}
   BALEIA_BI_GATEWAY_URL: {{ . | quote }}
+  {{- end }}
+  {{- if and (include "baleia.dataPolicies" .) (not (hasKey .Values.config "BALEIA_DATA_POLICIES")) }}
+  BALEIA_DATA_POLICIES: "opa"
   {{- end }}
   {{- /* Any other config key (e.g. BALEIA_METRICS_ENABLED, BALEIA_DB_MAX_CONNS) as given: the deployments reference every config key. */}}
   {{- $rendered := list "PUBLIC_URL" "TEMPORAL_HOST" "TRINO_URL" "POLARIS_URL" "BALEIA_REDIS_URL" "S3_ENDPOINT" "S3_BUCKET" "S3_REGION" "S3_USE_SSL" "SMTP_HOST" "SMTP_PORT" "SMTP_USER" "SMTP_FROM" "BALEIA_RESULT_MAX_ROWS" "BALEIA_RESULT_MAX_BYTES" "BALEIA_STATEMENT_TIMEOUT" "BALEIA_EXECUTION_TIMEOUT" "BALEIA_METADATA_SYNC_INTERVAL" "BALEIA_TRINO_ADMIN_USER" "BALEIA_CONNECTIONS_DENY_CIDRS" "BALEIA_CONNECTIONS_ALLOW_CIDRS" "BALEIA_BI_GATEWAY_ADDR" "BALEIA_BI_GATEWAY_URL" }}

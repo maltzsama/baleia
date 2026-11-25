@@ -197,4 +197,48 @@ trino:
   networkPolicy:
     enabled: true
     extraIngressFrom: []
+  # Data policies (ADR 0028): row filters and column masks authored in Baleia,
+  # decided by OPA and enforced by this Trino. Sets BALEIA_DATA_POLICIES=opa on
+  # the API and worker and runs OPA as a sidecar of the coordinator, with the
+  # Rego and the Trino OPA properties of the plugin release (0.11.0 or later).
+  # The coordinator is ready only once OPA has activated a bundle; the API
+  # publishes an initial revision without policies at its first start.
+  # Requires, in secrets.values or in existingSecret:
+  #   BALEIA_DATA_POLICY_SIGNING_KEY  PEM RSA private key that signs the bundles
+  #                                   (2048 bits or more); publicKey below is its
+  #                                   public half.
+  #   BALEIA_OPA_TOKEN                the bearer token OPA fetches the bundle and
+  #                                   reports its status with, 16+ characters;
+  #                                   secrets.create generates it once when unset.
+  #   BALEIA_DEFAULT_ENGINE_ID        a UUID the coordinator's OPA reports its
+  #                                   status under; Baleia records it on the
+  #                                   default Trino engine. secrets.create
+  #                                   generates it once; with existingSecret,
+  #                                   put any fresh UUID there.
+  # The coordinator must not be reachable by end users, nor the catalog manager
+  # and the storage of restricted tables (docs/data-policies.md).
+  dataPolicies:
+    enabled: false
+    # PEM public key of BALEIA_DATA_POLICY_SIGNING_KEY. OPA refuses a bundle
+    # it does not verify with it.
+    publicKey: ""
+    opa:
+      # The official image, pinned by digest (ADR 0028).
+      image: docker.io/openpolicyagent/opa:1.22.4-static@sha256:12cecac5a174368f7d3f09d3a19d040ebe0c91d576e520335ae7a985a26e39d3
+      # /health and /metrics. The decision API listens on 127.0.0.1:8181 only.
+      diagnosticPort: 8282
+      # How often OPA asks the API for a new revision.
+      polling:
+        minDelaySeconds: 10
+        maxDelaySeconds: 30
+      resources: {}
+    # OPA keeps its last activated bundle here (persist: true): a restarted
+    # coordinator then serves users until that bundle's lease ends, even while
+    # the API is down. With persistence the coordinator rolls with Recreate,
+    # since the volume is ReadWriteOnce. Without it the bundle survives a
+    # container restart only.
+    persistence:
+      enabled: true
+      size: 64Mi
+      storageClassName: ""
   resources: {}

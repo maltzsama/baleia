@@ -327,6 +327,88 @@ func TestPublisher_RollbackRetryResolvesNamesAgain(t *testing.T) {
 	}
 }
 
+func TestPublisher_PublishInitial(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("nothing published", func(t *testing.T) {
+		t.Parallel()
+		store, objects := newMemStore(), &memObjects{}
+		user := uuid.New()
+		store.subjects = []SubjectSource{{UserID: db.UUID{Bytes: user, Valid: true}, Email: "a@x.io"}}
+		p := newPublisher(t, store, objects, &now)
+		rev, published, err := p.PublishInitial(ctx)
+		if err != nil || !published {
+			t.Fatalf("PublishInitial = %v, %v", published, err)
+		}
+		content := contentOf(t, rev)
+		if rev.Reason != ReasonPublish || rev.CreatedBy != nil || rev.SourceID != nil || len(content.Catalogs) != 0 {
+			t.Fatalf("initial revision = %+v, content %+v", rev, content)
+		}
+		if len(content.Subjects) == 0 {
+			t.Fatal("the initial revision carries no subjects")
+		}
+		if !rev.NotAfter.Equal(now.Add(24 * time.Hour)) {
+			t.Fatalf("lease ends %s, want %s", rev.NotAfter, now.Add(24*time.Hour))
+		}
+		if _, ok := objects.objects[BundleKey(rev.ID)]; !ok {
+			t.Fatal("the initial bundle was not stored")
+		}
+	})
+
+	t.Run("a revision is already published", func(t *testing.T) {
+		t.Parallel()
+		store, objects := newMemStore(), &memObjects{}
+		p := newPublisher(t, store, objects, &now)
+		sales := uuid.New()
+		store.policies[sales] = publishedPolicies(sales)
+		first, err := p.PublishCatalog(ctx, sales, []string{"lake"}, ViewInspection{}, uuid.New())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, published, err := p.PublishInitial(ctx); err != nil || published {
+			t.Fatalf("PublishInitial over a published revision = %v, %v", published, err)
+		}
+		if got, _ := store.PublishedRevision(ctx); got.ID != first.ID {
+			t.Fatalf("published revision = %s, want %s", got.ID, first.ID)
+		}
+	})
+
+	t.Run("another replica publishes first", func(t *testing.T) {
+		t.Parallel()
+		store, objects := newMemStore(), &memObjects{}
+		p := newPublisher(t, store, objects, &now)
+		other := newPublisher(t, store, objects, &now)
+		var winner Revision
+		store.raceOnce = func() {
+			rev, published, err := other.PublishInitial(ctx)
+			if err != nil || !published {
+				t.Errorf("the other replica's PublishInitial = %v, %v", published, err)
+			}
+			winner = rev
+		}
+		if _, published, err := p.PublishInitial(ctx); err != nil || published {
+			t.Fatalf("PublishInitial that lost the race = %v, %v, want false and no error", published, err)
+		}
+		if got, _ := store.PublishedRevision(ctx); got.ID != winner.ID {
+			t.Fatalf("published revision = %s, want the winner %s", got.ID, winner.ID)
+		}
+	})
+
+	t.Run("the bundle cannot be stored", func(t *testing.T) {
+		t.Parallel()
+		store, objects := newMemStore(), &memObjects{fail: errors.New("storage down")}
+		p := newPublisher(t, store, objects, &now)
+		if _, published, err := p.PublishInitial(ctx); err == nil || published {
+			t.Fatalf("PublishInitial with storage down = %v, %v, want an error", published, err)
+		}
+		if _, err := store.PublishedRevision(ctx); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("a pointer was published without its bundle: %v", err)
+		}
+	})
+}
+
 func TestPublisher_ReissueAndRollback(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -334,8 +416,9 @@ func TestPublisher_ReissueAndRollback(t *testing.T) {
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 	p := newPublisher(t, store, objects, &now)
 
-	if _, changed, err := p.Reissue(ctx); err != nil || changed {
-		t.Fatalf("Reissue with nothing published = %v, %v", changed, err)
+	initial, changed, err := p.Reissue(ctx)
+	if err != nil || !changed || initial.Reason != ReasonPublish || len(contentOf(t, initial).Catalogs) != 0 {
+		t.Fatalf("Reissue with nothing published = %+v, %v, %v, want the initial revision", initial, changed, err)
 	}
 	sales := uuid.New()
 	store.policies[sales] = publishedPolicies(sales)

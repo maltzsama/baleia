@@ -77,20 +77,8 @@ public final class BiGatewayE2E {
             throw new IllegalStateException("empty BI key in " + keyFile);
         }
 
-        String authority = URI.create(base).getAuthority();
-        String jdbc = "jdbc:trino://" + authority + "/" + catalog + "/" + schema;
-        Properties props = new Properties();
-        props.setProperty("user", user);
-        props.setProperty("password", secret);
-        boolean secure = base.startsWith("https://");
-        props.setProperty("SSL", String.valueOf(secure));
-        if (secure) {
-            // tlsproxy.go uses a self-signed certificate; a real edge has one
-            // the clients trust.
-            props.setProperty("SSLVerification", "NONE");
-        }
-        props.setProperty("source", "baleia-e2e");
-        props.setProperty("clientTags", "e2e");
+        String jdbc = jdbcURL(catalog, schema);
+        Properties props = jdbcProperties(user, secret);
 
         try (Connection conn = DriverManager.getConnection(jdbc, props)) {
             check("Basic auth and a statement", () -> {
@@ -332,8 +320,74 @@ public final class BiGatewayE2E {
             }
         });
 
+        dataPolicies();
+
         System.out.println("BI GATEWAY E2E PASS (" + base + ", " + user + ", " + catalog + "." + schema + ", "
                 + pods.length + " replicas)");
+    }
+
+    // Data policies (ADR 0028, #1145) hold through the gateway: the member's
+    // key reads the EU rows with their e-mails, the viewer's key the US rows
+    // with the e-mails masked. cmd/e2e-seed wrote both keys.
+    private static void dataPolicies() throws Exception {
+        String memberKey = env("BI_E2E_MEMBER_KEY_FILE", "");
+        String viewerKey = env("BI_E2E_VIEWER_KEY_FILE", "");
+        if (memberKey.isBlank() || viewerKey.isBlank()) {
+            System.out.println("skip  data policies: BI_E2E_MEMBER_KEY_FILE or BI_E2E_VIEWER_KEY_FILE is unset");
+            return;
+        }
+        governedRows("member@e2e.test", memberKey, "EU", false);
+        governedRows("viewer@e2e.test", viewerKey, "US", true);
+    }
+
+    private static void governedRows(String who, String keyFile, String region, boolean masked) throws Exception {
+        String key = Files.readString(Path.of(keyFile), StandardCharsets.UTF_8).trim();
+        String name = "data policies: " + who + " reads the " + region + " rows"
+                + (masked ? " with e-mails masked" : " with their e-mails");
+        check(name, () -> {
+            try (Connection conn = DriverManager.getConnection(jdbcURL("e2e_governed", "sales"), jdbcProperties(who, key));
+                    Statement st = conn.createStatement();
+                    ResultSet rs = st.executeQuery("SELECT id, region, email FROM customers ORDER BY id")) {
+                int rows = 0;
+                while (rs.next()) {
+                    rows++;
+                    String got = rs.getString("region");
+                    String email = rs.getString("email");
+                    if (!region.equals(got)) {
+                        throw new AssertionError(who + " got a " + got + " row; the row filter allows " + region + " only");
+                    }
+                    if (masked && !"***".equals(email)) {
+                        throw new AssertionError(who + " got the e-mail " + email + "; it must be masked");
+                    }
+                    if (!masked && (email == null || !email.contains("@"))) {
+                        throw new AssertionError(who + " got the e-mail " + email + "; it must not be masked");
+                    }
+                }
+                if (rows != 2) {
+                    throw new AssertionError(who + " got " + rows + " rows, want the 2 " + region + " rows");
+                }
+            }
+        });
+    }
+
+    private static String jdbcURL(String catalog, String schema) {
+        return "jdbc:trino://" + URI.create(base).getAuthority() + "/" + catalog + "/" + schema;
+    }
+
+    private static Properties jdbcProperties(String user, String secret) {
+        Properties props = new Properties();
+        props.setProperty("user", user);
+        props.setProperty("password", secret);
+        boolean secure = base.startsWith("https://");
+        props.setProperty("SSL", String.valueOf(secure));
+        if (secure) {
+            // tlsproxy.go uses a self-signed certificate; a real edge has one
+            // the clients trust.
+            props.setProperty("SSLVerification", "NONE");
+        }
+        props.setProperty("source", "baleia-e2e");
+        props.setProperty("clientTags", "e2e");
+        return props;
     }
 
     private static void check(String name, Checked body) throws Exception {

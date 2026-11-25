@@ -43,6 +43,17 @@ func ensureTarget(ctx context.Context, q db.Querier, admin, member db.User) (db.
 	if err != nil {
 		return db.Catalog{}, db.CatalogBinding{}, err
 	}
+	// Record the connector, as an adopted Trino catalog has it: publishing data
+	// policies treats a binding of unknown connector as one that may hold
+	// views it cannot read, and refuses (ADR 0028, fail closed).
+	connector := "tpch"
+	binding, err = q.UpdateBinding(ctx, db.UpdateBindingParams{
+		ID: binding.ID, EngineCatalogName: binding.EngineCatalogName, Connector: &connector,
+		ExtraProps: []byte(`{}`), Enabled: true, LifecycleState: "active", FromStates: []string{"active"},
+	})
+	if err != nil {
+		return db.Catalog{}, db.CatalogBinding{}, err
+	}
 
 	// The member and the admin can both query it from their own workspace.
 	for _, user := range []db.User{member, admin} {
@@ -89,29 +100,38 @@ func ensureTrinoCatalog(ctx context.Context, q db.Querier, trinoURL string) erro
 	}); err != nil {
 		return err
 	}
+	client, err := adminTrino(trinoURL)
+	if err != nil {
+		return err
+	}
+	err = client.CreateCatalog(ctx, trino.CatalogSpec{Name: e2eTrinoCatalog, Connector: "tpch", Properties: props})
+	if errors.Is(err, trino.ErrCatalogExists) {
+		return nil
+	}
+	return err
+}
+
+// adminTrino logs in to Trino as Baleia's admin identity. The dev Trino
+// requires HTTPS and a password (#647): E2E_TRINO_PASSWORD and the CA bundle
+// in E2E_TRINO_CA_FILE.
+func adminTrino(trinoURL string) (*trino.Client, error) {
 	user := os.Getenv("E2E_TRINO_ADMIN_USER")
 	if user == "" {
 		user = "baleia_admin"
 	}
-	// The dev Trino requires HTTPS and a password (#647): E2E_TRINO_PASSWORD
-	// and the CA bundle in E2E_TRINO_CA_FILE.
 	var ca string
 	if f := os.Getenv("E2E_TRINO_CA_FILE"); f != "" {
 		b, err := os.ReadFile(f)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		ca = string(b)
 	}
 	hc, err := trino.Authenticated(&http.Client{Transport: &http.Transport{}, Timeout: time.Minute}, user, os.Getenv("E2E_TRINO_PASSWORD"), ca)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	err = trino.NewWithHTTPClient(trinoURL, user, hc).CreateCatalog(ctx, trino.CatalogSpec{Name: e2eTrinoCatalog, Connector: "tpch", Properties: props})
-	if errors.Is(err, trino.ErrCatalogExists) {
-		return nil
-	}
-	return err
+	return trino.NewWithHTTPClient(trinoURL, user, hc), nil
 }
 
 // ensureQueueCapacity pins the default Trino engine's interactive queue to one

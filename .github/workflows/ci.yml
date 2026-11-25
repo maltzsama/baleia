@@ -289,6 +289,32 @@ jobs:
           BALEIA_TEST_DATABASE_URL: postgres://postgres:baleia_dev@127.0.0.1:5432/postgres?sslmode=disable
         run: go test -count=1 -tags contract -v ./internal/contract/...
 
+  # The data policy Rego (ADR 0028): strict check, formatting and the tests
+  # that replay the recorded Trino OPA inputs, with the OPA release the chart
+  # pins. The Contract job checks that the plugin release ships the same Rego.
+  opa:
+    name: OPA
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    env:
+      OPA_VERSION: v1.22.4
+      OPA_SHA256: 35e3b352e715e80624ead6c89930d8585f6f7d94cdc409eb2a9fe36620dcccba
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install OPA ${{ env.OPA_VERSION }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/opa" "https://github.com/open-policy-agent/opa/releases/download/${OPA_VERSION}/opa_linux_amd64_static"
+          echo "${OPA_SHA256}  $RUNNER_TEMP/opa" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/opa"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Check, format and test the Rego
+        run: |
+          opa check --strict deploy/opa/baleia
+          opa fmt --list --fail deploy/opa/baleia
+          opa test -v deploy/opa/baleia
+
   docs:
     name: Docs links
     runs-on: ubuntu-latest
@@ -415,3 +441,5 @@ jobs:
         run: ./scripts/verify-dev-sync.sh
       - name: Trino security ConfigMaps are immutable and mounted
         run: ./scripts/verify-trino-security-config.sh
+      - name: Data policies chart wiring (OPA sidecar)
+        run: ./scripts/verify-data-policies-chart.sh

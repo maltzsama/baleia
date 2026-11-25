@@ -392,3 +392,39 @@ func TestConfig_DataPoliciesOPA(t *testing.T) {
 		t.Fatalf("off: %v", err)
 	}
 }
+
+func TestConfig_DefaultEngineIDFromEnv(t *testing.T) {
+	const id = "0b9c7a4e-5f1d-4c2a-9e8b-3d6f1a2b4c5d"
+	t.Setenv("BALEIA_DEFAULT_ENGINE_ID", id)
+	if got := Load().DefaultEngineID; got != id {
+		t.Fatalf("DefaultEngineID = %q, want %q", got, id)
+	}
+}
+
+func TestConfig_DefaultEngineID(t *testing.T) {
+	t.Parallel()
+	const id = "0b9c7a4e-5f1d-4c2a-9e8b-3d6f1a2b4c5d"
+	tests := []struct {
+		name    string
+		id      string
+		wantErr bool
+	}{
+		{name: "unset", id: ""},
+		{name: "uuid", id: id},
+		{name: "not a uuid", id: "default", wantErr: true},
+		{name: "the nil uuid", id: "00000000-0000-0000-0000-000000000000", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			c := &Config{JWTSecret: "a-long-random-value-not-the-default", DefaultEngineID: tt.id}
+			err := c.Validate()
+			if tt.wantErr != (err != nil) {
+				t.Fatalf("Validate() = %v, want error %t", err, tt.wantErr)
+			}
+			if tt.wantErr && !strings.Contains(err.Error(), "BALEIA_DEFAULT_ENGINE_ID") {
+				t.Fatalf("Validate() = %v, want an error naming BALEIA_DEFAULT_ENGINE_ID", err)
+			}
+		})
+	}
+}

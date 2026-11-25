@@ -2,7 +2,7 @@ BALEIA_DIR ?= $(CURDIR)
 
 # The baleia-trino-catalog-store release Baleia runs and tests its contract
 # against (#88, #39): the single pin for compose, the dev cluster and CI.
-BALEIA_PLUGIN_VERSION ?= 0.10.2
+BALEIA_PLUGIN_VERSION ?= 0.11.0
 TRINO_VERSION         ?= 484
 BALEIA_PLUGIN_TARBALL  = baleia-catalog-store-$(BALEIA_PLUGIN_VERSION)+trino$(TRINO_VERSION).tar.gz
 BALEIA_PLUGIN_URL     ?= https://github.com/maltzsama/baleia-trino-catalog-store/releases/download/v$(BALEIA_PLUGIN_VERSION)/$(BALEIA_PLUGIN_TARBALL)
@@ -15,7 +15,7 @@ JWT_SECRET ?= dev-secret-not-for-production
 # override rule: an exported or command-line value wins.
 BALEIA_ENCRYPTION_KEY ?= dev-encryption-key-not-for-production-0123
 
-.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-seed e2e-forward e2e-bi e2e-openmetadata e2e-down
+.PHONY: dev worker migrate-credentials migrate-oidc-providers store-migrate store-migrate-down store-migrate-status generate lint lint-all vuln deadcode test-authz build build-web build-all seed-tpch contract-fetch up down down-v logs restart-trino k8s-up k8s-plugin-bundle k8s-data-policy-key k8s-forward k8s-ldap-forward k8s-logs k8s-seed-tpch k8s-down k8s-source k8s-source-down e2e e2e-seed e2e-forward e2e-bi e2e-opa-down e2e-openmetadata e2e-down
 
 dev:
 	JWT_SECRET=$(JWT_SECRET) BALEIA_ENCRYPTION_KEY=$(BALEIA_ENCRYPTION_KEY) BALEIA_AGENTS_ENABLED=true SMTP_HOST=localhost SMTP_PORT=1025 SMTP_FROM=noreply@baleia.io PORT=9000 go run ./cmd/api
@@ -27,7 +27,8 @@ worker:
 # The plugin is never built here: compose and the dev cluster install the
 # released tarball (sha256-verified) into the official Trino image.
 
-# contract-fetch extracts contract/ of the pinned release into
+# contract-fetch extracts contract/ and opa/ (the Rego bundle and the OPA
+# access-control properties, ADR 0028) of the pinned release into
 # internal/contract/testdata for the contract tests (go test -tags contract).
 .PHONY: contract-fetch
 contract-fetch:
@@ -35,7 +36,7 @@ contract-fetch:
 	curl -fsSL -o internal/contract/testdata/p.tgz "$(BALEIA_PLUGIN_URL)"
 	curl -fsSL -o internal/contract/testdata/p.sha256 "$(BALEIA_PLUGIN_URL).sha256"
 	cd internal/contract/testdata && echo "$$(cut -d' ' -f1 p.sha256)  p.tgz" | sha256sum -c - \
-		&& tar -xzf p.tgz contract VERSION \
+		&& tar -xzf p.tgz contract opa VERSION \
 		&& test "$$(cat VERSION)" = "$(BALEIA_PLUGIN_VERSION)+trino$(TRINO_VERSION)" \
 		&& rm p.tgz p.sha256
 	@echo ">>> contract of plugin $$(cat internal/contract/testdata/VERSION) in internal/contract/testdata"
@@ -101,6 +102,9 @@ E2E_TRINO_CA ?= $(or $(TMPDIR),/tmp)/baleia-e2e-trino-ca.pem
 BI_E2E_JDBC_VERSION ?= 484
 BI_E2E_JDBC_JAR ?= $(or $(TMPDIR),/tmp)/trino-jdbc-$(BI_E2E_JDBC_VERSION).jar
 BI_E2E_KEY_FILE ?= $(or $(TMPDIR),/tmp)/baleia-e2e-bi-key.secret
+# The member's and the viewer's BI keys, for the data policy checks (#1145).
+BI_E2E_MEMBER_KEY_FILE ?= $(or $(TMPDIR),/tmp)/baleia-e2e-bi-member-key.secret
+BI_E2E_VIEWER_KEY_FILE ?= $(or $(TMPDIR),/tmp)/baleia-e2e-bi-viewer-key.secret
 BI_E2E_URL ?= https://localhost:8444
 BI_E2E_TLS_PROXY ?= $(or $(TMPDIR),/tmp)/baleia-bi-e2e-tlsproxy
 # Runs against the minikube dev cluster (not compose). Port-forwards the API,
@@ -113,10 +117,12 @@ e2e:
 	$(MAKE) e2e-seed
 	$(MAKE) e2e-bi
 	cd web && E2E_BASE_URL=http://localhost:8080 npx playwright test
+	$(MAKE) e2e-opa-down
 
 # Forwards the cluster's ports and seeds it with cmd/e2e-seed (accounts, the
-# e2e_tpch target, a BI key, semantic content). `e2e` and the OpenMetadata
-# nightly call it after k8s-up.
+# e2e_tpch target, a BI key, semantic content, and the data policies on
+# e2e_governed with the member's and the viewer's BI keys). `e2e` and the
+# OpenMetadata nightly call it after k8s-up.
 e2e-seed:
 	$(MAKE) e2e-forward
 	@echo "waiting for the API on :8080…"
@@ -132,6 +138,9 @@ e2e-seed:
 		E2E_TRINO_CA_FILE=$(E2E_TRINO_CA) \
 		E2E_TRINO_PASSWORD="$$pw" \
 		E2E_BI_KEY_FILE=$(BI_E2E_KEY_FILE) \
+		E2E_POLARIS_URL=http://localhost:18181 \
+		E2E_BI_MEMBER_KEY_FILE=$(BI_E2E_MEMBER_KEY_FILE) \
+		E2E_BI_VIEWER_KEY_FILE=$(BI_E2E_VIEWER_KEY_FILE) \
 		go run -tags e2e ./cmd/e2e-seed
 
 e2e-forward:
@@ -139,6 +148,7 @@ e2e-forward:
 	kubectl -n $(K8S_NS) port-forward svc/postgres 5433:5432 &
 	kubectl -n $(K8S_NS) port-forward svc/baleia-trino 8081:8443 &
 	kubectl -n $(K8S_NS) port-forward svc/baleia-bi-gateway 8443:8443 &
+	kubectl -n $(K8S_NS) port-forward svc/polaris 18181:8181 &
 
 # Drives the Trino protocol through the gateway with the Trino JDBC driver:
 # Basic auth, a query, multi-page follows, every replica validating a nextUri,
@@ -169,8 +179,15 @@ e2e-bi:
 	curl -sSk -o /dev/null $(BI_E2E_URL)/v1/info || { echo "e2e-bi: the gateway is not reachable at $(BI_E2E_URL)" >&2; exit 1; }; \
 	BI_E2E_URL=$(BI_E2E_URL) BI_E2E_USER=admin@e2e.test \
 		BI_E2E_KEY_FILE=$(BI_E2E_KEY_FILE) BI_E2E_CATALOG=e2e_tpch BI_E2E_SCHEMA=tiny \
+		BI_E2E_MEMBER_KEY_FILE=$(BI_E2E_MEMBER_KEY_FILE) BI_E2E_VIEWER_KEY_FILE=$(BI_E2E_VIEWER_KEY_FILE) \
 		BI_E2E_PODS="$${pods#,}" \
 		java -cp $(BI_E2E_JDBC_JAR) scripts/bi-e2e/BiGatewayE2E.java
+
+# Data policies fail closed (ADR 0028, #1145): with the coordinator's OPA
+# stopped, every statement fails, the trusted admin's too, and the policies
+# hold again once it resumes. It pauses OPA, so `e2e` runs it last.
+e2e-opa-down:
+	scripts/data-policies-e2e/opa-down.sh
 
 # Runs the pinned OpenMetadata Trino connector against the already seeded BI
 # gateway. The target is separate from e2e because OpenMetadata starts a
@@ -269,6 +286,16 @@ k8s-plugin-bundle:
 		-t $(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG) -f deploy/dev/plugins.Dockerfile .
 	minikube -p $(K8S_PROFILE) image load $(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG)
 
+# The dev cluster runs with data policies on (ADR 0028). Their bundle signing
+# key pair is made once per workstation and never committed. K8S_HELM_ARGS
+# passes extra flags to the chart.
+K8S_DATA_POLICY_KEY ?= $(or $(TMPDIR),/tmp)/baleia-dev-data-policy.pem
+K8S_HELM_ARGS       ?=
+
+k8s-data-policy-key:
+	@test -s $(K8S_DATA_POLICY_KEY) || openssl genrsa -out $(K8S_DATA_POLICY_KEY) 2048
+	@openssl rsa -in $(K8S_DATA_POLICY_KEY) -pubout -out $(K8S_DATA_POLICY_KEY).pub 2>/dev/null
+
 # Start minikube, deploy the dependency stack, build baleia:dev into the node,
 # then install the chart. The build runs on the node's Docker daemon with the
 # node's network: the node's Docker bridge has no IPv6, and apk hangs on the
@@ -281,11 +308,15 @@ k8s-up:
 	kubectl apply -k deploy/dev
 	eval "$$(minikube -p $(K8S_PROFILE) docker-env --shell bash)" && docker build --network=host -t baleia:dev .
 	$(MAKE) k8s-plugin-bundle
+	$(MAKE) k8s-data-policy-key
 	helm upgrade --install baleia deploy/helm/baleia -n $(K8S_NS) \
 		-f deploy/dev/values-dev.yaml \
 		--set-string config.BALEIA_PLUGIN_VERSION=$(K8S_PLUGIN_VERSION) \
 		--set trino.plugin.image=$(K8S_PLUGIN_IMAGE):$(K8S_PLUGIN_TAG) \
 		--set trino.plugin.version=$(K8S_PLUGIN_VERSION) \
+		--set-file secrets.values.BALEIA_DATA_POLICY_SIGNING_KEY=$(K8S_DATA_POLICY_KEY) \
+		--set-file trino.dataPolicies.publicKey=$(K8S_DATA_POLICY_KEY).pub \
+		$(K8S_HELM_ARGS) \
 		--wait --timeout 10m
 	# The image tag is mutable ("dev") and the chart has no checksum
 	# annotation, so the upgrade leaves the pod spec unchanged and the API

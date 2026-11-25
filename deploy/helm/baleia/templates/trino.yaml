@@ -2,11 +2,61 @@
 immutable ConfigMap whose name carries a hash of its content, so editing it in
 place is impossible: a change in values renders a new ConfigMap and rolls the
 coordinator instead. */}}
+{{- /* OPA's configuration (ADR 0028). The data bundle comes from the API,
+signed with the deployment's key and kept on disk; the Rego is the policy
+bundle install-plugin copied out of the verified plugin release. OPA reports
+its status under the default engine's id, read from the environment. */}}
+{{- define "baleia.opaConfig" -}}
+services:
+  baleia:
+    url: http://{{ include "baleia.fullname" . }}-api.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.api.port }}/opa/
+    credentials:
+      bearer:
+        token_path: /var/run/baleia-opa/token
+labels:
+  baleia_engine_id: ${BALEIA_DEFAULT_ENGINE_ID}
+bundles:
+  baleia:
+    service: baleia
+    resource: bundles/baleia.tar.gz
+    persist: true
+    polling:
+      min_delay_seconds: {{ .Values.trino.dataPolicies.opa.polling.minDelaySeconds | int }}
+      max_delay_seconds: {{ .Values.trino.dataPolicies.opa.polling.maxDelaySeconds | int }}
+    signing:
+      keyid: baleia
+  policy:
+    resource: file:///policy/policy.tar.gz
+keys:
+  baleia:
+    algorithm: RS256
+    key: |
+{{ .Values.trino.dataPolicies.publicKey | trim | indent 6 }}
+persistence_directory: /var/opa
+status:
+  service: baleia
+{{- end }}
+
+{{- /* Shell lines of install-plugin that copy the release's opa/ (from $SRC)
+into the policy volume. A release without it (before 0.11.0) stops the pod:
+Trino must never start without the OPA properties it was configured with. */}}
+{{- define "baleia.installPolicy" -}}
+for f in baleia-opa-policy.tar.gz opa-access-control.properties; do
+  test -s "$SRC/$f" || { echo "install-plugin: the plugin release has no opa/$f; data policies need plugin 0.11.0 or later" >&2; exit 1; }
+done
+cp "$SRC/baleia-opa-policy.tar.gz" /policy/policy.tar.gz
+cp "$SRC/opa-access-control.properties" /policy/opa-access-control.properties
+{{- end }}
+
 {{- define "baleia.trinoConfigData" }}
   config.properties: |
 {{- $config := .Files.Get "files/trino/config.properties" }}
 {{- if not (include "baleia.trinoAuth" .) }}
 {{- $config = regexReplaceAll `(?s)# --- authentication \(#647\).*# --- end authentication\n` $config "" }}
+{{- end }}
+{{- if include "baleia.dataPolicies" . }}
+{{- /* OPA is the third access control, after the base rules and the guard. */}}
+{{- $config = regexReplaceAll `(?m)^(access-control\.config-files=.*)$` $config "${1},/etc/trino/opa/opa-access-control.properties" }}
 {{- end }}
 {{ $config | indent 4 }}{{ if .Values.trino.queryEvents.enabled }}
     event-listener.config-files=/etc/trino/event-listener.properties{{ end }}
@@ -50,6 +100,14 @@ coordinator instead. */}}
   {{- end }}
   baleia-catalog-guard.properties: |
 {{ .Files.Get "files/trino/baleia-catalog-guard.properties" | replace "baleia.admin-users=baleia_admin" (printf "baleia.admin-users=%s" .Values.config.BALEIA_TRINO_ADMIN_USER) | replace "baleia.allow-unauthenticated-admin=false" (printf "baleia.allow-unauthenticated-admin=%t" (and (not (include "baleia.trinoAuth" .)) .Values.trino.catalogGuard.allowUnauthenticatedAdmin)) | indent 4 }}
+  {{- if include "baleia.dataPolicies" . }}
+  opa-config.yaml: |
+{{ include "baleia.opaConfig" . | indent 4 }}
+  # The identities OPA never filters or masks: the guard's admin and service
+  # users. Deployment configuration, never part of the data bundle.
+  trusted.json: |
+    {{ dict "baleia_deployment" (dict "trusted_identities" (list .Values.config.BALEIA_TRINO_ADMIN_USER (.Values.config.BALEIA_TRINO_SERVICE_USER | default "baleia"))) | toJson }}
+  {{- end }}
 {{- end }}
 {{- if .Values.trino.enabled }}
 {{- $trinoConfigHash := include "baleia.trinoConfigData" . | sha256sum | trunc 10 }}
@@ -71,6 +129,11 @@ metadata:
     app.kubernetes.io/component: trino
 spec:
   replicas: 1
+  {{- if and (include "baleia.dataPolicies" .) .Values.trino.dataPolicies.persistence.enabled }}
+  # OPA's bundle volume is ReadWriteOnce: the old pod releases it first.
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "baleia.selectorLabels" . | nindent 6 }}
@@ -90,20 +153,36 @@ spec:
         checksum/trino-password: {{ .Values.secrets.values.BALEIA_TRINO_PASSWORD | default "" | sha256sum }}
         {{- end }}
     spec:
+      {{- if include "baleia.dataPolicies" . }}
+      # Trino's and OPA's user, so OPA can write its bundle volume.
+      securityContext:
+        fsGroup: 1000
+      {{- end }}
       initContainers:
         # The plugin is either bundled (trino.plugin.image: a small image with
         # /baleia-catalog-store, for air-gapped/restricted networks) or
         # downloaded from the release tarball (default), verified by sha256 and
         # unpacked into the shared emptyDir. Official Trino image, never a custom
-        # one.
+        # one. With data policies on, the same release's opa/ (the Rego bundle
+        # and Trino's OPA properties, ADR 0028) goes into the policy volume,
+        # which Trino and OPA mount read-only.
         {{- if .Values.trino.plugin.image }}
         - name: install-plugin
           image: {{ .Values.trino.plugin.image }}
           imagePullPolicy: {{ .Values.trino.plugin.imagePullPolicy | default .Values.image.pullPolicy }}
           command: ["/bin/sh", "-ec"]
-          args: ["cp -a /baleia-catalog-store/. /plugin/"]
+          args:
+            - |
+              cp -a /baleia-catalog-store/. /plugin/
+              {{- if include "baleia.dataPolicies" . }}
+              SRC=/opa
+              {{- include "baleia.installPolicy" . | nindent 14 }}
+              {{- end }}
           volumeMounts:
             - { name: plugin, mountPath: /plugin }
+            {{- if include "baleia.dataPolicies" . }}
+            - { name: policy, mountPath: /policy }
+            {{- end }}
         {{- else }}
         - name: install-plugin
           image: docker.io/library/alpine:3.20
@@ -116,11 +195,18 @@ spec:
               echo "$(cat /tmp/p.sha256)  /tmp/p.tgz" | sha256sum -c -
               tar -xzf /tmp/p.tgz -C /tmp
               cp -a /tmp/baleia-catalog-store/. /plugin/
+              {{- if include "baleia.dataPolicies" . }}
+              SRC=/tmp/opa
+              {{- include "baleia.installPolicy" . | nindent 14 }}
+              {{- end }}
           env:
             - name: PLUGIN_URL
               value: {{ include "baleia.pluginURL" . | quote }}
           volumeMounts:
             - { name: plugin, mountPath: /plugin }
+            {{- if include "baleia.dataPolicies" . }}
+            - { name: policy, mountPath: /policy }
+            {{- end }}
         {{- end }}
         {{- if include "baleia.trinoAuth" . }}
         # The password file (bcrypt, from BALEIA_TRINO_PASSWORD) and the PEM
@@ -264,9 +350,89 @@ spec:
               mountPath: /etc/trino/event-listener.properties
               subPath: event-listener.properties
             {{- end }}
+            {{- if include "baleia.dataPolicies" . }}
+            # opa-access-control.properties of the plugin release.
+            - name: policy
+              mountPath: /etc/trino/opa
+              readOnly: true
+            {{- end }}
+        {{- if include "baleia.dataPolicies" . }}
+        # OPA (ADR 0028): its decision API listens on localhost only, so nothing
+        # outside the pod can query it or change its policy; the diagnostic
+        # port serves /health and /metrics. The pod is ready only once OPA has
+        # activated both bundles, so the Service never routes a query to a
+        # coordinator without its policies.
+        - name: opa
+          image: {{ .Values.trino.dataPolicies.opa.image }}
+          args:
+            - run
+            - --server
+            - --addr=127.0.0.1:8181
+            - --diagnostic-addr=0.0.0.0:{{ .Values.trino.dataPolicies.opa.diagnosticPort | int }}
+            - --config-file=/etc/opa/config.yaml
+            - /etc/opa/trusted.json
+          env:
+            # OPA's labels name the engine its status reports are about.
+            - name: BALEIA_DEFAULT_ENGINE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "baleia.secretName" . }}
+                  key: BALEIA_DEFAULT_ENGINE_ID
+          ports:
+            - { name: opa-diag, containerPort: {{ .Values.trino.dataPolicies.opa.diagnosticPort | int }} }
+          readinessProbe:
+            httpGet: { path: "/health?bundles=true", port: opa-diag }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: opa-diag }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          {{- with .Values.trino.dataPolicies.opa.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: trino-config
+              mountPath: /etc/opa/config.yaml
+              subPath: opa-config.yaml
+            - name: trino-config
+              mountPath: /etc/opa/trusted.json
+              subPath: trusted.json
+            - name: policy
+              mountPath: /policy
+              readOnly: true
+            - name: opa-token
+              mountPath: /var/run/baleia-opa
+              readOnly: true
+            - name: opa-bundles
+              mountPath: /var/opa
+        {{- end }}
       volumes:
         - name: plugin
           emptyDir: {}
+        {{- if include "baleia.dataPolicies" . }}
+        - name: policy
+          emptyDir: {}
+        - name: opa-token
+          secret:
+            secretName: {{ include "baleia.secretName" . }}
+            items: [{ key: BALEIA_OPA_TOKEN, path: token }]
+        - name: opa-bundles
+          {{- if .Values.trino.dataPolicies.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "baleia.fullname" . }}-trino-opa
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
         - name: trino-config
           configMap:
             name: {{ include "baleia.fullname" . }}-trino-config-{{ $trinoConfigHash }}
@@ -295,4 +461,23 @@ spec:
     {{- else }}
     - { name: http, port: 8080, targetPort: http }
     {{- end }}
+{{- if and (include "baleia.dataPolicies" .) .Values.trino.dataPolicies.persistence.enabled }}
+---
+# OPA's last activated data bundle (persist: true, ADR 0028).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "baleia.fullname" . }}-trino-opa
+  labels:
+    {{- include "baleia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trino
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.trino.dataPolicies.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.trino.dataPolicies.persistence.size }}
+{{- end }}
 {{- end }}

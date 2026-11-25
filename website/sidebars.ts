@@ -32,7 +32,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Running Baleia',
-      items: ['configuration', 'operations', 'secrets', 'observability', 'ldap']
+      items: ['configuration', 'operations', 'secrets', 'data-policies', 'observability', 'ldap']
     },
     {
       type: 'category',

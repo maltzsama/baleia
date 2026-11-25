@@ -109,6 +109,61 @@ func TestOPAHandler_ReceiveStatus(t *testing.T) {
 	}
 }
 
+// TestOPAHandler_ReceiveStatusDefaultEngineAlias: the default Trino engine's
+// OPA reports under BALEIA_DEFAULT_ENGINE_ID, and its status is recorded on
+// the default engine's own id.
+func TestOPAHandler_ReceiveStatusDefaultEngineAlias(t *testing.T) {
+	t.Parallel()
+	alias := uuid.New()
+	post := func(h *OPAHandler, label string) int {
+		body := `{"labels":{"baleia_engine_id":"` + label + `"},"bundles":{"baleia":{"active_revision":"r1"}}}`
+		req := httptest.NewRequest(http.MethodPost, StatusPath, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+h.Token)
+		rec := httptest.NewRecorder()
+		h.ReceiveStatus(rec, req)
+		return rec.Code
+	}
+
+	t.Run("the alias names the default engine", func(t *testing.T) {
+		t.Parallel()
+		h, store, _, _, engine := opaHandler(t)
+		h.DefaultEngineAlias = alias
+		h.DefaultEngine = func(context.Context) (uuid.UUID, error) { return engine, nil }
+		if code := post(h, alias.String()); code != http.StatusNoContent {
+			t.Fatalf("report under the alias = %d", code)
+		}
+		if len(store.statuses) != 1 || store.statuses[0].EngineID != engine {
+			t.Fatalf("recorded = %+v, want the default engine %s", store.statuses, engine)
+		}
+		// An engine's own id still works, as for an external Trino's OPA.
+		if code := post(h, engine.String()); code != http.StatusNoContent {
+			t.Fatalf("report under the engine id = %d", code)
+		}
+	})
+
+	t.Run("no default engine", func(t *testing.T) {
+		t.Parallel()
+		h, store, _, _, _ := opaHandler(t)
+		h.DefaultEngineAlias = alias
+		h.DefaultEngine = func(context.Context) (uuid.UUID, error) { return uuid.Nil, ErrNotFound }
+		if code := post(h, alias.String()); code != http.StatusNotFound {
+			t.Fatalf("alias without a default engine = %d, want 404", code)
+		}
+		if len(store.statuses) != 0 {
+			t.Fatalf("recorded %+v without a default engine", store.statuses)
+		}
+	})
+
+	t.Run("no alias configured", func(t *testing.T) {
+		t.Parallel()
+		h, _, _, _, engine := opaHandler(t)
+		h.DefaultEngine = func(context.Context) (uuid.UUID, error) { return engine, nil }
+		if code := post(h, alias.String()); code != http.StatusNotFound {
+			t.Fatalf("an unknown id without an alias = %d, want 404", code)
+		}
+	})
+}
+
 // TestOPAPaths pins the paths the server mounts as literals for the
 // authorization coverage audit.
 func TestOPAPaths(t *testing.T) {
