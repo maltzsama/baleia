@@ -349,3 +349,7 @@ func TestBindingAPI_DataPoliciesUnenforced(t *testing.T) {
 func (q *bindingQuerier) LockEngineForUpdate(ctx context.Context, id db.UUID) (db.Engine, error) {
 	return q.GetEngineByID(ctx, id)
 }
+
+func (q *bindingQuerier) LockCatalogForUpdate(context.Context, db.UUID) error {
+	return nil
+}

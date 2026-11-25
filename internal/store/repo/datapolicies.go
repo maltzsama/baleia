@@ -206,12 +206,21 @@ func (r *DataPolicies) CreateRevision(ctx context.Context, rev datapolicy.Revisi
 // the other's change. A first publication (base uuid.Nil) inserts the pointer
 // and never overwrites one: a concurrent first publication that wrote it
 // first, or took the revision number first, makes it fail the same way. A
-// publish or a rollback also locks the engines its catalogs are bound to and
-// fails with datapolicy.ErrPoliciesUnenforced when one does not enforce data
-// policies (requireEnforcingEngines).
+// publish or a rollback first locks the catalogs it holds policies for
+// (lockPoliciedCatalogs), then the engines they are bound to, and fails with
+// datapolicy.ErrPoliciesUnenforced when one does not enforce data policies
+// (requireEnforcingEngines).
 func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revision, base uuid.UUID) (datapolicy.Revision, error) {
 	var out datapolicy.Revision
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var policied []string
+		if rev.Reason == datapolicy.ReasonPublish || rev.Reason == datapolicy.ReasonRollback {
+			catalogs, err := lockPoliciedCatalogs(tx, rev.Content)
+			if err != nil {
+				return err
+			}
+			policied = catalogs
+		}
 		read := tx.Where("id = ?", true)
 		if base != uuid.Nil {
 			read = read.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate})
@@ -231,10 +240,8 @@ func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revis
 		if current != want {
 			return datapolicy.ErrVersionConflict
 		}
-		if rev.Reason == datapolicy.ReasonPublish || rev.Reason == datapolicy.ReasonRollback {
-			if err := requireEnforcingEngines(tx, rev.Content); err != nil {
-				return err
-			}
+		if err := requireEnforcingEngines(tx, policied); err != nil {
+			return err
 		}
 		created, err := createRevision(tx, rev)
 		if err != nil {
@@ -259,17 +266,18 @@ func (r *DataPolicies) PublishRevision(ctx context.Context, rev datapolicy.Revis
 	return out, err
 }
 
-// requireEnforcingEngines locks, in id order, every engine bound to a
-// catalog content holds policies for, and fails with
-// datapolicy.ErrPoliciesUnenforced when one does not enforce data policies.
-// Turning an engine's data_policies off takes the same row lock before it
-// checks the published revision, so the two cannot interleave (ADR 0028). A
+// lockPoliciedCatalogs locks, in id order, the rows of the catalogs content
+// holds policies for and returns their ids. A new binding locks its catalog
+// before it checks the published revision, so a binding and the publish of
+// its catalog's policies cannot interleave (ADR 0028). It runs before any
+// other read of the transaction, so on MySQL and MariaDB the snapshot the
+// later reads use already holds every binding that committed first. A
 // re-issue skips it: it never adds a policy, and refusing it would let the
 // lease lapse for every user.
-func requireEnforcingEngines(tx *gorm.DB, raw []byte) error {
+func lockPoliciedCatalogs(tx *gorm.DB, raw []byte) ([]string, error) {
 	var content datapolicy.Content
 	if err := json.Unmarshal(raw, &content); err != nil {
-		return fmt.Errorf("datapolicy revision: %w", err)
+		return nil, fmt.Errorf("datapolicy revision: %w", err)
 	}
 	catalogs := make([]string, 0, len(content.Catalogs))
 	for key, catalog := range content.Catalogs {
@@ -277,6 +285,23 @@ func requireEnforcingEngines(tx *gorm.DB, raw []byte) error {
 			catalogs = append(catalogs, key)
 		}
 	}
+	if len(catalogs) == 0 {
+		return nil, nil
+	}
+	var rows []model.Catalog
+	if err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+		Where("id IN ?", catalogs).Order("id").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return catalogs, nil
+}
+
+// requireEnforcingEngines locks, in id order, every engine bound to one of
+// catalogs, and fails with datapolicy.ErrPoliciesUnenforced when one does not
+// enforce data policies. Turning an engine's data_policies off takes the same
+// row lock before it checks the published revision, so the two cannot
+// interleave (ADR 0028).
+func requireEnforcingEngines(tx *gorm.DB, catalogs []string) error {
 	if len(catalogs) == 0 {
 		return nil
 	}

@@ -205,9 +205,14 @@ func (h *CatalogHandlers) CreateCatalogBinding(ctx context.Context, request Crea
 
 	var created db.CatalogBinding
 	txErr := h.inTx(ctx, func(qtx db.Querier) error {
-		// The engine row stays locked until the binding commits, so turning
-		// its data_policies flag off cannot slip in between the check and
-		// the insert (ADR 0028).
+		// The catalog and engine rows stay locked until the binding commits,
+		// so neither a publish or rollback of the catalog's policies nor
+		// turning the engine's data_policies flag off can slip in between the
+		// check and the insert (ADR 0028). A publish locks catalogs before
+		// engines too.
+		if err := qtx.LockCatalogForUpdate(ctx, t.catalog.ID); err != nil {
+			return err
+		}
 		eng, err := qtx.LockEngineForUpdate(ctx, t.engine.ID)
 		if err != nil {
 			return err

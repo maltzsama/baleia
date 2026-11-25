@@ -241,6 +241,66 @@ func TestDataPolicies_PublishRequiresEnforcingEngines(t *testing.T) {
 	}
 }
 
+func TestDataPolicies_PublishRacingABinding(t *testing.T) {
+	t.Parallel()
+	f, r, catalogID, author := dataPolicyFixture(t)
+	ctx := context.Background()
+	lease := time.Now().Add(time.Hour)
+	content := policiedContent(t, catalogID, author)
+	enforce(t, f, true)
+	first, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonPublish, []byte(`{"catalogs":{}}`), lease, &author), uuid.Nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	conn := model.CatalogConnection{
+		ID: model.UUID(NewUUID()), Name: model.Text("unenforcing-" + NewUUID()[:8]),
+		Type: "trino", URL: "http://trino-b.test", CreatedAt: now, UpdatedAt: now,
+	}
+	if err := f.gdb.Create(&conn).Error; err != nil {
+		t.Fatal(err)
+	}
+	unenforcing := model.Engine{
+		ID: model.UUID(NewUUID()), Name: model.Text("trino-b"), Kind: "trino", Class: "federated",
+		ConnectionID: conn.ID, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := f.gdb.Create(&unenforcing).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// A binding of the catalog to an engine that does not enforce, made
+	// under the catalog's row lock as CreateCatalogBinding does, while a
+	// rollback brings the catalog's policies back: the rollback waits for
+	// the lock and sees the binding.
+	tx := f.gdb.Begin()
+	if err := New(tx).LockCatalogForUpdate(ctx, PGUUID(string(f.catalog))); err != nil {
+		tx.Rollback()
+		t.Fatal(err)
+	}
+	if err := tx.Create(&model.CatalogBinding{
+		ID: model.UUID(NewUUID()), CatalogID: f.catalog, EngineID: unenforcing.ID,
+		EngineCatalogName: "lake_b", Mode: "adopted", CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		tx.Rollback()
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.PublishRevision(ctx, datapolicy.NewRevision(datapolicy.ReasonRollback, content, lease, &author), first.ID)
+		done <- err
+	}()
+	time.Sleep(200 * time.Millisecond)
+	if err := tx.Commit().Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, datapolicy.ErrPoliciesUnenforced) {
+		t.Fatalf("rollback racing a binding to an engine that does not enforce = %v, want ErrPoliciesUnenforced", err)
+	}
+	if err := New(f.gdb).LockCatalogForUpdate(ctx, PGUUID(NewUUID())); !errors.Is(err, db.ErrNoRows) {
+		t.Fatalf("LockCatalogForUpdate of an unknown catalog = %v, want ErrNoRows", err)
+	}
+}
+
 // policiedContent is a revision's content with one row filter on catalogID.
 func policiedContent(t *testing.T, catalogID, author uuid.UUID) []byte {
 	t.Helper()
