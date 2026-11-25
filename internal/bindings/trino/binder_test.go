@@ -700,7 +700,7 @@ func TestSupports(t *testing.T) {
 func TestProject_SecretReference(t *testing.T) {
 	t.Setenv("BALEIA_TEST_PASSWORD", "s3cret")
 	b := newTestBinder()
-	ref := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "@baleia-secret[env:BALEIA_TEST_PASSWORD]"})
+	ref := allowedEnvConfig(t, "BALEIA_TEST_PASSWORD", map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "@baleia-secret[env:BALEIA_TEST_PASSWORD]"})
 	lit := cfg(connections.KindPostgreSQL, map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "s3cret"})
 
 	pRef, err := b.Project(bindings.BindingSpec{EngineCatalog: "c"}, ref)
@@ -723,6 +723,33 @@ func TestProject_SecretReference(t *testing.T) {
 	}
 	if pLit.Properties["connection-password"] != "s3cret" || len(pLit.SecretKeys) != 1 {
 		t.Errorf("literal secret not projected: %v %v", pLit.Properties, pLit.SecretKeys)
+	}
+}
+
+// allowedEnvConfig is a PostgreSQL Config whose resolver allows the env
+// variable name, as one built from the composition root's registry with
+// BALEIA_SECRET_ENV_ALLOW set.
+func allowedEnvConfig(t *testing.T, name string, values, secrets map[string]string) connections.Config {
+	t.Helper()
+	c := testProviderSource().WithSecrets(connections.SecretResolver{EnvAllow: []string{name}}).NewConfig(db.UUID{}, connections.KindPostgreSQL)
+	maps.Copy(c.Values, values)
+	maps.Copy(c.Secrets, secrets)
+	return c
+}
+
+// TestProject_RefusedEnvReference: an env: reference outside the allow-list
+// (one stored before it existed) is not projected, so the engine never
+// resolves it in its own environment.
+func TestProject_RefusedEnvReference(t *testing.T) {
+	t.Setenv("JWT_SECRET", "jwt")
+	b := newTestBinder()
+	c := allowedEnvConfig(t, "CONN_PASSWORD", map[string]string{"host": "db", "username": "u"}, map[string]string{"password": "@baleia-secret[env:JWT_SECRET]"})
+	p, err := b.Project(bindings.BindingSpec{EngineCatalog: "c"}, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := p.Properties["connection-password"]; ok {
+		t.Errorf("refused reference projected as %q", v)
 	}
 }
 

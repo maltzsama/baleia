@@ -25,7 +25,8 @@ lives in Baleia's database:
 @baleia-secret[file:name]
 ```
 
-- `env:` reads `VAR` from the process environment (upper-case names only).
+- `env:` reads `VAR` from the process environment (upper-case names only),
+  but never Baleia's own configuration (see below).
 - `file:` reads `BALEIA_SECRET_FILE_BASE_DIR/name`; the name must not contain a
   path separator or `..`. The read is confined to that directory: a symlink
   inside it may point within it through a **relative** target (as the
@@ -62,7 +63,36 @@ sides, so Baleia and the plugin agree; a divergence surfaces as
 `secret_mismatch`, never a silent drift.
 
 `BALEIA_SECRET_FILE_BASE_DIR` is the directory `file:` references resolve
-under. Without it, `file:` references are unavailable; `env:` still works.
+under. Without it, `file:` references are unavailable.
+
+### Which variables `env:` may read
+
+The API's environment holds its own secrets (`JWT_SECRET`,
+`BALEIA_ENCRYPTION_KEY`, the data policy signing key). Whoever may write a
+connection could otherwise name one of them and point the connection at a
+server they control, which would receive the value as a password. So `env:`
+never reads Baleia's own configuration: `BALEIA_*`, `JWT_SECRET`,
+`DATABASE_URL`, `PUBLIC_URL`, `PORT`, `WORKER_HEALTH_PORT`, `CI`,
+`RATE_LIMIT_*`, `POLARIS_*`, `TRINO_*`, `TEMPORAL_*`, `S3_*`, `SMTP_*`,
+`OTEL_*`, and the cloud SDKs' `AWS_*`, `GOOGLE_*` and `AZURE_*`. Any other
+variable may be read, as before.
+
+`BALEIA_SECRET_ENV_ALLOW` narrows that further: when set, `env:` reads only
+the variables it lists (comma-separated names, or prefixes ending in `*`). It
+may name one of the variables above on purpose; a lone `*` is refused at
+startup.
+
+```bash
+BALEIA_SECRET_ENV_ALLOW=CONN_*,LAKE_POLARIS_TOKEN
+```
+
+- Creating or editing a connection with a reference it may not read answers
+  422 on that field. Editing other fields keeps a stored reference.
+- A stored reference it may not read is neither resolved nor projected into
+  the Trino catalog registry, so Trino never resolves it in its own
+  environment either.
+- The default engine's `@baleia-secret[env:BALEIA_TRINO_PASSWORD]`, which
+  Baleia stores itself, always resolves. A request cannot store that reference.
 
 ## Catalog registry at rest (Phase B, #200 / D4)
 

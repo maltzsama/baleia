@@ -305,6 +305,12 @@ type Config struct {
 	// SecretFileBaseDir is where file: secret references resolve
 	// (BALEIA_SECRET_FILE_BASE_DIR); empty refuses them.
 	SecretFileBaseDir string
+	// SecretEnvAllow, when set, restricts the variables env: secret
+	// references of a connection may read to the ones it lists
+	// (BALEIA_SECRET_ENV_ALLOW, comma-separated names or prefixes ending in
+	// *). Unset, any variable but Baleia's own configuration may be read.
+	// Parsed by connections.ParseEnvAllow at startup.
+	SecretEnvAllow string
 	// OracleLOBMaxBytes caps a LOB value an Oracle engine reads into Arrow
 	// (BALEIA_LOB_MAX_BYTES); 0 keeps the engine's default (1 MiB).
 	OracleLOBMaxBytes int
@@ -381,6 +387,7 @@ func Load() *Config {
 		TrinoEventsToken:                  getEnv("BALEIA_TRINO_EVENTS_TOKEN", ""),
 		OracleLOBMaxBytes:                 getEnvInt("BALEIA_LOB_MAX_BYTES", 0),
 		SecretFileBaseDir:                 getEnv("BALEIA_SECRET_FILE_BASE_DIR", ""),
+		SecretEnvAllow:                    getEnv("BALEIA_SECRET_ENV_ALLOW", ""),
 		TrinoURL:                          getEnv("TRINO_URL", "http://localhost:8088"),
 		TrinoDBPassword:                   getEnv("BALEIA_TRINO_DB_PASSWORD", ""),
 		TrinoAdminUser:                    getEnv("BALEIA_TRINO_ADMIN_USER", "baleia_admin"),
