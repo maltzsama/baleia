@@ -6515,6 +6515,18 @@ export interface components {
         DataPolicyTemplate: "null_value" | "constant" | "partial" | "sha256" | "custom";
         /** @enum {string} */
         DataPolicyValidation: "pending" | "valid" | "invalid";
+        /**
+         * @description What Trino 484 lets a write do once the policy applies to the writer: checked (allowed when the new row matches the row filter, else denied, as PostgreSQL's WITH CHECK), visible_rows (applies only to the rows the filter leaves visible) or refused.
+         * @enum {string}
+         */
+        DataPolicyWriteEffect: "checked" | "visible_rows" | "refused";
+        /** @description What each write does on the policy's table for the identities the policy applies to (ADR 0028, "Writes on policied tables"). Several policies on one table combine to the most restrictive effect; writes that need more go through a trusted job or an unpolicied table. */
+        DataPolicyWrites: {
+            insert: components["schemas"]["DataPolicyWriteEffect"];
+            update: components["schemas"]["DataPolicyWriteEffect"];
+            delete: components["schemas"]["DataPolicyWriteEffect"];
+            merge: components["schemas"]["DataPolicyWriteEffect"];
+        };
         /** @enum {string} */
         DataPolicyAllowedAction: "update" | "delete";
         DataPolicy: {
@@ -6549,6 +6561,7 @@ export interface components {
             invalid_reason?: string | null;
             /** @description The offending construct (a function, column or type), never the expression */
             invalid_detail?: string | null;
+            writes: components["schemas"]["DataPolicyWrites"];
             /** Format: int64 */
             version: number;
             /** Format: uuid */

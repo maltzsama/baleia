@@ -25,6 +25,37 @@ const (
 	KindColumnMask Kind = "column_mask"
 )
 
+// WriteEffect is what Trino 484 lets a write do to a table once a policy
+// applies to the writer (ADR 0028, "Writes on policied tables").
+type WriteEffect string
+
+const (
+	// WriteChecked: allowed when the new row matches the row filter, else
+	// denied (PostgreSQL's WITH CHECK).
+	WriteChecked WriteEffect = "checked"
+	// WriteVisibleRows: applies only to the rows the filter leaves visible.
+	WriteVisibleRows WriteEffect = "visible_rows"
+	// WriteRefused: Trino refuses the statement.
+	WriteRefused WriteEffect = "refused"
+)
+
+// Writes is what each kind of write does under a policy, for the identities
+// it applies to.
+type Writes struct {
+	Insert, Update, Delete, Merge WriteEffect
+}
+
+// Writes reports what Trino 484 lets the policy's subjects write: under a row
+// filter, INSERT is checked against it, DELETE removes only visible rows, and
+// UPDATE and MERGE are refused; under a column mask every write is refused.
+// Several policies on one table combine to the most restrictive effect.
+func (p Policy) Writes() Writes {
+	if p.Kind == KindRowFilter {
+		return Writes{Insert: WriteChecked, Update: WriteRefused, Delete: WriteVisibleRows, Merge: WriteRefused}
+	}
+	return Writes{Insert: WriteRefused, Update: WriteRefused, Delete: WriteRefused, Merge: WriteRefused}
+}
+
 // Mode is how a row filter combines with the others of its table
 // (PostgreSQL's model): permissive ones are OR-ed, restrictive ones AND-ed.
 type Mode string

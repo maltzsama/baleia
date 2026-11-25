@@ -32,6 +32,26 @@ func validMask() Policy {
 	}
 }
 
+func TestPolicy_Writes(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		kind Kind
+		want Writes
+	}{
+		{"row filter", KindRowFilter, Writes{Insert: WriteChecked, Update: WriteRefused, Delete: WriteVisibleRows, Merge: WriteRefused}},
+		{"column mask", KindColumnMask, Writes{Insert: WriteRefused, Update: WriteRefused, Delete: WriteRefused, Merge: WriteRefused}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := (Policy{Kind: tt.kind}).Writes(); got != tt.want {
+				t.Fatalf("Writes() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestPolicy_Normalize(t *testing.T) {
 	t.Parallel()
 	p := validRowFilter()

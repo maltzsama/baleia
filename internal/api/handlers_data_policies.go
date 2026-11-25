@@ -1037,6 +1037,7 @@ func dataPolicyToPublic(p datapolicy.Policy) DataPolicy {
 		Subjects: subjectsToPublic(p.Subjects), Expression: p.Expression,
 		State: DataPolicyState(p.State), Validation: DataPolicyValidation(p.Validation),
 		Version: p.Version, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		Writes: writesToPublic(p.Writes()),
 	}
 	if p.Target.Column != "" {
 		column := p.Target.Column
@@ -1063,6 +1064,13 @@ func dataPolicyToPublic(p datapolicy.Policy) DataPolicy {
 		out.CreatedBy = &by
 	}
 	return out
+}
+
+func writesToPublic(w datapolicy.Writes) DataPolicyWrites {
+	return DataPolicyWrites{
+		Insert: DataPolicyWriteEffect(w.Insert), Update: DataPolicyWriteEffect(w.Update),
+		Delete: DataPolicyWriteEffect(w.Delete), Merge: DataPolicyWriteEffect(w.Merge),
+	}
 }
 
 func revisionToPublic(rev datapolicy.Revision, published bool) DataPolicyRevision {

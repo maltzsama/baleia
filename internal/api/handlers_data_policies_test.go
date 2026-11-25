@@ -216,6 +216,13 @@ func TestDataPolicies_Authoring(t *testing.T) {
 	if row.Schema != "sales" || row.Table != "orders" || row.Version != 1 {
 		t.Fatalf("created = %+v, want a lowercase target at version 1", row)
 	}
+	// Trino 484's write rules under a row filter, for the policy screen.
+	if want := (DataPolicyWrites{
+		Insert: DataPolicyWriteEffectChecked, Update: DataPolicyWriteEffectRefused,
+		Delete: DataPolicyWriteEffectVisibleRows, Merge: DataPolicyWriteEffectRefused,
+	}); row.Writes != want {
+		t.Fatalf("row filter writes = %+v, want %+v", row.Writes, want)
+	}
 	maskTemplate := DataPolicyTemplateNull
 	mask := CreateDataPolicyRequest{
 		Name: "hide-email", Kind: DataPolicyKindColumnMask, Schema: "sales", Table: "orders", Column: ptr("email"),
@@ -223,9 +230,16 @@ func TestDataPolicies_Authoring(t *testing.T) {
 		Subjects:   []DataPolicySubject{{Everyone: ptr(true), Except: &[]DataPolicySubject{{Group: ptr("auditors")}}}},
 		Expression: "CAST(NULL AS varchar)",
 	}
-	if code, body, created := f.create(t, ctx, mask); code != 201 || created.Validation != DataPolicyValidationValid ||
+	code, body, created := f.create(t, ctx, mask)
+	if code != 201 || created.Validation != DataPolicyValidationValid ||
 		created.Template == nil || *created.Template != DataPolicyTemplateNull {
 		t.Fatalf("create mask = %d %s", code, body)
+	}
+	if want := (DataPolicyWrites{
+		Insert: DataPolicyWriteEffectRefused, Update: DataPolicyWriteEffectRefused,
+		Delete: DataPolicyWriteEffectRefused, Merge: DataPolicyWriteEffectRefused,
+	}); created.Writes != want {
+		t.Fatalf("column mask writes = %+v, want every write refused", created.Writes)
 	}
 
 	// An expression outside the language is kept as an invalid draft.

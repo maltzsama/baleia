@@ -3135,6 +3135,28 @@ components:
       type: string
       x-enum-varnames: [DataPolicyValidationPending, DataPolicyValidationValid, DataPolicyValidationInvalid]
       enum: [pending, valid, invalid]
+    DataPolicyWriteEffect:
+      type: string
+      x-enum-varnames: [DataPolicyWriteEffectChecked, DataPolicyWriteEffectVisibleRows, DataPolicyWriteEffectRefused]
+      enum: [checked, visible_rows, refused]
+      description: >
+        What Trino 484 lets a write do once the policy applies to the writer:
+        checked (allowed when the new row matches the row filter, else denied,
+        as PostgreSQL's WITH CHECK), visible_rows (applies only to the rows
+        the filter leaves visible) or refused.
+    DataPolicyWrites:
+      type: object
+      required: [insert, update, delete, merge]
+      description: >
+        What each write does on the policy's table for the identities the
+        policy applies to (ADR 0028, "Writes on policied tables"). Several
+        policies on one table combine to the most restrictive effect; writes
+        that need more go through a trusted job or an unpolicied table.
+      properties:
+        insert: { $ref: "#/components/schemas/DataPolicyWriteEffect" }
+        update: { $ref: "#/components/schemas/DataPolicyWriteEffect" }
+        delete: { $ref: "#/components/schemas/DataPolicyWriteEffect" }
+        merge: { $ref: "#/components/schemas/DataPolicyWriteEffect" }
     DataPolicyAllowedAction:
       type: string
       x-enum-varnames: [DataPolicyAllowedActionUpdate, DataPolicyAllowedActionDelete]
@@ -3142,7 +3164,7 @@ components:
 
     DataPolicy:
       type: object
-      required: [id, catalog_id, name, description, kind, schema, table, priority, subjects, expression, state, validation, version, created_at, updated_at, allowed_actions]
+      required: [id, catalog_id, name, description, kind, schema, table, priority, subjects, expression, state, validation, version, created_at, updated_at, allowed_actions, writes]
       properties:
         allowed_actions:
           type: array
@@ -3173,6 +3195,7 @@ components:
         validation: { $ref: "#/components/schemas/DataPolicyValidation" }
         invalid_reason: { type: string, nullable: true, description: "Why validation is invalid: a stable code (function_not_allowed, unknown_column, not_boolean, type_mismatch, engine_refused, …)" }
         invalid_detail: { type: string, nullable: true, description: "The offending construct (a function, column or type), never the expression" }
+        writes: { $ref: "#/components/schemas/DataPolicyWrites" }
         version: { type: integer, format: int64 }
         created_by: { type: string, format: uuid, nullable: true }
         created_at: { type: string, format: date-time }
