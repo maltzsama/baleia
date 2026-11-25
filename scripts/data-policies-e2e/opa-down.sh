@@ -41,8 +41,21 @@ trap resume EXIT
 
 kubectl -n "$ns" get secret baleia-secret -o jsonpath='{.data.BALEIA_TRINO_PASSWORD}' | base64 -d >"$work/password"
 login="$(python3 -c 'import json,sys; print(json.dumps({"email": "member@e2e.test", "password": sys.argv[1]}))' "$password")"
-token="$(curl -fsS -X POST "$api/api/v1/auth/login" -H 'Content-Type: application/json' \
-  -d "$login" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+# Logins are limited to 10 per minute (#391) and the Playwright suite just ran:
+# on 429, wait for Retry-After and sign in again.
+token=""
+for _ in $(seq 1 10); do
+  status="$(curl -sS -o "$work/login.json" -D "$work/login.headers" -w '%{http_code}' -X POST \
+    "$api/api/v1/auth/login" -H 'Content-Type: application/json' -d "$login")"
+  if [ "$status" = "200" ]; then
+    token="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["token"])' "$work/login.json")"
+    break
+  fi
+  [ "$status" = "429" ] || fail "login as the member = $status: $(cat "$work/login.json")"
+  wait_s="$(tr -d '\r' <"$work/login.headers" | awk -F': ' 'tolower($1)=="retry-after" {print $2}')"
+  sleep "$(( ${wait_s:-6} + 1 ))"
+done
+[ -n "$token" ] || fail "could not sign in as the member"
 member_id="$(curl -fsS "$api/api/v1/auth/me" -H "Authorization: Bearer $token" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 member="u_$member_id"
 
