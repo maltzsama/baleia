@@ -441,3 +441,5 @@ jobs:
         run: ./scripts/verify-dev-sync.sh
       - name: Trino security ConfigMaps are immutable and mounted
         run: ./scripts/verify-trino-security-config.sh
+      - name: Data policies chart wiring (OPA sidecar)
+        run: ./scripts/verify-data-policies-chart.sh

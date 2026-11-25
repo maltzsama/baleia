@@ -102,6 +102,20 @@ in-chart Redis, else empty (no shared layer). */}}
 - name: BALEIA_TRINO_PASSWORD
   valueFrom:
     secretKeyRef: { name: {{ $name }}, key: BALEIA_TRINO_PASSWORD, optional: true }
+{{- /* Data policies (ADR 0028). Optional so a deployment without them keeps
+booting; with them on, the API and worker refuse to start without the token
+and the key. config may name the key with an @baleia-secret reference instead. */}}
+- name: BALEIA_OPA_TOKEN
+  valueFrom:
+    secretKeyRef: { name: {{ $name }}, key: BALEIA_OPA_TOKEN, optional: true }
+{{- if not (hasKey .Values.config "BALEIA_DATA_POLICY_SIGNING_KEY") }}
+- name: BALEIA_DATA_POLICY_SIGNING_KEY
+  valueFrom:
+    secretKeyRef: { name: {{ $name }}, key: BALEIA_DATA_POLICY_SIGNING_KEY, optional: true }
+{{- end }}
+- name: BALEIA_DEFAULT_ENGINE_ID
+  valueFrom:
+    secretKeyRef: { name: {{ $name }}, key: BALEIA_DEFAULT_ENGINE_ID, optional: true }
 {{- end }}
 
 {{- define "baleia.podSecurityContext" -}}
@@ -119,6 +133,24 @@ securityContext:
   capabilities:
     drop: ["ALL"]
 {{- end -}}
+{{/* Non-empty when the in-chart Trino enforces data policies through an OPA
+sidecar (ADR 0028). */}}
+{{- define "baleia.dataPolicies" -}}
+{{- if and .Values.trino.enabled .Values.trino.dataPolicies.enabled }}true{{ end }}
+{{- end }}
+
+{{/* BALEIA_DATA_POLICIES for the API and worker, when the chart renders it and
+config does not list it (the deployments already reference every config key). */}}
+{{- define "baleia.dataPoliciesEnv" -}}
+{{- if and (include "baleia.dataPolicies" .) (not (hasKey .Values.config "BALEIA_DATA_POLICIES")) }}
+- name: BALEIA_DATA_POLICIES
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "baleia.fullname" . }}-config
+      key: BALEIA_DATA_POLICIES
+{{- end }}
+{{- end }}
+
 {{/* Non-empty when the in-chart Trino requires authentication (#647). */}}
 {{- define "baleia.trinoAuth" -}}
 {{- if and .Values.trino.enabled .Values.trino.auth.enabled }}true{{ end }}

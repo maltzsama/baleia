@@ -43,6 +43,7 @@ spec:
             {{- end }}
             {{- end }}
             {{- include "baleia.trinoCAEnv" . | nindent 12 }}
+            {{- include "baleia.dataPoliciesEnv" . | nindent 12 }}
             {{- include "baleia.secretEnv" . | nindent 12 }}
           {{- if .Values.migrate.enabled }}
           lifecycle:

@@ -61,6 +61,7 @@ spec:
                   key: BALEIA_BI_GATEWAY_SECRET
             {{- end }}
             {{- include "baleia.trinoCAEnv" . | nindent 12 }}
+            {{- include "baleia.dataPoliciesEnv" . | nindent 12 }}
             {{- include "baleia.secretEnv" . | nindent 12 }}
           ports:
             - name: http
