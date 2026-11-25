@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/db"
-	"github.com/google/uuid"
 )
 
 type fakeEngineStore struct {
@@ -87,35 +86,6 @@ func TestEnsureDefaultTrinoEngine(t *testing.T) {
 		}
 		if len(f.links) != 1 || f.links[0].ID != f.cluster.ID {
 			t.Fatalf("links = %+v", f.links)
-		}
-		if f.engines[0].ID.Valid {
-			t.Fatalf("engine id = %v, want the store to pick one", f.engines[0].ID)
-		}
-	})
-
-	t.Run("creates the engine with BALEIA_DEFAULT_ENGINE_ID", func(t *testing.T) {
-		t.Parallel()
-		id := uuid.MustParse("0b9c7a4e-5f1d-4c2a-9e8b-3d6f1a2b4c5d")
-		f := &fakeEngineStore{cluster: &db.TrinoCluster{ID: db.UUID{Bytes: [16]byte{2}, Valid: true}, Name: "default"}}
-		if err := EnsureDefaultTrinoEngine(ctx, discard, f, DefaultTrinoEngine{URL: "http://trino:8080", EngineID: id}); err != nil {
-			t.Fatal(err)
-		}
-		if len(f.engines) != 1 || f.engines[0].ID != (db.UUID{Bytes: id, Valid: true}) {
-			t.Fatalf("engine = %+v, want id %s", f.engines, id)
-		}
-	})
-
-	t.Run("an existing engine keeps its id", func(t *testing.T) {
-		t.Parallel()
-		existing := defaultEngine("http://trino:8080", db.UUID{})
-		existing.Engine.ID = db.UUID{Bytes: [16]byte{5}, Valid: true}
-		f := &fakeEngineStore{engine: existing}
-		env := DefaultTrinoEngine{URL: "http://trino:8080", EngineID: uuid.MustParse("0b9c7a4e-5f1d-4c2a-9e8b-3d6f1a2b4c5d")}
-		if err := EnsureDefaultTrinoEngine(ctx, discard, f, env); err != nil {
-			t.Fatal(err)
-		}
-		if len(f.engines)+len(f.updated)+len(f.createdConn) != 0 {
-			t.Fatal("the configured id rewrote or recreated an existing engine")
 		}
 	})
 

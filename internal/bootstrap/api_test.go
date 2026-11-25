@@ -46,6 +46,55 @@ func TestPublishInitialDataPolicies(t *testing.T) {
 	PublishInitialDataPolicies(t.Context(), discard, nil)
 }
 
+type aliasStore struct {
+	engines map[uuid.UUID]db.Engine
+	def     uuid.UUID
+}
+
+func (s aliasStore) GetEngineByID(_ context.Context, id db.UUID) (db.Engine, error) {
+	e, ok := s.engines[id.Bytes]
+	if !ok {
+		return db.Engine{}, db.ErrNoRows
+	}
+	return e, nil
+}
+
+func (s aliasStore) GetDefaultTrinoEngine(context.Context) (db.GetDefaultTrinoEngineRow, error) {
+	if s.def == uuid.Nil {
+		return db.GetDefaultTrinoEngineRow{}, db.ErrNoRows
+	}
+	return db.GetDefaultTrinoEngineRow{Engine: s.engines[s.def]}, nil
+}
+
+func TestCheckDefaultEngineAlias(t *testing.T) {
+	t.Parallel()
+	def, other := uuid.New(), uuid.New()
+	store := aliasStore{def: def, engines: map[uuid.UUID]db.Engine{
+		def:   {ID: db.UUID{Bytes: def, Valid: true}, Name: "default"},
+		other: {ID: db.UUID{Bytes: other, Valid: true}, Name: "lake"},
+	}}
+	tests := []struct {
+		name    string
+		alias   string
+		wantErr bool
+	}{
+		{name: "unset", alias: ""},
+		{name: "a fresh id", alias: uuid.NewString()},
+		{name: "the default engine's own id", alias: def.String()},
+		{name: "another engine's id", alias: other.String(), wantErr: true},
+		{name: "not a uuid", alias: "default", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := CheckDefaultEngineAlias(t.Context(), store, tt.alias)
+			if tt.wantErr != (err != nil) {
+				t.Fatalf("CheckDefaultEngineAlias(%q) = %v, want error %t", tt.alias, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestSealCredentialsNilKeyring(t *testing.T) {
 	t.Parallel()
 	if sealCredentials(nil) != nil {

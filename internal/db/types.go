@@ -217,9 +217,6 @@ type CreateCatalogParams struct {
 }
 
 type CreateEngineParams struct {
-	// ID is the engine's id; the zero value lets the store pick one. The
-	// default Trino engine is created with BALEIA_DEFAULT_ENGINE_ID.
-	ID           UUID   `json:"id"`
 	Name         string `json:"name"`
 	Kind         string `json:"kind"`
 	Class        string `json:"class"`

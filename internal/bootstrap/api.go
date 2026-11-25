@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -53,22 +54,16 @@ func PrepareAPI(ctx context.Context, logger *slog.Logger, cfg *config.Config, st
 
 	// Engine endpoints live in the database; TRINO_URL only seeds and updates
 	// the default Trino engine Baleia created itself.
-	var engineID uuid.UUID
-	if cfg.DefaultEngineID != "" {
-		id, err := uuid.Parse(cfg.DefaultEngineID)
-		if err != nil {
-			return fmt.Errorf("BALEIA_DEFAULT_ENGINE_ID: %w", err)
-		}
-		engineID = id
-	}
 	if err := st.Store.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return EnsureDefaultTrinoEngine(ctx, logger, repo.New(tx), DefaultTrinoEngine{
 			URL: cfg.TrinoURL, ServiceUser: cfg.TrinoServiceUser, AdminUser: cfg.TrinoAdminUser,
 			Password: cfg.TrinoPassword != "", CA: st.TrinoCA, Seal: sealCredentials(st.Keyring),
-			EngineID: engineID,
 		})
 	}); err != nil {
 		return fmt.Errorf("default trino engine: %w", err)
+	}
+	if err := CheckDefaultEngineAlias(ctx, repo.New(st.Store), cfg.DefaultEngineID); err != nil {
+		return err
 	}
 
 	// Split connections that today carry both a direct engine and Trino
@@ -82,6 +77,41 @@ func PrepareAPI(ctx context.Context, logger *slog.Logger, cfg *config.Config, st
 	}
 	PublishInitialDataPolicies(ctx, logger, st.DataPolicies)
 	return nil
+}
+
+// DefaultEngineAliasStore is what CheckDefaultEngineAlias reads.
+type DefaultEngineAliasStore interface {
+	GetEngineByID(ctx context.Context, id db.UUID) (db.Engine, error)
+	GetDefaultTrinoEngine(ctx context.Context) (db.GetDefaultTrinoEngineRow, error)
+}
+
+// CheckDefaultEngineAlias refuses a BALEIA_DEFAULT_ENGINE_ID that is the id of
+// an engine other than the default Trino engine. The default engine's OPA
+// reports its status under that id (ADR 0028), and Baleia resolves it to the
+// default engine, so it must not name another one.
+func CheckDefaultEngineAlias(ctx context.Context, q DefaultEngineAliasStore, alias string) error {
+	if alias == "" {
+		return nil
+	}
+	id, err := uuid.Parse(alias)
+	if err != nil {
+		return fmt.Errorf("BALEIA_DEFAULT_ENGINE_ID: %w", err)
+	}
+	eng, err := q.GetEngineByID(ctx, db.UUID{Bytes: id, Valid: true})
+	if errors.Is(err, db.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("BALEIA_DEFAULT_ENGINE_ID: %w", err)
+	}
+	def, err := q.GetDefaultTrinoEngine(ctx)
+	if err == nil && def.Engine.ID == eng.ID {
+		return nil
+	}
+	if err != nil && !errors.Is(err, db.ErrNoRows) {
+		return fmt.Errorf("BALEIA_DEFAULT_ENGINE_ID: %w", err)
+	}
+	return fmt.Errorf("BALEIA_DEFAULT_ENGINE_ID %s is the id of the engine %q, not of the default Trino engine", alias, eng.Name)
 }
 
 // PublishInitialDataPolicies publishes the initial data policy revision when

@@ -849,6 +849,20 @@ func (s *Server) mountOPA() {
 			}
 			return err == nil, err
 		}
+		// Config validation already refused a malformed id.
+		if alias, err := uuid.Parse(s.cfg.DefaultEngineID); err == nil {
+			opa.DefaultEngineAlias = alias
+			opa.DefaultEngine = func(ctx context.Context) (uuid.UUID, error) {
+				row, err := s.queries.GetDefaultTrinoEngine(ctx)
+				if errors.Is(err, db.ErrNoRows) {
+					return uuid.Nil, datapolicy.ErrNotFound
+				}
+				if err != nil {
+					return uuid.Nil, err
+				}
+				return uuid.UUID(row.Engine.ID.Bytes), nil
+			}
+		}
 	}
 	// Literal paths, so the authorization coverage audit sees the routes;
 	// they equal datapolicy.BundlePath and datapolicy.StatusPath.
