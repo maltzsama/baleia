@@ -3779,9 +3779,12 @@ type JoinSuggestionSource string
 
 // LDAPConfig LDAP provider configuration written once. `bind_password` is never returned.
 type LDAPConfig struct {
-	BaseDn         string                 `json:"base_dn"`
-	BindDn         string                 `json:"bind_dn"`
-	BindPassword   string                 `json:"bind_password"`
+	BaseDn       string `json:"base_dn"`
+	BindDn       string `json:"bind_dn"`
+	BindPassword string `json:"bind_password"`
+
+	// CaPem PEM bundle of a private CA that signed the directory's certificate. Empty uses the system roots.
+	CaPem          *string                `json:"ca_pem,omitempty"`
 	DefaultRole    *LDAPConfigDefaultRole `json:"default_role,omitempty"`
 	EmailAttribute *string                `json:"email_attribute,omitempty"`
 	GroupAttribute *string                `json:"group_attribute,omitempty"`
@@ -3806,8 +3809,11 @@ type LDAPConfigDefaultRole string
 
 // LDAPConfigAdmin LDAP provider configuration without the bind password.
 type LDAPConfigAdmin struct {
-	BaseDn           *string                     `json:"base_dn,omitempty"`
-	BindDn           *string                     `json:"bind_dn,omitempty"`
+	BaseDn *string `json:"base_dn,omitempty"`
+	BindDn *string `json:"bind_dn,omitempty"`
+
+	// CaPem The private CA bundle; a certificate is not a secret.
+	CaPem            *string                     `json:"ca_pem,omitempty"`
 	DefaultRole      *LDAPConfigAdminDefaultRole `json:"default_role,omitempty"`
 	EmailAttribute   *string                     `json:"email_attribute,omitempty"`
 	GroupAttribute   *string                     `json:"group_attribute,omitempty"`
@@ -5608,7 +5614,10 @@ type UpdateLDAPConfig struct {
 	BindDn *string `json:"bind_dn,omitempty"`
 
 	// BindPassword Omit to keep the stored secret; send an empty string to clear it.
-	BindPassword     *string                      `json:"bind_password,omitempty"`
+	BindPassword *string `json:"bind_password,omitempty"`
+
+	// CaPem Omit to keep the stored CA bundle; send an empty string to use the system roots.
+	CaPem            *string                      `json:"ca_pem,omitempty"`
 	DefaultRole      *UpdateLDAPConfigDefaultRole `json:"default_role,omitempty"`
 	EmailAttribute   *string                      `json:"email_attribute,omitempty"`
 	GroupAttribute   *string                      `json:"group_attribute,omitempty"`

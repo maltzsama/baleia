@@ -665,6 +665,7 @@ components:
       properties:
         url: { type: string, description: "ldaps:// or ldap:// (requires start_tls)." }
         start_tls: { type: boolean }
+        ca_pem: { type: string, description: "PEM bundle of a private CA that signed the directory's certificate. Empty uses the system roots." }
         bind_dn: { type: string }
         bind_password: { type: string }
         base_dn: { type: string }
@@ -686,6 +687,7 @@ components:
       properties:
         url: { type: string }
         start_tls: { type: boolean }
+        ca_pem: { type: string, description: "The private CA bundle; a certificate is not a secret." }
         bind_dn: { type: string }
         base_dn: { type: string }
         user_filter: { type: string }
@@ -764,6 +766,7 @@ components:
       properties:
         url: { type: string }
         start_tls: { type: boolean }
+        ca_pem: { type: string, description: "Omit to keep the stored CA bundle; send an empty string to use the system roots." }
         bind_dn: { type: string }
         bind_password:
           type: string

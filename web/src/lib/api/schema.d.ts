@@ -4508,6 +4508,8 @@ export interface components {
             /** @description ldaps:// or ldap:// (requires start_tls). */
             url: string;
             start_tls?: boolean;
+            /** @description PEM bundle of a private CA that signed the directory's certificate. Empty uses the system roots. */
+            ca_pem?: string;
             bind_dn: string;
             bind_password: string;
             base_dn: string;
@@ -4529,6 +4531,8 @@ export interface components {
         LDAPConfigAdmin: {
             url?: string;
             start_tls?: boolean;
+            /** @description The private CA bundle; a certificate is not a secret. */
+            ca_pem?: string;
             bind_dn?: string;
             base_dn?: string;
             user_filter?: string;
@@ -4606,6 +4610,8 @@ export interface components {
         UpdateLDAPConfig: {
             url?: string;
             start_tls?: boolean;
+            /** @description Omit to keep the stored CA bundle; send an empty string to use the system roots. */
+            ca_pem?: string;
             bind_dn?: string;
             /** @description Omit to keep the stored secret; send an empty string to clear it. */
             bind_password?: string;

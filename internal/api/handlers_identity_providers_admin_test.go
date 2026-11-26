@@ -2,9 +2,18 @@ package api
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/galileostudio/baleia/internal/auth"
+	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
@@ -84,6 +93,91 @@ func TestIdP_PatchKeepsSecret(t *testing.T) {
 	if cfg.ClientSecret != "oidc-client-secret" {
 		t.Errorf("stored secret = %q, want the original", cfg.ClientSecret)
 	}
+}
+
+// TestIdP_LDAPCAPem: the CA bundle of a directory with a private certificate
+// is stored on create, shown back, kept by an update that omits it and
+// cleared by an empty one.
+func TestIdP_LDAPCAPem(t *testing.T) {
+	t.Parallel()
+	h := idpTestHandlers(t)
+	ca := ldapTestCAPEM(t)
+	cfg := validLDAPConfig()
+	cfg.CaPem = &ca
+	resp, err := h.CreateIdentityProvider(idpAdminCtx(), CreateIdentityProviderRequestObject{Body: &CreateIdentityProviderRequest{
+		Name: "corp-ldap", Type: IdentityProviderTypeLdap, Ldap: cfg,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, ok := resp.(CreateIdentityProvider201JSONResponse)
+	if !ok {
+		t.Fatalf("create = %T", resp)
+	}
+	if created.Ldap == nil || created.Ldap.CaPem == nil || *created.Ldap.CaPem != ca {
+		t.Fatalf("created ldap = %+v, want the CA bundle back", created.Ldap)
+	}
+	stored := func() string {
+		t.Helper()
+		ap, err := h.queries.GetAuthProviderByID(context.Background(), mustUUID(t, created.Id.String()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, err := identityldap.OpenConfig(h.keyring, idString(ap.ID), ap.ConfigEnc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.CAPem
+	}
+	if got := stored(); got != ca {
+		t.Fatalf("stored ca_pem = %q, want the bundle", got)
+	}
+
+	update := func(ldap UpdateLDAPConfig) {
+		t.Helper()
+		got, err := h.UpdateIdentityProvider(idpAdminCtx(), UpdateIdentityProviderRequestObject{
+			Id: created.Id, Body: &UpdateIdentityProviderRequest{Ldap: &ldap},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.(UpdateIdentityProvider200JSONResponse); !ok {
+			t.Fatalf("update = %T", got)
+		}
+	}
+	filter := "(mail={{username}})"
+	update(UpdateLDAPConfig{UserFilter: &filter})
+	if got := stored(); got != ca {
+		t.Errorf("an update without ca_pem changed it to %q", got)
+	}
+	empty := ""
+	update(UpdateLDAPConfig{CaPem: &empty})
+	if got := stored(); got != "" {
+		t.Errorf("an empty ca_pem left %q", got)
+	}
+}
+
+// ldapTestCAPEM returns a throwaway self-signed CA in PEM form.
+func ldapTestCAPEM(t *testing.T) string {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "baleia-test-ca"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
 }
 
 // TestIdP_DeleteWithUsers409: a provider with linked users cannot be deleted

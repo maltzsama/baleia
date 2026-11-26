@@ -9,6 +9,7 @@
 	import Input from '$lib/ui/Input.svelte';
 	import Modal from '$lib/ui/Modal.svelte';
 	import Select from '$lib/ui/Select.svelte';
+	import Textarea from '$lib/ui/Textarea.svelte';
 
 	type Detail = components['schemas']['IdentityProviderDetail'];
 	type Create = components['schemas']['CreateIdentityProviderRequest'];
@@ -96,6 +97,7 @@
 	// LDAP
 	let url = $state('');
 	let startTls = $state(false);
+	let caPem = $state('');
 	let bindDn = $state('');
 	let bindPassword = $state('');
 	let baseDn = $state('');
@@ -140,6 +142,7 @@
 		const ldap = source?.ldap;
 		url = ldap?.url ?? '';
 		startTls = ldap?.start_tls ?? false;
+		caPem = ldap?.ca_pem ?? '';
 		bindDn = ldap?.bind_dn ?? '';
 		bindPassword = '';
 		baseDn = ldap?.base_dn ?? '';
@@ -218,6 +221,7 @@
 		return {
 			url,
 			start_tls: startTls,
+			ca_pem: caPem,
 			bind_dn: bindDn,
 			bind_password: bindPassword,
 			base_dn: baseDn,
@@ -380,6 +384,7 @@
 				label={m.identity_identityproviderform_starttls_required_for_ldap()}
 				bind:checked={startTls}
 			/>
+			<Textarea label={m.identity_identityproviderform_ca_pem()} bind:value={caPem} rows={3} />
 			<div class="grid grid-cols-2 gap-3">
 				<Input label={m.identity_identityproviderform_bind_dn()} bind:value={bindDn} />
 				<Input
