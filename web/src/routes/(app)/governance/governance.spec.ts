@@ -228,6 +228,35 @@ describe('governance by object', () => {
 		expect(screen.getByText('second-only')).toBeTruthy();
 	});
 
+	it("offers no Publish from the previous catalog's draft while the next loads", async () => {
+		const second = '00000000-0000-0000-0000-0000000000e3';
+		mockCatalog({ draft: true });
+		server.use(
+			catalogsAnswer([
+				summary(['view', 'manage_data_policies']),
+				{ ...summary(['view', 'manage_data_policies']), id: second, name: 'second' }
+			]),
+			http.get('/catalogs/{id}/data-policies', async ({ params, response }) => {
+				if (params.id === second) await delay(150);
+				return response(200).json({
+					enabled: true,
+					names: [],
+					draft: params.id === catalogId,
+					policies: [filter]
+				});
+			})
+		);
+		renderPage(GovernancePage, { me: admin() });
+		const publish = await screen.findByRole('button', { name: 'Publish' });
+		expect((publish as HTMLButtonElement).disabled).toBe(false);
+		await fireEvent.change(screen.getByRole('combobox', { name: 'Catalog' }), {
+			target: { value: second }
+		});
+		expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+		expect(screen.queryByText('Unpublished changes')).toBeNull();
+		expect(await screen.findByText('Published')).toBeTruthy();
+	});
+
 	it('hides edit and delete without the policy allowed actions', async () => {
 		server.use(
 			...directory(),

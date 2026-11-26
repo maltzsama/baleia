@@ -71,6 +71,9 @@
 	// Each catalog load takes a token: a response for an earlier selection,
 	// arriving late, changes nothing.
 	let catalogRequest = 0;
+	// The catalog `data` belongs to: switching catalogs clears it, so the draft
+	// badge and Publish never show the previous catalog's state.
+	let loadedFor = '';
 
 	let editorOpen = $state(false);
 	let editorSession = $state(0);
@@ -109,6 +112,10 @@
 		loading = true;
 		error = '';
 		problems = [];
+		if (loadedFor !== id) {
+			data = null;
+			loadedFor = id;
+		}
 		views = [];
 		viewsState = 'idle';
 		viewsError = '';
@@ -289,7 +296,11 @@
 						<PlusIcon class="h-4 w-4" aria-hidden="true" />
 						{m.governance_add_policy()}
 					</Button>
-					<Button variant="primary" disabled={!data.draft} onclick={() => (publishOpen = true)}>
+					<Button
+						variant="primary"
+						disabled={!data.draft || loading}
+						onclick={() => (publishOpen = true)}
+					>
 						{m.governance_publish()}
 					</Button>
 				{/if}
