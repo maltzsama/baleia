@@ -141,15 +141,22 @@
 
 	// Each engine's revision is a global admin's (FD9); a failure shows with a
 	// retry and leaves the policies on screen.
+	// Each status read takes a number: an earlier one answering late (a
+	// retry, or the read after a publish) does not replace a newer answer.
+	let statusRequest = 0;
 	async function loadStatus() {
+		const request = ++statusRequest;
 		statusLoading = true;
 		statusError = '';
 		try {
-			status = await getStatus();
+			const next = await getStatus();
+			if (request === statusRequest) status = next;
 		} catch (e) {
-			statusError = apiErrorMessage(e instanceof DataPolicyError ? e.body : e);
+			if (request === statusRequest) {
+				statusError = apiErrorMessage(e instanceof DataPolicyError ? e.body : e);
+			}
 		} finally {
-			statusLoading = false;
+			if (request === statusRequest) statusLoading = false;
 		}
 	}
 

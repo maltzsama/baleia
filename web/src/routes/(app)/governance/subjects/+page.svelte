@@ -101,6 +101,10 @@
 		teamsLoading = false;
 		const user = subject?.user;
 		if (!user) return;
+		if (directory.teamsFailed) {
+			teamsError = m.governance_teams_unavailable();
+			return;
+		}
 		teamsLoading = true;
 		try {
 			const found = await Promise.all(

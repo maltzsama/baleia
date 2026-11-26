@@ -30,6 +30,7 @@ describe('loadDirectory', () => {
 		);
 		const directory = await loadDirectory();
 		expect(directory.teams).toEqual([]);
+		expect(directory.teamsFailed).toBe(true);
 		expect(directory.serviceAccounts.map((s) => s.name)).toEqual(['etl']);
 	});
 });

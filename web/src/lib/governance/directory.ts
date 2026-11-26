@@ -11,9 +11,19 @@ export type Directory = {
 	users: DirectoryEntry[];
 	teams: DirectoryEntry[];
 	serviceAccounts: DirectoryEntry[];
+	/**
+	 * The teams could not be listed: an empty `teams` is then unknown, not
+	 * "no team", so a user's team-granted policies cannot be told.
+	 */
+	teamsFailed: boolean;
 };
 
-export const emptyDirectory: Directory = { users: [], teams: [], serviceAccounts: [] };
+export const emptyDirectory: Directory = {
+	users: [],
+	teams: [],
+	serviceAccounts: [],
+	teamsFailed: false
+};
 
 async function users(): Promise<DirectoryEntry[]> {
 	const out: DirectoryEntry[] = [];
@@ -33,11 +43,15 @@ async function users(): Promise<DirectoryEntry[]> {
 	return out;
 }
 
+// Unlike the other lists, a failure here is reported: By subject reads a
+// user's teams from it.
 async function teams(): Promise<DirectoryEntry[]> {
 	const { data, error } = await client.GET('/teams');
-	if (error || !data) return [];
+	if (error || !data) throw new DataPolicyDirectoryError();
 	return data.map((team) => ({ id: team.id, name: team.name }));
 }
+
+class DataPolicyDirectoryError extends Error {}
 
 async function serviceAccounts(): Promise<DirectoryEntry[]> {
 	const { data, error } = await client.GET('/service-accounts');
@@ -59,12 +73,16 @@ async function bestEffort(list: () => Promise<DirectoryEntry[]>): Promise<Direct
  * fails, is empty, so the policies still load.
  */
 export async function loadDirectory(): Promise<Directory> {
+	let teamsFailed = false;
 	const [u, t, s] = await Promise.all([
 		bestEffort(users),
-		bestEffort(teams),
+		teams().catch(() => {
+			teamsFailed = true;
+			return [];
+		}),
 		bestEffort(serviceAccounts)
 	]);
-	return { users: u, teams: t, serviceAccounts: s };
+	return { users: u, teams: t, serviceAccounts: s, teamsFailed };
 }
 
 function nameOf(list: DirectoryEntry[], id: string): string {

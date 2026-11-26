@@ -119,6 +119,21 @@ describe('governance by subject', () => {
 		expect(screen.queryByRole('region', { name: 'governed' })).toBeNull();
 	});
 
+	it('says the teams are unknown when they cannot be listed', async () => {
+		mock();
+		server.use(
+			http.get('/teams', ({ response }) =>
+				response(401).json({ code: 'unauthorized', message: 'boom' })
+			)
+		);
+		renderPage(SubjectsPage, { me: makeMe() });
+		await choose(ana);
+		expect(
+			await screen.findByText(/the policies this user gets through a team cannot be shown/)
+		).toBeTruthy();
+		expect(screen.queryByRole('region', { name: 'governed' })).toBeNull();
+	});
+
 	it('honours the exceptions of everyone', async () => {
 		mock();
 		renderPage(SubjectsPage, { me: makeMe() });

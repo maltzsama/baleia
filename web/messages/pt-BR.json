@@ -2986,6 +2986,7 @@
 	"governance_could_not_load_revisions": "Não foi possível carregar as revisões",
 	"governance_could_not_load_status": "Não foi possível carregar o estado das políticas nos motores",
 	"governance_could_not_load_teams": "Não foi possível carregar os times do sujeito",
+	"governance_teams_unavailable": "Não foi possível listar os times, então as políticas que este usuário recebe por um time não podem ser mostradas.",
 	"governance_no_catalogs_title": "Nenhum catálogo para governar",
 	"governance_no_catalogs_description": "As políticas de dados são geridas pelo dono da conexão do catálogo ou por um admin global.",
 	"governance_disabled_title": "As políticas de dados estão desligadas",

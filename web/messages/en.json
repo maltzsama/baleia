@@ -2986,6 +2986,7 @@
 	"governance_could_not_load_revisions": "Could not load revisions",
 	"governance_could_not_load_status": "Could not load the engines' policy state",
 	"governance_could_not_load_teams": "Could not load the subject's teams",
+	"governance_teams_unavailable": "The teams could not be listed, so the policies this user gets through a team cannot be shown.",
 	"governance_no_catalogs_title": "No catalog to govern",
 	"governance_no_catalogs_description": "Data policies are managed by the owner of a catalog's connection or a global admin.",
 	"governance_disabled_title": "Data policies are off",
