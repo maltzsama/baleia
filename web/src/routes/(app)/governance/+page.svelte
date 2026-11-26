@@ -8,7 +8,7 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import { can, canGlobal } from '$lib/authz/can';
-	import { listCatalogs, type CatalogSummary } from '$lib/catalogs/admin';
+	import type { CatalogSummary } from '$lib/catalogs/admin';
 	import AttributeFreshness from '$lib/governance/AttributeFreshness.svelte';
 	import EngineStates from '$lib/governance/EngineStates.svelte';
 	import GuaranteeNotice from '$lib/governance/GuaranteeNotice.svelte';
@@ -20,6 +20,8 @@
 		getStatus,
 		listCatalogPolicies,
 		listDefinerViews,
+		listManageableCatalogs,
+		policyDialect,
 		publishCatalog,
 		type CatalogDataPolicies,
 		type DataPolicy,
@@ -43,6 +45,7 @@
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Select from '$lib/ui/Select.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
+	import CodeBlock from '$lib/ui/patterns/CodeBlock.svelte';
 	import ConfirmDialog from '$lib/ui/patterns/ConfirmDialog.svelte';
 	import { toasts } from '$lib/ui/toast.svelte';
 
@@ -55,11 +58,19 @@
 
 	let data = $state.raw<CatalogDataPolicies | null>(null);
 	let views = $state.raw<DataPolicyDefinerView[]>([]);
+	// idle: no lookup is made (no policy, or policies off).
+	let viewsState = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
 	let viewsError = $state('');
 	let status = $state.raw<DataPolicyStatus | null>(null);
+	let statusLoading = $state(false);
+	let statusError = $state('');
 	let directory = $state.raw<Directory>(emptyDirectory);
+	let dialect = $state<string | null>(null);
 	let loading = $state(false);
 	let error = $state('');
+	// Each catalog load takes a token: a response for an earlier selection,
+	// arriving late, changes nothing.
+	let catalogRequest = 0;
 
 	let editorOpen = $state(false);
 	let editorSession = $state(0);
@@ -80,8 +91,7 @@
 		loadingCatalogs = true;
 		catalogsError = '';
 		try {
-			const all = await listCatalogs({ limit: 200 });
-			catalogs = all.filter((c) => c.id && can(c, 'manage_data_policies'));
+			catalogs = await listManageableCatalogs();
 			if (!catalogs.some((c) => c.id === catalogId)) catalogId = catalogs[0]?.id ?? '';
 		} catch (e) {
 			catalogsError = apiErrorMessage(e);
@@ -93,29 +103,46 @@
 
 	async function loadCatalog() {
 		if (!catalogId) return;
+		const id = catalogId;
+		const token = ++catalogRequest;
+		const current = () => token === catalogRequest;
 		loading = true;
 		error = '';
 		problems = [];
+		views = [];
+		viewsState = 'idle';
+		viewsError = '';
 		try {
-			const [policies, dir] = await Promise.all([listCatalogPolicies(catalogId), loadDirectory()]);
+			const [policies, dir, base] = await Promise.all([
+				listCatalogPolicies(id),
+				loadDirectory(),
+				policyDialect(catalogs.find((c) => c.id === id) ?? null)
+			]);
+			if (!current()) return;
 			data = policies;
 			directory = dir;
+			dialect = base;
 		} catch (e) {
+			if (!current()) return;
 			error = apiErrorMessage(e instanceof DataPolicyError ? e.body : e);
 			data = null;
 		} finally {
-			loading = false;
+			if (current()) loading = false;
 		}
-		await loadViews();
+		await loadViews(id, current);
 	}
 
-	// Each engine's revision is a global admin's (FD9); a failure leaves the
-	// policies on screen without it.
+	// Each engine's revision is a global admin's (FD9); a failure shows with a
+	// retry and leaves the policies on screen.
 	async function loadStatus() {
+		statusLoading = true;
+		statusError = '';
 		try {
 			status = await getStatus();
-		} catch {
-			status = null;
+		} catch (e) {
+			statusError = apiErrorMessage(e instanceof DataPolicyError ? e.body : e);
+		} finally {
+			statusLoading = false;
 		}
 	}
 
@@ -131,14 +158,18 @@
 
 	// The DEFINER views need the catalog manager; a failure there does not hide
 	// the policies.
-	async function loadViews() {
-		viewsError = '';
-		views = [];
-		if (!data?.enabled || data.policies.length === 0) return;
+	async function loadViews(id: string, current: () => boolean) {
+		if (!current() || !data?.enabled || data.policies.length === 0) return;
+		viewsState = 'loading';
 		try {
-			views = await listDefinerViews(catalogId);
+			const found = await listDefinerViews(id);
+			if (!current()) return;
+			views = found;
+			viewsState = 'ready';
 		} catch (e) {
+			if (!current()) return;
 			viewsError = apiErrorMessage(e instanceof DataPolicyError ? e.body : e);
+			viewsState = 'error';
 		}
 	}
 
@@ -309,8 +340,22 @@
 					{m.governance_engine_names({ names: data.names.join(', ') })}
 				</p>
 			{/if}
-			{#if status}
-				<div class="mb-4"><EngineStates {status} /></div>
+			{#if isAdmin}
+				<div class="mb-4">
+					{#if statusLoading}
+						<div role="status" aria-label={m.governance_loading()}>
+							<Skeleton class="h-16 w-full" />
+						</div>
+					{:else if statusError}
+						<ErrorState
+							title={m.governance_could_not_load_status()}
+							message={statusError}
+							onretry={loadStatus}
+						/>
+					{:else if status}
+						<EngineStates {status} />
+					{/if}
+				</div>
 			{/if}
 
 			{#if tables.length === 0}
@@ -326,7 +371,9 @@
 				</EmptyState>
 			{:else}
 				<div class="flex flex-col gap-4">
-					{#each tables as [table, policies] (table)}
+					{#each tables as group (group.key)}
+						{@const table = group.label}
+						{@const policies = group.policies}
 						{@const writes = combineWrites(policies.filter((p) => p.state === 'enabled'))}
 						{@const tableViews = viewsOver(table)}
 						<section
@@ -340,8 +387,7 @@
 								{#if canManage}
 									<Button
 										size="sm"
-										onclick={() =>
-											addPolicy({ schema: policies[0].schema, table: policies[0].table })}
+										onclick={() => addPolicy({ schema: group.schema, table: group.table })}
 									>
 										<PlusIcon class="h-3.5 w-3.5" aria-hidden="true" />
 										{m.governance_add_policy_to({ table })}
@@ -394,10 +440,15 @@
 														{/each}
 													</ul>
 												</td>
-												<td class="px-3 py-2"
-													><code class="font-mono text-[11px] break-all">{policy.expression}</code
-													></td
-												>
+												<td class="min-w-48 px-3 py-2">
+													<CodeBlock
+														code={policy.expression}
+														language="sql"
+														{dialect}
+														label={m.governance_expression_of({ name: policy.name })}
+														maxHeight="120px"
+													/>
+												</td>
 												<td class="px-3 py-2">
 													{#if policy.validation === 'valid'}
 														<Badge tone="success">{m.governance_valid()}</Badge>
@@ -451,7 +502,11 @@
 								</div>
 								<div>
 									<h3 class="mb-1 text-[12px] font-semibold">{m.governance_definer_views()}</h3>
-									{#if viewsError}
+									{#if viewsState === 'loading'}
+										<div role="status" aria-label={m.governance_loading()}>
+											<Skeleton class="h-4 w-40" />
+										</div>
+									{:else if viewsState === 'error'}
 										<p class="text-[11px] text-danger">{viewsError}</p>
 									{:else if tableViews.length === 0}
 										<p class="text-[11px] text-text-muted">{m.governance_no_definer_views()}</p>

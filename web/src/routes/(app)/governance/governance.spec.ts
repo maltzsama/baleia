@@ -1,11 +1,14 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/svelte';
-import { HttpResponse } from 'msw';
+import { delay, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { http, server } from '../../../test/server';
 import { makeCatalog, makeDataPolicy, makeDataPolicyStatus, makeMe } from '../../../test/factories';
 import { renderPage } from '../../../test/render';
 import GovernancePage from './+page.svelte';
 
+vi.mock('$lib/ui/patterns/CodeBlock.svelte', async () => ({
+	default: (await import('../../../test/CodeBlockStub.svelte')).default
+}));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/state', () => ({
 	page: { url: new URL('http://localhost/governance'), params: {} }
@@ -42,8 +45,20 @@ const mask = makeDataPolicy({
 	writes: { insert: 'refused', update: 'refused', delete: 'refused', merge: 'refused' }
 });
 
+// GET /catalogs as the server answers it: `action` keeps the catalogs that
+// allow it.
+function catalogsAnswer(list: ReturnType<typeof summary>[]) {
+	return http.get('/catalogs', ({ request, response }) => {
+		const action = new URL(request.url).searchParams.get('action');
+		return response(200).json(
+			action ? list.filter((c) => (c.allowed_actions as string[]).includes(action)) : list
+		);
+	});
+}
+
 function directory() {
 	return [
+		http.get('/engines', ({ response }) => response(200).json([])),
 		http.get('/users', ({ response }) =>
 			response(200).json({
 				data: [
@@ -71,9 +86,7 @@ function mockCatalog(
 ) {
 	server.use(
 		...directory(),
-		http.get('/catalogs', ({ response }) =>
-			response(200).json([summary(options.actions ?? ['view', 'manage_data_policies'])])
-		),
+		catalogsAnswer([summary(options.actions ?? ['view', 'manage_data_policies'])]),
 		http.get('/catalogs/{id}/data-policies', ({ response }) =>
 			response(200).json({
 				enabled: options.enabled ?? true,
@@ -136,12 +149,89 @@ describe('governance by object', () => {
 		expect(await screen.findByText('No catalog to govern')).toBeTruthy();
 	});
 
+	it('finds a governable catalog past the first page of catalogs', async () => {
+		mockCatalog();
+		const other = (i: number) => ({
+			...summary(['view', 'manage_data_policies']),
+			id: `00000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
+			name: `other-${i}`
+		});
+		const seen: string[] = [];
+		server.use(
+			http.get('/catalogs', ({ request, response }) => {
+				const params = new URL(request.url).searchParams;
+				seen.push(`${params.get('action')}@${params.get('offset')}`);
+				// The server filters on action; a full first page means another.
+				const page =
+					params.get('offset') === '0'
+						? Array.from({ length: 200 }, (_, i) => other(i + 1))
+						: [summary(['view', 'manage_data_policies'])];
+				return response(200).json(page);
+			})
+		);
+		renderPage(GovernancePage, { me: admin() });
+		const select = await screen.findByRole('combobox', { name: 'Catalog' });
+		await waitFor(() =>
+			expect(within(select).getByRole('option', { name: 'governed' })).toBeTruthy()
+		);
+		expect(seen).toEqual(['manage_data_policies@0', 'manage_data_policies@200']);
+	});
+
+	it('shows a failed engine status with a retry', async () => {
+		mockCatalog();
+		let calls = 0;
+		server.use(
+			http.get('/data-policies/status', ({ response }) => {
+				calls += 1;
+				return calls === 1
+					? response(403).json({ code: 'forbidden', message: 'boom' })
+					: response(200).json(makeDataPolicyStatus());
+			})
+		);
+		renderPage(GovernancePage, { me: admin() });
+		expect(await screen.findByText("Could not load the engines' policy state")).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByRole('region', { name: 'Active revision per engine' })).toBeTruthy();
+	});
+
+	it('keeps the selected catalog when an earlier one answers late', async () => {
+		const second = '00000000-0000-0000-0000-0000000000e3';
+		mockCatalog();
+		server.use(
+			catalogsAnswer([
+				summary(['view', 'manage_data_policies']),
+				{ ...summary(['view', 'manage_data_policies']), id: second, name: 'second' }
+			]),
+			http.get('/catalogs/{id}/data-policies', async ({ params, response }) => {
+				if (params.id === catalogId) await delay(150);
+				return response(200).json({
+					enabled: true,
+					names: [],
+					draft: false,
+					policies: [
+						params.id === catalogId
+							? filter
+							: makeDataPolicy({ id: 'late', name: 'second-only', subjects: [{ user: ada }] })
+					]
+				});
+			})
+		);
+		renderPage(GovernancePage, { me: admin() });
+		const select = await screen.findByRole('combobox', { name: 'Catalog' });
+		await waitFor(() =>
+			expect(within(select).getByRole('option', { name: 'second' })).toBeTruthy()
+		);
+		await fireEvent.change(select, { target: { value: second } });
+		expect(await screen.findByText('second-only')).toBeTruthy();
+		await new Promise((resolve) => setTimeout(resolve, 250));
+		expect(screen.queryByText('eu-only')).toBeNull();
+		expect(screen.getByText('second-only')).toBeTruthy();
+	});
+
 	it('hides edit and delete without the policy allowed actions', async () => {
 		server.use(
 			...directory(),
-			http.get('/catalogs', ({ response }) =>
-				response(200).json([summary(['view', 'manage_data_policies'])])
-			),
+			catalogsAnswer([summary(['view', 'manage_data_policies'])]),
 			http.get('/catalogs/{id}/data-policies', ({ response }) =>
 				response(200).json({
 					enabled: true,
@@ -169,9 +259,7 @@ describe('governance by object', () => {
 	it('shows a retryable, catalog-backed error', async () => {
 		server.use(
 			...directory(),
-			http.get('/catalogs', ({ response }) =>
-				response(200).json([summary(['manage_data_policies'])])
-			),
+			catalogsAnswer([summary(['manage_data_policies'])]),
 			http.get('/catalogs/{id}/data-policies', () =>
 				HttpResponse.json({ code: 'internal', message: 'pq: boom' }, { status: 500 })
 			)
@@ -259,7 +347,7 @@ describe('governance by object', () => {
 		expect(form.getByText(/unsalted hash of low-cardinality values/)).toBeTruthy();
 		await fireEvent.click(form.getByRole('button', { name: 'Fill in the expression' }));
 		expect((form.getByLabelText('Expression') as HTMLTextAreaElement).value).toBe(
-			'to_hex(sha256(to_utf8(email)))'
+			'to_hex(sha256(to_utf8("email")))'
 		);
 		await fireEvent.click(form.getByRole('button', { name: 'Save' }));
 
@@ -271,7 +359,7 @@ describe('governance by object', () => {
 			table: 'customers',
 			column: 'email',
 			subjects: [{ everyone: true }],
-			expression: 'to_hex(sha256(to_utf8(email)))',
+			expression: 'to_hex(sha256(to_utf8("email")))',
 			template: 'sha256'
 		});
 	});

@@ -45,9 +45,25 @@ async function serviceAccounts(): Promise<DirectoryEntry[]> {
 	return data.map((account) => ({ id: account.id, name: account.name, detail: account.email }));
 }
 
-/** Loads what the caller may read; a list it may not read is empty. */
+/** The list, or an empty one when its request fails outright. */
+async function bestEffort(list: () => Promise<DirectoryEntry[]>): Promise<DirectoryEntry[]> {
+	try {
+		return await list();
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * Loads what the caller may read; a list it may not read, or whose request
+ * fails, is empty, so the policies still load.
+ */
 export async function loadDirectory(): Promise<Directory> {
-	const [u, t, s] = await Promise.all([users(), teams(), serviceAccounts()]);
+	const [u, t, s] = await Promise.all([
+		bestEffort(users),
+		bestEffort(teams),
+		bestEffort(serviceAccounts)
+	]);
 	return { users: u, teams: t, serviceAccounts: s };
 }
 

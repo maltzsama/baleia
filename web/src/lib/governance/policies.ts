@@ -55,13 +55,30 @@ export function policyApplies(policy: DataPolicy, refs: ReadonlySet<string>): bo
 	});
 }
 
-/** `schema.table`, the key the screens group policies by. */
-export function tableKey(policy: Pick<DataPolicy, 'schema' | 'table'>): string {
+/** `schema.table`, how the screens name a table. */
+export function tableLabel(policy: Pick<DataPolicy, 'schema' | 'table'>): string {
 	return `${policy.schema}.${policy.table}`;
 }
 
-/** Policies grouped by table, tables sorted, filters before masks within one. */
-export function groupByTable(policies: readonly DataPolicy[]): [string, DataPolicy[]][] {
+/**
+ * A key that keeps schema and table apart: names may hold dots, so schema
+ * `a.b` with table `c` and schema `a` with table `b.c` stay two tables.
+ */
+export function tableKey(policy: Pick<DataPolicy, 'schema' | 'table'>): string {
+	return JSON.stringify([policy.schema, policy.table]);
+}
+
+/** One table's policies: filters before masks, then by column and priority. */
+export type TableGroup = {
+	key: string;
+	label: string;
+	schema: string;
+	table: string;
+	policies: DataPolicy[];
+};
+
+/** Policies grouped by table, tables sorted by name. */
+export function groupByTable(policies: readonly DataPolicy[]): TableGroup[] {
 	const groups = new Map<string, DataPolicy[]>();
 	for (const policy of policies) {
 		const key = tableKey(policy);
@@ -69,17 +86,20 @@ export function groupByTable(policies: readonly DataPolicy[]): [string, DataPoli
 	}
 	const kindOrder = (p: DataPolicy) => (p.kind === 'row_filter' ? 0 : 1);
 	return [...groups.entries()]
-		.sort(([a], [b]) => a.localeCompare(b))
-		.map(([key, list]) => [
+		.map(([key, list]) => ({
 			key,
-			[...list].sort(
+			label: tableLabel(list[0]),
+			schema: list[0].schema,
+			table: list[0].table,
+			policies: [...list].sort(
 				(a, b) =>
 					kindOrder(a) - kindOrder(b) ||
 					(a.column ?? '').localeCompare(b.column ?? '') ||
 					b.priority - a.priority ||
 					a.name.localeCompare(b.name)
 			)
-		]);
+		}))
+		.sort((a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key));
 }
 
 const effectRank: Record<DataPolicyWriteEffect, number> = {
@@ -118,8 +138,9 @@ export type MaskOptions = {
 	from?: 'start' | 'end';
 };
 
+// Always quoted: a column may be named after a reserved word (`order`).
 function quoteIdentifier(column: string): string {
-	return /^[a-z_][a-z0-9_]*$/.test(column) ? column : `"${column.replaceAll('"', '""')}"`;
+	return `"${column.replaceAll('"', '""')}"`;
 }
 
 function quoteString(value: string): string {
@@ -164,6 +185,9 @@ export function maskExpression(
 
 /** What one table's enabled policies do for a subject. */
 export type TableEffect = {
+	/** tableKey of the table, unique within a catalog. */
+	key: string;
+	/** `schema.table`, for display. */
 	table: string;
 	/** The table has row policies, so it is default-deny (ADR 0028). */
 	filtered: boolean;
@@ -186,7 +210,9 @@ export function effectsFor(
 	refs: ReadonlySet<string>
 ): TableEffect[] {
 	const out: TableEffect[] = [];
-	for (const [table, list] of groupByTable(policies.filter((p) => p.state === 'enabled'))) {
+	for (const { key, label: table, policies: list } of groupByTable(
+		policies.filter((p) => p.state === 'enabled')
+	)) {
 		const filters = list.filter((p) => p.kind === 'row_filter');
 		const matching = filters.filter((p) => policyApplies(p, refs));
 		const permissive = matching.filter((p) => p.mode !== 'restrictive');
@@ -205,6 +231,7 @@ export function effectsFor(
 		const filtered = filters.length > 0;
 		if (!filtered && masks.length === 0) continue;
 		out.push({
+			key,
 			table,
 			filtered,
 			permissive,
@@ -214,4 +241,19 @@ export function effectsFor(
 		});
 	}
 	return out;
+}
+
+/**
+ * The rows a subject sees on a filtered table, as one expression: the union of
+ * its permissive filters, narrowed by each restrictive one (ADR 0028). The
+ * union is parenthesized as a whole so a restrictive filter narrows all of it.
+ */
+export function combinedFilter(effect: Pick<TableEffect, 'permissive' | 'restrictive'>): string {
+	const parts: string[] = [];
+	if (effect.permissive.length === 1) parts.push(`(${effect.permissive[0].expression})`);
+	else if (effect.permissive.length > 1) {
+		parts.push(`(${effect.permissive.map((p) => `(${p.expression})`).join(' OR ')})`);
+	}
+	for (const p of effect.restrictive) parts.push(`(${p.expression})`);
+	return parts.join(' AND ');
 }

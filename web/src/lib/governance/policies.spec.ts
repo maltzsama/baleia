@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeDataPolicy } from '../../test/factories';
 import {
+	combinedFilter,
 	combineWrites,
 	effectsFor,
 	groupByTable,
@@ -55,10 +56,21 @@ describe('groupByTable', () => {
 			makeDataPolicy({ id: '2', table: 'b' }),
 			makeDataPolicy({ id: '3', table: 'a' })
 		]);
-		expect(groups.map(([table, list]) => [table, list.map((p) => p.id)])).toEqual([
+		expect(groups.map((g) => [g.label, g.policies.map((p) => p.id)])).toEqual([
 			['sales.a', ['3']],
 			['sales.b', ['2', '1']]
 		]);
+	});
+
+	it('keeps dotted schema and table names apart', () => {
+		const groups = groupByTable([
+			makeDataPolicy({ id: '1', schema: 'a.b', table: 'c' }),
+			makeDataPolicy({ id: '2', schema: 'a', table: 'b.c' })
+		]);
+		expect(groups).toHaveLength(2);
+		expect(groups.map((g) => g.label)).toEqual(['a.b.c', 'a.b.c']);
+		expect(groups.map((g) => g.policies.map((p) => p.id)).sort()).toEqual([['1'], ['2']]);
+		expect(new Set(groups.map((g) => g.key)).size).toBe(2);
 	});
 });
 
@@ -82,12 +94,14 @@ describe('maskExpression', () => {
 		);
 		expect(maskExpression('constant', 'email', { value: "it's" })).toBe("'it''s'");
 		expect(maskExpression('partial', 'phone', { keep: 4, from: 'end' })).toBe(
-			"concat('***', substr(phone, -4))"
+			'concat(\'***\', substr("phone", -4))'
 		);
 		expect(maskExpression('partial', 'phone', { keep: 2, from: 'start' })).toBe(
-			"concat(substr(phone, 1, 2), '***')"
+			'concat(substr("phone", 1, 2), \'***\')'
 		);
 		expect(maskExpression('sha256', 'Tax ID')).toBe('to_hex(sha256(to_utf8("Tax ID")))');
+		// A reserved word is a valid column once quoted.
+		expect(maskExpression('sha256', 'order')).toBe('to_hex(sha256(to_utf8("order")))');
 	});
 
 	it('never puts anything but a type name into CAST', () => {
@@ -145,5 +159,23 @@ describe('effectsFor', () => {
 			subjects: [{ user: bo }]
 		});
 		expect(effectsFor([masked], refs)).toEqual([]);
+	});
+});
+
+describe('combinedFilter', () => {
+	const p = (expression: string) => makeDataPolicy({ expression });
+
+	it('narrows the whole permissive union with each restrictive filter', () => {
+		expect(
+			combinedFilter({ permissive: [p('a = 1'), p('b = 2')], restrictive: [p('c = 3')] })
+		).toBe('((a = 1) OR (b = 2)) AND (c = 3)');
+	});
+
+	it('keeps a single filter as it was', () => {
+		expect(combinedFilter({ permissive: [p('a = 1')], restrictive: [] })).toBe('(a = 1)');
+		expect(combinedFilter({ permissive: [p('a = 1')], restrictive: [p('c = 3')] })).toBe(
+			'(a = 1) AND (c = 3)'
+		);
+		expect(combinedFilter({ permissive: [], restrictive: [p('c = 3')] })).toBe('(c = 3)');
 	});
 });

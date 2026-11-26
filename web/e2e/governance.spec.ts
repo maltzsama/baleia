@@ -43,8 +43,9 @@ test('@issue-1146 By subject shows the viewer filtered to US with e-mails masked
 		.getByRole('region', { name: 'E2E Governed' })
 		.getByRole('row')
 		.filter({ hasText: 'sales.customers' });
-	await expect(row.getByText("(region = 'US')")).toBeVisible();
-	await expect(row.getByText("'***'")).toBeVisible();
+	// The expressions show in read-only CodeBlocks, named after what they hold.
+	await expect(row.getByLabel('Rows sales.customers shows')).toContainText("region = 'US'");
+	await expect(row.getByLabel('Mask on email of sales.customers')).toContainText("'***'");
 });
 
 test('@issue-1146 Revisions shows the published revision and a healthy engine', async ({

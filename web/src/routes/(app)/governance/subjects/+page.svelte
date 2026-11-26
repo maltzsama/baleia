@@ -5,14 +5,14 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { client } from '$lib/api/client';
 	import { apiErrorMessage } from '$lib/api/errors';
-	import { can } from '$lib/authz/can';
-	import { listCatalogs } from '$lib/catalogs/admin';
 	import AttributeFreshness from '$lib/governance/AttributeFreshness.svelte';
 	import GuaranteeNotice from '$lib/governance/GuaranteeNotice.svelte';
 	import SubjectPicker from '$lib/governance/SubjectPicker.svelte';
 	import {
 		DataPolicyError,
 		listCatalogPolicies,
+		listManageableCatalogs,
+		policyDialect,
 		type DataPolicy,
 		type DataPolicySubject
 	} from '$lib/governance/api';
@@ -22,19 +22,21 @@
 		subjectLabel,
 		type Directory
 	} from '$lib/governance/directory';
-	import {
-		effectsFor,
-		subjectFromKey,
-		subjectKey,
-		type TableEffect
-	} from '$lib/governance/policies';
+	import { combinedFilter, effectsFor, subjectFromKey, subjectKey } from '$lib/governance/policies';
 	import { m } from '$lib/paraglide/messages';
 	import Badge from '$lib/ui/Badge.svelte';
 	import EmptyState from '$lib/ui/EmptyState.svelte';
 	import ErrorState from '$lib/ui/ErrorState.svelte';
 	import Skeleton from '$lib/ui/Skeleton.svelte';
+	import CodeBlock from '$lib/ui/patterns/CodeBlock.svelte';
 
-	type CatalogPolicies = { id: string; name: string; policies: DataPolicy[] };
+	type CatalogPolicies = {
+		id: string;
+		name: string;
+		policies: DataPolicy[];
+		/** The enforcing engine's CodeMirror base, for the policy SQL. */
+		dialect: string | null;
+	};
 
 	let directory = $state.raw<Directory>(emptyDirectory);
 	let catalogs = $state.raw<CatalogPolicies[]>([]);
@@ -43,8 +45,13 @@
 		subjectFromKey(page.url.searchParams.get('subject') ?? '')
 	);
 	let teamKeys = $state.raw<string[]>([]);
+	let teamsLoading = $state(false);
+	let teamsError = $state('');
 	let loading = $state(true);
 	let error = $state('');
+	// Each team lookup takes a number: one for an earlier subject, finishing
+	// late, does not replace the current subject's teams.
+	let teamsRequest = 0;
 
 	// Who the subject is known as: itself, and for a user its teams. Identity-
 	// provider groups come from the user's sign-ins, which this screen cannot
@@ -64,39 +71,55 @@
 		loading = true;
 		error = '';
 		try {
-			const [all, dir] = await Promise.all([listCatalogs({ limit: 200 }), loadDirectory()]);
+			const [managed, dir] = await Promise.all([listManageableCatalogs(), loadDirectory()]);
 			directory = dir;
-			const managed = all.flatMap((c) =>
-				c.id && can(c, 'manage_data_policies') ? [{ id: c.id, name: c.name ?? c.id }] : []
+			const lists = await Promise.all(
+				managed.map((c) => Promise.all([listCatalogPolicies(c.id ?? ''), policyDialect(c)]))
 			);
-			const lists = await Promise.all(managed.map((c) => listCatalogPolicies(c.id)));
-			enabled = lists.every((l) => l.enabled);
+			enabled = lists.every(([l]) => l.enabled);
 			catalogs = managed.map((c, i) => ({
-				...c,
-				policies: lists[i].policies
+				id: c.id ?? '',
+				name: c.name ?? c.id ?? '',
+				policies: lists[i][0].policies,
+				dialect: lists[i][1]
 			}));
 		} catch (e) {
 			error = apiErrorMessage(e instanceof DataPolicyError ? e.body : e);
 		} finally {
 			loading = false;
 		}
-		await loadTeams();
+		if (!error) await loadTeams();
 	}
 
-	// A user's teams, from the teams the caller can read.
+	// A user's teams, from the teams the caller can read. A failed lookup is an
+	// error, not "member of none": the effects would leave out what the teams
+	// grant.
 	async function loadTeams() {
+		const request = ++teamsRequest;
 		teamKeys = [];
+		teamsError = '';
+		teamsLoading = false;
 		const user = subject?.user;
 		if (!user) return;
-		const found = await Promise.all(
-			directory.teams.map(async (team) => {
-				const { data } = await client.GET('/teams/{id}/members', {
-					params: { path: { id: team.id } }
-				});
-				return data?.some((member) => member.user.id === user) ? `team:${team.id}` : null;
-			})
-		);
-		teamKeys = found.filter((key): key is string => key !== null);
+		teamsLoading = true;
+		try {
+			const found = await Promise.all(
+				directory.teams.map(async (team) => {
+					const { data, error: failed } = await client.GET('/teams/{id}/members', {
+						params: { path: { id: team.id } }
+					});
+					if (failed || !data) throw failed ?? new Error(team.id);
+					return data.some((member) => member.user.id === user) ? `team:${team.id}` : null;
+				})
+			);
+			if (request !== teamsRequest) return;
+			teamKeys = found.filter((key): key is string => key !== null);
+		} catch (e) {
+			if (request !== teamsRequest) return;
+			teamsError = apiErrorMessage(e);
+		} finally {
+			if (request === teamsRequest) teamsLoading = false;
+		}
 	}
 
 	function choose(next: DataPolicySubject) {
@@ -110,15 +133,6 @@
 			noScroll: true
 		});
 		void loadTeams();
-	}
-
-	function filterSummary(effect: TableEffect): string {
-		return [
-			effect.permissive.map((p) => `(${p.expression})`).join(' OR '),
-			...effect.restrictive.map((p) => `(${p.expression})`)
-		]
-			.filter(Boolean)
-			.join(' AND ');
 	}
 
 	onMount(load);
@@ -177,7 +191,19 @@
 				{m.governance_effects_for({ name: subjectLabel(subject, directory) })}
 			</h2>
 			<p class="mb-3 text-[12px] text-text-muted">{m.governance_effects_draft_note()}</p>
-			{#if effects.length === 0}
+			{#if teamsLoading}
+				<div class="flex flex-col gap-2" role="status" aria-label={m.governance_loading()}>
+					{#each [0, 1] as item (item)}
+						<Skeleton class="h-12 w-full" />
+					{/each}
+				</div>
+			{:else if teamsError}
+				<ErrorState
+					title={m.governance_could_not_load_teams()}
+					message={teamsError}
+					onretry={loadTeams}
+				/>
+			{:else if effects.length === 0}
 				<EmptyState
 					title={m.governance_nothing_applies_title()}
 					description={m.governance_nothing_applies_description()}
@@ -201,7 +227,7 @@
 									</tr>
 								</thead>
 								<tbody>
-									{#each entry.tables as effect (effect.table)}
+									{#each entry.tables as effect (effect.key)}
 										<tr class="border-t border-border/60 align-top">
 											<td class="px-3 py-2 font-mono">{effect.table}</td>
 											<td class="px-3 py-2">
@@ -211,9 +237,13 @@
 													<Badge tone="danger">{m.governance_no_rows()}</Badge>
 													<div class="mt-1 text-text-muted">{m.governance_default_deny()}</div>
 												{:else}
-													<code class="font-mono text-[11px] break-all"
-														>{filterSummary(effect)}</code
-													>
+													<CodeBlock
+														code={combinedFilter(effect)}
+														language="sql"
+														dialect={entry.catalog.dialect}
+														label={m.governance_filter_of({ table: effect.table })}
+														maxHeight="120px"
+													/>
 													<div class="mt-1 text-text-muted">
 														{[...effect.permissive, ...effect.restrictive]
 															.map((p) => p.name)
@@ -230,7 +260,16 @@
 															<li>
 																<span class="font-mono">{mask.column}</span>
 																→
-																<code class="font-mono text-[11px]">{mask.applied.expression}</code>
+																<CodeBlock
+																	code={mask.applied.expression}
+																	language="sql"
+																	dialect={entry.catalog.dialect}
+																	label={m.governance_mask_of({
+																		column: mask.column,
+																		table: effect.table
+																	})}
+																	maxHeight="80px"
+																/>
 																<span class="text-text-muted">({mask.applied.name})</span>
 																{#if mask.shadowed.length > 0}
 																	<div class="text-text-muted">

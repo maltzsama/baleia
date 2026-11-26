@@ -5,6 +5,9 @@ import { makeCatalog, makeDataPolicy, makeMe } from '../../../../test/factories'
 import { renderPage } from '../../../../test/render';
 import SubjectsPage from './+page.svelte';
 
+vi.mock('$lib/ui/patterns/CodeBlock.svelte', async () => ({
+	default: (await import('../../../../test/CodeBlockStub.svelte')).default
+}));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/state', () => ({
 	page: { url: new URL('http://localhost/governance/subjects'), params: {} }
@@ -73,7 +76,8 @@ function mock() {
 				{ user: person(ana, 'Ana'), role: 'member', joined_at: '2026-01-01T00:00:00Z' }
 			])
 		),
-		http.get('/service-accounts', ({ response }) => response(200).json([]))
+		http.get('/service-accounts', ({ response }) => response(200).json([])),
+		http.get('/engines', ({ response }) => response(200).json([]))
 	);
 }
 
@@ -92,7 +96,7 @@ describe('governance by subject', () => {
 		await choose(ana);
 
 		expect(await screen.findByText('For User Ana')).toBeTruthy();
-		const catalog = within(screen.getByRole('region', { name: 'governed' }));
+		const catalog = within(await screen.findByRole('region', { name: 'governed' }));
 		const customers = catalog.getByText('sales.customers').closest('tr')!;
 		expect(await within(customers).findByText("(region = 'EU')")).toBeTruthy();
 		expect(within(customers).getByText("'***'")).toBeTruthy();
@@ -100,6 +104,19 @@ describe('governance by subject', () => {
 		const orders = catalog.getByText('sales.orders').closest('tr')!;
 		expect(within(orders).getByText('No rows')).toBeTruthy();
 		expect(screen.getByText(/identity-provider groups are not included/)).toBeTruthy();
+	});
+
+	it('shows a failed team lookup instead of treating it as no membership', async () => {
+		mock();
+		server.use(
+			http.get('/teams/{id}/members', ({ response }) =>
+				response(404).json({ code: 'not_found', message: 'boom' })
+			)
+		);
+		renderPage(SubjectsPage, { me: makeMe() });
+		await choose(ana);
+		expect(await screen.findByText("Could not load the subject's teams")).toBeTruthy();
+		expect(screen.queryByRole('region', { name: 'governed' })).toBeNull();
 	});
 
 	it('honours the exceptions of everyone', async () => {
