@@ -164,7 +164,7 @@ func TestParseEnvAllow(t *testing.T) {
 	if got, err := ParseEnvAllow(""); err != nil || got != nil {
 		t.Fatalf("empty = %v, %v", got, err)
 	}
-	for _, bad := range []string{"*", "lower", "A*B", "A**", "A-B"} {
+	for _, bad := range []string{"*", "lower", "A*B", "A**", "A-B", ",", " , ", " "} {
 		if _, err := ParseEnvAllow(bad); err == nil {
 			t.Errorf("%q should be refused", bad)
 		}

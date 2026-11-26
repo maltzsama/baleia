@@ -76,6 +76,11 @@ func ParseEnvAllow(raw string) ([]string, error) {
 		}
 		out = append(out, entry)
 	}
+	// A value that names nothing (",", " ") is a mistake, not the unset
+	// default: it would leave every variable but Baleia's own readable.
+	if raw != "" && len(out) == 0 {
+		return nil, errors.New("BALEIA_SECRET_ENV_ALLOW: no variable named; unset it to allow any variable but Baleia's own")
+	}
 	return out, nil
 }
 
