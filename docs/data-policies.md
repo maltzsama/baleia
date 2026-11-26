@@ -230,13 +230,20 @@ Data policies hold only if the deployment closes the paths around Trino:
 - **Writes.** Trino 484 refuses `UPDATE` and `MERGE` on a table with a row
   filter, and every write on a table with a mask. ADR 0028 lists what the
   `writes` field of a policy allows.
-- **Views.** A `SECURITY DEFINER` view applies its owner's policies. One owned
-  by a trusted identity over a policied table makes the publish fail. One
-  owned by an ordinary user is refused by the catalog guard until plugin
-  issue maltzsama/baleia-trino-catalog-store#117 is resolved.
+- **Views.** A `SECURITY INVOKER` view applies each reader's policies. A
+  `SECURITY DEFINER` view applies its owner's: one owned by a trusted identity
+  over a policied table makes the publish fail, and one owned by an ordinary
+  user cannot be read at all, because Trino runs it without the reader's
+  credentials. The SQL editor therefore creates views as `SECURITY INVOKER`
+  unless the statement names a mode ([workbench](guides/workbench.md#run)).
 - **Revision changes during a statement.** Trino asks OPA separately for the
-  access check, the row filters and the masks of one statement. A bundle that
-  activates between those calls can mix two revisions (#1149).
+  access check, the row filters and the masks of one statement. A statement
+  analyzed while a new revision activates can take its filters from one
+  revision and its masks from the other (#1149). Only a publish, a re-issue or
+  a rollback activates a revision. To keep that mix from being looser than
+  both revisions, change either the row filters or the masks of a table in
+  one publish, not both: when a change needs both, publish the narrowing part
+  first (for example, add the mask) and the rest in a second publish.
 - **Other catalog types.** The Rego denies the metadata tables that carry
   values (`$files`, `$partitions` and others) and `table_changes` on policied
   tables. Allowing policies on another catalog type, such as one with
