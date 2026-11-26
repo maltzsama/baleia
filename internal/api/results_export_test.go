@@ -15,6 +15,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
 	"github.com/apache/arrow-go/v18/arrow/memory"
+	"github.com/galileostudio/baleia/internal/arrowipc"
 )
 
 // arrowStream builds an Arrow IPC stream with one string column.
@@ -97,6 +98,54 @@ func TestExportTSVAndJSONL(t *testing.T) {
 	}
 	if len(rows) != 2 || rows[0]["value"] != "a" || rows[1]["value"] != "b" {
 		t.Fatalf("rows = %+v", rows)
+	}
+}
+
+// TestExport_ArrowFile: the worker stores results as Arrow IPC files
+// (arrowipc.NewFileWriter, #238); every export format reads them, as well as
+// the legacy streams the tests above use.
+func TestExport_ArrowFile(t *testing.T) {
+	t.Parallel()
+	values := []string{"a", "b,c"}
+	stream := arrowStream(t, values)
+	reader, err := ipc.NewReader(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(reader.Release)
+	var file bytes.Buffer
+	writer, err := arrowipc.NewFileWriter(&file, reader.Schema())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for reader.Next() {
+		if err := writer.Write(reader.RecordBatch()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		format exportFormat
+		want   string
+	}{
+		{exportCSV, "value\na\n\"b,c\"\n"},
+		{exportTSV, "value\na\nb,c\n"},
+		{exportJSONL, "{\"value\":\"a\"}\n{\"value\":\"b,c\"}\n"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.format), func(t *testing.T) {
+			t.Parallel()
+			var out bytes.Buffer
+			if err := convertResult(&out, bytes.NewReader(file.Bytes()), tt.format); err != nil {
+				t.Fatal(err)
+			}
+			if out.String() != tt.want {
+				t.Errorf("%s = %q, want %q", tt.format, out.String(), tt.want)
+			}
+		})
 	}
 }
 
