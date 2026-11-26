@@ -241,9 +241,21 @@ Data policies hold only if the deployment closes the paths around Trino:
   analyzed while a new revision activates can take its filters from one
   revision and its masks from the other (#1149). Only a publish, a re-issue or
   a rollback activates a revision. To keep that mix from being looser than
-  both revisions, change either the row filters or the masks of a table in
-  one publish, not both: when a change needs both, publish the narrowing part
-  first (for example, add the mask) and the rest in a second publish.
+  both revisions for any table, change either the row filters or the masks of
+  a table in one publish, not both: when a change needs both, publish the
+  narrowing part first (for example, add the mask) and the rest in a second
+  publish.
+  - Publish the second part only after every engine shows the first revision
+    active. OPA fetches only the newest bundle when it polls, so two publishes
+    inside one poll interval skip the revision in between.
+  - Roll back the same way, one step at a time: from the second revision to
+    the one in between, wait until every engine shows it active, then to the
+    original. A rollback straight to the original changes the filters and the
+    masks at once.
+  - A statement that joins several tables can still take one table's filters
+    from one revision and another's from the other. Each table then returns
+    only rows one of the revisions shows it, the same a reader gets by reading
+    each table before and after the change.
 - **Other catalog types.** The Rego denies the metadata tables that carry
   values (`$files`, `$partitions` and others) and `table_changes` on policied
   tables. Allowing policies on another catalog type, such as one with

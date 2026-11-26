@@ -410,7 +410,8 @@ rollback and failed publish is audited with the actor, the revision and the affe
 ## Consequences
 
 - Row filters and column masks apply to every statement Trino runs: editor, retrievers, agents and
-  the BI gateway. Baleia rewrites no SQL.
+  the BI gateway. Policies rewrite no SQL; the only rewrite is the SQL editor's `SECURITY INVOKER`
+  on a `CREATE VIEW` that names no mode (see Views).
 - They protect only the Trino path. Their value depends on the deployment closing direct access to
   the catalog manager and storage for restricted tables.
 - Turning policies on makes OPA a hard dependency of each engine that has them, maintenance
@@ -444,7 +445,14 @@ rollback and failed publish is audited with the actor, the revision and the affe
   changes, for each table, either its row filters or its masks but not both, the part it does not
   change is the same in both revisions, so no table gets the filter of one with the masks of the
   other. The operator docs say to split a change that moves both into two publishes, the
-  narrowing one first, so the revision in between is never looser than either end.
+  narrowing one first, and to publish the second only once every engine shows the first active:
+  OPA fetches only the current bundle at each poll, so two publishes inside one poll interval skip
+  the revision in between. A rollback across both changes is the same kind of change, so it goes
+  back one step at a time. With those rules the revision in between is never looser than either
+  end for any one table. Across tables a statement can still join one table's filter from one
+  revision with another table's from the other; each table then returns only rows one of the
+  revisions shows it, which the reader could also get by reading each table before and after the
+  change, so this case is accepted without a further rule.
 
 ## Spike results (#994)
 
