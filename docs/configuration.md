@@ -85,6 +85,7 @@ Baleia (the API and the worker) is configured with environment variables. The de
 | `BALEIA_HTTP_READ_HEADER_TIMEOUT` | `10s` | Time a client has to send the request headers to the API |
 | `BALEIA_HTTP_IDLE_TIMEOUT` | `2m` | How long an idle keep-alive connection to the API stays open |
 | `BALEIA_HTTP_SHUTDOWN_TIMEOUT` | `20s` | How long the API drains in-flight requests on shutdown (keep it below the pod's termination grace period); `0` waits without a deadline |
+| `BALEIA_SECRET_ENV_ALLOW` | _(unset)_ | When set, the only variables `@baleia-secret[env:VAR]` connection references may read: comma-separated names or prefixes ending in `*`. Unset, any variable but Baleia's own configuration ([secrets.md](secrets.md#which-variables-env-may-read)). Read once at startup |
 | `BALEIA_SECRET_FILE_BASE_DIR` | _(unset)_ | Directory `@baleia-secret[file:name]` references resolve under ([secrets.md](secrets.md)); unset refuses `file:` references. Read once at startup |
 | `BALEIA_SQLITE_ROOT` | _(unset)_ | Directory SQLite connections are confined to (symlinks resolved); unset disables the SQLite provider. The API and the worker must see the same files (shared volume) |
 | `BALEIA_SQLITE_ALLOW_WRITE` | `false` | Let a SQLite connection that sets `read_write` open its file read-write; otherwise files open read-only |

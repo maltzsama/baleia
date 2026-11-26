@@ -7,7 +7,15 @@ import { sectionForPath } from '$lib/settings/sections';
 import type { Features } from '$lib/stores/auth.svelte';
 
 export type AreaKey =
-	'sql' | 'data' | 'explore' | 'content' | 'connections' | 'monitoring' | 'settings' | 'profile';
+	| 'sql'
+	| 'data'
+	| 'explore'
+	| 'content'
+	| 'connections'
+	| 'governance'
+	| 'monitoring'
+	| 'settings'
+	| 'profile';
 
 export type NavPage = {
 	readonly href: string;
@@ -73,6 +81,17 @@ export const navAreas: readonly NavArea[] = [
 			{ href: '/connections', label: m.nav_page_connections },
 			{ href: '/catalogs', label: m.nav_page_catalogs },
 			{ href: '/engines', label: m.nav_page_engines }
+		]
+	},
+	// Data policies (ADR 0028): By object, By subject and Revisions.
+	{
+		key: 'governance',
+		label: m.nav_governance,
+		href: '/governance',
+		pages: [
+			{ href: '/governance', label: m.nav_page_by_object },
+			{ href: '/governance/subjects', label: m.nav_page_by_subject },
+			{ href: '/governance/revisions', label: m.nav_page_revisions }
 		]
 	},
 	{

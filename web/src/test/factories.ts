@@ -33,6 +33,9 @@ type MaintenancePolicy = components['schemas']['MaintenancePolicy'];
 type StoredMaintenancePolicy = components['schemas']['StoredMaintenancePolicy'];
 type MaintenancePlan = components['schemas']['MaintenancePlan'];
 type TableMaintenance = components['schemas']['TableMaintenance'];
+type DataPolicy = components['schemas']['DataPolicy'];
+type DataPolicyRevision = components['schemas']['DataPolicyRevision'];
+type DataPolicyStatus = components['schemas']['DataPolicyStatus'];
 
 export function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 	return {
@@ -687,6 +690,73 @@ export function makeWorkspaceTarget(overrides: Partial<WorkspaceTarget> = {}): W
 		engine_catalog_name: 'lake',
 		mode: 'native',
 		is_default: true,
+		...overrides
+	};
+}
+
+export function makeDataPolicy(overrides: Partial<DataPolicy> = {}): DataPolicy {
+	return {
+		id: '00000000-0000-0000-0000-0000000000d1',
+		catalog_id: '00000000-0000-0000-0000-0000000000e2',
+		name: 'eu-only',
+		description: '',
+		kind: 'row_filter',
+		schema: 'sales',
+		table: 'customers',
+		column: null,
+		mode: 'permissive',
+		priority: 0,
+		subjects: [{ user: '00000000-0000-0000-0000-000000000003' }],
+		expression: "region = 'EU'",
+		compiled: "region = 'EU'",
+		template: null,
+		state: 'enabled',
+		validation: 'valid',
+		invalid_reason: null,
+		invalid_detail: null,
+		writes: { insert: 'checked', update: 'refused', delete: 'visible_rows', merge: 'refused' },
+		version: 1,
+		created_by: null,
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
+		allowed_actions: ['update', 'delete'],
+		...overrides
+	};
+}
+
+export function makeDataPolicyRevision(
+	overrides: Partial<DataPolicyRevision> = {}
+): DataPolicyRevision {
+	return {
+		id: '00000000-0000-0000-0000-0000000000f1',
+		number: 1,
+		reason: 'publish',
+		source_id: null,
+		digest: 'abcdef0123456789abcdef0123456789',
+		not_after: '2026-01-02T00:00:00Z',
+		created_by: null,
+		created_at: '2026-01-01T00:00:00Z',
+		published: true,
+		...overrides
+	};
+}
+
+export function makeDataPolicyStatus(overrides: Partial<DataPolicyStatus> = {}): DataPolicyStatus {
+	return {
+		enabled: true,
+		published: makeDataPolicyRevision(),
+		expected_policy_digest: 'rego-digest',
+		engines: [
+			{
+				engine_id: '00000000-0000-0000-0000-0000000000a1',
+				engine_name: 'trino',
+				data_policies: true,
+				health: 'healthy',
+				reason: null,
+				active_revision: '00000000-0000-0000-0000-0000000000f1',
+				reported_at: '2026-01-01T00:00:00Z'
+			}
+		],
 		...overrides
 	};
 }

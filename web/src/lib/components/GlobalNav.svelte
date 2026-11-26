@@ -5,6 +5,7 @@
 	import KeyIcon from '@lucide/svelte/icons/key';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
+	import ShieldIcon from '@lucide/svelte/icons/shield';
 	import Table2Icon from '@lucide/svelte/icons/table-2';
 	import TerminalIcon from '@lucide/svelte/icons/terminal';
 	import UserIcon from '@lucide/svelte/icons/user';
@@ -15,6 +16,7 @@
 	import { locate, railAreas, type AreaKey } from '$lib/nav/sections';
 	import { visibleSections } from '$lib/settings/sections';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { canGlobal } from '$lib/authz/can';
 	import Logo from '$lib/components/Logo.svelte';
 
 	let menuOpen = $state(false);
@@ -23,7 +25,17 @@
 	// name, and its pages are tabs in the header. Settings is administration,
 	// shown only to someone who can open one of its sections.
 	const current = $derived(locate(page.url.pathname)?.area.key ?? null);
-	const mainAreas = railAreas.filter((area) => area.key !== 'settings');
+	// Governance is for whoever can manage data policies: a global admin, or
+	// the owner of a connection (someone who could create one).
+	const showGovernance = $derived(
+		canGlobal(authStore.user, 'manage_data_policies') ||
+			canGlobal(authStore.user, 'create_connection')
+	);
+	const mainAreas = $derived(
+		railAreas.filter(
+			(area) => area.key !== 'settings' && (area.key !== 'governance' || showGovernance)
+		)
+	);
 	const settingsArea = railAreas.find((area) => area.key === 'settings')!;
 	const showSettings = $derived(visibleSections(authStore.user).length > 0);
 
@@ -34,6 +46,7 @@
 		explore: ZoomInIcon,
 		content: FolderIcon,
 		connections: DatabaseIcon,
+		governance: ShieldIcon,
 		monitoring: ChartNoAxesColumnIcon,
 		settings: SettingsIcon,
 		profile: UserIcon

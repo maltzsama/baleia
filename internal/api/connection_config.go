@@ -119,6 +119,23 @@ func validate(p connections.Provider, cfg connections.Config) (connections.Confi
 	return out, err
 }
 
+// refuseReferences answers a 422 when one of keys (every secret when none is
+// given) holds an env: reference to Baleia's own configuration, or one outside
+// BALEIA_SECRET_ENV_ALLOW when it is set: stored, it would let a connection
+// writer read the API's, or Trino's, own environment (JWT_SECRET, the
+// encryption key) by pointing the connection at a server they control.
+func refuseReferences(cfg connections.Config, keys ...string) (connections.Config, error) {
+	refused := cfg.RefusedReferences(keys...)
+	if len(refused) == 0 {
+		return cfg, nil
+	}
+	fields := make([]connections.FieldError, len(refused))
+	for i, key := range refused {
+		fields[i] = connections.FieldError{Key: key, Message: "a connection may not read this environment variable"}
+	}
+	return connections.Config{}, &configError{code: ErrorCodeValidationError, fields: fields}
+}
+
 // asConfigError maps a request-shape failure (a malformed JDBC URL) to a 422.
 func asConfigError(err error) error {
 	var ve *connections.ValidationError
@@ -170,7 +187,11 @@ func (h *core) createConfig(id db.UUID, body *CreateCatalogConnectionRequest) (c
 	if err != nil {
 		return connections.Config{}, asConfigError(err)
 	}
-	return validate(p, cfg)
+	out, err := validate(p, cfg)
+	if err != nil {
+		return out, err
+	}
+	return refuseReferences(out)
 }
 
 // legacyCredentials returns the credentials object of a create request as a
@@ -218,7 +239,34 @@ func (h *core) updateConfig(conn db.CatalogConnection, body UpdateCatalogConnect
 	if err != nil {
 		return connections.Config{}, asConfigError(err)
 	}
-	return validate(p, merged)
+	out, err := validate(p, merged)
+	if err != nil {
+		return out, err
+	}
+	// A reference only Baleia stores (the default engine's password) is bound
+	// to the endpoint Baleia set: an edit of the endpoint or the config would
+	// send the operator's password wherever it points. TRINO_URL sets that
+	// endpoint; replacing the password first frees the connection. The values
+	// are compared, not the request fields: Merge also moves a non-secret key
+	// sent in credentials (url) into them.
+	if !maps.Equal(merged.Values, cur.Values) {
+		if kept := out.SystemReferences(); len(kept) > 0 {
+			fields := []connections.FieldError{{Key: "url", Message: "this connection reads its password from Baleia's environment; change its endpoint with TRINO_URL, or replace the password in the same request"}}
+			return connections.Config{}, &configError{code: ErrorCodeValidationError, fields: fields}
+		}
+	}
+	// Only a secret the update adds or changes is checked: one stored as it
+	// was (the default engine's password reference) is kept.
+	var changed []string
+	for key, v := range out.Secrets {
+		if stored, ok := cur.Secrets[key]; !ok || stored != v {
+			changed = append(changed, key)
+		}
+	}
+	if len(changed) == 0 {
+		return out, nil
+	}
+	return refuseReferences(out, changed...)
 }
 
 // storedColumns is a validated config as catalog_connections columns: config

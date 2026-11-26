@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"time"
@@ -312,20 +313,24 @@ type Config struct {
 // Value returns a non-secret value, or "" when unset.
 func (c Config) Value(key string) string { return c.Values[key] }
 
+// secrets returns the Config's resolver; a Config built without a registry
+// resolves no file: reference and no env: one to Baleia's own configuration.
+func (c Config) secrets() SecretResolver {
+	if c.resolver != nil {
+		return *c.resolver
+	}
+	return SecretResolver{}
+}
+
 // Secret returns a secret value resolved for Baleia's own use: an external
 // reference (@baleia-secret[env:…] or @baleia-secret[file:…]) is resolved with
-// the Config's resolver; empty when it cannot be resolved.
+// the Config's resolver; empty when it cannot be resolved or is not allowed.
 func (c Config) Secret(key string) string {
 	v := c.Secrets[key]
 	if !IsSecretReference(v) {
 		return v
 	}
-	// A Config built without a registry resolves env: references only.
-	var r SecretResolver
-	if c.resolver != nil {
-		r = *c.resolver
-	}
-	resolved, err := r.Resolve(v)
+	resolved, err := c.secrets().Resolve(v)
 	if err != nil {
 		return ""
 	}
@@ -333,13 +338,48 @@ func (c Config) Secret(key string) string {
 }
 
 // Reference returns a secret field's raw external reference, or "" when the
-// field holds a literal secret. Binders project it verbatim, so the plugin
-// persists the reference instead of the resolved value (#31).
+// field holds a literal secret or a reference the resolver does not allow.
+// Binders project it verbatim, so the plugin persists the reference instead
+// of the resolved value (#31); a refused env: reference never reaches the
+// engine, which would otherwise resolve it in its own environment.
 func (c Config) Reference(key string) string {
-	if v := c.Secrets[key]; IsSecretReference(v) {
+	if v := c.Secrets[key]; IsSecretReference(v) && c.secrets().Permits(v) {
 		return v
 	}
 	return ""
+}
+
+// SystemReferences lists the secret fields holding a reference only Baleia
+// may store (connections.SecretResolver.SystemEnv: the default engine's
+// BALEIA_TRINO_PASSWORD), sorted by key.
+func (c Config) SystemReferences() []string {
+	r := c.secrets()
+	var out []string
+	for key, v := range c.Secrets {
+		if IsSecretReference(v) && r.Permits(v) && !r.Writable(v) {
+			out = append(out, key)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// RefusedReferences lists the given secret fields (every one when keys is
+// empty) whose external reference a request may not store: an env: name
+// outside BALEIA_SECRET_ENV_ALLOW. Sorted by key.
+func (c Config) RefusedReferences(keys ...string) []string {
+	r := c.secrets()
+	if len(keys) == 0 {
+		keys = slices.Collect(maps.Keys(c.Secrets))
+	}
+	var out []string
+	for _, key := range keys {
+		if v, ok := c.Secrets[key]; ok && IsSecretReference(v) && !r.Writable(v) {
+			out = append(out, key)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // State is a provider's static implementation status (ADR 0021 CR-12). Runtime

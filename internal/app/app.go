@@ -216,12 +216,20 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 			return nil, err
 		}
 	}
+	envAllow, err := connections.ParseEnvAllow(cfg.SecretEnvAllow)
+	if err != nil {
+		return nil, err
+	}
 	c.Dialects = dialect.NewRegistry()
 	pOpts := providers.Options{
 		Dialects: c.Dialects,
-		Secrets:  connections.SecretResolver{FileBaseDir: cfg.SecretFileBaseDir},
-		SQLite:   sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite, Logger: c.Logger},
-		Glue:     glue.Options{AllowAmbientCredentials: cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: cfg.GlueAllowInsecureEndpoint},
+		Secrets: connections.SecretResolver{
+			FileBaseDir: cfg.SecretFileBaseDir,
+			EnvAllow:    envAllow,
+			SystemEnv:   []string{bootstrap.TrinoPasswordEnv},
+		},
+		SQLite: sqlite.Options{Root: cfg.SQLiteRoot, AllowWrite: cfg.SQLiteAllowWrite, Logger: c.Logger},
+		Glue:   glue.Options{AllowAmbientCredentials: cfg.AllowAmbientAWSCredentials, AllowInsecureEndpoint: cfg.GlueAllowInsecureEndpoint},
 	}
 	c.Connections, err = providers.New(c.Dialer, pOpts)
 	if err != nil {
@@ -319,7 +327,10 @@ var ErrNoService = errors.New("app: Options.Service is required")
 // an @baleia-secret reference to a mounted Secret, and parses the key. A
 // deployment with data policies on does not start without it.
 func loadDataPolicySigningKey(cfg *config.Config) (*rsa.PrivateKey, error) {
-	text, err := connections.SecretResolver{FileBaseDir: cfg.SecretFileBaseDir}.Resolve(cfg.DataPolicySigningKey)
+	// The operator sets this value, not a connection writer: it may name any
+	// variable of the environment.
+	operator := connections.SecretResolver{FileBaseDir: cfg.SecretFileBaseDir, EnvAllow: []string{"*"}}
+	text, err := operator.Resolve(cfg.DataPolicySigningKey)
 	if err != nil {
 		return nil, fmt.Errorf("BALEIA_DATA_POLICY_SIGNING_KEY: %w", err)
 	}

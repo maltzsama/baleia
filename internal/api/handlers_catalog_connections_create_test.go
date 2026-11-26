@@ -12,6 +12,7 @@ import (
 	"github.com/galileostudio/baleia/internal/audit"
 	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/galileostudio/baleia/internal/bootstrap"
 	"github.com/galileostudio/baleia/internal/catalogs"
 	"github.com/galileostudio/baleia/internal/config"
 	"github.com/galileostudio/baleia/internal/connections"
@@ -65,6 +66,11 @@ func anyMap(kv ...string) *map[string]any {
 	for i := 0; i+1 < len(kv); i += 2 {
 		m[kv[i]] = kv[i+1]
 	}
+	return &m
+}
+
+func directMode() *CreateCatalogConnectionRequestAccessMode {
+	m := CreateCatalogConnectionRequestAccessModeDirect
 	return &m
 }
 
@@ -325,6 +331,9 @@ func TestCreateConnection_Rejects(t *testing.T) {
 		"bad url":      {&CreateCatalogConnectionRequest{Name: "x", Type: "nessie", Config: strMap("url", "ftp://n")}, "validation_error", "url"},
 		"bad jdbc":     {&CreateCatalogConnectionRequest{Name: "x", Type: "postgresql", Url: func() *string { s := "not a url"; return &s }()}, "validation_error", "url"},
 		"unknown kind": {&CreateCatalogConnectionRequest{Name: "x", Type: "duckdb"}, "provider_unsupported", "type"},
+		// No BALEIA_SECRET_ENV_ALLOW: a connection must not read JWT_SECRET.
+		"env reference not allowed": {&CreateCatalogConnectionRequest{Name: "x", Type: "mysql", AccessMode: directMode(),
+			Config: strMap("host", "db", "username", "u"), Credentials: anyMap("password", "@baleia-secret[env:JWT_SECRET]")}, "validation_error", "password"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -498,6 +507,110 @@ func TestUpdateConnection_RejectsInvalid(t *testing.T) {
 	}
 	if len(q.updates) != 0 {
 		t.Fatal("an invalid update was written")
+	}
+}
+
+// TestConnection_EnvReferenceAllowList: an env: reference is stored only for a
+// variable BALEIA_SECRET_ENV_ALLOW names, on create and on update, so whoever
+// may write a connection cannot read the API's own environment.
+func TestConnection_EnvReferenceAllowList(t *testing.T) {
+	t.Parallel()
+	kr := testKeyring(t)
+	reg := testRegistry(t).WithSecrets(connections.SecretResolver{EnvAllow: []string{"CONN_*"}})
+	handlers := func(q db.Querier) *API {
+		return testAPI(handlerFields{queries: q, tx: directTx{q: q}, keyring: kr, connections: reg, settings: SettingsFromConfig(&config.Config{}), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
+	}
+	p, err := authz.PrincipalFromContext(testContext())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// prepareRegistration is every create's validation, without reaching the
+	// database server a direct connection would be checked against.
+	create := func(ref string) CreateCatalogConnectionResponseObject {
+		_, resp, err := handlers(&recordingConnQuerier{}).prepareRegistration(testContext(), p, db.UUID{Bytes: [16]byte{1}, Valid: true}, audit.Event{}, &CreateCatalogConnectionRequest{
+			Name: "my", Type: "mysql", AccessMode: directMode(),
+			Config: strMap("host", "db", "username", "u"), Credentials: anyMap("password", ref),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	for _, ok := range []string{"@baleia-secret[env:CONN_MYSQL_PASSWORD]", "@baleia-secret[file:mysql-password]"} {
+		if resp := create(ok); resp != nil {
+			rec := visitCreate(t, resp)
+			t.Fatalf("%s refused: %d %s", ok, rec.Code, rec.Body)
+		}
+	}
+	resp := create("@baleia-secret[env:JWT_SECRET]")
+	if resp == nil {
+		t.Fatal("an env reference outside the allow-list was accepted")
+	}
+	if rec := visitCreate(t, resp); rec.Code != 422 || !strings.Contains(rec.Body.String(), `"field":"password"`) {
+		t.Fatalf("refused reference: %d %s", rec.Code, rec.Body)
+	}
+
+	q := &updateConnQuerier{conn: storedPolaris(t, kr)}
+	rec := runUpdate(t, handlers(q), UpdateCatalogConnectionRequest{Credentials: anyMap("client_secret", "@baleia-secret[env:BALEIA_ENCRYPTION_KEY]")})
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), `"field":"client_secret"`) || len(q.updates) != 0 {
+		t.Fatalf("refused reference on update: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// TestCreateConnection_EnvReferenceWithoutAllowList: with no
+// BALEIA_SECRET_ENV_ALLOW, a connection may still name its own variable, as
+// before the allow-list existed.
+func TestCreateConnection_EnvReferenceWithoutAllowList(t *testing.T) {
+	t.Parallel()
+	reg := prepareCreate(t, testKeyring(t), &CreateCatalogConnectionRequest{
+		Name: "my", Type: "mysql", AccessMode: directMode(),
+		Config: strMap("host", "db", "username", "u"), Credentials: anyMap("password", "@baleia-secret[env:PG_PASSWORD]"),
+	})
+	if reg.config.Reference("password") != "@baleia-secret[env:PG_PASSWORD]" {
+		t.Fatalf("reference not kept: %v", reg.config.Secrets)
+	}
+}
+
+// TestUpdateConnection_KeepsTheDefaultEnginePasswordReference: the default
+// engine stores a reference to BALEIA_TRINO_PASSWORD itself. It stays bound to
+// the endpoint Baleia set, and a request cannot store that reference anywhere.
+func TestUpdateConnection_KeepsTheDefaultEnginePasswordReference(t *testing.T) {
+	t.Parallel()
+	kr := testKeyring(t)
+	reg := testRegistry(t).WithSecrets(connections.SecretResolver{SystemEnv: []string{bootstrap.TrinoPasswordEnv}})
+	handlers := func(q db.Querier) *API {
+		return testAPI(handlerFields{queries: q, tx: directTx{q: q}, keyring: kr, connections: reg, settings: SettingsFromConfig(&config.Config{}), catalogCache: NewTTLStore[[]workspaceCatalogEntry](time.Minute)})
+	}
+	stored := storedPolaris(t, kr)
+	enc, err := kr.Seal([]byte(`{"client_secret":"`+bootstrap.TrinoPasswordRef+`"}`), catalogs.CredentialsAAD(stored.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored.CredentialsEnc = &enc
+
+	// The reference is bound to the endpoint Baleia set: a config or url
+	// edit would send the operator's password wherever the connection points.
+	q := &updateConnQuerier{conn: stored}
+	for name, body := range map[string]UpdateCatalogConnectionRequest{
+		"config":          {Config: strMap("client_id", "new-id")},
+		"url in config":   {Config: strMap("url", "https://attacker.example")},
+		"top-level url":   {Url: func() *string { u := "https://attacker.example"; return &u }()},
+		"credentials url": {Credentials: anyMap("url", "https://attacker.example")},
+	} {
+		if rec := runUpdate(t, handlers(q), body); rec.Code != 422 || !strings.Contains(rec.Body.String(), `"field":"url"`) {
+			t.Fatalf("%s edit kept the operator's reference: %d %s", name, rec.Code, rec.Body)
+		}
+	}
+	if len(q.updates) != 0 {
+		t.Fatal("a refused edit was written")
+	}
+	// Replacing the password in the same request frees the connection.
+	if rec := runUpdate(t, handlers(q), UpdateCatalogConnectionRequest{Config: strMap("client_id", "new-id"), Credentials: anyMap("client_secret", "literal")}); rec.Code != 200 {
+		t.Fatalf("edit that replaces the reference: %d %s", rec.Code, rec.Body)
+	}
+	q = &updateConnQuerier{conn: storedPolaris(t, kr)}
+	if rec := runUpdate(t, handlers(q), UpdateCatalogConnectionRequest{Credentials: anyMap("client_secret", bootstrap.TrinoPasswordRef)}); rec.Code != 422 || len(q.updates) != 0 {
+		t.Fatalf("storing the default engine's reference: %d %s", rec.Code, rec.Body)
 	}
 }
 

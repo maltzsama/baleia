@@ -43,6 +43,8 @@ func ValidateSchema(schema []Field, cfg Config) (Config, error) {
 		Kind:         cfg.Kind,
 		Values:       map[string]string{},
 		Secrets:      map[string]string{},
+		// The copy resolves references as the input did (BALEIA_SECRET_*).
+		resolver: cfg.resolver,
 	}
 	var errs []FieldError
 	known := make(map[string]Field, len(schema))

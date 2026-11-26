@@ -42,9 +42,15 @@ type DefaultTrinoEngine struct {
 	Seal func(plain []byte, connID db.UUID) (string, error)
 }
 
+// TrinoPasswordEnv is the variable the default engine's password reference
+// names. It is Baleia's own configuration, which a connection may not read,
+// but Baleia stores this reference itself, so the resolver resolves it
+// (connections.SecretResolver.SystemEnv); a request may not store it.
+const TrinoPasswordEnv = "BALEIA_TRINO_PASSWORD" //nolint:gosec // G101: a variable name, not a credential
+
 // TrinoPasswordRef is the external secret reference the default engine stores
 // in place of the password.
-const TrinoPasswordRef = "@baleia-secret[env:BALEIA_TRINO_PASSWORD]"
+const TrinoPasswordRef = "@baleia-secret[env:" + TrinoPasswordEnv + "]"
 
 // authKeys are the config keys set only for an authenticated coordinator; they
 // are removed when the environment no longer sets them.
