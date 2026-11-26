@@ -79,8 +79,8 @@ variable may be read, as before.
 
 `BALEIA_SECRET_ENV_ALLOW` narrows that further: when set, `env:` reads only
 the variables it lists (comma-separated names, or prefixes ending in `*`). It
-may name one of the variables above on purpose; a lone `*` is refused at
-startup.
+may name one of the variables above on purpose. A lone `*`, or a value that
+names nothing (`,`), is refused at startup.
 
 ```bash
 BALEIA_SECRET_ENV_ALLOW=CONN_*,LAKE_POLARIS_TOKEN
@@ -92,7 +92,10 @@ BALEIA_SECRET_ENV_ALLOW=CONN_*,LAKE_POLARIS_TOKEN
   the Trino catalog registry, so Trino never resolves it in its own
   environment either.
 - The default engine's `@baleia-secret[env:BALEIA_TRINO_PASSWORD]`, which
-  Baleia stores itself, always resolves. A request cannot store that reference.
+  Baleia stores itself, always resolves. A request cannot store that reference,
+  and while a connection holds it, an edit of its URL or config is refused
+  (422 on `url`): `TRINO_URL` sets that endpoint. An edit that also replaces
+  the password goes through.
 
 ## Catalog registry at rest (Phase B, #200 / D4)
 

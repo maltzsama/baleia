@@ -349,6 +349,21 @@ func (c Config) Reference(key string) string {
 	return ""
 }
 
+// SystemReferences lists the secret fields holding a reference only Baleia
+// may store (connections.SecretResolver.SystemEnv: the default engine's
+// BALEIA_TRINO_PASSWORD), sorted by key.
+func (c Config) SystemReferences() []string {
+	r := c.secrets()
+	var out []string
+	for key, v := range c.Secrets {
+		if IsSecretReference(v) && r.Permits(v) && !r.Writable(v) {
+			out = append(out, key)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // RefusedReferences lists the given secret fields (every one when keys is
 // empty) whose external reference a request may not store: an env: name
 // outside BALEIA_SECRET_ENV_ALLOW. Sorted by key.

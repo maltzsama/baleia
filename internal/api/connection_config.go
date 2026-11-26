@@ -243,6 +243,16 @@ func (h *core) updateConfig(conn db.CatalogConnection, body UpdateCatalogConnect
 	if err != nil {
 		return out, err
 	}
+	// A reference only Baleia stores (the default engine's password) is bound
+	// to the endpoint Baleia set: an edit of the endpoint or the config would
+	// send the operator's password wherever it points. TRINO_URL sets that
+	// endpoint; replacing the password first frees the connection.
+	if body.Url != nil || body.Config != nil {
+		if kept := out.SystemReferences(); len(kept) > 0 {
+			fields := []connections.FieldError{{Key: "url", Message: "this connection reads its password from Baleia's environment; change its endpoint with TRINO_URL, or replace the password in the same request"}}
+			return connections.Config{}, &configError{code: ErrorCodeValidationError, fields: fields}
+		}
+	}
 	// Only a secret the update adds or changes is checked: one stored as it
 	// was (the default engine's password reference) is kept.
 	var changed []string

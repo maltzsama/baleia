@@ -572,8 +572,8 @@ func TestCreateConnection_EnvReferenceWithoutAllowList(t *testing.T) {
 }
 
 // TestUpdateConnection_KeepsTheDefaultEnginePasswordReference: the default
-// engine stores a reference to BALEIA_TRINO_PASSWORD itself. Editing another
-// field keeps it, while a request cannot store that reference anywhere.
+// engine stores a reference to BALEIA_TRINO_PASSWORD itself. It stays bound to
+// the endpoint Baleia set, and a request cannot store that reference anywhere.
 func TestUpdateConnection_KeepsTheDefaultEnginePasswordReference(t *testing.T) {
 	t.Parallel()
 	kr := testKeyring(t)
@@ -588,9 +588,23 @@ func TestUpdateConnection_KeepsTheDefaultEnginePasswordReference(t *testing.T) {
 	}
 	stored.CredentialsEnc = &enc
 
+	// The reference is bound to the endpoint Baleia set: a config or url
+	// edit would send the operator's password wherever the connection points.
 	q := &updateConnQuerier{conn: stored}
-	if rec := runUpdate(t, handlers(q), UpdateCatalogConnectionRequest{Config: strMap("client_id", "new-id")}); rec.Code != 200 {
-		t.Fatalf("editing another field: %d %s", rec.Code, rec.Body)
+	for name, body := range map[string]UpdateCatalogConnectionRequest{
+		"config": {Config: strMap("client_id", "new-id")},
+		"url":    {Config: strMap("url", "https://attacker.example")},
+	} {
+		if rec := runUpdate(t, handlers(q), body); rec.Code != 422 || !strings.Contains(rec.Body.String(), `"field":"url"`) {
+			t.Fatalf("%s edit kept the operator's reference: %d %s", name, rec.Code, rec.Body)
+		}
+	}
+	if len(q.updates) != 0 {
+		t.Fatal("a refused edit was written")
+	}
+	// Replacing the password in the same request frees the connection.
+	if rec := runUpdate(t, handlers(q), UpdateCatalogConnectionRequest{Config: strMap("client_id", "new-id"), Credentials: anyMap("client_secret", "literal")}); rec.Code != 200 {
+		t.Fatalf("edit that replaces the reference: %d %s", rec.Code, rec.Body)
 	}
 	q = &updateConnQuerier{conn: storedPolaris(t, kr)}
 	if rec := runUpdate(t, handlers(q), UpdateCatalogConnectionRequest{Credentials: anyMap("client_secret", bootstrap.TrinoPasswordRef)}); rec.Code != 422 || len(q.updates) != 0 {
