@@ -592,8 +592,10 @@ func TestUpdateConnection_KeepsTheDefaultEnginePasswordReference(t *testing.T) {
 	// edit would send the operator's password wherever the connection points.
 	q := &updateConnQuerier{conn: stored}
 	for name, body := range map[string]UpdateCatalogConnectionRequest{
-		"config": {Config: strMap("client_id", "new-id")},
-		"url":    {Config: strMap("url", "https://attacker.example")},
+		"config":          {Config: strMap("client_id", "new-id")},
+		"url in config":   {Config: strMap("url", "https://attacker.example")},
+		"top-level url":   {Url: func() *string { u := "https://attacker.example"; return &u }()},
+		"credentials url": {Credentials: anyMap("url", "https://attacker.example")},
 	} {
 		if rec := runUpdate(t, handlers(q), body); rec.Code != 422 || !strings.Contains(rec.Body.String(), `"field":"url"`) {
 			t.Fatalf("%s edit kept the operator's reference: %d %s", name, rec.Code, rec.Body)
