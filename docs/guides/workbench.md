@@ -45,6 +45,8 @@ A script runs its statements in order, in one engine session, and stops at the f
 
 Statements run as written: a query can join tables from any catalog the engine can reach, and a script can create a table and write to it in the next statement. What a user may read or change is decided by the engine and the catalog manager. Baleia never rewrites a query; only the stored result is capped, by `BALEIA_RESULT_MAX_ROWS` and `BALEIA_RESULT_MAX_BYTES`.
 
+One statement is completed: on Trino, a `CREATE VIEW` that names no security mode runs with `SECURITY INVOKER` added, and the history shows it that way. Trino would otherwise make the view `SECURITY DEFINER`, which runs its query as the owner without the reader's credentials, so nobody could read it through Baleia. An `INVOKER` view runs as each reader, and the catalog manager decides what that reader sees. A view that names `SECURITY DEFINER` is created as written, and cannot be read through Baleia.
+
 With [workload management](workload.md) on, a run may wait in its engine's queue before it starts. The run panel then shows *Queued*, its position and the expected wait, and the run can be cancelled while it waits.
 
 ## Results

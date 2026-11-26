@@ -227,6 +227,11 @@ func (a *Activities) splitSQL(ctx context.Context, params SplitSQLParams) (*Spli
 	if len(stmts) == 0 {
 		stmts = []string{params.SQL}
 	}
+	// A view made here is SECURITY INVOKER unless it says otherwise (#1152).
+	// The statement records keep this text, so history shows what ran.
+	for i, s := range stmts {
+		stmts[i] = policy.InvokerViews(d, s)
+	}
 	return &SplitSQLResult{Statements: stmts}, nil
 }
 
