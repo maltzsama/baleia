@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"database/sql"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,7 +14,7 @@ import (
 )
 
 // registry has every metric this package produces registered, with the pool
-// collector on a pool that never connects.
+// collector reading fixed stats.
 func registry(t *testing.T) *Registry {
 	t.Helper()
 	r := New("api")
@@ -26,6 +27,7 @@ func registry(t *testing.T) *Registry {
 	r.Retention().Observe("audit", time.Unix(1_700_000_000, 0), 52*24*time.Hour)
 	r.Audit().WriteFailed()
 	r.WatchMetadataStaleness(slog.New(slog.DiscardHandler), func(context.Context) (float64, error) { return 42, nil })
+	r.WatchDBPool(func() sql.DBStats { return sql.DBStats{InUse: 19, Idle: 1, MaxOpenConnections: 20} })
 	workload := r.Workload()
 	workload.State("e1", "interactive", 1, 2)
 	workload.Admitted("e1", "interactive", time.Second)
@@ -71,7 +73,7 @@ func TestLabelAllowList(t *testing.T) {
 			}
 		}
 	}
-	if n < 5 { // build_info, the three pool gauges, the acquire histogram
+	if n < 5 { // build_info, the three pool gauges
 		t.Errorf("only %d baleia_ families registered", n)
 	}
 }
@@ -186,4 +188,37 @@ func TestRetentionMetrics(t *testing.T) {
 	// A nil producer (a process without metrics) is a no-op.
 	var none *Retention
 	none.Observe("audit", time.Now(), time.Hour)
+}
+
+// TestDBPoolMetrics: the pool gauges carry the names BaleiaDBPoolSaturated reads
+// and the process label, read from the stats on each scrape.
+func TestDBPoolMetrics(t *testing.T) {
+	t.Parallel()
+	r := New("api")
+	inUse := 3
+	r.WatchDBPool(func() sql.DBStats { return sql.DBStats{InUse: inUse, MaxOpenConnections: 20} })
+	inUse = 19
+	families, err := r.Prometheus().Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]float64{}
+	for _, f := range families {
+		if !strings.HasPrefix(f.GetName(), "baleia_db_pool_") {
+			continue
+		}
+		for _, m := range f.GetMetric() {
+			got[f.GetName()] = m.GetGauge().GetValue()
+			hasProcess := false
+			for _, l := range m.GetLabel() {
+				hasProcess = hasProcess || (l.GetName() == "process" && l.GetValue() == "api")
+			}
+			if !hasProcess {
+				t.Errorf("%s has no process=api label", f.GetName())
+			}
+		}
+	}
+	if got["baleia_db_pool_acquired_conns"] != 19 || got["baleia_db_pool_max_conns"] != 20 {
+		t.Errorf("pool gauges = %v, want acquired 19 and max 20", got)
+	}
 }
