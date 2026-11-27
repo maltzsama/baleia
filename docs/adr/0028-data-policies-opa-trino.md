@@ -1,6 +1,6 @@
 # 0028. Row filters and column masks: authored in Baleia, decided by OPA, enforced by Trino
 
-- Status: Accepted, amended by the spike in #994 (results under "Spike results").
+- Status: Accepted, amended by the spike in #994 (results under "Spike results") and settled by #1149 (accepted limit) and #1152 (SQL editor views are INVOKER).
 - Date: 2026-11-13; amended 2026-11-22, 2026-11-25 (the initial revision and the engine id) and
   2026-11-26 (views, revision mix)
 - Issues: #994 (spike), #995 (implementation), #993 (catalog-manager RBAC), #992 (chart hardening),

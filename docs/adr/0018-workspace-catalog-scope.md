@@ -1,6 +1,6 @@
 # 0018. Workspace-scoped catalog access
 
-- Status: Proposed. Supersedes the "workspace → catalog" layer and the grant flow of
+- Status: Accepted; implemented by #700 to #704. Supersedes the "workspace → catalog" layer and the grant flow of
   [0016](0016-access-layers-and-workspace-roles.md); extends
   [0005](0005-trino-security-model.md).
 - Date: 2026-11-05

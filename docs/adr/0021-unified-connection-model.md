@@ -1,6 +1,6 @@
 # 0021. Unified connection model and Trino catalog support
 
-- **Status:** Proposed
+- **Status:** Accepted. Still open, marked OPEN or Proposal (open) in the text: registering `system` as a connection, and the configuration schemas of Delta Lake and Hudi
 - **Date:** 2026-11-08
 - **Amends:** ADR 0002
 - **Preserves:** ADR 0003 catalog-store contract and lifecycle
