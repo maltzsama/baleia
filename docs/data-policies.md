@@ -249,7 +249,8 @@ Data policies hold only if the deployment closes the paths around Trino:
   - A change where each part shows something the other hides (from US rows
     with names visible to EU rows with salaries visible) first goes to a
     revision no looser than either: only the rows both filters allow, with
-    every column either one masks. Then publish the target.
+    every column masked by a mask at least as restrictive as both endpoints'
+    masks (a null mask, when one endpoint uses it). Then publish the target.
   - Publish each next step only after every engine shows the previous
     revision active. OPA fetches only the newest bundle when it polls, so two
     publishes inside one poll interval skip the revision in between.
@@ -259,6 +260,12 @@ Data policies hold only if the deployment closes the paths around Trino:
     from one revision and another's from the other. Each table then returns
     only rows one of the revisions shows it, the same a reader gets by reading
     each table before and after the change.
+  - A statement that stays in analysis while two publishes activate can read
+    the filters of one revision and the masks of a later one, even when each
+    step follows these rules. Baleia does not drain analyses in flight before
+    it activates a revision, and the active revision each engine reports is
+    only the latest. The window is as long as the statement's analysis, so
+    keep long statements out of the minutes around a policy change.
 - **Other catalog types.** The Rego denies the metadata tables that carry
   values (`$files`, `$partitions` and others) and `table_changes` on policied
   tables. Allowing policies on another catalog type, such as one with

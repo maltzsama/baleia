@@ -446,15 +446,19 @@ rollback and failed publish is audited with the actor, the revision and the affe
   all widening. Any mix of the two revisions is then no looser than the looser end. A change that
   narrows one part and widens the other is split, narrowing first; a change where each part
   widens something the other hides (US rows with names shown, to EU rows with salaries shown) first
-  goes to a revision no looser than either end (only rows both filters allow, every column either
-  masks) and then to the target. Each next step is published only once every engine shows the
+  goes to a revision no looser than either end (only rows both filters allow, every column masked
+  by a mask at least as restrictive as both endpoints' masks) and then to the target. Each next step is published only once every engine shows the
   previous one active, because OPA fetches only the current bundle at each poll and two publishes
   inside one poll interval skip the revision in between. A rollback is a change like any other and
   follows the same steps. With those rules no revision in between, and no mix, is looser than both
   ends for any one table. Across tables a statement can still join one table's filter from one
   revision with another table's from the other; each table then returns only rows one of the
   revisions shows it, which the reader could also get by reading each table before and after the
-  change, so this case is accepted without a further rule.
+  change, so this case is accepted without a further rule. A statement that stays in analysis
+  while two publishes activate can still read one revision's filters with a later revision's masks:
+  Baleia does not drain in-flight analyses before it activates, and the active revision an engine
+  reports is only the latest, so the window lasts as long as the statement's analysis. Accepted as
+  part of #1149; long statements belong away from policy changes.
 
 ## Spike results (#994)
 
