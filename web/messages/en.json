@@ -1615,6 +1615,7 @@
 	"identity_identityproviderform_base_dn": "Base DN",
 	"identity_identityproviderform_dc_example_dc_com": "dc=example,dc=com",
 	"identity_identityproviderform_starttls_required_for_ldap": "StartTLS (required for ldap://)",
+	"identity_identityproviderform_ca_pem": "CA certificate (PEM, optional)",
 	"identity_identityproviderform_bind_dn": "Bind DN",
 	"identity_identityproviderform_user_filter": "User filter",
 	"identity_identityproviderform_group_attribute": "Group attribute",

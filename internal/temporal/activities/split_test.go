@@ -3,6 +3,7 @@ package activities
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/galileostudio/baleia/internal/dialect"
@@ -21,6 +22,27 @@ func TestSplitSQL(t *testing.T) {
 		if !errors.As(err, &appErr) || !appErr.NonRetryable() || appErr.Type() != "editor_rejected" {
 			t.Errorf("%q: want a non-retryable editor_rejected error, got %v", sql, err)
 		}
+	}
+}
+
+// TestSplitSQL_InvokerViews: a view made in the editor runs as SECURITY
+// INVOKER unless it names a mode (#1152).
+func TestSplitSQL_InvokerViews(t *testing.T) {
+	a := &Activities{dialects: dialect.NewRegistry()}
+	res, err := a.splitSQL(context.Background(), SplitSQLParams{
+		SQL:     "CREATE VIEW v AS SELECT 1; CREATE VIEW w SECURITY DEFINER AS SELECT 1; SELECT 1",
+		Dialect: "trino",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"CREATE VIEW v SECURITY INVOKER AS SELECT 1",
+		"CREATE VIEW w SECURITY DEFINER AS SELECT 1",
+		"SELECT 1",
+	}
+	if !slices.Equal(res.Statements, want) {
+		t.Errorf("statements = %q, want %q", res.Statements, want)
 	}
 }
 

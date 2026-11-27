@@ -1613,6 +1613,7 @@
 	"identity_identityproviderform_base_dn": "Base DN",
 	"identity_identityproviderform_dc_example_dc_com": "dc=example,dc=com",
 	"identity_identityproviderform_starttls_required_for_ldap": "StartTLS (obrigatório para ldap://)",
+	"identity_identityproviderform_ca_pem": "Certificado da CA (PEM, opcional)",
 	"identity_identityproviderform_bind_dn": "Bind DN",
 	"identity_identityproviderform_user_filter": "Filtro de usuários",
 	"identity_identityproviderform_group_attribute": "Atributo de grupo",

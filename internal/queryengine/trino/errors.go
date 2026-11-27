@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/galileostudio/baleia/internal/queryengine"
@@ -62,7 +63,24 @@ func mapError(err error) error {
 	if !errors.As(err, &qe) {
 		return queryengine.NewError(queryengine.CodeInternal, Kind, "", err.Error())
 	}
-	return queryengine.NewError(codeFor(qe.ErrorName, qe.ErrorType), Kind, qe.ErrorName, qe.Message)
+	code := codeFor(qe.ErrorName, qe.ErrorType)
+	if refusedByCatalog(qe.Causes) {
+		code = queryengine.CodePermission
+	}
+	return queryengine.NewError(code, Kind, qe.ErrorName, qe.Message)
+}
+
+// catalogRefusals are the exceptions an Iceberg REST catalog manager's 403
+// and 401 become (Polaris, Unity, Lakekeeper). Trino reports them under
+// ICEBERG_CATALOG_ERROR, or INVALID_VIEW when a view's table is refused, with
+// only "Failed to load table" in the message; the cause says it was a refusal.
+var catalogRefusals = []string{
+	"org.apache.iceberg.exceptions.ForbiddenException",
+	"org.apache.iceberg.exceptions.NotAuthorizedException",
+}
+
+func refusedByCatalog(causes []string) bool {
+	return slices.ContainsFunc(causes, func(c string) bool { return slices.Contains(catalogRefusals, c) })
 }
 
 // codeFor maps by errorName first, then by family, then by errorType.

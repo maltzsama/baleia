@@ -106,4 +106,47 @@ describe('identity providers settings', () => {
 			oidc: { issuer_url: 'https://idp.example.test', client_id: 'baleia' }
 		});
 	});
+	it('creates an LDAP provider with a private CA', async () => {
+		baseHandlers();
+		let body: Record<string, unknown> | null = null;
+		server.use(
+			http.post('/admin/identity-providers', async ({ request, response }) => {
+				body = (await request.json()) as Record<string, unknown>;
+				return response(201).json(ldap);
+			})
+		);
+
+		renderPage(IdentityPage, { me: makeMe(), url: '/settings/identity' });
+		await screen.findByText('Okta');
+		await fireEvent.click(screen.getByRole('button', { name: 'Add provider' }));
+
+		await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'Directory' } });
+		await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'ldap' } });
+		const ca = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----';
+		await fireEvent.input(await screen.findByLabelText('URL'), {
+			target: { value: 'ldaps://ldap.example.test:636' }
+		});
+		await fireEvent.input(screen.getByLabelText('CA certificate (PEM, optional)'), {
+			target: { value: ca }
+		});
+		await fireEvent.input(screen.getByLabelText('Base DN'), {
+			target: { value: 'ou=people,dc=example,dc=test' }
+		});
+		await fireEvent.input(screen.getByLabelText('Bind DN'), {
+			target: { value: 'cn=svc,dc=example,dc=test' }
+		});
+		await fireEvent.input(screen.getByLabelText('Bind password'), { target: { value: 'secret' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Create provider' }));
+
+		await waitFor(() => expect(body).not.toBeNull());
+		expect(body).toMatchObject({
+			name: 'Directory',
+			type: 'ldap',
+			ldap: {
+				url: 'ldaps://ldap.example.test:636',
+				ca_pem: ca,
+				bind_dn: 'cn=svc,dc=example,dc=test'
+			}
+		});
+	});
 });

@@ -38,6 +38,11 @@ type QueryError struct {
 	Message   string
 	ErrorName string
 	ErrorType string
+	// Causes are the Java exception types of the failure, outermost first,
+	// from Trino's failureInfo. The cause can say more than the error name:
+	// a catalog that refuses a table shows as an Iceberg ForbiddenException
+	// under ICEBERG_CATALOG_ERROR or INVALID_VIEW.
+	Causes []string
 }
 
 func (e *QueryError) Error() string {
@@ -66,8 +71,15 @@ func (e *TransportError) Code() string { return "engine_unavailable" }
 // Code is Trino's error name, lower-cased (bindings.ErrorCode).
 func (e *QueryError) Code() string { return strings.ToLower(e.ErrorName) }
 
+// maxFailureCauses bounds the walk down a failureInfo's causes.
+const maxFailureCauses = 16
+
 func queryError(id string, se *StatementError) *QueryError {
-	return &QueryError{QueryID: id, Message: se.Message, ErrorName: se.ErrorName, ErrorType: se.ErrorType}
+	var causes []string
+	for f := se.FailureInfo; f != nil && len(causes) < maxFailureCauses; f = f.Cause {
+		causes = append(causes, f.Type)
+	}
+	return &QueryError{QueryID: id, Message: se.Message, ErrorName: se.ErrorName, ErrorType: se.ErrorType, Causes: causes}
 }
 
 // ServerInfo is the answer of GET /v1/info.
@@ -123,10 +135,18 @@ type StatementResponse struct {
 }
 
 type StatementError struct {
-	Message   string `json:"message"`
-	ErrorCode any    `json:"errorCode"`
-	ErrorName string `json:"errorName"`
-	ErrorType string `json:"errorType"`
+	Message     string       `json:"message"`
+	ErrorCode   any          `json:"errorCode"`
+	ErrorName   string       `json:"errorName"`
+	ErrorType   string       `json:"errorType"`
+	FailureInfo *FailureInfo `json:"failureInfo"`
+}
+
+// FailureInfo is the part of Trino's failureInfo Baleia reads: each failure's
+// exception type and its cause.
+type FailureInfo struct {
+	Type  string       `json:"type"`
+	Cause *FailureInfo `json:"cause"`
 }
 
 type QueryResult struct {

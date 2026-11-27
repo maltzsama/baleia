@@ -1,8 +1,10 @@
 # 0028. Row filters and column masks: authored in Baleia, decided by OPA, enforced by Trino
 
 - Status: Accepted, amended by the spike in #994 (results under "Spike results").
-- Date: 2026-11-13; amended 2026-11-22 and 2026-11-25 (the initial revision and the engine id)
-- Issues: #994 (spike), #995 (implementation), #993 (catalog-manager RBAC), #992 (chart hardening)
+- Date: 2026-11-13; amended 2026-11-22, 2026-11-25 (the initial revision and the engine id) and
+  2026-11-26 (views, revision mix)
+- Issues: #994 (spike), #995 (implementation), #993 (catalog-manager RBAC), #992 (chart hardening),
+  #1149 (revision mix), #1152 (editor views)
 - Extends: [0005](0005-trino-security-model.md) (a third access control next to the file rules and
   the catalog guard)
 
@@ -297,10 +299,24 @@ core is not changed for it. Therefore:
   refused while a trusted-owned DEFINER view reads the policied table; the refusal lists those
   views, to be recreated as INVOKER or with an ordinary owner. `/governance` lists, for each
   policied table, the DEFINER views over it and whose policy they apply.
-- **Today the catalog guard denies DEFINER views of ordinary owners.** The owner's identity carries
-  no `baleia.catalogs`, so the guard's fail-closed scope (0018) refuses it, with or without OPA (the
-  spike's finding). The guard changes to accept a DEFINER view owner's identity; that change has
-  its own issue and security analysis in the plugin repository.
+- **A DEFINER view of an ordinary owner cannot be read, and stays that way.** Trino evaluates its
+  body as `Identity.ofUser(owner)` (`MetadataManager.getView`): the owner's name without the
+  caller's extra credentials. The guard finds no `baleia.catalogs` and refuses it on every catalog
+  (0018). Accepting that identity in the guard (maltzsama/baleia-trino-catalog-store#117) would
+  not help on an Iceberg REST catalog with per-user identity (0015): the REST session is built
+  from the identity's extra credentials (`TrinoRestCatalog.convert`), so the catalog manager gets
+  no token and refuses. Measured with Trino 484, Polaris 1.9 and its OPA authorizer: a reader who
+  may read a table reads it through the owner's INVOKER view (Polaris sees the reader's
+  `LOAD_VIEW` and `LOAD_TABLE`), and fails through the owner's DEFINER view (Polaris sees only
+  the `LOAD_VIEW`). Trino never falls back to the connection's credential. The run-as identity
+  comes from `SystemSecurityMetadata`, which is not part of the SPI, and `checkCanCreateView` does
+  not see the security mode, so no plugin can change this. Delegation the way Lake Formation does
+  it (a definer role the catalog itself trusts) would have to come from the catalog manager.
+- **Views made in the SQL editor are INVOKER unless they say otherwise** (#1152). The editor
+  runs as the user's own identity, so a DEFINER view made there is always unreadable; on Trino it
+  adds `SECURITY INVOKER` to a `CREATE VIEW` that names no mode, and the statement it stores is the
+  one that ran. An explicit `SECURITY DEFINER` is left as written. Clients that reach Trino
+  directly keep Trino's default.
 
 ### Screens: `/governance`
 
@@ -394,7 +410,8 @@ rollback and failed publish is audited with the actor, the revision and the affe
 ## Consequences
 
 - Row filters and column masks apply to every statement Trino runs: editor, retrievers, agents and
-  the BI gateway. Baleia rewrites no SQL.
+  the BI gateway. Policies rewrite no SQL; the only rewrite is the SQL editor's `SECURITY INVOKER`
+  on a `CREATE VIEW` that names no mode (see Views).
 - They protect only the Trino path. Their value depends on the deployment closing direct access to
   the catalog manager and storage for restricted tables.
 - Turning policies on makes OPA a hard dependency of each engine that has them, maintenance
@@ -422,8 +439,26 @@ rollback and failed publish is audited with the actor, the revision and the affe
 - **One statement can mix two revisions.** Trino asks OPA separately for the access check, the row
   filters and the masks of a statement. A bundle that activates between those calls can combine
   a filter of one revision with a mask of another. The Rego cannot tie the calls together (the
-  filter and mask calls carry no query id); #1149 decides between a mechanism and an accepted,
-  documented limit.
+  filter and mask calls carry no query id). Accepted as a documented limit (#1149): the calls
+  belong to the analysis of one statement, so only a statement analyzed while a revision
+  activates is exposed, and only a publish, re-issue or rollback activates one. The rule: in one
+  publish, every change to a table's row filters and masks goes the same way, all narrowing or
+  all widening. Any mix of the two revisions is then no looser than the looser end. A change that
+  narrows one part and widens the other is split, narrowing first; a change where each part
+  widens something the other hides (US rows with names shown, to EU rows with salaries shown) first
+  goes to a revision no looser than either end (only rows both filters allow, every column masked
+  by a mask at least as restrictive as both endpoints' masks) and then to the target. Each next step is published only once every engine shows the
+  previous one active, because OPA fetches only the current bundle at each poll and two publishes
+  inside one poll interval skip the revision in between. A rollback is a change like any other and
+  follows the same steps. With those rules no revision in between, and no mix, is looser than both
+  ends for any one table. Across tables a statement can still join one table's filter from one
+  revision with another table's from the other; each table then returns only rows one of the
+  revisions shows it, which the reader could also get by reading each table before and after the
+  change, so this case is accepted without a further rule. A statement that stays in analysis
+  while two publishes activate can still read one revision's filters with a later revision's masks:
+  Baleia does not drain in-flight analyses before it activates, and the active revision an engine
+  reports is only the latest, so the window lasts as long as the statement's analysis. Accepted as
+  part of #1149; long statements belong away from policy changes.
 
 ## Spike results (#994)
 
@@ -443,7 +478,7 @@ plugin inputs.
 | 6 | Coordinator only | Pass. With splits only on the worker, the worker's OPA served no decision. |
 | 7 | Integrity | Pass. A wrong checksum stops the init container; the digest is in the status report; patching a security ConfigMap is refused; OPA's data API is unreachable from the cluster network. |
 | 8 | Polaris claims | Pass (see "Scope of the guarantee"). |
-| 9 | Views | INVOKER: the caller's policy. Trusted-owned DEFINER: unfiltered. Ordinary-owner DEFINER: denied by the guard (see "Views"). |
+| 9 | Views | INVOKER: the caller's policy. Trusted-owned DEFINER: unfiltered. Ordinary-owner DEFINER: unreadable (see "Views"). |
 
 **Identities that run SQL unfiltered.** Every user-facing path (editor, saved queries, agents,
 semantic layer, retrievers, BI gateway) runs as the user's own identity. The trusted ones:
@@ -489,9 +524,10 @@ Implemented in #995's parts:
   - The Realm view and "what a subject can read" (catalog RBAC) come with
     the Polaris RBAC screens of #993.
 
-Open: the guard still refuses DEFINER views of ordinary owners
-(maltzsama/baleia-trino-catalog-store#117), and one statement can mix revisions (#1149). The
-spike suite above stays as the regression test of the Rego against Trino.
+Settled since: DEFINER views of ordinary owners stay unreadable and the SQL editor makes views
+INVOKER (#1152, see "Views"), and the mix of revisions in one statement is an accepted limit
+(#1149, see "Consequences"). The spike suite above stays as the regression test of the Rego
+against Trino.
 
 ## Alternatives considered
 

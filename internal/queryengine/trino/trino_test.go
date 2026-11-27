@@ -76,6 +76,58 @@ func TestErrorMapping(t *testing.T) {
 	}
 }
 
+// TestErrorMapping_CatalogRefusal: a table the catalog manager refuses is a
+// permission error, read directly or through a view, whatever name Trino
+// reports it under.
+func TestErrorMapping_CatalogRefusal(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, errorName, errorType string
+		causes                     []string
+		want                       queryengine.ErrorCode
+	}{
+		{
+			name: "table read directly", errorName: "ICEBERG_CATALOG_ERROR", errorType: "EXTERNAL",
+			causes: []string{"io.trino.spi.TrinoException", "org.apache.iceberg.exceptions.ForbiddenException"},
+			want:   queryengine.CodePermission,
+		},
+		{
+			name: "table under a view", errorName: "INVALID_VIEW", errorType: "USER_ERROR",
+			causes: []string{
+				"io.trino.spi.TrinoException", "io.trino.spi.TrinoException",
+				"org.apache.iceberg.exceptions.ForbiddenException",
+			},
+			want: queryengine.CodePermission,
+		},
+		{
+			name: "token the catalog does not accept", errorName: "ICEBERG_CATALOG_ERROR", errorType: "EXTERNAL",
+			causes: []string{"io.trino.spi.TrinoException", "org.apache.iceberg.exceptions.NotAuthorizedException"},
+			want:   queryengine.CodePermission,
+		},
+		{
+			name: "catalog failure", errorName: "ICEBERG_CATALOG_ERROR", errorType: "EXTERNAL",
+			causes: []string{"io.trino.spi.TrinoException", "org.apache.iceberg.exceptions.ServiceFailureException"},
+			want:   queryengine.CodeInternal,
+		},
+		{
+			name: "view out of date", errorName: "INVALID_VIEW", errorType: "USER_ERROR",
+			causes: []string{"io.trino.spi.TrinoException"},
+			want:   queryengine.CodeSyntax,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := mapError(&trinoclient.QueryError{
+				ErrorName: tt.errorName, ErrorType: tt.errorType, Message: "m", Causes: tt.causes,
+			})
+			if got := queryengine.CodeOf(err); got != tt.want {
+				t.Errorf("code = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
 // fakeCoordinator answers the statement protocol and records request headers.
 type fakeCoordinator struct {
 	mu       sync.Mutex

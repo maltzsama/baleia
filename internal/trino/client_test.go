@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -316,6 +317,29 @@ func TestStatementAsksForParametricDatetime(t *testing.T) {
 	}
 	if got != "PARAMETRIC_DATETIME" {
 		t.Fatalf("X-Trino-Client-Capabilities = %q", got)
+	}
+}
+
+// TestErrorCauses: the exception types of Trino's failureInfo reach the
+// QueryError, outermost first (the shape Trino 484 sends for a view whose
+// table the catalog manager refused).
+func TestErrorCauses(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"id":"q","error":{"message":"Failed analyzing stored view","errorName":"INVALID_VIEW",`+
+			`"errorType":"USER_ERROR","failureInfo":{"type":"io.trino.spi.TrinoException","message":"m",`+
+			`"cause":{"type":"io.trino.spi.TrinoException","message":"Failed to load table 'orders'",`+
+			`"cause":{"type":"org.apache.iceberg.exceptions.ForbiddenException","message":"Forbidden"}}}}}`)
+	}))
+	defer srv.Close()
+	_, err := New(srv.URL, "baleia").Execute(context.Background(), "SELECT 1", "", "")
+	var qe *QueryError
+	if !errors.As(err, &qe) {
+		t.Fatalf("err = %#v", err)
+	}
+	want := []string{"io.trino.spi.TrinoException", "io.trino.spi.TrinoException", "org.apache.iceberg.exceptions.ForbiddenException"}
+	if !slices.Equal(qe.Causes, want) {
+		t.Errorf("causes = %q, want %q", qe.Causes, want)
 	}
 }
 

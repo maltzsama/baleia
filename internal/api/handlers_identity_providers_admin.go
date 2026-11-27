@@ -255,6 +255,9 @@ func mergeLDAPConfig(current identityldap.Config, upd *UpdateLDAPConfig) identit
 	if upd.StartTls != nil {
 		out.StartTLS = *upd.StartTls
 	}
+	if upd.CaPem != nil {
+		out.CAPem = *upd.CaPem
+	}
 	if upd.BindDn != nil {
 		out.BindDN = *upd.BindDn
 	}

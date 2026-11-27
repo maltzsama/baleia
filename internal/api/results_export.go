@@ -1,8 +1,11 @@
 package api
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -65,6 +68,10 @@ func convertResult(w io.Writer, r io.Reader, format exportFormat) error {
 		return err
 	}
 
+	r, err := arrowStreamOf(r)
+	if err != nil {
+		return fmt.Errorf("read arrow result: %w", err)
+	}
 	reader, err := ipc.NewReader(r)
 	if err != nil {
 		return fmt.Errorf("read arrow result: %w", err)
@@ -81,6 +88,26 @@ func convertResult(w io.Writer, r io.Reader, format exportFormat) error {
 	default:
 		return fmt.Errorf("unsupported export format %q", format)
 	}
+}
+
+// arrowFileHeader opens an Arrow IPC file: the magic and its padding to 8 bytes.
+var arrowFileHeader = []byte("ARROW1\x00\x00")
+
+// arrowStreamOf returns r as an Arrow IPC stream. The worker stores results as
+// IPC files (#238), whose body after the header is the stream format, ended by
+// its end-of-stream marker before the footer; older results are plain streams.
+func arrowStreamOf(r io.Reader) (io.Reader, error) {
+	buffered := bufio.NewReader(r)
+	head, err := buffered.Peek(len(arrowFileHeader))
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	if bytes.Equal(head, arrowFileHeader) {
+		if _, err := buffered.Discard(len(arrowFileHeader)); err != nil {
+			return nil, err
+		}
+	}
+	return buffered, nil
 }
 
 // writeDelimited writes RFC 4180 CSV (or the same escaping with tabs). A header

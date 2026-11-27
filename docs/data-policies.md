@@ -230,13 +230,42 @@ Data policies hold only if the deployment closes the paths around Trino:
 - **Writes.** Trino 484 refuses `UPDATE` and `MERGE` on a table with a row
   filter, and every write on a table with a mask. ADR 0028 lists what the
   `writes` field of a policy allows.
-- **Views.** A `SECURITY DEFINER` view applies its owner's policies. One owned
-  by a trusted identity over a policied table makes the publish fail. One
-  owned by an ordinary user is refused by the catalog guard until plugin
-  issue maltzsama/baleia-trino-catalog-store#117 is resolved.
+- **Views.** A `SECURITY INVOKER` view applies each reader's policies. A
+  `SECURITY DEFINER` view applies its owner's: one owned by a trusted identity
+  over a policied table makes the publish fail, and one owned by an ordinary
+  user cannot be read at all, because Trino runs it without the reader's
+  credentials. The SQL editor therefore creates views as `SECURITY INVOKER`
+  unless the statement names a mode ([workbench](guides/workbench.md#run)).
 - **Revision changes during a statement.** Trino asks OPA separately for the
-  access check, the row filters and the masks of one statement. A bundle that
-  activates between those calls can mix two revisions (#1149).
+  access check, the row filters and the masks of one statement. A statement
+  analyzed while a new revision activates can take its filters from one
+  revision and its masks from the other (#1149). Only a publish, a re-issue or
+  a rollback activates a revision. To keep that mix from being looser than
+  both revisions for any table, make every change to a table's row filters
+  and masks in one publish go the same way: all narrowing, or all widening.
+  - A change that narrows one part and widens the other takes two publishes,
+    the narrowing part first (for example, add the mask, then widen the
+    filter).
+  - A change where each part shows something the other hides (from US rows
+    with names visible to EU rows with salaries visible) first goes to a
+    revision no looser than either: only the rows both filters allow, with
+    every column masked by a mask at least as restrictive as both endpoints'
+    masks (a null mask, when one endpoint uses it). Then publish the target.
+  - Publish each next step only after every engine shows the previous
+    revision active. OPA fetches only the newest bundle when it polls, so two
+    publishes inside one poll interval skip the revision in between.
+  - A rollback follows the same rules, one step at a time. A rollback straight
+    across a split change narrows one part and widens the other at once.
+  - A statement that joins several tables can still take one table's filters
+    from one revision and another's from the other. Each table then returns
+    only rows one of the revisions shows it, the same a reader gets by reading
+    each table before and after the change.
+  - A statement that stays in analysis while two publishes activate can read
+    the filters of one revision and the masks of a later one, even when each
+    step follows these rules. Baleia does not drain analyses in flight before
+    it activates a revision, and the active revision each engine reports is
+    only the latest. The window is as long as the statement's analysis, so
+    keep long statements out of the minutes around a policy change.
 - **Other catalog types.** The Rego denies the metadata tables that carry
   values (`$files`, `$partitions` and others) and `table_changes` on policied
   tables. Allowing policies on another catalog type, such as one with
