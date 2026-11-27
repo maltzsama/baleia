@@ -441,14 +441,16 @@ rollback and failed publish is audited with the actor, the revision and the affe
   a filter of one revision with a mask of another. The Rego cannot tie the calls together (the
   filter and mask calls carry no query id). Accepted as a documented limit (#1149): the calls
   belong to the analysis of one statement, so only a statement analyzed while a revision
-  activates is exposed, and only a publish, re-issue or rollback activates one. When a publish
-  changes, for each table, either its row filters or its masks but not both, the part it does not
-  change is the same in both revisions, so no table gets the filter of one with the masks of the
-  other. The operator docs say to split a change that moves both into two publishes, the
-  narrowing one first, and to publish the second only once every engine shows the first active:
-  OPA fetches only the current bundle at each poll, so two publishes inside one poll interval skip
-  the revision in between. A rollback across both changes is the same kind of change, so it goes
-  back one step at a time. With those rules the revision in between is never looser than both
+  activates is exposed, and only a publish, re-issue or rollback activates one. The rule: in one
+  publish, every change to a table's row filters and masks goes the same way, all narrowing or
+  all widening. Any mix of the two revisions is then no looser than the looser end. A change that
+  narrows one part and widens the other is split, narrowing first; a change where each part
+  widens something the other hides (US rows with names shown, to EU rows with salaries shown) first
+  goes to a revision no looser than either end (only rows both filters allow, every column either
+  masks) and then to the target. Each next step is published only once every engine shows the
+  previous one active, because OPA fetches only the current bundle at each poll and two publishes
+  inside one poll interval skip the revision in between. A rollback is a change like any other and
+  follows the same steps. With those rules no revision in between, and no mix, is looser than both
   ends for any one table. Across tables a statement can still join one table's filter from one
   revision with another table's from the other; each table then returns only rows one of the
   revisions shows it, which the reader could also get by reading each table before and after the

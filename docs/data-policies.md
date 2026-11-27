@@ -241,17 +241,20 @@ Data policies hold only if the deployment closes the paths around Trino:
   analyzed while a new revision activates can take its filters from one
   revision and its masks from the other (#1149). Only a publish, a re-issue or
   a rollback activates a revision. To keep that mix from being looser than
-  both revisions for any table, change either the row filters or the masks of
-  a table in one publish, not both: when a change needs both, publish the
-  narrowing part first (for example, add the mask) and the rest in a second
-  publish.
-  - Publish the second part only after every engine shows the first revision
-    active. OPA fetches only the newest bundle when it polls, so two publishes
-    inside one poll interval skip the revision in between.
-  - Roll back the same way, one step at a time: from the second revision to
-    the one in between, wait until every engine shows it active, then to the
-    original. A rollback straight to the original changes the filters and the
-    masks at once.
+  both revisions for any table, make every change to a table's row filters
+  and masks in one publish go the same way: all narrowing, or all widening.
+  - A change that narrows one part and widens the other takes two publishes,
+    the narrowing part first (for example, add the mask, then widen the
+    filter).
+  - A change where each part shows something the other hides (from US rows
+    with names visible to EU rows with salaries visible) first goes to a
+    revision no looser than either: only the rows both filters allow, with
+    every column either one masks. Then publish the target.
+  - Publish each next step only after every engine shows the previous
+    revision active. OPA fetches only the newest bundle when it polls, so two
+    publishes inside one poll interval skip the revision in between.
+  - A rollback follows the same rules, one step at a time. A rollback straight
+    across a split change narrows one part and widens the other at once.
   - A statement that joins several tables can still take one table's filters
     from one revision and another's from the other. Each table then returns
     only rows one of the revisions shows it, the same a reader gets by reading
