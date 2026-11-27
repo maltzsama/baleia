@@ -248,9 +248,10 @@ Data policies hold only if the deployment closes the paths around Trino:
     filter).
   - A change where each part shows something the other hides (from US rows
     with names visible to EU rows with salaries visible) first goes to a
-    revision no looser than either: only the rows both filters allow, with
-    every column masked by a mask at least as restrictive as both endpoints'
-    masks (a null mask, when one endpoint uses it). Then publish the target.
+    revision no looser than the stricter of the two endpoints: only the rows
+    both filters allow, with every column masked by a mask at least as
+    restrictive as both endpoints' masks (a null mask, when one endpoint uses
+    it). Then publish the target.
   - Publish each next step only after every engine shows the previous
     revision active. OPA fetches only the newest bundle when it polls, so two
     publishes inside one poll interval skip the revision in between.

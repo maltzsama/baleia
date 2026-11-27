@@ -48,6 +48,16 @@ sensitive work; add positive, negative and foreign-resource tests; add action pr
 after enforcement; update OpenAPI/error contracts if needed; and use action predicates in the web
 client rather than comparing role strings.
 
+## Governance
+
+**Governance** (`/governance`) holds the data policies of the Iceberg REST catalogs: row filters and column masks written in Baleia, published as signed revisions and enforced by Trino ([data policies](../data-policies.md)). It is shown to global admins and to people who can create connections. Its pages are:
+
+- **By object:** one catalog's policies per table, with the `SECURITY DEFINER` views over it. Visible for the catalogs whose connection you own, unless you are a global admin.
+- **By subject:** what is filtered and masked for one user, team, identity-provider group, service account or everyone. A user's view leaves out the policies on their identity-provider groups: choose the group to see them.
+- **Revisions** (global admins): the published revisions and each engine's active revision, with which one to roll back to.
+
+Publishing is refused with every reason listed, and each publish, rollback and failed publish is audited.
+
 ## Attention
 
 The bell in the header lists what needs attention, errors first. It is computed from the current state each time, so an item disappears once fixed; there is no read state and no e-mail. Each item links to the page that fixes it, and everyone sees only what they can act on:

@@ -225,12 +225,13 @@ its cleanup. Close them by hand:
    Run this only after the drain, while no 0.4.0 query has started yet, or
    narrow it to the stuck executions with `AND e.id IN (…)`.
 
-### 2. Trino 484 needs plugin 0.10.0
+### 2. Trino 484 needs plugin 0.10.2 or later
 
 The chart's Trino image is now `trinodb/trino:484`. The catalog-store plugin
-is built per Trino version, and 0.10.0 is the first release for 484: set
-`trino.plugin.version: 0.10.0` (and `config.BALEIA_PLUGIN_VERSION`, whose
-default is now 0.10.0). An older plugin does not load on 484.
+is built per Trino version. Set `trino.plugin.version` to `0.10.2` or later
+(and `config.BALEIA_PLUGIN_VERSION`, whose default is `0.10.2`): below that
+the guard does not enforce the catalog scope. Data policies need `0.11.0` or
+later, which ships the OPA policy. An older plugin does not load on 484.
 
 ### 3. Managed Iceberg catalogs are re-created once
 
