@@ -448,8 +448,8 @@ rollback and failed publish is audited with the actor, the revision and the affe
   narrowing one first, and to publish the second only once every engine shows the first active:
   OPA fetches only the current bundle at each poll, so two publishes inside one poll interval skip
   the revision in between. A rollback across both changes is the same kind of change, so it goes
-  back one step at a time. With those rules the revision in between is never looser than either
-  end for any one table. Across tables a statement can still join one table's filter from one
+  back one step at a time. With those rules the revision in between is never looser than both
+  ends for any one table. Across tables a statement can still join one table's filter from one
   revision with another table's from the other; each table then returns only rows one of the
   revisions shows it, which the reader could also get by reading each table before and after the
   change, so this case is accepted without a further rule.
