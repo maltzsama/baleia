@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 // workloadRuleCtx is an administrator without a user row: the rule's

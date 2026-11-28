@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/datapolicy"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/datapolicy"
 )
 
 func view(namespace, name, owner, sql string) datapolicy.CatalogView {

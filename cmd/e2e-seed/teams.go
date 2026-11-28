@@ -6,7 +6,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 func ensureTeam(ctx context.Context, q db.Querier, name string, createdBy db.UUID) (db.Team, error) {

@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/galileostudio/baleia/internal/api"
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/api"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/config"
 )
 
 // oidcMiddleware injects the strict OIDC result and, after the handler, writes

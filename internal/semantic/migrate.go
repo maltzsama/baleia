@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/dialect"
 )
 
 // ColumnType is one table column with the logical type the metadata layer

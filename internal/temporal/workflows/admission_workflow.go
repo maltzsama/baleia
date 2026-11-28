@@ -3,9 +3,9 @@ package workflows
 import (
 	"time"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/temporal/activities"
-	"github.com/galileostudio/baleia/internal/workload"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/temporal/activities"
+	"github.com/maltzsama/baleia/internal/workload"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )

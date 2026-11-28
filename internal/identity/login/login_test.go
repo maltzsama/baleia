@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/identity"
-	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/identity"
+	identityldap "github.com/maltzsama/baleia/internal/identity/ldap"
 	"golang.org/x/crypto/bcrypt"
 )
 

@@ -20,8 +20,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/semantic"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/semantic"
 )
 
 // ErrUnsupported means the explore query is valid but uses a feature this

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/monitoring/maintenance"
 )
 
 // policyStore keeps one table's parameters, runs and health in memory, with

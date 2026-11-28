@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/queryengine"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

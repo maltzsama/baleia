@@ -6,7 +6,7 @@ package queryengine
 import (
 	"encoding/json"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Target is where an execution runs: a binding (catalog × engine) plus an

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/store/model"
 	"gorm.io/gorm"
 )
 

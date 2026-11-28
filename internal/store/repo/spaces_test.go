@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/galileostudio/baleia/internal/workspaces/spaces"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/workspaces/spaces"
 )
 
 // TestSpacesRoundTrip (#40, #770) exercises the GORM space store: the default

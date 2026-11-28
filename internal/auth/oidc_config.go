@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/identity"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/identity"
 )
 
 // OIDCProviderConfig is the secret part of an auth_providers row. It is sealed

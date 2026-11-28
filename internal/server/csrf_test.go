@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/auth"
 )
 
 func csrfFixture(called *bool) func(context.Context, http.ResponseWriter, *http.Request, any) (any, error) {

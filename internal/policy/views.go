@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/dialect"
 	sqlglot "github.com/maltzsama/sqlglot-go"
 	"github.com/maltzsama/sqlglot-go/tokens"
 )

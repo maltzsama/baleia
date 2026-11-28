@@ -6,13 +6,13 @@ import (
 	"errors"
 	"math"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/content"
-	"github.com/galileostudio/baleia/internal/content/history"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/semantic/metrics"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/content"
+	"github.com/maltzsama/baleia/internal/content/history"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/semantic/metrics"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

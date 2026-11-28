@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/galileostudio/baleia/internal/api"
-	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/api"
+	"github.com/maltzsama/baleia/internal/auth"
 )
 
 // csrfMiddleware requires X-Requested-With: baleia on the cookie-authenticated

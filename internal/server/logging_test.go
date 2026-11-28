@@ -12,10 +12,10 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/obs"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/obs"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )

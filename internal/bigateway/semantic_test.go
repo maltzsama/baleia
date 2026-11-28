@@ -11,10 +11,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/semanticcatalog"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/semanticcatalog"
 )
 
 type fakeSemantic struct {

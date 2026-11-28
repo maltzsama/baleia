@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 func TestValidate(t *testing.T) {

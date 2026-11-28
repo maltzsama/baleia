@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 // TestSessions_RotateKeepsTheFamilyLive (#1030): a rotation revokes the old

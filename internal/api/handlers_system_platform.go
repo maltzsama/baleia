@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/temporal/schedulespecs"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/temporal/schedulespecs"
 )
 
 // Platform sections of the system status (#291). Each section is probed under

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // TestPopularTables_Refresh counts two finished statements that read orders,

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // FunctionReference is one function of an engine's catalog (#788). Signature,

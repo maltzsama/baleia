@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // TestAuditInsertList covers the GORM replacement for audit.sql (#774): the

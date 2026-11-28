@@ -16,7 +16,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Kind is the connection type, stored in catalog_connections.type.

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/dialect"
 	"go.temporal.io/sdk/temporal"
 )
 

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // recorder keeps the snapshots it is asked to write.

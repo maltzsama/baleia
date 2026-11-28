@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/temporal/schedules"
 )
 
 // ids lists the IDs of the specs.

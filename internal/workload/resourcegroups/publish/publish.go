@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/workload"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/workload"
 )
 
 // Writer is the resource-group write surface Publish needs; db.Querier and the

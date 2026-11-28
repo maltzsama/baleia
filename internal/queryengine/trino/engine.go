@@ -14,12 +14,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	trinoprovider "github.com/galileostudio/baleia/internal/connections/trino"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/obs"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	trinoclient "github.com/galileostudio/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/connections"
+	trinoprovider "github.com/maltzsama/baleia/internal/connections/trino"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/obs"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	trinoclient "github.com/maltzsama/baleia/internal/trino"
 )
 
 // Kind is the registered engine kind.

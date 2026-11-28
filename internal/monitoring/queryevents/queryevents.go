@@ -18,10 +18,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/monitoring/events"
-	"github.com/galileostudio/baleia/internal/trino/monitor"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/monitoring/events"
+	"github.com/maltzsama/baleia/internal/trino/monitor"
 )
 
 // Store writes query snapshots; *repo.Repo implements it.

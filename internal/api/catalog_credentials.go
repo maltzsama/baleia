@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/catalogs"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/catalogs"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // errNoKeyring means BALEIA_ENCRYPTION_KEY is not configured, so credentials

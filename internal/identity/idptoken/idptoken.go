@@ -20,9 +20,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Store is the subset of db.Querier the tokens use.

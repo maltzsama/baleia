@@ -5,10 +5,10 @@ package viewsql
 import (
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/datapolicy"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/sqlref"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/datapolicy"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/sqlref"
 )
 
 var trinoSQL = dialect.NewRegistry().MustGet(dialect.Trino)

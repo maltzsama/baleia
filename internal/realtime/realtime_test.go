@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/realtime"
+	"github.com/maltzsama/baleia/internal/realtime"
 )
 
 // openClient returns a client against BALEIA_TEST_REDIS_URL, or skips when it

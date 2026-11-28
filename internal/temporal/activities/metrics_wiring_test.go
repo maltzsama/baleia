@@ -3,9 +3,9 @@ package activities
 import (
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/metrics"
-	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/metrics"
+	"github.com/maltzsama/baleia/internal/storage"
 )
 
 // TestSetMetrics_LeavesStorageToTheWiring: the composition root registers the

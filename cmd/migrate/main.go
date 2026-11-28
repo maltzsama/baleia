@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/obs"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/obs"
 )
 
 func main() {

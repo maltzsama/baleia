@@ -5,11 +5,11 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/galileostudio/baleia/internal/audit/trail"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/monitoring"
-	"github.com/galileostudio/baleia/internal/ops/signals"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/audit/trail"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/monitoring"
+	"github.com/maltzsama/baleia/internal/ops/signals"
+	"github.com/maltzsama/baleia/internal/store/repo"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )

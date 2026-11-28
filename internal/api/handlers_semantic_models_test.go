@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // The definition a client sends carries neither the slug nor the binding, and

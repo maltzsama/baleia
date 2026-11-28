@@ -7,8 +7,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/engines/manage"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/engines/manage"
 )
 
 // Store reads and writes connections, and lists engines to tell which

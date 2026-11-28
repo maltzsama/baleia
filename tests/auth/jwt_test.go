@@ -6,7 +6,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/auth"
 )
 
 func TestNewAccessToken(t *testing.T) {

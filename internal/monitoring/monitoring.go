@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Engines reads engine snapshots; *repo.Repo implements it.

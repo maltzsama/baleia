@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/bindings"
-	"github.com/galileostudio/baleia/internal/bindings/stored"
-	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
-	"github.com/galileostudio/baleia/internal/catalogs/admin"
-	"github.com/galileostudio/baleia/internal/catalogs/conns"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/engines/manage"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/bindings"
+	"github.com/maltzsama/baleia/internal/bindings/stored"
+	bindtrino "github.com/maltzsama/baleia/internal/bindings/trino"
+	"github.com/maltzsama/baleia/internal/catalogs/admin"
+	"github.com/maltzsama/baleia/internal/catalogs/conns"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/engines/manage"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // CatalogHandlers serves connections, catalogs, engines, bindings and their metadata (#365).

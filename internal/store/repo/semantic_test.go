@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/content/search"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/semantic/docs"
-	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/content/search"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/semantic/docs"
+	"github.com/maltzsama/baleia/internal/store/model"
 )
 
 // semanticFixture is the workbench fixture with its granted catalog, binding

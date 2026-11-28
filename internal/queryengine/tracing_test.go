@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/queryengine/fake"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine/fake"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"

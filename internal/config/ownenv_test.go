@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // TestOwnEnvCoversConfig: every variable Load reads is Baleia's own

@@ -3,8 +3,8 @@ package activities
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // workbenchStore is the query_editor and statement_refs persistence the

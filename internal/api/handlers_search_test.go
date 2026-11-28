@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/maltzsama/baleia/internal/metrics"
 )
 
 func federatedFixture(t *testing.T) *metaFixture {

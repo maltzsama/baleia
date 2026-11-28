@@ -1,5 +1,5 @@
 // Package version holds the Baleia build version, injected at build time via
-// -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=...".
+// -ldflags "-X github.com/maltzsama/baleia/internal/version.Version=...".
 // It defaults to "dev" for local development builds.
 package version
 

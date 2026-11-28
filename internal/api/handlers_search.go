@@ -5,12 +5,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/content/search"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/metadata/browse"
-	"github.com/galileostudio/baleia/internal/metrics"
-	textsearch "github.com/galileostudio/baleia/internal/search"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/content/search"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/metadata/browse"
+	"github.com/maltzsama/baleia/internal/metrics"
+	textsearch "github.com/maltzsama/baleia/internal/search"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
 	oracle "github.com/godoes/gorm-oracle"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
 	"gorm.io/gorm"
 )
 

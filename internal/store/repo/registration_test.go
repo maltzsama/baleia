@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/engines/manage"
-	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/engines/manage"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 // TestRegistrationIsOneTransaction (ADR 0029): the connection, its native

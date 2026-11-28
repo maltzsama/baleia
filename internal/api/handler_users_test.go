@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 type fakeUserDeleter struct {

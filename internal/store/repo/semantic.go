@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/content/search"
-	"github.com/galileostudio/baleia/internal/db"
-	textsearch "github.com/galileostudio/baleia/internal/search"
-	"github.com/galileostudio/baleia/internal/semantic/docs"
-	"github.com/galileostudio/baleia/internal/semantic/metrics"
-	"github.com/galileostudio/baleia/internal/semantic/models"
-	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/content/search"
+	"github.com/maltzsama/baleia/internal/db"
+	textsearch "github.com/maltzsama/baleia/internal/search"
+	"github.com/maltzsama/baleia/internal/semantic/docs"
+	"github.com/maltzsama/baleia/internal/semantic/metrics"
+	"github.com/maltzsama/baleia/internal/semantic/models"
+	"github.com/maltzsama/baleia/internal/store/model"
 	"gorm.io/gorm"
 )
 

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
-	"github.com/galileostudio/baleia/internal/temporal/schedulespecs"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/temporal/schedules"
+	"github.com/maltzsama/baleia/internal/temporal/schedulespecs"
 	"go.temporal.io/sdk/client"
 )
 

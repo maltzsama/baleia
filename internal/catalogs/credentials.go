@@ -8,9 +8,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // ErrCredentialsUnreadable means a connection's stored credentials cannot be

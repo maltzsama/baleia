@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
 )
 
 type Querier interface {

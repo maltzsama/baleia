@@ -8,7 +8,7 @@ package signals
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Status reads what the status page shows; *repo.Repo implements it.

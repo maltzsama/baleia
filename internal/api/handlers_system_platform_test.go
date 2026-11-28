@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/temporal/schedules"
 )
 
 func findStatusItem(t *testing.T, res SystemStatusResource, name string) SystemStatusItem {

@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/catalogs"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/datapolicy"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/catalogs"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/datapolicy"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 type fakeInitialPublisher struct {

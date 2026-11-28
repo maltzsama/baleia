@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // biFileResponse writes the data source with its download filename (#713).

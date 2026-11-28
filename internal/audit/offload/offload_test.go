@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit/export"
+	"github.com/maltzsama/baleia/internal/audit/export"
 )
 
 // fakeStore records puts in memory.

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // Markdown renders docs/connections.md from the registry. Since ADR 0021 the

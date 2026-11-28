@@ -3,7 +3,7 @@ package content
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Store is the narrow persistence surface the content service writes through

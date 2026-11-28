@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/metrics"
-	"github.com/galileostudio/baleia/internal/obs"
+	"github.com/maltzsama/baleia/internal/metrics"
+	"github.com/maltzsama/baleia/internal/obs"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.opentelemetry.io/otel/attribute"

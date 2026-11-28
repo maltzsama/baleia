@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/policy"
-	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/policy"
+	"github.com/maltzsama/baleia/internal/queryengine"
 	"golang.org/x/time/rate"
 )
 

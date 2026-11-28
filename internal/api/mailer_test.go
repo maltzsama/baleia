@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/mail"
+	"github.com/maltzsama/baleia/internal/mail"
 )
 
 // mailerFunc adapts a function to MailSender in tests.

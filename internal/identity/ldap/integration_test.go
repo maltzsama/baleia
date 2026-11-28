@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/identity"
+	"github.com/maltzsama/baleia/internal/identity"
 )
 
 func envOr(key, fallback string) string {

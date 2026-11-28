@@ -11,11 +11,11 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
-	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
-	"github.com/galileostudio/baleia/internal/identity/provision"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/db"
+	identityldap "github.com/maltzsama/baleia/internal/identity/ldap"
+	"github.com/maltzsama/baleia/internal/identity/provision"
 	"golang.org/x/crypto/bcrypt"
 )
 

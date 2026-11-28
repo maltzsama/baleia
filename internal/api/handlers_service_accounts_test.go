@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/testdb"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

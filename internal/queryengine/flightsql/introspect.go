@@ -10,8 +10,8 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/flight"
 	"github.com/apache/arrow-go/v18/arrow/flight/flightsql"
 	"github.com/apache/arrow-go/v18/arrow/memory"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // catalogs lists the server's catalogs.

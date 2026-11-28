@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Reconcile action kinds and results (#37).

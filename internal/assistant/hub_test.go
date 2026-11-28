@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/assistant"
-	"github.com/galileostudio/baleia/internal/realtime"
+	"github.com/maltzsama/baleia/internal/assistant"
+	"github.com/maltzsama/baleia/internal/realtime"
 )
 
 func TestHubLocal(t *testing.T) {

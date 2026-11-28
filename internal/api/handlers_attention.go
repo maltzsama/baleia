@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/semantic"
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/semantic"
+	"github.com/maltzsama/baleia/internal/temporal/schedules"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )

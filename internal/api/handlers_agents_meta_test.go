@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/agentpolicy"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/queryengine/fake"
+	"github.com/maltzsama/baleia/internal/agentpolicy"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine/fake"
 )
 
 type fakeEngineSource struct{ readOnly queryengine.ReadOnlySupport }

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit/export"
+	"github.com/maltzsama/baleia/internal/audit/export"
 )
 
 // AuditReader is the PeriodReader of the audit stream: it reads audit_events

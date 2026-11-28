@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Store reads events and the entities they name; *repo.Repo implements it.

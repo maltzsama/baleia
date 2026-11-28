@@ -3,11 +3,11 @@ package api
 import (
 	"context"
 
-	agentmanage "github.com/galileostudio/baleia/internal/agents/manage"
-	"github.com/galileostudio/baleia/internal/assistant"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	agentmanage "github.com/maltzsama/baleia/internal/agents/manage"
+	"github.com/maltzsama/baleia/internal/assistant"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // AgentHandlers serves agents, their policy and tokens, the assistant and the MCP surface (#365).

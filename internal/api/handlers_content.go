@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/content/search"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/metrics"
-	"github.com/galileostudio/baleia/internal/workbench/folders"
-	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/content/search"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/metrics"
+	"github.com/maltzsama/baleia/internal/workbench/folders"
+	wsaccess "github.com/maltzsama/baleia/internal/workspaces/access"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

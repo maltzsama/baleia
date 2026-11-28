@@ -25,7 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/glue"
 	gluetypes "github.com/aws/aws-sdk-go-v2/service/glue/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // Catalog is the one logical catalog of a Glue connection: the whole Data

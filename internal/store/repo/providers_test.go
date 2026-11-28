@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 func TestProvidersRoundTrip(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // fakeStore returns n events per call, or a full page forever when endless.

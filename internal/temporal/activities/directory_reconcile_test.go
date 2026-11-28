@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/identity"
-	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/identity"
+	identityldap "github.com/maltzsama/baleia/internal/identity/ldap"
 )
 
 func testUUID(n int) db.UUID {

@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/agentpolicy"
-	agentmanage "github.com/galileostudio/baleia/internal/agents/manage"
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/results"
+	"github.com/maltzsama/baleia/internal/agentpolicy"
+	agentmanage "github.com/maltzsama/baleia/internal/agents/manage"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/results"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

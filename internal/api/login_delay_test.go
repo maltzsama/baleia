@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/realtime"
+	"github.com/maltzsama/baleia/internal/realtime"
 )
 
 // TestLogin_ProgressiveDelay: the sixth failure waits at least 1s, then the

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/identity/bikeys"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/identity/bikeys"
 )
 
 // rewritePage rewrites the URIs of one Trino page to the gateway, signing

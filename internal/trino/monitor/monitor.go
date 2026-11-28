@@ -6,8 +6,8 @@ package monitor
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/policy"
-	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/policy"
+	"github.com/maltzsama/baleia/internal/trino"
 )
 
 // QueryInfo is one entry of Trino's query list.

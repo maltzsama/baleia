@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 	mssql "github.com/microsoft/go-mssqldb"
 )
 

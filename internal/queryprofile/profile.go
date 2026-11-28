@@ -6,7 +6,7 @@ package queryprofile
 import (
 	"encoding/json"
 
-	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/trino"
 )
 
 // Profile is a query's execution profile; a nil field is unknown.

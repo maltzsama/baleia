@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 // TestBIGatewaySwitch covers the global BI gateway switch (#711): admins read

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // fakeStore records which engine list was read.

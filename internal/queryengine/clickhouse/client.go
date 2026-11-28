@@ -14,9 +14,9 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/version"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/version"
 )
 
 // Catalog is the one catalog of a ClickHouse server; its namespaces are the

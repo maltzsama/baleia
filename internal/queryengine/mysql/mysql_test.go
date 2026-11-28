@@ -3,7 +3,7 @@ package mysql
 import (
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 func TestToTimeMicros(t *testing.T) {

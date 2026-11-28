@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/workbench/folders"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/workbench/folders"
 )
 
 func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }

@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"log/slog"
 
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/store"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/store"
 	"gorm.io/gorm"
 )
 

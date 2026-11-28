@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Store lists the workspace's targets; *repo.Repo implements it.

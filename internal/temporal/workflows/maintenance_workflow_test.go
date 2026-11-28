@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"github.com/maltzsama/baleia/internal/temporal/activities"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.temporal.io/sdk/temporal"

@@ -1,11 +1,11 @@
 package api
 
 import (
-	"github.com/galileostudio/baleia/internal/content/search"
-	"github.com/galileostudio/baleia/internal/semantic/docs"
-	"github.com/galileostudio/baleia/internal/semantic/metrics"
-	"github.com/galileostudio/baleia/internal/semantic/models"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/content/search"
+	"github.com/maltzsama/baleia/internal/semantic/docs"
+	"github.com/maltzsama/baleia/internal/semantic/metrics"
+	"github.com/maltzsama/baleia/internal/semantic/models"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // SemanticHandlers serves semantic models and metrics, saved content, versions and bundles (#365).

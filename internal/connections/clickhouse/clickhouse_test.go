@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/conntest"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections/conntest"
 )
 
 // TestMetadataReader_clickhouse runs against a real server. Set

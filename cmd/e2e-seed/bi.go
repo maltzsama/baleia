@@ -7,9 +7,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/identity/bikeys"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/identity/bikeys"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // e2eBIKeyFile is where ensureBIKey writes the key secret the Trino JDBC e2e

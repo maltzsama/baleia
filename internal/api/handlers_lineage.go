@@ -7,12 +7,12 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/semantic"
-	"github.com/galileostudio/baleia/internal/sqlref"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/semantic"
+	"github.com/maltzsama/baleia/internal/sqlref"
 )
 
 // Lineage (B4, #558): the graph of what depends on what, across tables,

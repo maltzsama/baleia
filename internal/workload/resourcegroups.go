@@ -3,7 +3,7 @@ package workload
 import (
 	"fmt"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // Resource groups (A-5.1, #598): Baleia renders Trino's resource-groups.json

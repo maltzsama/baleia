@@ -12,7 +12,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Reader reads engines and bindings; *repo.Repo implements it.

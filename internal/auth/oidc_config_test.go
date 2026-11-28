@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/identity"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/identity"
 )
 
 // TestOIDCConfigValidate pins the rules the admin API relies on (#259).

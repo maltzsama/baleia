@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/assistant"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/assistant"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/testdb"
 	"gorm.io/gorm"
 )
 

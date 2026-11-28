@@ -14,8 +14,8 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/maltzsama/baleia/internal/auth"
 )
 
 // Outcome is how the audited operation ended.

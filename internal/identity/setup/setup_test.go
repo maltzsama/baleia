@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
 	"golang.org/x/crypto/bcrypt"
 )
 

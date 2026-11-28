@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/config"
 	"github.com/go-chi/chi/v5"
+	"github.com/maltzsama/baleia/internal/config"
 )
 
 // TestRun_CleanShutdown: cancelling the context drains and returns nil, not

@@ -19,14 +19,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/execscope"
-	"github.com/galileostudio/baleia/internal/identity/bikeys"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/semanticcatalog"
-	"github.com/galileostudio/baleia/internal/workload"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/execscope"
+	"github.com/maltzsama/baleia/internal/identity/bikeys"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/semanticcatalog"
+	"github.com/maltzsama/baleia/internal/workload"
 )
 
 // Deps is everything the gateway needs, built at the wiring site.

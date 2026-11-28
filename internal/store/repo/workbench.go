@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/workbench/folders"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/workbench/folders"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

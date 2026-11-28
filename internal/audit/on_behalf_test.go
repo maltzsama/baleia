@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 // TestOnBehalfOfOnlyForAgents: agent events carry actor_kind=agent, the agent

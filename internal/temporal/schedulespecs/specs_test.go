@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
+	"github.com/maltzsama/baleia/internal/temporal/schedules"
 )
 
 func TestCore(t *testing.T) {

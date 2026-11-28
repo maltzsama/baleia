@@ -7,11 +7,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/catalogs"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/catalogs"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/model"
 	"gorm.io/gorm"
 )
 

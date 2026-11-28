@@ -8,7 +8,7 @@ package topology
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Engines reads engines and Trino clusters; *repo.Repo implements it.

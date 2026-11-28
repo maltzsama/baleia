@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/crypto"
 )
 
 // ProviderRow is one auth_providers row for the re-encryption pass.

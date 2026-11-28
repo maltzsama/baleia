@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Store reads and creates accounts; *repo.Repo implements it.

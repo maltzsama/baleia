@@ -3,9 +3,9 @@ package api
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/datapolicy"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/datapolicy"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // dataPolicyGuard says where data policies tie a catalog to the engines that

@@ -16,7 +16,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/dialect"
 )
 
 // SourceKind is how a model names its relation.

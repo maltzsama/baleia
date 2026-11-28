@@ -244,7 +244,7 @@ func (t *pgxTracer) TraceAcquireEnd(ctx context.Context, pool *pgxpool.Pool, dat
 // tracer taken from the global provider stays bound to the first provider
 // installed. Until Setup installs a provider its spans are no-ops.
 func Tracer(pkg string) trace.Tracer {
-	return otel.Tracer("github.com/galileostudio/baleia/internal/" + pkg)
+	return otel.Tracer("github.com/maltzsama/baleia/internal/" + pkg)
 }
 
 // FailSpan marks span failed with reason, a short fixed string. The error's

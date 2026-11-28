@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/store"
-	"github.com/galileostudio/baleia/internal/store/model"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/store"
+	"github.com/maltzsama/baleia/internal/store/model"
 	"gorm.io/gorm"
 )
 

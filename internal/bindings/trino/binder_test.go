@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/bindings"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/providers"
-	"github.com/galileostudio/baleia/internal/db"
-	trinoclient "github.com/galileostudio/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/bindings"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections/providers"
+	"github.com/maltzsama/baleia/internal/db"
+	trinoclient "github.com/maltzsama/baleia/internal/trino"
 )
 
 func cfg(kind connections.Kind, values, secrets map[string]string) connections.Config {

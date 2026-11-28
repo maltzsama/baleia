@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
-	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/store/model"
 	"gorm.io/gorm"
 )
 

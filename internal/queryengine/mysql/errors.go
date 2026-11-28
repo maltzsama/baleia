@@ -7,8 +7,8 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
 	driver "github.com/go-sql-driver/mysql"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // mapError turns a driver error into a typed engine error. The MySQL error

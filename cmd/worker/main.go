@@ -5,14 +5,14 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/app"
-	"github.com/galileostudio/baleia/internal/command"
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/trino"
-	"github.com/galileostudio/baleia/internal/trino/monitor"
-	"github.com/galileostudio/baleia/internal/webhooks"
-	"github.com/galileostudio/baleia/internal/workerapp"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/app"
+	"github.com/maltzsama/baleia/internal/command"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/trino/monitor"
+	"github.com/maltzsama/baleia/internal/webhooks"
+	"github.com/maltzsama/baleia/internal/workerapp"
 	"go.temporal.io/sdk/worker"
 )
 

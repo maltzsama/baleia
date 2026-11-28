@@ -22,13 +22,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/bindings"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/kafka"
-	"github.com/galileostudio/baleia/internal/connections/lakekeeper"
-	"github.com/galileostudio/baleia/internal/connections/nessie"
-	"github.com/galileostudio/baleia/internal/connections/polaris"
-	"github.com/galileostudio/baleia/internal/connections/unity"
+	"github.com/maltzsama/baleia/internal/bindings"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections/kafka"
+	"github.com/maltzsama/baleia/internal/connections/lakekeeper"
+	"github.com/maltzsama/baleia/internal/connections/nessie"
+	"github.com/maltzsama/baleia/internal/connections/polaris"
+	"github.com/maltzsama/baleia/internal/connections/unity"
 )
 
 // nameRe is Trino's catalog and connector name grammar, mirrored by the

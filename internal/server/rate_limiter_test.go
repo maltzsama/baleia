@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/realtime"
+	"github.com/maltzsama/baleia/internal/realtime"
 )
 
 func openSharedLimiterClient(t *testing.T, prefix string) *realtime.Client {

@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/agentpolicy"
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/agentpolicy"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -230,7 +230,7 @@ func TestRefusalRoundsRetryUpToSeconds(t *testing.T) {
 // must never reach the database, engines or object storage directly (#58).
 func TestImportBoundary(t *testing.T) {
 	t.Parallel()
-	out, err := exec.Command("go", "list", "-f", `{{join .Imports "\n"}}`, "github.com/galileostudio/baleia/internal/mcp").Output()
+	out, err := exec.Command("go", "list", "-f", `{{join .Imports "\n"}}`, "github.com/maltzsama/baleia/internal/mcp").Output()
 	if err != nil {
 		t.Fatalf("go list: %v", err)
 	}

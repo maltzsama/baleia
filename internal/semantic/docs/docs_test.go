@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 func TestNormalizeTags(t *testing.T) {

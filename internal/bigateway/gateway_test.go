@@ -11,11 +11,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/identity/bikeys"
-	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/identity/bikeys"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 var (

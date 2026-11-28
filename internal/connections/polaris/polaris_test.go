@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // TestMetadataReader_polaris runs against a real Polaris (the compose service

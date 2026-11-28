@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/config"
 )
 
 // TestSettingsFromConfig: defaults are resolved once, so a zero config value

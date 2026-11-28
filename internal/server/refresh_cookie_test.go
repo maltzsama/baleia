@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/api"
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/api"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/config"
 )
 
 func loginHandler(token string) api.StrictHandlerFunc {

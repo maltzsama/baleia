@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/agentpolicy"
-	"github.com/galileostudio/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/agentpolicy"
+	"github.com/maltzsama/baleia/internal/audit"
 )
 
 type fakeRecorder struct{ events []audit.Event }

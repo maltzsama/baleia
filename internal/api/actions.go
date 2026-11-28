@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Allowed actions (#104): each list is computed by the same authz predicates

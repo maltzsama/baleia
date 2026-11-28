@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/maltzsama/baleia/internal/metrics"
 )
 
 func TestMetricsListener(t *testing.T) {

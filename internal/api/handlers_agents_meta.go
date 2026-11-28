@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/agentpolicy"
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/agentpolicy"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/queryengine"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

@@ -7,15 +7,15 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit/export"
-	"github.com/galileostudio/baleia/internal/audit/offload"
-	"github.com/galileostudio/baleia/internal/audit/retention"
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
-	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/galileostudio/baleia/internal/store"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/audit/export"
+	"github.com/maltzsama/baleia/internal/audit/offload"
+	"github.com/maltzsama/baleia/internal/audit/retention"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/storage"
+	"github.com/maltzsama/baleia/internal/store"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // pruneAudit drops the audit partitions before before (YYYY-MM-DD, or YYYY-MM

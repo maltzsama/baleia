@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // batchSize is how many rows one Arrow record batch holds.

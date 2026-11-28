@@ -7,7 +7,7 @@ package assistant
 import (
 	"net/netip"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 type Agent struct {

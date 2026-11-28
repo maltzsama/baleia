@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit/export"
+	"github.com/maltzsama/baleia/internal/audit/export"
 )
 
 // objectStore is the S3 surface the sink needs. internal/storage.S3Client

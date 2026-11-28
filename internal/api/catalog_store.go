@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // catalogWriteStore is the persistence the catalog and grant write flows need

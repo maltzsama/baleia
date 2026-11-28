@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
-	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // session is one ClickHouse HTTP session. USE and SET persist on it; ClickHouse

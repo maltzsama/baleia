@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // TestGOBatches: the dialect splits a script on GO lines, and GO never reaches

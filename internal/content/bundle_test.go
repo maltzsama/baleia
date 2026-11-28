@@ -7,12 +7,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/content"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/content"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 func (f *fixture) workspace(t *testing.T, name, slug string) db.UUID {

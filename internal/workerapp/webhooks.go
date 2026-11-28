@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/monitoring/events"
-	"github.com/galileostudio/baleia/internal/realtime"
+	"github.com/maltzsama/baleia/internal/monitoring/events"
+	"github.com/maltzsama/baleia/internal/realtime"
 )
 
 // RelayWebhooks reads the durable webhook outbox and appends each event to the

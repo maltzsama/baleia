@@ -6,7 +6,7 @@ package trinoidentity
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // UserStore is the slice of the database the mapping reads.

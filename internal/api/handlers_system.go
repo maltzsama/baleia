@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/version"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/version"
 	"go.temporal.io/sdk/client"
 	"gorm.io/gorm"
 )

@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/queryengine"
 	driver "github.com/go-sql-driver/mysql"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // Registered engine kinds.

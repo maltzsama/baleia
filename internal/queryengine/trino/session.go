@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
-	"github.com/galileostudio/baleia/internal/arrowipc"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	trinoclient "github.com/galileostudio/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/arrowipc"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	trinoclient "github.com/maltzsama/baleia/internal/trino"
 )
 
 // session is client-side state: what the next request must send.

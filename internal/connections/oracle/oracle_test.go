@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/conntest"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections/conntest"
 	goora "github.com/sijms/go-ora/v2"
 )
 

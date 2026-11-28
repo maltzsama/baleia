@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/config"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

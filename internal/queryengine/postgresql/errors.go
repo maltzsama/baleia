@@ -6,8 +6,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // mapError turns a pgx error into a typed engine error. The SQLSTATE stays in

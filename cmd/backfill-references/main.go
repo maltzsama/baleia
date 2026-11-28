@@ -10,11 +10,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/sqlref"
-	"github.com/galileostudio/baleia/internal/store"
-	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/sqlref"
+	"github.com/maltzsama/baleia/internal/store"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 func main() {

@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 func TestSubjects(t *testing.T) {

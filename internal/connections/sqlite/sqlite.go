@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
 )
 

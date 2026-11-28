@@ -9,12 +9,12 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/store/repo"
-	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/store/repo"
+	wsaccess "github.com/maltzsama/baleia/internal/workspaces/access"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

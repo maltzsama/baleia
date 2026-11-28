@@ -6,7 +6,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // ClickHouse exception codes (ErrorCodes.cpp). The engine maps the ones a

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // memStore is an in-memory PublishStore.

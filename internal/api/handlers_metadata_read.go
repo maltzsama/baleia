@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/metadata"
-	"github.com/galileostudio/baleia/internal/metadata/browse"
-	"github.com/galileostudio/baleia/internal/metadata/typemap"
-	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/metadata"
+	"github.com/maltzsama/baleia/internal/metadata/browse"
+	"github.com/maltzsama/baleia/internal/metadata/typemap"
+	"github.com/maltzsama/baleia/internal/metrics"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

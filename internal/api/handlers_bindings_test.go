@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/db"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

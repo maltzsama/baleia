@@ -6,14 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/retrievers"
-	"github.com/galileostudio/baleia/internal/retrievers/schedule"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/retrievers"
+	"github.com/maltzsama/baleia/internal/retrievers/schedule"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

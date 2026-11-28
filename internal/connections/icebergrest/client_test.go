@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // TestBearer_ReuseWindow: a client-credentials token is reused until 30 s

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/dialect"
 	"github.com/maltzsama/sqlglot-go/expressions"
 )
 

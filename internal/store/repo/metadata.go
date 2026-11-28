@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/metadata/browse"
-	"github.com/galileostudio/baleia/internal/search"
-	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/metadata/browse"
+	"github.com/maltzsama/baleia/internal/search"
+	"github.com/maltzsama/baleia/internal/store/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

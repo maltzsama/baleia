@@ -3,7 +3,7 @@ package activities
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
+	"github.com/maltzsama/baleia/internal/temporal/schedules"
 	"go.temporal.io/sdk/activity"
 )
 

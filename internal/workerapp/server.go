@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/metrics"
+	"github.com/maltzsama/baleia/internal/metrics"
 )
 
 // MetricsMux serves the worker's /metrics and /healthz.

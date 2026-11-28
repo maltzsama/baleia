@@ -4,9 +4,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/providers"
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections/providers"
+	"github.com/maltzsama/baleia/internal/dialect"
 )
 
 // TestDirectAccessAgreesWithEngineRegistry is the agreement check between the

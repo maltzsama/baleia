@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // topicCatalogs gives a provider a catalog schema, the way Kafka's topic set

@@ -3,8 +3,8 @@ package server
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/ws"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/ws"
 )
 
 // wsStore is the workbench persistence the WebSocket handler reads.

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/identity"
 	ldapv3 "github.com/go-ldap/ldap/v3"
+	"github.com/maltzsama/baleia/internal/identity"
 )
 
 func TestNestedGroups(t *testing.T) {

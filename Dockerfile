@@ -31,8 +31,8 @@ ARG COMMIT=dev
 ARG TARGETOS
 ARG TARGETARCH
 ENV GOOS=$TARGETOS GOARCH=$TARGETARCH
-RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION} -X github.com/galileostudio/baleia/internal/version.Commit=${COMMIT}" -o /api ./cmd/api
-RUN CGO_ENABLED=0 go build -ldflags "-X github.com/galileostudio/baleia/internal/version.Version=${VERSION} -X github.com/galileostudio/baleia/internal/version.Commit=${COMMIT}" -o /worker ./cmd/worker
+RUN CGO_ENABLED=0 go build -ldflags "-X github.com/maltzsama/baleia/internal/version.Version=${VERSION} -X github.com/maltzsama/baleia/internal/version.Commit=${COMMIT}" -o /api ./cmd/api
+RUN CGO_ENABLED=0 go build -ldflags "-X github.com/maltzsama/baleia/internal/version.Version=${VERSION} -X github.com/maltzsama/baleia/internal/version.Commit=${COMMIT}" -o /worker ./cmd/worker
 RUN CGO_ENABLED=0 go build -o /migrate ./cmd/migrate
 
 FROM alpine:3.20

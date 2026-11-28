@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/semantic"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/semantic"
 )
 
 func models() map[string]semantic.Model {

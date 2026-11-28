@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/assistant"
-	"github.com/galileostudio/baleia/internal/assistant/llm"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/testdb"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/assistant"
+	"github.com/maltzsama/baleia/internal/assistant/llm"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 type fakeTools struct {

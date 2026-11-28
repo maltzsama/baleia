@@ -7,7 +7,7 @@ package workload
 import (
 	"time"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // Capacity is how one (engine, class) queue is allowed to run and wait.

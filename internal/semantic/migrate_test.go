@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/dialect"
 )
 
 func sp(s string) *string { return &s }

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 func TestWebhookCRUD(t *testing.T) {

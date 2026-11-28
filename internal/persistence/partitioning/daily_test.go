@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
-	"github.com/galileostudio/baleia/internal/testdb"
 	oracle "github.com/godoes/gorm-oracle"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/testdb"
 	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 )

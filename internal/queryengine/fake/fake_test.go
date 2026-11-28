@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/queryengine/conformance"
-	"github.com/galileostudio/baleia/internal/queryengine/fake"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine/conformance"
+	"github.com/maltzsama/baleia/internal/queryengine/fake"
 )
 
 func fixtures() conformance.Fixtures {

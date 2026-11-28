@@ -10,9 +10,9 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/identity"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/identity"
 )
 
 // TeamMembers writes team memberships; *repo.Repo implements it.

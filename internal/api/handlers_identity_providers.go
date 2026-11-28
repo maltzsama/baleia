@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
-	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
-	"github.com/galileostudio/baleia/internal/identity/providers"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/db"
+	identityldap "github.com/maltzsama/baleia/internal/identity/ldap"
+	"github.com/maltzsama/baleia/internal/identity/providers"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

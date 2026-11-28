@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit/offload"
-	"github.com/galileostudio/baleia/internal/audit/retention"
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
+	"github.com/maltzsama/baleia/internal/audit/offload"
+	"github.com/maltzsama/baleia/internal/audit/retention"
+	"github.com/maltzsama/baleia/internal/temporal/schedules"
 )
 
 // OffloadAudit runs one pass of the audit S3 cold offload; a no-op when no

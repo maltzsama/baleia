@@ -3,7 +3,7 @@ package catalogs
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // NativeNames names the catalogs a direct engine exposes: a PostgreSQL
