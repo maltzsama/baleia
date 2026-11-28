@@ -968,7 +968,7 @@ The change is complete when:
 
 ## Current compliance against the code
 
-Not compliant. This is the target state.
+Partly compliant. The access mode, the provider status values and the expanded kind list are in the code (see [ADR 0029](0029-connection-access-modes-determine-engine-and-catalog-lifecycle.md)). The rows of the table below were not all re-checked against the code when this section was updated.
 
 The following pieces already exist:
 

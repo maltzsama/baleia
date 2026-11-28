@@ -59,6 +59,7 @@ config:
   S3_ENDPOINT: s3.example.com
   S3_BUCKET: baleia-results
   S3_USE_SSL: "true"
+  BALEIA_PLUGIN_VERSION: "0.11.0"
 
 trino:
   enabled: true

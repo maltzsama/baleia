@@ -7,8 +7,8 @@ and by the worker on `BALEIA_WORKER_METRICS_ADDR`. See ADR 0009 and the
 Prometheus rules in `deploy/prometheus`.
 
 Every name is prefixed `baleia_`. Label names come from a fixed allow-list
-(`AllowedLabels` in `internal/metrics`), which has no user or resource
-identifier. The alert rules in
+(`AllowedLabels` in `internal/metrics`). Label values are bounded, except the
+`engine` label on the workload metrics, which carries the engine ID. The alert rules in
 `deploy/prometheus/alerts.yml` read the series below; their unit tests
 (`alerts_test.yml`) run them against fixed series.
 
