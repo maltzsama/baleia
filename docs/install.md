@@ -131,7 +131,7 @@ With the gateway configured, a Trino table's detail offers **Download Tableau co
 ```bash title="Install the chart"
 helm install baleia oci://ghcr.io/maltzsama/charts/baleia \
   -n baleia -f values.yaml \
-  --version 0.10.0 # x-release-please-version
+  --version 0.11.0 # x-release-please-version
 ```
 
 The migration job runs first. Open `PUBLIC_URL`: on the first visit, a setup wizard creates the admin account.
