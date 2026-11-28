@@ -1,6 +1,6 @@
 # 0018. Workspace-scoped catalog access
 
-- Status: Proposed. Supersedes the "workspace → catalog" layer and the grant flow of
+- Status: Accepted; implemented by #700 to #704. Supersedes the "workspace → catalog" layer and the grant flow of
   [0016](0016-access-layers-and-workspace-roles.md); extends
   [0005](0005-trino-security-model.md).
 - Date: 2026-11-05
@@ -102,7 +102,7 @@ error and `BALEIA_REQUIRE_CATALOG_SCOPE=true` refuses user queries.
 
 ## Current compliance
 
-Not implemented. Tracked in #701 (guard), #702 (scope/migration), #703 (engine), #704 (api+ui).
+Implemented by #700 to #704. The guard enforces the per-workspace catalog scope from plugin 0.10.2 (#701), the scope is carried to Trino and fails closed (#703), the scope function and grant-request table are in place (#702), and the API and UI manage grants and removals (#704).
 
 ## Alternatives considered
 

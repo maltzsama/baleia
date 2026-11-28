@@ -27,18 +27,18 @@ Format: [MADR](https://adr.github.io/madr/), one decision per file, numbered in 
 | [0015](0015-per-user-catalog-identity.md) | Per-user identity to the catalog manager | Accepted |
 | [0016](0016-access-layers-and-workspace-roles.md) | Three access layers and workspace roles | Accepted; layer 1 / grant flow superseded by 0018 |
 | [0017](0017-bi-gateway.md) | BI tools reach the engines only through Baleia (the BI gateway) | Accepted; amends 0001; extended by 0030 |
-| [0018](0018-workspace-catalog-scope.md) | Workspace-scoped catalog access | Proposed; supersedes 0016 layer 1, extends 0005 |
+| [0018](0018-workspace-catalog-scope.md) | Workspace-scoped catalog access | Accepted (implemented by #700 to #704); supersedes 0016 layer 1, extends 0005 |
 | [0019](0019-sqlingo-editor-sql-intelligence.md) | sqlingo is the editor's SQL intelligence; the server keeps its own parser | Accepted |
 | [0020](0020-gorm-store.md) | GORM is the store ORM; no handwritten SQL survives in the data layer | Accepted; amended by 0024 (partitioning behind a PartitionManager seam) |
-| [0021](0021-unified-connection-model.md) | Unified connection model and Trino catalog support | Proposed; amends 0002; amended by 0029 (access-mode vocabulary) |
+| [0021](0021-unified-connection-model.md) | Unified connection model and Trino catalog support | Accepted, with open items (the `system` registration, Delta Lake and Hudi schemas); amends 0002; amended by 0029 (access-mode vocabulary) |
 | [0022](0022-shared-realtime-backbone.md) | Redis is the shared real-time, cache and rate-limit backbone | Accepted |
 | [0023](0023-portable-search-index.md) | Search reads a portable term index rebuilt per scope | Accepted |
 | [0024](0024-cold-storage-and-retention.md) | Cold storage and retention for the audit trail and query history | Accepted; amends 0020 (table partitioning); interval, defaults and cadence amended by 0026 |
 | [0025](0025-semantic-search.md) | Semantic search behind a vector store seam, embedded by Baleia | Proposed; extends 0023 |
 | [0026](0026-daily-partitions-and-retention-cadence.md) | Daily partitions, configurable retention and a weekly drop cadence | Accepted; amends 0024 |
 | [0027](0027-catalog-manager-rbac-administration.md) | Catalog-manager RBAC is administered through Baleia and owned by the manager | Proposed (amended by #994) |
-| [0028](0028-data-policies-opa-trino.md) | Row filters and column masks: authored in Baleia, decided by OPA, enforced by Trino | Accepted (spike #994); extends 0005 |
-| [0029](0029-connection-access-modes-determine-engine-and-catalog-lifecycle.md) | Connection access modes determine engine and catalog lifecycle | Proposed; builds on 0002, 0006, 0021; amends 0002, 0021 |
+| [0028](0028-data-policies-opa-trino.md) | Row filters and column masks: authored in Baleia, decided by OPA, enforced by Trino | Accepted (spike #994; #1149 and #1152 settled); extends 0005 |
+| [0029](0029-connection-access-modes-determine-engine-and-catalog-lifecycle.md) | Connection access modes determine engine and catalog lifecycle | Accepted (implemented by #998); builds on 0002, 0006, 0021; amends 0002, 0021 |
 | [0030](0030-semantic-catalog-through-the-bi-gateway.md) | External catalogs read the semantic catalog through the BI gateway | Accepted; extends 0017 |
 
 ## Owner decisions

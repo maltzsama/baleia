@@ -6,6 +6,59 @@
 and by the worker on `BALEIA_WORKER_METRICS_ADDR`. See ADR 0009 and the
 Prometheus rules in `deploy/prometheus`.
 
+Every name is prefixed `baleia_`. Label names come from a fixed allow-list
+(`AllowedLabels` in `internal/metrics`). Label values are bounded, except the
+`engine` label on the workload metrics, which carries the engine ID. The alert rules in
+`deploy/prometheus/alerts.yml` read the series below; their unit tests
+(`alerts_test.yml`) run them against fixed series.
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `baleia_build_info` | gauge | `version`, `commit` | Always 1; the build that runs |
+| `baleia_http_requests_total` | counter | `route`, `method`, `status_class` | HTTP requests by route template |
+| `baleia_http_request_duration_seconds` | histogram | `route`, `method` | Request duration by route template |
+| `baleia_http_inflight_requests` | gauge | | Requests being served |
+| `baleia_auth_attempts_total` | counter | `kind`, `outcome` | Sign-in attempts by kind and outcome |
+| `baleia_authz_denials_total` | counter | `resource`, `reason` | Denied operations by resource |
+| `baleia_users_suspended_total` | counter | `reason` | Users suspended, by reason |
+| `baleia_directory_reconcile_runs_total` | counter | `outcome` | Directory reconciliation passes |
+| `baleia_engine_statements_total` | counter | `engine`, `outcome` | Statements by engine kind and outcome |
+| `baleia_engine_statement_duration_seconds` | histogram | `engine` | Statement duration by engine kind |
+| `baleia_engine_errors_total` | counter | `engine`, `code` | Statement errors by engine kind and error code |
+| `baleia_engine_rows_returned_total` | counter | `engine` | Rows returned by engine kind |
+| `baleia_engine_result_bytes_total` | counter | `engine` | Result bytes stored by engine kind |
+| `baleia_cluster_active_workers` | gauge | `engine` | Active workers in the engine's latest cluster snapshot |
+| `baleia_cluster_running_queries` | gauge | `engine` | Running queries in the latest snapshot |
+| `baleia_cluster_queued_queries` | gauge | `engine` | Queued queries in the latest snapshot |
+| `baleia_cluster_blocked_queries` | gauge | `engine` | Blocked queries in the latest snapshot |
+| `baleia_cluster_memory_used_ratio` | gauge | `engine` | Share of the engine's memory in use (0 to 1) |
+| `baleia_execution_queue_depth` | gauge | `engine`, `class` | Runs waiting in an engine's queue, by workload class |
+| `baleia_execution_queue_running` | gauge | `engine`, `class` | Runs holding a slot on an engine, by class |
+| `baleia_execution_queue_wait_seconds` | histogram | `engine`, `class` | How long an admitted run waited in the queue |
+| `baleia_execution_admissions_total` | counter | `engine`, `class` | Runs admitted from an engine's queue |
+| `baleia_execution_queue_timeouts_total` | counter | `engine`, `class` | Runs that timed out waiting in the queue |
+| `baleia_db_pool_acquired_conns` | gauge | `process` | Store connections in use (`BaleiaDBPoolSaturated` divides it by the max) |
+| `baleia_db_pool_idle_conns` | gauge | `process` | Idle store connections |
+| `baleia_db_pool_max_conns` | gauge | `process` | Store connection limit (0 is unlimited) |
+| `baleia_catalog_ddl_total` | counter | `action`, `outcome` | Catalog DDL sent to engines |
+| `baleia_catalogs_by_state` | gauge | `state` | Managed catalog bindings by lifecycle state |
+| `baleia_metadata_sync_duration_seconds` | histogram | `outcome` | Duration of one catalog metadata pass |
+| `baleia_metadata_staleness_seconds_max` | gauge | | Age of the stalest catalog's metadata |
+| `baleia_schedule_last_success_timestamp_seconds` | gauge | `schedule` | Unix time of a schedule's last successful pass |
+| `baleia_retention_oldest_partition_start_timestamp_seconds` | gauge | `stream` | Start of the oldest partition still in the database |
+| `baleia_retention_allowed_age_seconds` | gauge | `stream` | How old the oldest partition may get before retention is behind |
+| `baleia_audit_write_failures_total` | counter | | Audit events that could not be written |
+| `baleia_audit_export_events_total` | counter | `outcome` | Audit events exported |
+| `baleia_audit_export_lag_seconds` | gauge | | How far the audit export is behind |
+| `baleia_storage_operations_total` | counter | `operation`, `outcome` | Object storage operations |
+| `baleia_storage_bytes_total` | counter | `operation` | Bytes moved to or from object storage |
+| `baleia_search_requests_total` | counter | `kind`, `outcome` | In-product search requests, and whether they found anything |
+| `baleia_agent_gate_decisions_total` | counter | `tool`, `outcome`, `reason` | Agent capability gate decisions |
+| `baleia_webhook_deliveries_total` | counter | `outcome` | Webhook delivery attempts (`delivered`, `failed`, `dead`) |
+
+The Go runtime, process and Temporal SDK metrics are served on the same
+endpoints.
+
 ## Distributed tracing (#47)
 
 Tracing is **off by default**. Turn it on with:

@@ -1,6 +1,6 @@
 # 0029. Connection and engine registration lifecycles
 
-- Status: Proposed
+- Status: Accepted; implemented by #998
 - Date: 2026-11-13
 - Issues: #998
 - Builds on: [0002](0002-connections-engines-catalogs-bindings.md),

@@ -164,6 +164,11 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (_ *Core, err er
 		return nil, fmt.Errorf("gorm store: %w", err)
 	}
 	c.onClose(func() { _ = store.Close(c.Store) })
+	sqlDB, err := c.Store.DB()
+	if err != nil {
+		return nil, fmt.Errorf("store pool: %w", err)
+	}
+	c.Metrics.WatchDBPool(sqlDB.Stats)
 	c.StoreRepo = repo.New(c.Store)
 	c.Queries = c.StoreRepo
 	c.Outbox = events.NewOutbox(c.Store)

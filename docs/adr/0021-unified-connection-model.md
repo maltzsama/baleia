@@ -1,6 +1,6 @@
 # 0021. Unified connection model and Trino catalog support
 
-- **Status:** Proposed
+- **Status:** Accepted. Still open, marked OPEN or Proposal (open) in the text: registering `system` as a connection, and the configuration schemas of Delta Lake and Hudi
 - **Date:** 2026-11-08
 - **Amends:** ADR 0002
 - **Preserves:** ADR 0003 catalog-store contract and lifecycle
@@ -968,7 +968,7 @@ The change is complete when:
 
 ## Current compliance against the code
 
-Not compliant. This is the target state.
+Partly compliant. The access mode, the provider status values and the expanded kind list are in the code (see [ADR 0029](0029-connection-access-modes-determine-engine-and-catalog-lifecycle.md)). The rows of the table below were not all re-checked against the code when this section was updated.
 
 The following pieces already exist:
 
