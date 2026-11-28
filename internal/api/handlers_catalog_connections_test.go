@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 type fakeConnQuerier struct {

@@ -12,10 +12,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	connectionssqlite "github.com/galileostudio/baleia/internal/connections/sqlite"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/connections"
+	connectionssqlite "github.com/maltzsama/baleia/internal/connections/sqlite"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // Kind is the registered engine kind.

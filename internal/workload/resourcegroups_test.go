@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // TestResourceGroups_Generate covers the A-5.1 generator (#598): the root

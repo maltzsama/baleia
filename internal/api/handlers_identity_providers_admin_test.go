@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/auth"
+	identityldap "github.com/maltzsama/baleia/internal/identity/ldap"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/store/repo"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

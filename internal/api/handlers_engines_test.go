@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/catalogs"
-	"github.com/galileostudio/baleia/internal/catalogs/conns"
-	"github.com/galileostudio/baleia/internal/catalogs/topology"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/catalogs"
+	"github.com/maltzsama/baleia/internal/catalogs/conns"
+	"github.com/maltzsama/baleia/internal/catalogs/topology"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	wsaccess "github.com/maltzsama/baleia/internal/workspaces/access"
 )
 
 // fakeEngineProvider is a direct-engine provider whose metadata reader lists

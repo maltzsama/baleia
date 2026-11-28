@@ -9,7 +9,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Reader counts what depends on catalogs and connections; *repo.Repo

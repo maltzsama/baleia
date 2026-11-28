@@ -8,7 +8,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/server"
+	"github.com/maltzsama/baleia/internal/server"
 )
 
 func testConfig() server.RateLimiterConfig {

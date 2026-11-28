@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	trinoclient "github.com/galileostudio/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	trinoclient "github.com/maltzsama/baleia/internal/trino"
 )
 
 func TestErrorMapping(t *testing.T) {

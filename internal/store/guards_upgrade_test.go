@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/store"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/store"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/testdb"
 	"gorm.io/gorm"
 )
 

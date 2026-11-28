@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/bindings"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
-	trinoclient "github.com/galileostudio/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/bindings"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/db"
+	trinoclient "github.com/maltzsama/baleia/internal/trino"
 )
 
 // RegistryStore is the plugin contract's registry (docs/adr/0003):

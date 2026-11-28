@@ -11,9 +11,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/galileostudio/baleia/internal/app"
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/obs"
+	"github.com/maltzsama/baleia/internal/app"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/obs"
 )
 
 // Main runs a service's process lifecycle and exits non-zero on error. It

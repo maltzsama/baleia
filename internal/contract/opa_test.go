@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/deploy/opa"
+	"github.com/maltzsama/baleia/deploy/opa"
 )
 
 // TestOPAPolicyRevision pins the Rego of the plugin release to the Rego this

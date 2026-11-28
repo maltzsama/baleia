@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Reader reads teams, members and users; *repo.Repo implements it.

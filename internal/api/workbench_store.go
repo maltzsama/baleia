@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // workbenchReads are the workbench reads that have a GORM path (#770): the

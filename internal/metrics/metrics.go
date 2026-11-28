@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/version"
+	"github.com/maltzsama/baleia/internal/version"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"

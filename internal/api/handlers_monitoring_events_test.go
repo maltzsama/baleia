@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/monitoring/events"
+	"github.com/maltzsama/baleia/internal/monitoring/events"
 )
 
 func TestMonitoringSSEStreamsChangedEvents(t *testing.T) {

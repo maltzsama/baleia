@@ -6,8 +6,8 @@ package schedulespecs
 import (
 	"time"
 
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
-	"github.com/galileostudio/baleia/internal/temporal/workflows"
+	"github.com/maltzsama/baleia/internal/temporal/schedules"
+	"github.com/maltzsama/baleia/internal/temporal/workflows"
 )
 
 // Core returns the schedules every worker ensures at boot. metadataSyncEvery

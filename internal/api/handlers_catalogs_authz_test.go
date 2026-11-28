@@ -13,15 +13,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/bindings"
-	"github.com/galileostudio/baleia/internal/catalogs"
-	"github.com/galileostudio/baleia/internal/catalogs/topology"
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/db"
-	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/bindings"
+	"github.com/maltzsama/baleia/internal/catalogs"
+	"github.com/maltzsama/baleia/internal/catalogs/topology"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/db"
+	wsaccess "github.com/maltzsama/baleia/internal/workspaces/access"
 )
 
 // fakeTrino records every statement it receives and answers FINISHED.

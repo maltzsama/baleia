@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // catalogGrantStore is the grant flow's persistence. *repo.Repo implements it over the GORM store (#771).

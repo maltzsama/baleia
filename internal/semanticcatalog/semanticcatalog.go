@@ -12,7 +12,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // ContractVersion is the version of the JSON contract. It changes only on an

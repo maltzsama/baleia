@@ -4,8 +4,8 @@ import (
 	"cmp"
 	"time"
 
-	"github.com/galileostudio/baleia/deploy/opa"
-	"github.com/galileostudio/baleia/internal/config"
+	"github.com/maltzsama/baleia/deploy/opa"
+	"github.com/maltzsama/baleia/internal/config"
 )
 
 // Settings is the part of the configuration the handlers read, resolved once

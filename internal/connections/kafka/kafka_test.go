@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 func newProvider(t *testing.T, o connections.DialerOptions) *Provider {

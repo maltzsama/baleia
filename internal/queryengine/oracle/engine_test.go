@@ -3,7 +3,7 @@ package oracle
 import (
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/dialect"
 )
 
 func TestOptions_LOBMaxBytes(t *testing.T) {

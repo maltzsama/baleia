@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/trino"
 )
 
 // Operations are Trino's Iceberg procedures, in the priority a round runs

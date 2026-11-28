@@ -5,11 +5,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	wsmanage "github.com/galileostudio/baleia/internal/workspaces/manage"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	wsmanage "github.com/maltzsama/baleia/internal/workspaces/manage"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

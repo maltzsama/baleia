@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/ws"
-	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/gorilla/websocket"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/ws"
+	"github.com/maltzsama/baleia/internal/wsticket"
 )
 
 type mockQuerier struct {

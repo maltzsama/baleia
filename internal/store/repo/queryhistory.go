@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/store/model"
 )
 
 // OffloadQueryExecutions returns up to limit executions with (started_at, id)

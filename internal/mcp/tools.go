@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/agentpolicy"
-	"github.com/galileostudio/baleia/internal/api"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/agentpolicy"
+	"github.com/maltzsama/baleia/internal/api"
+	"github.com/maltzsama/baleia/internal/db"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )

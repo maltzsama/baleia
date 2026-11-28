@@ -8,16 +8,16 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/queryengine/clickhouse"
-	"github.com/galileostudio/baleia/internal/queryengine/flightsql"
-	"github.com/galileostudio/baleia/internal/queryengine/mysql"
-	"github.com/galileostudio/baleia/internal/queryengine/oracle"
-	"github.com/galileostudio/baleia/internal/queryengine/postgresql"
-	"github.com/galileostudio/baleia/internal/queryengine/sqlite"
-	"github.com/galileostudio/baleia/internal/queryengine/sqlserver"
-	"github.com/galileostudio/baleia/internal/queryengine/trino"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine/clickhouse"
+	"github.com/maltzsama/baleia/internal/queryengine/flightsql"
+	"github.com/maltzsama/baleia/internal/queryengine/mysql"
+	"github.com/maltzsama/baleia/internal/queryengine/oracle"
+	"github.com/maltzsama/baleia/internal/queryengine/postgresql"
+	"github.com/maltzsama/baleia/internal/queryengine/sqlite"
+	"github.com/maltzsama/baleia/internal/queryengine/sqlserver"
+	"github.com/maltzsama/baleia/internal/queryengine/trino"
 )
 
 // Options are the server-side settings some kinds need.

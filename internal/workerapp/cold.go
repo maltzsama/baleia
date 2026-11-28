@@ -7,16 +7,16 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/app"
-	"github.com/galileostudio/baleia/internal/audit"
-	auditexport "github.com/galileostudio/baleia/internal/audit/export"
-	"github.com/galileostudio/baleia/internal/audit/offload"
-	"github.com/galileostudio/baleia/internal/audit/retention"
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
-	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/galileostudio/baleia/internal/temporal/activities"
+	"github.com/maltzsama/baleia/internal/app"
+	"github.com/maltzsama/baleia/internal/audit"
+	auditexport "github.com/maltzsama/baleia/internal/audit/export"
+	"github.com/maltzsama/baleia/internal/audit/offload"
+	"github.com/maltzsama/baleia/internal/audit/retention"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/storage"
+	"github.com/maltzsama/baleia/internal/temporal/activities"
 )
 
 // wireColdRetention wires the S3 cold offload and the retention into the

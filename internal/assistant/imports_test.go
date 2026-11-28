@@ -21,19 +21,19 @@ func TestImportBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	forbiddenExact := map[string]bool{
-		"github.com/galileostudio/baleia/internal/store":       true,
-		"github.com/galileostudio/baleia/internal/dbpool":      true,
-		"github.com/galileostudio/baleia/internal/api":         true,
-		"github.com/galileostudio/baleia/internal/trino":       true,
-		"github.com/galileostudio/baleia/internal/queryengine": true,
-		"github.com/galileostudio/baleia/internal/temporal":    true,
-		"github.com/galileostudio/baleia/internal/storage":     true,
+		"github.com/maltzsama/baleia/internal/store":       true,
+		"github.com/maltzsama/baleia/internal/dbpool":      true,
+		"github.com/maltzsama/baleia/internal/api":         true,
+		"github.com/maltzsama/baleia/internal/trino":       true,
+		"github.com/maltzsama/baleia/internal/queryengine": true,
+		"github.com/maltzsama/baleia/internal/temporal":    true,
+		"github.com/maltzsama/baleia/internal/storage":     true,
 	}
 	forbiddenPrefixes := []string{
-		"github.com/galileostudio/baleia/internal/trino/",
-		"github.com/galileostudio/baleia/internal/queryengine/",
-		"github.com/galileostudio/baleia/internal/temporal/",
-		"github.com/galileostudio/baleia/internal/storage/",
+		"github.com/maltzsama/baleia/internal/trino/",
+		"github.com/maltzsama/baleia/internal/queryengine/",
+		"github.com/maltzsama/baleia/internal/temporal/",
+		"github.com/maltzsama/baleia/internal/storage/",
 	}
 	for _, file := range files {
 		if strings.HasSuffix(file, "_test.go") {

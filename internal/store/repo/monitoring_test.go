@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/monitoring/queryevents"
-	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/monitoring/queryevents"
+	"github.com/maltzsama/baleia/internal/store/model"
 )
 
 // monitoringFixture is the workbench fixture's catalog, binding and engine,

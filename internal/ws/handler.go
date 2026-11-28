@@ -8,13 +8,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/realtime"
-	"github.com/galileostudio/baleia/internal/temporal/workflows"
-	"github.com/galileostudio/baleia/internal/wsticket"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/realtime"
+	"github.com/maltzsama/baleia/internal/temporal/workflows"
+	"github.com/maltzsama/baleia/internal/wsticket"
 	"go.temporal.io/sdk/client"
 )
 

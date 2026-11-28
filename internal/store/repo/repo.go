@@ -1,7 +1,7 @@
 package repo
 
 import (
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 )

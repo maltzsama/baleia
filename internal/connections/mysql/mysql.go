@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
 	driver "github.com/go-sql-driver/mysql"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 const (

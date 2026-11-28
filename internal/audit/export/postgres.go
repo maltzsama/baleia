@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // exportStore is the part of Baleia's database the export uses.

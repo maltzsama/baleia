@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	textsearch "github.com/galileostudio/baleia/internal/search"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
+	textsearch "github.com/maltzsama/baleia/internal/search"
 )
 
 func newID() db.UUID { return db.UUID{Bytes: uuid.New(), Valid: true} }

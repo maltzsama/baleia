@@ -42,8 +42,8 @@ var wiringSites = []string{"internal/app/app.go", "cmd/worker/main.go", "cmd/e2e
 var constructionRules = []constructionRule{
 	{
 		constructors: []guardedConstructor{
-			{"github.com/galileostudio/baleia/internal/trino", "New"},
-			{"github.com/galileostudio/baleia/internal/trino", "NewWithHTTPClient"},
+			{"github.com/maltzsama/baleia/internal/trino", "New"},
+			{"github.com/maltzsama/baleia/internal/trino", "NewWithHTTPClient"},
 		},
 		// The Trino provider owns a client for metadata reads and pings.
 		allowed: append([]string{"internal/queryengine/", "internal/bindings/", "internal/connections/trino/"}, wiringSites...),
@@ -281,7 +281,7 @@ var trinoInDomain = map[string]string{}
 // through internal/queryengine, never through the Trino client.
 func TestNoTrinoImportsInDomain(t *testing.T) {
 	t.Parallel()
-	const trinoPkg = "github.com/galileostudio/baleia/internal/trino"
+	const trinoPkg = "github.com/maltzsama/baleia/internal/trino"
 	offending := map[string]bool{}
 	for file, imports := range moduleImports(t) {
 		if !strings.HasPrefix(file, "internal/api/") && !strings.HasPrefix(file, "internal/temporal/") {
@@ -323,8 +323,8 @@ func TestNoTrinoInExecutionPath(t *testing.T) {
 			continue
 		}
 		for _, imp := range got {
-			if strings.HasPrefix(imp, "github.com/galileostudio/baleia/internal/trino") ||
-				strings.HasPrefix(imp, "github.com/galileostudio/baleia/internal/queryengine/trino") {
+			if strings.HasPrefix(imp, "github.com/maltzsama/baleia/internal/trino") ||
+				strings.HasPrefix(imp, "github.com/maltzsama/baleia/internal/queryengine/trino") {
 				t.Errorf("%s imports %s; the execution path is engine-neutral", file, imp)
 			}
 		}
@@ -553,7 +553,7 @@ func isExecscopeFor(e ast.Expr, alias string) bool {
 // #704). internal/queryengine defines and consumes the field.
 func TestSessionScopeFromExecscope(t *testing.T) {
 	t.Parallel()
-	const execscopePkg = "github.com/galileostudio/baleia/internal/execscope"
+	const execscopePkg = "github.com/maltzsama/baleia/internal/execscope"
 	// fixedScopeAllowed lists the files that may set a fixed AllowedCatalogs:
 	// the legacy explorer sends the single catalog it authorized (#704 removes
 	// the route). Nothing else may spell a fixed allowlist.

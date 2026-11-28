@@ -6,15 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/metrics"
-	"github.com/galileostudio/baleia/internal/storage"
-	"github.com/galileostudio/baleia/internal/testdb"
-	"github.com/galileostudio/baleia/internal/wsticket"
+	"github.com/maltzsama/baleia/internal/audit"
+	bindtrino "github.com/maltzsama/baleia/internal/bindings/trino"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/metrics"
+	"github.com/maltzsama/baleia/internal/storage"
+	"github.com/maltzsama/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/wsticket"
 )
 
 // testDeps is a complete Deps over a throwaway database.

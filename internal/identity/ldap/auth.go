@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/identity"
 	ldapv3 "github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/identity"
 )
 
 // User is the directory identity after a successful bind and group mapping.

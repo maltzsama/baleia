@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // joinSuggestionLimit bounds one suggestion list. The editor only needs the

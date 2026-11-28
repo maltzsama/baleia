@@ -7,12 +7,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/semantic"
-	"github.com/galileostudio/baleia/internal/semantic/compiler"
-	"github.com/galileostudio/baleia/internal/semantic/metrics"
-	"github.com/galileostudio/baleia/internal/semanticcatalog"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/semantic"
+	"github.com/maltzsama/baleia/internal/semantic/compiler"
+	"github.com/maltzsama/baleia/internal/semantic/metrics"
+	"github.com/maltzsama/baleia/internal/semanticcatalog"
 )
 
 // BISemanticCatalog returns the reader the BI gateway serves as the workspace

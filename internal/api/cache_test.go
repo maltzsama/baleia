@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/realtime"
+	"github.com/maltzsama/baleia/internal/realtime"
 )
 
 // openSharedCacheClient returns a client for the cross-replica cache tests, or

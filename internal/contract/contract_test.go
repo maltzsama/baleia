@@ -22,13 +22,13 @@ import (
 	"testing"
 	"time"
 
-	bindtrino "github.com/galileostudio/baleia/internal/bindings/trino"
-	"github.com/galileostudio/baleia/internal/bootstrap"
-	"github.com/galileostudio/baleia/internal/store"
-	"github.com/galileostudio/baleia/internal/trino"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	bindtrino "github.com/maltzsama/baleia/internal/bindings/trino"
+	"github.com/maltzsama/baleia/internal/bootstrap"
+	"github.com/maltzsama/baleia/internal/store"
+	"github.com/maltzsama/baleia/internal/trino"
 )
 
 func fixture(t *testing.T, name string, v any) {

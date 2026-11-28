@@ -13,7 +13,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/dialect"
 	"github.com/maltzsama/sqlglot-go/expressions"
 	"github.com/maltzsama/sqlglot-go/optimizer"
 )

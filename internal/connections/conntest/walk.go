@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // CheckWalk checks a reader's one-query catalog walk (#15) against LoadTable:

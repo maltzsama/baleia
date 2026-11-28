@@ -10,9 +10,9 @@ import (
 	"os"
 	"time"
 
-	trinobinding "github.com/galileostudio/baleia/internal/bindings/trino"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/trino"
+	trinobinding "github.com/maltzsama/baleia/internal/bindings/trino"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/trino"
 )
 
 // ensureTarget exposes Trino's tpch connector as the e2e_tpch catalog on the

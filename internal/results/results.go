@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow/ipc"
-	"github.com/galileostudio/baleia/internal/arrowipc"
-	"github.com/galileostudio/baleia/internal/storage"
+	"github.com/maltzsama/baleia/internal/arrowipc"
+	"github.com/maltzsama/baleia/internal/storage"
 )
 
 // Column is one result column.

@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/oidctest"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/oidctest"
 )
 
 func newProvider(t *testing.T, idp *oidctest.StubIDP) *auth.OIDCProvider {

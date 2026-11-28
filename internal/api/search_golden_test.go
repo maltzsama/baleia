@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/store/repo"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 // The golden search set (#798, #941): a corpus of tables, columns, docs and

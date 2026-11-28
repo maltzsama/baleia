@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/authz"
 )
 
 // GetWorkspaceBIStatus — GET /workspaces/{id}/bi-status (#1102). Any workspace

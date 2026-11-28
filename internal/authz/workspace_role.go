@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // WorkspaceRole is what a caller may do in a workspace (#653, docs/adr/0016).

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

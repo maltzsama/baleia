@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/config"
 )
 
 func TestNew_RequiresService(t *testing.T) {

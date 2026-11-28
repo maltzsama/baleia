@@ -10,7 +10,7 @@ import (
 	"errors"
 	"unicode/utf8"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Catalogs reads the granted catalogs and their namespaces; *repo.Repo

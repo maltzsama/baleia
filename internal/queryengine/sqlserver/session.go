@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // batchSize is how many rows one Arrow record batch holds.

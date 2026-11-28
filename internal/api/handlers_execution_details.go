@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/queryprofile"
-	"github.com/galileostudio/baleia/internal/workbench/executions"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/queryprofile"
+	"github.com/maltzsama/baleia/internal/workbench/executions"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

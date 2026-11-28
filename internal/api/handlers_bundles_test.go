@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/content"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/content"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/store/repo"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

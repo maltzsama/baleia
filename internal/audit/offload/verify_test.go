@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit/export"
+	"github.com/maltzsama/baleia/internal/audit/export"
 )
 
 // erroringStore fails every call, as an unreachable cold store would.

@@ -12,9 +12,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/semantic"
-	"github.com/galileostudio/baleia/internal/slug"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/semantic"
+	"github.com/maltzsama/baleia/internal/slug"
 )
 
 // Store reads metrics and records their certification; *repo.Repo

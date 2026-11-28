@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // Origin is where a run came from. Classification looks at it before any

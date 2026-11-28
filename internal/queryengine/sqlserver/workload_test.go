@@ -3,7 +3,7 @@ package sqlserver
 import (
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 func TestSQLServerAppName(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
-	trinoclient "github.com/galileostudio/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	trinoclient "github.com/maltzsama/baleia/internal/trino"
 )
 
 // errorNames maps Trino errorName values to engine error codes (#25).

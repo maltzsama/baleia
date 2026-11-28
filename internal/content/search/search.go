@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	textsearch "github.com/galileostudio/baleia/internal/search"
+	"github.com/maltzsama/baleia/internal/db"
+	textsearch "github.com/maltzsama/baleia/internal/search"
 )
 
 // Reader reads the visible content and the space names; *repo.Repo

@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/trino"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/trino"
 	_ "github.com/microsoft/go-mssqldb"
 	goora "github.com/sijms/go-ora/v2"
 	_ "modernc.org/sqlite"

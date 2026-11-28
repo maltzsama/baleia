@@ -6,7 +6,7 @@
 package assistant
 
 import (
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 type AddAssistantAgentWorkspaceParams struct {

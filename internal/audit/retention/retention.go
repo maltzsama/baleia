@@ -9,7 +9,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
 )
 
 // Partitions is the partition surface the retention needs.

@@ -3,7 +3,7 @@ package activities
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // AgentSlotParams asks whether an agent may start another run.

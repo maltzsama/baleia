@@ -1,4 +1,4 @@
-module github.com/galileostudio/baleia
+module github.com/maltzsama/baleia
 
 go 1.26.0
 

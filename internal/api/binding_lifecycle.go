@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/bindings"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/bindings"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Glue between the handlers and the binding lifecycle (#38): the catalog

@@ -3,8 +3,8 @@ package activities
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/datapolicy"
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
+	"github.com/maltzsama/baleia/internal/datapolicy"
+	"github.com/maltzsama/baleia/internal/temporal/schedules"
 )
 
 // SetDataPolicyPublisher wires the data policy publisher (ADR 0028); nil

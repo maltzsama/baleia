@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/workspaces/spaces"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/workspaces/spaces"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

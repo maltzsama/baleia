@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // MarkQueuedParams names the run that entered its engine's admission queue.

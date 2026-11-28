@@ -3,14 +3,14 @@ package api
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/retrievers"
-	"github.com/galileostudio/baleia/internal/store/repo"
-	"github.com/galileostudio/baleia/internal/workbench/executions"
-	"github.com/galileostudio/baleia/internal/workbench/folders"
-	"github.com/galileostudio/baleia/internal/workbench/savedqueries"
-	"github.com/galileostudio/baleia/internal/wsticket"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/retrievers"
+	"github.com/maltzsama/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/workbench/executions"
+	"github.com/maltzsama/baleia/internal/workbench/folders"
+	"github.com/maltzsama/baleia/internal/workbench/savedqueries"
+	"github.com/maltzsama/baleia/internal/wsticket"
 )
 
 // QueryHandlers serves the query editor, saved queries, results and retrievers (#365).

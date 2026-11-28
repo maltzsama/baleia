@@ -8,9 +8,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/conntest"
 	"github.com/jackc/pgx/v5"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections/conntest"
 )
 
 // TestMetadataReader_postgresql runs against a real server. Set

@@ -3,7 +3,7 @@ package workload
 import (
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 func TestClassify(t *testing.T) {

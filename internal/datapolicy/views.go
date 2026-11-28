@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // TableName names a table or view on the engines: its engine catalog name,

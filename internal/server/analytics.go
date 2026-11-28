@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/config"
 )
 
 // analyticsTag is the Umami tracker the operator opted into, or "" when it is

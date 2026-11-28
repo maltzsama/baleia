@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit/export"
-	"github.com/galileostudio/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/audit/export"
+	"github.com/maltzsama/baleia/internal/store/model"
 )
 
 type fakeQueryHistoryStore struct {

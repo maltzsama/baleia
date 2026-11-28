@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
 	"github.com/jackc/pgx/v5"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 const (

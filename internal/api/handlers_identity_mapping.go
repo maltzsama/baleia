@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/identity"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/identity"
 )
 
 // PreviewIdentityMapping — POST /admin/identity-providers/mapping-preview

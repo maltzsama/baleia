@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/config"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/config"
 )
 
 func TestSystemStatus_AdminOnly(t *testing.T) {

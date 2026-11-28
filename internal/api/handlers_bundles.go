@@ -7,13 +7,13 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/content"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/semantic/metrics"
-	"github.com/galileostudio/baleia/internal/version"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/content"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/semantic/metrics"
+	"github.com/maltzsama/baleia/internal/version"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/config"
 )
 
 const testKey = "k-0123456789abcdef0123456789abcdef"

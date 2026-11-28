@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/assistant"
-	"github.com/galileostudio/baleia/internal/assistant/llm"
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/authz"
-	"github.com/galileostudio/baleia/internal/db"
-	adb "github.com/galileostudio/baleia/internal/db/assistant"
-	"github.com/galileostudio/baleia/internal/obs"
+	"github.com/maltzsama/baleia/internal/assistant"
+	"github.com/maltzsama/baleia/internal/assistant/llm"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/authz"
+	"github.com/maltzsama/baleia/internal/db"
+	adb "github.com/maltzsama/baleia/internal/db/assistant"
+	"github.com/maltzsama/baleia/internal/obs"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

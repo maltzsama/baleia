@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/metrics"
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/metrics"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
 )
 
 // storeWith is a store that lists partitions and does nothing else.

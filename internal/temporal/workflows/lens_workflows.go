@@ -3,8 +3,8 @@ package workflows
 import (
 	"time"
 
-	"github.com/galileostudio/baleia/internal/temporal/activities"
-	"github.com/galileostudio/baleia/internal/temporal/schedules"
+	"github.com/maltzsama/baleia/internal/temporal/activities"
+	"github.com/maltzsama/baleia/internal/temporal/schedules"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )

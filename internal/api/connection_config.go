@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/catalogs"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/providers"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/catalogs"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections/providers"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // errConfigInvalid wraps every request-config failure that answers 422.

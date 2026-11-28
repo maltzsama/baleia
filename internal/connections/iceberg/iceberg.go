@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/icebergrest"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections/icebergrest"
 )
 
 // DefaultCatalog names the single catalog when no warehouse is configured.

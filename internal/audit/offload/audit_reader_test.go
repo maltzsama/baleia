@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit/export"
+	"github.com/maltzsama/baleia/internal/audit/export"
 )
 
 // TestColdAuditDocument: the cold object is lossless; it keeps the id and

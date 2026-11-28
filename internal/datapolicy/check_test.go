@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	trinoclient "github.com/galileostudio/baleia/internal/trino"
+	trinoclient "github.com/maltzsama/baleia/internal/trino"
 )
 
 // fakeTypes answers with fixed types, or an error, and records what it was

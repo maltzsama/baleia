@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/execscope"
-	"github.com/galileostudio/baleia/internal/policy"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	"github.com/galileostudio/baleia/internal/retrievers/schedule"
-	"github.com/galileostudio/baleia/internal/temporal/workflows"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/execscope"
+	"github.com/maltzsama/baleia/internal/policy"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/retrievers/schedule"
+	"github.com/maltzsama/baleia/internal/temporal/workflows"
 	"go.temporal.io/sdk/client"
 )
 

@@ -3,9 +3,9 @@ package repo
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/catalogs/admin"
-	"github.com/galileostudio/baleia/internal/engines/manage"
-	"github.com/galileostudio/baleia/internal/identity/setup"
+	"github.com/maltzsama/baleia/internal/catalogs/admin"
+	"github.com/maltzsama/baleia/internal/engines/manage"
+	"github.com/maltzsama/baleia/internal/identity/setup"
 	"gorm.io/gorm"
 )
 

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/monitoring/maintenance"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/monitoring/maintenance"
 )
 
 // Policies reads and writes per-table maintenance parameters (#500);

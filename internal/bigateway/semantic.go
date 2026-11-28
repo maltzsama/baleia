@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/identity/bikeys"
-	"github.com/galileostudio/baleia/internal/semanticcatalog"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/identity/bikeys"
+	"github.com/maltzsama/baleia/internal/semanticcatalog"
 )
 
 // Semantic catalog routes (ADR 0030). They live under /baleia/ so they never

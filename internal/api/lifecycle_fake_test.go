@@ -5,7 +5,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // lifecycleFake is the binding-lifecycle part of the database (#38) for

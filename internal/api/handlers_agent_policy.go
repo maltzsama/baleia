@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/galileostudio/baleia/internal/agentpolicy"
-	"github.com/galileostudio/baleia/internal/audit"
-	"github.com/galileostudio/baleia/internal/authz"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/agentpolicy"
+	"github.com/maltzsama/baleia/internal/audit"
+	"github.com/maltzsama/baleia/internal/authz"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

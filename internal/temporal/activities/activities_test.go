@@ -10,14 +10,14 @@ import (
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
-	"github.com/galileostudio/baleia/internal/arrowipc"
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	qtrino "github.com/galileostudio/baleia/internal/queryengine/trino"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/arrowipc"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	qtrino "github.com/maltzsama/baleia/internal/queryengine/trino"
 )
 
 // fakeQuerier embeds db.Querier so only the exercised method is implemented.

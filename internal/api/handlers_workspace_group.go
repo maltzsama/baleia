@@ -3,10 +3,10 @@ package api
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/repo"
-	wsmanage "github.com/galileostudio/baleia/internal/workspaces/manage"
-	"github.com/galileostudio/baleia/internal/workspaces/teams"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/repo"
+	wsmanage "github.com/maltzsama/baleia/internal/workspaces/manage"
+	"github.com/maltzsama/baleia/internal/workspaces/teams"
 )
 
 // WorkspaceHandlers serves workspaces, teams, spaces and their members (#365).

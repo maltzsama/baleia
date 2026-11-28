@@ -4,9 +4,9 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/galileostudio/baleia/internal/bootstrap"
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/store"
+	"github.com/maltzsama/baleia/internal/bootstrap"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/store"
 )
 
 // runStoreUp applies the versioned schema migrations and the deploy-time

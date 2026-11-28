@@ -9,7 +9,7 @@ package planned
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // Provider is a declared but non-creatable connection type.

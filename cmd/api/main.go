@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/galileostudio/baleia/internal/app"
-	"github.com/galileostudio/baleia/internal/bootstrap"
-	"github.com/galileostudio/baleia/internal/command"
-	"github.com/galileostudio/baleia/internal/config"
-	"github.com/galileostudio/baleia/internal/datapolicy"
-	"github.com/galileostudio/baleia/internal/server"
-	"github.com/galileostudio/baleia/internal/store"
-	"github.com/galileostudio/baleia/internal/store/repo"
+	"github.com/maltzsama/baleia/internal/app"
+	"github.com/maltzsama/baleia/internal/bootstrap"
+	"github.com/maltzsama/baleia/internal/command"
+	"github.com/maltzsama/baleia/internal/config"
+	"github.com/maltzsama/baleia/internal/datapolicy"
+	"github.com/maltzsama/baleia/internal/server"
+	"github.com/maltzsama/baleia/internal/store"
+	"github.com/maltzsama/baleia/internal/store/repo"
 )
 
 func main() {

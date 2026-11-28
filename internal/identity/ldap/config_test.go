@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/identity"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/identity"
 )
 
 func testKeyring(t *testing.T, secret string) *crypto.Keyring {

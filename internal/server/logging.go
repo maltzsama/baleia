@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/maltzsama/baleia/internal/auth"
 )
 
 // responseRecorder captures the status code and body size for logging.

@@ -3,7 +3,7 @@ package oracle
 import (
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 func TestOracleModule(t *testing.T) {

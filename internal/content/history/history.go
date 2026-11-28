@@ -7,8 +7,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/content"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/content"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Versions reads content versions; *repo.Repo implements it.

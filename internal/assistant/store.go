@@ -3,8 +3,8 @@ package assistant
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
-	adb "github.com/galileostudio/baleia/internal/db/assistant"
+	"github.com/maltzsama/baleia/internal/db"
+	adb "github.com/maltzsama/baleia/internal/db/assistant"
 )
 
 // Store is the assistant's persistence boundary (#774). The GORM-backed

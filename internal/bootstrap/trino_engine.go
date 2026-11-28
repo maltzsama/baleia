@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // DefaultEngineStore is the subset of db.Querier EnsureDefaultTrinoEngine uses.

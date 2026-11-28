@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/identity"
+	"github.com/maltzsama/baleia/internal/identity"
 )
 
 // TestMappingPreview: the endpoint returns exactly what login-time mapping

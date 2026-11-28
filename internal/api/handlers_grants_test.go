@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/catalogs/topology"
-	"github.com/galileostudio/baleia/internal/db"
-	wsaccess "github.com/galileostudio/baleia/internal/workspaces/access"
 	"github.com/go-chi/chi/v5"
+	"github.com/maltzsama/baleia/internal/catalogs/topology"
+	"github.com/maltzsama/baleia/internal/db"
+	wsaccess "github.com/maltzsama/baleia/internal/workspaces/access"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 

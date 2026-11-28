@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/queryengine"
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 )

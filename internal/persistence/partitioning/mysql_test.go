@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 // TestMySQLPartitions exercises the MySQL/MariaDB native range adapter end to

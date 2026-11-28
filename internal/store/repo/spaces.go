@@ -6,9 +6,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/workspaces/spaces"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/workspaces/spaces"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

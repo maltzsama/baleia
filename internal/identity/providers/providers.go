@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Store reads providers and updates one; *repo.Repo implements it.

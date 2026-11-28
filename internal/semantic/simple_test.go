@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/dialect"
 )
 
 func metric(t *testing.T, m SimpleMetricV1) SimpleMetricV1 {

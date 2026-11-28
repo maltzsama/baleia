@@ -12,8 +12,8 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/decimal128"
 	"github.com/apache/arrow-go/v18/arrow/memory"
-	"github.com/galileostudio/baleia/internal/db"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // PostgreSQL type OIDs the adapter maps explicitly (pg_catalog).

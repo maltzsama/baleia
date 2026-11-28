@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 func testKeyring(t *testing.T) *crypto.Keyring {

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/galileostudio/baleia/internal/db"
-	slugs "github.com/galileostudio/baleia/internal/slug"
+	"github.com/maltzsama/baleia/internal/db"
+	slugs "github.com/maltzsama/baleia/internal/slug"
 )
 
 // Reader reads spaces, their members and content counts, and the principals

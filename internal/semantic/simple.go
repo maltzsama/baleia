@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/dialect"
 )
 
 // FormatVersion is the definition version stored in

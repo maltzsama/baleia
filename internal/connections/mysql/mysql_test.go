@@ -9,9 +9,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/conntest"
 	driver "github.com/go-sql-driver/mysql"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections/conntest"
 )
 
 // TestMetadataReader_mysql runs against a real server. Set

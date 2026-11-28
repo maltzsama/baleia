@@ -10,9 +10,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/db"
-	adb "github.com/galileostudio/baleia/internal/db/assistant"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/db"
+	adb "github.com/maltzsama/baleia/internal/db/assistant"
 )
 
 // apiKeyAAD is the keyring AAD for the provider API key (#19). It is a

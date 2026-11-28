@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/realtime"
+	"github.com/maltzsama/baleia/internal/realtime"
 )
 
 // TTL is how long an issued ticket stays valid.

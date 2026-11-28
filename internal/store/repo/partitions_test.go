@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 // TestEnsureAuditPartitions: the schedule extends the daily partitions of the

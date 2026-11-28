@@ -13,8 +13,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/crypto"
-	"github.com/galileostudio/baleia/internal/identity"
+	"github.com/maltzsama/baleia/internal/crypto"
+	"github.com/maltzsama/baleia/internal/identity"
 )
 
 const (

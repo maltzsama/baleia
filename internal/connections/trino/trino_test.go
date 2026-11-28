@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/dialect"
 )
 
 func provider(t *testing.T) *Provider {

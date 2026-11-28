@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/queryengine"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/queryengine"
 )
 
 // introspector lists what Oracle sees for the engine's connection. The catalog

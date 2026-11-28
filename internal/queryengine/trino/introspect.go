@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/queryengine"
-	trinoclient "github.com/galileostudio/baleia/internal/trino"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/queryengine"
+	trinoclient "github.com/maltzsama/baleia/internal/trino"
 )
 
 // introspector lists what Trino sees, as the service identity. Identifiers

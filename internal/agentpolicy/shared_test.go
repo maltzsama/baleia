@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/realtime"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/realtime"
 )
 
 func TestRedisGatesShareAgentBurst(t *testing.T) {

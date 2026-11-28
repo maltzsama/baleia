@@ -6,8 +6,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/audit/export"
-	"github.com/galileostudio/baleia/internal/persistence/partitioning"
+	"github.com/maltzsama/baleia/internal/audit/export"
+	"github.com/maltzsama/baleia/internal/persistence/partitioning"
 )
 
 // period is the width of one offload unit (ADR 0026): the offloader writes, and

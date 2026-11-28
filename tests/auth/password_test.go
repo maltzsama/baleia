@@ -3,7 +3,7 @@ package auth_test
 import (
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/auth"
 )
 
 func TestHashPassword(t *testing.T) {

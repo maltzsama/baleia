@@ -8,10 +8,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/auth"
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/webhooks"
 	"github.com/google/uuid"
+	"github.com/maltzsama/baleia/internal/auth"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/webhooks"
 )
 
 // writeTimeout bounds one audit write: Record never blocks its caller longer.

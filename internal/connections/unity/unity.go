@@ -33,8 +33,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
-	"github.com/galileostudio/baleia/internal/connections/icebergrest"
+	"github.com/maltzsama/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections/icebergrest"
 )
 
 const (

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	trinoclient "github.com/galileostudio/baleia/internal/trino"
+	trinoclient "github.com/maltzsama/baleia/internal/trino"
 )
 
 // TypeChecker asks the engine for the type of expressions over a table. It

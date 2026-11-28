@@ -8,9 +8,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/slug"
-	"github.com/galileostudio/baleia/internal/workbench/folders"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/slug"
+	"github.com/maltzsama/baleia/internal/workbench/folders"
 )
 
 // Store reads saved queries; *repo.Repo implements it.

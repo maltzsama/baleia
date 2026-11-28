@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/server"
+	"github.com/maltzsama/baleia/internal/server"
 )
 
 func TestLogin_RateLimitedPerIP(t *testing.T) {

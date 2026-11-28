@@ -13,7 +13,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // Reader reads workspaces, grants and what depends on them; *repo.Repo

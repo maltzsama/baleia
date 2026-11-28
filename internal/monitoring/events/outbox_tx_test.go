@@ -3,8 +3,8 @@ package events
 import (
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/store/model"
-	"github.com/galileostudio/baleia/internal/testdb"
+	"github.com/maltzsama/baleia/internal/store/model"
+	"github.com/maltzsama/baleia/internal/testdb"
 )
 
 func TestNotifyTxRollsBack(t *testing.T) {

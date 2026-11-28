@@ -3,8 +3,8 @@ package sqlref
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
 )
 
 // Store is the persistence of a statement's references, columns and joins;

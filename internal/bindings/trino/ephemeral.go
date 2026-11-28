@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/bindings"
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/bindings"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 // EphemeralPrefix names the short-lived catalogs connection tests bind

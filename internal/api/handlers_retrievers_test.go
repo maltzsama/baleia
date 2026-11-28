@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/dialect"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/dialect"
 )
 
 func TestRetrieverActionsFollowWorkspaceRole(t *testing.T) {

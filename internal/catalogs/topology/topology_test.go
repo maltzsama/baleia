@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/db"
 )
 
 type fakeStore struct {

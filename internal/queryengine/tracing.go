@@ -11,7 +11,7 @@ import (
 // once: a tracer taken from the global provider stays bound to the first
 // provider installed. With tracing off it is the no-op one.
 func tracer() trace.Tracer {
-	return otel.Tracer("github.com/galileostudio/baleia/internal/queryengine")
+	return otel.Tracer("github.com/maltzsama/baleia/internal/queryengine")
 }
 
 // Span attributes. They are bounded: never the SQL text, which can carry

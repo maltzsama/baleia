@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/auth"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/maltzsama/baleia/internal/auth"
 )
 
 // StubIDP is a minimal OIDC provider: discovery, JWKS and a token endpoint

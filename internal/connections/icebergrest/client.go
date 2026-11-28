@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/connections"
+	"github.com/maltzsama/baleia/internal/connections"
 )
 
 // Auth selects how requests authenticate. Token wins over client credentials;

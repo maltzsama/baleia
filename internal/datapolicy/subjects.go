@@ -3,8 +3,8 @@ package datapolicy
 import (
 	"slices"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/trinoidentity"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/trinoidentity"
 )
 
 // SubjectSource is one active account as the subject map needs it: its id,

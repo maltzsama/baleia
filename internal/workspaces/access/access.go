@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/galileostudio/baleia/internal/db"
-	"github.com/galileostudio/baleia/internal/trinoidentity"
+	"github.com/maltzsama/baleia/internal/db"
+	"github.com/maltzsama/baleia/internal/trinoidentity"
 )
 
 // Workspaces reads membership, workspaces and targets; *repo.Repo

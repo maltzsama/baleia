@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/galileostudio/baleia/internal/auth"
-	identityldap "github.com/galileostudio/baleia/internal/identity/ldap"
+	"github.com/maltzsama/baleia/internal/auth"
+	identityldap "github.com/maltzsama/baleia/internal/identity/ldap"
 )
 
 // Identity provider probe (#286). A probe never writes anything: it validates

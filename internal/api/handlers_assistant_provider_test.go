@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/galileostudio/baleia/internal/assistant/llm"
-	"github.com/galileostudio/baleia/internal/connections"
-	adb "github.com/galileostudio/baleia/internal/db/assistant"
+	"github.com/maltzsama/baleia/internal/assistant/llm"
+	"github.com/maltzsama/baleia/internal/connections"
+	adb "github.com/maltzsama/baleia/internal/db/assistant"
 )
 
 // TestLLMProvider_GoesThroughTheDialer: a provider base URL on a denied

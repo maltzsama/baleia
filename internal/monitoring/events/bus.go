@@ -3,7 +3,7 @@ package events
 import (
 	"context"
 
-	"github.com/galileostudio/baleia/internal/realtime"
+	"github.com/maltzsama/baleia/internal/realtime"
 )
 
 // Bus is the cross-process Transport over the shared Redis pub/sub layer
